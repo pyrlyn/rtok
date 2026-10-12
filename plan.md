@@ -21,18 +21,18 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | --- | --- | --- | --- | --- | --- |
 | T124 | todo | P3 | 2 | 0% | |
 | T131 | todo | P2 | 3 | 70% | |
-| T132 | todo | P2 | 2 | 70% | |
+| T132 | in progress | P2 | 2 | 70% | Claude Code / claude-sonnet-5-5 |
 | T134 | todo | P1 | 2 | 40% | |
 | T156 | in progress | P3 | 3 | 50% | Claude Code / claude-opus-5-5 |
-| T262.3 | todo | P2 | 2 | 0% | |
+| T262.3 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
 | T261 | in progress | P2 | 3 | 95% | Cursor / grok 4.7 |
 | T275 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
 | T275.1 | in progress | P2 | 3 | 80% | Cursor / grok 4.7 |
 | T276 | in progress | P2 | 5 | 30% | Claude Code / sonnet-5.5 |
 | T276.3 | todo | P2 | 4 | 0% | |
 | T276.4 | todo | P2 | 4 | 0% | |
-| T276.5 | todo | P2 | 3 | 0% | |
-| T276.6 | todo | P2 | 3 | 0% | |
+| T276.5 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T276.6 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T277 | in progress | P2 | 5 | 30% | Claude Code / sonnet-5.5 |
 | T278 | in progress | P1 | 3 | 90% | Claude Code / claude-opus-5-5 |
 | T279 | in progress | P1 | 5 | 90% | Claude Code / claude-opus-5-5 |
@@ -70,8 +70,8 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
 | T428 | in progress | P2 | 3 | 85% | Claude Code / sonnet-5.5 |
 | T436.3 | todo | P2 | 2 | 0% | |
-| T436.4 | todo | P3 | 2 | 0% | |
-| T477 | todo | P3 | 3 | 0% | |
+| T436.4 | in progress | P3 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
+| T477 | in progress | P3 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T521 | todo | P2 | 2 | 0% | |
 | T522 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T523 | in progress | P2 | 2 | 0% | MiMo / mimo |
@@ -79,92 +79,92 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T525 | in progress | P2 | 3 | 0% | MiMo / mimo |
 | T526 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T527 | in progress | P2 | 3 | 0% | MiMo / mimo |
-| T531 | todo | P2 | 2 | 0% | |
-| T532 | todo | P1 | 3 | 0% | |
-| T533 | todo | P1 | 3 | 0% | |
-| T534 | todo | P2 | 2 | 0% | |
-| T535 | todo | P2 | 2 | 0% | |
-| T536 | todo | P2 | 2 | 0% | |
-| T537 | todo | P2 | 2 | 0% | |
-| T538 | todo | P2 | 2 | 0% | |
-| T539 | todo | P2 | 2 | 0% | |
-| T541 | todo | P1 | 2 | 0% | |
-| T542 | todo | P2 | 3 | 0% | |
-| T543 | todo | P2 | 2 | 0% | |
-| T544 | todo | P2 | 2 | 0% | |
-| T545 | todo | P2 | 3 | 0% | |
-| T546 | todo | P2 | 2 | 0% | |
-| T548 | todo | P1 | 2 | 0% | |
-| T549 | todo | P2 | 3 | 0% | |
-| T550 | todo | P2 | 2 | 0% | |
-| T551 | todo | P2 | 2 | 0% | |
-| T552 | todo | P2 | 2 | 0% | |
-| T553 | todo | P2 | 2 | 0% | |
-| T555 | todo | P2 | 2 | 0% | |
-| T556 | todo | P2 | 3 | 0% | |
-| T557 | todo | P2 | 3 | 0% | |
-| T558 | todo | P2 | 2 | 0% | |
-| T559 | todo | P2 | 2 | 0% | |
-| T560 | todo | P3 | 2 | 0% | |
-| T561 | todo | P3 | 3 | 0% | |
+| T531 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
+| T532 | in progress | P1 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T533 | in progress | P1 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T534 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
+| T535 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
+| T536 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
+| T537 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
+| T538 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
+| T539 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
+| T541 | in progress | P1 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
+| T542 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T543 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
+| T544 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
+| T545 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T546 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
+| T548 | in progress | P1 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
+| T549 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T550 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
+| T551 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
+| T552 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
+| T553 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
+| T555 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
+| T556 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T557 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T558 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
+| T559 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
+| T560 | in progress | P3 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
+| T561 | in progress | P3 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T562 | todo | P1 | 2 | 0% | |
-| T563 | todo | P2 | 2 | 0% | |
-| T564 | todo | P2 | 2 | 0% | |
-| T565 | todo | P2 | 3 | 0% | |
-| T566 | todo | P2 | 2 | 0% | |
-| T567 | todo | P2 | 2 | 0% | |
-| T569 | todo | P2 | 3 | 0% | |
-| T570 | todo | P2 | 2 | 0% | |
-| T571 | todo | P2 | 2 | 0% | |
-| T573 | todo | P2 | 3 | 0% | |
-| T574 | todo | P2 | 2 | 0% | |
-| T576 | todo | P2 | 3 | 0% | |
-| T577 | todo | P2 | 3 | 0% | |
-| T579 | todo | P2 | 3 | 0% | |
-| T580 | todo | P2 | 2 | 0% | |
-| T581 | todo | P2 | 2 | 0% | |
-| T583 | todo | P2 | 3 | 0% | |
-| T584 | todo | P2 | 2 | 0% | |
-| T586 | todo | P2 | 3 | 0% | |
-| T587 | todo | P2 | 2 | 0% | |
-| T589 | todo | P2 | 3 | 0% | |
-| T590 | todo | P2 | 3 | 0% | |
-| T592 | todo | P2 | 3 | 0% | |
-| T594 | todo | P2 | 3 | 0% | |
-| T595 | todo | P2 | 3 | 0% | |
-| T597 | todo | P1 | 3 | 0% | |
-| T599 | todo | P3 | 2 | 0% | |
-| T601 | todo | P2 | 3 | 0% | |
-| T604 | todo | P2 | 3 | 0% | |
-| T606 | todo | P2 | 3 | 0% | |
-| T608 | todo | P3 | 3 | 0% | |
-| T609 | todo | P3 | 3 | 0% | |
-| T611 | todo | P2 | 3 | 0% | |
-| T613 | todo | P2 | 3 | 0% | |
-| T615 | todo | P2 | 3 | 0% | |
-| T617 | todo | P2 | 3 | 0% | |
-| T618 | todo | P1 | 3 | 0% | |
-| T619 | todo | P2 | 3 | 0% | |
+| T563 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
+| T564 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
+| T565 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T566 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
+| T567 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
+| T569 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T570 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
+| T571 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
+| T573 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T574 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
+| T576 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T577 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T579 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T580 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
+| T581 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
+| T583 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T584 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
+| T586 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T587 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
+| T589 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T590 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T592 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T594 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T595 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T597 | in progress | P1 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T599 | in progress | P3 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
+| T601 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T604 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T606 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T608 | in progress | P3 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T609 | in progress | P3 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T611 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T613 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T615 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T617 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T618 | in progress | P1 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T619 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T620 | todo | P1 | 5 | 0% | |
 | T621 | todo | P2 | 5 | 0% | |
-| T622 | todo | P2 | 3 | 0% | |
+| T622 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T623 | todo | P2 | 5 | 0% | |
-| T624 | todo | P3 | 2 | 0% | |
-| T625 | todo | P1 | 3 | 0% | |
-| T626 | todo | P2 | 3 | 0% | |
-| T627 | todo | P1 | 3 | 0% | |
-| T628 | todo | P2 | 3 | 0% | |
-| T629 | todo | P2 | 3 | 0% | |
-| T630 | todo | P2 | 3 | 0% | |
-| T631 | todo | P3 | 3 | 0% | |
-| T632 | todo | P2 | 3 | 0% | |
-| T633 | todo | P3 | 2 | 0% | |
-| T634 | todo | P2 | 2 | 0% | |
-| T635 | todo | P2 | 3 | 0% | |
-| T636 | todo | P2 | 3 | 0% | |
-| T637 | todo | P2 | 3 | 0% | |
-| T638 | todo | P2 | 3 | 0% | |
-| T639 | todo | P2 | 3 | 0% | |
+| T624 | in progress | P3 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
+| T625 | in progress | P1 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T626 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T627 | in progress | P1 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T628 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T629 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T630 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T631 | in progress | P3 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T632 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T633 | in progress | P3 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
+| T634 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
+| T635 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T636 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T637 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T638 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T639 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 
 
 
