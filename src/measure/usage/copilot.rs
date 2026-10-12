@@ -64,29 +64,44 @@ fn session(path: &Path, text: &str, since: i64) -> Vec<UsageSlice> {
             continue;
         };
         for (model, metric) in models {
-            let n = |k: &str| {
-                metric
-                    .pointer(&format!("/usage/{k}"))
-                    .and_then(Value::as_i64)
-                    .unwrap_or(0)
-                    .max(0)
-            };
-            let (cache_read, cache_write) = (n("cacheReadTokens"), n("cacheWriteTokens"));
-            // `inputTokens` is taken to count the cached part too (unverified, `research.md`
-            // 30.2): the one real log's cache reads stay below it.
-            let input = (n("inputTokens") - cache_read - cache_write).max(0);
             out.extend(super::slice(
                 "copilot",
                 "github",
                 &id,
                 Some(model.clone()),
                 ts,
-                [input, cache_write, cache_read, n("outputTokens")],
+                legs(metric),
                 since,
             ));
         }
     }
     out
+}
+
+/// `[input, cache write, cache read, output]` of one model's metric. `tokenDetails` is the
+/// whole spend: it is `usage` plus the context-compaction requests, which `usage` leaves out
+/// (the sums match on the one real log, `research.md` 30.2). Its `input` is uncached already.
+/// Without both `input` and `output` there it falls back to `usage`, whose `inputTokens`
+/// includes the cache legs.
+fn legs(metric: &Value) -> [i64; 4] {
+    let count = |p: String| metric.pointer(&p).and_then(Value::as_i64).map(|c| c.max(0));
+    let detail = |k: &str| count(format!("/tokenDetails/{k}/tokenCount"));
+    let usage = |k: &str| count(format!("/usage/{k}")).unwrap_or(0);
+    if let (Some(input), Some(output)) = (detail("input"), detail("output")) {
+        return [
+            input,
+            detail("cache_write").unwrap_or(0),
+            detail("cache_read").unwrap_or(0),
+            output,
+        ];
+    }
+    let (cache_read, cache_write) = (usage("cacheReadTokens"), usage("cacheWriteTokens"));
+    [
+        (usage("inputTokens") - cache_read - cache_write).max(0),
+        cache_write,
+        cache_read,
+        usage("outputTokens"),
+    ]
 }
 
 #[cfg(test)]
@@ -167,6 +182,36 @@ mod tests {
             .0
             .is_empty()
         );
+        std::fs::remove_dir_all(&d).ok();
+    }
+
+    /// A real 1.0.80 log: `tokenDetails` is `usage` plus the compaction requests (the
+    /// `compactionTokensUsed` of each `session.compaction_complete`), so it is the whole spend.
+    #[test]
+    fn token_details_carry_the_compaction_requests_that_usage_leaves_out() {
+        let d = std::env::temp_dir().join(format!("rtok-usage-cop-td-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(d.join("sess-td")).unwrap();
+        let mut m = metric(1000, 600, 0, 50);
+        m["tokenDetails"] = json!({"input":{"tokenCount":700},"cache_read":{"tokenCount":600},
+            "cache_write":{"tokenCount":0},"output":{"tokenCount":80}});
+        // A block that lacks a leg is not trusted over `usage`.
+        let mut partial = metric(200, 50, 0, 9);
+        partial["tokenDetails"] = json!({"input":{"tokenCount":999}});
+        std::fs::write(
+            d.join("sess-td/events.jsonl"),
+            shutdown(
+                "2026-09-02T10:58:10Z",
+                json!({"full": m, "partial": partial}),
+            ),
+        )
+        .unwrap();
+
+        let (mut rows, _) = slices(std::slice::from_ref(&d), 0, SystemTime::UNIX_EPOCH);
+        rows.sort_by(|a, b| a.model.cmp(&b.model));
+        let legs = |r: &UsageSlice| (r.input, r.cache_create, r.cache_read, r.output);
+        assert_eq!(legs(&rows[0]), (700, 0, 600, 80));
+        assert_eq!(legs(&rows[1]), (150, 0, 50, 9));
         std::fs::remove_dir_all(&d).ok();
     }
 }
