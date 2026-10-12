@@ -38,6 +38,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T289 | in progress | P2 | 4 | 75% | Claude Code / sonnet-5 |
 | T329 | todo | P2 | 5 | 0% | |
 | T329.50 | in progress | P3 | 3 | 0% | MiMo / mimo |
+| T329.54 | in progress | P2 | 4 | 0% | Claude Code / claude-sonnet-5-5 |
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
 | T369.1 | todo | P3 | 1 | 0% | |
 | T370 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
@@ -861,6 +862,14 @@ Check: fixture repos under `tests/fixtures`, no network:
 Left over from T329.32. Each running call gets a small floating label next to its node (2D and 3D) with its tool name and an elapsed counter that ticks up (the metrics list already shows the elapsed seconds); the label fades a few seconds after the call ends. A call folded into "+N more" labels the node that holds the count (T329.32). Calls outside the scope get no label.
 
 Check: a running call shows its label and elapsed counter on its node in 2D and 3D; the label fades after the call ends; no label for a call outside the scope; Vitest, stories (axe) and Playwright; `just check`.
+
+### T329.54. Web actions: re-index and remove project, with a job tracker for indexing/failed states
+
+The web graph page has no way to re-index ("Index now") or remove a project: `ProjectRequest` in `src/web/protocol.rs` has only Select/Link/Unlink, `project_write` in `src/web/mod.rs` has no such arm, and `web/src/pages/graph3d/ProjectsOverview.tsx` says they "arrive with T329.20", which shipped link/unlink only. Done means: protocol variants and `project_write` arms that call the same functions as the CLI commands (remove shows the plan, writes nothing without confirmation), a SPA node menu with both actions, a job tracker that gives the `indexing` and `failed` states (see the T329.12 deviations in `done.md`), state markers on the nodes, and docs en/ru/uk.
+
+Check: web and Rust tests for both actions and the tracker states, Playwright for the node menu; `just spa-test`, `just js`, `just spa-stories`, `just spa-e2e`, `just check`. Unblocks T477.
+
+Execution plan (2026-10-12): card text and id taken from the `t620-lsp-web-spinners-mcp` branch, where it was split and left unclaimed. 1. `ProjectRequest` variants and `project_write` arms for re-index and remove, calling the same functions as the CLI (`graph::projects`), remove behind its dry-run plan and a confirmation; 2. an index job tracker that sets `indexing`/`failed`; 3. SPA node-menu actions, stories, Playwright; 4. the card's Check gates. Then T477 on top.
 
 ### T521. MiMo Desktop variant of the `mimo` host
 

@@ -23,6 +23,7 @@
 - T289. Worktrees the host creates join rtok: `rtok worktree adopt` and the post-create hooks
 - T329. Graph page: project selector, auto-added projects and linked projects (epic)
 - T329.50. Graph page: running labels with elapsed counters on the live canvas
+- T329.54. Web actions: re-index and remove project, with a job tracker for indexing/failed states
 - T356. Never index `$HOME` or `/` as a graph root
 - T369.1. Measure grep_symbol follow-up rate after an opt-in window
 - T370. SessionStart repo map ranked by file-level personalized PageRank
