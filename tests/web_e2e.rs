@@ -288,6 +288,38 @@ async fn websocket_streams_snapshots_and_answers_commands() {
     ws.close(None).await.expect("close");
 }
 
+/// T623: an answer carries the `req` of the request it answers — a plan, a refusal, a parse
+/// error and a lookup miss alike — and a request without one is answered with none.
+#[tokio::test]
+async fn answers_echo_the_request_id_and_only_that_one() {
+    let web = start("req").await;
+    let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://{}/ws", web.addr))
+        .await
+        .expect("ws connect");
+    let sent = [
+        (r#"{"req":11,"junk":{"action":"plan"}}"#, "junkplan"),
+        (r#"{"req":12,"junk":{"action":"burn"}}"#, "message"),
+        (r#"{"req":13,"expand":"no-such-id"}"#, "message"),
+        (
+            r#"{"req":14,"set":{"key":"core.db_path","value":true}}"#,
+            "message",
+        ),
+        (r#"{"req":15,"graph":{}}"#, "message"),
+    ];
+    for (text, kind) in sent {
+        ws.send(Message::text(text)).await.expect("send");
+        let want: Value = serde_json::from_str(text).unwrap();
+        let reply = next_of(&mut ws, kind).await;
+        assert_eq!(reply["req"], want["req"], "{text} -> {reply}");
+    }
+    ws.send(Message::text(r#"{"expand":"no-such-id"}"#))
+        .await
+        .expect("send bare");
+    let bare = next_of(&mut ws, "message").await;
+    assert!(bare.get("req").is_none(), "{bare}");
+    ws.close(None).await.expect("close");
+}
+
 /// T331.12: the doctor fix over the real socket. A plan changes nothing; only `apply` writes,
 /// and it leaves the `_backup/` copy.
 #[cfg(unix)] // POSIX hook command paths
