@@ -1456,6 +1456,20 @@ everything below was checked on 2026-10-10 against primary sources.
 - MiMo Desktop: still no documented config path. A third-party README
   (https://github.com/akaradje/mimo-desktop, **unverified**) says Desktop reads
   `~/.config/mimocode/mimocode.jsonc`; T521 waits for a read-only probe on the creator's machine.
+- MiMo Desktop, resolved (T521, 2026-10-11). The vendor docs still name no Desktop path: the intro
+  of https://mimo.xiaomi.com/mimocode/start says MiMo Code runs "in the terminal, the desktop
+  app, and IDE extensions", and https://mimo.xiaomi.com/mimocode/config-files lists `default_agent`
+  as "applied across all interfaces (TUI / `mimo run` / desktop / GitHub Action)"; the config-overrides
+  page (all fetched 2026-10-11) lists the global dir as `$XDG_CONFIG_HOME/mimocode/`, i.e.
+  `~/.config/mimocode/`, with `MIMOCODE_HOME` moving it to `$MIMOCODE_HOME/config/`. The vendor's
+  own shipped app is the primary source for Desktop: `Xiaomi MiMo AI.app` 26.1010.101546 (bundle
+  id `com.xiaomi.mimo.desktop-ai`, updater feed `https://mimocode-cdn.xiaomimimo.com/mimocode/mimodesktopai/`,
+  read-only inspection of `Contents/Resources/app.asar` and `app-update.yml` on 2026-10-11)
+  contains `const KM=["mimocode.jsonc","mimocode.json","config.json"]` and a resolver that
+  returns the first existing file of `MIMOCODE_HOME/config`, else `XDG_CONFIG_HOME/mimocode`, else
+  `~/.config/mimocode`: the CLI's config family. The third-party README is therefore confirmed on
+  the path but not needed. The Windows and Linux install paths of the app are not verified, so
+  only the two macOS app paths are probed.
 
 ## 16. Token savings beyond the shipped surface (2026-09-21)
 

@@ -132,6 +132,34 @@ fn run_retention_purges_old_call_and_archive() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// T385.9.1: one summary per archive id and compressor version, first writer wins, and a
+/// version bump is a separate row; retention takes the summary with its archive row.
+#[test]
+fn archive_summaries_are_stored_once_per_version_and_purged_with_the_archive() {
+    let dir = std::env::temp_dir().join(format!("rtok-t385-9-1-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let (store, arch_path) = seed_one_spilled_call(&dir);
+    let id = arch_path.file_name().unwrap().to_str().unwrap().to_string();
+
+    assert_eq!(store.archive_summary(&id, "v1").unwrap(), None);
+    assert!(store.put_archive_summary(&id, "v1", "first").unwrap());
+    assert!(!store.put_archive_summary(&id, "v1", "second").unwrap());
+    assert!(store.put_archive_summary(&id, "v2", "other").unwrap());
+    assert_eq!(
+        store.archive_summary(&id, "v1").unwrap().as_deref(),
+        Some("first")
+    );
+    assert_eq!(
+        store.archive_summary(&id, "v2").unwrap().as_deref(),
+        Some("other")
+    );
+
+    assert_eq!(store.run_retention(1, 3).unwrap(), 1);
+    assert_eq!(store.archive_summary(&id, "v1").unwrap(), None);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// `agents junk clear`'s dry run (T182): the same set `run_retention` would delete,
 /// named without touching the database or the file.
 #[test]
