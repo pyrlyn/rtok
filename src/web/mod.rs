@@ -437,9 +437,7 @@ fn inbound(state: &DashState, text: &str) -> Option<String> {
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner)
                 .clone();
-            return project_write(&cfg, project)
-                .err()
-                .map(|e| message_frame(&format!("{e:#}")));
+            return project_reply(&cfg, project);
         }
         Ok(ClientMessage::Set { set }) => set,
         // Handled by the socket loop, which owns the subscription; a stray one here is a no-op.
@@ -518,6 +516,23 @@ fn inbound(state: &DashState, text: &str) -> Option<String> {
     }
 }
 
+/// The reply to a registry write: nothing on success (the next snapshot shows it), a notice when
+/// it is refused, and the dry run for a `remove` the user has not confirmed yet.
+fn project_reply(cfg: &Config, req: protocol::ProjectRequest) -> Option<String> {
+    let plan_for = match &req {
+        protocol::ProjectRequest::Remove {
+            project,
+            confirmed: false,
+        } => Some(project.clone()),
+        _ => None,
+    };
+    match (project_write(cfg, req), plan_for) {
+        (Ok(plan), Some(project)) => Some(ServerFrame::ProjectPlan { project, plan }.to_json()),
+        (Ok(_), None) => None,
+        (Err(e), _) => Some(message_frame(&format!("{e:#}"))),
+    }
+}
+
 #[cfg(feature = "graph")]
 pub(crate) fn project_write(cfg: &Config, req: protocol::ProjectRequest) -> Result<String> {
     use crate::plugins::graph::projects::{Action, run};
@@ -536,6 +551,14 @@ pub(crate) fn project_write(cfg: &Config, req: protocol::ProjectRequest) -> Resu
             from: Some(from),
             both,
         },
+        // The worker is the surface's own: the socket must keep answering while it indexes.
+        R::Reindex { project } => return crate::plugins::graph::jobs::start(&rt, &project),
+        // The unconfirmed request is the dry run, so the guard is here and not in each surface.
+        R::Remove {
+            project,
+            confirmed: false,
+        } => return crate::plugins::graph::projects::preview(&rt, Action::Remove(project), false),
+        R::Remove { project, .. } => Action::Remove(project),
     };
     run(&rt, action, false)
 }

@@ -4,7 +4,7 @@
 
 import type { Decorator, Meta, StoryObj } from "@storybook/react-vite";
 import { createRef, type ReactNode, useEffect, useRef } from "react";
-import { expect, userEvent, waitFor, within } from "storybook/test";
+import { expect, screen, userEvent, waitFor, within } from "storybook/test";
 import { connectSample } from "../api/sample";
 import { alertRow, project } from "../api/sampleRows";
 import type { ProjectRow } from "../api/snapshot.gen";
@@ -174,5 +174,35 @@ export const WebglDrawsAndClickSelects: StoryObj = {
         ]);
         const header = within(await canvas.findByLabelText("current project", undefined, READY));
         await expect(await header.findByText("ketch", undefined, READY)).toBeVisible();
+    },
+};
+
+/** The node menu against the sample server (T329.54): Re-index settles a stale project, and Remove drops one only after its plan is confirmed. */
+export const ReindexAndRemoveAgainstSampleServer: StoryObj = {
+    render: () => (
+        <WithSnapshot>{(snap) => <ProjectsOverview rows={snap.projects ?? []} />}</WithSnapshot>
+    ),
+    decorators: [withData(connectSample), viewing("2d")],
+    play: async ({ canvasElement }) => {
+        const canvas = within(canvasElement);
+        const node = async (name: RegExp) =>
+            (await canvas.findAllByTestId("node-2d", undefined, READY)).find((n) =>
+                name.test(n.getAttribute("aria-label") ?? ""),
+            )!;
+        const menu = async (name: RegExp, item: string) => {
+            await userEvent.pointer({ keys: "[MouseRight]", target: await node(name) });
+            // The menu is portalled to the body, outside the story root.
+            await userEvent.click(await screen.findByRole("menuitem", { name: item }));
+        };
+
+        await expect(await node(/^ketch, stale/)).toBeVisible();
+        await menu(/^ketch, stale/, "Re-index");
+        await waitFor(async () => expect(await node(/^ketch, ok/)).toBeVisible(), READY);
+
+        await menu(/^notes/, "Remove…");
+        const region = await canvas.findByRole("region", { name: "remove notes" });
+        await expect(await within(region).findByText(/files untouched/)).toBeVisible();
+        await userEvent.click(within(region).getByRole("button", { name: /Remove notes/ }));
+        await waitFor(async () => expect(canvas.getAllByTestId("node-2d")).toHaveLength(6), READY);
     },
 };

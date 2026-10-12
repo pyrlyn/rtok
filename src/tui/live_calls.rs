@@ -20,12 +20,13 @@ use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Cell, Paragraph, Row, Table};
 
+use super::drill::Drawn;
 use super::theme::{self, ACCENT, ERR, WARN};
 use super::view::time_of;
 use crate::config::{Config, Graph};
 use crate::web::calls_store::{
-    CallsStore, DrawnNode, FeedFilter, Finished, OUTSIDE_SCOPE, Totals, WINDOWS, clock_ms,
-    distinct, filter_feed, outside_scope, spark_label,
+    CallsStore, FeedFilter, Finished, OUTSIDE_SCOPE, Totals, WINDOWS, clock_ms, distinct,
+    filter_feed, outside_scope, spark_label,
 };
 use crate::web::live::{self, CallBatch, Reader};
 
@@ -56,11 +57,6 @@ pub(super) struct LiveCalls {
     window: usize,
     filter: FeedFilter,
     now: i64,
-    /// The nodes of a one-project view and the count the cap left out of it. The Graph tab draws
-    /// no such view yet, so these stay empty and the folded counter shows nothing; the page's
-    /// counter is [`CallsStore::folded_counters`], which this pane calls on them.
-    drawn: Vec<DrawnNode>,
-    more: usize,
 }
 
 /// One thread on the web's reader; it ends when the TUI drops the receiver. Batches come with
@@ -112,15 +108,7 @@ impl LiveCalls {
             window: 1,
             filter: FeedFilter::default(),
             now: clock_ms(),
-            drawn: Vec::new(),
-            more: 0,
         }
-    }
-
-    #[cfg(test)]
-    pub(super) fn set_drawn(&mut self, drawn: Vec<DrawnNode>, more: usize) {
-        self.drawn = drawn;
-        self.more = more;
     }
 
     /// Takes what the reader found and drops calls whose process is gone. `active` is whether the
@@ -430,8 +418,15 @@ impl LiveCalls {
     }
 
     /// `scope` is the names of the projects the live part is scoped to (see
-    /// [`crate::web::calls_store::scope_names`]); a call on any other is marked.
-    pub(super) fn render(&self, frame: &mut Frame, area: Rect, scope: Option<&HashSet<String>>) {
+    /// [`crate::web::calls_store::scope_names`]); a call on any other is marked. `drawn` is the
+    /// one-project view, empty on the overview, where no node is folded.
+    pub(super) fn render(
+        &self,
+        frame: &mut Frame,
+        area: Rect,
+        scope: Option<&HashSet<String>>,
+        drawn: &Drawn,
+    ) {
         let t = self.shown().window_totals(self.window, self.shown_now());
         // The Graph page gives the pane 13 rows at 24; the bars yield so the feed keeps its rows.
         // The sparklines yield first, then the bars, for the same reason.
@@ -450,9 +445,9 @@ impl LiveCalls {
             ));
         }
         lines.push(Line::from(filters));
-        let folded = self
-            .shown()
-            .folded_counters(&self.drawn, self.more, scope, self.shown_now());
+        let folded =
+            self.shown()
+                .folded_counters(&drawn.nodes, drawn.more, scope, self.shown_now());
         if !folded.is_empty() {
             let mut spans = vec![Span::styled("folded calls  ", theme::muted())];
             spans.extend(
@@ -551,7 +546,7 @@ mod tests {
     fn pane(app: &App, scope: Option<&HashSet<String>>) -> String {
         let mut terminal = Terminal::new(TestBackend::new(150, 30)).unwrap();
         terminal
-            .draw(|f| app.live().render(f, f.area(), scope))
+            .draw(|f| app.live().render(f, f.area(), scope, app.drill().drawn()))
             .unwrap();
         let buf = terminal.backend().buffer().clone();
         (0..buf.area.height)
@@ -618,31 +613,61 @@ mod tests {
         assert!(s.contains("rtok outside scope"), "{s}");
     }
 
+    /// A registered, indexed project called `rtok` (the name the fixture calls carry) with more
+    /// files than the page's cap draws, so the one-project view leaves ten of them out.
+    #[cfg(feature = "graph")]
+    fn capped_project(cfg: &crate::config::Config) {
+        use crate::plugin::Runtime;
+        use crate::plugins::graph::drill::DEFAULT_LIMIT;
+        use crate::plugins::graph::index;
+        use crate::store::Origin;
+
+        let root = crate::testutil::tmp_dir("tui-t561").join("rtok");
+        std::fs::create_dir_all(&root).unwrap();
+        for i in 0..DEFAULT_LIMIT + 10 {
+            std::fs::write(
+                root.join(format!("f{i:03}.rs")),
+                format!("fn f{i}() {{}}\n"),
+            )
+            .unwrap();
+        }
+        let rt = Runtime::open(cfg.clone(), "t561-fixture").unwrap();
+        index::run(&rtok_plugin_sdk::Ctx::new(&rt), &root, false).unwrap();
+        rt.store.register_project(&root, Origin::Manual).unwrap();
+    }
+
     #[test]
-    fn folded_targets_count_on_their_nearest_visible_ancestor_or_the_group() {
-        let mut app = graph_app();
-        app.live_mut().feed_batch(&first_batch(), T);
-        assert!(
-            !pane(&app, None).contains("folded calls"),
-            "no cap, no counter"
+    #[cfg(feature = "graph")]
+    fn the_one_project_view_counts_folded_targets_on_the_nearest_drawn_node_or_the_group() {
+        let mut cfg = config();
+        cfg.tui.tab = "graph".into();
+        capped_project(&cfg);
+        let mut app = App::new(&cfg);
+        let mut under = end("u", 10, 5);
+        under.target = Some("f001.rs/inner".into());
+        let mut drawn = end("v", 10, 5);
+        drawn.target = Some("f002.rs".into());
+        app.live_mut().feed_batch(
+            &batch(vec![end("a", 100, 30), under, drawn, event("c")], 0),
+            T,
         );
-        let node = |label: &str, root: &str| DrawnNode {
-            label: label.into(),
-            root: root.into(),
-        };
-        app.live_mut().set_drawn(vec![node("web", "src/web")], 4);
-        let s = pane(&app, None);
         assert!(
-            s.contains("folded calls") && s.contains("+4 more · 3 folded"),
-            "{s}"
+            !screen(&app).contains("folded calls"),
+            "the overview draws no nodes, so nothing is folded"
         );
-        app.live_mut()
-            .set_drawn(vec![node("tree", "open_index")], 4);
-        let s = pane(&app, None);
+        press(&mut app, 'd');
+        let s = screen(&app);
+        assert!(s.contains("rtok: 500 nodes drawn, +10 more"), "{s}");
+        // `open_index` (two calls, one still running) is under no drawn file; `f001.rs/inner`
+        // is under the drawn `f001.rs`; a call on the drawn `f002.rs` is lit, not folded.
+        let line = s.lines().find(|l| l.contains("folded calls")).expect(&s);
         assert!(
-            s.contains("tree · 3 folded") && !s.contains("+4 more"),
-            "{s}"
+            line.contains("+10 more · 2 folded") && line.contains("f001.rs · 1 folded"),
+            "{line}"
         );
+        assert!(!line.contains("f002.rs"), "{line}");
+        press(&mut app, 'd');
+        assert!(!screen(&app).contains("folded calls"), "d leaves the view");
     }
 
     fn press(app: &mut App, c: char) {

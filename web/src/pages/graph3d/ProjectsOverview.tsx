@@ -3,8 +3,10 @@
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
 import { type RefObject, useEffect, useRef, useState } from "react";
-import { useProjectMutation } from "../../api/query";
+import { createPortal } from "react-dom";
+import { useProjectMutation, useProjectPlan } from "../../api/query";
 import type { ProjectRow } from "../../api/snapshot.gen";
+import { Button } from "../../ui/Button";
 import { Kpi } from "../../ui/Kpi";
 import { Panel } from "../../ui/Panel";
 import { Result } from "../../ui/Result";
@@ -37,6 +39,14 @@ export function ProjectsOverview({
     const own = useRef<ViewApi | null>(null);
     const api = probe ?? own;
     const { mutate, error, inFlight } = useProjectMutation();
+    const { projectPlan } = useProjectPlan();
+    // The dry run the server answered, shown until the user confirms or cancels.
+    const [removal, setRemoval] = useState<{
+        id: number;
+        name: string;
+        plan?: string;
+        error?: string;
+    } | null>(null);
     const waiting = new Set(
         inFlight.flatMap((r) => (r.action === "select" ? [Number(r.project)] : [])),
     );
@@ -44,6 +54,27 @@ export function ProjectsOverview({
     const select = (id: number) => {
         const p = rows.find((r) => r.id === id);
         if (p && !p.missing) mutate({ action: "select", project: String(id) });
+    };
+    const reindex = (id: number) => {
+        const p = rows.find((r) => r.id === id);
+        if (p && !p.missing && p.state !== "indexing")
+            mutate({ action: "reindex", project: String(id) });
+    };
+    const askRemove = (id: number) => {
+        const p = rows.find((r) => r.id === id);
+        if (!p) return;
+        setRemoval({ id, name: p.name });
+        const still = (f: (r: NonNullable<typeof removal>) => NonNullable<typeof removal>) =>
+            setRemoval((cur) => (cur?.id === id ? f(cur) : cur));
+        projectPlan(String(id)).then(
+            (r) => still((cur) => ({ ...cur, plan: r.plan })),
+            (e) => still((cur) => ({ ...cur, error: e instanceof Error ? e.message : String(e) })),
+        );
+    };
+    const confirmRemove = () => {
+        if (removal?.plan)
+            mutate({ action: "remove", project: String(removal.id), confirmed: true });
+        setRemoval(null);
     };
     const open = (id: number) => {
         // A missing project has no index to draw.
@@ -103,6 +134,51 @@ export function ProjectsOverview({
                         Selecting {rows.find((r) => waiting.has(r.id))?.name ?? "project"}…
                     </p>
                 )}
+                {rows
+                    .filter((r) => r.state === "indexing")
+                    .map((r) => (
+                        <p
+                            key={r.id}
+                            role="status"
+                            aria-busy
+                            className="flex items-center gap-1.5 text-xs text-fg-muted"
+                        >
+                            <span className="text-accent">
+                                <Spinner size="sm" />
+                            </span>
+                            Indexing {r.name}…
+                        </p>
+                    ))}
+                {rows
+                    .filter((r) => r.state === "failed" && r.error)
+                    .map((r) => (
+                        <Result key={r.id} verb="index" kind="error">
+                            {r.name}: {r.error}
+                        </Result>
+                    ))}
+                {removal && (
+                    <section
+                        role="region"
+                        aria-label={`remove ${removal.name}`}
+                        className="flex flex-col gap-2 rounded-md border border-border-strong p-3"
+                    >
+                        {removal.error ? (
+                            <Result verb="remove" kind="error">
+                                {removal.error}
+                            </Result>
+                        ) : (
+                            <pre className="whitespace-pre-wrap text-2xs text-fg-muted">
+                                {removal.plan ?? "Planning…"}
+                            </pre>
+                        )}
+                        <div className="flex items-center gap-2">
+                            <Button verb="remove" disabled={!removal.plan} onClick={confirmRemove}>
+                                Remove {removal.name}
+                            </Button>
+                            <Button onClick={() => setRemoval(null)}>Cancel</Button>
+                        </div>
+                    </section>
+                )}
                 {error && (
                     <Result verb="select" kind="error">
                         {error.message}
@@ -115,21 +191,27 @@ export function ProjectsOverview({
                     </p>
                 )}
             </SceneView>
-            {menu && (
-                <NodeMenu
-                    at={menu}
-                    node={rows.find((r) => r.id === menu.id)}
-                    onClose={() => setMenu(null)}
-                    onSelect={() => select(menu.id)}
-                    onOpen={onOpen && (() => open(menu.id))}
-                    onFocus={() => api.current?.focus(menu.id)}
-                />
-            )}
+            {menu &&
+                // The panel's blur makes it the containing block of a fixed child, which would
+                // put the menu off the pointer and under the panel below.
+                createPortal(
+                    <NodeMenu
+                        at={menu}
+                        node={rows.find((r) => r.id === menu.id)}
+                        onClose={() => setMenu(null)}
+                        onSelect={() => select(menu.id)}
+                        onOpen={onOpen && (() => open(menu.id))}
+                        onFocus={() => api.current?.focus(menu.id)}
+                        onReindex={() => reindex(menu.id)}
+                        onRemove={() => askRemove(menu.id)}
+                    />,
+                    document.body,
+                )}
         </Panel>
     );
 }
 
-/** What the protocol offers today: open (T329.22), select, focus, copy the root. Link, unlink, re-index and remove arrive with T329.20. */
+/** The node menu: open (T329.22), select, re-index and remove (T329.54), focus, copy the root. Link and unlink live in the links panel (T329.20). */
 function NodeMenu({
     at,
     node,
@@ -137,6 +219,8 @@ function NodeMenu({
     onSelect,
     onOpen,
     onFocus,
+    onReindex,
+    onRemove,
 }: {
     at: { x: number; y: number };
     node: ProjectRow | undefined;
@@ -144,6 +228,8 @@ function NodeMenu({
     onSelect(): void;
     onOpen?(): void;
     onFocus(): void;
+    onReindex(): void;
+    onRemove(): void;
 }) {
     const ref = useRef<HTMLDivElement>(null);
     useEffect(() => {
@@ -189,6 +275,18 @@ function NodeMenu({
                     Open
                 </button>
             )}
+            <button
+                type="button"
+                role="menuitem"
+                disabled={node.missing || node.state === "indexing"}
+                className={item}
+                onClick={act(onReindex)}
+            >
+                Re-index
+            </button>
+            <button type="button" role="menuitem" className={item} onClick={act(onRemove)}>
+                Remove…
+            </button>
             <button type="button" role="menuitem" className={item} onClick={act(onFocus)}>
                 {prefersReducedMotion() ? "Center" : "Fly to"}
             </button>

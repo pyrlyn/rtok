@@ -66,9 +66,8 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T414.7 | in progress | P3 | 1 | 0% | MiMo / mimo |
 | T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
 | T428 | in progress | P2 | 3 | 85% | Claude Code / sonnet-5.5 |
-| T436.3 | todo | P2 | 2 | 0% | |
+| T436.3 | todo | P2 | 2 | 50% | |
 | T436.4 | todo | P3 | 2 | 90% | |
-| T477 | todo | P3 | 3 | 0% | |
 | T640 | in progress | P2 | 4 | 90% | Claude / opus-5.5 |
 | T522 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T523 | in progress | P2 | 2 | 0% | MiMo / mimo |
@@ -76,7 +75,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T525 | in progress | P2 | 3 | 0% | MiMo / mimo |
 | T526 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T527 | in progress | P2 | 3 | 0% | MiMo / mimo |
-| T561 | todo | P3 | 3 | 0% | |
 | T592 | todo | P2 | 3 | 0% | |
 | T620 | todo | P1 | 5 | 0% | |
 | T621 | todo | P2 | 5 | 0% | |
@@ -1187,6 +1185,10 @@ Split from T436 (2026-10-08), item 5: `OPERATION_ICONS`, `icon()`, `ICON_WIDTH` 
 
 Check: the crate's unit tests (icon per verb, fallback, width); rtok's `src/ui/style.rs` and `tests/ui_style.rs` green on the crate; ketch's own tests green; `just check`.
 
+Execution plan (2026-10-12): 1. a neutral-name crate in `packages/crates` (own worktree and PR there, its AGENTS.md rules) holding `OPERATION_ICONS`, `icon()`, `ICON_WIDTH` and the gutter padding, generic over the tone/kind type, with unit tests; 2. after release-plz publishes it, rtok's `src/ui/style.rs` and ketch's `src/ui.rs` depend on the crates.io version with no output change; until then this card stays in progress with the crate PR linked.
+
+Progress (2026-10-12): step 1 is done: crate `operation-icons` merged in the crates-packages repository (PR #56) and not yet published. Step 2 waits for the creator to release it (the release pipeline has Actions off there); then rtok and ketch switch to the crates.io version.
+
 ### T436.4. Spinner on `agents install/update` through T276's `ProgressRunner`
 
 Split from T436.2 (2026-10-08): T436.2 shipped the remaining waits and the operation icons on the `agents install/update/remove` header, but the card's install/update spinner rests on T276's `ProgressRunner`, which does not exist yet; the existing `with_loader("updating host")` stays until then. Depends on T276.
@@ -1196,12 +1198,6 @@ Check: `agents install` and `agents update` show one spinner per host on a TTY a
 Execution plan (2026-10-12): 1. replace `with_loader("updating host")` in the `agents install/update` path with a per-host spinner through `rtok_sys::proc` progress (T276.1/T276.2); 2. TTY only, nothing on a pipe; 3. non-TTY test, trycmd snapshots unchanged; the manual terminal run stays for the creator.
 
 Progress (2026-10-12): `agents install/update` draw one `ProgressRunner::batch` bar stepped once per host (`src/agents/mod.rs`, `host_bar`), off a TTY and while the plugin question may be asked; `apply_hosts` no longer uses `with_loader`. Tests: `agents::tests::apply_all_steps_the_bar_once_per_host` (fail-first), `tests/agents_update.rs::install_and_update_draw_no_bar_on_a_pipe`; trycmd unchanged. A TTY run with `--yes` or `--dry-run` now shows the bar; the restart wait in `restart.rs` has no indicator until T276.3. Left: the creator's manual run in a terminal (bar per host, cleared before the result lines; no bar over the plugin question without `--yes`).
-
-### T477. TUI: re-index and remove projects (counterpart of the web actions)
-
-T329 plans web actions to re-index ("Index now") and remove a project on the graph page; D27 (amended 2026-10-10, T346) requires the same actions in the TUI. Depends on the T329 subtask that adds those web actions and on T476 (done: the TUI project keys, picker and confirm stage live in `src/tui/projects.rs`, and `web::project_write` runs on the key loop, so the re-index here needs a worker to keep the screen alive). Done means: the TUI graph page has re-index and remove keys that call the same functions as the web actions and the CLI commands, with the same guards: remove shows the plan (what leaves the registry, that no file is deleted) and needs a confirm key; re-index shows progress on the status line and leaves the old data usable while it runs.
-
-Check: a TUI test on a fixture project: re-index brings a stale project to indexed and equals the CLI result, remove drops it from the registry only after the confirm, declining changes nothing; `tests/surface_parity.rs` lists both actions on both surfaces; `just check`.
 
 ## Reference
 
@@ -1398,9 +1394,3 @@ Plan:
 5. `fs-kit` 0.1.0 is on crates.io, so the dependency is the registry version (`fs-kit = "0.1"`), not a path.
 
 Check: `just check` green on `fs-kit` 0.1 from crates.io; `fs-kit` unit tests cover each moved helper (atomic write through a symlink, permissions kept, `if_changed`, tree usage and copy, path folding), and the existing rtok tests for `paths`, `junk`, completions install and the agent SDK pass unchanged.
-
-### T561. TUI: folded-target counter in a one-project view
-
-Left over from T500. `CallsStore::folded_counters(drawn, more, scope, now)` and the pane's "folded calls" lines (`{label} · {n} folded`) exist, but the TUI has no one-project drill view, so nothing fills `LiveCalls.drawn`/`more` and the counter never shows. Give the TUI a one-project view that supplies the drawn nodes and `more`, then wire it in and drop the `#[cfg(test)]` `set_drawn`.
-
-Check: in the one-project view the pane lists folded targets on their nearest drawn ancestor, else on the "+N more" group; TUI test; `tests/surface_parity.rs`; `just check`.
