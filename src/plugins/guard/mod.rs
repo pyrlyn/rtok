@@ -134,13 +134,7 @@ impl Plugin for Guard {
             // dependency on the `read` plugin's invalidation.
             None if matches!(ev.tool_name, "Bash" | "Edit" | "Write") => {
                 let _ = cx.clear_read_cache("bash");
-                let mutated_path = ev
-                    .tool_input
-                    .get("file_path")
-                    .or_else(|| ev.tool_input.get("path"))
-                    .and_then(Value::as_str)
-                    .map(str::trim)
-                    .filter(|p| !p.is_empty());
+                let mutated_path = file_arg(ev.tool_input).and_then(|p| path_identity(p, cx.cwd()));
                 match (ev.tool_name, mutated_path) {
                     ("Bash", _) => {
                         let _ = cx.clear_read_cache("read");
@@ -148,7 +142,8 @@ impl Plugin for Guard {
                     (_, Some(p)) => {
                         let _ = cx.clear_read_cache(&format!("read\t{p}"));
                     }
-                    // An Edit/Write whose path is missing can name any file: drop them all.
+                    // An Edit/Write whose path is missing, or has no stable identity
+                    // (relative without a cwd, `..`), can name any file: drop them all.
                     (_, None) => {
                         let _ = cx.clear_read_cache("read");
                     }
@@ -216,6 +211,40 @@ fn native_redirect(tool: &str, cx: &Ctx) -> Option<PreToolDecision> {
     Some(PreToolDecision::Deny { reason })
 }
 
+fn file_arg(input: &Value) -> Option<&str> {
+    input
+        .get("file_path")
+        .or_else(|| input.get("path"))
+        .and_then(Value::as_str)
+}
+
+/// One spelling for a file, shared by the Read key and the Edit/Write invalidation (T556): a
+/// relative path is resolved against the hook cwd, `.` and repeated separators are dropped.
+/// Lexical only — no file system access. `None` (no key, or clear every read) when the
+/// path is blank, relative without a cwd, or holds `..`, which a symlink makes unresolvable.
+fn path_identity(p: &str, cwd: Option<&str>) -> Option<String> {
+    use std::path::{Component, Path, PathBuf};
+    if p.trim().is_empty() {
+        return None;
+    }
+    let p = Path::new(p);
+    let joined = if p.is_absolute() {
+        p.to_path_buf()
+    } else {
+        Path::new(cwd.filter(|d| !d.is_empty())?).join(p)
+    };
+    if !joined.is_absolute() || joined.components().any(|c| c == Component::ParentDir) {
+        return None;
+    }
+    Some(
+        joined
+            .components()
+            .collect::<PathBuf>()
+            .to_string_lossy()
+            .into_owned(),
+    )
+}
+
 pub(crate) fn cache_key(
     tool: &str,
     input: &Value,
@@ -228,14 +257,7 @@ pub(crate) fn cache_key(
         // The `read\t` prefix is what the mutating arm below clears in one store call
         // (`clear_read_cache` deletes `x` and every `x\t…`).
         "Read" => {
-            let p = input
-                .get("file_path")
-                .or_else(|| input.get("path"))?
-                .as_str()?
-                .trim();
-            if p.is_empty() {
-                return None;
-            }
+            let p = path_identity(file_arg(input)?, cwd)?;
             // T322: a slice (`offset`/`limit`/`pages`) is a different body. The slice is a
             // suffix after the path, so the `read\t{path}` prefix clear still reaches it.
             let slice = ["offset", "limit", "pages"].map(|f| match input.get(f) {
@@ -1040,6 +1062,74 @@ mod tests {
             tool_input: &path,
         };
         assert!(g.pre_tool(&read, &Ctx::new(&cx)).is_none());
+    }
+
+    fn read_at(cx: &crate::plugin::Runtime, input: &Value) -> bool {
+        let ev = PreToolUse {
+            tool_name: "Read",
+            tool_input: input,
+        };
+        matches!(
+            Guard.pre_tool(&ev, &Ctx::new(cx)),
+            Some(PreToolDecision::Deny { .. })
+        )
+    }
+
+    fn done(cx: &crate::plugin::Runtime, tool: &'static str, input: &Value) {
+        let resp = json!({"content": "body"});
+        let ev = PostToolUse {
+            tool_name: tool,
+            tool_input: input,
+            tool_response: &resp,
+        };
+        assert!(Guard.post_tool(&ev, &Ctx::new(cx)).is_none());
+    }
+
+    /// T556: a relative path names another file once the hook cwd differs.
+    #[test]
+    fn relative_read_is_keyed_by_its_cwd() {
+        let mut cx = setup();
+        let rel = json!({"file_path": "file.txt"});
+        cx.cwd = Some("/A".to_string());
+        done(&cx, "Read", &rel);
+        assert!(read_at(&cx, &rel));
+        cx.cwd = Some("/B".to_string());
+        assert!(!read_at(&cx, &rel), "another directory's file.txt");
+        cx.cwd = Some("/A".to_string());
+        assert!(read_at(&cx, &rel));
+        assert!(read_at(&cx, &json!({"file_path": "./file.txt"})));
+        assert!(read_at(&cx, &json!({"file_path": "/A/file.txt"})));
+        // No cwd, no identity for a relative path: never cached.
+        cx.cwd = None;
+        assert!(!read_at(&cx, &rel));
+        assert_eq!(cache_key("Read", &rel, None, None), None);
+        // `..` cannot be resolved without the file system.
+        let up = json!({"file_path": "/A/x/../file.txt"});
+        assert_eq!(cache_key("Read", &up, None, Some("/A")), None);
+    }
+
+    /// T556: every spelling of a path invalidates together, slices included; other files keep
+    /// their cache.
+    #[test]
+    fn edit_through_an_alias_invalidates_every_spelling() {
+        let mut cx = setup();
+        cx.cwd = Some("/A".to_string());
+        let rel = json!({"file_path": "./file.txt"});
+        let slice = json!({"file_path": "file.txt", "offset": 10, "limit": 5});
+        let other = json!({"file_path": "other.txt"});
+        for i in [&rel, &slice, &other] {
+            done(&cx, "Read", i);
+            assert!(read_at(&cx, i));
+        }
+        done(&cx, "Edit", &json!({"file_path": "/A/file.txt"}));
+        assert!(!read_at(&cx, &rel));
+        assert!(!read_at(&cx, &slice));
+        assert!(read_at(&cx, &other), "unrelated file keeps its cache");
+        // A relative edit with no cwd cannot name its file: drop every read.
+        cx.cwd = None;
+        done(&cx, "Edit", &json!({"file_path": "other.txt"}));
+        cx.cwd = Some("/A".to_string());
+        assert!(!read_at(&cx, &other));
     }
 
     #[test]
