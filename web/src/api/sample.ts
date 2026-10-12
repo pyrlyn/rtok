@@ -363,6 +363,22 @@ export const connectSample: Connect = (handlers) => {
         return true;
       }
       if ("project" in message) {
+        const req = message.project;
+        if (req.action === "remove" && !req.confirmed) {
+          const name = snapshot.projects?.find((p) => String(p.id) === req.project)?.name;
+          later(() =>
+            handlers.onFrame(
+              name
+                ? {
+                    type: "projectplan",
+                    project: req.project,
+                    plan: `would remove ${name}\n  files untouched; nothing removed (dry run)\n`,
+                  }
+                : { type: "message", text: `no project \`${req.project}\`` },
+            ),
+          );
+          return true;
+        }
         snapshot = {
           ...snapshot,
           projects: applyProject(snapshot.projects ?? [], message.project),

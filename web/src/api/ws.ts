@@ -89,6 +89,10 @@ export function parseFrame(raw: unknown): Frame | null {
         ? { type: "doctorfixed", fixed: fixed as unknown as Fixed }
         : null;
     }
+    case "projectplan":
+      return typeof v.project === "string" && typeof v.plan === "string"
+        ? { type: "projectplan", project: v.project, plan: v.plan }
+        : null;
     case "junkplan": {
       const plan = v.plan as Record<string, unknown> | null;
       return plan && Array.isArray(plan.items) && typeof plan.planned_bytes === "number"

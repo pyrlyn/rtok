@@ -21,6 +21,7 @@ use super::live_calls::LiveCalls;
 use super::projects::{self, Key};
 use crate::config::{Config, validate};
 use crate::model::{self, Snapshot};
+use crate::web::protocol::ProjectRequest;
 
 /// The one key table (T60.8): the footer and the `?` overlay render from it, so the
 /// key hints are never hand-written twice. `(page, key, description)`; page `""` is
@@ -73,6 +74,8 @@ pub(crate) const KEYS: &[(&str, &str, &str)] = &[
     ("graph", "e", "export graph"),
     ("graph", "v", "view saved export"),
     ("graph", "d", "drill"),
+    ("graph", "i", "re-index"),
+    ("graph", "x", "remove…"),
     ("export", "↑/↓", "choose field"),
     ("export", "Space", "change format, level, redact"),
     ("export", "type", "file to write, or export to view"),
@@ -314,6 +317,7 @@ impl App {
             .skills
             .selected
             .min(self.visible_skills(&snapshot).saturating_sub(1));
+        self.projects.settle(&projects::entries(&snapshot));
         self.snapshot = snapshot;
         self.updated = crate::log::now();
     }
@@ -512,14 +516,34 @@ impl App {
         match self.projects.key(code, &rows) {
             Key::Ignored => return false,
             Key::Handled => {}
-            Key::Write(req, plan) => {
-                let status = match crate::web::project_write(&self.cfg, req) {
-                    // `select` answers with the registry table, which the page already shows.
-                    Ok(_) if plan.starts_with("select ") => format!("{plan}: done"),
-                    Ok(out) => out.trim().lines().collect::<Vec<_>>().join("; "),
-                    Err(e) => format!("{e:#}"),
+            Key::Plan(id) => {
+                let req = ProjectRequest::Remove {
+                    project: id.to_string(),
+                    confirmed: false,
                 };
-                self.projects.set_status(status);
+                match crate::web::project_write(&self.cfg, req) {
+                    Ok(dry_run) => self.projects.confirm_remove(id, &dry_run),
+                    Err(e) => self.projects.set_status(format!("{e:#}")),
+                }
+            }
+            Key::Write(req, plan) => {
+                let reindexed = match &req {
+                    ProjectRequest::Reindex { project } => project.parse::<i32>().ok(),
+                    _ => None,
+                };
+                match (reindexed, crate::web::project_write(&self.cfg, req)) {
+                    // The worker is running: the status line follows it from `refresh`.
+                    (Some(id), Ok(_)) => self.projects.watch(id, &rows),
+                    (_, outcome) => {
+                        let status = match outcome {
+                            // `select` answers with the registry table, which the page already shows.
+                            Ok(_) if plan.starts_with("select ") => format!("{plan}: done"),
+                            Ok(out) => out.trim().lines().collect::<Vec<_>>().join("; "),
+                            Err(e) => format!("{e:#}"),
+                        };
+                        self.projects.set_status(status);
+                    }
+                }
                 self.request();
             }
             Key::Drill(id, name) => {

@@ -466,8 +466,8 @@ fn live_extras_are_on_the_page_and_in_the_tui() {
     );
 }
 
-/// T476 (D27): selecting a project and linking or unlinking a pair are writes on the Graph page
-/// of both surfaces, each through the one `graph projects` function — the web by
+/// T476, T477 (D27): selecting a project, linking or unlinking a pair, re-indexing and removing
+/// one are writes on the Graph page of both surfaces, each through the one `graph projects` function — the web by
 /// `ClientMessage::Project`, the TUI by keys over the same `ProjectRequest` and
 /// `web::project_write`. A write added to one without the other fails here by name.
 #[test]
@@ -479,6 +479,8 @@ fn project_writes_exist_on_both_surfaces() {
         ("Select", "s", "select project"),
         ("Link", "l", "link to…"),
         ("Unlink", "u", "unlink from…"),
+        ("Reindex", "i", "re-index"),
+        ("Remove", "x", "remove…"),
     ] {
         assert!(
             web.contains(&format!("R::{verb}")),
@@ -1086,6 +1088,10 @@ const EXEMPT: &[(&str, &str)] = &[
     (
         "graph projects remove",
         "changes the registry; the selector is T329.12",
+    ),
+    (
+        "graph projects reindex",
+        "changes the index; the Graph page's node menu and the TUI's `i` key run the same function (T329.54, T477)",
     ),
     (
         "graph projects link",

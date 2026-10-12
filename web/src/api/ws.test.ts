@@ -74,6 +74,12 @@ describe("parseFrame", () => {
       type: "doctorfixed",
       fixed,
     });
+    expect(parseFrame('{"type":"projectplan","project":"2","plan":"would remove /x\\n"}')).toEqual({
+      type: "projectplan",
+      project: "2",
+      plan: "would remove /x\n",
+    });
+    expect(parseFrame('{"type":"projectplan","project":2,"plan":"x"}')).toBeNull();
     expect(parseFrame('{"type":"doctorplan","plan":null}')).toBeNull();
     expect(parseFrame('{"type":"doctorfixed","fixed":{"text":"x"}}')).toBeNull();
     expect(parseFrame('{"type":"message","text":"refused key x"}')).toEqual({

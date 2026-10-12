@@ -495,13 +495,23 @@ fn render_graph(frame: &mut Frame, app: &App, area: Rect) {
     // Seven rows and the header: the table scrolls to the cursor beyond that.
     let height = (rows.len() as u16 + 1).min(8);
     let detail = health::detail(&rows[state.cursor(&rows)]);
-    // Three hint lines: the project keys (T476), the live pane's (T480) and compare's (T485)
-    // overflow two at 128 columns.
+    // The key hints and a remove's plan wrap, so their rows are counted, not guessed: at 140
+    // columns the hints fit three lines, at 100 they need more.
+    let hints_text = Paragraph::new(status_line("graph", "")).wrap(Wrap { trim: true });
+    let plan = state.note(&rows);
+    let plan = if plan.is_empty() {
+        drill.note().to_owned()
+    } else {
+        plan
+    };
+    let note_text =
+        Paragraph::new(Line::styled(plan, Style::new().fg(WARN))).wrap(Wrap { trim: true });
+    let rows_for = |p: &Paragraph, most: usize| p.line_count(area.width).clamp(1, most) as u16;
     let [table, breakdown, note, hints, text] = Layout::vertical([
         Constraint::Length(height),
         Constraint::Length(detail.len() as u16),
-        Constraint::Length(1),
-        Constraint::Length(3),
+        Constraint::Length(rows_for(&note_text, 3)),
+        Constraint::Length(rows_for(&hints_text, 6)),
         Constraint::Min(0),
     ])
     .areas(area);
@@ -536,16 +546,8 @@ fn render_graph(frame: &mut Frame, app: &App, area: Rect) {
         &mut cursor,
     );
     frame.render_widget(Paragraph::new(detail), breakdown);
-    let plan = state.note(&rows);
-    let plan = if plan.is_empty() { drill.note() } else { &plan };
-    frame.render_widget(
-        Paragraph::new(Line::styled(plan.to_owned(), Style::new().fg(WARN))),
-        note,
-    );
-    frame.render_widget(
-        Paragraph::new(status_line("graph", "")).wrap(Wrap { trim: true }),
-        hints,
-    );
+    frame.render_widget(note_text, note);
+    frame.render_widget(hints_text, hints);
     frame.render_widget(graph_page(app), text);
 }
 

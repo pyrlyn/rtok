@@ -41,6 +41,7 @@ pub mod export;
 pub mod follow;
 pub mod health;
 pub mod index;
+pub mod jobs;
 pub mod lsp;
 pub mod projects;
 pub mod rank;
