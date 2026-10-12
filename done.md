@@ -238,6 +238,28 @@ Validation: `CHECK_BASE=ee8d66288b1d1b850ba24b7f9a9a70481695c3ca mise exec -- ju
 Status: done 2026-10-11
 Model: OpenAI / GPT-6
 
+### T623.1. Request ids on the `/ws` protocol: the server echoes `req` on every answer
+
+First half of T623, split when claimed (the whole task exceeds 500 lines: Rust protocol, schema, generated types, client queue, mocks and tests).
+
+Confirmed on `2c7c40b2d8af0673f085d71d8d3e1da0051084e5` in [askDoctor and settleDoctor](web/src/api/query.tsx#L180). Pending requests are matched by answer kind and optional project key. A timeout removes the old entry, but its eventual answer still matches the next request of that kind. The client then resolves the new request with the old payload and ignores the actual new answer. Sequential server processing does not prevent this when the first operation outlasts the client timer.
+
+A Vitest fake-clock/transport probe exercised the verbatim `createApi` implementation: plan A timed out, plan B was sent, and the late A frame resolved B with A's selection/diff. A timely-response control passed. [DoctorFix](web/src/pages/DoctorFix.tsx#L29) protects component effect generations, but cannot detect a response already assigned to the wrong API promise. This is separate from T576's server-side preview/apply selection drift and the already documented snapshot/write acknowledgement behavior.
+
+Execution plan:
+
+1. `src/web/protocol.rs`: a `req: Option<u64>` envelope on requests and replies (`Request`, `Reply`, flattened over `ClientMessage` and `ServerFrame`) so the committed schema and `snapshot.gen.ts` carry it; `tag_reply` writes it into an already rendered frame.
+2. `src/web/mod.rs`: `inbound` reads `req` from the request and tags whatever it answers with, errors included (`message` frames), so a failed answer names its request. A request without `req` is answered as before.
+3. Bless `web/src/api/ws.schema.json`, run `npm --prefix web run gen:api`; run the web gates after `git add`.
+4. Tests: `protocol.rs` units (`tag_reply` equals the serialized envelope, requests with and without `req` parse) and `tests/web_e2e.rs` (a doctor plan and a refused request echo their `req` over a real socket).
+
+Check: every answer to a request that carried `req` carries the same `req`, success or failure; a request without it is answered unchanged; `just check` passes.
+
+Result: `src/web/protocol.rs` gains the `Request` and `Reply` envelopes (an optional `req`, flattened over `ClientMessage` and `ServerFrame`) and `tag_reply`; `inbound` in `src/web/mod.rs` reads `req` off the request and writes it into whatever answers it, `message` refusals and parse errors included. The committed schema and `snapshot.gen.ts` carry the new types. Nothing in the client sends `req` yet, so behavior is unchanged until T623.2. Tests: `protocol.rs` units (`tag_reply` equals the serialized envelope, requests parse with and without `req`) and `tests/web_e2e.rs::answers_echo_the_request_id_and_only_that_one` over a real socket; the e2e test fails with the tagging removed.
+
+Status: done 2026-10-12 · Model: Claude Code / sonnet-5.5
+
+
 ### T591. Audit OpenTelemetry export cursors and cumulative metrics
 
 Source audit only; no product code changed. Reviewed OTel export selection and watermark advancement, stream failure isolation, span/log mapping, metric sums and encoding against the module design and existing tests. This was a sampled audit; retention and all transport/platform behavior were not exhaustively verified.
@@ -1511,6 +1533,14 @@ Check result: fail-first shown by swapping in `origin/main`'s `src/hooks/mod.rs`
 
 Status: done 2026-09-24
 Model: Claude Code / claude-opus-5-5
+
+### T645. Codex `PreToolUse` and `PostToolUse` through `rtok hook` (idea I-88)
+
+Creator approved 2026-10-12 (idea I-88, unblocks T262.3). Wire Codex's `PreToolUse` (Bash `updatedInput.command` rewrite and deny) and `PostToolUse` (`additionalContext`) into both the Codex installer and `plugins/codex/hooks/hooks.json`, as `rtok hook <event> --host codex` so the store attributes the calls to the `codex` host instead of the `claude` default. The live Codex payloads (codex-cli 0.162.1, a scratch `CODEX_HOME` against a local fake Responses server, no login) are recorded in `research.md` §40 and kept as sanitized fixtures.
+
+Found by the capture: Codex applies a `PreToolUse` rewrite only with `permissionDecision: "allow"` next to `updatedInput`; Claude's shape (no decision) leaves the call unchanged and marks the hook run failed. So a Codex output adapter in `src/hooks/mod.rs` adds `allow` to a rewrite and drops `updatedMcpToolOutput`, which Codex does not read.
+
+Result (2026-10-12): `hook_events.rs` carries the `codex` rows (`PreToolUse` on Bash, `PostToolUse` on `*`, `PreCompact`, `PostCompact`) as installer rows; `run_hooks` walks them through the shared Claude-layout insert/strip with the `--host codex` spelling and still recognises the old plain one, so an upgrade rewrites a T58.2 entry in place. `hooks::codex_output` adds `permissionDecision: "allow"` to a rewrite and drops `updatedMcpToolOutput`. `plugins/codex/hooks/hooks.json`, both READMEs and `AGENTS.md` follow the table; `tests/codex_plugin.rs` compares the manifest to it. Live payloads: `research.md` §40, `tests/fixtures/hooks/codex/`. Tests: `codex_output_allows_a_rewrite_and_drops_cursor_keys`, `codex_live_payloads_dispatch_under_the_codex_host`, `hooks_json_carries_the_codex_rows_and_upgrades_the_old_spelling`. Not verified: whether `allow` skips Codex's own approval prompt.
 
 ### T262.4. Copilot CLI: spawn brief on `subagentStart`
 
@@ -8788,6 +8818,17 @@ Check: the T413 per-host check (step 5) for this host.
 Status: done 2026-10-12
 Model: Claude Code / sonnet-5.5
 
+### T413.10. `rtok agents install amazonq` — Amazon Q Developer CLI
+
+Verify first whether Amazon Q Developer CLI is still maintained or replaced by the Kiro CLI; if replaced, close this sub-task into T413.4 and say so in `done.md`.
+
+Done: closed into T413.4 without code. Kiro's own migration guide says "Kiro CLI is the next update of the Q CLI", that new features and fixes ship only in Kiro CLI, and that the one-time migration copies `~/.aws/amazonq/mcp.json` to `~/.kiro/settings/mcp.json` (https://kiro.dev/docs/upgrade-guides/migrating-from-q/, page updated 2026-08-04, checked 2026-10-12). A separate `amazonq` host would write a file Kiro CLI already copies, so T413.4 owns the CLI. Facts recorded in `research.md` §32.10.
+
+Check: nothing to run; docs-only change.
+
+Status: done 2026-10-12
+Model: Claude Code / sonnet-5.5
+
 ### T413.14. `rtok agents install openhands` — OpenHands
 
 OpenHands CLI (the local variant only; the cloud service is out of scope). MCP and any documented hooks.
@@ -11874,6 +11915,17 @@ Check: batch position/total tests on a hidden target; parser tests on recorded `
 Result: `crates/rtok-sys/src/proc/` gains `ProgressRunner::batch(label, total, unit)` returning a `Batch` (`step(msg)` finishes the previous item and names the next, so the bar counts finished items and never passes its total; `finish()` clears it; `position()` and `total()` are readable). The bar is a `TtyIndicator::bar` on the shared `MultiProgress`, added before any command's spinner, so each command run for an item draws under it; off a terminal, or with `RTOK_NO_PROGRESS=1` or `disable_progress()`, it is `Hidden`. `Progress::Callback` takes a closure with the `ProgressParser` signature. `CargoProgress` reads cargo's `Building [==>   ] 120/300: crate` line (format recorded from cargo 1.98 with `CARGO_TERM_PROGRESS_WHEN=always`; `CargoProgress::ENV` carries the two env pairs that make cargo draw it into a pipe, since cargo draws it only on a terminal) and `JsonLines` reads `{"progress":{"pos","total","unit","msg"}}` through `serde_json` (new `rtok-sys` dependency, already in the workspace). `ProgressRunner::windows_shim()` runs a bare name or `.cmd`/`.bat` through `cmd.exe /D /C` on Windows only; `needs_cmd_host` moved from `src/doctor.rs`, which now calls it (`stdin` is stored and applied at run time so the shim can rebuild the command). First users: `rtok worktree gc --yes` shows a bar over the worktrees it removes and `rtok worktree clean --yes` over the caches it deletes, each only when more than one item goes (one keeps its single spinner); stdout and non-TTY stderr are unchanged (an integration test asserts empty stderr). Not here: `spawn_cli` and `mcp_command` still build their own commands (T276.3).
 
 Status: done 2026-10-11
+Model: Claude Code / sonnet-5.5
+
+### T276.4. `ProgressRunner` in `bench`, `plugins/cmd/run` and `agents/restart`
+
+Split from T276 (migration plan step 3, 2026-10-11, D16): `bench.rs` (3 sites, a `Batch` over runs plus `Capture`), `plugins/cmd/run.rs` (`Stream` or `Capture`, decided from the code), `agents/restart.rs` (10 sites, `Capture`). Depends on T276.1, T276.2.
+
+Check: the T276 card's Check lines for items 4 and 5; `just check`.
+
+Result: `rtok bench` shows a `Batch` bar over its runs (`bench [###   ] 3/36`, each step named `<task> <config> <n>/<runs>`) with a `running claude -p…` spinner under it, in both the A/B table and the graph suite; the task `check` command now runs captured (its output used to be inherited and could land in the stdout table). `rtok run` is `Capture` (the output is archived and filtered, then printed at the end), so a terminal gets `running <command>…` (first line, 60 characters); a pipe gets nothing, which `tests/ui_style.rs` asserts. In `agents/restart.rs` the `pgrep`, `tasklist` and `osascript` probes are `Progress::Off`, `quit` shows `closing <app>…`, `open` shows `reopening <app>…`, and the Linux direct spawn and `xdg-open` are `Output::Detached`. To keep what `src/proc.rs::capture_capped` guaranteed for `bench` and `run`, the runner gained `run_capped(cap)` (a byte budget over stdout and stderr together, the dropped count returned), a bounded drain (200 ms) after the child exits so a descendant holding a pipe cannot stall any run (the reader threads own their state instead of living in a scope), `proc::exit_code` (128 + signal, moved from `src/proc.rs`) and Windows `raw_arg`. `src/proc.rs` lost `capture_capped`, the budget and `dropped`; what is left is `capture` for the host `--version` probe, which goes with T276.3. While the non-interactive `agents install/update/remove` loader (`with_loader`) is still there, `apply_hosts` calls `disable_progress` so the restart spinners do not draw over it; T276.3 and T276.6 retire both. The `Command::new` ban is still T276.6.
+
+Status: done 2026-10-12
 Model: Claude Code / sonnet-5.5
 
 ### T436.1. Web: a spinner on every action the user waits for, and operation icons like ketch's
