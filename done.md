@@ -13535,6 +13535,343 @@ Check: `spawn_takes_explicit_stdout_and_stderr_over_the_mode_defaults`; demon, `
 Status: done 2026-10-12
 Model: Claude Code / claude-sonnet-5-5
 
+### T560. Make the TOON test decoder handle quoted comma cells
+
+Confirmed by an actual-source round-trip probe: [encode_cell](src/plugins/toon/mod.rs#L188) correctly quotes a string containing a comma, but the test-only [decode](src/plugins/toon/mod.rs#L225) unconditionally splits each row on every comma. The accepted table `[{"a":"x,y","b":1,"c":true}]` encodes to a three-column row and decodes to None because the oracle sees four cells. The round-trip cases at line 375 omit commas. T468 intentionally kept this decoder as the losslessness oracle after removing it from release code; this task repairs that verification path and makes no production-decoder/data-loss claim.
+
+Execution plan:
+
+1. Add the quoted-comma table to the round-trip cases and verify the current oracle fails on it.
+2. Parse row cell boundaries with quote/escape awareness in the test decoder, matching the existing encoder's grammar; do not weaken the encoder or reject valid input to satisfy a broken oracle.
+3. Add generated round-trip coverage combining commas, quotes, backslashes, control characters, empty strings and scalar-looking strings, and check declared row/column counts.
+
+Check: decode(encode(table)) equals the original for all accepted generated fixtures, valid comma cells pass, malformed rows are rejected, and `just check` passes. This is a P3 test-quality defect.
+
+Result: The TOON test decoder in `src/plugins/toon/mod.rs` splits rows quote-aware, rejects malformed rows and checks the declared row count, so a quoted comma cell decodes instead of becoming None.
+
+Check: `round_trip_values`, `generated_cells_round_trip_with_declared_counts`, `malformed_rows_are_rejected`.
+
+Status: done 2026-10-12
+Model: Claude Code / claude-sonnet-5-5
+
+### T566. Preserve leading dots in memory note-file mentions
+
+Source-confirmed: [clean](src/plugins/memory/files.rs#L56) strips periods from both ends of a path token. ".env" becomes "env" and is discarded by [mentioned](src/plugins/memory/files.rs#L95); "./src/lib.rs" becomes "/src/lib.rs" and is rejected as outside the fixture root. Worse, ".config/file" becomes "config/file" and links the wrong existing sibling if both exist. This affects note linking and prompt-driven recall. T374/T452 specify those features but do not track this normalization defect.
+
+Execution plan:
+
+1. Create existing .env, src/lib.rs, .config/file and config/file fixtures; assert hidden and dot-relative mentions resolve to the named file only.
+2. Separate prose punctuation handling from path syntax so leading dots and dot-relative prefixes survive; preserve existing root confinement and position-suffix handling.
+3. Cover Markdown/backtick mentions, trailing punctuation, line ranges, hidden-directory collisions and traversal rejection in both note linking and prompt recall.
+
+Check: no-dot siblings are never substituted for explicitly named dot paths, valid mentions remain root-relative, outside paths stay excluded, and `just check` passes.
+
+Result: `clean()` in `src/plugins/memory/files.rs` trims only `:,;!?` at the start of a mention (still `.:,;!?` at the end), so `.env`, `./src/lib.rs:12-30` and `.config/file` survive; note linking and prompt recall share `mentioned()`.
+
+Check: `leading_dots_name_hidden_and_dot_relative_files` (hidden files, dot-relative, `#L3`, markdown/backtick, `../.env` and `.../x` rejected) failed before and passes after.
+
+Status: done 2026-10-12
+Model: Claude Code / claude-sonnet-5-5
+
+### T573. Apply terminal call state even when the live event list is capped
+
+Confirmed with actual coalesce/fold/sweep functions: [coalesce](src/web/live.rs#L134) removes the oldest events beyond the display cap, including End events for calls already present in running. [CallsStore::fold](src/web/calls_store.rs#L213) clears running entries only from the retained events. Deliver Start A and Start B, then successful End A and End B in one batch with cap=1: the summary counts two completed calls, but A remains running because its End was discarded. At 120001 ms [sweep](src/web/calls_store.rs#L282) falsely marks A interrupted. The reader advances past the dropped End, so the next poll cannot repair it. Web and [TUI](src/tui/live_calls.rs#L118) share this state path. T329.15/T329.26 intentionally allow capped display rows and sampled tool/backend/latency bars; they do not permit a completed call to become a false interruption.
+
+Execution plan:
+
+1. Add the two-start/two-end fixture and an uncapped control; assert every completed call leaves running even when its End is not a displayed row.
+2. Preserve terminal call identities independently of the capped display list, or apply lifecycle transitions before truncation. Keep bounded processing and the existing intentional display/statistics sampling contract.
+3. Cover multiple omitted ends, ends without visible starts, interleaved progress, genuinely unfinished calls, late ends after a real timeout, and web/TUI consumption of the shared batch.
+
+Check: successful omitted ends never create stale running or interrupted rows, pending calls remain visible, summaries and display caps remain correct, and `just check` passes. The isolated actual-source probe reproduced the false interruption and showed the uncapped control clearing both calls.
+
+Result: `CallBatch` carries every ended call id, the fold clears running calls by it, and the display cap cuts ended rows before unfinished calls, so a completed call cut by the cap is never marked interrupted.
+
+Check: `an_end_the_display_cap_cut_still_clears_its_call_and_never_becomes_interrupted`, `a_call_with_no_end_stays_visible_when_ended_rows_crowd_the_cap`, `a_capped_end_after_a_real_timeout_replaces_the_interrupted_mark`.
+
+Status: done 2026-10-12
+Model: Claude Code / claude-sonnet-5-5
+
+### T574. Decode SPA asset URL paths before looking up filenames
+
+Confirmed through the actual Axum SPA router with both directory and embedded assets: [serve](src/web/spa.rs#L198) passes uri.path() directly to lookup, preserving percent escapes as literal filename text. A present assets/logo space.svg is requested as /assets/logo%20space.svg and returns 404; the same happens for filenames containing a hash, a percent sign or Unicode. An ordinary assets/plain.svg control returns 200. Neither [directory lookup](src/web/spa.rs#L117) nor embedded lookup decodes the name. T310.9 covers both sources but has no fix for encoded asset names.
+
+Execution plan:
+
+1. Add directory/embedded router fixtures for space, hash, percent and Unicode filenames, requesting their percent-encoded URLs and asserting the original bytes and MIME type.
+2. Decode the URL path exactly once before filename lookup and route classification, then validate the decoded relative path with the existing confinement rules. Handle malformed escapes/invalid text explicitly rather than silently changing a filename.
+3. Cover encoded traversal and separators, literal percent sequences without double decoding, missing assets, page fallback and negotiated compressed variants; retain the existing GET/HEAD behavior.
+
+Check: encoded URLs resolve the intended existing asset in both sources, traversal remains rejected and unknown asset URLs stay 404, and `just check` passes. Actual router probes returned 404 for all four encoded-name fixtures and 200 for the plain-name control; HEAD controls correctly returned no body.
+
+Result: SPA asset lookup decodes each URL path segment once and answers 400 for malformed escapes, non-UTF-8 and encoded separators, so `%20`/`%23`/`%25`/Unicode names resolve. New direct dep `percent-encoding` (already in the lock).
+
+Check: `percent_encoded_asset_urls_resolve_the_file_they_name`.
+
+Status: done 2026-10-12
+Model: Claude Code / claude-sonnet-5-5
+
+### T576. Bind Doctor web writes to the confirmed preview
+
+Confirmed in the selection path: [Selection](src/doctor/web.rs#L31) carries only kept-copy swaps and toggles, and [prepare](src/doctor/web.rs#L80) rebuilds candidates and default selections on both plan and apply. Preview a removable broken hook A in a user-level settings file, then add another removable broken hook B before confirming the original preview. With the original empty selection delta, B is also selected during apply although the page confirmed only A. [DoctorFix confirmation](web/src/pages/DoctorFix.tsx#L38) sends the deltas without preview identities or file versions. [fix_found](src/doctor/fix.rs#L284) edits the fresh selected findings; [fix_file's reread](src/doctor/fix.rs#L366) compares bytes read within that apply request, not those shown in the earlier preview. T331.12's fresh rescan prevents use of stale findings but does not bind writes to the confirmed diff.
+
+Execution plan:
+
+1. Add a fake-filesystem plan/apply regression: preview A, introduce B, submit the original confirmation and assert B is untouched. Cover insertion in the same file and a newly discovered file, plus an unchanged-preview success control.
+2. Carry an explicit set of confirmed identities and content/version evidence from the preview into apply. Revalidate the selected entries and affected files before writing; refuse a changed preview and return a fresh plan requiring confirmation. Do not auto-select findings discovered after the preview or treat a reused array position as the same entry.
+3. Wire the preview evidence through the web protocol and page state; cover toggles, kept-copy swaps, shared-file defaults, reordered/replaced entries, stale requests and backup/write failures. Retain the immediate pre-write reread as a separate safeguard.
+
+Check: apply never removes an entry absent from the confirmed preview or silently changes the confirmed diff, unchanged selections still work, and `just check` passes. The isolated probe compiled actual prepare/shared/default-selection functions with fixture discovery/removability: the same selection chose A before the rescan and A+B after it. Host parsing and writes were source-traced, not executed; full fake-filesystem and page regressions belong to this fix.
+
+Result: Doctor `plan` returns a token of the selected entries and their diff; `apply` writes only when the rescan yields that token, else returns a fresh plan (`Fixed.replan`) needing its own confirmation. Wired through `/ws`, the SPA and the TUI.
+
+Check: `an_entry_that_appeared_after_the_preview_is_not_removed_by_its_confirmation`, `an_unchanged_preview_still_applies_and_a_missing_or_wrong_token_does_not`, `the_token_follows_the_selection_so_a_toggle_needs_its_own_confirmation`, plus TUI/SPA/e2e counterparts.
+
+Status: done 2026-10-12
+Model: Claude Code / claude-sonnet-5-5
+
+### T579. Count each transcript once when scanning directory aliases
+
+Confirmed by the actual [paths_with_ext](src/measure/codex.rs#L28) walker: a root with real/s.jsonl returns one path; adding alias pointing to real returns two paths that canonicalize to the same file. The walker follows directory symlinks through Path::is_dir and has no visited-directory or file-identity set. [Codex requests](src/measure/codex.rs#L77), [Claude usage](src/measure/usage.rs#L115) and [stats collect](src/measure/stats.rs#L1098) parse and accumulate each returned path; a path-keyed transcript cache does not remove these aliases. Thus a single recorded request/session can contribute twice to usage and statistics. T135 addresses avoiding repeated parsing of unchanged paths, not alias deduplication.
+
+Execution plan:
+
+1. Add a filesystem fixture with one transcript, a directory alias and an unlinked control. Assert the discovered physical file and its usage/session contribution are counted once; include a symlink cycle and a symlink to a file where supported.
+2. Define one shared traversal policy for transcript readers: resolve the configured root, then either avoid following nested symlinks or track canonical directory/file identities before traversal and emission. Keep legitimate distinct transcripts and supported linked roots readable, preserve cutoff filtering and deterministic ordering, and fail open on inaccessible entries.
+3. Cover Claude/Codex usage, stats and transcript-cache callers, and consolidate the separate jsonl::parse_dir traversal so it cannot reintroduce alias double counting. Verify subagent attribution, missing targets and out-of-root links under the chosen policy.
+
+Check: adding an alias never changes totals for the same physical transcript and cycles terminate without repeated parsing; `just check` passes. The scratch probe exercised the actual walker and proved duplicate canonical paths; downstream accumulation was source-traced, not run through a complete host parser or CLI.
+
+Result: `paths_with_ext` in `src/measure/codex.rs` tracks canonical directory and file paths, walks real entries before links, skips dangling links and read errors, and takes a linked file's mtime from its target. `jsonl::parse_dir` now reuses `codex::jsonl_paths`, so every transcript reader shares the one walker.
+
+Check: `measure::codex::tests::aliases_and_cycles_count_a_transcript_once` (directory alias, file alias, cycle, dangling link, symlinked root; walker, `collect`, `requests`, `parse_dir`) failed before and passes after.
+
+Status: done 2026-10-12
+Model: Claude Code / claude-sonnet-5-5
+
+### T580. Include report metadata and anchors in the AI output budget
+
+Confirmed with the actual [AI render loop](src/report/ai.rs#L41) and [token estimator](src/tokens.rs#L22): admission subtracts only section-body estimates, then appends the report header, date range/store path, dropped-section list and section anchors outside the budget. Eight controlled bodies admitted at an 808-token budget produced a final 840-token estimate. A longer store path adds more unbudgeted output. T22.4 and report.budget_tokens describe a cap on the AI report; existing tight-budget tests check whole-section omission but never estimate the final output. T565 covers a similar issue in mem_pack, not this renderer.
+
+Execution plan:
+
+1. Add final-output estimator assertions using real Document fixtures at a tight budget and exact admission boundaries, including long store paths, all-kept and partially dropped sections.
+2. Budget the complete serialized report, including anchors and the actual dropped list. Recompute admission when dropping a section changes metadata; preserve whole sections, their order and byte-stable output.
+3. Define explicit behavior when even the minimal metadata does not fit, and cover zero/tiny budgets, non-default estimator rates, Unicode and both TOON and fallback table rendering. Do not silently emit output above the configured cap.
+
+Check: every successful AI report stays within report.budget_tokens according to the configured estimator, while tables remain whole and drops are accurately named; `just check` passes. The isolated probe used actual render/admission and estimator functions with controlled section bodies and minimal model/config stubs, not the full document renderer.
+
+Result: `render` in `src/report/ai.rs` budgets the whole serialized text (header, store path, `dropped:` line, anchors). When even the header does not fit, output degrades to the title plus `dropped:`, then to empty.
+
+Check: `whole_output_stays_within_the_budget` (budgets 0..1500, two estimator rates, long and Unicode store paths), `budget_boundary_is_exact`, `a_budget_below_the_header_degrades_explicitly`; all failed against the old `render`.
+
+Status: done 2026-10-12
+Model: Claude Code / claude-sonnet-5-5
+
+### T581. Filter actionable report sinks before applying the top-ten limit
+
+Confirmed through actual aggregation and recommendation functions: [report_sinks](src/model/report.rs#L284) groups all catalogue plugins, sorts by before_bytes and truncates to ten. Only afterwards [top_sinks](src/report/advice.rs#L253) skips classes other than read/cmd/mcp. Ten larger archive rows with distinct references therefore displace a smaller Read sink, yielding no top-sinks recommendation; the Read-only control yields one. The archive rows are valid measurements, but deliberately have no actionable switch in this rule. T59.8 and docs/report.md promise the ten largest file/command/MCP sinks; T302 changed ranking units, not filtering before truncation.
+
+Execution plan:
+
+1. Add an integration fixture with ten distinct positive-byte archive measurements and a smaller Read measurement. Assert that the Read recommendation remains; include cmd and MCP wrap controls and more than ten eligible sinks.
+2. Apply the actionable-class predicate before truncating to ten, or retain all grouped sinks until the recommendation layer filters and limits them. Share the eligibility rule so aggregation and presentation cannot drift; preserve deterministic tie ordering and existing switch labels.
+3. Cover mixed actionable/non-actionable classes, repeated references that aggregate into one sink, nonpositive byte counts and empty ledgers. Verify that recommendations expose at most ten eligible sinks and keep their Measurement evidence.
+
+Check: unrelated archive/injection rows cannot hide eligible read/cmd/MCP recommendations, the largest eligible sinks remain ranked correctly, and `just check` passes. The scratch probe compiled actual report_sinks/sink_label/sink_switch and top_sinks with an in-memory Store fixture and a catalogue subset containing the relevant real plugins; it was not a Diesel or CLI integration test.
+
+Result: `model::is_actionable_sink` filters report sinks before the top-ten cut, and `src/report/advice.rs` uses the same predicate, so large archive rows no longer hide read, cmd and mcp sinks.
+
+Check: `tests/report.rs::top_sinks_survive_larger_non_actionable_rows` failed before and passes after.
+
+Status: done 2026-10-12
+Model: Claude Code / claude-sonnet-5-5
+
+### T587. Let an explicit report --format md override configuration
+
+Confirmed through actual Clap argument parsing and [report_flags](src/cli/report.rs#L32): [Args.format](src/cli/report.rs#L63) defaults to Md, and the flag layer treats every Md value as omitted. With report.format=html in a lower-precedence config layer, explicitly passing --format md produces no format override and the effective value remains html; --format pdf correctly overrides it. [run](src/cli/report.rs#L89) merges this flag layer and selects the renderer using cfg.report.format. Thus the explicit CLI request can produce HTML or PDF instead of Markdown. D12 and docs/config.md promise flags override configuration; T22.1/T22.2 and T60 do not cover explicit selection of the built-in default.
+
+Execution plan:
+
+1. Add argument/config regressions for configured html and pdf with omitted --format, explicit md and explicit pdf/html. Assert omission preserves configuration but every explicit format wins; include combinations with --out and --since.
+2. Preserve whether --format was supplied, for example with an Option<ReportFormat>, and insert every explicitly supplied value into the flag layer. Keep md as the configuration default and preserve the documented --ai precedence.
+3. Cover environment and project/user config layers, help/completion output, and a CLI rendering fixture that verifies Markdown bytes for an explicit --format md over configured HTML/PDF.
+
+Check: explicit format flags always select the requested renderer, an omitted flag still respects lower-precedence settings, and `just check` passes. The scratch probe used actual ReportFormat/Args/report_flags with Clap and a Figment config layer; full report construction and file output were not run.
+
+Result: `report --format` is `Option<ReportFormat>` and every supplied value enters the flag layer, so an explicit `--format md` beats a configured html or pdf. Help no longer prints `[default: md]`.
+
+Check: `tests/report.rs::explicit_format_md_overrides_configured_format` failed before and passes after; `help-subcommands.trycmd` updated.
+
+Status: done 2026-10-12
+Model: Claude Code / claude-sonnet-5-5
+
+### T604. Keep literal strings distinct from JSON-tree variable references
+
+Confirmed on `e06ada0852e3cc28e5dcaa04d26faa6bdc2bc5ab` with the actual folding functions. In a root object's `children`, give nodes `a` and `b` the same object-valued `value`, then give node `literal` a string equal to that object's generated `V-<sha1-8>` identifier. [insert_field](src/plugins/json_tree/mod.rs#L323) represents a hoisted object as `Value::String(id)`, exactly like the original literal. [collect_bodies](src/plugins/json_tree/mod.rs#L361) and [stamp](src/plugins/json_tree/mod.rs#L372) consequently assign all three nodes the same element template. The probe produced `EL-a5ce585c: {"type":"ITEM","value":"V-65c37664"}` for all three, although the third input value is a string and the other two are objects. Changing the literal to `ordinary-literal` leaves only the two object-valued nodes templated.
+
+This is a collision between user data and the encoder's reference representation, not a SHA-1 hash collision. The folded preview incorrectly conflates values and cannot tell a reader which occurrence is literal. The archived original remains recoverable; no irreversible archive loss is claimed. T475 implements hoisting and T554 inspected general folding behavior, but neither covers this case. T532's typed cache-key collision concerns a separate mechanism.
+
+Execution plan:
+
+1. Add a deterministic regression using two identical object-valued fields and one literal equal to their generated variable id. Assert that the literal retains its string meaning and is not assigned the same element body as the references. Retain the ordinary-literal control and insertion-order determinism checks.
+2. Keep generated references distinct from JSON strings in the internal folded representation, including the body identity used for template counting and stamping. Do not infer a reference solely from a string's spelling; preserve the source JSON value until the encoder explicitly replaces it with a typed reference.
+3. Render an unambiguous distinction between a reference and literal reference-like text in both inline fields and `ELEMENTS` bodies. Make variable-use collection follow actual references, covering nested user strings, identity extras and reserved-looking literals without treating them as encoder metadata.
+4. Exercise proxy and MCP folding with the collision fixture, including their size gates and Measurements. Verify that folding retains the distinction, stored-pointer replay is stable, and `expand` still returns the exact original bytes. Run focused JSON-tree/MCP tests and `just check`.
+
+Check: the reproduced object/string fields remain distinguishable in the folded output while repeated object bodies still share templates. The offline probe compiled extracted production fold/render/hash functions and the actual TOON eligibility helper. It also executed the extracted MCP fold wrapper with a minimal enabled config and recording/estimation adapters: the collision fixture was accepted at 1,075 output bytes versus 1,932 original bytes. Full CLI/proxy transport, archive storage and a production tokenizer were not executed.
+
+Result: JSON-tree node bodies store each field as a hoisted reference or the source value; template keys use `canonical_body` and `referenced_vars` follows real references only (`mark_ids` removed). A reference prints bare; an id-shaped literal string is quoted.
+
+Check: `a_literal_equal_to_a_var_id_stays_distinct_from_the_reference`, `a_reference_shaped_literal_does_not_mark_a_var_used`, `the_proxy_folds_the_collision_and_expand_returns_the_original`, `mcp_fold_keeps_a_reference_shaped_literal_distinct`.
+
+Status: done 2026-10-12
+Model: Claude Code / claude-sonnet-5-5
+
+### T606. Preserve fitting Unicode mode files when bounding injection reads
+
+Confirmed with the actual [read_mode](src/plugins/inject/mod.rs#L119), [fit_budget](src/plugin.rs#L37), [apply](src/plugins/inject/mod.rs#L148) and [token estimator](src/tokens.rs#L22). `read_mode` computes `ceil(budget * prose_rate) + 1` and reads that many **bytes**, while the estimator divides the number of Unicode **characters** by the prose rate. At the defaults of 800 tokens and rate 4.2, a mode containing 1,000 four-byte characters followed by `\nKEEP_THIS_TAIL\n` is only 242 estimated tokens (1,016 characters), but exceeds the 3,361-byte read cap. The reader returns 3,360 bytes and loses the tail; the final injection has no `dropped:` marker. This example even fits the README's 250-token per-mode guidance. A 2,016-character Cyrillic mode likewise loses its tail despite fitting the shared 800-token budget; the same-length ASCII control remains intact.
+
+The truncation happens before [modes_text](src/plugins/inject/mod.rs#L87) passes the mode to `fit_budget` and before aggregate injection accounting, so neither stage can recover the unread instructions. This is unnecessary truncation of content that fits the configured estimator budget, not a claim about actual model token billing. T188 introduced bounded mode reads to fix oversized input and tested a 1 MB ASCII mode; it does not test Unicode modes that already fit the token budget. T189 addresses PostToolUse archive references; neither covers this byte/character mismatch while loading mode files.
+
+Execution plan:
+
+1. Add file-backed regressions for two-, three- and four-byte UTF-8 text that fits the configured estimated-token budget but exceeds the current byte cap. Include a distinctive tail and assert that the entire fitting mode survives; retain ASCII and missing-file builtin controls.
+2. Bound file I/O in a way consistent with the estimator's character budget. Account for UTF-8's maximum bytes per scalar or decode incrementally with a bounded character allowance, using checked arithmetic and preserving character boundaries. Keep large files bounded rather than reading them all into memory.
+3. Run the decoded text through the shared budget fitter. Preserve fitting content and define how genuine truncation is reported/accounted for without changing T2.4's intentional candidate-selection policy. Check zero/small budgets, partial UTF-8 at the read boundary and multiple mode files.
+4. Add SessionStart coverage with an actual Unicode mode file: assert the fitting tail survives, repeated unchanged runs remain byte-identical, and mode text is absent from UserPromptSubmit. Run focused injection/token tests and `just check`.
+
+Check: the reproduced 242-token mode survives in full under budget 800; genuinely oversized files remain bounded and existing priority/budget behavior stays intact. The isolated executable compiled the production read, fit, apply and estimate functions, used real scratch files and minimal config/Measurement adapters, and observed stable repeated output. ASCII and missing-file builtin controls retained all fitting text. Full hook dispatch, checkpoint composition and persistent Measurement storage were source-traced or excluded, not executed.
+
+Result: `read_mode` in `src/plugins/inject/mod.rs` caps by characters (`ceil(budget*rate)+1`, 4 bytes each), drops a partial UTF-8 tail instead of producing U+FFFD, and reads via `take().read_to_end` without pre-allocating the cap.
+
+Check: `read_mode_keeps_a_fitting_multibyte_mode_whole`, `read_mode_bounds_a_huge_multibyte_file_on_a_character_boundary`, `session_start_keeps_the_tail_of_a_fitting_unicode_mode`.
+
+Status: done 2026-10-12
+Model: Claude Code / claude-sonnet-5-5
+
+### T608. Preserve identifier and path suffixes in prose word stripping
+
+The public [compress_prose](src/modes/compress.rs#L82) helper changes `Edit foo_a now` to `Edit foo_ now`, `Open /tmp/a now` to `Open /tmp/ now`, and `Keep item1a here` to `Keep item1 here` at Full intensity. [strip_words](src/modes/compress.rs#L259) starts a removable word after an underscore, slash or digit but checks only the character following that word for identifier/path glue. Thus the final `a` is mistaken for an article and deleted. These are changes to names, not whitespace or filler compression. The existing `a.txt`/`a-b`/`a/b`/`a1` tests cover following glue, not preceding glue.
+
+Execution plan:
+
+1. Add Full and Ultra regressions for `foo_a`, `/tmp/a`, `item1a`, and analogous suffixes matching filler words. Assert preservation of the entire name, not merely the surrounding sentence. Retain standalone-article removal and existing right-boundary cases.
+2. Decide whether a token is standalone from both original input boundaries. Treat preceding identifier/path punctuation and digits consistently with the current following-boundary protection, without making the decision from already edited output.
+3. Cover combinations of left/right glue, Unicode neighbors, negation words and protected inline/fenced code; retain Lite behavior and deterministic output. Keep genuine prose article/filler removal working.
+4. Add realistic identifier/path fixtures to the mode comparison tests, checking exact retained names before recording compression measurements. Run focused mode unit/benchmark tests and `just check`.
+
+Check: the three reproduced names remain byte-identical while `Edit the file` still becomes `Edit file`. The isolated executable imported the actual compression module by path and reproduced all three changes; Lite and `a.txt` controls preserved their names. This is a P3 library/benchmark correctness defect: these native helpers are currently used by tests and comparisons, not wired into production hook compression.
+
+Result: `strip_words` in `src/modes/compress.rs` checks the character before a word as well as after and treats non-ASCII letters as glue on both sides, so identifier and path suffixes are kept.
+
+Check: `a_suffix_inside_a_name_is_kept` failed before and passes after; `a_suffix_name_next_to_code_is_kept`.
+
+Status: done 2026-10-12
+Model: Claude Code / claude-sonnet-5-5
+
+### T609. Preserve code inside longer Markdown backtick fences
+
+The public [compress_prose](src/modes/compress.rs#L82) helper closes a fence at the next occurrence of exactly three backticks, without remembering the opening delimiter length or requiring a closing fence line. For a four-backtick Markdown block containing a triple-backtick example followed by `The really exact content`, Full compression removes `The really` inside the outer code block. The source promise to preserve fenced code verbatim is therefore violated. This is distinct from inline code-span protection and from stripping identifiers outside code.
+
+Execution plan:
+
+1. Add a golden regression for a four-backtick outer fence containing a triple-backtick example and filler-like code text. Assert exact preservation of the whole fenced region, including delimiters, spacing and newlines, at every intensity.
+2. Recognize fence openings and closures by line position, delimiter kind and opening run length. A shorter internal run or an occurrence inside a code line must not close the block. Preserve unclosed blocks through the end as today; define and test supported Markdown fence forms.
+3. Add controls for ordinary triple fences, longer matching closers, code lines containing backtick runs, and prose around the fence. Verify that inline-span handling remains independent and that prose outside the block still compresses.
+4. Extend `tests/mode_bench.rs` with the reproduced fixture and an independent preservation oracle: its current `fence_bodies` helper also splits on raw triple-backtick substrings and cannot establish correctness for this case. Run focused mode tests, comparison tests and `just check`.
+
+Check: the complete reproduced outer code block is byte-for-byte unchanged. An isolated executable imported the actual compression module by path, reproduced the four-backtick mutation, and passed ordinary triple-fence and double-backtick inline controls. This is a P3 library/benchmark defect, not observed production hook corruption; the native compression helper is not currently wired into those hooks.
+
+Result: Fences in `src/modes/compress.rs` are found line by line with CommonMark rules (`find_fence`/`fence_run`): backtick and tilde, up to 3 spaces of indent, closer at least as long as the opener, unclosed fence to the end; a mid-line triple-backtick span stays inline.
+
+Check: `a_longer_fence_survives_a_shorter_inner_run`, `fences_follow_markdown_opening_and_closing_rules`, `inline_triple_backtick_spans_stay_inline`, `tests/mode_bench.rs::compress_keeps_longer_fences_and_identifier_suffixes_exact`; snapshots unchanged.
+
+Status: done 2026-10-12
+Model: Claude Code / claude-sonnet-5-5
+
+### T617. Limit file-linked observation recall after deduplicating observations
+
+Confirmed on `2c7c40b2d8af0673f085d71d8d3e1da0051084e5` with actual Store migrations and public APIs. [observations_for_files](crates/rtok-store/src/observations.rs#L122) joins `observation_files` to `observations`, then orders and limits joined rows without making observation IDs distinct. Insert an older observation linked to `a.rs`, then a newer one linked to both `a.rs` and `b.rs`; querying both paths with limit 2 returns the newer ID twice and omits the older matching observation. [obs_for_prompt](src/plugins/memory/mod.rs#L299) feeds these rows into [rrf_obs](src/plugins/memory/observe.rs#L180), which both gives duplicate IDs extra rank contributions and merges them after the store limit has already discarded other hits. The real ranking helper reduces this fixture to one hit despite two eligible observations.
+
+Execution plan:
+
+1. Add store regressions with multiple file links per observation and several distinct observations. Assert unique IDs, newest-first ordering and a limit counted in observations; include project isolation, overlapping paths and single-path controls.
+2. Express an existence/subquery or distinct projection through Diesel so each observation participates once before ordering and LIMIT. Preserve global/project visibility and the existing empty-path behavior.
+3. Add recall/ranking coverage proving extra matched files do not create duplicate contributions within one result list or starve older distinct hits. Preserve the intentional boost when an observation appears in separate FTS and file-recall lists.
+4. Run focused store observation and memory recall tests, then `just check`.
+
+Check: the two-path fixture returns both distinct observations, and fusion retains both. Executed evidence used the real in-memory Store and the verbatim production `rrf_obs`; single-path and other-project controls passed. Full hook dispatch and live host integration were not run.
+
+Result: `observations_for_files` in `crates/rtok-store/src/observations.rs` filters by an id subquery on the links table instead of a join, so the limit counts distinct observations. Diesel only, no migration.
+
+Check: `file_linked_observations_are_distinct_before_the_limit` failed before and passes after; `fusion_keeps_distinct_file_hits_and_boosts_cross_list_ones`.
+
+Status: done 2026-10-12
+Model: Claude Code / claude-sonnet-5-5
+
+### T618. Scrub private observation content before truncation removes its delimiters
+
+Confirmed on `2c7c40b2d8af0673f085d71d8d3e1da0051084e5` with the production [synthesize](src/plugins/memory/observe.rs#L153) and [strip_private](src/plugins/memory/scrub.rs#L48). A complete output `<private>SYNTHETIC_PRIVATE_MARKER` + 300 filler characters + `</private> public` is redacted by `strip_private` when passed whole. `synthesize` first truncates each input/output string to 200 characters, then the combined narrative to 400, and only then scrubs. That removes the closing tag; the paired-tag regex no longer matches, so the private marker remains in the narrative. The real Store persisted and returned that narrative in the isolated probe.
+
+[capture](src/plugins/memory/observe.rs#L245) passes this synthesized narrative straight to `insert_observation`. Short complete blocks are covered by existing tests and redact correctly; the long complete-block case is not. T548 covers checkpoint prompts bypassing private-tag filtering entirely; this is a separate observation path where truncation defeats an existing scrubber.
+
+Execution plan:
+
+1. Add synthetic private-block regressions crossing the 200-character per-field and 400-character combined limits, for both tool input and response. Assert private text never reaches the stored narrative; retain short-block, ordinary-text and Unicode-cap controls.
+2. Scrub complete field content before applying lossy truncation, using the shared privacy function. Ensure any bounded implementation tracks private spans across its cut rather than retaining an unmatched private prefix. Preserve the final narrative character cap.
+3. Exercise capture through the memory host and Store retrieval/search so private payloads cannot reappear in recall. Cover other supported secret patterns crossing a cut, without real credentials in fixtures.
+4. Run focused privacy, observation/capture and memory recall tests and `just check`.
+
+Check: a complete private block remains private regardless of its position or length. The probe compiled the verbatim production synthesizer, imported the actual scrubber, and used real Store migrations/public methods; the full-block scrub, short-block and Unicode-cap controls passed. The full hook/capture integration was source-traced, not executed.
+
+Result: `synthesize` in `src/plugins/memory/observe.rs` runs `scrub::strip_private` on each whole field before the 200-character cut; the ineffective final scrub after the 400-character cut is gone.
+
+Check: `private_content_is_scrubbed_before_truncation_cuts_its_delimiters` (long private block, `sk-ant-` key across the cut) failed before and passes after. Hook cost on multi-megabyte outputs not measured.
+
+Status: done 2026-10-12
+Model: Claude Code / claude-sonnet-5-5
+
+### T632. Use rendered chart height when paginating PDF reports
+
+Source-confirmed on `ea999781d7a48733e3a5c92e711cfad291c13536` in [pagination](src/report/pdf.rs#L77) and [bar rendering](src/report/pdf.rs#L243). A chart is budgeted as `pairs.len() + 2` lines at `LEAD = 4.6` mm, but each drawn bar advances 5.2 mm. The chunker accepts 56 bars as a 58-line page. Starting at TOP 282 mm, after the chart title the last bar baseline is `282 - 6 - 55 * 5.2 = -10` mm, below the page itself and well below the 15 mm bottom margin. The existing oversized-chart guard and T167's orphan-heading fix do not account for the different physical bar spacing.
+
+Execution plan:
+
+1. Add layout regressions at the maximum chart size, with and without a preceding heading/paragraph. Inspect the emitted positions and require every row to stay within the content area.
+2. Express block costs and splitting in the same physical units used for rendering, including chart title and trailing spacing. Derive the maximum rows per chart from available height.
+3. Preserve chart continuation, heading placement and progress guarantees for oversized and empty charts; check mixed charts and paragraphs.
+4. Render representative reports for visual inspection, run PDF/report parity tests and `just check`.
+
+Check: no chart row crosses the bottom margin. The executed probe checked the current source constants and arithmetic; an actual PDF renderer/viewer was not run in this audit.
+
+Result: PDF report chart rows are budgeted at their drawn heights in `src/report/pdf.rs`, so they stay above the bottom margin.
+
+Check: `chart_rows_stay_above_the_bottom_margin`.
+
+Status: done 2026-10-12
+Model: Claude Code / claude-sonnet-5-5
+
+### T633. Include the contents page in printed PDF page numbers
+
+Source-confirmed on `ea999781d7a48733e3a5c92e711cfad291c13536`: [render](src/report/pdf.rs#L52) prepends one contents page, and section bookmarks use `start + 2`, but [toc_page](src/report/pdf.rs#L171) prints `start + 1`. A section starting on content index zero is physically on page 2 while the contents says page 1; subsequent section numbers have the same offset. This is separate from T632's chart-height calculation.
+
+Execution plan:
+
+1. Add a PDF contents regression with sections starting on different content pages, checking printed page numbers against their physical pages.
+2. Share the conversion from zero-based content index to physical page number between the contents and bookmark construction, honoring the PDF library's index convention.
+3. Verify first, middle and final sections plus chart continuations with extracted text/bookmarks and a rendered sample.
+4. Run PDF/report tests and `just check`.
+
+Check: every contents entry points to the page that actually starts the section. The source-arithmetic probe confirmed the one-page discrepancy; viewer navigation was not executed.
+
+Result: One `physical_page` helper feeds both the PDF contents page and the bookmarks, so section numbers match the heading pages.
+
+Check: `section_page_numbers_match_heading_pages`.
+
+Status: done 2026-10-12
+Model: Claude Code / claude-sonnet-5-5
+
 ### T353. MCP parameter tolerance: `a,b` line ranges and missing-param errors
 
 Found 2026-10-02 in `~/.rtok/errors.log`: `read` rejects `invalid line range \`N,N\`` (14) and `\`N, N\`` (3) — T172 only stripped quotes; `search` fails with `missing \`pattern\`` (8), `read` with `missing \`path\`` (2), `symbol` with `missing \`name\`` (1); `outline` says `No such file or directory (os error 2)` (6) without the path.
