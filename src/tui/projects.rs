@@ -23,6 +23,7 @@ pub(super) struct Entry {
     pub missing: bool,
     pub state: &'static str,
     /// The index job's key: the tracker is keyed by root (T329.54).
+    #[cfg(feature = "graph")]
     pub root: String,
     pub links: Vec<(i32, String)>,
     /// The server's score, painted as it came (T481); with `graph` off there are no rows.
