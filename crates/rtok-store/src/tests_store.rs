@@ -197,6 +197,58 @@ fn migration_0015_adds_lifecycle_columns_to_a_previous_schema_db() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// T592: a database holding the old `(ended_at, count)` export mark migrates to a sequence
+/// mark. Sessions are numbered by `(ended_at, id)`; the mark stops before the whole watermark
+/// second, because the count cannot say whether the late `a-late` was among those delivered.
+#[test]
+fn migration_20261012120002_turns_the_session_mark_into_a_sequence() {
+    use schema::{otel_export, sessions};
+    let (dir, mut conn) = db_before_migration("20261012120002");
+    let db = dir.join("rtok.db");
+    for (id, ended) in [
+        ("old", Some(95)),
+        ("z-first", Some(100)),
+        ("a-late", Some(100)),
+        ("next", Some(101)),
+        ("live", None),
+    ] {
+        diesel::insert_into(sessions::table)
+            .values((
+                sessions::id.eq(id),
+                sessions::started_at.eq(1i64),
+                sessions::ended_at.eq(ended),
+            ))
+            .execute(&mut conn)
+            .unwrap();
+    }
+    for (stream, mark) in [("sessions", 100i64), ("sessions_tail", 1), ("calls", 7)] {
+        diesel::insert_into(otel_export::table)
+            .values((otel_export::stream.eq(stream), otel_export::mark.eq(mark)))
+            .execute(&mut conn)
+            .unwrap();
+    }
+    drop(conn);
+    let store = Store::open(&db).unwrap();
+    assert_eq!(store.otel_mark("sessions").unwrap(), 1);
+    assert_eq!(store.otel_mark("sessions_tail").unwrap(), 0, "retired");
+    assert_eq!(
+        store.otel_mark("calls").unwrap(),
+        7,
+        "other streams keep theirs"
+    );
+    let pending = store.sessions_pending_export(1, 10).unwrap();
+    assert_eq!(
+        pending.iter().map(|r| r.id.as_str()).collect::<Vec<_>>(),
+        ["a-late", "z-first", "next"]
+    );
+    store.end_session("live", 102).unwrap();
+    let last = store.sessions_pending_export(4, 10).unwrap();
+    assert_eq!(last.len(), 1);
+    assert_eq!((last[0].id.as_str(), last[0].end_seq), ("live", Some(5)));
+    drop(store);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn upsert_same_title_with_a_new_body_keeps_the_old_body_in_history() {
     let store = Store::open_in_memory().unwrap();

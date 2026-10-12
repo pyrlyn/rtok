@@ -169,7 +169,7 @@ fn every_row_posts_once_and_the_marks_advance() {
     assert_eq!(flush_blocking(&cx).spans, 1);
     assert_eq!(flush_blocking(&cx).spans, 0);
     root.assert_calls(1);
-    assert_eq!(cx.store.otel_mark("sessions").unwrap(), 1_700_000_000);
+    assert_eq!(cx.store.otel_mark("sessions").unwrap(), 1);
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -204,8 +204,140 @@ fn session_in_watermark_second_posts_once() {
     assert_eq!(flush_blocking(&cx).spans, 0);
     traces.assert_calls(3);
     logs.assert_calls(1);
-    assert_eq!(cx.store.otel_mark("sessions").unwrap(), 1_700_000_000);
-    assert_eq!(cx.store.otel_mark("sessions_tail").unwrap(), 2);
+    // The mark is the `end_seq` of the last session posted: two sessions ended, numbered 1, 2.
+    assert_eq!(cx.store.otel_mark("sessions").unwrap(), 2);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// T592: the OTLP server answers 200 and records which session ids each `/v1/traces` body held.
+fn collector() -> MockServer {
+    let server = MockServer::start();
+    for path in ["/v1/logs", "/v1/metrics"] {
+        server.mock(|when, then| {
+            when.method(POST).path(path);
+            then.status(200).body("{}");
+        });
+    }
+    server
+}
+
+fn traces_with<'a>(server: &'a MockServer, id: &str) -> httpmock::Mock<'a> {
+    server.mock(|when, then| {
+        when.method(POST)
+            .path("/v1/traces")
+            .body_includes(format!("\"{id}\""));
+        then.status(200).body("{}");
+    })
+}
+
+fn open_sessions(cx: &Runtime, ids: &[&str]) {
+    for id in ids {
+        cx.store
+            .upsert_session(id, None, Some("p"), Some("/w"), Some("startup"))
+            .unwrap();
+    }
+}
+
+/// T592: a session ending in an already-exported second ships whatever its id sorts to. The
+/// cursor was a per-second rank by id, so a lower id ending late shifted the exported row
+/// past the count and hid itself.
+fn late_session_in_watermark_second(first: &str, late: &str) {
+    let server = collector();
+    let first_posts = traces_with(&server, first);
+    let late_posts = traces_with(&server, late);
+    let dir = home(&format!("late-{first}-{late}"));
+    let cx = ctx(&dir, &server.base_url());
+    open_sessions(&cx, &[first, late]);
+    cx.store.end_session(first, 1_700_000_000).unwrap();
+    assert_eq!(flush_blocking(&cx).spans, 1);
+    cx.store.end_session(late, 1_700_000_000).unwrap();
+    let r = flush_blocking(&cx);
+    assert_eq!(r.spans, 1, "the late session ships: {r}");
+    assert_eq!(flush_blocking(&cx).spans, 0, "and the next flush drains");
+    first_posts.assert_calls(1);
+    late_posts.assert_calls(1);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_late_lower_id_session_in_the_watermark_second_ships() {
+    late_session_in_watermark_second("z-first", "a-late");
+}
+
+#[test]
+fn a_late_higher_id_session_in_the_watermark_second_ships() {
+    late_session_in_watermark_second("a-first", "z-late");
+}
+
+/// T592: a failed POST keeps every session pending; after a restart (a fresh `Runtime` on the
+/// same database, now pointing at a healthy collector) each ships once, whichever ended last.
+#[test]
+fn a_failed_post_and_a_restart_keep_late_sessions_pending() {
+    let dead = MockServer::start();
+    let refused = dead.mock(|when, then| {
+        when.method(POST).path("/v1/traces");
+        then.status(500);
+    });
+    dead.mock(|when, then| {
+        when.method(POST);
+        then.status(200).body("{}");
+    });
+    let dir = home("late-retry");
+    let cx = ctx(&dir, &dead.base_url());
+    open_sessions(&cx, &["z-first", "a-late"]);
+    cx.store.end_session("z-first", 1_700_000_000).unwrap();
+    cx.store.end_session("a-late", 1_700_000_000).unwrap();
+    assert!(flush_blocking(&cx).error.is_some());
+    refused.assert_calls(1);
+    drop(cx);
+
+    let server = collector();
+    let both = server.mock(|when, then| {
+        when.method(POST)
+            .path("/v1/traces")
+            .body_includes("\"z-first\"")
+            .body_includes("\"a-late\"");
+        then.status(200).body("{}");
+    });
+    let cx = ctx(&dir, &server.base_url());
+    assert_eq!(flush_blocking(&cx).spans, 2);
+    assert_eq!(flush_blocking(&cx).spans, 0);
+    both.assert_calls(1);
+    drop(cx);
+
+    // Another restart finds the acknowledged sessions acknowledged.
+    let cx = ctx(&dir, &server.base_url());
+    assert_eq!(flush_blocking(&cx).spans, 0);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// T592: more ties than one batch, with a lower id finishing while the first batch is out.
+#[test]
+fn ties_across_batches_and_a_session_ending_between_them_all_ship() {
+    use rtok::otel::export::BATCH;
+    let server = collector();
+    let late = traces_with(&server, "0-late");
+    server.mock(|when, then| {
+        when.method(POST).path("/v1/traces");
+        then.status(200).body("{}");
+    });
+    let dir = home("late-batches");
+    let cx = ctx(&dir, &server.base_url());
+    let n = BATCH + 5;
+    let ids: Vec<String> = (0..n).map(|i| format!("m{i:05}")).collect();
+    for id in &ids {
+        open_sessions(&cx, &[id]);
+        cx.store.end_session(id, 1_700_000_000).unwrap();
+    }
+    assert_eq!(flush_blocking(&cx).spans, usize::try_from(BATCH).unwrap());
+    open_sessions(&cx, &["0-late"]);
+    cx.store.end_session("0-late", 1_700_000_000).unwrap();
+    let mut total = usize::try_from(BATCH).unwrap();
+    for _ in 0..3 {
+        total += flush_blocking(&cx).spans;
+    }
+    assert_eq!(total, usize::try_from(n).unwrap() + 1);
+    late.assert_calls(1);
     let _ = std::fs::remove_dir_all(&dir);
 }
 

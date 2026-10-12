@@ -224,6 +224,8 @@ diesel::table! {
         source -> Nullable<Text>,
         started_at -> BigInt,
         ended_at -> Nullable<BigInt>,
+        // 20261012120002 (T592): export order of ended sessions, see `Store::end_session`.
+        end_seq -> Nullable<BigInt>,
     }
 }
 

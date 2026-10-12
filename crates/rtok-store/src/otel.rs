@@ -6,7 +6,7 @@
 //! past them. A second `impl Store`; `src/otel/` never sees SQL.
 
 use crate::Result;
-use diesel::dsl::{count_star, min};
+use diesel::dsl::{count_star, max, min};
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
 
@@ -259,29 +259,48 @@ impl Store {
             .load(&mut *conn)?)
     }
 
-    /// Ended sessions not yet posted: `mark` is the last `ended_at` fully covered, `tail` is how
-    /// many at that second were posted (ordered by `id`). A new session in the same second is
-    /// not skipped when the watermark already covers that timestamp.
+    /// Ended sessions after export sequence `after`, oldest ending first, at most `limit`.
     ///
-    /// At most `limit` rows, like `calls_after` / `logs_after`: unbounded, an endpoint that was
-    /// down for a while got every pending session in one `/v1/traces` body. A cut inside one
-    /// second is safe — the rows come in `rn` order, so `(mark, tail)` resumes right after it.
-    pub fn sessions_pending_export(
-        &self,
-        mark: i64,
-        tail: i64,
-        limit: i64,
-    ) -> Result<Vec<Session>> {
+    /// `end_seq` is stamped by [`Store::end_session`] and only grows, so a session that ends
+    /// late sorts after everything already exported whatever its id or `ended_at` (a rank by
+    /// id inside one second shifted under an exported row and hid the new one). Bounded like
+    /// `calls_after` / `logs_after`: unbounded, an endpoint that was down for a while got every
+    /// pending session in one `/v1/traces` body; the cut is safe, the mark resumes at the last
+    /// `end_seq` posted.
+    pub fn sessions_pending_export(&self, after: i64, limit: i64) -> Result<Vec<Session>> {
         let mut conn = self.lock()?;
-        Ok(super::sql_ext::SessionsPending { mark, tail, limit }.load(&mut *conn)?)
+        Ok(sessions::table
+            .filter(sessions::end_seq.gt(after))
+            .order(sessions::end_seq.asc())
+            .limit(limit)
+            .select(Session::as_select())
+            .load(&mut *conn)?)
     }
 
+    /// Stamp `ended_at` and, when it is new or changed, a fresh `end_seq` past every other
+    /// session's, so the exporter ships it (again) whatever its id. Immediate transaction: the
+    /// maximum is read and used under the write lock, so two processes ending sessions at once
+    /// never share a number.
     pub fn end_session(&self, id: &str, ended_at: i64) -> Result<()> {
         let mut conn = self.lock()?;
-        diesel::update(sessions::table.find(id))
-            .set(sessions::ended_at.eq(ended_at))
-            .execute(&mut *conn)?;
-        Ok(())
+        conn.immediate_transaction(|conn| -> Result<()> {
+            let next = sessions::table
+                .select(max(sessions::end_seq))
+                .first::<Option<i64>>(conn)?
+                .unwrap_or(0)
+                + 1;
+            diesel::update(
+                sessions::table.find(id).filter(
+                    sessions::ended_at
+                        .is_null()
+                        .or(sessions::ended_at.ne(ended_at))
+                        .or(sessions::end_seq.is_null()),
+                ),
+            )
+            .set((sessions::ended_at.eq(ended_at), sessions::end_seq.eq(next)))
+            .execute(conn)?;
+            Ok(())
+        })
     }
 
     /// The one read a span needs: io, usage, plugin token rows, measurements and the three slugs.
@@ -417,41 +436,74 @@ mod tests {
         assert!(s.sessions_ended_after(1_700_000_001).unwrap().is_empty());
     }
 
-    #[test]
-    fn sessions_pending_export_skips_posted_ids_at_the_same_second() {
-        let s = Store::open_in_memory().unwrap();
-        s.upsert_session("s1", None, Some("p"), Some("/w"), Some("startup"))
-            .unwrap();
-        s.upsert_session("s2", None, Some("p"), Some("/w"), Some("startup"))
-            .unwrap();
-        s.end_session("s1", 1_700_000_000).unwrap();
-        s.end_session("s2", 1_700_000_000).unwrap();
-        assert_eq!(s.sessions_pending_export(0, 0, 1000).unwrap().len(), 2);
-        s.otel_advance("sessions", 1_700_000_000).unwrap();
-        s.otel_advance("sessions_tail", 1).unwrap();
-        let rows = s.sessions_pending_export(1_700_000_000, 1, 1000).unwrap();
-        assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].id, "s2");
+    fn ids(rows: &[Session]) -> Vec<&str> {
+        rows.iter().map(|r| r.id.as_str()).collect()
     }
 
-    /// A batch cut inside one second resumes at the next id, never repeats or skips one.
+    /// T592: sessions come in the order they ended, not by id, and a mark past the last
+    /// one posted leaves a session that ends later in the same second pending.
+    #[test]
+    fn sessions_pending_export_follows_end_order_not_id_order() {
+        let s = Store::open_in_memory().unwrap();
+        for id in ["z-first", "a-late"] {
+            s.upsert_session(id, None, Some("p"), Some("/w"), Some("startup"))
+                .unwrap();
+        }
+        s.end_session("z-first", 1_700_000_000).unwrap();
+        let rows = s.sessions_pending_export(0, 1000).unwrap();
+        assert_eq!(ids(&rows), ["z-first"]);
+        let mark = rows[0].end_seq.unwrap();
+        s.end_session("a-late", 1_700_000_000).unwrap();
+        let rows = s.sessions_pending_export(mark, 1000).unwrap();
+        assert_eq!(ids(&rows), ["a-late"]);
+        assert!(
+            s.sessions_pending_export(rows[0].end_seq.unwrap(), 1000)
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    /// A batch cut inside one second resumes at the next session, never repeats or skips one.
     #[test]
     fn sessions_pending_export_is_batched_and_resumes_mid_second() {
         let s = Store::open_in_memory().unwrap();
-        for id in ["s1", "s2", "s3"] {
+        for id in ["s3", "s1", "s2"] {
             s.upsert_session(id, None, None, None, None).unwrap();
             s.end_session(id, 1_700_000_000).unwrap();
         }
-        let first = s.sessions_pending_export(0, 0, 2).unwrap();
+        let first = s.sessions_pending_export(0, 2).unwrap();
+        assert_eq!(ids(&first), ["s3", "s1"]);
+        let rest = s
+            .sessions_pending_export(first[1].end_seq.unwrap(), 2)
+            .unwrap();
+        assert_eq!(ids(&rest), ["s2"]);
+    }
+
+    /// Ending a session again at the same second is not a new delivery; at a new second it is.
+    #[test]
+    fn end_session_restamps_only_a_changed_end() {
+        let s = Store::open_in_memory().unwrap();
+        s.upsert_session("s1", None, None, None, None).unwrap();
+        s.upsert_session("s2", None, None, None, None).unwrap();
+        s.end_session("s1", 10).unwrap();
+        s.end_session("s2", 10).unwrap();
+        let seq = |s: &Store| {
+            s.sessions_pending_export(0, 10)
+                .unwrap()
+                .into_iter()
+                .map(|r| (r.id, r.end_seq.unwrap()))
+                .collect::<Vec<_>>()
+        };
+        let before = seq(&s);
+        s.end_session("s1", 10).unwrap();
+        assert_eq!(seq(&s), before);
+        s.end_session("s1", 11).unwrap();
         assert_eq!(
-            first.iter().map(|r| r.id.as_str()).collect::<Vec<_>>(),
-            ["s1", "s2"]
+            seq(&s).iter().map(|r| r.0.as_str()).collect::<Vec<_>>(),
+            ["s2", "s1"]
         );
-        let rest = s.sessions_pending_export(1_700_000_000, 2, 2).unwrap();
-        assert_eq!(
-            rest.iter().map(|r| r.id.as_str()).collect::<Vec<_>>(),
-            ["s3"]
-        );
+        s.end_session("missing", 12).unwrap();
+        assert_eq!(seq(&s).len(), 2);
     }
 
     #[test]

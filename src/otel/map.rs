@@ -533,6 +533,7 @@ mod tests {
             source: None,
             started_at: 1,
             ended_at: Some(2),
+            end_seq: Some(1),
         };
         let root = session_span(&se, Some("claude"));
         assert_eq!(root.name, "invoke_agent claude");

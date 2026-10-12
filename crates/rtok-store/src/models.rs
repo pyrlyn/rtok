@@ -47,6 +47,7 @@ pub struct Session {
     pub source: Option<String>,
     pub started_at: i64,
     pub ended_at: Option<i64>,
+    pub end_seq: Option<i64>,
 }
 
 #[derive(Debug, Queryable, Selectable, Identifiable, Associations)]

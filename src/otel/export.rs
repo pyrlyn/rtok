@@ -230,9 +230,8 @@ async fn flush_into(cx: &Runtime, ep: &Endpoint, rep: &mut Report) -> Result<()>
     let res = resource(cx);
 
     let smark = store.otel_mark("sessions")?;
-    let stail = store.otel_mark("sessions_tail")?;
     let cmark = store.otel_mark("calls")?;
-    let sessions = store.sessions_pending_export(smark, stail, BATCH)?;
+    let sessions = store.sessions_pending_export(smark, BATCH)?;
     let mut calls = store.calls_after(cmark, BATCH)?;
     // Stop in front of the first row still running: the mark advances to the last exported
     // id, so the finished span ships on the flush after `finish`.
@@ -260,7 +259,10 @@ async fn flush_into(cx: &Runtime, ep: &Endpoint, rep: &mut Report) -> Result<()>
                 if let Some(c) = calls.last() {
                     store.otel_advance("calls", i64::from(c.id))?;
                 }
-                advance_sessions(store, smark, stail, &sessions)?;
+                // Ascending by `end_seq`: the last row is the highest one posted.
+                if let Some(seq) = sessions.last().and_then(|se| se.end_seq) {
+                    store.otel_advance("sessions", seq)?;
+                }
             }
             Ok(false) => rep.skipped.push("traces"),
             Err(e) => push_error(rep, e.to_string()),
@@ -310,33 +312,6 @@ fn push_error(rep: &mut Report, msg: String) {
         }
         None => rep.error = Some(msg),
     }
-}
-
-fn advance_sessions(
-    store: &crate::store::Store,
-    smark: i64,
-    stail: i64,
-    exported: &[crate::store::models::Session],
-) -> Result<()> {
-    let Some(last) = exported
-        .iter()
-        .max_by(|a, b| a.ended_at.cmp(&b.ended_at).then_with(|| a.id.cmp(&b.id)))
-    else {
-        return Ok(());
-    };
-    let last_e = last.ended_at.unwrap();
-    let n_at_last = exported
-        .iter()
-        .filter(|s| s.ended_at == Some(last_e))
-        .count();
-    store.otel_advance("sessions", last_e)?;
-    let new_tail = if last_e > smark {
-        i64::try_from(n_at_last)?
-    } else {
-        stail + i64::try_from(n_at_last)?
-    };
-    store.otel_advance("sessions_tail", new_tail)?;
-    Ok(())
 }
 
 /// `Ok(false)`: HTTP 404, the backend has no pipeline for this stream.
@@ -575,7 +550,7 @@ mod tests {
         }
         assert_eq!((r.spans, r.logs, r.points, r.posted), (0, 0, 0, 0));
         assert!(r.skipped.is_empty(), "a refusal is not a 404");
-        for stream in ["calls", "logs", "sessions", "sessions_tail"] {
+        for stream in ["calls", "logs", "sessions"] {
             assert_eq!(s.otel_mark(stream).unwrap(), 0, "{stream} mark moved");
         }
         let last = s.last_log("otel").unwrap().expect("failure logged");
