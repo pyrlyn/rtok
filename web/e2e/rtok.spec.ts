@@ -385,6 +385,42 @@ test("the 3D live canvas takes no input and its camera holds a call from another
   await expect(live).not.toHaveAttribute("data-framed", /.+/, { timeout: 15_000 });
 });
 
+test("a graph call from another process shows its label on the 2D node, which fades after the call", async ({
+  page,
+  rtok,
+}) => {
+  await viewing(page, "2d");
+  rtok.addProject();
+  await page.goto("/#/graph");
+  const label = page.getByTestId("run-label");
+  // The call has usually ended before a frame shows it running: the label then carries its duration.
+  await expect(async () => {
+    callers(rtok);
+    await expect(label.first()).toBeVisible({ timeout: 1000 });
+  }).toPass({ timeout: 20_000 });
+  await expect(label.first()).toHaveText(/^callers( \d+(\.\d)? ?(ms|s))?$/);
+  await expect(label).toHaveCount(0, { timeout: 15_000 });
+});
+
+test("a graph call from another process shows its label on the 3D node", async ({ page, rtok }) => {
+  await viewing(page, "3d");
+  rtok.addProject();
+  await page.goto("/#/graph");
+  await expect(
+    page.getByTestId("graph-live-3d").or(page.getByText(/3D unavailable/)),
+  ).toBeVisible();
+  test.skip(
+    (await page.getByText(/3D unavailable/).count()) > 0,
+    "WebGL is not available in this browser",
+  );
+  const label = page.getByTestId("run-label");
+  await expect(async () => {
+    callers(rtok);
+    await expect(label.first()).toBeVisible({ timeout: 1000 });
+  }).toPass({ timeout: 20_000 });
+  await expect(label).toHaveCount(0, { timeout: 15_000 });
+});
+
 test("the splitter keeps its place and the hidden state across a reload and stops the stream", async ({
   page,
   rtok,

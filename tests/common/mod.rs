@@ -7,6 +7,7 @@
 #![allow(dead_code, clippy::print_stdout, clippy::print_stderr)]
 
 pub mod agents;
+pub mod compress_fixture;
 #[cfg(unix)]
 pub mod fake_lsp;
 pub mod git;

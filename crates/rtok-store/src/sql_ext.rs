@@ -11,8 +11,8 @@ use diesel::sql_types::{BigInt, Binary, Double, Integer, Nullable, Text};
 use diesel::sqlite::Sqlite;
 
 use super::schema::{
-    archive, archive_decisions, call_io, calls, extractor, logs, measurements, read_cache,
-    symbol_stale, symbols, tokens, usage,
+    archive, archive_decisions, archive_summaries, call_io, calls, extractor, logs, measurements,
+    read_cache, symbol_stale, symbols, tokens, usage,
 };
 
 /// `ROW_NUMBER() OVER (PARTITION BY ended_at ORDER BY id)` — no window functions in
@@ -1000,6 +1000,8 @@ pub(crate) fn delete_old_calls(conn: &mut SqliteConnection, cutoff: i64) -> Quer
 
 pub(crate) fn purge_archive(conn: &mut SqliteConnection, id: &str) -> QueryResult<()> {
     diesel::delete(archive_decisions::table.filter(archive_decisions::archive_id.eq(id)))
+        .execute(conn)?;
+    diesel::delete(archive_summaries::table.filter(archive_summaries::archive_id.eq(id)))
         .execute(conn)?;
     diesel::update(read_cache::table.filter(read_cache::archive_id.eq(id)))
         .set(read_cache::archive_id.eq(None::<String>))

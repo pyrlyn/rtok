@@ -695,6 +695,7 @@ mod tests {
             "Kilo Code for VS Code" => "Visual Studio Code",
             "Kimi Code Desktop" => "Kimi Code",
             "Kiro IDE" => "Kiro",
+            "MiMo Desktop" => "Xiaomi MiMo AI",
             "OpenCode Desktop" => "OpenCode",
             "Roo Code" => "Visual Studio Code",
             "VS Code" => "Visual Studio Code",

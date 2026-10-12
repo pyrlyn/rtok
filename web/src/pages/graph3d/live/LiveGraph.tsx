@@ -16,6 +16,7 @@ import { readView, saveView, useStableScene } from "../SceneView";
 import { useLayout } from "../useLayout";
 import { type ViewApi, webglAvailable } from "../webgl";
 import { foldedCounters, liveState } from "./lit";
+import { RunningLabels } from "./RunningLabels";
 import { totalCalls } from "./useCalls";
 
 // The 3D chunk loads only when the live part draws in 3D.
@@ -92,6 +93,7 @@ function Canvas({
                     )}
                 </div>
             )}
+            <RunningLabels labels={live.labels} now={now} api={api} />
             <div role="group" aria-label="live view" className="absolute top-2 left-2 flex gap-1">
                 {(["2d", "3d"] as const).map((v) => (
                     <Chip
