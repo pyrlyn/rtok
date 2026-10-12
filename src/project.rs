@@ -41,10 +41,10 @@ pub fn project_key(cwd: &Path) -> Option<String> {
 
 pub(crate) fn project_key_with(fs: &impl ReadFs, cwd: &Path) -> Option<String> {
     let common = common_git_dir(fs, cwd)?;
-    if let Some(url) = origin_url(fs, &common).and_then(|u| canonical_url(&u)) {
+    let main = common.parent()?;
+    if let Some(url) = origin_url(fs, &common).and_then(|u| canonical_url(fs, main, &u)) {
         return Some(url);
     }
-    let main = common.parent()?;
     let main = fs.canonicalize(main).unwrap_or_else(|| main.to_path_buf());
     Some(main.to_string_lossy().into_owned())
 }
@@ -115,9 +115,13 @@ fn url_name(url: &str) -> Option<String> {
 }
 
 /// `git@github.com:Owner/Repo.git`, `ssh://git@github.com/owner/repo` and
-/// `https://user@github.com/owner/repo/` → `github.com/owner/repo`. A `file://` or plain path
-/// remote keeps its path. `None` for an empty URL.
-fn canonical_url(url: &str) -> Option<String> {
+/// `https://user@github.com/owner/repo/` → `github.com/owner/repo`. A local remote (`file://`,
+/// absolute or relative path) becomes its absolute path, so every spelling of one repository
+/// shares a key and `../remote.git` in two checkouts does not (T586.1). `None` for an empty URL.
+fn canonical_url(fs: &impl ReadFs, main: &Path, url: &str) -> Option<String> {
+    if let Some(path) = local_path(url.trim()) {
+        return Some(local_key(fs, main, &path));
+    }
     let url = url.trim().trim_end_matches('/');
     let url = url.strip_suffix(".git").unwrap_or(url);
     let (rest, scp) = match url.split_once("://") {
@@ -137,6 +141,39 @@ fn canonical_url(url: &str) -> Option<String> {
         _ => rest.to_string(),
     };
     (!rest.is_empty()).then(|| rest.to_ascii_lowercase())
+}
+
+/// The filesystem path a `file://` URL or plain-path remote names; `None` for a network URL,
+/// an scp-like `host:path` (git: a colon before the first slash, a one-letter prefix being a
+/// drive) and an empty string.
+fn local_path(url: &str) -> Option<PathBuf> {
+    if url.is_empty() {
+        return None;
+    }
+    if url.starts_with("file://") {
+        // A non-local host has no path here: the generic branch keeps it as a host/path key.
+        return url::Url::parse(url).ok()?.to_file_path().ok();
+    }
+    if url.contains("://") {
+        return None;
+    }
+    let colon = url.find(':');
+    let slash = url.find(['/', '\\']);
+    let scp = matches!(colon, Some(c) if c > 1 && slash.is_none_or(|s| s > c));
+    (!scp).then(|| PathBuf::from(url))
+}
+
+/// A local remote's key: git resolves a relative path against the main checkout (where the
+/// shared `config` lives, whichever worktree asks), through symlinks; a remote that is not on
+/// disk (yet) keeps its lexical absolute path. Lower case and no `.git`, like network keys.
+fn local_key(fs: &impl ReadFs, main: &Path, path: &Path) -> String {
+    let joined = main.join(path);
+    let abs = fs
+        .canonicalize(&joined)
+        .unwrap_or_else(|| normalize(main, path));
+    let abs = abs.to_string_lossy();
+    let abs = abs.trim_end_matches('/');
+    abs.strip_suffix(".git").unwrap_or(abs).to_ascii_lowercase()
 }
 
 #[cfg(test)]
@@ -245,7 +282,28 @@ mod tests {
     #[case("file:///srv/git/rtok.git", "/srv/git/rtok")]
     #[case("/srv/git/rtok", "/srv/git/rtok")]
     fn remotes_canonicalize_across_protocols(#[case] url: &str, #[case] key: &str) {
-        assert_eq!(canonical_url(url).as_deref(), Some(key));
+        let vfs = Vfs::new();
+        assert_eq!(
+            canonical_url(&vfs, Path::new("/home/me/rtok"), url).as_deref(),
+            Some(key)
+        );
+    }
+
+    /// Network and scp spellings never see the checkout; a relative path is resolved against it.
+    #[test]
+    fn local_remotes_resolve_against_the_main_checkout_without_touching_network_urls() {
+        let vfs = Vfs::new();
+        let main = Path::new("/home/me/rtok");
+        let key = |url| canonical_url(&vfs, main, url);
+        assert_eq!(key("../origin.git").as_deref(), Some("/home/me/origin"));
+        assert_eq!(key("./sub/../../o/").as_deref(), Some("/home/me/o"));
+        assert_eq!(
+            key("file:///srv/My%20Repo.git").as_deref(),
+            Some("/srv/my repo")
+        );
+        assert_eq!(key("git@host:../x.git").as_deref(), Some("host/../x"));
+        assert_eq!(key("https://host/a/b.git").as_deref(), Some("host/a/b"));
+        assert_eq!(key("  ").as_deref(), None);
     }
 
     #[test]
@@ -262,5 +320,133 @@ mod tests {
         let key = project_key_with(&vfs, Path::new("/home/me/local-only"));
         assert_eq!(key.as_deref(), Some("/home/me/local-only"));
         assert_eq!(project_key_with(&vfs, Path::new("/home/me")), None);
+    }
+
+    /// Real-git fixtures (T586.1): a seed repo, bare remotes cloned from it and checkouts
+    /// whose `origin` is spelled in the test.
+    mod local_remote {
+        use super::*;
+        use std::process::{Command, Output};
+
+        fn git(dir: &Path, args: &[&str]) -> Output {
+            let out = Command::new("git")
+                .arg("-C")
+                .arg(dir)
+                .args(["-c", "user.name=t", "-c", "user.email=t@t"])
+                .args(args)
+                .output()
+                .expect("git");
+            assert!(out.status.success(), "git {args:?}: {out:?}");
+            out
+        }
+
+        /// A canonical scratch dir (macOS `/var` is a symlink), lower case: keys are.
+        fn scratch(tag: &str) -> PathBuf {
+            let base = std::env::temp_dir().join(format!("rtok-pk-{tag}-{}", std::process::id()));
+            std::fs::create_dir_all(&base).unwrap();
+            dunce::canonicalize(base).unwrap()
+        }
+
+        fn seed(base: &Path) -> PathBuf {
+            let seed = base.join("seed");
+            std::fs::create_dir_all(&seed).unwrap();
+            git(&seed, &["init", "-q"]);
+            std::fs::write(seed.join("a.txt"), "a\n").unwrap();
+            git(&seed, &["add", "."]);
+            git(&seed, &["commit", "-q", "-m", "init"]);
+            seed
+        }
+
+        /// `<dir>/remote.git` (a bare clone of `seed`) and `<dir>/checkout` with `origin`
+        /// set to `url`.
+        fn site(dir: &Path, seed: &Path, url: &str) -> PathBuf {
+            std::fs::create_dir_all(dir).unwrap();
+            git(
+                dir,
+                &[
+                    "clone",
+                    "-q",
+                    "--bare",
+                    seed.to_str().unwrap(),
+                    "remote.git",
+                ],
+            );
+            let checkout = dir.join("checkout");
+            std::fs::create_dir_all(&checkout).unwrap();
+            git(&checkout, &["init", "-q"]);
+            git(&checkout, &["remote", "add", "origin", url]);
+            checkout
+        }
+
+        fn lower(p: &Path) -> String {
+            p.to_string_lossy().to_ascii_lowercase()
+        }
+
+        fn key(dir: &Path) -> String {
+            project_key(dir).expect("key")
+        }
+
+        /// Two checkouts spelling `origin` as `../remote.git` reach different repositories
+        /// (git resolves it against the checkout), so they must not share a key.
+        #[test]
+        fn identical_relative_remotes_of_different_repositories_get_distinct_keys() {
+            let base = scratch("distinct");
+            let seed = seed(&base);
+            let a = site(&base.join("a"), &seed, "../remote.git");
+            let b = site(&base.join("b"), &seed, "../remote.git");
+            assert_ne!(key(&a), key(&b));
+            assert_eq!(key(&a), lower(&base.join("a/remote")));
+            assert_eq!(key(&b), lower(&base.join("b/remote")));
+            let _ = std::fs::remove_dir_all(base);
+        }
+
+        /// Relative, dotted, absolute and `file://` spellings of one remote are one project,
+        /// whichever checkout (main or linked worktree, nested cwd) asks.
+        #[test]
+        fn every_spelling_of_one_local_remote_gives_one_key() {
+            let base = scratch("spellings");
+            let seed = seed(&base);
+            let site_dir = base.join("with space");
+            let checkout = site(&site_dir, &seed, "../remote.git");
+            let remote = site_dir.join("remote.git");
+            let want = key(&checkout);
+            assert_eq!(want, lower(&site_dir.join("remote")));
+            let file_url = format!("file://{}", remote.to_string_lossy().replace(' ', "%20"));
+            for url in [
+                "./../remote.git",
+                "../checkout/../remote.git",
+                "../remote.git/",
+                remote.to_str().unwrap(),
+                file_url.as_str(),
+            ] {
+                git(&checkout, &["remote", "set-url", "origin", url]);
+                assert_eq!(key(&checkout), want, "{url}");
+                // The control: git itself reaches the same remote with that spelling.
+                git(&checkout, &["ls-remote", "origin"]);
+            }
+            git(&checkout, &["remote", "set-url", "origin", "../remote.git"]);
+            git(&checkout, &["commit", "-q", "--allow-empty", "-m", "x"]);
+            let wt = base.join("wt");
+            git(
+                &checkout,
+                &["worktree", "add", "-q", wt.to_str().unwrap(), "-b", "w"],
+            );
+            std::fs::create_dir_all(checkout.join("sub")).unwrap();
+            assert_eq!(key(&wt), want);
+            assert_eq!(key(&checkout.join("sub")), want);
+            let _ = std::fs::remove_dir_all(base);
+        }
+
+        /// A remote that does not exist (yet) still gets a stable absolute key.
+        #[test]
+        fn missing_local_remote_falls_back_to_a_lexical_absolute_key() {
+            let base = scratch("missing");
+            let checkout = base.join("checkout");
+            std::fs::create_dir_all(&checkout).unwrap();
+            git(&checkout, &["init", "-q"]);
+            git(&checkout, &["remote", "add", "origin", "../gone.git"]);
+            assert_eq!(key(&checkout), lower(&base.join("gone")));
+            let _ = std::fs::remove_dir_all(base);
+        }
     }
 }
