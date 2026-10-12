@@ -11,6 +11,17 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "apply_patch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command -v rtok >/dev/null 2>&1 && exec rtok hook PreToolUse --host codex; [ -x \"$HOME/.ketch/bin/rtok\" ] && exec \"$HOME/.ketch/bin/rtok\" hook PreToolUse --host codex; exit 0",
+            "commandWindows": "rtok hook PreToolUse --host codex",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -45,6 +56,18 @@
             "type": "command",
             "command": "command -v rtok >/dev/null 2>&1 && exec rtok hook PostCompact --host codex; [ -x \"$HOME/.ketch/bin/rtok\" ] && exec \"$HOME/.ketch/bin/rtok\" hook PostCompact --host codex; exit 0",
             "commandWindows": "rtok hook PostCompact --host codex",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command -v rtok >/dev/null 2>&1 && exec rtok hook SubagentStart --host codex; [ -x \"$HOME/.ketch/bin/rtok\" ] && exec \"$HOME/.ketch/bin/rtok\" hook SubagentStart --host codex; exit 0",
+            "commandWindows": "rtok hook SubagentStart --host codex",
             "timeout": 5
           }
         ]

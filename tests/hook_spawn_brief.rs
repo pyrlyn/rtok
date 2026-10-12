@@ -227,3 +227,36 @@ fn copilot_reads_reach_the_brief() {
         .unwrap_or_else(|| panic!("{out}"));
     assert!(text.contains("/repo/c.rs"), "{text}");
 }
+
+/// T262.3: Codex's live `SubagentStart` payload (`research.md` section 40) gets the brief in the
+/// shape Codex reads, `hookSpecificOutput.additionalContext`, and the ledger holds what the
+/// session edited through `apply_patch` (Codex has no `Read` tool).
+#[test]
+fn codex_patches_reach_the_brief() {
+    let home = tmp("codex");
+    enable_spawn_brief(&home);
+    let session = "s-codex";
+    let patch = json!({
+        "session_id": session,
+        "cwd": "/repo",
+        "hook_event_name": "PreToolUse",
+        "tool_name": "apply_patch",
+        "tool_input": {"command": "*** Begin Patch\n*** Update File: src/lib.rs\n@@\n-a\n+b\n*** End Patch"},
+    });
+    let _ = hook_as(&home, &["--host", "codex"], "PreToolUse", &patch);
+
+    let mut spawn: Value =
+        serde_json::from_str(include_str!("fixtures/hooks/codex/subagent_start.json")).unwrap();
+    spawn["session_id"] = session.into();
+    let first = hook_as(&home, &["--host", "codex"], "SubagentStart", &spawn);
+    assert_eq!(
+        first["hookSpecificOutput"]["hookEventName"],
+        "SubagentStart"
+    );
+    let text = brief_of(&first).expect("the patched file must reach the ledger");
+    assert!(text.contains("/repo/src/lib.rs"), "{text}");
+    assert!(text.contains("rtok expand"), "{text}");
+
+    let second = hook_as(&home, &["--host", "codex"], "SubagentStart", &spawn);
+    assert_eq!(first, second, "an unchanged ledger must be byte-stable");
+}

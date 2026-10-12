@@ -6,8 +6,8 @@
 //!
 //! Codex reads MCP servers from `~/.codex/config.toml` as `[mcp_servers.<name>]`
 //! tables with `command` and `args`, and lifecycle hooks from `hooks.json` (or
-//! inline `[hooks]`). The `codex` rows of `hook_events` (Bash `PreToolUse`, `PostToolUse`,
-//! `PreCompact`/`PostCompact`; T58.2, T645) plus MCP and proxy wiring (T11.5) are the
+//! inline `[hooks]`). The `codex` rows of `hook_events` (Bash and `apply_patch` `PreToolUse`,
+//! `PostToolUse`, `PreCompact`/`PostCompact`, `SubagentStart`; T58.2, T645, T262.3) plus MCP and proxy wiring (T11.5) are the
 //! install. Edits go through `toml_edit` so the user's comments and other servers survive.
 
 use std::fs;
@@ -74,7 +74,7 @@ const FORM: HookForm = HookForm {
 };
 
 /// Register the `codex` rows of [`hook_events`] in `hooks.json`: the Bash rewrite, tool
-/// context and the compaction pair.
+/// context, the compaction pair and the spawn brief.
 pub fn run_hooks(cfg: &Config, remove: bool) -> Result<String> {
     let (a, path) = (apply(cfg), hooks_path(cfg));
     let (entries, timeout) = (hook_events::entries(HOST), cfg.setup.hook_timeout_s);
@@ -891,19 +891,23 @@ mod tests {
         fs::write(&hooks, old.to_string()).unwrap();
         let report = run_hooks(&c, false).unwrap();
         assert!(report.contains("+ PreToolUse Bash"), "{report}");
+        assert!(report.contains("+ PreToolUse apply_patch"), "{report}");
         assert!(report.contains("+ PostToolUse *"), "{report}");
+        assert!(report.contains("+ SubagentStart"), "{report}");
         assert!(report.contains("~ PreCompact"), "{report}");
         let v: serde_json::Value =
             serde_json::from_str(&fs::read_to_string(&hooks).unwrap()).unwrap();
         for (event, matcher) in hook_events::entries(HOST) {
+            // One event may carry several matchers (`PreToolUse`: `Bash`, `apply_patch`).
             let ours: Vec<_> = v["hooks"][event]
                 .as_array()
                 .unwrap()
                 .iter()
+                .filter(|e| e["matcher"].as_str().unwrap_or("") == matcher)
                 .flat_map(|e| e["hooks"].as_array().unwrap())
                 .filter(|h| h["command"].as_str().unwrap().contains("rtok"))
                 .collect();
-            assert_eq!(ours.len(), 1, "{event}: {v}");
+            assert_eq!(ours.len(), 1, "{event} {matcher}: {v}");
             assert!(
                 ours[0]["command"]
                     .as_str()
@@ -911,8 +915,6 @@ mod tests {
                     .contains(&format!("hook {event} --host codex")),
                 "{event}: {v}"
             );
-            let entry = &v["hooks"][event][0];
-            assert_eq!(entry["matcher"].as_str().unwrap_or(""), matcher, "{event}");
         }
         assert_eq!(
             v["hooks"]["PreCompact"][0]["hooks"][1]["command"],

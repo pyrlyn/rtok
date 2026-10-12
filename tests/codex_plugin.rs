@@ -68,7 +68,8 @@ fn root_marketplace_points_at_the_plugins_codex_subdirectory() {
 fn hooks_are_the_installer_rows() {
     let hooks = read("hooks/hooks.json")["hooks"].clone();
     let rows: Vec<_> = hook_events::for_host("codex").collect();
-    assert_eq!(hooks.as_object().unwrap().len(), rows.len(), "{hooks}");
+    // An event may take several rows, one per matcher (`PreToolUse`: `Bash`, `apply_patch`).
+    let mut want = serde_json::Map::new();
     for row in rows {
         let event = row.host_event;
         assert_eq!(row.rtok_event, event, "Codex events keep their names");
@@ -85,8 +86,13 @@ fn hooks_are_the_installer_rows() {
         if !row.matcher.is_empty() {
             entry["matcher"] = json!(row.matcher);
         }
-        assert_eq!(hooks[event], json!([entry]), "{event}");
+        want.entry(event)
+            .or_insert_with(|| json!([]))
+            .as_array_mut()
+            .unwrap()
+            .push(entry);
     }
+    assert_eq!(hooks, Value::Object(want));
 }
 
 /// T250.1 check: on Unix, each event's `command` resolves `rtok` from PATH first, then falls
@@ -97,7 +103,13 @@ fn hooks_are_the_installer_rows() {
 fn hook_commands_resolve_path_then_ketch_then_exit_open() {
     let sh = common::HookShell::new("t250.1-codex-hooks");
     let hooks = read("hooks/hooks.json")["hooks"].clone();
-    for event in ["PreToolUse", "PostToolUse", "PreCompact", "PostCompact"] {
+    for event in [
+        "PreToolUse",
+        "PostToolUse",
+        "PreCompact",
+        "PostCompact",
+        "SubagentStart",
+    ] {
         let command = hooks[event][0]["hooks"][0]["command"].as_str().unwrap();
         let run = || {
             let (ok, stdout) = sh.run(command);

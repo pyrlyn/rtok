@@ -38,8 +38,8 @@ entry gains the key once; a value you set yourself is kept.
 Files:
 
 - `.codex-plugin/plugin.json` — manifest (name, version, metadata, `hooks` path).
-- `hooks/hooks.json` — `PreToolUse` (matcher `Bash`), `PostToolUse` (`*`), `PreCompact` and
-  `PostCompact`, each `timeout: 5` and `rtok hook <event> --host codex`, resolving `rtok` from
+- `hooks/hooks.json` — `PreToolUse` (matchers `Bash` and `apply_patch`), `PostToolUse` (`*`),
+  `PreCompact`, `PostCompact` and `SubagentStart`, each `timeout: 5` and `rtok hook <event> --host codex`, resolving `rtok` from
   `PATH` then `~/.ketch/bin/rtok` (`commandWindows` bare for `cmd.exe`): the `codex` rows of
   `src/agents/hook_events.rs`, the same events `rtok agents install codex` registers. Checked by
   `tests/codex_plugin.rs` and `tests/hook_manifests.rs`.
@@ -47,11 +47,14 @@ Files:
 
 Known limits:
 
-- Tool hooks (T645) run on `Bash` only for `PreToolUse`: Codex has no `Read` or `Skill` tool, and
+- Tool hooks (T645) rewrite `Bash` only: Codex has no `Read` or `Skill` tool, and
   file edits are `apply_patch`. A rewrite reaches Codex as `permissionDecision: "allow"` plus
   `updatedInput` (`rtok hook --host codex` adds the decision; Codex ignores a bare
   `updatedInput`). Payloads and the live run: `research.md` section 40. Not verified: whether
-  that `allow` also skips Codex's own approval prompt.
+  that `allow` also skips Codex's own approval prompt. The `apply_patch` matcher (T262.3) only
+  feeds the spawn brief's ledger, which names the files a patch adds, updates or moves; nothing
+  rewrites a patch. `SubagentStart` answers `hookSpecificOutput.additionalContext`, the spawn brief
+  (`[plugins.memory] spawn_brief`, on by default).
 - Verified on codex-cli 0.155.1 in a scratch `CODEX_HOME` (2026-09-21): `marketplace add` accepts
   the `./` entry and `plugin add` copies the tree to `plugins/cache/rtok/rtok/0.0.1/` and enables
   it. Not verified: the hooks firing in a live session (trust prompt).

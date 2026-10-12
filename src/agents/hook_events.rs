@@ -92,12 +92,16 @@ pub const HOOK_EVENTS: &[HookEvent] = &[
     matched("commandcode", "PostToolUse", "PostToolUse", ".*", true),
     row("commandcode", "SessionStart", "SessionStart", true),
     row("commandcode", "Stop", "SessionEnd", true),
-    // Codex has no `Read` tool (reads go through `Bash`) and no `Skill` tool, so only `Bash` is
-    // matched on the way in; `SubagentStart` is T262.3. Research.md section 40 has the payloads.
+    // Codex has no `Read` tool (reads go through `Bash`) and no `Skill` tool, so `Bash` is the
+    // rewrite's matcher. `apply_patch` (file edits) is matched too, only so the spawn
+    // brief's ledger sees which files a Codex session edited (T262.3); nothing rewrites it.
+    // Research.md section 40 has the payloads.
     matched("codex", "PreToolUse", "PreToolUse", "Bash", true),
+    matched("codex", "PreToolUse", "PreToolUse", "apply_patch", true),
     matched("codex", "PostToolUse", "PostToolUse", "*", true),
     row("codex", "PreCompact", "PreCompact", true),
     row("codex", "PostCompact", "PostCompact", true),
+    row("codex", "SubagentStart", "SubagentStart", true),
     row("copilot", "preToolUse", "PreToolUse", true),
     row("copilot", "postToolUse", "PostToolUse", true),
     row("copilot", "userPromptSubmitted", "UserPromptSubmit", true),

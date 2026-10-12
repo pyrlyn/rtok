@@ -74,12 +74,45 @@ struct Pointer {
 
 /// Where one `Read`/`Edit` call landed in its file: a `Read` line window, or an `Edit`'s
 /// `new_string`, located in the file only when the index has definitions to widen it to.
+#[derive(Clone)]
 enum Touch {
     Lines(i32, i32),
     Text(String),
 }
 
-/// Paths this session read or edited, most recent first, each path once (T130).
+/// Files an `apply_patch` body adds, updates or moves to, in patch order, relative paths
+/// joined to the session `cwd` (a pointer must open from the subagent's directory too). A
+/// deleted file is skipped: there is nothing left to point at. Markers are Codex's own
+/// (openai/codex `codex-rs/apply-patch/src/parser.rs`, checked 2026-10-13).
+fn patch_paths(patch: &str, cwd: &str) -> Vec<String> {
+    const MARKERS: [&str; 3] = ["*** Add File: ", "*** Update File: ", "*** Move to: "];
+    let mut out: Vec<String> = Vec::new();
+    for line in patch.lines() {
+        let Some(path) = MARKERS
+            .iter()
+            .find_map(|m| line.strip_prefix(m))
+            .map(str::trim)
+            .filter(|p| !p.is_empty())
+        else {
+            continue;
+        };
+        let path = if cwd == "." {
+            path.to_string()
+        } else {
+            std::path::Path::new(cwd)
+                .join(path)
+                .to_string_lossy()
+                .into_owned()
+        };
+        if !out.contains(&path) {
+            out.push(path);
+        }
+    }
+    out
+}
+
+/// Paths this session read or edited, most recent first, each path once (T130). Codex's
+/// `apply_patch` rows count as edits (T262.3).
 ///
 /// Reads `Ledger::recent_hook_inputs` rather than the `read` plugin's dedup cache: that cache
 /// is cleared on every `Edit`/`Write` (T4.4), which would drop exactly the paths a spawn brief
@@ -96,21 +129,23 @@ fn ledger(cx: &Ctx) -> Vec<Pointer> {
             continue;
         };
         let tool = v.get("tool_name").and_then(|t| t.as_str()).unwrap_or("");
-        if !matches!(tool, "Read" | "Edit" | "Write") {
-            continue;
-        }
+        let cwd = v.get("cwd").and_then(|c| c.as_str()).unwrap_or(".");
         let input = v.get("tool_input");
-        let Some(path) = input
-            .and_then(|i| i.get("file_path").or_else(|| i.get("path")))
-            .and_then(|p| p.as_str())
-        else {
-            continue;
+        let paths: Vec<String> = match tool {
+            "Read" | "Edit" | "Write" => input
+                .and_then(|i| i.get("file_path").or_else(|| i.get("path")))
+                .and_then(|p| p.as_str())
+                .map(str::to_string)
+                .into_iter()
+                .collect(),
+            // Codex has no `Read` tool and edits through `apply_patch` (T262.3).
+            "apply_patch" => input
+                .and_then(|i| i.get("command"))
+                .and_then(|c| c.as_str())
+                .map(|patch| patch_paths(patch, cwd))
+                .unwrap_or_default(),
+            _ => continue,
         };
-        let at = *seen.entry(path.to_string()).or_insert_with(|| {
-            let cwd = v.get("cwd").and_then(|c| c.as_str()).unwrap_or(".");
-            touched.push((path.to_string(), cwd.to_string(), Vec::new()));
-            touched.len() - 1
-        });
         let int = |k: &str| input.and_then(|i| i.get(k)).and_then(|n| n.as_i64());
         let touch = match tool {
             "Read" if int("offset").is_some() || int("limit").is_some() => {
@@ -126,7 +161,13 @@ fn ledger(cx: &Ctx) -> Vec<Pointer> {
                 .map(|s| Touch::Text(s.to_string())),
             _ => None,
         };
-        touched[at].2.extend(touch);
+        for path in paths {
+            let at = *seen.entry(path.clone()).or_insert_with(|| {
+                touched.push((path, cwd.to_string(), Vec::new()));
+                touched.len() - 1
+            });
+            touched[at].2.extend(touch.clone());
+        }
     }
     touched
         .into_iter()
@@ -394,6 +435,54 @@ mod tests {
         assert!(
             tight.contains(&lib) && !tight.contains("1-4 alpha"),
             "{tight}"
+        );
+    }
+
+    const PATCH: &str = "*** Begin Patch\n*** Add File: new.rs\n+fn a() {}\n\
+*** Update File: src/lib.rs\n*** Move to: src/core.rs\n@@\n-old\n+*** Update File: not.rs\n\
+*** Delete File: gone.rs\n*** Update File: /abs/x.rs\n*** Update File: src/lib.rs\n*** End Patch";
+
+    /// T262.3: Codex edits arrive as one patch; adds, updates and move targets are pointers,
+    /// a delete and a marker-looking hunk line are not, and relative paths gain the `cwd`.
+    #[test]
+    fn patch_paths_lists_files_the_patch_leaves_behind() {
+        assert_eq!(
+            patch_paths(PATCH, "/repo"),
+            [
+                "/repo/new.rs",
+                "/repo/src/lib.rs",
+                "/repo/src/core.rs",
+                "/abs/x.rs"
+            ]
+        );
+        assert_eq!(patch_paths(PATCH, ".")[0], "new.rs");
+        assert!(patch_paths("*** Begin Patch\n*** End Patch", "/repo").is_empty());
+    }
+
+    /// T262.3: Codex has no `Read` tool, so an `apply_patch` row is what it leaves in the ledger;
+    /// a `Bash` row stays out, like any other tool Claude's list does not name.
+    #[test]
+    fn apply_patch_rows_reach_the_brief() {
+        let cx = crate::plugin::Runtime::in_memory("t262-3-patch").unwrap();
+        touch_at(
+            &cx,
+            "/repo",
+            "apply_patch",
+            serde_json::json!({"command": PATCH}),
+        );
+        touch_at(
+            &cx,
+            "/repo",
+            "Bash",
+            serde_json::json!({"command": "cat other.rs"}),
+        );
+        let text = build_brief(&Ctx::new(&cx), 300, "").unwrap();
+        for want in ["/repo/new.rs", "/repo/src/core.rs", "/abs/x.rs"] {
+            assert!(text.lines().any(|l| l == want), "{want}\n{text}");
+        }
+        assert!(
+            !text.contains("gone.rs") && !text.contains("other.rs"),
+            "{text}"
         );
     }
 
