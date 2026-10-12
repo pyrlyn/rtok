@@ -1,4 +1,3 @@
-- T592. Keep late same-second sessions from moving behind the OTel cursor
 - T623.2. Match `/ws` replies to their request by `req` in the web client
 - T124. Realized `tools_rewrite` saving as a dated `research.md` row
 

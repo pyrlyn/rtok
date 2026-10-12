@@ -612,7 +612,7 @@ pub fn otel_status(cfg: &Config) -> Result<OtelStatus> {
         calls_pending,
         logs_mark: store.otel_mark("logs")?,
         logs_pending,
-        sessions_mark: store.otel_mark("sessions")?,
+        sessions_mark: store.otel_mark("sessions_seq")?,
         last,
     })
 }
