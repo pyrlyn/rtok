@@ -21,7 +21,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | --- | --- | --- | --- | --- | --- |
 | T124 | todo | P3 | 2 | 0% | |
 | T131 | todo | P2 | 3 | 70% | |
-| T132 | in progress | P2 | 2 | 70% | Claude Code / claude-haiku-5-5 |
 | T134 | todo | P1 | 2 | 40% | |
 | T156 | in progress | P3 | 3 | 50% | Claude Code / claude-opus-5-5 |
 | T262.3 | todo | P2 | 2 | 0% | |
@@ -42,13 +41,13 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
 | T369.1 | todo | P3 | 1 | 0% | |
 | T370 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
-| T378 | in progress | P3 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T378 | todo | P3 | 3 | 30% | |
 | T385 | in progress | P1 | 5 | 20% | Claude Code / opus-5-5 |
 | T385.3 | todo | P1 | 3 | 20% | |
 | T385.9 | todo | P3 | 5 | 10% | |
 | T394 | todo | P2 | 2 | 20% | |
 | T395 | todo | P3 | 2 | 20% | |
-| T396 | in progress | P3 | 2 | 20% | Claude Code / claude-sonnet-5-5 |
+| T396 | todo | P3 | 2 | 70% | |
 | T398 | todo | P3 | 1 | 30% | |
 | T413 | todo | P2 | 3 | 0% | |
 | T413.3 | in progress | P2 | 3 | 0% | Cursor / grok 4.7 |
@@ -69,7 +68,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
 | T428 | in progress | P2 | 3 | 85% | Claude Code / sonnet-5.5 |
 | T436.3 | todo | P2 | 2 | 0% | |
-| T436.4 | in progress | P3 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
+| T436.4 | todo | P3 | 2 | 90% | |
 | T477 | todo | P3 | 3 | 0% | |
 | T521 | todo | P2 | 2 | 0% | |
 | T640 | in progress | P2 | 4 | 90% | Claude / opus-5.5 |
@@ -80,7 +79,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T526 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T527 | in progress | P2 | 3 | 0% | MiMo / mimo |
 | T561 | todo | P3 | 3 | 0% | |
-| T562 | in progress | P1 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
 | T592 | todo | P2 | 3 | 0% | |
 | T620 | todo | P1 | 5 | 0% | |
 | T621 | todo | P2 | 5 | 0% | |
@@ -97,18 +95,6 @@ from source-derived reproduction steps and gives its own implementation/check se
 Existing tasks, including uncommitted T522–T527 in the shared checkout, were checked for
 overlap and were not copied or reassigned. This is a bounded review of the core data
 paths, not a claim that every bug or host/platform combination has been exhausted.
-
-### T562. Abort memory sync when an existing host file cannot be read
-
-Source-confirmed: [sync read](src/plugins/memory/sync.rs#L119) uses read_to_string(...).unwrap_or_default(), treating every read error as an empty file. An existing CLAUDE.md containing an invalid UTF-8 byte therefore bypasses the managed-block guard; a normal sync prepares only the new memory block and [backs up and overwrites](src/plugins/memory/sync.rs#L138) the original, losing all outside content from the active host file. A backup does not make this replacement correct. A missing file is the only read failure that should enter the create path.
-
-Execution plan:
-
-1. Add a scratch host-file fixture with ordinary outside text and an invalid UTF-8 byte; assert sync fails and preserves the original bytes and stored digest.
-2. Handle NotFound explicitly as a new file; propagate all other read failures before rendering, backups, writes or digest updates.
-3. Cover unreadable files where permissions allow a reliable fixture, dry-run/remove/force variants, and successful creation of a genuinely missing file.
-
-Check: failed reads never replace or remove host content or change sync metadata; existing valid managed-block behavior and `just check` pass. The isolated read/splice probe establishes the lossy replacement text; the live CLI write regression remains part of this fix.
 
 ### T620. Enforce LSP request deadlines during blocking transport reads
 
@@ -175,13 +161,6 @@ Rule: a saving that is not a `Measurement` row does not exist, and the brief is 
 Plan: T130.1's hook records a `Measurement` (`plugin: "memory"`, `kind: "brief"`) with the tokens it added (before = 0, after = brief) so the cost shows as negative saving; `rtok stats` `subagents` row splits the re-read share and sub-agent input tokens by "spawned with a brief" (the brief's archive id in the sub-agent's first user message) vs without.
 Check: fixture with one briefed and one plain sub-agent asserts the split; after a dated window with the flag on, `research.md` §17 gets the measured net; default flips to on only if net tokens saved > 0 — otherwise the card closes with the number and T130 stays off.
 Progress (2026-09-25): the cost row was already recorded by T130.1 (`memory`/`brief`, before 0, after = brief tokens); `tests/hook_spawn_brief.rs` now asserts one row per fired brief and none otherwise. `rtok stats` splits the `subagents` re-read share and input tokens into `brief` / `no brief`, detected by `measure::subagents::SPAWN_BRIEF_MARKER` in a sub-agent's first user message (a `handoff.rs` test pins it inside the brief's `INSTRUCTIONS`); fixture test `briefed_and_plain_subagents_split_the_reread_share`. Left: the dated window with the flag on, the net in `research.md` §17, and the default decision.
-### T132. Ship a Haiku scout agent definition with the Claude Code plugin
-`research.md` §17.3(4). Make the cheap path the default one: `plugins/claude/agents/rtok-scout.md` with `model: haiku`, `tools` limited to the rtok MCP `read`, `search`, `outline`, `explore`, `expand`, and a short system prompt — ranged reads only, never a whole file over the outline threshold, answer with `path:line` citations and no file dumps. Verify the plugin `agents/` directory format against the current Claude Code docs first and add the link to the `## Docs` list in `plugins/claude/README.md`.
-Check: `rtok agents install claude` offers the agent file and removal takes it away (host matrix e2e); `tests/host_docs.rs` and `tests/agents_doc.rs` (`RTOK_BLESS=1`) green; T128's per-`agentType` split is the measurement — record `rtok-scout` vs `Explore`/`general-purpose` read bytes per sub-agent in `research.md` §17 after a dated window.
-Progress (2026-09-24): `plugins/claude/agents/rtok-scout.md` ships with the plugin (`model: haiku`, the five tools under the plugin-scoped names `mcp__plugin_rtok_rtok__<tool>`); unit test on the frontmatter, install/remove e2e in `tests/claude_plugin.rs`. Left: the dated `rtok-scout` vs `Explore`/`general-purpose` read-bytes row in `research.md` §17 once a window of sessions has run with it.
-
-Execution plan (2026-10-12): read the T128 per-`agentType` sub-agent split from this machine's store over the window since 2026-09-24 and write one dated `research.md` §17 row (`rtok-scout` vs `Explore`/`general-purpose` read bytes per sub-agent, with the command); no product code.
-
 ### T134. Probe: does a CLI command hook's `PostToolUse` `updatedToolOutput` replace native tool output?
 Gate for I-91 (`research.md` §17.2). The Agent SDK hooks page says `updatedToolOutput` "works for any tool"; rtok's standing rule says PostToolUse can only add context. If the CLI honours it, native Read/Bash output could be shrunk in place (pointer + `expand <id>`) instead of wrapped or denied — that changes the design of `cmd`, `read` and `guard`, so it is a creator decision, not a silent change. No product code in this task.
 Plan: throwaway hook script (scratch, not committed) returning `hookSpecificOutput.updatedToolOutput` for `Read` and `Bash` on the current Claude Code; run one Read and one Bash; check what the model received in the transcript. Repeat for an MCP tool.
@@ -990,6 +969,8 @@ Check: equivalence test (prefiltered vs full scan) over a fixture; divan bench `
 
 Execution plan (2026-10-12): measure `search` p95 on the largest local repository with a dated command; at or under 200 ms close the card with the number in `research.md`; over 200 ms report back before building the prefilter.
 
+Progress (2026-10-12, `research.md` §39): `search` through `rtok mcp` at bf88f07e2, load ~20. Real repos top out at ~2k files (apps/stator 1,995): p95 ≤ 157 ms. A synthetic 66,493-file tree (local repos cloned 7×): capped queries ≤ 137 ms, an absent literal p95 30.4 s, linear in file count. No real ≥ 50k-file repo here. Creator decision: build the prefilter on the synthetic number, find a real 50k-file repo first, or close at the 2k scale.
+
 ### T385. Proxy lanes and the optimization plan from `docs/research/optimization.md`
 
 From `research.md` §31 and `docs/research/optimization.md` §6 (2026-10-04): a 12-step plan, "proposal, nothing built", which says to promote items into `plan.md` before coding. `src/proxy/` has no lane code. This card is the spec; split it into sub-tasks (T385.1 …) when claiming, one PR each, in this order:
@@ -1050,6 +1031,8 @@ Done means: each reader runs once on a real file from a machine with that host; 
 Check: a fixture per confirmed shape; §30 updated with dates; `just check`.
 
 Execution plan (2026-10-12): 1. run the Kilo, Gemini CLI, Copilot CLI and pi readers read-only on this machine's own files and record the observed shapes (no content); 2. a synthetic fixture per confirmed shape; 3. check whether a resumed Copilot session writes cumulative or run-only shutdown totals and stop double counting if needed (test first); 4. date each §30 tag; Grok `signals.json` stays unverified until the creator decides.
+
+Progress (2026-10-12, `research.md` §30): Copilot CLI 1.0.80 — `tokenDetails` is authoritative (it equals `usage` plus the compaction requests), the reader now takes it (`token_details_carry_the_compaction_requests_that_usage_leaves_out`, fail-first), and `inputTokens` including the cache legs is confirmed. pi 0.85.1 — reader sums match an independent sum over 953 entries; fixture for the `reasoning`/`cacheWrite1h` shape; fork id copying confirmed from source, not observed. Left: a resumed Copilot session (the SDK docs point to cumulative shutdown totals, so summing would double count; reader unchanged without a real file), a Kilo message row (this machine's db has none), Gemini CLI (not installed here), Grok `signals.json` (creator decision).
 
 ### T398. Probe editors on a `worktree.useRelativePaths` worktree
 
@@ -1233,6 +1216,8 @@ Split from T436.2 (2026-10-08): T436.2 shipped the remaining waits and the opera
 Check: `agents install` and `agents update` show one spinner per host on a TTY and nothing on a pipe (non-TTY test); trycmd snapshots unchanged; the creator's manual run of `rtok agents install` in a terminal.
 
 Execution plan (2026-10-12): 1. replace `with_loader("updating host")` in the `agents install/update` path with a per-host spinner through `rtok_sys::proc` progress (T276.1/T276.2); 2. TTY only, nothing on a pipe; 3. non-TTY test, trycmd snapshots unchanged; the manual terminal run stays for the creator.
+
+Progress (2026-10-12): `agents install/update` draw one `ProgressRunner::batch` bar stepped once per host (`src/agents/mod.rs`, `host_bar`), off a TTY and while the plugin question may be asked; `apply_hosts` no longer uses `with_loader`. Tests: `agents::tests::apply_all_steps_the_bar_once_per_host` (fail-first), `tests/agents_update.rs::install_and_update_draw_no_bar_on_a_pipe`; trycmd unchanged. A TTY run with `--yes` or `--dry-run` now shows the bar; the restart wait in `restart.rs` has no indicator until T276.3. Left: the creator's manual run in a terminal (bar per host, cleared before the result lines; no bar over the plugin question without `--yes`).
 
 ### T477. TUI: re-index and remove projects (counterpart of the web actions)
 
