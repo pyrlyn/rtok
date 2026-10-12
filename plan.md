@@ -165,6 +165,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T637 | todo | P2 | 3 | 0% | |
 | T638 | todo | P2 | 3 | 0% | |
 | T639 | todo | P2 | 3 | 0% | |
+| T641 | in progress | P1 | 2 | 10% | Claude Code / claude-opus-5-5 |
 
 
 
@@ -1125,6 +1126,19 @@ Execution plan:
 4. Run TUI state/rendering tests and `just check`.
 
 Check: keyboard navigation never leaves the Calls cursor outside its visible list. The executed probe used the production table function and real TestBackend; row data and formatting/theme dependencies were small fixtures, and full App navigation was source-traced.
+
+### T641. Let `rtok web` bind port 0 so e2e servers never race for a port
+
+The Playwright helper [`freePort`](web/e2e/rtok.ts#L24) and the Rust e2e helper [`free_port`](tests/web_e2e.rs#L34) bind port 0, close the probe and pass the number to `rtok web --port`. With four parallel workers another process can take the port in between, and `rtok web` exits 1 (`rtok web exited early (1)`, CI on PR #997, `e2e/rtok.spec.ts:17`); worse, the `/health` poll can reach another worker's server. `rtok web --port 0` is already accepted, but the startup line prints `:0` and `/health` reports port 0.
+
+Execution plan:
+
+1. `src/web/mod.rs`: after binding, take the listener's real address and write its port back into the config, so the stderr line `rtok web http://<addr>` and `/health` report the bound port.
+2. `tests/web_e2e.rs`: a regression test that starts `rtok web --port 0`, reads the port from the stderr line and checks `/health` answers there with that port (fails before step 1); `start_with` uses the same path and drops `free_port`.
+3. `web/e2e/rtok.ts`: the first `start()` passes `--port 0` and reads the port from stderr; a restart (the offline test) reuses that port so the open page reconnects.
+4. Verify: `just spa-e2e`, `just check`.
+
+Check: no e2e helper probes a port and hands it to a child; `rtok web --port 0` prints and serves the bound port.
 
 ### T599. Make stored-body cleaning stable when noise removal reveals a wrapper
 
