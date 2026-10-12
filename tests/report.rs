@@ -731,3 +731,40 @@ fn report_lists_cache_counters_per_lane_and_tier() {
     let _ = fs::remove_dir_all(&h);
     let _ = fs::remove_dir_all(&plain);
 }
+
+/// T587: `--format md` is an explicit request and must beat `report.format = "html"`; an
+/// omitted flag still obeys the configuration.
+#[test]
+fn explicit_format_md_overrides_configured_format() {
+    let h = home("format-md-explicit");
+    let cfg = h.join("rtok.toml");
+    for configured in ["html", "pdf"] {
+        fs::write(&cfg, format!("[report]\nformat = \"{configured}\"\n")).unwrap();
+        let cfg_arg = cfg.to_str().unwrap();
+        let explicit = Command::new(bin())
+            .args(["--config", cfg_arg, "report", "--format", "md"])
+            .env("RTOK_HOME", &h)
+            .env("HOME", &h)
+            .output()
+            .unwrap();
+        assert!(explicit.status.success(), "{explicit:?}");
+        let text = String::from_utf8_lossy(&explicit.stdout);
+        assert!(
+            text.trim_start().starts_with('#') && !text.contains("<html"),
+            "{configured}: {text}"
+        );
+        let omitted = Command::new(bin())
+            .args(["--config", cfg_arg, "report"])
+            .env("RTOK_HOME", &h)
+            .env("HOME", &h)
+            .output()
+            .unwrap();
+        assert!(omitted.status.success(), "{omitted:?}");
+        let stdout = &omitted.stdout;
+        let looks_md = String::from_utf8_lossy(stdout)
+            .trim_start()
+            .starts_with('#');
+        assert!(!looks_md, "omitted flag must keep configured {configured}");
+    }
+    let _ = fs::remove_dir_all(&h);
+}
