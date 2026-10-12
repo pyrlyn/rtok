@@ -57,10 +57,9 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T413.9 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
 | T413.10 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T413.11 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
-| T413.12 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
-| T413.13 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
-| T413.14 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
-| T413.15 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
+| T413.13 | in progress | P3 | 2 | 0% | Claude Code / sonnet-5.5 |
+| T413.14 | in progress | P3 | 2 | 0% | Claude Code / sonnet-5.5 |
+| T413.15 | in progress | P3 | 2 | 0% | Claude Code / sonnet-5.5 |
 | T414 | in progress | P1 | 4 | 20% | Claude Code / opus-5.5 |
 | T414.7 | in progress | P3 | 1 | 0% | MiMo / mimo |
 | T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
@@ -750,14 +749,6 @@ Crush (Charm), open-source terminal agent. MCP and any documented hooks.
 Check: the T413 per-host check (step 5) for this host.
 
 Plan: Charm's docs and the Crush repo for the MCP config; hooks only with a documented payload.
-
-### T413.12. `rtok agents install warp` — Warp
-
-Warp terminal's agent. MCP and rules if they live in a file setup can edit; a setting stored only in the app's database is out of scope.
-
-Check: the T413 per-host check (step 5) for this host.
-
-Plan: Warp docs for a file-based MCP or rules path. If the setting lives only in the app database, close with that finding and no installer writes.
 
 ### T413.13. `rtok agents install trae` — Trae
 

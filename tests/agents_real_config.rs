@@ -108,6 +108,10 @@ const HOSTS: &[Host] = &[
         id: "qwen",
         files: &[".qwen/settings.json"],
     },
+    Host {
+        id: "warp",
+        files: &[".warp/.mcp.json"],
+    },
 ];
 
 /// True for anything rtok owns: install puts it there and remove takes it away, so it is the
@@ -213,6 +217,7 @@ fn fixture(rel: &str) -> &'static str {
         | ".codeium/windsurf/mcp_config.json"
         | ".config/devin/mcp_config.json"
         | ".omp/agent/mcp.json"
+        | ".warp/.mcp.json"
         | "Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json" => {
             r#"{"mcpServers":{"foreign":{"command":"x"}}}"#
         }
@@ -341,6 +346,7 @@ real_config_round_trip! {
     devin_keeps_the_real_config_and_mcp_json => "devin",
     roo_keeps_the_real_mcp_settings_json => "roo",
     qwen_keeps_the_real_settings_json => "qwen",
+    warp_keeps_the_real_mcp_json => "warp",
 }
 
 /// Zed writes JSONC. The fixture carries a `//` comment; the installer edits the text

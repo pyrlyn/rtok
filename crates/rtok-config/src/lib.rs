@@ -86,6 +86,7 @@ pub const HOSTS: &[&str] = &[
     "roo",
     "qwen",
     "codebuddy",
+    "warp",
 ];
 
 /// Adapters `[tasks] adapter` accepts. `tasks::run::ADAPTERS` re-exports this.
@@ -788,6 +789,7 @@ section! {
         roo: SetupRoo = SetupRoo::default(),
         qwen: SetupQwen = SetupQwen::default(),
         codebuddy: SetupCodebuddy = SetupCodebuddy::default(),
+        warp: SetupWarp = SetupWarp::default(),
     }
 }
 
@@ -939,6 +941,11 @@ section! {
         dir: PathBuf = p("~/.codebuddy"),
         workbuddy_dir: PathBuf = p("~/.workbuddy"),
     }
+}
+
+section! {
+    /// `[setup.warp]` — Warp's user-level MCP file (T413.12).
+    SetupWarp { mcp_path: PathBuf = p("~/.warp/.mcp.json") }
 }
 
 section! {
@@ -1692,6 +1699,7 @@ impl Config {
             setup.qwen.dir,
             setup.codebuddy.dir,
             setup.codebuddy.workbuddy_dir,
+            setup.warp.mcp_path,
             setup.codewhale.dir,
             setup.mimo.config_path,
             setup.antigravity.plugins_path,

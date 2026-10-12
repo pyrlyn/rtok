@@ -443,6 +443,8 @@ dir           = "~/.qwen"                    # settings.json (хуки, mcpServe
 [setup.codebuddy]
 dir           = "~/.codebuddy"               # CodeBuddy Code: settings.json (хуки), .mcp.json, plugins/; CODEBUDDY_CONFIG_DIR переносить каталог
 workbuddy_dir = "~/.workbuddy"               # WorkBuddy Desktop: ті самі файли (вбудований CodeBuddy Code; неперевірено)
+[setup.warp]
+mcp_path      = "~/.warp/.mcp.json"          # Warp: користувацький файл MCP-серверів (mcpServers)
 
 [expand]                              # rtok expand <id>
 max_lines = 0                         # 0 = без обмежень (--lines a-b задається для виклику)
