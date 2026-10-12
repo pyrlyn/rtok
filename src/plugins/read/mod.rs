@@ -168,7 +168,6 @@ pub(crate) fn read_with(
         return Ok(msg);
     }
     let _ = cache::remember(cx, &key, payload);
-    let out = cap(cx, body)?;
     // T300: `map`/`signatures` measure the same way `stripped` already does — raw file vs
     // the text actually returned — but only on this fresh-render path; `cache::hit` and
     // `identical_result` above already recorded their own row (kind `dedup`/`delta`) and
@@ -178,6 +177,13 @@ pub(crate) fn read_with(
         "signatures" => Some("signatures"),
         _ if stripped_src.is_some() => Some("stripped"),
         _ => None,
+    };
+    // T535: a full or ranged view has no render row, so the cap is its only saving. The
+    // outline modes record against the raw file below; a second row here would double count.
+    let out = if render_kind.is_some() {
+        cap(cx, body)?
+    } else {
+        cap_recording(cx, body, "read_cap")?
     };
     if let Some(kind) = render_kind
         && (out.len() as u64) < (raw.len() as u64)
@@ -379,6 +385,36 @@ pub(crate) mod tests {
             max
         );
         assert!(out.chars().count() < blob.len(), "capped");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T535: a fresh `full` or `lines` read cut by `max_chars` is a saving and gets its row;
+    /// one that fits does not.
+    #[rstest]
+    #[case("full", None)]
+    #[case("lines", Some("1-3000"))]
+    fn a_capped_fresh_read_records_one_row(#[case] mode: &str, #[case] range: Option<&str>) {
+        let (cx, dir) = cx("cap-row");
+        let p = dir.join("big.txt");
+        let blob: String = (0..3000).map(|i| format!("line{i}\n")).collect();
+        fs::write(&p, &blob).unwrap();
+        let path = p.to_str().unwrap();
+        let out = read(&Ctx::new(&cx), path, mode, range).unwrap();
+        let rows = cx.store.list_measurements("read").unwrap();
+        assert_eq!(rows.len(), 1, "{rows:?}");
+        let r = &rows[0];
+        assert_eq!(r.kind, "read_cap");
+        assert_eq!(r.after_bytes as usize, out.len());
+        assert!(r.before_bytes > r.after_bytes);
+        let id = r.ref_id.clone().unwrap();
+        assert_eq!(id, archive_id(&out));
+        let full = crate::expand::fetch(&cx, &id).unwrap().unwrap();
+        assert_eq!(full.len() as i64, r.before_bytes);
+
+        let small = dir.join("small.txt");
+        fs::write(&small, "a\nb\n").unwrap();
+        let _ = read(&Ctx::new(&cx), small.to_str().unwrap(), "full", None).unwrap();
+        assert_eq!(cx.store.measurement_count("read").unwrap(), 1);
         let _ = fs::remove_dir_all(dir);
     }
 
