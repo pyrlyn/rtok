@@ -157,7 +157,7 @@ pub fn run(
     };
     // Only an absent file starts empty: reading a damaged one as empty would back it up and
     // overwrite every byte outside the managed block.
-    let before = crate::agents::jsonc::read_or_empty(&path)?;
+    let before = fs_kit::read::text_or_empty(&path)?;
     let cx = crate::plugin::Runtime::open(cfg.clone(), "memory")?;
     let key = kv_key(&path);
     let stored = match cx.store.kv_get(&key)? {

@@ -13884,7 +13884,7 @@ Execution plan:
 
 Check: failed reads never replace or remove host content or change sync metadata; existing valid managed-block behavior and `just check` pass. The isolated read/splice probe establishes the lossy replacement text; the live CLI write regression remains part of this fix.
 
-Result: `run()` in `src/plugins/memory/sync.rs` reads the host file through `crate::agents::jsonc::read_or_empty`, which treats only NotFound as empty and returns every other error with the path before rendering, backups, writes or digest updates. Dry-run, remove and force share the same read.
+Result: `run()` in `src/plugins/memory/sync.rs` reads the host file through `fs_kit::read::text_or_empty`, which treats only NotFound as empty and returns every other error with the path before rendering, backups, writes or digest updates. Dry-run, remove and force share the same read.
 
 Check: `a_non_utf8_host_file_aborts_sync_without_touching_anything`, `a_non_utf8_host_file_keeps_an_existing_digest`, `an_unreadable_host_file_aborts_sync_without_touching_anything` (unix, skips as root) failed before and pass after; `a_missing_host_file_is_still_created`; `plugins::memory` (94) and trycmd green.
 
