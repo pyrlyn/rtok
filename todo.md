@@ -35,7 +35,6 @@
 - T579. Count each transcript once when scanning directory aliases
 - T580. Include report metadata and anchors in the AI output budget
 - T581. Filter actionable report sinks before applying the top-ten limit
-- T583. Make Batch result accounting idempotent across downloads
 - T586. Resolve local relative remotes before deriving project identity
 - T587. Let an explicit report --format md override configuration
 - T589. Track log generations without using their first line as identity

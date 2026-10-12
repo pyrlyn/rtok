@@ -176,6 +176,7 @@ diesel::table! {
         output -> BigInt,
         call_id -> Nullable<Integer>,
         api -> Text,
+        result_key -> Nullable<Text>,
     }
 }
 
