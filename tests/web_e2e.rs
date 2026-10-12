@@ -316,8 +316,19 @@ async fn doctor_plans_without_writing_and_applies_on_confirm() {
     assert!(plan["plan"]["diff"].as_str().unwrap().contains("old.sh"));
     assert_eq!(std::fs::read_to_string(&settings).unwrap(), broken);
 
+    // T576.2: an apply that does not carry the preview's evidence writes nothing.
     ws.send(Message::text(format!(
         r#"{{"doctor":{{"action":"apply",{none}}}}}"#
+    )))
+    .await
+    .expect("send bare apply");
+    let refused = next_of(&mut ws, "doctorfixed").await;
+    assert_eq!(refused["fixed"]["code"], 1, "{refused}");
+    assert_eq!(std::fs::read_to_string(&settings).unwrap(), broken);
+
+    let confirmed = &plan["plan"]["confirmed"];
+    ws.send(Message::text(format!(
+        r#"{{"doctor":{{"action":"apply","selection":{{"keep":[],"toggled":[],"confirmed":{confirmed}}}}}}}"#
     )))
     .await
     .expect("send apply");
