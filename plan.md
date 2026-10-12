@@ -55,7 +55,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T413.8 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
 | T413.9 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
 | T413.10 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
-| T413.11 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T413.12 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T413.13 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T413.14 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
@@ -733,14 +732,6 @@ Verify first whether Amazon Q Developer CLI is still maintained or replaced by t
 Check: the T413 per-host check (step 5) for this host.
 
 Plan: AWS docs first. If the CLI is the Kiro CLI, close into T413.4 with the citation. Otherwise an MCP installer for the documented file only.
-
-### T413.11. `rtok agents install crush` — Crush
-
-Crush (Charm), open-source terminal agent. MCP and any documented hooks.
-
-Check: the T413 per-host check (step 5) for this host.
-
-Plan: Charm's docs and the Crush repo for the MCP config; hooks only with a documented payload.
 
 ### T413.12. `rtok agents install warp` — Warp
 

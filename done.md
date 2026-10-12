@@ -8788,6 +8788,17 @@ Check: the T413 per-host check (step 5) for this host.
 Status: done 2026-10-12
 Model: Claude Code / sonnet-5.5
 
+### T413.11. `rtok agents install crush` — Crush
+
+Crush (Charm), open-source terminal agent. MCP and any documented hooks.
+
+Done: `src/agents/crush/` (one CLI variant, `crush` on PATH): `mcp.rtok` → `rtok mcp --host crush` in the global `crush.json` as `{command, args}` (`type` defaults to `stdio`), through the new `register_stdio_mcp_in` / `unregister_stdio_mcp_in` (the existing stdio helper with the object key as a parameter, so no second copy of the entry). `[setup.crush] config_path` (default `~/.config/crush/crush.json`) is the override for `CRUSH_GLOBAL_CONFIG` / `XDG_CONFIG_HOME`. Hooks stay `Support::No`: the only documented event is `PreToolUse` and rtok has no checked mapping of Crush's tool names. Why JSON and not `crushrc`: see `research.md` §32.11. Host registered in `HOSTS`, `agent_for`, `mcp::rows`, `junk_map::NO_ROWS`, the config section and default, the docs tables (en, ru, uk) and the host tests.
+
+Check: `agents::crush` unit tests (dry run, `type`-less stdio entry under `mcp`, idempotence, foreign keys kept byte-equal after remove, `apply` via the trait), `agents_real_config` (`crush_keeps_the_real_crush_json`), `agents_install`, `host_docs`, `agents_list_content`, `agents_doc`, config and trycmd snapshots.
+
+Status: done 2026-10-12
+Model: Claude Code / sonnet-5.5
+
 ### T426. Install refuses a host whose app is not installed
 
 `present()` counts a host as installed when only its config folder (or that folder's parent) exists, so `rtok agents install gemini` writes rtok into `~/.gemini` with no Gemini CLI on the machine. Done: a host variant is present only when its app bundle or binary is found (`app_path`); leftover config folders no longer count, in `agents list`, `install`, `update`, `doctor` and `junk` alike. `agents install|update <host>` whose wanted variants are all absent writes nothing and exits non-zero with `error: <host> is not installed`; with several hosts, any absent one refuses the whole run before any backup. A host with one present variant still installs into it, and the absent sibling prints `— not found` as today. `--remove` is unchanged.

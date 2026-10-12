@@ -327,6 +327,7 @@ Every effective key with its origin — the `config show --sources` page.
 | setup.codex.config_path | ~/.codex/config.toml | default |
 | setup.commandcode.dir | ~/.commandcode | default |
 | setup.copilot.dir | ~/.copilot | default |
+| setup.crush.config_path | ~/.config/crush/crush.json | default |
 | setup.cursor.hooks_path | ~/.cursor/hooks.json | default |
 | setup.devin.config_path | ~/.config/devin/config.json | default |
 | setup.droid.mcp_path | ~/.factory/mcp.json | default |
@@ -445,7 +446,7 @@ Every effective key with its origin — the `config show --sources` page.
 | worktree.enabled | true | default |
 | worktree.root | ~/.rtok/worktrees | default |
 
-399 keys.
+400 keys.
 
 ## Doctor
 
@@ -659,6 +660,11 @@ agents
     mcp     not installed
     proxy   not supported: Droid has no single model base-URL setting; each customModels entry carries its own baseUrl
     plugin  not supported: Droid plugins install into its own cache through `droid plugin install`; rtok ships no Droid plugin
+  crush (cli)
+    hooks   not supported: Crush documents only a PreToolUse hook, and rtok has no checked mapping of its tool names
+    mcp     not installed
+    proxy   not supported: Crush takes provider base URLs per provider entry; rtok has no checked single endpoint to point at the proxy
+    plugin  not supported: Crush has no documented local plugin directory to link; it loads skills, not plugins
 skills (1 listed, 154 desc bytes ≈ 38 tokens per request)
   descriptions over 120 chars: 1 skills, ≈ 8 tokens/request recoverable
   dry-refactoring project desc 154c body 2772B calls - WARN desc>120 WARN never invoked
