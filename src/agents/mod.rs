@@ -63,6 +63,7 @@ pub(crate) mod plugin_version;
 pub mod post_create;
 pub(crate) mod proxy_env;
 pub mod qwen;
+pub mod reasonix;
 pub mod restart;
 pub mod roo;
 pub mod skill;
@@ -132,6 +133,7 @@ pub fn host(id: &str) -> Option<&'static dyn Agent> {
         "continue" => Some(&continue_dev::Continue),
         "openhands" => Some(&openhands::OpenHands),
         "augment" => Some(&augment::Augment),
+        "reasonix" => Some(&reasonix::Reasonix),
         _ => None,
     }
 }

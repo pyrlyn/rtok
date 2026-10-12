@@ -91,6 +91,7 @@ lang: ru
 | `crush` | no | MCP | ещё не проверено | `worktree_add` |
 | `openhands` | no | MCP | ещё не проверено | `worktree_add` |
 | `augment` | no | MCP | ещё не проверено | `worktree_add` |
+| `reasonix` | no | MCP | ещё не проверено | `worktree_add` |
 | `qwen` | yes | hooks | ещё не проверено | `worktree_add` |
 | `codebuddy` | yes | hooks | ещё не проверено | `worktree_add` |
 | `goose` | no | MCP | ещё не проверено | `worktree_add` |

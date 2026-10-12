@@ -355,6 +355,7 @@ Every effective key with its origin — the `config show --sources` page.
 | setup.pi.tools | false | default |
 | setup.proxy | false | default |
 | setup.qwen.dir | ~/.qwen | default |
+| setup.reasonix.dir | ~/.reasonix | default |
 | setup.roo.mcp_path |  | default |
 | setup.source |  | default |
 | setup.vscode.code_user_dir |  | default |

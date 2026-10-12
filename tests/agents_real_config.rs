@@ -148,6 +148,10 @@ const HOSTS: &[Host] = &[
         id: "augment",
         files: &[".augment/settings.json"],
     },
+    Host {
+        id: "reasonix",
+        files: &[".reasonix/config.toml"],
+    },
 ];
 
 /// True for anything rtok owns: install puts it there and remove takes it away, so it is the
@@ -272,6 +276,7 @@ fn fixture(rel: &str) -> &'static str {
             r#"{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"other-tool run"}]}]},"env":{"KEEP":"1"}}"#
         }
         ".codex/config.toml" | ".grok/config.toml" => "[mcp_servers.foreign]\ncommand = \"x\"\n",
+        ".reasonix/config.toml" => "# keep\n[[plugins]]\nname = \"foreign\"\ncommand = \"x\"\n",
         ".config/opencode/opencode.json"
         | ".config/kilo/kilo.json"
         | ".config/mimocode/mimocode.json"
@@ -409,6 +414,7 @@ real_config_round_trip! {
     crush_keeps_the_real_crush_json => "crush",
     openhands_keeps_the_real_mcp_json => "openhands",
     augment_keeps_the_real_settings_json => "augment",
+    reasonix_keeps_the_real_config_toml => "reasonix",
 }
 
 /// Zed writes JSONC. The fixture carries a `//` comment; the installer edits the text
