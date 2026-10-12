@@ -61,7 +61,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T414.7 | in progress | P3 | 1 | 0% | MiMo / mimo |
 | T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
 | T428 | in progress | P2 | 3 | 85% | Claude Code / sonnet-5.5 |
-| T436.3 | in progress | P2 | 2 | 50% | Claude Code / claude-sonnet-5-5 |
+| T436.3 | todo | P2 | 2 | 50% | |
 | T436.4 | todo | P3 | 2 | 90% | |
 | T640 | in progress | P2 | 4 | 90% | Claude / opus-5.5 |
 | T522 | in progress | P2 | 2 | 0% | MiMo / mimo |
@@ -785,8 +785,6 @@ Check: the crate's unit tests (icon per verb, fallback, width); rtok's `src/ui/s
 Execution plan (2026-10-12): 1. a neutral-name crate in `packages/crates` (own worktree and PR there, its AGENTS.md rules) holding `OPERATION_ICONS`, `icon()`, `ICON_WIDTH` and the gutter padding, generic over the tone/kind type, with unit tests; 2. after release-plz publishes it, rtok's `src/ui/style.rs` and ketch's `src/ui.rs` depend on the crates.io version with no output change; until then this card stays in progress with the crate PR linked.
 
 Progress (2026-10-12): step 1 is done: crate `operation-icons` merged in the crates-packages repository (PR #56) and not yet published. Step 2 waits for the creator to release it (the release pipeline has Actions off there); then rtok and ketch switch to the crates.io version.
-
-Unblocked (2026-10-13): `operation-icons` 0.1.0 is on crates.io (https://crates.io/crates/operation-icons, published 2026-10-12), so step 2 starts: rtok in the shared branch `batch3-t623-t436-t262`, ketch in its own worktree and PR in the ketch repository.
 
 ### T436.4. Spinner on `agents install/update` through T276's `ProgressRunner`
 
