@@ -11,7 +11,8 @@ use std::ffi::OsStr;
 use std::io::{self, Read, Write};
 use std::path::Path;
 use std::process::{Child, Command, ExitStatus, Stdio};
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, PoisonError, mpsc};
 use std::time::{Duration, Instant};
 
 pub use indicator::{Hidden, Indicator, TtyIndicator, disable_progress, suspend};
@@ -19,6 +20,11 @@ pub use parse::{
     CargoProgress, GitProgress, JsonLines, Percent, ProgressCallback, ProgressParser, Stream, Unit,
     Update,
 };
+
+/// How long a run keeps reading once the child has exited. A descendant it left running
+/// (`git fsmonitor--daemon`, a backgrounded server) can hold a pipe's write end for good, so
+/// waiting for EOF would hang; what the pipe already holds is still collected.
+const DRAIN_AFTER_EXIT: Duration = Duration::from_millis(200);
 
 /// What a finished `.run()` hands back; the same shape as `Command::output`.
 pub type Captured = std::process::Output;
@@ -127,6 +133,15 @@ impl ProgressRunner {
         self
     }
 
+    /// One argument put on the Windows command line as is, for `cmd.exe /C` bodies that
+    /// `Command::arg` would re-quote with MSVC rules (`\"`) which `cmd.exe` does not parse.
+    #[cfg(windows)]
+    pub fn raw_arg(mut self, arg: impl AsRef<OsStr>) -> Self {
+        use std::os::windows::process::CommandExt;
+        self.cmd.raw_arg(arg);
+        self
+    }
+
     /// Windows CLIs installed through npm (`npx`, `claude`) ship as `.cmd` or `.bat` shims, which
     /// `CreateProcess` cannot start and `PATHEXT` never reaches; run those through
     /// `cmd.exe /D /C`, as the shell does. A no-op elsewhere and for anything that is an `.exe`
@@ -155,17 +170,29 @@ impl ProgressRunner {
 
     /// Run to the end. The indicator is cleared before this returns, so the caller's own
     /// output or error lands on a clean line.
-    pub fn run(mut self) -> io::Result<Captured> {
+    pub fn run(self) -> io::Result<Captured> {
+        self.run_capped(u64::MAX).map(|(done, _)| done)
+    }
+
+    /// [`ProgressRunner::run`] that keeps at most `cap` bytes of stdout and stderr together.
+    /// Bytes past it are still read, so the child never blocks on a full pipe and exits on its
+    /// own, but are counted in the second value instead of stored: `yes | head -c 10G` must
+    /// not take memory the unwrapped command would not.
+    pub fn run_capped(mut self, cap: u64) -> io::Result<(Captured, u64)> {
         match self.output {
-            Output::Capture | Output::Stream => self.run_piped(),
-            Output::Inherit => Ok(Captured {
-                status: {
-                    self.prepare(false);
-                    self.cmd.status()?
-                },
-                stdout: Vec::new(),
-                stderr: Vec::new(),
-            }),
+            Output::Capture | Output::Stream => self.run_piped(cap),
+            Output::Inherit => {
+                self.prepare(false);
+                let status = self.cmd.status()?;
+                Ok((
+                    Captured {
+                        status,
+                        stdout: Vec::new(),
+                        stderr: Vec::new(),
+                    },
+                    0,
+                ))
+            }
             Output::Detached => Err(use_spawn("a detached child")),
         }
     }
@@ -206,39 +233,58 @@ impl ProgressRunner {
         };
     }
 
-    fn run_piped(mut self) -> io::Result<Captured> {
+    fn run_piped(mut self, cap: u64) -> io::Result<(Captured, u64)> {
         self.cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
         self.prepare(true);
         let mut child = self.cmd.spawn()?;
-        let ind = match self.progress {
-            Progress::Off => Box::new(Hidden) as Box<dyn Indicator>,
-            _ => indicator::pick(&self.label),
+        let ind: Arc<dyn Indicator> = match self.progress {
+            Progress::Off => Arc::new(Hidden),
+            _ => indicator::pick(&self.label).into(),
         };
-        let parser = Mutex::new(match self.progress {
+        let parser = Arc::new(Mutex::new(match self.progress {
             Progress::Parse(p) => Some(p),
             Progress::Callback(f) => Some(Box::new(parse::Callback(f)) as Box<dyn ProgressParser>),
             _ => None,
-        });
-        let forward = self.output == Output::Stream;
-        let (out, err) = (child.stdout.take(), child.stderr.take());
-        let (ind, parser) = (&*ind, &parser);
-        let (stdout, stderr, status) = std::thread::scope(|s| {
-            let out = s.spawn(move || pump(out, Stream::Stdout, ind, parser, forward));
-            let err = s.spawn(move || pump(err, Stream::Stderr, ind, parser, forward));
-            let status = wait(&mut child, self.timeout);
-            (
-                out.join().unwrap_or_default(),
-                err.join().unwrap_or_default(),
-                status,
-            )
-        });
+        }));
+        let pump = Pump {
+            ind: ind.clone(),
+            parser,
+            budget: Arc::new(Budget::new(cap)),
+            forward: self.output == Output::Stream,
+        };
+        let (tx, rx) = mpsc::channel();
+        let out = pump.start(child.stdout.take(), Stream::Stdout, tx.clone());
+        let err = pump.start(child.stderr.take(), Stream::Stderr, tx);
+        let status = wait(&mut child, self.timeout);
+        let deadline = Instant::now() + DRAIN_AFTER_EXIT;
+        for _ in 0..2 {
+            if rx
+                .recv_timeout(deadline.saturating_duration_since(Instant::now()))
+                .is_err()
+            {
+                break;
+            }
+        }
         ind.finish();
-        Ok(Captured {
+        let take = |b: &Mutex<Vec<u8>>| std::mem::take(&mut *lock(b));
+        let done = Captured {
             status: status?,
-            stdout,
-            stderr,
-        })
+            stdout: take(&out),
+            stderr: take(&err),
+        };
+        Ok((done, pump.budget.dropped.load(Ordering::Relaxed)))
     }
+}
+
+/// The code a shell would report for `status`: its own code, or `128 + signal` for a Unix
+/// signal death, where `ExitStatus::code()` is `None` and a caller that defaults it to 1 hides
+/// an OOM kill (137) or a timeout (143) behind an ordinary failure.
+pub fn exit_code(status: ExitStatus) -> Option<i32> {
+    #[cfg(unix)]
+    if let Some(sig) = std::os::unix::process::ExitStatusExt::signal(&status) {
+        return Some(128 + sig);
+    }
+    status.code()
 }
 
 /// True when `command` is a Windows batch or `PATHEXT` shim that `CreateProcess` cannot run: a
@@ -361,45 +407,99 @@ fn wait(child: &mut Child, limit: Option<Duration>) -> io::Result<ExitStatus> {
     }
 }
 
+fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// What the two pipe readers of one run share: a byte budget for stdout and stderr together,
+/// and the count of bytes that did not fit.
+struct Budget {
+    left: AtomicU64,
+    dropped: AtomicU64,
+}
+
+impl Budget {
+    fn new(cap: u64) -> Self {
+        Self {
+            left: AtomicU64::new(cap),
+            dropped: AtomicU64::new(0),
+        }
+    }
+
+    /// Take up to `n` bytes from the budget; the rest of `n` is counted as dropped.
+    fn take(&self, n: usize) -> usize {
+        let n = n as u64;
+        let got = self
+            .left
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |left| {
+                Some(left - left.min(n))
+            })
+            .map_or(0, |left| left.min(n));
+        self.dropped.fetch_add(n - got, Ordering::Relaxed);
+        got as usize
+    }
+}
+
 type SharedParser = Mutex<Option<Box<dyn ProgressParser>>>;
 
-/// Drain one stream: keep it (or forward it live), and feed its lines to the parser.
-fn pump(
-    reader: Option<impl Read>,
-    which: Stream,
-    ind: &dyn Indicator,
-    parser: &SharedParser,
+/// What both reader threads of one run share. The threads own it (not a scope) so a reader
+/// blocked on a pipe a descendant holds open can be left behind after [`DRAIN_AFTER_EXIT`].
+#[derive(Clone)]
+struct Pump {
+    ind: Arc<dyn Indicator>,
+    parser: Arc<SharedParser>,
+    budget: Arc<Budget>,
     forward: bool,
-) -> Vec<u8> {
-    let (mut kept, mut buf) = (Vec::new(), [0u8; 8192]);
-    let Some(mut reader) = reader else {
-        return kept;
-    };
-    let mut lines = parse::Lines::default();
-    let mut feed = |line: &str| {
-        let mut slot = parser
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some(update) = slot.as_mut().and_then(|p| p.feed(which, line)) {
-            ind.set(&update);
-        }
-    };
-    loop {
-        let n = match reader.read(&mut buf) {
-            Ok(0) => break,
-            Ok(n) => n,
-            Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
-            Err(_) => break,
-        };
-        if forward {
-            ind.suspend(&mut || echo(which, &buf[..n]));
-        } else {
-            kept.extend_from_slice(&buf[..n]);
-        }
-        lines.push(&buf[..n], &mut feed);
+}
+
+impl Pump {
+    /// Drain one stream on its own thread into the returned buffer, as far as the budget
+    /// allows (or forward it live), and feed its lines to the parser; `done` fires at EOF.
+    fn start(
+        &self,
+        reader: Option<impl Read + Send + 'static>,
+        which: Stream,
+        done: mpsc::Sender<()>,
+    ) -> Arc<Mutex<Vec<u8>>> {
+        let kept = Arc::new(Mutex::new(Vec::new()));
+        let (sink, this) = (kept.clone(), self.clone());
+        std::thread::spawn(move || {
+            if let Some(reader) = reader {
+                this.drain(reader, which, &sink);
+            }
+            let _ = done.send(());
+        });
+        kept
     }
-    lines.finish(&mut feed);
-    kept
+
+    fn drain(&self, mut reader: impl Read, which: Stream, sink: &Mutex<Vec<u8>>) {
+        let mut buf = [0u8; 8192];
+        let mut lines = parse::Lines::default();
+        let mut feed = |line: &str| {
+            let mut slot = lock(&self.parser);
+            if let Some(update) = slot.as_mut().and_then(|p| p.feed(which, line)) {
+                self.ind.set(&update);
+            }
+        };
+        loop {
+            let n = match reader.read(&mut buf) {
+                Ok(0) => break,
+                Ok(n) => n,
+                Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                Err(_) => break,
+            };
+            if self.forward {
+                self.ind.suspend(&mut || echo(which, &buf[..n]));
+            } else {
+                let keep = self.budget.take(n);
+                if keep > 0 {
+                    lock(sink).extend_from_slice(&buf[..keep]);
+                }
+            }
+            lines.push(&buf[..n], &mut feed);
+        }
+        lines.finish(&mut feed);
+    }
 }
 
 fn echo(which: Stream, bytes: &[u8]) {
@@ -674,6 +774,54 @@ mod tests {
                 (OsStr::new("B"), None)
             ]
         );
+    }
+
+    /// T638: a descendant that outlives the child keeps the pipe open; the drain after the
+    /// child's exit is finite, so a run neither stalls nor loses the child's output.
+    #[test]
+    fn a_descendant_holding_the_pipe_does_not_stall_the_run() {
+        let start = Instant::now();
+        let got = sh("echo hi; sleep 20 & exit 4").run().unwrap();
+        assert!(
+            start.elapsed() < Duration::from_secs(10),
+            "{:?}",
+            start.elapsed()
+        );
+        assert_eq!(
+            (got.stdout.as_slice(), got.status.code()),
+            (&b"hi\n"[..], Some(4))
+        );
+    }
+
+    #[test]
+    fn a_cap_keeps_the_first_bytes_and_counts_the_rest() {
+        let (got, dropped) = sh("head -c 5000 /dev/zero | tr '\\0' x; exit 2")
+            .run_capped(1024)
+            .unwrap();
+        assert_eq!(
+            (got.stdout.len(), dropped, got.status.code()),
+            (1024, 3976, Some(2))
+        );
+        // The budget is shared by both streams, and the child still exits with its own code.
+        let (got, dropped) = sh("head -c 50000 /dev/zero; head -c 7000 /dev/zero >&2; exit 3")
+            .run_capped(1000)
+            .unwrap();
+        assert_eq!(got.stdout.len() + got.stderr.len(), 1000);
+        assert_eq!((dropped, got.status.code()), (56_000, Some(3)));
+        let (got, dropped) = sh("printf hello").run_capped(5).unwrap();
+        assert_eq!((got.stdout.as_slice(), dropped), (&b"hello"[..], 0));
+    }
+
+    #[test]
+    fn the_exit_code_is_128_plus_the_signal_of_a_killed_child() {
+        for (script, code) in [
+            ("kill -TERM $$", 143),
+            ("kill -KILL $$", 137),
+            ("exit 7", 7),
+        ] {
+            let got = sh(script).run().unwrap();
+            assert_eq!(exit_code(got.status), Some(code), "{script}");
+        }
     }
 
     #[test]

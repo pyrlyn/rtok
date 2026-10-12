@@ -92,12 +92,16 @@ export type Format = "json" | "svg" | "png";
  */
 export type Level2 = "overview" | "symbols";
 /**
- * A frame the server pushes besides the [`Snapshot`] itself.
+ * A frame as it goes out for a request that carried `req`: the same fields plus the id, on
+ * success and on failure (a `message` notice) alike.
  *
  * This interface was referenced by `WsProtocol`'s JSON-Schema
- * via the `definition` "ServerFrame".
+ * via the `definition` "Reply".
  */
-export type ServerFrame =
+export type Reply = {
+  req?: number | null;
+} & Reply1;
+export type Reply1 =
   | {
       text: string;
       type: "message";
@@ -160,6 +164,111 @@ export type DrillEdgeKind = "contains" | "calls" | "implements" | "imports";
  * via the `definition` "DrillNodeKind".
  */
 export type DrillNodeKind = ("file" | "type" | "module" | "function") | "external";
+/**
+ * A request with the id its answer comes back under (T623). The server reads `req` off any
+ * message, so [`ClientMessage`] itself stays the bare shape; this is the wire form a client with
+ * more than one request in flight sends.
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "Request".
+ */
+export type Request = Request1 & {
+  /**
+   * Chosen by the client, never reused on one page: a reply for a request that timed out
+   * still carries its own id, so it cannot be taken for the answer to a later one.
+   */
+  req?: number | null;
+};
+export type Request1 =
+  | {
+      expand: string;
+    }
+  | {
+      set: SetRequest;
+    }
+  | {
+      project: ProjectRequest;
+    }
+  | {
+      doctor: DoctorRequest;
+    }
+  | {
+      junk: JunkRequest;
+    }
+  | {
+      graph: DrillRequest;
+    }
+  | {
+      diff: DiffRequest;
+    }
+  | {
+      export: ExportRequest;
+    }
+  | {
+      import: ImportRequest;
+    }
+  | {
+      calls: CallsRequest;
+    };
+/**
+ * A frame the server pushes besides the [`Snapshot`] itself.
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "ServerFrame".
+ */
+export type ServerFrame =
+  | {
+      text: string;
+      type: "message";
+    }
+  | {
+      id: string;
+      text: string;
+      type: "expand";
+    }
+  | {
+      plan: string;
+      project: string;
+      type: "projectplan";
+    }
+  | {
+      plan: Plan;
+      type: "doctorplan";
+    }
+  | {
+      fixed: Fixed;
+      type: "doctorfixed";
+    }
+  | {
+      plan: Cleared;
+      type: "junkplan";
+    }
+  | {
+      cleared: Cleared;
+      type: "junkcleared";
+    }
+  | {
+      graph: DrillGraph;
+      type: "graph";
+    }
+  | {
+      diff: DiffReport;
+      project: string;
+      type: "diff";
+    }
+  | {
+      file: ExportFile;
+      type: "export";
+    }
+  | {
+      export: Export;
+      name: string;
+      type: "imported";
+    }
+  | {
+      calls: CallsView;
+      type: "calls";
+    };
 /**
  * This interface was referenced by `WsProtocol`'s JSON-Schema
  * via the `definition` "ModuleState".
@@ -227,6 +336,8 @@ export type TasksState = "ready" | "reading" | "unconfigured" | "failed";
  */
 export interface WsProtocol {
   client: ClientMessage;
+  reply: Reply;
+  request: Request;
   server: ServerFrame;
   snapshot: Snapshot;
 }
