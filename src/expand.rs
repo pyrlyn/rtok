@@ -24,12 +24,22 @@ fn json_tree_pointer(pointer: &str) -> bool {
 /// the owning plugin sends the original from the next request on, and one `expand`
 /// measurement records the cost — `rtok stats --plugin <id>` derives the expand rate.
 pub fn fetch(cx: &Runtime, id: &str) -> Result<Option<Vec<u8>>> {
+    fetch_range(cx, id, None)
+}
+
+/// [`fetch`] for a call that asked for `lines`. T534: the range is checked against the
+/// payload's real line count before anything is frozen or charged, so a range past the end
+/// fails without turning a decision permanent for an expansion that returned no bytes.
+pub fn fetch_range(cx: &Runtime, id: &str, lines: Option<&str>) -> Result<Option<Vec<u8>>> {
     let Some(bytes) = cx
         .store
         .get_archive(id, Some(&cx.config.core.archive_dir))?
     else {
         return Ok(None);
     };
+    if let Some(spec) = lines {
+        parse_range(spec, String::from_utf8_lossy(&bytes).lines().count())?;
+    }
     // T208: freeze + measurement commit in one transaction (`Store::mark_expanded_recorded`)
     // — a crash or a failed insert used to leave the decision frozen with no ledger row,
     // permanently under-counting `report_expand.cost`.
@@ -203,7 +213,7 @@ pub fn run(
         parse_range(spec, usize::MAX)?;
     }
     let cx = Runtime::open(cfg.clone(), "expand")?;
-    let Some(bytes) = fetch(&cx, id)? else {
+    let Some(bytes) = fetch_range(&cx, id, lines)? else {
         bail!(unknown_id_message(id));
     };
     let max_lines = cfg.expand.max_lines;
@@ -403,6 +413,57 @@ mod tests {
                 .expanded,
             "the writer's session must see the freeze"
         );
+    }
+
+    /// T534: seeds one live-zone decision on a one-line archive; returns the id and the config.
+    fn seeded(name: &str, body: &[u8]) -> (Config, String) {
+        let c = cfg(name);
+        let cx = crate::plugin::Runtime::open(c.clone(), "proxy-sess").unwrap();
+        let id = cx
+            .store
+            .put_archive("proxy-sess", body, &c.core.archive_dir)
+            .unwrap();
+        cx.store
+            .put_archive_decision("tu-1", &id, "proxy-sess", &format!("[archived {id}]"))
+            .unwrap();
+        (c, id)
+    }
+
+    fn frozen_and_charged(c: &Config, id: &str) -> (bool, usize) {
+        let cx = crate::plugin::Runtime::open(c.clone(), "probe").unwrap();
+        let frozen = cx
+            .store
+            .archive_decision("proxy-sess", "tu-1")
+            .unwrap()
+            .unwrap()
+            .expanded;
+        let rows = cx.store.list_measurements("archive").unwrap();
+        (
+            frozen,
+            rows.iter()
+                .filter(|r| r.ref_id.as_deref() == Some(id))
+                .count(),
+        )
+    }
+
+    /// T534: a range past the end of the payload is an error that leaves the decision unfrozen
+    /// and the ledger untouched, on the CLI and on the shared fetch the MCP tool uses; a valid
+    /// range then freezes once and records once.
+    #[rstest]
+    #[case(b"only line\n".as_slice(), "2-3")]
+    #[case(b"".as_slice(), "1")]
+    fn a_range_past_the_end_neither_freezes_nor_charges(#[case] body: &[u8], #[case] spec: &str) {
+        let (c, id) = seeded("range-past-end", body);
+        let err = run(&c, &id, Some(spec), None, 0).unwrap_err();
+        assert!(err.to_string().contains("exceeds line count"), "{err}");
+        let cx = crate::plugin::Runtime::open(c.clone(), "mcp-1").unwrap();
+        assert!(fetch_range(&cx, &id, Some(spec)).is_err());
+        assert_eq!(frozen_and_charged(&c, &id), (false, 0));
+        if !body.is_empty() {
+            let out = run(&c, &id, Some("1"), None, 0).unwrap();
+            assert_eq!(out, b"only line\n");
+            assert_eq!(frozen_and_charged(&c, &id), (true, 1));
+        }
     }
 
     /// T55.11: an expand of a toon pointer attributes its Measurement to `toon`;

@@ -79,12 +79,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T525 | in progress | P2 | 3 | 0% | MiMo / mimo |
 | T526 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T527 | in progress | P2 | 3 | 0% | MiMo / mimo |
-| T531 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
-| T532 | in progress | P1 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T533 | in progress | P1 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T534 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
-| T535 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
-| T536 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
 | T537 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
 | T538 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
 | T539 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
@@ -123,12 +117,9 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T579 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T580 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
 | T581 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
-| T583 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T584 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
 | T586 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T587 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
 | T589 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T590 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T592 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T594 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T595 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
@@ -177,80 +168,6 @@ from source-derived reproduction steps and gives its own implementation/check se
 Existing tasks, including uncommitted T522–T527 in the shared checkout, were checked for
 overlap and were not copied or reassigned. This is a bounded review of the core data
 paths, not a claim that every bug or host/platform combination has been exhausted.
-
-### T531. Make the archive reference returned by read dedup expandable
-
-Source-confirmed on `0b14b88e`: [`dedup_line`](src/plugins/read/cache.rs#L65) formats a 64-character archive id, then always shortens it to eight characters to meet the 80-character output limit. Even a one-line file produces a full form longer than 80 characters. [`Store::get_archive`](crates/rtok-store/src/archive_rows.rs#L402) performs an exact primary-key lookup; neither CLI nor MCP expand resolves prefixes. Read a file twice in one session, copy the id from `unchanged since <8 chars>`, then expand it: the lookup has no matching row. The bytes exist, but the returned reference cannot retrieve them. T4.4 introduced the short display; T354 documents full ids but does not make this reference usable.
-
-Execution plan:
-
-1. Add a regression using the id parsed from the second read response, not the full id fetched from the database.
-2. Prefer a compact dedup message containing the full id within the existing budget; reuse the archive reference convention instead of introducing ambiguous prefix lookup.
-3. Exercise CLI and MCP expansion of that exact reference, including large line counts; retain one dedup Measurement.
-
-Check: the second read's reference expands to the archived bytes, the response meets its length contract, and `just check` passes.
-
-### T532. Preserve typed content and message fields in the direct cache key
-
-Source-confirmed on `0b14b88e`: [`messages_text` / `block_text`](src/proxy/semantic_cache.rs#L368) flatten structured requests into strings before hashing. `tool_result.is_error`, message `name`, and `image_url.detail` are omitted. For example, otherwise identical single-user requests with the same image URL and `detail: "low"` versus `"high"` produce identical CachePrompts. A text block containing `tool_result t: OK` also has the same flattened text as `{type:"tool_result", tool_use_id:"t", content:"OK"}`. With semantic cache enabled, the direct tier returns the first response for the second request before an upstream call. This is distinct from completed T55.14/T212/T303/T323: those added fields but retained lossy flattening.
-
-Validation: an offline Rust harness compiled verbatim `messages_text`, `content_text`, `block_text` and `canonical_json` from this revision; all four differing pairs above returned equal message fields. Other CachePrompt inputs were held equal. This proves the normalization collision, not an end-to-end proxy run.
-
-Execution plan:
-
-1. Add paired-request fixtures for image detail, tool-result error status, participant name and literal text versus typed tool content. Assert distinct direct keys and two upstream calls.
-2. Build the direct key from canonical structured message/content values, keeping type tags, field boundaries and response-affecting fields. Keep semantic text extraction separate.
-3. Retain key-order equivalence and the existing caller/model/tool-schema isolation tests; do not broaden cache eligibility.
-
-Check: all differing fixture pairs miss the direct cache, exact replay still hits, reordered object keys retain the same key, and `just check` passes.
-
-### T533. Scope cached responses to the resolved upstream request target
-
-Source-confirmed on `0b14b88e`: [`handle`](src/proxy/mod.rs#L407) looks up a shared cache before resolving the target at line 430. [`CachePrompt`](src/proxy/semantic_cache.rs#L22) includes provider/model/body/caller but no upstream URL, path, query or HTTP method. [`upstream_for`](src/proxy/mod.rs#L224) supports different upstreams per lane. Two cache-enabled lanes with identical shaping policy, body and credentials but different upstreams therefore share a direct key: warming endpoint A can cause a request intended for B to return A's answer without contacting B. This remains possible with `cache_by_provider` and `cache_by_model` both enabled; T323 isolated callers, not routing destinations.
-
-Execution plan:
-
-1. Reproduce with two local upstream servers returning distinct sentinel responses and two lanes that permit cache reads/fills.
-2. Resolve the effective target before lookup and include a consistent target/method namespace in both lookup and fill. Avoid retaining raw credentials or credential-bearing query strings in cache metadata; reuse hashing.
-3. Test differing paths/queries as well as lane upstreams; exact replay to one endpoint must still hit.
-
-Check: B receives its first request after A was warmed, each endpoint returns its own bytes, same-target replay hits, and `just check` passes.
-
-### T534. Validate expand ranges against the payload before freezing decisions
-
-Source-confirmed on `0b14b88e`: [`expand::run`](src/expand.rs#L200) and [`mcp::expand_text`](src/mcp.rs#L837) validate ranges against `usize::MAX`, call `fetch`, and only then validate against the actual line count. [`fetch`](src/expand.rs#L26) commits the expanded flag and its Measurement. Expanding a one-line live-zone archive with `lines: "2-3"` therefore returns an error after permanently freezing the compression decision and charging an expansion that returned no bytes. The earlier past-EOF fix correctly rejects the range; this task addresses its remaining side effects, not range syntax (T522).
-
-Execution plan:
-
-1. Seed an unexpanded decision and a one-line archive, request `2-3` through both CLI and MCP, and assert an error with unchanged decision and measurement rows.
-2. Separate retrieval/validation from successful-expansion bookkeeping; share the sequence across both surfaces and preserve the atomic freeze-plus-measurement transaction.
-3. Cover empty archives and valid filtered expansion, and retain malformed-range checks.
-
-Check: all failed ranges leave state unchanged; successful expansion still freezes once and records the intended cost; `just check` passes.
-
-### T535. Record the first full or ranged read when its output is capped
-
-Source-confirmed on `0b14b88e`: [`read_with`](src/plugins/read/mod.rs#L171) calls `cap`, which passes `None` to [`cap_impl`](src/plugins/read/mod.rs#L270) and writes no Measurement. The subsequent render measurement only handles map/signatures/stripped modes. A fresh `full` or `lines` read exceeding `read.max_chars` is archived and shortened but produces no read saving row. Generic MCP token rows compare the arguments with the response and do not repair this missing Measurement. T300 covers outlines and stripped output; search/tree already use `cap_recording`.
-
-Execution plan:
-
-1. In a fresh session, read a fixture above the cap in full and ranged modes; assert one Measurement with the full rendered view as before and the returned text, including its marker, as after.
-2. Reuse the existing cap recorder at the responsible path; retain a single measurement for map/signatures/stripped, dedup and delta paths.
-3. Verify an uncapped full read does not acquire a fictitious saving, and the capped archive remains expandable.
-
-Check: capped fresh full/lines reads have exactly one correct Measurement, existing rendering/dedup accounting does not double count, and `just check` passes.
-
-### T536. Preserve raw command bytes when storage fails open
-
-Source-confirmed on `0b14b88e`: [`emit_filtered_to`](src/plugins/cmd/run.rs#L323) creates a lossy UTF-8 view before opening the runtime. Both the runtime-open failure at line 332 and the archive-write failure at line 393 print that lossy view. With a body containing byte `0xff` and an unavailable database/archive, the fallback outputs UTF-8 replacement bytes instead; no usable archive can restore the input. The normal successful archive path already preserves binary bytes, so its tests do not cover this fallback.
-
-Execution plan:
-
-1. Inject runtime-open failure and archive-write failure using a temporary store/path and non-UTF-8 input. Compare output bytes, not decoded strings.
-2. Share a raw-byte fallback writer for both failures, preserving the CLI's established trailing-newline convention and wrapped exit code.
-3. Keep the successful formatter/archive path and tiny-body behavior unchanged; verify no dead archive pointer is emitted on failure.
-
-Check: the original bytes survive both failure branches, the command status is preserved, and `just check` passes.
 
 ### T537. Keep MCP pending calls when the server sends its own request
 
@@ -646,31 +563,6 @@ Execution plan:
 3. Cover mixed actionable/non-actionable classes, repeated references that aggregate into one sink, nonpositive byte counts and empty ledgers. Verify that recommendations expose at most ten eligible sinks and keep their Measurement evidence.
 
 Check: unrelated archive/injection rows cannot hide eligible read/cmd/MCP recommendations, the largest eligible sinks remain ranked correctly, and `just check` passes. The scratch probe compiled actual report_sinks/sink_label/sink_switch and top_sinks with an in-memory Store fixture and a catalogue subset containing the relevant real plugins; it was not a Diesel or CLI integration test.
-
-### T583. Make Batch result accounting idempotent across downloads
-
-Confirmed in the recording path: [batch_results::record](src/proxy/batch_results.rs#L56) inserts every parsed successful result under the current GET call_id. [ResultUsage](src/proxy/batch_results.rs#L90) retains model/API/counters but drops the result/custom_id, and record receives no batch or output-file identity. Fetching the same result again therefore adds the same counters under a new call. [Store insertion](crates/rtok-store/src/call_log.rs#L261) is a plain INSERT and [lane totals](crates/rtok-store/src/call_log.rs#L509) sum both copies; Batch model pricing also consumes these rows. In the isolated probe, one result with 100 input and 20 output tokens produced 120 after the first recording and 240 after replay, without another inference request. T385.4 covers recording result lines and T385.12.1 prices Batch usage, but neither implements replay identity. Refusing an existing CLI output path does not prevent another GET or a fetch to another file.
-
-Execution plan:
-
-1. Add store/proxy regressions that download the same successful Batch artifact twice under distinct call IDs and assert one usage contribution per original result. Keep both download calls observable; cover Anthropic results and OpenAI output-file downloads.
-2. Preserve a stable, provider-scoped batch/file/result identity through parsing and recording. Scope it to the upstream/account as needed so identical custom IDs in different jobs are not collapsed; do not deduplicate solely by usage values or response text.
-3. Persist the result identity and usage contribution atomically through Diesel with a uniqueness rule that survives concurrent fetches and restarts. Let later downloads add previously unrecorded complete results after a partial/truncated download; keep malformed/error lines uncounted and preserve response bytes.
-4. Verify lane/model/pricing aggregates remain unchanged on replay but grow for distinct results and jobs. Define compatibility for older rows lacking result identity without guessing which historical entries represent the same request.
-
-Check: downloading existing results cannot inflate provider-token totals or estimated Batch costs; distinct billed requests still count independently, and `just check` passes. The probe used actual Batch record/parse functions with a plain-append Store fixture matching the source INSERT semantics; Diesel, HTTP and provider integration were source-traced, not executed.
-
-### T584. Preserve complete SSE usage events before an incomplete UTF-8 tail
-
-Confirmed with actual wire parsers: [usage_from_response](src/proxy/wire.rs#L370) and [service_tier_from_response](src/proxy/wire.rs#L395) validate the entire captured buffer as UTF-8 before reading any events. A complete Anthropic message_start containing input_tokens=100 and service_tier=standard is lost when a later content delta ends after only the first byte of a multibyte character. Both parsers return None; the same prefix cut before that character and the full-body control preserve the earlier values. [The tee](src/proxy/mod.rs#L558) retains arbitrary byte prefixes on a capture cap, upstream error or client disconnect. [finish](src/proxy/mod.rs#L1082) then records an all-zero usage row and omits the tier despite having a complete earlier usage event. T323's acknowledged capture limit and no-partial-cache rule do not require discarding complete events already retained; T326 covers terminal provider events, not this decoding failure.
-
-Execution plan:
-
-1. Add parser regressions with a complete usage/tier event followed by each possible split within a multibyte SSE data character. Compare full response, ASCII-safe incomplete tail, malformed later line and no-usage controls.
-2. Decode complete SSE events independently from captured bytes, retaining valid preceding events while ignoring an incomplete trailing event. Share framing between usage and service-tier extraction; do not make incomplete ordinary JSON responses valid or invent missing usage counters.
-3. Add a mock streaming regression ending after a split UTF-8 chunk, plus a small configurable capture-limit fixture. Verify retained counters/tier reach the store, missing final output counters remain explicitly partial, original response bytes are forwarded unchanged and truncated responses still cannot enter the semantic cache.
-
-Check: a damaged or incomplete trailing SSE event cannot erase earlier complete usage/tier events, genuinely absent counters remain unknown, and `just check` passes. The isolated probe exercised actual wire/Anthropic extraction functions with synthetic byte prefixes; transport cancellation, the 256 MiB cap and store persistence were source-traced rather than exercised end to end.
 
 ### T586. Resolve local relative remotes before deriving project identity
 
@@ -1205,19 +1097,6 @@ Execution plan:
 4. Exercise watch integration with a scratch rotating writer and rerun the existing rotation/first-screen tests on supported platforms.
 
 Check: retained generations neither lose nor replay complete rows in either fixture, existing follow ordering remains intact, and `just check` passes. The offline probe compiled actual Follow and whole-line functions with local scratch files; full CLI/watch scheduling was source-traced, not executed.
-
-### T590. Preserve filesystem semantics for parent segments after symlinks
-
-Confirmed in [resolve_with](src/plugins/read/mod.rs#L205): the request is lexically normalized before filesystem canonicalization at lines 218–224. With `root/link -> root/a/nested`, both `root/a/target.txt` and `root/target.txt` present and containing different text, native lookup of `link/../target.txt` reads `root/a/target.txt`, but rtok resolves and reads `root/target.txt`. Both targets are inside the allowed root; this is a wrong-file result, not a demonstrated root escape. Read, search and tree share this resolver. T56's Vfs/symlink-escape coverage and T430's Windows path identity do not cover parent traversal through an existing symlink.
-
-Execution plan:
-
-1. Add a fixture with distinct target contents and an in-root directory symlink followed by `..`; compare relative and absolute requests with native filesystem lookup. Keep a direct-path control.
-2. Preserve symlink-sensitive traversal when resolving an existing request instead of collapsing parent components first. Apply the root guard to the actual resolved target and return a path naming that same target; handle missing paths explicitly without weakening confinement.
-3. Cover allowed extra/dynamic roots, symlinks leaving a root, parent segments after those links, missing components and multiple links. Align the Vfs adapter with the host contract and retain Windows prefix/case coverage.
-4. Add representative read/search/tree integration checks proving both selected content and root rejection, then rerun existing root-guard and path tests.
-
-Check: existing paths identify the same file as native lookup, outside-root targets remain rejected, and `just check` passes. The Unix scratch probe compiled actual resolve/normalize functions with a standard filesystem adapter, equivalent Unix prefix checks and inactive dynamic roots; full MCP and Windows behavior were not executed.
 
 **Continued source audit (T540).** T541–T546 were confirmed against source at
 `efbb220b` (product code unchanged from `0b14b88e`). Fix the disk data-loss

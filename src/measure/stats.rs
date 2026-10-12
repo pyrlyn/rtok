@@ -1666,7 +1666,7 @@ fn has_outline(_path: &str) -> bool {
 #[cfg(feature = "read")]
 fn has_rtok_marker(content: &str) -> bool {
     is_read_deny(content)
-        || content.contains("unchanged since ")
+        || content.contains(crate::plugins::read::cache::DEDUP_PREFIX)
         || content.starts_with("[archived ")
         || content.contains("[rtok ")
 }

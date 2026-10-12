@@ -283,7 +283,7 @@ fn graph(kind: &str, body: &[u8]) -> usize {
     fs::write(&file, body).unwrap();
     let path = file.to_string_lossy().into_owned();
     // Two runtimes on purpose: `read`'s re-read cache would answer the call inside
-    // `outline` with a delta ("unchanged since …"), and the delta is what would be
+    // `outline` with a delta ("unchanged id …"), and the delta is what would be
     // archived. A separate store reads the original; the fresh one archives it.
     let mut probe = rtok::plugin::Runtime::in_memory("t102-graph-probe").unwrap();
     probe.config.core.archive_dir = dir.join("probe-archive");
