@@ -1490,6 +1490,14 @@ Check result: fail-first shown by swapping in `origin/main`'s `src/hooks/mod.rs`
 Status: done 2026-09-24
 Model: Claude Code / claude-opus-5-5
 
+### T645. Codex `PreToolUse` and `PostToolUse` through `rtok hook` (idea I-88)
+
+Creator approved 2026-10-12 (idea I-88, unblocks T262.3). Wire Codex's `PreToolUse` (Bash `updatedInput.command` rewrite and deny) and `PostToolUse` (`additionalContext`) into both the Codex installer and `plugins/codex/hooks/hooks.json`, as `rtok hook <event> --host codex` so the store attributes the calls to the `codex` host instead of the `claude` default. The live Codex payloads (codex-cli 0.162.1, a scratch `CODEX_HOME` against a local fake Responses server, no login) are recorded in `research.md` §40 and kept as sanitized fixtures.
+
+Found by the capture: Codex applies a `PreToolUse` rewrite only with `permissionDecision: "allow"` next to `updatedInput`; Claude's shape (no decision) leaves the call unchanged and marks the hook run failed. So a Codex output adapter in `src/hooks/mod.rs` adds `allow` to a rewrite and drops `updatedMcpToolOutput`, which Codex does not read.
+
+Result (2026-10-12): `hook_events.rs` carries the `codex` rows (`PreToolUse` on Bash, `PostToolUse` on `*`, `PreCompact`, `PostCompact`) as installer rows; `run_hooks` walks them through the shared Claude-layout insert/strip with the `--host codex` spelling and still recognises the old plain one, so an upgrade rewrites a T58.2 entry in place. `hooks::codex_output` adds `permissionDecision: "allow"` to a rewrite and drops `updatedMcpToolOutput`. `plugins/codex/hooks/hooks.json`, both READMEs and `AGENTS.md` follow the table; `tests/codex_plugin.rs` compares the manifest to it. Live payloads: `research.md` §40, `tests/fixtures/hooks/codex/`. Tests: `codex_output_allows_a_rewrite_and_drops_cursor_keys`, `codex_live_payloads_dispatch_under_the_codex_host`, `hooks_json_carries_the_codex_rows_and_upgrades_the_old_spelling`. Not verified: whether `allow` skips Codex's own approval prompt.
+
 ### T262.4. Copilot CLI: spawn brief on `subagentStart`
 
 `research.md` §23: Copilot CLI's `subagentStart` prepends `additionalContext` to the subagent's prompt (not for the built-in general-purpose agent). Add it to `plugins/copilot/hooks/hooks.json` and the Copilot installer, and map Copilot's payload to rtok's `SubagentStart`. Unblocked by T262.5: call rows keep the host-adapted input, so Copilot reads reach `ledger()`.

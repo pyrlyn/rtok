@@ -58,4 +58,3 @@
 - T525. SubagentStart and PreCompact under the 10 ms hook budget
 - T526. `worktree_list` and `search` when `rtok mcp` was started in the home directory
 - T527. A worktree claim does not stay held by an agent idle for days
-- T645. Codex `PreToolUse` and `PostToolUse` through `rtok hook` (idea I-88)
