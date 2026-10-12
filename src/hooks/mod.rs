@@ -17,6 +17,7 @@ use crate::config::Config;
 use crate::plugin::{Ctx, Injection, PreToolDecision, Runtime, SessionStart};
 use crate::plugins::Registry;
 use crate::tokens::Class;
+use rtok_sys::proc::{Output, ProgressRunner};
 use serde_json::Value;
 use std::io::{Read, Write};
 use std::panic::{self, AssertUnwindSafe};
@@ -159,8 +160,9 @@ fn first_chars(s: &str, n: usize) -> String {
 fn claim_injection(cx: &Runtime, agent: Option<&str>) -> Option<Injection> {
     let agent = agent?;
     let cwd = cx.cwd.as_deref()?;
-    let project = crate::project::project_key(std::path::Path::new(cwd))?;
-    let row = cx.store.latest_task_claim(&project, agent).ok()??;
+    let keys = crate::project::project_keys(std::path::Path::new(cwd))?;
+    let read = crate::project::read_keys(&keys.key, keys.legacy.as_deref());
+    let row = cx.store.latest_task_claim(&read, agent).ok()??;
     let title = row.title.split(['\n', '\r']).next().unwrap_or("").trim();
     let text = format!("task {} {title}", row.task_id);
     Some(Injection {
@@ -701,14 +703,12 @@ fn defer_session_end(cfg: &Config, event: &str, stdin: &[u8]) {
     let Ok(exe) = std::env::current_exe() else {
         return;
     };
-    let mut cmd = std::process::Command::new(exe);
-    cmd.args(["hook", "SessionEnd"])
+    let mut cmd = ProgressRunner::quiet(exe, ["hook", "SessionEnd"])
         .env(DEFERRED_ENV, "1")
         .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null());
+        .output(Output::Detached);
     if !cfg.home.as_os_str().is_empty() {
-        cmd.env("RTOK_HOME", &cfg.home);
+        cmd = cmd.env("RTOK_HOME", &cfg.home);
     }
     // As in `otel::export::spawn_child`: the child must not hold the agent's pipes open.
     rtok_sys::stop_inheriting_own_stdio();
@@ -2215,6 +2215,35 @@ mod tests {
         );
         assert!(!additional_context(&out).contains("more"));
         assert!(cx.store.list_measurements("task_claim").unwrap().is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// T586.2: a claim filed before T586.1 under a relative origin's raw key (`../remote`) is
+    /// still named after the key became the absolute path.
+    #[test]
+    fn session_start_names_a_claim_filed_under_the_legacy_relative_key() {
+        let dir = std::env::temp_dir().join(format!("rtok-claim-legacy-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("checkout/.git")).unwrap();
+        let checkout = dir.join("checkout");
+        std::fs::write(
+            checkout.join(".git/config"),
+            "[remote \"origin\"]\n\turl = ../remote.git\n",
+        )
+        .unwrap();
+        let (stdin, input, mut cx) = session_start_fixture("t586-legacy-claim");
+        cx.cwd = Some(checkout.display().to_string());
+        let host = cx.host_id().unwrap();
+        let agent = cx
+            .store
+            .register_agent(host, &cx.session, None, cx.cwd.as_deref(), None)
+            .unwrap();
+        assert_ne!(crate::project::project_key(&checkout).unwrap(), "../remote");
+        cx.store
+            .upsert_task_claim("../remote", "R4", &agent, "Legacy")
+            .unwrap();
+        let out = additional_context(&dispatch(&stdin, &input, &cx));
+        assert!(out.contains("task R4 Legacy"), "{out}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

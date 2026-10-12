@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
-//! T276.4: `rtok bench` and `rtok run` go through `ProgressRunner`, and on pipes (how agents and
-//! CI see rtok) their stdout and stderr stay what they were: no spinner or bar bytes, the same
-//! output. Every child here is an `sh` script in a temp dir; no real agent and no host process.
+//! T276.4/T276.5: `rtok bench`, `rtok run` and `rtok demon upgrade` go through `ProgressRunner`,
+//! and on pipes (how agents and CI see rtok) their stdout and stderr stay what they were: no
+//! spinner or bar bytes, the same output. Every child here is an `sh` script in a temp dir; no
+//! real agent and no host process.
 
 #![cfg(unix)]
 
@@ -104,5 +105,24 @@ fn rtok_run_returns_though_a_background_child_holds_the_pipe() {
     assert!(start.elapsed() < Duration::from_secs(6));
     assert_eq!(text(&out.stdout), "started\n");
     assert_eq!(text(&out.stderr), "");
+    let _ = fs::remove_dir_all(&d);
+}
+
+/// T276.5: the updater `rtok demon upgrade` runs owns the terminal (`Output::Inherit`), so on a
+/// pipe its two streams arrive untouched and rtok adds no indicator bytes of its own.
+#[test]
+fn demon_upgrade_passes_the_updater_output_through_untouched() {
+    let d = dir("upgrade");
+    let updater = d.join("update.sh");
+    fs::write(&updater, "#!/bin/sh\necho UPDATED\necho warn >&2\n").unwrap();
+    fs::set_permissions(&updater, fs::Permissions::from_mode(0o755)).unwrap();
+    let out = rtok(
+        &d,
+        &["demon", "upgrade"],
+        &[("RTOK_UPDATE_CMD", updater.to_str().unwrap())],
+    );
+    let (so, se) = (text(&out.stdout), text(&out.stderr));
+    assert!(out.status.success(), "{so}{se}");
+    assert_eq!((so.as_str(), se.as_str()), ("UPDATED\n", "warn\n"));
     let _ = fs::remove_dir_all(&d);
 }

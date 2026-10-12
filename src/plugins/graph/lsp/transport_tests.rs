@@ -3,6 +3,7 @@
 //! recording cases are exact and need no network or toolchain.
 
 use super::*;
+use std::process::Command;
 use std::sync::atomic::AtomicU32;
 use std::sync::mpsc;
 

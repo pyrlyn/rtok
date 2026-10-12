@@ -40,6 +40,9 @@ pub enum Output {
     Inherit,
     /// A background child with null stdio; no indicator. `.spawn()` only.
     Detached,
+    /// A server the caller talks to: stdin and stdout are pipes it drives, stderr is ours unless
+    /// [`ProgressRunner::stderr`] says otherwise; no indicator. `.spawn()` only.
+    Pipes,
 }
 
 /// How the wait is drawn.
@@ -61,6 +64,7 @@ pub struct ProgressRunner {
     progress: Progress,
     timeout: Option<Duration>,
     stdin: Option<Stdio>,
+    stderr: Option<Stdio>,
     shim: bool,
 }
 
@@ -81,6 +85,7 @@ impl ProgressRunner {
             progress: Progress::Unknown,
             timeout: None,
             stdin: None,
+            stderr: None,
             shim: false,
         }
     }
@@ -113,6 +118,13 @@ impl ProgressRunner {
     /// Without this a piped or detached child gets a closed stdin; an inherited one keeps ours.
     pub fn stdin(mut self, stdin: Stdio) -> Self {
         self.stdin = Some(stdin);
+        self
+    }
+
+    /// Where a [`Output::Pipes`] child's stderr goes (a log file, `Stdio::null()`); ignored by
+    /// the other modes.
+    pub fn stderr(mut self, stderr: Stdio) -> Self {
+        self.stderr = Some(stderr);
         self
     }
 
@@ -166,7 +178,7 @@ impl ProgressRunner {
                 stdout: Vec::new(),
                 stderr: Vec::new(),
             }),
-            Output::Detached => Err(use_spawn("a detached child")),
+            Output::Detached | Output::Pipes => Err(use_spawn("a child the caller owns")),
         }
     }
 
@@ -177,12 +189,14 @@ impl ProgressRunner {
     pub fn run_capped(self, cap: u64) -> io::Result<(Captured, u64)> {
         match self.output {
             Output::Capture | Output::Stream => self.run_piped(Some(cap)),
-            Output::Inherit | Output::Detached => Err(use_spawn("a child that owns its output")),
+            Output::Inherit | Output::Detached | Output::Pipes => {
+                Err(use_spawn("a child that owns its output"))
+            }
         }
     }
 
     /// Start a child the caller owns. `Capture` pipes stdout and stderr without an indicator;
-    /// `Detached` nulls them; `Inherit` shares ours.
+    /// `Detached` nulls them; `Inherit` shares ours; `Pipes` pipes stdin and stdout.
     pub fn spawn(mut self) -> io::Result<Child> {
         match self.output {
             Output::Stream => return Err(use_spawn("a streamed child")),
@@ -192,9 +206,16 @@ impl ProgressRunner {
             Output::Detached => {
                 self.cmd.stdout(Stdio::null()).stderr(Stdio::null());
             }
+            Output::Pipes => {
+                self.cmd.stdout(Stdio::piped());
+                if let Some(stderr) = self.stderr.take() {
+                    self.cmd.stderr(stderr);
+                }
+                self.stdin.get_or_insert_with(Stdio::piped);
+            }
             Output::Inherit => {}
         }
-        self.prepare(self.output != Output::Inherit);
+        self.prepare(!matches!(self.output, Output::Inherit | Output::Pipes));
         self.cmd.spawn()
     }
 
@@ -600,6 +621,30 @@ mod tests {
         assert_eq!(err.kind(), io::ErrorKind::InvalidInput);
         let piped = sh("printf x").spawn().unwrap().wait_with_output().unwrap();
         assert_eq!(piped.stdout, b"x");
+    }
+
+    #[test]
+    fn pipes_hand_back_stdin_and_stdout_and_send_stderr_where_told() {
+        let log = std::env::temp_dir().join(format!("rtok-sys-pipes-{}", std::process::id()));
+        let mut child = sh("cat; echo err >&2")
+            .output(Output::Pipes)
+            .stderr(Stdio::from(std::fs::File::create(&log).unwrap()))
+            .spawn()
+            .unwrap();
+        child.stdin.take().unwrap().write_all(b"ping").unwrap();
+        let mut got = String::new();
+        child
+            .stdout
+            .take()
+            .unwrap()
+            .read_to_string(&mut got)
+            .unwrap();
+        child.wait().unwrap();
+        let logged = std::fs::read_to_string(&log).unwrap();
+        let _ = std::fs::remove_file(&log);
+        assert_eq!((got.as_str(), logged.as_str()), ("ping", "err\n"));
+        let err = sh("exit 0").output(Output::Pipes).run().unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::InvalidInput);
     }
 
     struct Seen(Arc<Mutex<Vec<Update>>>);

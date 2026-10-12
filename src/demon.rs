@@ -15,12 +15,12 @@
 use std::fs;
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result};
 use clap::ValueEnum;
+use rtok_sys::proc::{Output, ProgressRunner};
 use serde::{Deserialize, Serialize};
 
 use crate::config::Config;
@@ -186,15 +186,8 @@ pub fn start(cfg: &Config, config_file: Option<&Path>, named: &[Service]) -> Res
             eprintln!("{}", style::warn(&msg));
             crate::log::append(cfg, "warn", "demon", service.as_str(), &msg);
         }
-        let mut cmd = Command::new(&exe);
-        if let Some(c) = config_file {
-            cmd.arg("--config").arg(c);
-        }
-        let child = cmd
-            .args(["demon", "supervise", service.as_str()])
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
+        let child = service_cmd(&exe, config_file, &["demon", "supervise", service.as_str()])
+            .output(Output::Detached)
             .spawn()
             .with_context(|| format!("spawn supervisor for {service}"))?;
         let started = format!("{service} started (supervisor {})", child.id());
@@ -323,33 +316,46 @@ fn on_disk_exe() -> Result<PathBuf> {
 
 fn replace_binary() -> Result<()> {
     if let Some(cmd) = std::env::var_os("RTOK_UPDATE_CMD") {
-        return run_replace(Command::new(cmd));
+        return run_replace(inherit(&cmd, &[]));
     }
-    match Command::new("ketch")
-        .args(["upgrade", "rtok", "--yes"])
-        .status()
-    {
-        Ok(st) if st.success() => return Ok(()),
-        Ok(st) => anyhow::bail!("ketch upgrade rtok failed ({st})"),
+    match inherit("ketch", &["upgrade", "rtok", "--yes"]).run() {
+        Ok(out) if out.status.success() => return Ok(()),
+        Ok(out) => anyhow::bail!("ketch upgrade rtok failed ({})", out.status),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
         Err(e) => return Err(e.into()),
     }
-    match Command::new("rtok-update").status() {
-        Ok(st) if st.success() => Ok(()),
-        Ok(st) => anyhow::bail!("rtok-update failed ({st})"),
+    match inherit("rtok-update", &[]).run() {
+        Ok(out) if out.status.success() => Ok(()),
+        Ok(out) => anyhow::bail!("rtok-update failed ({})", out.status),
         Err(_) => anyhow::bail!(
             "no ketch or rtok-update — install with ketch (`ketch install pyrlyn/rtok`)"
         ),
     }
 }
 
-fn run_replace(mut cmd: Command) -> Result<()> {
-    let st = cmd.status()?;
+/// The updater owns the terminal (ketch prints its own progress), so no indicator of ours.
+fn inherit(program: impl AsRef<std::ffi::OsStr>, args: &[&str]) -> ProgressRunner {
+    ProgressRunner::quiet(program, args).output(Output::Inherit)
+}
+
+fn run_replace(cmd: ProgressRunner) -> Result<()> {
+    let st = cmd.run()?.status;
     if st.success() {
         Ok(())
     } else {
         anyhow::bail!("update command failed ({st})")
     }
+}
+
+/// `rtok [--config <file>] <args>` as a background child: no indicator, closed stdin.
+fn service_cmd(exe: &Path, config_file: Option<&Path>, args: &[&str]) -> ProgressRunner {
+    let mut all: Vec<&std::ffi::OsStr> = Vec::new();
+    if let Some(c) = config_file {
+        all.push("--config".as_ref());
+        all.push(c.as_os_str());
+    }
+    all.extend(args.iter().map(|a| std::ffi::OsStr::new(*a)));
+    ProgressRunner::quiet(exe, all)
 }
 
 /// One row of the `rtok demon status` page (T15.11): state asked of the kernel, never
@@ -526,15 +532,8 @@ pub fn supervise(cfg: &Config, config_file: Option<&Path>, service: Service) -> 
         // the T24.0 sink instead is what makes rotation possible at all.
         let mut log_cfg = cfg.clone();
         log_cfg.log.path = file(cfg, service, "log");
-        let mut cmd = Command::new(&exe);
-        if let Some(c) = config_file {
-            cmd.arg("--config").arg(c);
-        }
-        let mut child = cmd
-            .args(service.args())
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
+        let mut child = service_cmd(&exe, config_file, service.args())
+            .output(Output::Capture)
             .spawn()
             .with_context(|| format!("spawn {service}"))?;
         // Two reader threads only forward lines over a channel; the main thread is the sole
@@ -611,9 +610,8 @@ fn boot_time() -> Option<u64> {
     #[cfg(target_os = "macos")]
     {
         // `{ sec = 1700000000, usec = 0 } Tue Nov 14 ...`
-        let out = Command::new("sysctl")
-            .args(["-n", "kern.boottime"])
-            .output()
+        let out = ProgressRunner::quiet("sysctl", ["-n", "kern.boottime"])
+            .run()
             .ok()?;
         let s = String::from_utf8_lossy(&out.stdout);
         let rest = s.split_once("sec = ")?.1;

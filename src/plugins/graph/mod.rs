@@ -22,6 +22,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use anyhow::Result;
+use rtok_sys::proc::ProgressRunner;
 use serde_json::{Value, json};
 
 use rtok_plugin_sdk::{
@@ -1480,12 +1481,14 @@ fn defs_in_path(cx: &Ctx, root: &Path, key: &str, rel: &str) -> Result<Vec<Strin
 /// Stdout of `git -C root <args>`. Failure text starts with `git diff failed`
 /// so a review can tell a broken git from an empty diff.
 pub(crate) fn git_stdout_result(root: &Path, args: &[&str]) -> Result<Vec<u8>> {
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(root)
-        .args(args)
-        .output()
-        .map_err(|e| anyhow::anyhow!("git diff failed: {e}"))?;
+    let out = ProgressRunner::quiet(
+        "git",
+        ["-C".as_ref(), root.as_os_str()]
+            .into_iter()
+            .chain(args.iter().map(OsStr::new)),
+    )
+    .run()
+    .map_err(|e| anyhow::anyhow!("git diff failed: {e}"))?;
     if out.status.success() {
         return Ok(out.stdout);
     }

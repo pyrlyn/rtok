@@ -16,10 +16,10 @@ use std::fmt;
 use std::fmt::Write as _;
 use std::fs::{File, OpenOptions};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
 use std::time::Duration;
 
 use anyhow::{Result, anyhow};
+use rtok_sys::proc::{Output, ProgressRunner};
 
 use super::{map, metrics, otlp};
 use crate::config::{Config, Endpoint};
@@ -472,13 +472,10 @@ pub fn spawn_child(cx: &Runtime) {
     let Ok(exe) = std::env::current_exe() else {
         return;
     };
-    let mut cmd = Command::new(exe);
-    cmd.args(["otel", "flush", "--coalesce"])
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
+    let mut cmd =
+        ProgressRunner::quiet(exe, ["otel", "flush", "--coalesce"]).output(Output::Detached);
     if !cx.config.home.as_os_str().is_empty() {
-        cmd.env("RTOK_HOME", &cx.config.home);
+        cmd = cmd.env("RTOK_HOME", &cx.config.home);
     }
     // The flush child outlives this hook; on Windows it would otherwise inherit whatever piped
     // our own stdout/stderr (the agent, a test harness) and hold that pipe open until the flush
