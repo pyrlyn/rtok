@@ -30,7 +30,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T275.1 | in progress | P2 | 3 | 80% | Cursor / grok 4.7 |
 | T276 | in progress | P2 | 5 | 45% | Claude Code / sonnet-5.5 |
 | T276.3 | todo | P2 | 4 | 0% | |
-| T276.5 | todo | P2 | 4 | 0% | |
+| T276.5 | in progress | P2 | 4 | 5% | Claude Code / claude-sonnet-5-5 |
 | T276.6 | todo | P2 | 4 | 0% | |
 | T277 | in progress | P2 | 5 | 60% | Claude Code / sonnet-5.5 |
 | T278 | in progress | P1 | 3 | 90% | Claude Code / claude-opus-5-5 |
@@ -124,23 +124,23 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T573 | todo | P2 | 3 | 0% | |
 | T574 | todo | P2 | 2 | 0% | |
 | T576 | todo | P2 | 4 | 0% | |
-| T576.1 | todo | P2 | 3 | 0% | |
+| T576.1 | in progress | P2 | 3 | 5% | Claude Code / claude-sonnet-5-5 |
 | T576.2 | todo | P2 | 3 | 0% | |
 | T577 | todo | P2 | 3 | 0% | |
 | T579 | todo | P2 | 3 | 0% | |
 | T580 | todo | P2 | 2 | 0% | |
 | T581 | todo | P2 | 2 | 0% | |
 | T583 | todo | P2 | 4 | 0% | |
-| T583.1 | todo | P2 | 3 | 0% | |
+| T583.1 | in progress | P2 | 3 | 5% | Claude Code / claude-sonnet-5-5 |
 | T583.2 | todo | P2 | 3 | 0% | |
 | T584 | todo | P2 | 2 | 0% | |
 | T586 | todo | P2 | 4 | 0% | |
-| T586.1 | todo | P2 | 3 | 0% | |
+| T586.1 | in progress | P2 | 3 | 5% | Claude Code / claude-sonnet-5-5 |
 | T586.2 | todo | P2 | 3 | 0% | |
 | T587 | todo | P2 | 2 | 0% | |
 | T589 | todo | P2 | 3 | 0% | |
 | T590 | todo | P2 | 3 | 0% | |
-| T592 | todo | P2 | 4 | 0% | |
+| T592 | in progress | P2 | 4 | 5% | Claude Code / claude-sonnet-5-5 |
 | T594 | todo | P2 | 3 | 0% | |
 | T595 | todo | P2 | 3 | 0% | |
 | T597 | todo | P1 | 3 | 0% | |
@@ -171,7 +171,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T635 | todo | P2 | 3 | 0% | |
 | T636 | todo | P2 | 3 | 0% | |
 | T637 | todo | P2 | 2 | 0% | |
-| T638 | todo | P2 | 3 | 0% | |
 | T639 | todo | P2 | 2 | 0% | |
 
 
@@ -1175,19 +1174,6 @@ Execution plan:
 4. Run TUI state/rendering tests and `just check`.
 
 Check: every printable filter character reaches its input without firing an unrelated command. The executed probe compiled the actual routing prefix and Config handler with unrelated page/model methods stubbed; a full interactive terminal and Calls input were not run.
-
-### T638. Bound benchmark output draining after the child exits
-
-Confirmed on `ea999781d7a48733e3a5c92e711cfad291c13536` in [run_bounded](src/bench.rs#L402). The deadline controls only child polling; the subsequent `reader.join()` waits without a limit for stdout EOF. With the actual extracted function, a synthetic `sh -c 'sleep 0.8 & printf parent; exit 0'` and a 100 ms limit took 816 ms, waiting for the descendant after the direct child had exited. The ordinary `printf control` case returned its complete output. A longer-lived inherited pipe can stall the benchmark indefinitely. T235.1 and the host-version follow-up fixed command capture through `src/proc.rs`; this separate benchmark helper still implements its own unbounded drain. T620 concerns LSP request framing, not this process reader.
-
-Execution plan:
-
-1. Add hermetic subprocess regressions for an exited child whose descendant holds stdout, a child exceeding its deadline, nonzero exit and ordinary complete output. Never launch a real agent.
-2. Reuse the shared bounded capture mechanism in `src/proc.rs`, preserving the benchmark's success/timeout result semantics and imposing a finite post-exit drain.
-3. Reap the direct child on errors and timeout, and check both ordinary and graph benchmark callers. Keep capture output bounded where the shared API supports it.
-4. Run benchmark/process tests and `just check`.
-
-Check: the benchmark finishes within its deadline plus a documented finite drain allowance even when descendants retain stdout. The reproduction compiled the actual helper and ran synthetic shell children on macOS; no live benchmark agent or Windows process path was run.
 
 ### T639. Keep the selected Calls row visible in the TUI
 

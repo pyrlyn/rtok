@@ -150,5 +150,4 @@
 - T635. Decode JSON paths in Claude worktree fallback hooks
 - T636. Limit Claude legacy proxy migration to owned endpoints
 - T637. Route filter text before global TUI shortcuts
-- T638. Bound benchmark output draining after the child exits
 - T639. Keep the selected Calls row visible in the TUI

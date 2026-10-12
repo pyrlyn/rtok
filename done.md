@@ -11836,6 +11836,24 @@ Execution plan: route the 3 `bench.rs` sites (a `Batch` over runs plus `Capture`
 
 Result: `rtok bench`, `rtok run` and the desktop restart in `agents/restart.rs` run their children through `ProgressRunner`. `rtok bench` shows a bar over runs with a spinner per `claude -p` (the outer `with_loader` is gone); `rtok run` captures through the runner, so the buffered wait shows `running <command>…` on a terminal (control characters stripped from the label). The runner gained `run_capped` (shared byte cap with a dropped count, the old T448 cap), a return at child exit with a 200 ms pipe drain instead of waiting for pipe EOF (a backgrounded grandchild no longer holds a run), and `raw_arg` for the cmd.exe body; `capture_capped` left `src/proc.rs`. `restart.rs` closes and reopens apps with `closing …` and `reopening …` spinners and `quiet` probes. Pipes, CI and `--json` keep byte-identical stdout and stderr (`tests/progress_sites.rs`).
 
+### T638. Bound benchmark output draining after the child exits
+
+Confirmed on `ea999781d7a48733e3a5c92e711cfad291c13536` in [run_bounded](src/bench.rs#L402). The deadline controls only child polling; the subsequent `reader.join()` waits without a limit for stdout EOF. With the actual extracted function, a synthetic `sh -c 'sleep 0.8 & printf parent; exit 0'` and a 100 ms limit took 816 ms, waiting for the descendant after the direct child had exited. The ordinary `printf control` case returned its complete output. A longer-lived inherited pipe can stall the benchmark indefinitely. T235.1 and the host-version follow-up fixed command capture through `src/proc.rs`; this separate benchmark helper still implements its own unbounded drain. T620 concerns LSP request framing, not this process reader.
+
+Execution plan:
+
+1. Add hermetic subprocess regressions for an exited child whose descendant holds stdout, a child exceeding its deadline, nonzero exit and ordinary complete output. Never launch a real agent.
+2. Reuse the shared bounded capture mechanism in `src/proc.rs`, preserving the benchmark's success/timeout result semantics and imposing a finite post-exit drain.
+3. Reap the direct child on errors and timeout, and check both ordinary and graph benchmark callers. Keep capture output bounded where the shared API supports it.
+4. Run benchmark/process tests and `just check`.
+
+Check: the benchmark finishes within its deadline plus a documented finite drain allowance even when descendants retain stdout. The reproduction compiled the actual helper and ran synthetic shell children on macOS; no live benchmark agent or Windows process path was run.
+
+Result: fixed by T276.4, no separate change. `run_bounded` in `src/bench.rs` now runs the child through `ProgressRunner::timeout`; the runner returns at child exit and drains the pipe for at most `DRAIN_AFTER_EXIT` (200 ms, `crates/rtok-sys/src/proc/mod.rs:27`), so a descendant that keeps stdout open no longer stalls the benchmark, and the benchmark's own `reader.join()` is gone. Covered by T276.4's tests: `a_hung_run_is_killed_instead_of_hanging_the_bench`, `a_finished_run_hands_back_its_output` and `a_run_past_the_pipe_buffer_is_drained_not_timed_out` in `src/bench.rs`, plus the runner's own descendant test (`sleep 5 & printf out`, `crates/rtok-sys/src/proc/mod.rs:755`).
+
+Status: done 2026-10-12
+Model: Claude Code / claude-sonnet-5-5
+
 ### T436.1. Web: a spinner on every action the user waits for, and operation icons like ketch's
 
 Creator request 2026-10-07: the same as T436, in the `rtok web` SPA. Only page loads showed a spinner; the plugin switch, project select/link, doctor plan/apply and Calls expand only disabled their buttons.
