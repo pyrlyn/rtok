@@ -93,6 +93,7 @@ pub const HOSTS: &[&str] = &[
     "amp",
     "warp",
     "continue",
+    "crush",
 ];
 
 /// Adapters `[tasks] adapter` accepts. `tasks::run::ADAPTERS` re-exports this.
@@ -802,6 +803,7 @@ section! {
         amp: SetupAmp = SetupAmp::default(),
         warp: SetupWarp = SetupWarp::default(),
         r#continue: SetupContinue = SetupContinue::default(),
+        crush: SetupCrush = SetupCrush::default(),
     }
 }
 
@@ -993,6 +995,12 @@ section! {
 section! {
     /// `[setup.warp]` — Warp's user-level MCP file (T413.12).
     SetupWarp { mcp_path: PathBuf = p("~/.warp/.mcp.json") }
+}
+
+section! {
+    /// `[setup.crush]` — Crush's global JSON config (T413.11). `CRUSH_GLOBAL_CONFIG` or
+    /// `XDG_CONFIG_HOME` move it; this key is the override.
+    SetupCrush { config_path: PathBuf = p("~/.config/crush/crush.json") }
 }
 
 section! {
@@ -1752,6 +1760,7 @@ impl Config {
             setup.junie.mcp_path,
             setup.amp.settings_path,
             setup.warp.mcp_path,
+            setup.crush.config_path,
             setup.codewhale.dir,
             setup.mimo.config_path,
             setup.antigravity.plugins_path,

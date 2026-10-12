@@ -88,6 +88,7 @@ lang: ru
 | `kiro` | no | MCP | ещё не проверено | `worktree_add` |
 | `amp` | no | MCP | ещё не проверено | `worktree_add` |
 | `warp` | no | MCP | ещё не проверено | `worktree_add` |
+| `crush` | no | MCP | ещё не проверено | `worktree_add` |
 | `qwen` | yes | hooks | ещё не проверено | `worktree_add` |
 | `codebuddy` | yes | hooks | ещё не проверено | `worktree_add` |
 | `goose` | no | MCP | ещё не проверено | `worktree_add` |

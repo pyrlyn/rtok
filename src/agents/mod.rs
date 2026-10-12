@@ -25,6 +25,7 @@ pub mod commandcode;
 #[path = "continue/mod.rs"]
 pub mod continue_dev;
 pub mod copilot;
+pub mod crush;
 pub mod cursor;
 pub mod devin;
 pub mod droid;
@@ -118,6 +119,7 @@ pub fn host(id: &str) -> Option<&'static dyn Agent> {
         "devin" => Some(&devin::Devin),
         "roo" => Some(&roo::Roo),
         "junie" => Some(&junie::Junie),
+        "crush" => Some(&crush::Crush),
         "qwen" => Some(&qwen::Qwen),
         "codebuddy" => Some(&codebuddy::Codebuddy),
         "goose" => Some(&goose::Goose),
@@ -1310,11 +1312,22 @@ pub(crate) fn register_stdio_mcp(
     path: &std::path::Path,
     host: &'static str,
 ) -> Result<String> {
+    register_stdio_mcp_in(cfg, path, "mcpServers", host)
+}
+
+/// [`register_stdio_mcp`] under another top-level key, for a host that reads the same
+/// `{command, args}` entry from a differently named object (Crush: `mcp`).
+pub(crate) fn register_stdio_mcp_in(
+    cfg: &Config,
+    path: &std::path::Path,
+    key: &str,
+    host: &'static str,
+) -> Result<String> {
     let cmd = rtok_command();
     rtok_agent_sdk::register_server(
         &apply(cfg),
         path,
-        "mcpServers",
+        key,
         "rtok",
         stdio_mcp_entry(&cmd, host),
         &mcp_summary(&cmd, host),
@@ -1331,13 +1344,17 @@ pub(crate) fn unregister_stdio_mcp(
     path: &std::path::Path,
     host: &'static str,
 ) -> Result<String> {
-    unregister_ours(
-        cfg,
-        path,
-        "mcpServers",
-        "rtok",
-        &stdio_mcp_entry("rtok", host),
-    )
+    unregister_stdio_mcp_in(cfg, path, "mcpServers", host)
+}
+
+/// [`register_stdio_mcp_in`]'s remove.
+pub(crate) fn unregister_stdio_mcp_in(
+    cfg: &Config,
+    path: &std::path::Path,
+    key: &str,
+    host: &'static str,
+) -> Result<String> {
+    unregister_ours(cfg, path, key, "rtok", &stdio_mcp_entry("rtok", host))
 }
 
 /// `Agent::installed` for a host whose only module is `mcp`: present iff `path` mentions

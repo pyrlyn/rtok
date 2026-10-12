@@ -457,6 +457,8 @@ settings_path = "~/.config/amp/settings.json"    # Amp: user settings; amp.mcpSe
 mcp_path      = "~/.warp/.mcp.json"          # Warp: користувацький файл MCP-серверів (mcpServers)
 [setup.continue]
 config_path   = "~/.continue/config.yaml"        # Continue (VS Code, JetBrains, cn): mcpServers item rtok; Windows: %USERPROFILE%/.continue/; CONTINUE_GLOBAL_DIR moves it
+[setup.crush]
+config_path   = "~/.config/crush/crush.json" # Crush: global JSON config (mcp.rtok); CRUSH_GLOBAL_CONFIG or XDG_CONFIG_HOME move it
 
 [expand]                              # rtok expand <id>
 max_lines = 0                         # 0 = без обмежень (--lines a-b задається для виклику)

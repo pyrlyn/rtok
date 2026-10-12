@@ -329,6 +329,7 @@ Every effective key with its origin — the `config show --sources` page.
 | setup.commandcode.dir | ~/.commandcode | default |
 | setup.continue.config_path | ~/.continue/config.yaml | default |
 | setup.copilot.dir | ~/.copilot | default |
+| setup.crush.config_path | ~/.config/crush/crush.json | default |
 | setup.cursor.hooks_path | ~/.cursor/hooks.json | default |
 | setup.devin.config_path | ~/.config/devin/config.json | default |
 | setup.droid.mcp_path | ~/.factory/mcp.json | default |

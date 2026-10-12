@@ -282,6 +282,7 @@ setup.codex.config_path = ~/.codex/config.toml
 setup.commandcode.dir = ~/.commandcode
 setup.continue.config_path = ~/.continue/config.yaml
 setup.copilot.dir = ~/.copilot
+setup.crush.config_path = ~/.config/crush/crush.json
 setup.cursor.hooks_path = ~/.cursor/hooks.json
 setup.devin.config_path = ~/.config/devin/config.json
 setup.droid.mcp_path = ~/.factory/mcp.json
