@@ -12,6 +12,7 @@ use serde_json::Value;
 
 #[cfg(feature = "graph")]
 mod grep_symbol;
+mod sed;
 mod skill;
 
 /// T201: above this, `post_tool`'s sha256 + synchronous disk write (inside [`Ctx::put_archive`])
@@ -345,14 +346,24 @@ fn segment_read_only(seg: &str) -> bool {
 fn stem_read_only(seg: &str) -> bool {
     let mut w = seg.split_whitespace();
     match super::cmd::formatters::cmd_stem(w.next().unwrap_or("")) {
-        "ls" | "cat" | "head" | "tail" | "grep" | "rg" | "find" | "tree" | "wc" | "sed" | "jq" => {
-            true
-        }
+        "ls" | "cat" | "head" | "tail" | "grep" | "rg" | "find" | "tree" | "wc" | "jq" => true,
+        // T557: a script can write (`w`) or run (`e`) from inside its quotes.
+        "sed" => shlex::split(seg).is_some_and(|w| {
+            w.split_first()
+                .is_some_and(|(_, args)| sed::read_only(args))
+        }),
         // T322: an awk program can write from inside its quotes (`system(`, `print >`,
         // `| "cmd"`), which the quote-aware redirect scan does not see.
         "awk" => !seg.contains("system(") && !seg.contains(['>', '|']),
         "git" => match w.next() {
-            Some("status" | "log" | "diff" | "show" | "rev-parse") => true,
+            // T557: `--output=<file>` (and its unambiguous abbreviations) writes a file.
+            Some("status" | "log" | "diff" | "show" | "rev-parse") => shlex::split(seg)
+                .is_some_and(|w| {
+                    !w.iter().any(|a| {
+                        let name = a.split_once('=').map_or(a.as_str(), |(n, _)| n);
+                        name.len() >= 3 && "--output".starts_with(name)
+                    })
+                }),
             // Only the listing forms: `-D`, `-m`, `-c` and `newname` mutate refs.
             Some("branch") => w.all(|a| {
                 matches!(
@@ -381,10 +392,14 @@ fn writer_marker(seg: &str) -> bool {
     toks.iter().copied().any(is_redirect)
         || has_unquoted_redirect(seg)
         || (stem == "find"
-            && toks
-                .iter()
-                .any(|t| *t == "-delete" || *t == "-exec" || t.starts_with("-exec")))
-        || (stem == "sed" && toks.iter().copied().any(sed_in_place))
+            && shlex::split(seg).is_none_or(|w| {
+                w.iter().any(|t| {
+                    // `-fprint*`/`-fls` write a file, `-ok*` asks to run a command.
+                    t == "-delete"
+                        || t == "-fls"
+                        || ["-exec", "-ok", "-fprint"].iter().any(|p| t.starts_with(p))
+                })
+            }))
         || (stem == "tail"
             && toks
                 .iter()
@@ -414,12 +429,6 @@ fn has_unquoted_redirect(seg: &str) -> bool {
         }
     }
     false
-}
-
-fn sed_in_place(t: &str) -> bool {
-    t == "--in-place"
-        || t.starts_with("--in-place=")
-        || (t.starts_with("-i") && !t.starts_with("--"))
 }
 
 /// Normalized Bash key body: whitespace collapsed, the `rtok run --` wrap stripped, every
@@ -1495,6 +1504,73 @@ mod tests {
         assert!(k("git rev-parse HEAD").is_some());
         assert!(k("cargo metadata").is_some());
         assert!(k("cargo test").is_none());
+    }
+
+    /// T557: options and scripts that write a file or run a command are not read-only, even
+    /// when the stem is; the common listing forms keep their key.
+    #[test]
+    fn side_effect_variants_of_read_only_stems_have_no_key() {
+        let k = |c: &str| cache_key("Bash", &json!({"command": c}), None, None);
+        for w in [
+            "sed 'w output' input",
+            "sed -n 'w output' input",
+            "sed -e 'w output' input",
+            "sed --expression='w output' input",
+            "sed -ne 'w output' input",
+            "sed 's/a/b/w output' input",
+            "sed 's/a/b/e' input",
+            "sed '1e touch x' input",
+            "sed 'r other' input",
+            "sed -f script input",
+            "sed --file=script input",
+            "sed --in-place s/a/b/ input",
+            "sed 's/[/]/x/w out' input",
+            "find . -fprint output",
+            "find . -fprint0 output",
+            "find . -fprintf output '%p'",
+            "find . -fls output",
+            "find . \"-fprint\" output",
+            "find . -ok rm {} ;",
+            "find . -okdir rm {} ;",
+            "git diff --output=output",
+            "git diff --output output",
+            "git log --out=output",
+            "git show '--output=output'",
+        ] {
+            assert!(k(w).is_none(), "{w}");
+        }
+        for r in [
+            "sed -n 1,40p f",
+            "sed -n '10,20p' f",
+            "sed -n '/foo/p' f",
+            "sed 's/a/b/g' f",
+            "sed -E 's/(a|b)+/x/gI;5q' f",
+            "sed -e 's/a/b/' -e '$d' f",
+            "sed -ne '2p' f",
+            "sed '/^#/d' f",
+            "find . -name '*.rs' -type f",
+            "find . -name x -print",
+            "git diff --stat",
+            "git log --oneline -5",
+            "git diff --name-only HEAD~1",
+        ] {
+            assert!(k(r).is_some(), "{r}");
+        }
+    }
+
+    /// T557 at the hook layer: a writer in disguise drops the earlier Read result and is not
+    /// itself remembered, so repeating it executes again.
+    #[test]
+    fn a_disguised_writer_invalidates_an_earlier_read() {
+        let sh = Shell::new();
+        let read = json!({"file_path": "/r/input"});
+        done(&sh.cx, "Read", &read);
+        assert!(read_at(&sh.cx, &read));
+        sh.ran("sed 'w output' input");
+        assert!(!read_at(&sh.cx, &read), "the writer may have changed it");
+        assert!(!sh.denied("sed 'w output' input"));
+        sh.ran("sed -n 1,2p input");
+        assert!(sh.denied("sed -n 1,2p input"));
     }
 
     /// T57.1 false-deny Check: a writer that shares a read-only stem must clear bash keys.
