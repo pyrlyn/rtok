@@ -250,9 +250,8 @@ pub(crate) fn cache_key(
             })
         }
         "Bash" => {
-            // T322: `norm_cmd` collapses newlines to spaces, which would hide a command
-            // separator (`ls\nrm x` → `ls rm x`): make each one a `;` first.
-            let c = norm_cmd(&input.get("command")?.as_str()?.replace(['\n', '\r'], " ; "));
+            // T322/T555: `None` when no safe identity exists (an unterminated quote).
+            let c = norm_cmd(input.get("command")?.as_str()?)?;
             // Only read-only commands are keyed: a repeat of `cargo test` after an Edit is
             // new information, not a duplicate.
             // A relative hop resolves against a directory the key cannot name: PostToolUse
@@ -406,30 +405,42 @@ fn sed_in_place(t: &str) -> bool {
 /// current directory, so `cd sub` twice is `sub/sub`, not `sub` — folding them to the last
 /// hop would key two different directories as one and deny a first-time listing.
 /// Quote-aware: `cd 'a && b' && ls` is one hop to `'a && b'`.
-fn norm_cmd(s: &str) -> String {
-    let (hops, rest) = split_cd(&strip_wrap(&collapse(s)));
-    hops.into_iter()
-        .map(|d| format!("cd {d} && "))
-        .chain([rest])
-        .collect()
+fn norm_cmd(s: &str) -> Option<String> {
+    let (hops, rest) = split_cd(&unwrap_flat(s)?)?;
+    Some(
+        hops.into_iter()
+            .map(|d| format!("cd {d} && "))
+            .chain([rest])
+            .collect(),
+    )
 }
 
 /// Splits the leading `cd <dir> &&` hops from the command. Each remainder re-runs
-/// `strip_wrap` because PostToolUse re-wraps the command the model actually ran.
-fn split_cd(s: &str) -> (Vec<String>, String) {
+/// `unwrap_flat` because PostToolUse re-wraps the command the model actually ran.
+fn split_cd(s: &str) -> Option<(Vec<String>, String)> {
     let mut hops = Vec::new();
     let mut t = s.to_string();
     while let Some((d, rest)) = strip_cd_hop(&t) {
         hops.push(d);
-        t = strip_wrap(&rest);
+        t = unwrap_flat(&rest)?;
     }
-    (hops, t)
+    Some((hops, t))
+}
+
+/// The wrapper is removed before the inner command is flattened: inside the wrapper's own
+/// quotes every byte looks like argument text, so flattening first would keep the model's
+/// insignificant whitespace and split the Pre/Post keys.
+fn unwrap_flat(s: &str) -> Option<String> {
+    flatten(&strip_wrap(&flatten(s)?))
 }
 
 /// Whether any leading `cd` hop of the normalized command is relative (`cd sub`, `cd -`,
 /// `cd $HOME/x`). Absolute means a rooted path, `~…` or a Windows drive.
 fn relative_hop(cmd: &str) -> bool {
-    split_cd(cmd).0.iter().any(|t| {
+    let Some((hops, _)) = split_cd(cmd) else {
+        return true;
+    };
+    hops.iter().any(|t| {
         let t = t
             .strip_prefix('\'')
             .and_then(|r| r.strip_suffix('\''))
@@ -447,8 +458,7 @@ fn relative_hop(cmd: &str) -> bool {
 /// Whether the command moves the host's persistent shell, so every cached listing was
 /// taken from a different directory.
 fn has_cd_hop(command: &str) -> bool {
-    let t = collapse(&command.replace(['\n', '\r'], " ; "));
-    strip_cd_hop(&strip_wrap(&t)).is_some()
+    unwrap_flat(command).is_some_and(|t| strip_cd_hop(&t).is_some())
 }
 
 /// One `cd <dir> &&` prefix: the target word (quotes kept as typed) and the remainder
@@ -525,8 +535,53 @@ fn wrap_agent_id(id: &str) -> bool {
             .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
 }
 
-fn collapse(s: &str) -> String {
-    s.split_whitespace().collect::<Vec<_>>().join(" ")
+/// Collapses whitespace runs to one space and turns each unquoted newline into a `;` (T322:
+/// it would otherwise hide a command separator, `ls\nrm x` → `ls rm x`). Whitespace inside
+/// quotes or behind a backslash is argument text (T555) and stays byte-for-byte. `None` for
+/// an unterminated quote: no safe identity, so no key.
+fn flatten(s: &str) -> Option<String> {
+    let mut out = String::with_capacity(s.len());
+    let (mut quote, mut gap) = (None::<char>, false);
+    let mut chars = s.chars();
+    while let Some(c) = chars.next() {
+        match quote {
+            Some('\'') => {
+                out.push(c);
+                if c == '\'' {
+                    quote = None;
+                }
+            }
+            Some(q) => {
+                out.push(c);
+                if c == '\\' {
+                    out.push(chars.next()?);
+                } else if c == q {
+                    quote = None;
+                }
+            }
+            None if c == '\n' || c == '\r' => {
+                if !out.is_empty() {
+                    out.push(' ');
+                }
+                out.push(';');
+                gap = true;
+            }
+            None if c.is_whitespace() => gap = true,
+            None => {
+                if gap && !out.is_empty() {
+                    out.push(' ');
+                }
+                gap = false;
+                out.push(c);
+                match c {
+                    '\'' | '"' => quote = Some(c),
+                    '\\' => out.extend(chars.next()),
+                    _ => {}
+                }
+            }
+        }
+    }
+    quote.is_none().then_some(out)
 }
 
 fn payload(v: &Value) -> Vec<u8> {
@@ -623,6 +678,45 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// T555: whitespace inside quotes or behind a backslash is part of an argument, so two
+    /// commands that differ only there read different files and must not share a key.
+    #[test]
+    fn bash_key_keeps_whitespace_inside_arguments() {
+        let k = |c: &str| cache_key("Bash", &json!({"command": c}), None, Some("/r"));
+        for (a, b) in [
+            ("cat 'a  b'", "cat 'a b'"),
+            ("cat \"a  b\"", "cat \"a b\""),
+            ("cat a\\ \\ b", "cat a\\ b"),
+            ("cat 'a\tb'", "cat 'a b'"),
+            ("cat 'a\nb'", "cat 'a b'"),
+            ("cat \"a\nb\"", "cat \"a b\""),
+            ("rtok run -- 'cat '\"'\"'a  b'\"'\"''", "cat 'a b'"),
+        ] {
+            assert!(k(a).is_some(), "{a}");
+            assert_ne!(k(a), k(b), "{a} vs {b}");
+        }
+        // The wrapper PostToolUse sees keys the same as the command PreToolUse sees.
+        assert_eq!(k("rtok run -- 'cat '\"'\"'a  b'\"'\"''"), k("cat 'a  b'"));
+        assert_eq!(k("cat 'a\nb'"), k("cat 'a\nb'"));
+        // Insignificant whitespace still collapses, and a newline outside quotes stays a `;`.
+        assert_eq!(k("cat   'a b'\t x"), k("cat 'a b' x"));
+        assert_eq!(k("rtok run -- 'cat   x'"), k("cat x"));
+        assert_ne!(k("ls\nrm x"), k("ls rm x"));
+        assert_eq!(k("ls\nrm x"), k("ls ; rm x"));
+        // No safe identity: an unterminated quote is never keyed.
+        assert_eq!(k("cat 'a  b"), None);
+    }
+
+    /// T555 at the hook layer: a cached result for one file never answers the other.
+    #[test]
+    fn quoted_whitespace_variant_is_not_denied_as_a_duplicate() {
+        let sh = Shell::new();
+        sh.ran("cat 'a  b'");
+        assert!(sh.denied("cat 'a  b'"));
+        assert!(sh.denied("cat   'a  b'"));
+        assert!(!sh.denied("cat 'a b'"));
     }
 
     /// A redirect glued to a word (`echo x>file`) is still a writer: the
