@@ -2623,6 +2623,15 @@ Result: no `amazonq` host. The CLI is succeeded by Kiro CLI, which T413.4 covers
 - MCP file: the one-time migration copies `~/.aws/amazonq/mcp.json` to `~/.kiro/settings/mcp.json` and skips servers that conflict. Kiro CLI does not modify existing `.amazonq` folders, keeps reading project `.amazonq` configuration, and prefers `.kiro` when both exist. Same page. T413.4 should treat `~/.kiro/settings/mcp.json` as the user MCP file and write nothing to `.amazonq`.
 - Q Developer IDE plugins: no primary source checked, so no IDE variant. Third-party posts about their end of support are leads only (unverified).
 
+### 32.13 Trae (T413.13, checked 2026-10-12)
+
+Trae IDE (ByteDance). Facts are from the vendor's docs, https://docs.trae.ai/ide/add-mcp-servers, fetched 2026-10-12. Result: no installer; the documented user-level surface has no file path.
+
+- Project MCP servers: an `mcp.json` in a `.trae/` directory under the project root (step "Set up project MCP servers"). That file belongs to the project, so setup never writes it.
+- User-level MCP servers: added in the app's MCP panel. The page names the **Raw Config (JSON)** button, which opens "the mcp.json file in TRAE", but gives no path for it. The path is not in the page, and Trae is not installed on this machine to read it back.
+- VS Code layout: Trae is a VS Code fork, but the docs do not say it reads VS Code's `mcp.json` or `settings.json`, so `src/agents/vscode/` cannot be reused on a guess.
+- Because the only documented user-level file has no documented path, a fixed path would be a guess; the host stays out until the docs (or a Trae install to inspect) name one.
+
 ### 32.14 OpenHands (T413.14, checked 2026-10-12)
 
 OpenHands CLI. All facts are from the vendor's docs (docs.openhands.dev), fetched 2026-10-12.
