@@ -77,8 +77,9 @@ impl Apply {
 pub const BACKUP_DIR: &str = "_backup";
 
 /// Copy `path` to `_backup/<name>.bak-<unix-seconds>` beside it. `None` when there is no file
-/// yet, or when any file in that folder already holds the same bytes — a second install or
-/// uninstall of unchanged content is the same undo, whatever the copy is named.
+/// yet, or when a generation of that same name already holds the same bytes — a second install
+/// or uninstall of unchanged content is the same undo. Another file's copy never counts: its
+/// own retention cap could prune it, taking this file's only undo bytes along (T569).
 ///
 /// After a copy is taken, [`prune_backups`] keeps the newest `keep` generations of that name.
 pub fn backup(path: &Path, keep: usize) -> Result<Option<PathBuf>> {
@@ -184,7 +185,7 @@ fn backup_at(path: &Path, ts: u64) -> Result<Option<PathBuf>> {
     let Some(dir) = backup_dir(path) else {
         return Ok(None);
     };
-    if identical_backup_exists(&dir, &body) {
+    if identical_backup_exists(&dir, &name, &body) {
         return Ok(None);
     }
     fs::create_dir_all(&dir).with_context(|| dir.display().to_string())?;
@@ -209,18 +210,12 @@ fn backup_at(path: &Path, ts: u64) -> Result<Option<PathBuf>> {
     Ok(Some(bak))
 }
 
-/// True when any regular file in `dir` is byte-equal to `body`. Size first; names are ignored.
-fn identical_backup_exists(dir: &Path, body: &[u8]) -> bool {
-    let Ok(entries) = fs::read_dir(dir) else {
-        return false;
-    };
-    entries
-        .filter_map(Result::ok)
-        .filter(|e| e.path().is_file())
-        .any(|e| {
-            e.metadata().is_ok_and(|m| m.len() == body.len() as u64)
-                && fs::read(e.path()).is_ok_and(|b| b == body)
-        })
+/// True when a `<name>.bak-*` generation in `dir` is byte-equal to `body`. Size first.
+fn identical_backup_exists(dir: &Path, name: &str, body: &[u8]) -> bool {
+    generations(dir, name).into_iter().any(|(_, p)| {
+        fs::metadata(&p).is_ok_and(|m| m.len() == body.len() as u64)
+            && fs::read(&p).is_ok_and(|b| b == body)
+    })
 }
 
 /// A host's JSON config as a value to edit. A missing or empty file is an empty object, not an
@@ -1462,42 +1457,55 @@ mod tests {
     }
 
     /// T44.1: a second `setup`/`remove` over an unchanged file must not add a second copy,
-    /// whatever suffix the existing copy carries; changed content still gets its own.
+    /// whatever suffix the existing generation carries; changed content still gets its own.
     #[test]
-    fn backup_skips_when_an_identical_copy_exists_under_any_name() {
+    fn backup_skips_when_an_identical_generation_of_that_name_exists() {
         let dir = tmp("backup-identical");
         let path = dir.join("settings.json");
         fs::write(&path, "same").unwrap();
         let first = backup_at(&path, 1).unwrap().expect("first copy");
         assert_eq!(backup_at(&path, 2).unwrap(), None, "same bytes, no copy");
-        // Only a differently named identical copy remains: still no new copy.
+        // A differently suffixed generation of the same name still counts.
         let backup = dir.join(BACKUP_DIR);
         fs::rename(&first, backup.join("settings.json.bak-9-7")).unwrap();
         assert_eq!(backup_at(&path, 3).unwrap(), None);
-        fs::rename(
-            backup.join("settings.json.bak-9-7"),
-            backup.join("other.txt"),
-        )
-        .unwrap();
-        assert_eq!(
-            backup_at(&path, 3).unwrap(),
-            None,
-            "name in _backup is ignored"
-        );
         // Same size, different bytes: a copy is due.
         fs::write(&path, "diff").unwrap();
         let third = backup_at(&path, 4)
             .unwrap()
             .expect("changed content is copied");
         assert_eq!(fs::read_to_string(&third).unwrap(), "diff");
-        // Identical bytes under any name in _backup skip a new copy.
-        fs::write(backup.join("other.json"), "back").unwrap();
+        // Identical bytes under another file's name do not: that copy is not ours to rely on.
+        fs::write(backup.join("other.json.bak-1"), "back").unwrap();
         fs::write(&path, "back").unwrap();
-        assert_eq!(
-            backup_at(&path, 5).unwrap(),
-            None,
-            "bytes anywhere in _backup count"
-        );
+        assert!(backup_at(&path, 5).unwrap().is_some());
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T569: two host files that start with the same bytes each keep their own undo copy, so
+    /// pruning one file's generations under a cap of 1 never removes the other's only original.
+    #[test]
+    fn same_original_bytes_in_two_files_keep_one_undo_copy_each() {
+        let dir = tmp("backup-two-files");
+        let (a, b) = (dir.join("A.json"), dir.join("B.json"));
+        fs::write(&a, "orig").unwrap();
+        fs::write(&b, "orig").unwrap();
+        let apply = Apply {
+            backup: true,
+            backup_files: 1,
+            ..apply()
+        };
+        write(&apply, &a, "a1", "a1").unwrap();
+        write(&apply, &b, "b1", "b1").unwrap();
+        write(&apply, &a, "a2", "a2").unwrap();
+        let held = |name: &str| -> Vec<String> {
+            generations(&dir.join(BACKUP_DIR), name)
+                .into_iter()
+                .map(|(_, p)| fs::read_to_string(p).unwrap())
+                .collect()
+        };
+        assert_eq!(held("B.json"), ["orig"], "B's original survives A's prune");
+        assert_eq!(held("A.json"), ["a1"], "the cap is per file");
         let _ = fs::remove_dir_all(dir);
     }
 
