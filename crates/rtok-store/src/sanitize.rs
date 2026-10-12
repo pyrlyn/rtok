@@ -9,6 +9,7 @@
 use std::borrow::Cow;
 use std::sync::LazyLock;
 
+#[cfg(test)]
 use regex::Regex;
 use serde_json::Value;
 
