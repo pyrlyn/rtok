@@ -158,6 +158,9 @@ fn apply_hosts(cfg: &mut Config, req: &Request, no_restart: bool) -> Result<()> 
     let out = if interactive {
         super::restart::run(cfg, req, no_restart)?
     } else {
+        // The loader below already covers every step; a second spinner from the runner would
+        // draw over it. T276.3 retires both for step loaders.
+        rtok_sys::proc::disable_progress();
         with_loader("updating host", || {
             super::restart::run(cfg, req, no_restart)
         })?

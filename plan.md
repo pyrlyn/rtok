@@ -30,7 +30,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T275.1 | in progress | P2 | 3 | 80% | Cursor / grok 4.7 |
 | T276 | in progress | P2 | 5 | 30% | Claude Code / sonnet-5.5 |
 | T276.3 | todo | P2 | 4 | 0% | |
-| T276.4 | todo | P2 | 4 | 0% | |
 | T276.6 | todo | P2 | 3 | 0% | |
 | T277 | in progress | P2 | 5 | 30% | Claude Code / sonnet-5.5 |
 | T278 | in progress | P1 | 3 | 90% | Claude Code / claude-opus-5-5 |
@@ -381,12 +380,6 @@ Each PR listed here becomes a subtask (`Tn.m`, D16) when it is claimed; this car
 Split from T276 (migration plan step 2, 2026-10-11, D16): `agents/mod.rs::run_cli` / `spawn_cli` / `app_version` and `doctor.rs::spawn_mcp` / `mcp_command` go through `ProgressRunner`; `proc::suspend` replaces the T81 `interactive` switch so `rtok agents install/update/remove` shows step loaders and the plugin question stays readable; `probing MCP server <name>…` with a bar when more than one server. Starts after T275, T277 and T279 land (same spawn helpers). Unblocks T436.4. Depends on T276.1, T276.2.
 
 Check: the T276 card's Check lines for items 1 and 2; a non-TTY test asserts no spinner bytes; `just check`.
-
-### T276.4. `ProgressRunner` in `bench`, `plugins/cmd/run` and `agents/restart`
-
-Split from T276 (migration plan step 3, 2026-10-11, D16): `bench.rs` (3 sites, a `Batch` over runs plus `Capture`), `plugins/cmd/run.rs` (`Stream` or `Capture`, decided from the code), `agents/restart.rs` (10 sites, `Capture`). Depends on T276.1, T276.2.
-
-Check: the T276 card's Check lines for items 4 and 5; `just check`.
 
 ### T276.6. Retire the point indicators, turn on the `Command::new` ban, docs and changelog
 
