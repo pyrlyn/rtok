@@ -22,7 +22,7 @@ const WRAPPERS: [&str; 4] = [
     "local-command-caveat",
 ];
 
-/// `(<t>, </t>)` per wrapper, built once: [`unwrap`] checks them at every `>`.
+/// `(<t>, </t>)` per wrapper, built once: [`strip`] looks for them at every `<`.
 static TAGS: LazyLock<Vec<(String, String)>> = LazyLock::new(|| {
     WRAPPERS
         .iter()
@@ -32,8 +32,8 @@ static TAGS: LazyLock<Vec<(String, String)>> = LazyLock::new(|| {
 
 /// One alternative per tag: the regex crate has no backreferences, and a shared alternation
 /// would let `<a>` close on `</b>`. The newlines after a block go with it. Only the oracle
-/// the tests compare [`unwrap`] against: the shipped cleaner cannot use it, because a block
-/// removed (or a character dropped) can join its neighbours into a new tag.
+/// the tests compare [`unwrap`] against, kept out of the shipped code so the check stays
+/// independent of it.
 #[cfg(test)]
 static WRAPPER: LazyLock<Regex> = LazyLock::new(|| {
     let alts: Vec<String> = WRAPPERS.iter().map(|t| format!("<{t}>.*?</{t}>")).collect();
@@ -89,45 +89,66 @@ pub fn text(s: &str) -> Cow<'_, str> {
     }
 }
 
-/// `s` without wrapper blocks and the newlines after each, in one left-to-right pass.
-/// Each block is `<t>` to the first later `</t>` of the same tag, as a lazy regex would
-/// take it, but the output is reduced as it grows: removing a block can join its
-/// neighbours into a new tag (`<system-<task-notification>…</task-notification>reminder>`),
-/// and the tags are looked for in what is kept, so that tag is found without a second scan
-/// of the whole text. A tag left open stays.
+/// `s` without wrapper blocks and the newlines after each. Each block is `<t>` to the first
+/// later `</t>` of the same tag, as a lazy regex takes it, and removing blocks can join their
+/// neighbours into a new tag (`<system-<task-notification>…</task-notification>reminder>`).
+/// So [`strip`] repeats on its own output until a pass removes nothing: the result is the
+/// regex fixed point, and a tag counts only when it is whole in the text its pass reads, never
+/// when a later removal in the same pass would have made it whole. A tag left open stays.
 fn unwrap(s: &str) -> Cow<'_, str> {
+    let mut cur = Cow::Borrowed(s);
+    // Each repeat removes at least one whole block (over 30 bytes), so the loop ends, and
+    // plain input takes one or two passes: only a removal that joins a tag asks for another.
+    // Crafted input that nests joins k deep costs k linear passes, at most one per block,
+    // so quadratic in the worst case and linear for anything a host really sends.
+    while let Some(next) = strip(&cur) {
+        cur = Cow::Owned(next);
+    }
+    cur
+}
+
+/// One left-to-right pass: the leftmost `<t>…</t>` at each step, plus the newlines after it,
+/// is dropped and the scan resumes after it. `None` when nothing was removed.
+fn strip(s: &str) -> Option<String> {
     if !s.contains("</") {
-        return Cow::Borrowed(s);
+        return None;
     }
-    let mut out = String::with_capacity(s.len());
-    // Where the leftmost `<t>` still in `out` starts, per tag.
-    let mut open: [Option<usize>; WRAPPERS.len()] = [None; WRAPPERS.len()];
-    let mut swallow = false;
-    for c in s.chars() {
-        if swallow && c == '\n' {
+    // Where each closer last starts: an opener after it can never match, which keeps a
+    // flood of unclosed openers linear instead of one search to the end of `s` each.
+    let last: Vec<Option<usize>> = TAGS
+        .iter()
+        .map(|(_, closing)| s.rfind(closing.as_str()))
+        .collect();
+    let mut out = String::new();
+    let (mut kept, mut at) = (0, 0);
+    while let Some(lt) = s[at..].find('<') {
+        let start = at + lt;
+        at = start + 1;
+        let rest = &s[start..];
+        let Some((i, (opening, closing))) = TAGS
+            .iter()
+            .enumerate()
+            .find(|(_, (opening, _))| rest.starts_with(opening.as_str()))
+        else {
+            continue;
+        };
+        let body = start + opening.len();
+        if !last[i].is_some_and(|l| l >= body) {
             continue;
         }
-        swallow = false;
-        out.push(c);
-        if c != '>' {
+        let Some(q) = s[body..].find(closing.as_str()) else {
             continue;
-        }
-        for (i, (opening, closing)) in TAGS.iter().enumerate() {
-            if out.ends_with(closing.as_str()) {
-                let Some(at) = open[i] else { continue };
-                out.truncate(at);
-                for o in &mut open {
-                    *o = o.filter(|p| *p < at);
-                }
-                swallow = true;
-                break;
-            }
-            if out.ends_with(opening.as_str()) {
-                open[i].get_or_insert(out.len() - opening.len());
-            }
-        }
+        };
+        let end = body + q + closing.len();
+        out.push_str(&s[kept..start]);
+        at = end + s[end..].bytes().take_while(|b| *b == b'\n').count();
+        kept = at;
     }
-    Cow::Owned(out)
+    if kept == 0 {
+        return None;
+    }
+    out.push_str(&s[kept..]);
+    Some(out)
 }
 
 /// `s` without escapes, control and zero-width characters and nothing else (T432): wrappers,
@@ -370,8 +391,8 @@ mod tests {
         assert_eq!(&*body(&once), &once[..], "a second pass changes nothing");
     }
 
-    /// The old shape of the cleaner: strip wrappers to a fixed point, then characters. The
-    /// single pass must agree with it on every input, including joined tag fragments.
+    /// The old shape of the cleaner: strip wrappers to a fixed point, then characters.
+    /// [`unwrap`] must agree with it on every input, including joined tag fragments.
     fn by_fixed_point(s: &str) -> String {
         let mut cur = characters(s, true);
         loop {
@@ -381,6 +402,23 @@ mod tests {
             }
             cur = next;
         }
+    }
+
+    /// Found by the proptest below: pass 1 of the oracle removes the `ci-monitor-event` block
+    /// and the separate `<system-reminder></system-reminder>` pair after it, while the opener
+    /// that the removal joins (`<system-` + `reminder>`) has no closer left for pass 2.
+    #[test]
+    fn a_joined_opener_does_not_pair_with_a_later_closer() {
+        let s = [
+            "<system-",
+            "<ci-monitor-event>",
+            "</ci-monitor-event>",
+            "reminder>",
+        ]
+        .concat()
+            + "<system-reminder></system-reminder>";
+        assert_eq!(by_fixed_point(&s), "<system-reminder>");
+        assert_eq!(text(&s), "<system-reminder>");
     }
 
     proptest::proptest! {
