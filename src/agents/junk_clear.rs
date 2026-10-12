@@ -904,7 +904,8 @@ mod tests {
         for (d, lock) in [("direct", "Cargo.lock"), ("deep", "a/b/yarn.lock")] {
             let (action, is_planned, note) = by(&planned, d);
             assert_eq!((action, is_planned), ("skip", false), "{d}");
-            assert!(note.starts_with(why) && note.contains(lock), "{note}");
+            let lock = lock.replace('/', std::path::MAIN_SEPARATOR_STR);
+            assert!(note.starts_with(why) && note.contains(&lock), "{note}");
         }
         assert_eq!(by(&planned, "clean").0, "clear");
 
