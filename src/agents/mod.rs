@@ -44,6 +44,7 @@ pub mod junk_web;
 pub mod junk_worktrees;
 pub mod kilo;
 pub mod kimi;
+pub mod kiro;
 pub mod link;
 pub(crate) mod mcp;
 pub mod mimo;
@@ -116,6 +117,7 @@ pub fn host(id: &str) -> Option<&'static dyn Agent> {
         "qwen" => Some(&qwen::Qwen),
         "codebuddy" => Some(&codebuddy::Codebuddy),
         "droid" => Some(&droid::Droid),
+        "kiro" => Some(&kiro::Kiro),
         "goose" => Some(&goose::Goose),
         "continue" => Some(&continue_dev::Continue),
         _ => None,

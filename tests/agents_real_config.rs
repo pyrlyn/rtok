@@ -113,6 +113,10 @@ const HOSTS: &[Host] = &[
         files: &[".factory/mcp.json"],
     },
     Host {
+        id: "kiro",
+        files: &[".kiro/settings/mcp.json"],
+    },
+    Host {
         id: "goose",
         files: &[".config/goose/config.yaml"],
     },
@@ -226,6 +230,7 @@ fn fixture(rel: &str) -> &'static str {
         | ".config/devin/mcp_config.json"
         | ".omp/agent/mcp.json"
         | ".factory/mcp.json"
+        | ".kiro/settings/mcp.json"
         | "Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json" => {
             r#"{"mcpServers":{"foreign":{"command":"x"}}}"#
         }
@@ -361,6 +366,7 @@ real_config_round_trip! {
     roo_keeps_the_real_mcp_settings_json => "roo",
     qwen_keeps_the_real_settings_json => "qwen",
     droid_keeps_the_real_mcp_json => "droid",
+    kiro_keeps_the_real_mcp_json => "kiro",
     goose_keeps_the_real_config_yaml => "goose",
     continue_keeps_the_real_config_yaml => "continue",
 }

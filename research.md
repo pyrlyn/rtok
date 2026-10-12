@@ -2603,6 +2603,18 @@ Factory moved its docs from `docs.factory.ai` to `docs.factory.com` (308 redirec
 - Settings: `~/.factory/settings.json` (macOS and Linux), `%USERPROFILE%\.factory\settings.json` (Windows); no config-directory environment variable is documented. https://docs.factory.com/cli/configuration/settings
 - No Desktop app is documented, so there is one CLI variant.
 
+### 32.4 Kiro IDE and CLI (T413.4, checked 2026-10-12)
+
+- MCP files: `~/.kiro/settings/mcp.json` (user, "applies globally across all workspaces") and `.kiro/settings/mcp.json` (workspace); both merged, workspace wins. Loading priority on the same page: agent config (`mcpServers` field of the agent JSON, no path given), workspace file, global file. https://kiro.dev/docs/mcp/configuration/
+- Stdio entry: `mcpServers.<name>` with `command` (required), `args`, `env`, `disabled`, `autoApprove`, `disabledTools`. Same page. rtok writes `{command, args}` only.
+- Surfaces: the configuration page and https://kiro.dev/docs/mcp/ carry IDE, CLI and Web tabs, but the fetched text has the file paths under the IDE tab only and states no per-surface path; the page has a Windows note for "Kiro CLI V2" about how stdio commands launch. So the CLI is taken to read the same two files, **unverified** against the CLI itself.
+- Conflict: https://kiro.dev/docs/mcp/registry/ lists "Global: ~/.kiro/mcp.json" and "Workspace: .kiro/mcp.json" for the same scopes. The configuration page is the reference for the file format, so the installer uses `settings/mcp.json`; `[setup.kiro] mcp_path` redirects it. The old `/docs/cli/mcp/` pages are redirects to the unified pages.
+- CLI: binary `kiro-cli`, install `curl -fsSL https://cli.kiro.dev/install | bash`. https://kiro.dev/docs/cli/ . The page names no config directory and no `mcp add` syntax.
+- IDE app: the installation page says to "drag Kiro from Applications to the Trash", so the macOS bundle is `/Applications/Kiro.app` (bundle id not documented); no Windows or Linux install folder is named, so only macOS paths are probed. https://kiro.dev/docs/getting-started/installation/
+- Hooks: JSON files in `.kiro/hooks/` (project) and, for CLI V3, `~/.kiro/hooks/`; each has `version: "v1"` and a `hooks` array of `{name, trigger, matcher, action: {type, command | prompt}, timeout (default 60), enabled}`; triggers named include `PostFileSave`, `PreToolUse`, `PostToolUse`, `Stop`. The command receives session context as JSON on stdin. The page states no exit-code rules and no way for command output to reach the agent's context. https://kiro.dev/docs/hooks/ . Hooks stay `Support::No`.
+- No model base-URL setting and no local plugin directory are documented on the pages above, so proxy and plugin stay `Support::No`.
+- Migration: see 32.10 (T413.10): the Amazon Q CLI migration copies `~/.aws/amazonq/mcp.json` to `~/.kiro/settings/mcp.json`, which supports `~/.kiro/settings/mcp.json` as the CLI's user file.
+
 ### 32.6 Goose (T413.6, checked 2026-10-12)
 
 - Config file: https://github.com/aaif-goose/goose/blob/main/documentation/docs/guides/config-files.md — `~/.config/goose/config.yaml` on macOS and Linux, `%APPDATA%\Block\goose\config\config.yaml` on Windows. The CLI and the Desktop app share it.
@@ -2627,6 +2639,15 @@ Result: no `amazonq` host. The CLI is succeeded by Kiro CLI, which T413.4 covers
 - Succession: "Kiro CLI is the next update of the Q CLI"; staying on Q Developer CLI means "new features and fixes will only be available for Kiro CLI". The page gives no end-of-support date for the Q CLI. Kiro CLI was available from 2025-11-17, and auto-update users were moved to it on 2025-11-24. https://kiro.dev/docs/upgrade-guides/migrating-from-q/ (page updated 2026-08-04)
 - MCP file: the one-time migration copies `~/.aws/amazonq/mcp.json` to `~/.kiro/settings/mcp.json` and skips servers that conflict. Kiro CLI does not modify existing `.amazonq` folders, keeps reading project `.amazonq` configuration, and prefers `.kiro` when both exist. Same page. T413.4 should treat `~/.kiro/settings/mcp.json` as the user MCP file and write nothing to `.amazonq`.
 - Q Developer IDE plugins: no primary source checked, so no IDE variant. Third-party posts about their end of support are leads only (unverified).
+
+### 32.13 Trae (T413.13, checked 2026-10-12)
+
+Trae IDE (ByteDance). Facts are from the vendor's docs, https://docs.trae.ai/ide/add-mcp-servers, fetched 2026-10-12. Result: no installer; the documented user-level surface has no file path.
+
+- Project MCP servers: an `mcp.json` in a `.trae/` directory under the project root (step "Set up project MCP servers"). That file belongs to the project, so setup never writes it.
+- User-level MCP servers: added in the app's MCP panel. The page names the **Raw Config (JSON)** button, which opens "the mcp.json file in TRAE", but gives no path for it. The path is not in the page, and Trae is not installed on this machine to read it back.
+- VS Code layout: Trae is a VS Code fork, but the docs do not say it reads VS Code's `mcp.json` or `settings.json`, so `src/agents/vscode/` cannot be reused on a guess.
+- Because the only documented user-level file has no documented path, a fixed path would be a guess; the host stays out until the docs (or a Trae install to inspect) name one.
 
 ## 33. Which tests a change reaches (T420, 2026-10-06)
 
@@ -2855,3 +2876,23 @@ No local repository has 50k files: the largest tracked trees are `apps/stator` (
 Reading: a query that finds `cap` hits early stops the walk and stays far under 200 ms on any size. A query with few or no hits reads every file: about 120 ms on a 2 000-file repository (inside the gate), 15-34 s on 66 000 files (about 150x over the gate), roughly linear in files and bytes. Command: `python3 -I bench_search.py target/release/rtok <root> 20 'the' 'TODO' 'unwrap_or_default' 'zzqxnotfound_9f3a'`, run from the scratchpad.
 
 **Gate verdict (2026-10-12): not met, T378 stays open.** On the real repositories available (about 2 000 files) the absent-literal p95 is 130-157 ms, so p95 is at most 200 ms and the card's close-with-number clause would apply there. On a 66k-file tree the worst case (a literal with no or few hits) is p95 30 s, far above 200 ms. The card's own target is a 50k-file repository, so the gate resolves to "p95 > 200 ms": the prefilter is justified for that size, but the evidence for it is a synthetic tree, and I-95 (parallel walk) has not shipped, so the before/after Check the card names is still missing. The creator decides whether to build T378 on this number, run a real 50k-file repository first, or close the card at the 2 000-file scale.
+
+## 40. Codex `PreToolUse`, `PostToolUse` and `SubagentStart`: docs and live payloads (T645, checked 2026-10-12)
+
+Question: what does Codex send and read on these three events, so rtok can wire its Bash rewrite, tool context and (T262.3) spawn brief? Sources: Codex hooks reference https://learn.chatgpt.com/docs/hooks (fetched 2026-10-12) and a live run of `codex-cli 0.162.1` (macOS arm64, 2026-10-12). The live run used a scratch `CODEX_HOME` and project directory, `model_providers.fake` pointing at a local fake Responses server (no login, no network, no credentials), and `--dangerously-bypass-hook-trust` for the scratch hook script only. The creator's `~/.codex` was not touched. The fake server answered the first request with one `exec_command` (or `spawn_agent`) call, so the tool ran for real in the sandbox. Sanitized payloads: `tests/fixtures/hooks/codex/`.
+
+| Fact | Result | Source |
+| --- | --- | --- |
+| Config | `hooks.json` or inline `[hooks]` next to a config layer; plugins bundle `hooks/hooks.json`; non-managed hooks run only once trusted (hash-bound), `--dangerously-bypass-hook-trust` skips that for one run | docs |
+| Matcher | regex on `tool_name` for tool events, on `agent_type` for `SubagentStart`; `*`, empty or absent matches all; `apply_patch` also matches `Edit` and `Write` | docs |
+| Common stdin | `session_id`, `transcript_path`, `cwd`, `hook_event_name`, `model`, `permission_mode`, and `turn_id` on turn events | docs, live |
+| `PreToolUse` stdin | live Bash: `tool_name: "Bash"`, `tool_input: {"command": "echo hi"}`, `tool_use_id: "call_1"` (fixture `codex/pre_tool_bash.json`). A `spawn_agent` call arrives as `tool_name: "spawn_agent"`, `tool_input: {"message": "..."}` (`codex/pre_tool_spawn_agent.json`) | docs, live |
+| `PostToolUse` stdin | the same fields plus `tool_response`, a plain string (`"rewritten\n"`) where Claude sends an object; `tool_input` carries the command that ran, i.e. the rewritten one (`codex/post_tool_bash.json`) | live |
+| `SubagentStart` stdin | the parent's `session_id`, plus `agent_id` (the child thread id) and `agent_type: "default"` (`codex/subagent_start.json`); no tool fields | docs, live |
+| Rewrite | docs: `hookSpecificOutput.permissionDecision: "allow"` with `updatedInput` (Bash: a string `command`). Live: `{hookEventName, updatedInput}` **without** `permissionDecision` left the original `echo hi` running and Codex printed `hook: PreToolUse Failed`; adding `permissionDecision: "allow"` ran `echo rewritten` and the hook showed `Completed`. rtok's Claude-shaped rewrite carries no decision, so Codex needs an adapter | docs, live |
+| Context | `hookSpecificOutput.additionalContext` is read on `PreToolUse`, `PostToolUse`, `SessionStart`, `UserPromptSubmit` and `SubagentStart`. Live: the `SubagentStart` marker and a `PostToolUse` marker both appeared in the next model request (the subagent's first request for `SubagentStart`) | docs, live |
+| Deny | `permissionDecision: "deny"` with `permissionDecisionReason`; `ask`, `continue: false`, `stopReason` and `suppressOutput` mark the run failed on `PreToolUse` | docs |
+| Plain stdout | ignored on `PreToolUse` and `PostToolUse`; developer context on `SessionStart`, `UserPromptSubmit` and `SubagentStart` | docs |
+| Tool names | `Bash` (shell and `exec_command`), `apply_patch`, `mcp__<server>__<tool>`, other local tools by name; `spawn_agent` also matches `Agent`; hosted tools such as web search are not hooked | docs |
+
+Consequences for rtok: Codex's `Bash` is Claude's `Bash`, so the existing Bash rewrite and deny paths apply once the output carries `allow`; there is no `Read` tool (reads go through `Bash`), and file edits are `apply_patch` with the patch text in `tool_input.command`, so T262.3's ledger cannot count Codex reads and must parse paths out of a patch. Not verified: whether `allow` also skips Codex's own approval prompt on a rewritten command (the scratch run used `approval_policy = "never"`), and the exact `apply_patch` payload (the fake server only produced function calls).
