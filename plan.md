@@ -81,7 +81,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T527 | in progress | P2 | 3 | 0% | MiMo / mimo |
 | T532 | todo | P1 | 3 | 0% | |
 | T533 | todo | P1 | 3 | 0% | |
-| T534 | todo | P2 | 2 | 0% | |
 | T536 | todo | P2 | 2 | 0% | |
 | T537 | todo | P2 | 2 | 0% | |
 | T538 | todo | P2 | 2 | 0% | |
@@ -201,18 +200,6 @@ Execution plan:
 3. Test differing paths/queries as well as lane upstreams; exact replay to one endpoint must still hit.
 
 Check: B receives its first request after A was warmed, each endpoint returns its own bytes, same-target replay hits, and `just check` passes.
-
-### T534. Validate expand ranges against the payload before freezing decisions
-
-Source-confirmed on `0b14b88e`: [`expand::run`](src/expand.rs#L200) and [`mcp::expand_text`](src/mcp.rs#L837) validate ranges against `usize::MAX`, call `fetch`, and only then validate against the actual line count. [`fetch`](src/expand.rs#L26) commits the expanded flag and its Measurement. Expanding a one-line live-zone archive with `lines: "2-3"` therefore returns an error after permanently freezing the compression decision and charging an expansion that returned no bytes. The earlier past-EOF fix correctly rejects the range; this task addresses its remaining side effects, not range syntax (T522).
-
-Execution plan:
-
-1. Seed an unexpanded decision and a one-line archive, request `2-3` through both CLI and MCP, and assert an error with unchanged decision and measurement rows.
-2. Separate retrieval/validation from successful-expansion bookkeeping; share the sequence across both surfaces and preserve the atomic freeze-plus-measurement transaction.
-3. Cover empty archives and valid filtered expansion, and retain malformed-range checks.
-
-Check: all failed ranges leave state unchanged; successful expansion still freezes once and records the intended cost; `just check` passes.
 
 ### T536. Preserve raw command bytes when storage fails open
 

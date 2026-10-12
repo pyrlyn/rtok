@@ -839,7 +839,7 @@ fn expand_text(cx: &Runtime, args: &Value) -> Result<String> {
     if let Some(spec) = args["lines"].as_str() {
         crate::expand::parse_range(spec, usize::MAX)?;
     }
-    let Some(bytes) = crate::expand::fetch(cx, id)? else {
+    let Some(bytes) = crate::expand::fetch_range(cx, id, args["lines"].as_str())? else {
         bail!(crate::expand::unknown_id_message(id));
     };
     let text = String::from_utf8_lossy(&bytes);
@@ -1161,6 +1161,40 @@ mod tests {
         // Without `context` the hits stay bare, as before.
         let args = serde_json::json!({"id": id, "grep": "HIT"});
         assert_eq!(expand_text(&cx, &args).unwrap(), "2:HIT\n7:HIT");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T534: the MCP tool rejects a range past the payload before it freezes the decision or
+    /// records the expansion.
+    #[test]
+    fn expand_text_range_past_the_end_leaves_the_decision_unfrozen() {
+        let (cfg, dir) = tmp("mcp-range");
+        let cx = crate::plugin::Runtime::open(cfg, "mcp-range").unwrap();
+        let id = cx
+            .store
+            .put_archive("mcp", b"one line\n", &cx.config.core.archive_dir)
+            .unwrap();
+        cx.store
+            .put_archive_decision("tu-1", &id, "mcp-range", &format!("[archived {id}]"))
+            .unwrap();
+        let args = serde_json::json!({"id": id, "lines": "2-3"});
+        assert!(expand_text(&cx, &args).is_err());
+        let d = cx
+            .store
+            .archive_decision("mcp-range", "tu-1")
+            .unwrap()
+            .unwrap();
+        assert!(!d.expanded);
+        assert!(cx.store.list_measurements("archive").unwrap().is_empty());
+        let args = serde_json::json!({"id": id, "lines": "1"});
+        assert_eq!(expand_text(&cx, &args).unwrap(), "one line");
+        let d = cx
+            .store
+            .archive_decision("mcp-range", "tu-1")
+            .unwrap()
+            .unwrap();
+        assert!(d.expanded);
+        assert_eq!(cx.store.list_measurements("archive").unwrap().len(), 1);
         let _ = fs::remove_dir_all(dir);
     }
 

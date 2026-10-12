@@ -1,6 +1,5 @@
 - T532. Preserve typed content and message fields in the direct cache key
 - T533. Scope cached responses to the resolved upstream request target
-- T534. Validate expand ranges against the payload before freezing decisions
 - T536. Preserve raw command bytes when storage fails open
 - T537. Keep MCP pending calls when the server sends its own request
 - T538. Do not let skipped memory imports reserve unseen body hashes
