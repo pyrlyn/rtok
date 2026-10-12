@@ -764,7 +764,15 @@ pub fn prompt_counts(rows: &[(String, String)]) -> (u64, u64) {
     })
 }
 
+/// The same project identity ordinary memory and session attribution use (T133), so a
+/// linked worktree and its main checkout share one handoff.
 fn project_of_cx(cx: &Ctx) -> Option<String> {
+    crate::project::project_name(Path::new(cx.cwd()?))
+}
+
+/// What handoffs were filed under before T553: the git root's basename. Only a lookup
+/// fallback for rows an older build wrote; never a place to save.
+fn legacy_project_of_cx(cx: &Ctx) -> Option<String> {
     crate::config::layers::git_root(Path::new(cx.cwd()?))?
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
@@ -804,10 +812,12 @@ pub fn offer(cx: &Ctx) -> Option<Injection> {
 /// Newest `session:*` note of the hook cwd's project, same render and budget as [`offer`].
 /// Reads through the hook `Runtime`'s own store (T203) instead of opening a third one.
 pub fn offer_session(cx: &Ctx) -> Option<Injection> {
-    let raw = cx
-        .latest_session_note(project_of_cx(cx).as_deref())
-        .ok()
-        .flatten()?;
+    let project = project_of_cx(cx);
+    let latest = |p: Option<&str>| cx.latest_session_note(p).ok().flatten();
+    let raw = latest(project.as_deref()).or_else(|| {
+        let legacy = legacy_project_of_cx(cx).filter(|l| Some(l) != project.as_ref())?;
+        latest(Some(&legacy))
+    })?;
     let inj = render_offer(cx, raw.clone())?;
     let _ = cx.record(&Measurement {
         plugin: "memory",
@@ -1580,6 +1590,91 @@ mod tests {
         .unwrap();
         let text = offer(&ctx).expect("injection").text;
         assert!(!text.contains("PRIVATE_SENTINEL"), "{text}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// T553: a session ended in the main checkout is handed off to a session started in its
+    /// linked worktree and back, under the shared project name (origin repo name, not the
+    /// checkout's basename); an unrelated project and a legacy basename-scoped row behave.
+    #[test]
+    fn session_handoff_follows_the_shared_project_across_worktrees() {
+        let dir = std::env::temp_dir().join("rtok-t553-handoff-worktrees");
+        let _ = std::fs::remove_dir_all(&dir);
+        let main = dir.join("repo");
+        let linked = dir.join("repo-fix");
+        let admin = main.join(".git/worktrees/repo-fix");
+        std::fs::create_dir_all(&admin).unwrap();
+        std::fs::create_dir_all(linked.join("src")).unwrap();
+        std::fs::write(
+            main.join(".git/config"),
+            "[remote \"origin\"]\n\turl = git@github.com:o/shared-name.git\n",
+        )
+        .unwrap();
+        std::fs::write(admin.join("commondir"), "../..\n").unwrap();
+        std::fs::write(
+            linked.join(".git"),
+            format!("gitdir: {}\n", admin.display()),
+        )
+        .unwrap();
+        let other = dir.join("other");
+        std::fs::create_dir_all(other.join(".git")).unwrap();
+        let scratch = dir.join("scratch");
+        std::fs::create_dir_all(&scratch).unwrap();
+
+        let cfg = crate::testutil::config_in(&dir);
+        let run = |event: &str, input: serde_json::Value| {
+            let mut out = Vec::new();
+            crate::hooks::run(event, input.to_string().as_bytes(), &mut out, &cfg);
+            serde_json::from_slice::<serde_json::Value>(&out).unwrap()["hookSpecificOutput"]
+                ["additionalContext"]
+                .as_str()
+                .unwrap_or("")
+                .to_string()
+        };
+        let end = |session: &str, cwd: &Path, prompt: &str| {
+            let t = dir.join(format!("{session}.jsonl"));
+            let line = serde_json::json!({"type":"user","message":{"content":prompt}});
+            std::fs::write(&t, line.to_string()).unwrap();
+            run(
+                "SessionEnd",
+                serde_json::json!({"hook_event_name":"SessionEnd","session_id":session,"transcript_path":t,"cwd":cwd,"reason":"clear"}),
+            );
+        };
+        let start = |session: &str, cwd: &Path| {
+            run(
+                "SessionStart",
+                serde_json::json!({"hook_event_name":"SessionStart","session_id":session,"source":"startup","cwd":cwd}),
+            )
+        };
+
+        end("s-main", &main.join("src"), "from the main checkout");
+        end("s-other", &other, "from an unrelated project");
+        assert!(start("n1", &linked.join("src")).contains("from the main checkout"));
+        assert!(!start("n1b", &linked).contains("unrelated"));
+        end("s-linked", &linked.join("src"), "from the linked worktree");
+        assert!(start("n2", &main).contains("from the linked worktree"));
+        assert!(start("n3", &other).contains("from an unrelated project"));
+        assert!(!start("n4", &scratch).contains("handoff"), "non-git cwd");
+        assert!(!start("n4", &scratch).contains("from the"));
+
+        // A row filed under the checkout basename by an older build is still found.
+        let store = crate::store::Store::open(&cfg.core.db_path).unwrap();
+        store
+            .upsert_note(
+                Some("legacy-name"),
+                "session:old",
+                "compact",
+                "checkpoint\n- legacy row\n",
+            )
+            .unwrap();
+        let legacy = dir.join("legacy-name");
+        std::fs::create_dir_all(legacy.join(".git")).unwrap();
+        std::fs::write(
+            legacy.join(".git/config"),
+            "[remote \"origin\"]\n\turl = git@github.com:o/renamed.git\n",
+        )
+        .unwrap();
+        assert!(start("n5", &legacy).contains("legacy row"));
         let _ = std::fs::remove_dir_all(&dir);
     }
 
