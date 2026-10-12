@@ -29,6 +29,10 @@ pub enum ServerFrame {
     Message { text: String },
     /// The archived payload a client asked for with [`ClientMessage::Expand`].
     Expand { id: String, text: String },
+    /// What removing a project would drop (T329.54): the dry run `graph projects remove
+    /// --dry-run` prints. Nothing was removed; the page asks the user before it sends the
+    /// confirmed request.
+    ProjectPlan { project: String, plan: String },
     /// The checklist of `rtok doctor --fix` and the diff of the selection (T331.12).
     DoctorPlan { plan: Plan },
     /// What a confirmed `doctor` apply did.
@@ -111,6 +115,19 @@ pub enum ProjectRequest {
         to: String,
         #[serde(default)]
         both: bool,
+    },
+    /// Re-read the project's files (T329.54). Answered at once; the row reads `indexing` until
+    /// the worker ends, then `ok` or `failed` with the error.
+    Reindex {
+        project: String,
+    },
+    /// Drop the project from the registry with its index rows; its files are never touched.
+    /// Without `confirmed` nothing is written and the dry run comes back as a
+    /// [`ServerFrame::ProjectPlan`].
+    Remove {
+        project: String,
+        #[serde(default)]
+        confirmed: bool,
     },
 }
 

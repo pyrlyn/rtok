@@ -13926,6 +13926,51 @@ Check: Dated row with binary commit, roots, file counts, queries, runs, p50/p95 
 Status: done 2026-10-12
 Model: Claude Code / claude-sonnet-5-5
 
+### T329.54. Web actions: re-index and remove project, with a job tracker for indexing/failed states
+
+The web graph page has no way to re-index ("Index now") or remove a project: `ProjectRequest` in `src/web/protocol.rs` has only Select/Link/Unlink, `project_write` in `src/web/mod.rs` has no such arm, and `web/src/pages/graph3d/ProjectsOverview.tsx` says they "arrive with T329.20", which shipped link/unlink only. Done means: protocol variants and `project_write` arms that call the same functions as the CLI commands (remove shows the plan, writes nothing without confirmation), a SPA node menu with both actions, a job tracker that gives the `indexing` and `failed` states (see the T329.12 deviations in `done.md`), state markers on the nodes, and docs en/ru/uk.
+
+Check: web and Rust tests for both actions and the tracker states, Playwright for the node menu; `just spa-test`, `just js`, `just spa-stories`, `just spa-e2e`, `just check`. Unblocks T477.
+
+Execution plan (2026-10-12): card text and id taken from the `t620-lsp-web-spinners-mcp` branch, where it was split and left unclaimed. 1. `ProjectRequest` variants and `project_write` arms for re-index and remove, calling the same functions as the CLI (`graph::projects`), remove behind its dry-run plan and a confirmation; 2. an index job tracker that sets `indexing`/`failed`; 3. SPA node-menu actions, stories, Playwright; 4. the card's Check gates. Then T477 on top.
+
+Result: `Action::Reindex` in `src/plugins/graph/projects.rs` is shared by the CLI (`rtok graph projects reindex <project>`, refuses a missing root), the web page and the TUI. The new `src/plugins/graph/jobs.rs` tracks one re-index per root on a worker thread with its own `Runtime::open`; a second start or a missing root is refused, a worker panic becomes a `failed` row with an error, and `ProjectRow.state` reads `indexing` or `failed` while old index rows stay readable. The web protocol adds `ProjectRequest::Reindex` and `Remove{confirmed}` plus `ServerFrame::ProjectPlan`: an unconfirmed remove returns the T416.4 dry-run plan and writes nothing, a confirmed one runs the CLI's `Action::Remove`. The node menu has Re-index and Remove… (plan region with Confirm/Cancel, portal-rendered so the blurred Panel no longer clips it) and indexing/failed status lines. `ws.schema.json`, `snapshot.gen.ts`, docs en/ru/uk, the README row, a trycmd case and the completions snapshots are updated.
+
+Check: `graph::jobs` (`the_row_shows_indexing_then_failed_then_clears`, `start_indexes_on_a_worker_and_leaves_the_cli_result`, `a_second_start_while_running_and_a_missing_root_are_refused`), `tests/web.rs` `ws_reindex_runs_on_a_worker_and_remove_needs_its_confirmation`, `tests/graph_projects.rs`, `cli_trycmd`, `committed_schema`; SPA: `ProjectsOverview.test.tsx`, `projectLogic.test.ts`, `ws.test.ts`, story `ReindexAndRemoveAgainstSampleServer`, Playwright "the node menu re-indexes a project and removes it only after the plan is confirmed"; `just full-check` and the four SPA gates.
+
+Status: done 2026-10-12
+Model: Claude Code / claude-sonnet-5-5
+
+### T477. TUI: re-index and remove projects (counterpart of the web actions)
+
+T329 plans web actions to re-index ("Index now") and remove a project on the graph page; D27 (amended 2026-10-10, T346) requires the same actions in the TUI. Depends on the T329 subtask that adds those web actions and on T476 (done: the TUI project keys, picker and confirm stage live in `src/tui/projects.rs`, and `web::project_write` runs on the key loop, so the re-index here needs a worker to keep the screen alive). Done means: the TUI graph page has re-index and remove keys that call the same functions as the web actions and the CLI commands, with the same guards: remove shows the plan (what leaves the registry, that no file is deleted) and needs a confirm key; re-index shows progress on the status line and leaves the old data usable while it runs.
+
+Check: a TUI test on a fixture project: re-index brings a stale project to indexed and equals the CLI result, remove drops it from the registry only after the confirm, declining changes nothing; `tests/surface_parity.rs` lists both actions on both surfaces; `just check`.
+
+Execution plan (2026-10-12): 1. confirm the web graph page's re-index and remove actions exist (the T329 subtask this card depends on); stop if not; 2. TUI keys calling the same functions as the web and CLI, re-index on a worker with status-line progress, remove behind the plan + confirm stage of `src/tui/projects.rs`; 3. TUI fixture test against the CLI result, decline changes nothing, `tests/surface_parity.rs`; `just check`.
+
+Result: On the TUI Graph page `i` sends `ProjectRequest::Reindex` through `web::project_write`, so it takes the same `jobs::start` path as the web page; the status line shows `indexing <name>…` and `ProjectsState::settle` (from `refresh`) turns it into `indexed <name>` or `index of <name> failed: …` without blocking the screen. `x` fetches the unconfirmed Remove plan and enters the existing `Stage::Confirm` with it on the status line (no file is deleted); only `y` sends the confirmed Remove. The note and key hints are wrapped paragraphs with counted heights, so the new hints do not hide others on narrow terminals.
+
+Check: `tui::projects` `reindex_runs_on_a_worker_and_leaves_what_the_cli_leaves`, `reindex_of_a_missing_project_is_refused_on_the_status_line`, `remove_shows_the_plan_and_only_the_confirm_key_drops_the_project`; `tests/surface_parity.rs` `project_writes_exist_on_both_surfaces` lists ("Reindex","i") and ("Remove","x"); `just full-check`.
+
+Status: done 2026-10-12
+Model: Claude Code / claude-sonnet-5-5
+
+### T561. TUI: folded-target counter in a one-project view
+
+Left over from T500. `CallsStore::folded_counters(drawn, more, scope, now)` and the pane's "folded calls" lines (`{label} · {n} folded`) exist, but the TUI has no one-project drill view, so nothing fills `LiveCalls.drawn`/`more` and the counter never shows. Give the TUI a one-project view that supplies the drawn nodes and `more`, then wire it in and drop the `#[cfg(test)]` `set_drawn`.
+
+Check: in the one-project view the pane lists folded targets on their nearest drawn ancestor, else on the "+N more" group; TUI test; `tests/surface_parity.rs`; `just check`.
+
+Execution plan (2026-10-12): 1. a TUI one-project drill view on the graph/calls page that, like the web drill view, fills `LiveCalls.drawn` and `more`; 2. wire `CallsStore::folded_counters` into the pane and drop the `#[cfg(test)]` `set_drawn`; 3. TUI test (folded targets on the nearest drawn ancestor, else on "+N more"), `tests/surface_parity.rs`; `just check`.
+
+Result: `d` on the TUI Graph page opens a one-project view on the registry row under the cursor (`d` again closes it, `d` on another row re-drills). Its nodes come from `plugins::graph::drill::run`, the web page's call, at the same default cap of 500; the folded-target count stays `CallsStore::folded_counters` and the live pane shows `<label> · <n> folded` on the nearest drawn node, else on `+N more`. The drilled project is the scope for the outside-scope mark, as `scope_names(rows, drilled)` is on the web page. Drill state lives in `src/tui/drill.rs` and loads on a background thread; the `#[cfg(test)]` `set_drawn` is gone. The drilled view loads once per `d`; after a re-index press `d` twice to reload.
+
+Check: Fail-first `the_one_project_view_counts_folded_targets_on_the_nearest_drawn_node_or_the_group` (510-file indexed project, cap leaves 10; failed with `Drill::apply` not storing nodes); `tests/surface_parity.rs` `live_extras_are_on_the_page_and_in_the_tui` asserts both surfaces call `drill::run(` and the KEYS table documents `d`; `just full-check`.
+
+Status: done 2026-10-12
+Model: Claude Code / claude-sonnet-5-5
+
 ### T353. MCP parameter tolerance: `a,b` line ranges and missing-param errors
 
 Found 2026-10-02 in `~/.rtok/errors.log`: `read` rejects `invalid line range \`N,N\`` (14) and `\`N, N\`` (3) — T172 only stripped quotes; `search` fails with `missing \`pattern\`` (8), `read` with `missing \`path\`` (2), `symbol` with `missing \`name\`` (1); `outline` says `No such file or directory (os error 2)` (6) without the path.

@@ -598,3 +598,36 @@ test("a project with tasks shows them on the board, a subtask under its parent, 
   // Read-only: nothing on the page is a form control that could change a task.
   await expect(page.getByRole("main").getByRole("switch")).toHaveCount(0);
 });
+
+test("the node menu re-indexes a project and removes it only after the plan is confirmed", async ({
+  page,
+  rtok,
+}) => {
+  await viewing(page, "2d");
+  rtok.addGitProject("lib.rs", "fn kept() {}\nfn caller() {\n    kept();\n}\n");
+  expect(rtok.projects().map((p) => p.state)).toEqual(["not indexed"]);
+  await page.goto("/#/graph");
+  const node = (label: RegExp) => page.locator("[data-testid=node-2d]").and(page.getByLabel(label));
+  await expect(node(/^proj, not indexed/)).toBeVisible();
+
+  await node(/^proj/).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Re-index" }).click();
+  await expect(node(/^proj, ok/)).toBeVisible({ timeout: 20_000 });
+  expect(rtok.projects().map((p) => p.state)).toEqual(["ok"]);
+
+  await node(/^proj/).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Remove…" }).click();
+  const plan = page.getByRole("region", { name: "remove proj" });
+  await expect(plan.getByText(/files untouched/)).toBeVisible();
+  await plan.getByRole("button", { name: "Cancel" }).click();
+  expect(rtok.projects()).toHaveLength(1);
+
+  await node(/^proj/).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Remove…" }).click();
+  await page
+    .getByRole("region", { name: "remove proj" })
+    .getByRole("button", { name: /^Remove proj/ })
+    .click();
+  await expect(node(/^proj/)).toHaveCount(0);
+  expect(rtok.projects()).toHaveLength(0);
+});
