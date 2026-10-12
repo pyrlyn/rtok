@@ -302,6 +302,23 @@ mod tests {
     use super::*;
     use serde_json::json;
 
+    /// T617: the store now yields each file-linked observation once, so fusion keeps both
+    /// distinct hits and still boosts one that is in the text list as well.
+    #[test]
+    fn fusion_keeps_distinct_file_hits_and_boosts_cross_list_ones() {
+        let hit = |id| ObsHit {
+            id,
+            title: "t".into(),
+            session_id: "s".into(),
+            snippet: String::new(),
+        };
+        let linked = [hit(2), hit(1)];
+        let ids =
+            |lists: &[&[ObsHit]]| -> Vec<i32> { rrf_obs(lists, 10).iter().map(|h| h.id).collect() };
+        assert_eq!(ids(&[&[], &linked]), vec![2, 1]);
+        assert_eq!(ids(&[&[hit(1)], &linked]), vec![1, 2]);
+    }
+
     #[test]
     fn bash_becomes_a_short_command_observation() {
         let s = synthesize(
