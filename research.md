@@ -2634,6 +2634,15 @@ Warp is a desktop terminal with an agent. All facts below are from the vendor's 
 - Install: macOS "in your Applications folder" (`brew install --cask warp`), Windows via the Start menu (`winget install Warp.Warp`), Linux package with the `warp-terminal` command or an AppImage. No install directory, no PATH command for macOS or Windows and no `--version` flag are documented. https://docs.warp.dev/getting-started/installation-and-setup. Detection is therefore the macOS bundle `/Applications/Warp.app` only (checked present on the creator's machine on this date); `warp-terminal --version` would be a guess that may open the GUI.
 - Hooks, a plugin format and a model endpoint setting: the MCP page does not mention hooks and no page checked names the others, so hooks, plugin and proxy stay `Support::No`. Rules files (`WARP.md`, `AGENTS.md`) are not an rtok module surface here.
 
+### 32.13 Trae (T413.13, checked 2026-10-12)
+
+Trae IDE (ByteDance). Facts are from the vendor's docs, https://docs.trae.ai/ide/add-mcp-servers, fetched 2026-10-12. Result: no installer; the documented user-level surface has no file path.
+
+- Project MCP servers: an `mcp.json` in a `.trae/` directory under the project root (step "Set up project MCP servers"). That file belongs to the project, so setup never writes it.
+- User-level MCP servers: added in the app's MCP panel. The page names the **Raw Config (JSON)** button, which opens "the mcp.json file in TRAE", but gives no path for it. The path is not in the page, and Trae is not installed on this machine to read it back.
+- VS Code layout: Trae is a VS Code fork, but the docs do not say it reads VS Code's `mcp.json` or `settings.json`, so `src/agents/vscode/` cannot be reused on a guess.
+- Because the only documented user-level file has no documented path, a fixed path would be a guess; the host stays out until the docs (or a Trae install to inspect) name one.
+
 ## 33. Which tests a change reaches (T420, 2026-10-06)
 
 Question: what picks the tests for `just check` so that a docs-only change runs no cargo tests and an edit to one source file runs its unit tests plus the integration tests that reach it. All sources checked 2026-10-06.
