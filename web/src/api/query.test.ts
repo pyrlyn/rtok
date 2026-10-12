@@ -295,7 +295,7 @@ describe("?sample source", () => {
 
 describe("doctor requests", () => {
   const selection = { keep: [], toggled: [{ source: "/p", path: "hooks.Stop[0]" }] };
-  const plan = { items: [], diff: "", refused: [] };
+  const plan = { items: [], diff: "", refused: [], confirmed: { files: [] } };
 
   test("a plan and an apply each wait for their own frame, in the order asked", async () => {
     const s = scripted();
@@ -478,7 +478,7 @@ describe("request correlation", () => {
   const ridOf = (message: unknown) => (message as { rid?: string }).rid;
   const selA = { keep: [], toggled: [{ source: "/p", path: "hooks.Stop[0]" }] };
   const selB = { keep: [], toggled: [{ source: "/p", path: "hooks.Stop[1]" }] };
-  const planFor = (diff: string) => ({ items: [], diff, refused: [] });
+  const planFor = (diff: string) => ({ items: [], diff, refused: [], confirmed: { files: [] } });
   const request = { project: "1", expand: [], focus: null, depth: null, limit: null, query: "" };
   const exportRequest = {
     project: "1",

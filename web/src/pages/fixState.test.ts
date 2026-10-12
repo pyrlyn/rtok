@@ -21,7 +21,12 @@ const item = (source: string, selected: boolean): Item => ({
   can_keep: false,
 });
 
-const plan = (...items: Item[]): Plan => ({ items, diff: "", refused: [] });
+const plan = (...items: Item[]): Plan => ({
+  items,
+  diff: "",
+  refused: [],
+  confirmed: { files: [] },
+});
 
 const run = (start: FixState, ...actions: FixAction[]) => actions.reduce(fixReducer, start);
 

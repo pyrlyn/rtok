@@ -14,6 +14,9 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+
 use super::checklist::{self, Choice, Prompt};
 use super::hooks::{self, Probes, Problem, entries};
 use super::mcp_dupes::{self, Loc};
@@ -34,6 +37,10 @@ pub enum Outcome {
     Failed(String),
 }
 
+/// Why a write bound to a preview was refused (T576.1); the page tells the user to review the
+/// new plan and confirm again.
+pub const STALE: &str = "changed since the preview; review the new plan and confirm again";
+
 #[derive(Debug)]
 pub struct FileFix {
     pub source: PathBuf,
@@ -41,6 +48,52 @@ pub struct FileFix {
     pub diff: String,
     pub backup: Option<PathBuf>,
     pub outcome: Outcome,
+    /// SHA-256 of the bytes the edit was computed from; `None` when the file could not be read.
+    pub version: Option<String>,
+}
+
+/// One entry as a preview named it. The command is part of it so a different entry that now sits
+/// at the same key path is not taken for the confirmed one.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Deserialize, Serialize, JsonSchema)]
+pub struct EntryId {
+    pub path: String,
+    pub kind: String,
+    pub command: String,
+}
+
+/// What a preview showed for one file: its bytes (by hash) and the entries the diff removes.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, JsonSchema)]
+pub struct ConfirmedFile {
+    pub source: String,
+    /// `None` for a file the preview could not read.
+    pub version: Option<String>,
+    pub entries: Vec<EntryId>,
+}
+
+/// The evidence a write must match to be the one the user confirmed (T576.1).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize, JsonSchema)]
+pub struct Confirmed {
+    pub files: Vec<ConfirmedFile>,
+}
+
+impl FileFix {
+    fn evidence(&self) -> ConfirmedFile {
+        let mut entries: Vec<EntryId> = self
+            .removed
+            .iter()
+            .map(|x| EntryId {
+                path: x.path.clone(),
+                kind: x.kind.into(),
+                command: x.command.clone(),
+            })
+            .collect();
+        entries.sort();
+        ConfirmedFile {
+            source: self.source.display().to_string(),
+            version: self.version.clone(),
+            entries,
+        }
+    }
 }
 
 #[derive(Debug, Default)]
@@ -53,6 +106,20 @@ pub struct FixReport {
 }
 
 impl FixReport {
+    /// The evidence of this run's files, for a later write to be bound to.
+    pub fn confirmed(&self) -> Confirmed {
+        Confirmed {
+            files: self.files.iter().map(FileFix::evidence).collect(),
+        }
+    }
+
+    /// A write bound to a preview found something other than what the preview showed.
+    pub fn stale(&self) -> bool {
+        self.files
+            .iter()
+            .any(|f| matches!(&f.outcome, Outcome::Skipped(w) if w == STALE))
+    }
+
     /// 1 when a selected hook was not fixed (skipped or failed), else 0.
     pub fn exit_code(&self) -> i32 {
         i32::from(
@@ -263,6 +330,24 @@ pub fn fix_found(
     found: Vec<Problem>,
     skip: &BTreeSet<(String, String)>,
 ) -> FixReport {
+    fix_bound(cfg, p, w, apply, o, found, skip, None)
+}
+
+/// [`fix_found`] that, given the evidence of a preview, writes only a file whose bytes and
+/// removed entries are exactly the ones that preview showed (T576.1). Anything else, including a
+/// confirmed file that now has nothing to remove, is skipped as [`STALE`]: findings discovered
+/// after the preview are never written on its confirmation.
+#[allow(clippy::too_many_arguments)] // fix_found's list plus the evidence
+pub fn fix_bound(
+    cfg: &Config,
+    p: &Probes,
+    w: &dyn Writer,
+    apply: bool,
+    o: &Opts,
+    found: Vec<Problem>,
+    skip: &BTreeSet<(String, String)>,
+    bound: Option<&Confirmed>,
+) -> FixReport {
     let (keep, agent, kinds) = (o.keep, o.agent, o.kinds);
     let mut report = FixReport::default();
     let mut by_file: Vec<(String, Vec<Problem>)> = Vec::new();
@@ -315,7 +400,23 @@ pub fn fix_found(
         let path = PathBuf::from(&source);
         report
             .files
-            .push(fix_file(p, w, &path, problems, apply, keep, &locs));
+            .push(fix_file(p, w, &path, problems, apply, keep, &locs, bound));
+    }
+    for gone in bound.iter().flat_map(|c| &c.files) {
+        if !report
+            .files
+            .iter()
+            .any(|f| f.source.display().to_string() == gone.source)
+        {
+            report.files.push(FileFix {
+                source: PathBuf::from(&gone.source),
+                removed: Vec::new(),
+                diff: String::new(),
+                backup: None,
+                outcome: Outcome::Skipped(STALE.into()),
+                version: None,
+            });
+        }
     }
     if apply {
         report.left = findings(cfg, p, agent)
@@ -326,6 +427,7 @@ pub fn fix_found(
     report
 }
 
+#[allow(clippy::too_many_arguments)] // one file's slice of fix_bound's inputs
 fn fix_file(
     p: &Probes,
     w: &dyn Writer,
@@ -334,6 +436,7 @@ fn fix_file(
     apply: bool,
     keep: usize,
     locs: &[Loc],
+    bound: Option<&Confirmed>,
 ) -> FileFix {
     let mut fix = FileFix {
         source: path.to_path_buf(),
@@ -341,15 +444,24 @@ fn fix_file(
         diff: String::new(),
         backup: None,
         outcome: Outcome::Planned,
+        version: None,
     };
+    let read = p.fs.read(path);
+    fix.version = read
+        .as_ref()
+        .ok()
+        .map(|raw| crate::store::hex_sha256(raw.as_bytes()));
+    let shown = fix.evidence();
     let refs: Vec<&Problem> = fix.removed.iter().collect();
-    let planned =
-        p.fs.read(path)
-            .map_err(|e| format!("cannot read {}: {e}", path.display()))
-            .and_then(|raw| {
-                let body = edit(&raw, path, &refs, locs).map_err(str::to_string)?;
-                Ok((raw, body))
-            });
+    let planned = read
+        .map_err(|e| format!("cannot read {}: {e}", path.display()))
+        .and_then(|raw| {
+            if bound.is_some_and(|c| !c.files.contains(&shown)) {
+                return Err(STALE.to_string());
+            }
+            let body = edit(&raw, path, &refs, locs).map_err(str::to_string)?;
+            Ok((raw, body))
+        });
     let (raw, body) = match planned {
         Ok(ok) => ok,
         Err(why) => {

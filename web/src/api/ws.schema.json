@@ -652,6 +652,48 @@
         "links"
       ]
     },
+    "Confirmed": {
+      "description": "The evidence a write must match to be the one the user confirmed (T576.1).",
+      "type": "object",
+      "properties": {
+        "files": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ConfirmedFile"
+          }
+        }
+      },
+      "required": [
+        "files"
+      ]
+    },
+    "ConfirmedFile": {
+      "description": "What a preview showed for one file: its bytes (by hash) and the entries the diff removes.",
+      "type": "object",
+      "properties": {
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EntryId"
+          }
+        },
+        "source": {
+          "type": "string"
+        },
+        "version": {
+          "description": "`None` for a file the preview could not read.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "source",
+        "version",
+        "entries"
+      ]
+    },
     "DiffDef": {
       "type": "object",
       "properties": {
@@ -1255,6 +1297,26 @@
         "kind"
       ]
     },
+    "EntryId": {
+      "description": "One entry as a preview named it. The command is part of it so a different entry that now sits\nat the same key path is not taken for the confirmed one.",
+      "type": "object",
+      "properties": {
+        "command": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "kind",
+        "command"
+      ]
+    },
     "Export": {
       "type": "object",
       "properties": {
@@ -1466,6 +1528,17 @@
           "description": "1 when a selected entry was skipped or failed.",
           "type": "integer",
           "format": "int32"
+        },
+        "replan": {
+          "description": "Set when the files no longer matched the preview and nothing of it was written: the plan\nas it is now, to review and confirm again.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Plan"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "text": {
           "type": "string"
@@ -2089,6 +2162,10 @@
     "Plan": {
       "type": "object",
       "properties": {
+        "confirmed": {
+          "description": "What this plan showed; send it back with the confirmation.",
+          "$ref": "#/$defs/Confirmed"
+        },
         "diff": {
           "description": "The diff of every file the selection would change.",
           "type": "string"
@@ -2110,7 +2187,8 @@
       "required": [
         "items",
         "diff",
-        "refused"
+        "refused",
+        "confirmed"
       ]
     },
     "Planned": {
@@ -2979,6 +3057,17 @@
       "description": "What the user changed since the defaults.",
       "type": "object",
       "properties": {
+        "confirmed": {
+          "description": "The `confirmed` of the plan the user saw. Absent from a client that predates it, whose\nwrite is then not bound to any preview.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Confirmed"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "keep": {
           "description": "Entries made the kept copy of their duplicate.",
           "type": "array",

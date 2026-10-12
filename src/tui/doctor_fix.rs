@@ -121,7 +121,10 @@ impl DoctorFix {
     }
 
     fn replan(&mut self, cfg: &Config) {
-        self.plan = Some((self.engine.plan)(cfg, &self.sel));
+        let plan = (self.engine.plan)(cfg, &self.sel);
+        // What the user is about to confirm is this plan: the write is bound to it (T576.1).
+        self.sel.confirmed = Some(plan.confirmed.clone());
+        self.plan = Some(plan);
         self.cursor = self.cursor.min(self.last());
     }
 
@@ -309,8 +312,8 @@ pub(super) mod tests {
         go_to(&mut f, PROJECT);
         send(&mut f, &[KeyCode::Char(' ')]);
         let sel = Selection {
-            keep: vec![],
             toggled: vec![at(PROJECT)],
+            ..Selection::default()
         };
         assert_eq!(json(f.plan.as_ref().unwrap()), json(&web_plan(&m, &sel)));
         assert_eq!(f.chosen(), 2);
@@ -382,6 +385,7 @@ pub(super) mod tests {
         let sel = Selection {
             keep: vec![at(SETTINGS)],
             toggled: vec![at(PROJECT)],
+            ..Selection::default()
         };
         let twin = machine(USER_DUP);
         put(&twin, PROJECT, PROJECT_DUP);
@@ -416,5 +420,17 @@ pub(super) mod tests {
             asking.contains("Remove 1 selected entries? y = apply"),
             "{asking}"
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_entry_that_appears_after_the_checklist_was_shown_is_not_written_on_its_confirmation() {
+        let (m, mut f) = fresh(BROKEN, None);
+        send(&mut f, &[KeyCode::Char('f'), KeyCode::Enter]);
+        let both = r#"{"hooks": {"Stop": [{"hooks": [{"type": "command", "command": "/h/gone/old.sh"}]}], "PreToolUse": [{"hooks": [{"type": "command", "command": "/h/gone/b.sh"}]}]}}"#;
+        put(&m, SETTINGS, both);
+        assert_eq!(send(&mut f, &[KeyCode::Char('y')]), [Keyed::Wrote]);
+        assert_eq!(text(&m, SETTINGS), both);
+        assert_eq!(f.done.as_ref().map(|d| d.code), Some(1));
     }
 }

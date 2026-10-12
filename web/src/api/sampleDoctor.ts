@@ -76,7 +76,7 @@ export function mockMachine(): MockMachine {
               .join("\n")}`,
         )
         .join("\n");
-      return { items: items(sel), diff, refused: [] };
+      return { items: items(sel), diff, refused: [], confirmed: { files: [] } };
     },
     apply(sel) {
       const picked = chosen(sel);

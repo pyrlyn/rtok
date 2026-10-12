@@ -254,6 +254,11 @@ export interface DoctorRequest {
  */
 export interface Selection {
   /**
+   * The `confirmed` of the plan the user saw. Absent from a client that predates it, whose
+   * write is then not bound to any preview.
+   */
+  confirmed?: Confirmed | null;
+  /**
    * Entries made the kept copy of their duplicate.
    */
   keep: Ref[];
@@ -261,6 +266,41 @@ export interface Selection {
    * Entries whose selection is the opposite of their default.
    */
   toggled: Ref[];
+}
+/**
+ * The evidence a write must match to be the one the user confirmed (T576.1).
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "Confirmed".
+ */
+export interface Confirmed {
+  files: ConfirmedFile[];
+}
+/**
+ * What a preview showed for one file: its bytes (by hash) and the entries the diff removes.
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "ConfirmedFile".
+ */
+export interface ConfirmedFile {
+  entries: EntryId[];
+  source: string;
+  /**
+   * `None` for a file the preview could not read.
+   */
+  version: string | null;
+}
+/**
+ * One entry as a preview named it. The command is part of it so a different entry that now sits
+ * at the same key path is not taken for the confirmed one.
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "EntryId".
+ */
+export interface EntryId {
+  command: string;
+  kind: string;
+  path: string;
 }
 /**
  * An entry as the page names it: the file and the key path inside it.
@@ -407,6 +447,7 @@ export interface CallsRequest {
  * via the `definition` "Plan".
  */
 export interface Plan {
+  confirmed: Confirmed1;
   /**
    * The diff of every file the selection would change.
    */
@@ -416,6 +457,12 @@ export interface Plan {
    * Selected entries the engine will not remove, with why.
    */
   refused: string[];
+}
+/**
+ * The evidence a write must match to be the one the user confirmed (T576.1).
+ */
+export interface Confirmed1 {
+  files: ConfirmedFile[];
 }
 /**
  * One line of the checklist.
@@ -456,6 +503,11 @@ export interface Fixed {
    * 1 when a selected entry was skipped or failed.
    */
   code: number;
+  /**
+   * Set when the files no longer matched the preview and nothing of it was written: the plan
+   * as it is now, to review and confirm again.
+   */
+  replan?: Plan | null;
   text: string;
 }
 /**
@@ -1940,6 +1992,11 @@ export interface Score1 {
  * via the `definition` "Selection".
  */
 export interface Selection1 {
+  /**
+   * The `confirmed` of the plan the user saw. Absent from a client that predates it, whose
+   * write is then not bound to any preview.
+   */
+  confirmed?: Confirmed | null;
   /**
    * Entries made the kept copy of their duplicate.
    */
