@@ -83,7 +83,6 @@
 - T637. Route filter text before global TUI shortcuts
 - T638. Bound benchmark output draining after the child exits
 - T639. Keep the selected Calls row visible in the TUI
-- T641. Let `rtok web` bind port 0 so e2e servers never race for a port
 - T124. Realized `tools_rewrite` saving as a dated `research.md` row
 
 - T131. Measure the spawn brief: cost row and on/off re-read share
