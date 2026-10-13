@@ -50,3 +50,4 @@
 - T660.3. Worktrees nested in the project do not leak into walks, gc or clean
 - T660.4. Default worktree root `<project>/.rtok/worktrees`, `.rtok/` ignored
 - T660.5. `rtok worktree migrate` moves worktrees into the configured root
+- T663. `just dup` back under the 2% jscpd threshold
