@@ -4,15 +4,7 @@
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { sampleSnapshot } from "./sample";
-import {
-  connectWs,
-  parseFrame,
-  replyTo,
-  wsUrl,
-  type ConnectionState,
-  type Frame,
-  type Socket,
-} from "./ws";
+import { connectWs, parseFrame, wsUrl, type ConnectionState, type Frame, type Socket } from "./ws";
 
 class FakeSocket implements Socket {
   static all: FakeSocket[] = [];
@@ -99,29 +91,6 @@ describe("parseFrame", () => {
       id: "a1",
       text: "body",
     });
-  });
-
-  test("a frame keeps the req it answers; a req that is not a number is dropped", () => {
-    expect(parseFrame('{"type":"message","text":"no","req":7}')).toEqual({
-      type: "message",
-      text: "no",
-      req: 7,
-    });
-    expect(parseFrame('{"type":"message","text":"no"}')).toEqual({ type: "message", text: "no" });
-    expect(parseFrame('{"type":"message","text":"no","req":"7"}')).toEqual({
-      type: "message",
-      text: "no",
-    });
-    // A frame the client cannot read stays unread, tagged or not.
-    expect(parseFrame('{"type":"export","req":7}')).toBeNull();
-  });
-
-  test("replyTo tags an answer with its request's req and leaves snapshots alone", () => {
-    const message: Frame = { type: "message", text: "no" };
-    expect(replyTo(message, 3)).toEqual({ ...message, req: 3 });
-    expect(replyTo(message, undefined)).toBe(message);
-    const snap: Frame = { type: "snapshot_error", error: "boom" };
-    expect(replyTo(snap, 3)).toBe(snap);
   });
 
   test("a calls frame keeps its view and refuses a frame without one", () => {

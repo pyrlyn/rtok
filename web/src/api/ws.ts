@@ -7,14 +7,14 @@
 import type {
   CallsView,
   Cleared,
+  ClientMessage,
   DiffReport,
   DrillGraph,
   Export,
   ExportFile,
   Fixed,
   Plan,
-  Reply,
-  Request,
+  ServerFrame,
   Snapshot,
 } from "./snapshot.gen";
 
@@ -22,11 +22,10 @@ export type ConnectionState = "connecting" | "open" | "closed";
 
 // The server's panic fallback is `{"type":"snapshot","error":...}` with none of the page
 // fields, so a snapshot frame is split in two rather than cast blindly to `Snapshot`.
-// Every other frame may carry the `req` of the request it answers (T623).
 export type Frame =
   | { type: "snapshot"; snapshot: Snapshot }
   | { type: "snapshot_error"; error: string }
-  | Reply;
+  | ServerFrame;
 
 export interface Handlers {
   onState(state: ConnectionState): void;
@@ -35,7 +34,7 @@ export interface Handlers {
 
 export interface Connection {
   /** `false` when the frame was not sent because the link is not open. */
-  send(message: Request): boolean;
+  send(message: ClientMessage): boolean;
   close(): void;
 }
 
@@ -61,13 +60,6 @@ export function wsUrl(location: Pick<Location, "protocol" | "host">): string {
   return `${scheme}//${location.host}/ws`;
 }
 
-/** `frame` as the server sends it for the request that carried `req`; a request without one gets it unchanged. */
-export function replyTo(frame: Frame, req: number | null | undefined): Frame {
-  return req == null || frame.type === "snapshot" || frame.type === "snapshot_error"
-    ? frame
-    : { ...frame, req };
-}
-
 export function parseFrame(raw: unknown): Frame | null {
   if (typeof raw !== "string") return null;
   let value: unknown;
@@ -78,12 +70,6 @@ export function parseFrame(raw: unknown): Frame | null {
   }
   if (typeof value !== "object" || value === null) return null;
   const v = value as Record<string, unknown>;
-  const frame = parseBody(v);
-  // A `req` that is not a number cannot match anything this client sent, so it is dropped.
-  return frame && typeof v.req === "number" ? replyTo(frame, v.req) : frame;
-}
-
-function parseBody(v: Record<string, unknown>): Frame | null {
   switch (v.type) {
     case "message":
       return typeof v.text === "string" ? { type: "message", text: v.text } : null;

@@ -136,7 +136,6 @@ describe("Export menu", () => {
         fireEvent.click(options.getByRole("button", { name: "Download" }));
         await waitFor(() => expect(blobs).toHaveLength(1));
         expect(sent.find((m) => "export" in m)).toEqual({
-            req: expect.any(Number),
             export: {
                 project: "1",
                 level: "symbols",
@@ -218,7 +217,6 @@ describe("Opening an export", () => {
         });
         expect(await screen.findByText("viewing export from mine.json")).toBeTruthy();
         expect(sent.find((m) => "import" in m)).toEqual({
-            req: expect.any(Number),
             import: { name: "mine.json", text: saved },
         });
         expect(screen.getByText("rtok → ketch")).toBeTruthy();

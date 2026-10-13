@@ -5,8 +5,8 @@
 import { createMemoryHistory, RouterProvider } from "@tanstack/react-router";
 import { render } from "@testing-library/react";
 import { DataProvider } from "../api/query";
-import type { Request, Snapshot } from "../api/snapshot.gen";
-import { replyTo, type Connect, type Frame } from "../api/ws";
+import type { ClientMessage, Snapshot } from "../api/snapshot.gen";
+import type { Connect, Frame } from "../api/ws";
 import { createAppRouter } from "../router";
 
 export const serving =
@@ -17,15 +17,9 @@ export const serving =
         return { send: () => true, close: () => {} };
     };
 
-/**
- * A socket the test drives: it records what the page sends and pushes the frames it likes. A
- * frame or message answers the latest request, as the server would (T623): it carries that
- * request's `req`.
- */
+/** A socket the test drives: it records what the page sends and pushes the frames it likes. */
 export function wire(first: Snapshot) {
-    const sent: Request[] = [];
-    const latest = () => sent.findLast((m) => !("calls" in m))?.req;
-    const answer = (f: Frame) => push(f.type === "calls" ? f : replyTo(f, latest()));
+    const sent: ClientMessage[] = [];
     let push: (f: Frame) => void = () => {};
     const connect: Connect = (h) => {
         push = h.onFrame;
@@ -37,8 +31,8 @@ export function wire(first: Snapshot) {
         connect,
         sent,
         push: (snapshot: Snapshot) => push({ type: "snapshot", snapshot }),
-        message: (text: string) => answer({ type: "message", text }),
-        frame: answer,
+        message: (text: string) => push({ type: "message", text }),
+        frame: (f: Frame) => push(f),
     };
 }
 

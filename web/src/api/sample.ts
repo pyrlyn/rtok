@@ -4,7 +4,7 @@
 
 // Offline data source (`?sample`) and the snapshot fixture shared by Storybook, Vitest and
 // offline e2e. Typed as `Snapshot`, so a schema change breaks `tsc` here instead of drifting.
-import { replyTo, type Connect, type Connection, type Frame } from "./ws";
+import type { Connect, Connection } from "./ws";
 import { alertRow, call, plugin, project, stats } from "./sampleRows";
 import { applyProject } from "../pages/projectLogic";
 import { mockMachine } from "./sampleDoctor";
@@ -357,11 +357,9 @@ export const connectSample: Connect = (handlers) => {
   const connection: Connection = {
     send(message) {
       if (stopped) return false;
-      // Like the server, every answer carries the `req` of the request it answers.
-      const answer = (frame: Frame) => handlers.onFrame(replyTo(frame, message.req));
       if ("expand" in message) {
         const { expand: id } = message;
-        later(() => answer({ type: "expand", id, text: `sample payload for ${id}` }));
+        later(() => handlers.onFrame({ type: "expand", id, text: `sample payload for ${id}` }));
         return true;
       }
       if ("project" in message) {
@@ -369,7 +367,7 @@ export const connectSample: Connect = (handlers) => {
         if (req.action === "remove" && !req.confirmed) {
           const name = snapshot.projects?.find((p) => String(p.id) === req.project)?.name;
           later(() =>
-            answer(
+            handlers.onFrame(
               name
                 ? {
                     type: "projectplan",
@@ -392,8 +390,8 @@ export const connectSample: Connect = (handlers) => {
         const { action, selection, confirmed } = message.doctor;
         later(() =>
           action === "plan"
-            ? answer({ type: "doctorplan", plan: machine.plan(selection) })
-            : answer({
+            ? handlers.onFrame({ type: "doctorplan", plan: machine.plan(selection) })
+            : handlers.onFrame({
                 type: "doctorfixed",
                 fixed: machine.apply(selection, confirmed ?? ""),
               }),
@@ -404,8 +402,8 @@ export const connectSample: Connect = (handlers) => {
         const { action, paths } = message.junk;
         later(() =>
           action === "plan"
-            ? answer({ type: "junkplan", plan: junk.plan() })
-            : answer({ type: "junkcleared", cleared: junk.apply(paths) }),
+            ? handlers.onFrame({ type: "junkplan", plan: junk.plan() })
+            : handlers.onFrame({ type: "junkcleared", cleared: junk.apply(paths) }),
         );
         return true;
       }
@@ -415,24 +413,24 @@ export const connectSample: Connect = (handlers) => {
       }
       if ("diff" in message) {
         const { diff } = message;
-        later(() => answer(diffReply(diff, snapshot.projects ?? [])));
+        later(() => handlers.onFrame(diffReply(diff, snapshot.projects ?? [])));
         return true;
       }
       if ("graph" in message) {
         const { graph } = message;
-        later(() => answer(drillReply(graph, snapshot.projects ?? [])));
+        later(() => handlers.onFrame(drillReply(graph, snapshot.projects ?? [])));
         return true;
       }
       if ("export" in message || "import" in message) {
-        const exported = exportAnswer(message, snapshot.projects ?? []);
-        if (exported) later(() => answer(exported));
+        const answer = exportAnswer(message, snapshot.projects ?? []);
+        if (answer) later(() => handlers.onFrame(answer));
         return true;
       }
       const { key, value } = message.set;
       const id = /^plugins\.([^.]+)\.enabled$/.exec(key)?.[1];
       const plugin = snapshot.plugins.find((p) => p.id === id);
       if (!plugin) {
-        later(() => answer({ type: "message", text: `refused key ${key}` }));
+        later(() => handlers.onFrame({ type: "message", text: `refused key ${key}` }));
         return true;
       }
       snapshot = {
