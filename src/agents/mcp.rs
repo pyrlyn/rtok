@@ -246,6 +246,7 @@ pub(crate) fn surfaces(agent: &dyn super::Agent, cfg: &Config, kind: Kind) -> Ve
         "roo" => (super::roo::mcp_path(cfg), SERVERS),
         "droid" => (super::droid::mcp_path(cfg), SERVERS),
         "kiro" => (super::kiro::mcp_path(cfg), SERVERS),
+        "warp" => (super::warp::mcp_path(cfg), SERVERS),
         "openhands" => (super::openhands::mcp_path(cfg), SERVERS),
         "windsurf" => (s.windsurf.config_path.clone(), SERVERS),
         "zcode" => (s.zcode.config_path.clone(), "mcp.servers"),

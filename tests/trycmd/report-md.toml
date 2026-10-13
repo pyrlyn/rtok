@@ -356,6 +356,7 @@ Every effective key with its origin — the `config show --sources` page.
 | setup.source |  | default |
 | setup.vscode.code_user_dir |  | default |
 | setup.vscode.insiders_user_dir |  | default |
+| setup.warp.mcp_path | ~/.warp/.mcp.json | default |
 | setup.windsurf.config_path | ~/.codeium/windsurf/mcp_config.json | default |
 | setup.yes | false | default |
 | setup.zcode.config_path | ~/.zcode/cli/config.json | default |
@@ -450,7 +451,7 @@ Every effective key with its origin — the `config show --sources` page.
 | worktree.enabled | true | default |
 | worktree.root | ~/.rtok/worktrees | default |
 
-404 keys.
+405 keys.
 
 ## Doctor
 
@@ -694,6 +695,11 @@ agents
     mcp     not installed
     proxy   not supported: amp.url is Amp's own server URL, not a model-provider base URL
     plugin  not supported: Amp loads .ts and .js plugins from its plugins directory, but rtok ships no plugin for its API yet
+  warp (desktop)
+    hooks   not supported: Warp documents no hook surface
+    mcp     not installed
+    proxy   not supported: Warp documents no setting that points its agent at another endpoint
+    plugin  not supported: Warp documents no plugin format; rtok ships no Warp plugin
   openhands (cli)
     hooks   not supported: OpenHands documents hooks only as a project `.openhands/hooks.json`; no user-level file is documented
     mcp     not installed

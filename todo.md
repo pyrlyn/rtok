@@ -30,7 +30,6 @@
 - T413.7. `rtok agents install continue` — Continue
 - T413.8. `rtok agents install augment` — Augment Code and Auggie CLI
 - T413.11. `rtok agents install crush` — Crush
-- T413.12. `rtok agents install warp` — Warp
 - T413.13. `rtok agents install trae` — Trae
 - T413.15. `rtok agents install reasonix` — DeepSeek Reasonix
 - T414. Web dashboard restyle on the brand pack, built from `brand/` sources
@@ -49,3 +48,4 @@
 - T647.3. Worktrees nested in the project do not leak into walks, gc or clean
 - T647.4. Default worktree root `<project>/.rtok/worktrees`, `.rtok/` ignored
 - T647.5. `rtok worktree migrate` moves worktrees into the configured root
+- T644. Tests remove the temp dirs they create

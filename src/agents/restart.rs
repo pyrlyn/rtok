@@ -710,6 +710,7 @@ mod tests {
             "Goose" => "Goose",
             "VS Code" => "Visual Studio Code",
             "VS Code - Insiders" => "Visual Studio Code - Insiders",
+            "Warp" => "Warp",
             "Windsurf" => "Windsurf",
             "WorkBuddy" => "WorkBuddy",
             "ZCode" => "ZCode",

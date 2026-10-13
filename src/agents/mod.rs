@@ -65,6 +65,7 @@ pub mod skill;
 pub mod task_list;
 pub mod usage;
 pub mod vscode;
+pub mod warp;
 pub mod windsurf;
 pub mod zcode;
 pub mod zed;
@@ -121,6 +122,7 @@ pub fn host(id: &str) -> Option<&'static dyn Agent> {
         "droid" => Some(&droid::Droid),
         "kiro" => Some(&kiro::Kiro),
         "amp" => Some(&amp::Amp),
+        "warp" => Some(&warp::Warp),
         "openhands" => Some(&openhands::OpenHands),
         _ => None,
     }
