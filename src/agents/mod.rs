@@ -676,6 +676,14 @@ impl ModuleState {
         }
     }
 
+    fn short(self) -> &'static str {
+        match self {
+            ModuleState::Installed => "yes",
+            ModuleState::NotInstalled => "no",
+            ModuleState::NotSupported => "n/a",
+        }
+    }
+
     fn word(self) -> &'static str {
         match self {
             ModuleState::Installed => "installed",
@@ -717,6 +725,15 @@ pub fn module_lines(rows: &[ModuleRow], indent: &str, console: bool) -> String {
             row.state.line(indent, &text, console)
         })
         .collect()
+}
+
+/// `hooks=yes mcp=no proxy=n/a plugin=no`: [`module_lines`] on one line without the notes.
+/// The notes repeat across every host variant and are what outgrew the AI report (T664).
+pub fn module_summary(rows: &[ModuleRow]) -> String {
+    rows.iter()
+        .map(|row| format!("{}={}", row.name, row.state.short()))
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// The modules an install should leave behind: every `Yes` module (`mcp` only with
