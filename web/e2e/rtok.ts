@@ -4,9 +4,9 @@
 
 import { type ChildProcess, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
-import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { createInterface } from "node:readline";
 import { spawnGroup, stopGroup } from "./group";
 
 /** Two rotated log generations past `[log] files`: the junk the card offers to clear. */
@@ -21,19 +21,10 @@ const BIN = process.env["RTOK_BIN"] ?? resolve(import.meta.dirname, "../../targe
 const SAFE_PATH = "/usr/bin:/bin";
 const SEED_TIMEOUT_MS = 30_000;
 const HEALTH_TIMEOUT_MS = 20_000;
-
-const freePort = () =>
-  new Promise<number>((done, fail) => {
-    const probe = createServer();
-    probe.once("error", fail);
-    probe.listen(0, "127.0.0.1", () => {
-      const address = probe.address();
-      probe.close(() => {
-        if (address && typeof address === "object") done(address.port);
-        else fail(new Error("no port"));
-      });
-    });
-  });
+/** `rtok web`'s startup line on stderr: `rtok web http://<host>:<port>  (ws://…/ws)`. */
+const LISTENING = /^rtok web http:\/\/\S+:(\d+)(?:\s|$)/;
+/** How much of the server's stderr an early-exit error carries. */
+const STDERR_TAIL = 20;
 
 /**
  * One real `rtok web` process on a throwaway store. `HOME` and `RTOK_HOME` both point at a
@@ -43,15 +34,13 @@ const freePort = () =>
  */
 export class Rtok {
   private child: ChildProcess | undefined;
+  private bound: number | undefined;
 
-  private constructor(
-    readonly home: string,
-    readonly port: number,
-  ) {}
+  private constructor(readonly home: string) {}
 
   static async create(): Promise<Rtok> {
     const home = mkdtempSync(join(tmpdir(), "rtok-spa-e2e-"));
-    const rtok = new Rtok(home, await freePort());
+    const rtok = new Rtok(home);
     try {
       rtok.seed();
     } catch (e) {
@@ -59,6 +48,12 @@ export class Rtok {
       throw e;
     }
     return rtok;
+  }
+
+  /** The port `rtok web` bound on its first start; a restart binds it again. */
+  get port() {
+    if (this.bound === undefined) throw new Error("rtok web has not started yet");
+    return this.bound;
   }
 
   get url() {
@@ -216,17 +211,39 @@ export class Rtok {
 
   async start() {
     if (this.child) throw new Error("rtok web is already running");
-    const child = spawnGroup(BIN, ["web", "--host", "127.0.0.1", "--port", String(this.port)], {
+    // Port 0 on the first start: the kernel picks a free port as `rtok web` binds, and the
+    // startup line names it. A port probed here and handed over could be taken by a parallel
+    // worker in between. A restart asks for the same port, so the open page reconnects.
+    const child = spawnGroup(BIN, ["web", "--host", "127.0.0.1", "--port", String(this.bound ?? 0)], {
       cwd: this.home,
       env: this.env(),
-      stdio: "ignore",
+      stdio: ["ignore", "ignore", "pipe"],
     });
     this.child = child;
+    const tail: string[] = [];
+    const listening = new Promise<number>((done) => {
+      // Reading every line keeps the pipe drained, so the server never blocks on stderr.
+      createInterface({ input: child.stderr! }).on("line", (line) => {
+        tail.push(line);
+        if (tail.length > STDERR_TAIL) tail.shift();
+        const port = LISTENING.exec(line)?.[1];
+        if (port) done(Number(port));
+      });
+    });
     const exited = new Promise<never>((_, fail) =>
-      child.once("exit", (code) => fail(new Error(`rtok web exited early (${code})`))),
+      child.once("exit", (code) =>
+        fail(new Error(`rtok web exited early (${code}): ${tail.join("\n")}`)),
+      ),
     );
+    let timer: NodeJS.Timeout | undefined;
+    const silent = new Promise<never>((_, fail) => {
+      timer = setTimeout(
+        () => fail(new Error("rtok web never printed its address")),
+        HEALTH_TIMEOUT_MS,
+      );
+    });
     const deadline = Date.now() + HEALTH_TIMEOUT_MS;
-    const healthy = (async () => {
+    const healthy = async () => {
       while (Date.now() < deadline) {
         try {
           if ((await fetch(`${this.url}/health`)).ok) return;
@@ -236,12 +253,15 @@ export class Rtok {
         await new Promise((r) => setTimeout(r, 50));
       }
       throw new Error("rtok web never answered /health");
-    })();
+    };
     try {
-      await Promise.race([healthy, exited]);
+      this.bound = await Promise.race([listening, exited, silent]);
+      await Promise.race([healthy(), exited]);
     } catch (e) {
       await this.stop();
       throw e;
+    } finally {
+      clearTimeout(timer);
     }
   }
 
