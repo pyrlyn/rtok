@@ -1,8 +1,9 @@
 //! The one way rtok runs an external program (T276): a [`ProgressRunner`] that shows a spinner
 //! or a progress bar on a terminal while the child works, and nothing anywhere else.
 //!
-//! Every `Command::new` in the workspace belongs in this module; the clippy ban lands with the
-//! last call site (T276.6).
+//! Every `Command::new` in the workspace belongs in this module: `clippy.toml` bans it
+//! everywhere else (T276.6).
+#![allow(clippy::disallowed_methods)]
 
 mod indicator;
 mod parse;
@@ -93,6 +94,12 @@ impl ProgressRunner {
     /// time). Commands run inside it keep their own spinner under the bar.
     pub fn batch(label: &str, total: u64, unit: Unit) -> Batch {
         Batch::new(indicator::pick_bar(label, total, unit), total, unit)
+    }
+
+    /// A spinner labelled `label` while rtok works in-process (a migration, a report), cleared
+    /// before it returns so the line the caller prints next takes its place.
+    pub fn wait<T>(label: &str, f: impl FnOnce() -> T) -> T {
+        wait_on(indicator::pick(label), f)
     }
 
     /// A call with no indicator.
@@ -329,7 +336,19 @@ pub struct Batch {
     running: bool,
 }
 
+fn wait_on<T>(ind: Box<dyn Indicator>, f: impl FnOnce() -> T) -> T {
+    let out = f();
+    ind.finish();
+    out
+}
+
 impl Batch {
+    /// A batch that draws nothing, for a caller that does not own the terminal (the MCP server,
+    /// a background watcher) but shares the code path of one that does.
+    pub fn hidden(total: u64, unit: Unit) -> Self {
+        Self::new(Box::new(Hidden), total, unit)
+    }
+
     fn new(ind: Box<dyn Indicator>, total: u64, unit: Unit) -> Self {
         Self {
             ind,
@@ -700,6 +719,25 @@ mod tests {
         batch.finish();
         // Under test stderr is not a terminal, so the runner's own pick is Hidden too.
         ProgressRunner::batch("x…", 3, Unit::Items).finish();
+    }
+
+    #[test]
+    fn a_wait_clears_its_spinner_after_the_work_and_passes_the_result_through() {
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let got = wait_on(Box::new(Seen(seen.clone())), || {
+            assert!(
+                seen.lock().unwrap().is_empty(),
+                "cleared before the work ran"
+            );
+            Err::<(), _>("boom")
+        });
+        assert_eq!(got, Err("boom"));
+        assert_eq!(
+            seen.lock().unwrap().len(),
+            1,
+            "cleared once, after the work"
+        );
+        assert_eq!(ProgressRunner::wait("x…", || 7), 7);
     }
 
     #[test]

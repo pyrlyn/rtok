@@ -12,13 +12,14 @@
 
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
+use std::ffi::OsStr;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::str::FromStr;
 
 use anyhow::{Context, Result, bail};
+use rtok_sys::proc::ProgressRunner;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 
@@ -319,11 +320,15 @@ pub fn available(source: Source, local_dir: &Path, running_version: &Version) ->
 /// `git -C <dir> describe --always --dirty`, trimmed — the only place this module spawns a
 /// process.
 fn git_describe(dir: &Path) -> Result<String> {
-    let out = Command::new("git")
-        .arg("-C")
-        .arg(dir)
-        .args(["describe", "--always", "--dirty"])
-        .output()
+    let args = [
+        OsStr::new("-C"),
+        dir.as_os_str(),
+        OsStr::new("describe"),
+        OsStr::new("--always"),
+        OsStr::new("--dirty"),
+    ];
+    let out = ProgressRunner::quiet("git", args)
+        .run()
         .with_context(|| format!("cannot run git describe in {}", dir.display()))?;
     if !out.status.success() {
         bail!(
