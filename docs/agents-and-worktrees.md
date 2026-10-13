@@ -81,6 +81,7 @@ The `rtok-worktrees` skill tells the agent all of this: use `worktree_add` for n
 | `roo` | no | MCP | not checked yet | `worktree_add` |
 | `droid` | no | MCP | not checked yet | `worktree_add` |
 | `kiro` | no | MCP | not checked yet | `worktree_add` |
+| `junie` | no | MCP | not checked yet | `worktree_add` |
 | `qwen` | yes | hooks | not checked yet | `worktree_add` |
 | `codebuddy` | yes | hooks | not checked yet | `worktree_add` |
 | `goose` | no | MCP | not checked yet | `worktree_add` |
