@@ -69,7 +69,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T660.3 | todo | P1 | 3 | 0% | |
 | T660.4 | todo | P1 | 3 | 0% | |
 | T660.5 | todo | P2 | 3 | 0% | |
-| T664 | in progress | P1 | 2 | 10% | Claude / opus-5.5 |
 
 
 
@@ -101,14 +100,6 @@ Check: tests for the default path from main and from a linked worktree, a relati
 Needs T660.4. Moves this repository's worktrees that live outside the configured root to `<root>/<repo>-<task>` with `git worktree move`, keeping lock and claim records in step. Dry run without `--yes`. Skips, with a reason: main, the worktree holding the cwd, a worktree locked or claimed by another agent or by a live session, a worktree with submodules (`git worktree move` refuses them), a target that already exists. CLI only; new-command gates (trycmd fence, `surface_parity`, `config_coverage`). Docs with T660.4's pages.
 
 Check: tests on a temp repo for move, each skip reason and dry run; lock and claim follow the move; `just check`.
-
-### T664. `report --ai` keeps `#doctor` under the default budget
-
-On `6557b6d1` `tests/report_ai.rs` fails twice (`empty_store_ai_says_so`, `ai_carries_the_section_set_with_md_numbers`): with an empty `RTOK_HOME`/`HOME`, `rtok report --ai` drops the whole `doctor` section past the default `[report] budget_tokens = 8000`. The `agents` block of the doctor text is ~16 KB of the ~35 KB document: every T413 host variant prints four module lines, most with a long `not supported: …` reason repeated per variant. The creator chose to shrink that block in the AI report only and keep the budget. `rtok doctor`, the md/html/pdf reports and the TUI keep the full lines.
-
-Plan: `doctor::Report::to_compact_text` renders each host variant as one line (`claude (desktop) hooks=n/a mcp=no proxy=n/a plugin=no`, legend on the `agents` line, reasons left to `rtok doctor`); `src/report/ai.rs` `doctor()` uses it. The module summary sits next to `agents::module_lines`. Unit test on the compact form; the two integration tests pass again.
-
-Check: `tests/report_ai.rs` and the `report::ai` / `doctor` unit tests green; `just check`.
 
 **Source audit (T530).**
 

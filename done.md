@@ -14107,6 +14107,17 @@ Check: `whole_output_stays_within_the_budget` (budgets 0..1500, two estimator ra
 Status: done 2026-10-12
 Model: Claude Code / claude-sonnet-5-5
 
+### T664. `report --ai` keeps `#doctor` under the default budget
+
+On `6557b6d1` `tests/report_ai.rs` failed twice (`empty_store_ai_says_so`, `ai_carries_the_section_set_with_md_numbers`): with an empty `RTOK_HOME`/`HOME`, `rtok report --ai` dropped the whole `doctor` section past the default `[report] budget_tokens = 8000`. The `agents` block of the doctor text was ~16 KB of the ~35 KB document: every T413 host variant printed four module lines, most with a long `not supported: …` reason repeated per variant. The creator chose to shrink that block in the AI report only and keep the budget. `rtok doctor`, the md/html/pdf reports and the TUI keep the full lines.
+
+Result: `doctor::Report::to_compact_text` renders each host variant as one line (`claude (desktop) hooks=n/a mcp=no proxy=n/a plugin=n/a`, legend on the `agents` line, reasons left to `rtok doctor`) through `agents::module_summary`; `src/report/ai.rs` `doctor()` uses it. On an empty home the doctor section went from 16.6 KB to 3.2 KB and the whole document from 35.7 KB to 22.3 KB, `dropped: none`.
+
+Check: `doctor_agents_are_one_line_per_host_variant` (compact line, no reason, full text unchanged); the two `tests/report_ai.rs` tests pass again; `just check` green on fmt, clippy and all 3815 tests. `dup` stays over its threshold as on `origin/main` (2.13 % there, 2.09 % here; T663 owns it).
+
+Status: done 2026-10-14
+Model: Claude / opus-5.5
+
 ### T581. Filter actionable report sinks before applying the top-ten limit
 
 Confirmed through actual aggregation and recommendation functions: [report_sinks](src/model/report.rs#L284) groups all catalogue plugins, sorts by before_bytes and truncates to ten. Only afterwards [top_sinks](src/report/advice.rs#L253) skips classes other than read/cmd/mcp. Ten larger archive rows with distinct references therefore displace a smaller Read sink, yielding no top-sinks recommendation; the Read-only control yields one. The archive rows are valid measurements, but deliberately have no actionable switch in this rule. T59.8 and docs/report.md promise the ten largest file/command/MCP sinks; T302 changed ranking units, not filtering before truncation.
