@@ -96,6 +96,14 @@ const ELECTRON_CACHES: [&str; 5] = ["Cache", "Code Cache", "GPUCache", "CachedDa
 /// list explicit makes a new host in `HOSTS` fail a test until it has a row or joins this list.
 pub const NO_ROWS: [&str; 12] = [
     "kilo", "aider", "roo", "droid", "goose", "kiro", "junie", "amp", "warp", "continue", "crush", "openhands",
+pub const NO_ROWS: [&str; 7] = [
+    "kilo",
+    "aider",
+    "roo",
+    "droid",
+    "goose",
+    "kiro",
+    "openhands",
 ];
 
 /// The §22 rows and the desktop-app folders of `host`. A host §22 reads "not documented" for
