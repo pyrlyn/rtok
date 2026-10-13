@@ -979,6 +979,9 @@ section! {
     /// `[setup.amp]` — Amp (Sourcegraph) user settings file (`amp.mcpServers`, T413.5);
     /// `settings.jsonc` is used when it is the only one.
     SetupAmp { settings_path: PathBuf = p("~/.config/amp/settings.json") }
+}
+
+section! {
     /// `[setup.warp]` — Warp's user-level MCP file (T413.12).
     SetupWarp { mcp_path: PathBuf = p("~/.warp/.mcp.json") }
 }

@@ -127,6 +127,8 @@ const HOSTS: &[Host] = &[
     Host {
         id: "amp",
         files: &[".config/amp/settings.json"],
+    },
+    Host {
         id: "warp",
         files: &[".warp/.mcp.json"],
     },
