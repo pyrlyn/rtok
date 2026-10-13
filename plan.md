@@ -69,7 +69,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T660.3 | todo | P1 | 3 | 0% | |
 | T660.4 | todo | P1 | 3 | 0% | |
 | T660.5 | todo | P2 | 3 | 0% | |
-| T661 | in progress | P1 | 2 | 60% | Claude Code / opus-5.5 |
 
 
 
@@ -101,20 +100,6 @@ Check: tests for the default path from main and from a linked worktree, a relati
 Needs T660.4. Moves this repository's worktrees that live outside the configured root to `<root>/<repo>-<task>` with `git worktree move`, keeping lock and claim records in step. Dry run without `--yes`. Skips, with a reason: main, the worktree holding the cwd, a worktree locked or claimed by another agent or by a live session, a worktree with submodules (`git worktree move` refuses them), a target that already exists. CLI only; new-command gates (trycmd fence, `surface_parity`, `config_coverage`). Docs with T660.4's pages.
 
 Check: tests on a temp repo for move, each skip reason and dry run; lock and claim follow the move; `just check`.
-
-### T661. Deterministic graph overview and project link stories
-
-`ci / spa` failed intermittently on `GraphOverview.stories.tsx > Webgl Draws And Click Selects` (jobs 114192688574, 114122668246: `Unable to find an element with the text: ketch`) and on `Projects.stories.tsx > Link And Unlink Against Sample Server` (job 111193690455: the "not linked" line found, then `element is not in the document`).
-
-Root causes:
-- Overview: both jobs ran before T503 (#959), which is this failure (T503 names run 38044250038); no `ci / spa` failure of it since.
-- Link and unlink: `Stage3D.setScene` wrote `instanceColor!.needsUpdate` and three.js leaves `instanceColor` null with no edge. Unlinking the sample's only link threw in `<Scene3D>`, and the router's CatchBoundary rebuilt the page under the play function. Fixed in #710 (one hour after the failure) without a test: with the guard removed, all 255 stories still pass. Whether the story hit it depended on two races: the graph view key that GraphOverview stories leave in `localStorage` (one origin for every Vitest iframe, so it follows file order) and whether the lazy 3D stage mounted before the click. Reproduced locally with the old sample: view `3d` and the stage mounted fails 2/2 with the CI message, `2d` passes.
-
-Plan:
-1. `GraphOverview.stories.tsx`: `Webgl Without Links` draws the 3D overview of two unlinked projects; shares a `drawn3d` helper with `Webgl Draws And Click Selects`. Fails 2/2 with the #710 guard removed.
-2. `.storybook/preview.tsx`: clear `localStorage` before every story, so no story inherits another's graph view. `First Visit Opens 3D` (after a 2D story, no view decorator) fails without the clear and passes with it.
-
-Check: both new stories fail first as above; `just spa-test`, `just js`, `just spa-stories`.
 
 **Source audit (T530).**
 
