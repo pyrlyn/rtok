@@ -2658,6 +2658,17 @@ Trae IDE (ByteDance). Facts are from the vendor's docs, https://docs.trae.ai/ide
 - VS Code layout: Trae is a VS Code fork, but the docs do not say it reads VS Code's `mcp.json` or `settings.json`, so `src/agents/vscode/` cannot be reused on a guess.
 - Because the only documented user-level file has no documented path, a fixed path would be a guess; the host stays out until the docs (or a Trae install to inspect) name one.
 
+### 32.12 Warp (T413.12, checked 2026-10-12)
+
+Warp is a desktop terminal with an agent. All facts below are from the vendor's docs; the Warp page for MCP is served as Markdown at the `.md` URL.
+
+- File-based MCP servers: global `~/.warp/.mcp.json`, project `{repo_root}/.warp/.mcp.json`. Warp's own files are "On by default"; servers detected from other agents (`~/.claude.json`, `~/.codex/config.toml`, `~/.agents/.mcp.json`) need a toggle in Settings. https://docs.warp.dev/agents/capabilities/mcp.md
+- Format: top-level `mcpServers`, each entry keyed by a unique name. A local (CLI) server takes `command`, `args`, `env`, `working_directory`; a URL server takes `url`, `headers`. No `type` key appears in the property tables or any example, so the installer writes none. Same page.
+- Project-scoped servers are detected but never started automatically (each is toggled on per session), and "Warp prevents edits to MCP config files unless you explicitly approve the change" applies to the agent editing them. The installer writes only the user file and only when the user runs it. Same page.
+- Servers added in the app's own MCP settings page are the other path; the page does not say where the app stores them, so they stay out of scope and are never read or changed.
+- Install: macOS "in your Applications folder" (`brew install --cask warp`), Windows via the Start menu (`winget install Warp.Warp`), Linux package with the `warp-terminal` command or an AppImage. No install directory, no PATH command for macOS or Windows and no `--version` flag are documented. https://docs.warp.dev/getting-started/installation-and-setup. Detection is therefore the macOS bundle `/Applications/Warp.app` only (checked present on the creator's machine on this date); `warp-terminal --version` would be a guess that may open the GUI.
+- Hooks, a plugin format and a model endpoint setting: the MCP page does not mention hooks and no page checked names the others, so hooks, plugin and proxy stay `Support::No`. Rules files (`WARP.md`, `AGENTS.md`) are not an rtok module surface here.
+
 ### 32.7 Continue (T413.7, checked 2026-10-12)
 
 - Config file: https://docs.continue.dev/customize/deep-dives/configuration (source `docs/customize/deep-dives/configuration.mdx` in https://github.com/continuedev/continue) — `~/.continue/config.yaml` on macOS and Linux, `%USERPROFILE%\.continue\config.yaml` on Windows. `cn` defaults to the same file: https://docs.continue.dev/cli/configuration (`docs/cli/configuration.mdx`). `CONTINUE_GLOBAL_DIR` moves the directory: `core/util/paths.ts` and `extensions/cli` in the same repository (checked on `main`). The installer follows it only through `[setup.continue] config_path`.

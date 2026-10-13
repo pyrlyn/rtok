@@ -309,6 +309,7 @@ setup.roo.mcp_path =
 setup.source = 
 setup.vscode.code_user_dir = 
 setup.vscode.insiders_user_dir = 
+setup.warp.mcp_path = ~/.warp/.mcp.json
 setup.windsurf.config_path = ~/.codeium/windsurf/mcp_config.json
 setup.yes = false
 setup.zcode.config_path = ~/.zcode/cli/config.json
