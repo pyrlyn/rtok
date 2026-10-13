@@ -8978,8 +8978,39 @@ Done: `src/agents/warp/` (`mod.rs`, `README.md`): one Desktop variant, detected 
 
 Check: `agents_doc`, `host_docs`, `agents_install`, `agents_list_content`, `agents_real_config`, `config_coverage`, `cli_trycmd` and the `warp` unit tests green; `just check` green. Manual: `rtok agents install warp --dry-run` on this machine (Warp.app installed here) names `~/.warp/.mcp.json` and `mcpServers.rtok: rtok mcp --host warp` and writes nothing.
 
+### T413.14. `rtok agents install openhands` — OpenHands
+
+OpenHands CLI (the local variant only; the cloud service is out of scope). MCP and any documented hooks.
+
+Check: the T413 per-host check (step 5) for this host.
+
+Plan: OpenHands local CLI docs for the MCP file. Cloud config stays out. Hooks only with a documented payload.
+
+Done: `src/agents/openhands/` (`mod.rs`, `README.md`): one CLI variant, the `openhands` binary on PATH. `mcpServers.rtok` -> `rtok mcp --host openhands` as `{command, args}` in `~/.openhands/mcp.json` through `register_stdio_mcp` (the helper Cline, Roo Code, Windsurf and Droid share); `[setup.openhands] mcp_path` moves it. Hooks, proxy and plugin stay `Support::No`: the docs describe hooks only as a project `.openhands/hooks.json`, which belongs to the project. Servers added with `openhands mcp add` are never touched. Registered in `HOSTS` and `host()`, `config/default.toml`, `docs/config.md`, `docs/agents.md` (and `ru`/`uk`), `agents_install` matrix, list/real-config/host-docs tests and trycmd goldens. Research in `research.md` §32.14.
+
+Check: `agents_doc`, `host_docs`, `agents_install`, `agents_list_content`, `agents_real_config`, `config_coverage`, `cli_trycmd` and the `openhands` unit tests green.
+
 Status: done 2026-10-12
 Model: Claude Code / claude-sonnet-5-5
+
+### T413.7. `rtok agents install continue` — Continue
+
+VS Code / JetBrains extension and the `cn` CLI. MCP and rules; variants per documented config location.
+
+Done: `src/agents/continue/` writes the `rtok` item of `mcpServers` (stdio: `name`, `type`, `command`, `args`) into `~/.continue/config.yaml` as a text-level list-item edit validated with the existing `serde-saphyr`; a missing file is created with the required `name`, `version`, `schema`; `[setup.continue] config_path`; variants Continue CLI (`cn`) and Continue (extensions, detected through VS Code). The line-level YAML helpers Goose already had moved to `src/agents/yaml_text.rs` and both hosts use them. No rules, hooks, proxy or plugin: none has a documented file. Research in `research.md` §32.7.
+
+Check: unit tests for the list edit (create, append, flush-indent list, empty and flow values, CRLF, foreign YAML, extra item keys, declined remove), the real-config round trip, `agents_doc`, `host_docs`, trycmd snapshots; `just check`.
+
+### T413.11. `rtok agents install crush` — Crush
+
+Crush (Charm), open-source terminal agent. MCP and any documented hooks.
+
+Done: `src/agents/crush/` (one CLI variant, `crush` on PATH): `mcp.rtok` → `rtok mcp --host crush` in the global `crush.json` as `{command, args}` (`type` defaults to `stdio`), through the new `register_stdio_mcp_in` / `unregister_stdio_mcp_in` (the existing stdio helper with the object key as a parameter, so no second copy of the entry). `[setup.crush] config_path` (default `~/.config/crush/crush.json`) is the override for `CRUSH_GLOBAL_CONFIG` / `XDG_CONFIG_HOME`. Hooks stay `Support::No`: the only documented event is `PreToolUse` and rtok has no checked mapping of Crush's tool names. Why JSON and not `crushrc`: see `research.md` §32.11. Host registered in `HOSTS`, `agent_for`, `mcp::rows`, `junk_map::NO_ROWS`, the config section and default, the docs tables (en, ru, uk) and the host tests.
+
+Check: `agents::crush` unit tests (dry run, `type`-less stdio entry under `mcp`, idempotence, foreign keys kept byte-equal after remove, `apply` via the trait), `agents_real_config` (`crush_keeps_the_real_crush_json`), `agents_install`, `host_docs`, `agents_list_content`, `agents_doc`, config and trycmd snapshots.
+
+Status: done 2026-10-12
+Model: Claude Code / sonnet-5.5
 
 ### T426. Install refuses a host whose app is not installed
 

@@ -88,10 +88,13 @@ Skill `worktrees` розповідає агентові все це: `worktree_a
 | `kiro` | ні | MCP | ще не перевірено | `worktree_add` |
 | `amp` | ні | MCP | ще не перевірено | `worktree_add` |
 | `warp` | ні | MCP | ще не перевірено | `worktree_add` |
+| `crush` | ні | MCP | ще не перевірено | `worktree_add` |
+| `openhands` | ні | MCP | ще не перевірено | `worktree_add` |
 | `augment` | ні | MCP | ще не перевірено | `worktree_add` |
 | `qwen` | так | хуки | ще не перевірено | `worktree_add` |
 | `codebuddy` | так | хуки | ще не перевірено | `worktree_add` |
 | `goose` | ні | MCP | ще не перевірено | `worktree_add` |
+| `continue` | ні | MCP | ще не перевірено | `worktree_add` |
 | `codewhale` | так | хуки | не задокументовано | `worktree_add` |
 | `aider` | ні | немає | немає | лише CLI |
 | `zed` | ні | MCP | треди можуть вказувати на worktree, який ви створили | `worktree_adopt` |

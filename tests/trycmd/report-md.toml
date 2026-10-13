@@ -328,7 +328,9 @@ Every effective key with its origin — the `config show --sources` page.
 | setup.codewhale.dir | ~/.codewhale | default |
 | setup.codex.config_path | ~/.codex/config.toml | default |
 | setup.commandcode.dir | ~/.commandcode | default |
+| setup.continue.config_path | ~/.continue/config.yaml | default |
 | setup.copilot.dir | ~/.copilot | default |
+| setup.crush.config_path | ~/.config/crush/crush.json | default |
 | setup.cursor.hooks_path | ~/.cursor/hooks.json | default |
 | setup.devin.config_path | ~/.config/devin/config.json | default |
 | setup.droid.mcp_path | ~/.factory/mcp.json | default |
@@ -348,6 +350,7 @@ Every effective key with its origin — the `config show --sources` page.
 | setup.omp.extensions_path | ~/.omp/agent/extensions | default |
 | setup.omp.mcp_path | ~/.omp/agent/mcp.json | default |
 | setup.opencode.config_path | ~/.config/opencode/opencode.json | default |
+| setup.openhands.mcp_path | ~/.openhands/mcp.json | default |
 | setup.pi.extensions_path | ~/.pi/agent/extensions | default |
 | setup.pi.tools | false | default |
 | setup.proxy | false | default |
@@ -451,7 +454,7 @@ Every effective key with its origin — the `config show --sources` page.
 | worktree.enabled | true | default |
 | worktree.root | ~/.rtok/worktrees | default |
 
-405 keys.
+408 keys.
 
 ## Doctor
 
@@ -700,6 +703,26 @@ agents
     mcp     not installed
     proxy   not supported: Warp documents no setting that points its agent at another endpoint
     plugin  not supported: Warp documents no plugin format; rtok ships no Warp plugin
+  continue (cli)
+    hooks   not supported: Continue's docs describe config.yaml, mcpServers and rules, not shell hook events
+    mcp     not installed
+    proxy   not supported: Continue sets a model's apiBase per model in config.yaml; there is no single endpoint file to point at the proxy
+    plugin  not supported: Continue has no documented local plugin directory to link; blocks and rules live in config.yaml and .continue/
+  continue (desktop)
+    hooks   not supported: Continue's docs describe config.yaml, mcpServers and rules, not shell hook events
+    mcp     not installed
+    proxy   not supported: Continue sets a model's apiBase per model in config.yaml; there is no single endpoint file to point at the proxy
+    plugin  not supported: Continue has no documented local plugin directory to link; blocks and rules live in config.yaml and .continue/
+  crush (cli)
+    hooks   not supported: Crush documents only a PreToolUse hook, and rtok has no checked mapping of its tool names
+    mcp     not installed
+    proxy   not supported: Crush takes provider base URLs per provider entry; rtok has no checked single endpoint to point at the proxy
+    plugin  not supported: Crush has no documented local plugin directory to link; it loads skills, not plugins
+  openhands (cli)
+    hooks   not supported: OpenHands documents hooks only as a project `.openhands/hooks.json`; no user-level file is documented
+    mcp     not installed
+    proxy   not supported: rtok has not checked OpenHands's LLM base-URL setting, so it writes none
+    plugin  not supported: rtok ships no OpenHands plugin
   augment (cli)
     hooks   not supported: Augment hooks must be script files and PreToolUse can only deny (no updatedInput), so rtok cannot rewrite a call through them
     mcp     not installed

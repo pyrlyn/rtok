@@ -66,6 +66,10 @@ lang: uk
 | [`junie`](https://github.com/pyrlyn/rtok/blob/main/src/agents/junie/README.md) | Junie CLI | CLI | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
 | [`amp`](https://github.com/pyrlyn/rtok/blob/main/src/agents/amp/README.md) | Amp | CLI | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
 | [`warp`](https://github.com/pyrlyn/rtok/blob/main/src/agents/warp/README.md) | Warp | Desktop | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
+| [`continue`](https://github.com/pyrlyn/rtok/blob/main/src/agents/continue/README.md) | Continue CLI | CLI | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
+| [`continue`](https://github.com/pyrlyn/rtok/blob/main/src/agents/continue/README.md) | Continue | Desktop | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
+| [`crush`](https://github.com/pyrlyn/rtok/blob/main/src/agents/crush/README.md) | Crush | CLI | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
+| [`openhands`](https://github.com/pyrlyn/rtok/blob/main/src/agents/openhands/README.md) | OpenHands | CLI | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
 | [`augment`](https://github.com/pyrlyn/rtok/blob/main/src/agents/augment/README.md) | Augment Auggie CLI | CLI | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
 <!-- agents-table:end -->
 

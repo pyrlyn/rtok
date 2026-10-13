@@ -133,6 +133,18 @@ const HOSTS: &[Host] = &[
         files: &[".warp/.mcp.json"],
     },
     Host {
+        id: "continue",
+        files: &[".continue/config.yaml"],
+    },
+    Host {
+        id: "crush",
+        files: &[".config/crush/crush.json"],
+    },
+    Host {
+        id: "openhands",
+        files: &[".openhands/mcp.json"],
+    },
+    Host {
         id: "augment",
         files: &[".augment/settings.json"],
     },
@@ -245,10 +257,14 @@ fn fixture(rel: &str) -> &'static str {
         | ".kiro/settings/mcp.json"
         | ".junie/mcp/mcp.json"
         | ".warp/.mcp.json"
+        | ".openhands/mcp.json"
         | "Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json" => {
             r#"{"mcpServers":{"foreign":{"command":"x"}}}"#
         }
         ".config/amp/settings.json" => r#"{"amp.mcpServers":{"foreign":{"command":"x"}}}"#,
+        ".config/crush/crush.json" => {
+            r#"{"$schema":"https://charm.land/crush.json","options":{"debug":true},"mcp":{"foreign":{"type":"http","url":"https://x"}}}"#
+        }
         ".augment/settings.json" => {
             r#"{"mcpServers":{"foreign":{"command":"x"}},"hooks":{"Stop":[{"hooks":[{"type":"command","command":"/x/stop.sh"}]}]}}"#
         }
@@ -267,6 +283,9 @@ fn fixture(rel: &str) -> &'static str {
         ".aider.conf.yml" => "model: foreign\n",
         ".config/goose/config.yaml" => {
             "# KEEP: foreign\nGOOSE_PROVIDER: openai\nextensions:\n  developer:\n    type: builtin\n    name: developer\n    enabled: true\nGOOSE_MODE: auto\n"
+        }
+        ".continue/config.yaml" => {
+            "# KEEP: foreign\nname: Mine\nversion: 1.0.0\nschema: v1\nmodels:\n  - name: other\n    provider: ollama\n    model: llama\nmcpServers:\n  - name: foreign\n    command: npx\n    args:\n      - x\nrules:\n  - be brief\n"
         }
         ".config/zed/settings.json" => {
             // KEEP is last and has no trailing comma: install inserts `,\n  context_servers`
@@ -386,6 +405,9 @@ real_config_round_trip! {
     junie_keeps_the_real_mcp_json => "junie",
     amp_keeps_the_real_mcp_json => "amp",
     warp_keeps_the_real_mcp_json => "warp",
+    continue_keeps_the_real_config_yaml => "continue",
+    crush_keeps_the_real_crush_json => "crush",
+    openhands_keeps_the_real_mcp_json => "openhands",
     augment_keeps_the_real_settings_json => "augment",
 }
 
