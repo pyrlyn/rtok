@@ -60,6 +60,15 @@ Inventory of shipped levers vs further options: [`research.md` §16](research.md
 Inspired by the comparison matrix (`research.md` §4) and stack gaps (`research.md` §5)
 that v0.1 does not schedule.
 
+### T650 audit proposals (2026-10-13)
+
+These proposals are based on the current audit evidence at [`eb7d980`](https://github.com/pyrlyn/rtok/tree/eb7d980af235f0ccb3d8ff58471d24b8267af35d). They are not implementation tasks.
+
+| ID | Inspired by | Area | Proposition | Why it is not in the plan |
+|----|-------------|------|-------------|---------------------------|
+| I-130 | Internal audit: [MCP config writer](https://github.com/pyrlyn/rtok/blob/eb7d980af235f0ccb3d8ff58471d24b8267af35d/crates/rtok-mcp/src/config.rs#L134) | MCP host config | Preserve unrelated strict-JSON formatting and byte ranges when editing rtok's entry, as the JSONC path aims to do for comments and formatting. | The strict-JSON probe retained foreign semantics but pretty-printed/reordered the whole document. T652 addresses unreadable-file data loss; this is separate and showed no semantic data loss. |
+| I-131 | Internal audit: [ordered graph parse pipeline](https://github.com/pyrlyn/rtok/blob/eb7d980af235f0ccb3d8ff58471d24b8267af35d/src/plugins/graph/index.rs#L397) | graph indexing | Bound the out-of-order parse-result buffer as well as the worker channel, while keeping ordered writes and cancellation. | `early: BTreeMap` can grow if an early job stalls while workers complete later jobs. This is a scheduling/memory proposal only; no impact was measured. A slow-first synthetic benchmark should establish value before implementation. |
+
 ### Measure and doctor
 
 | ID | Inspired by | Area | Proposition | Why it is not in the plan |
