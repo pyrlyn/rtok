@@ -10,6 +10,7 @@ import type { ProjectRow, Snapshot } from "../api/snapshot.gen";
 import { richSnapshot } from "./fixtures";
 import { Graph } from "./Graph";
 import { VIEW_KEY } from "./graph3d/ProjectsOverview";
+import { slowNewNodes } from "./slowLayout";
 import { withData } from "./storyData";
 
 const registry: ProjectRow[] = [
@@ -49,16 +50,16 @@ export const ChangesOnTheGraph: Story = {
     play: async ({ canvasElement }) => {
         const canvas = within(canvasElement);
         await userEvent.click(await canvas.findByRole("button", { name: "Compare" }, READY));
-        // The mark in the label and the word in the name say what the colour says.
-        await expect(
-            await canvas.findByRole("button", { name: /^~ run, function · changed/ }, READY),
-        ).toBeVisible();
-        await expect(
-            canvas.getByRole("button", { name: /^\+ resolve, function · added/ }),
-        ).toBeVisible();
-        await expect(
-            canvas.getByRole("button", { name: /^− legacy_hook, function · removed/ }),
-        ).toBeVisible();
+        // The mark in the label and the word in the name say what the colour says. Each node is
+        // drawn only once the layout has placed it, and the ghost is new to the layout, so every
+        // node is awaited: one found says nothing about the others.
+        for (const name of [
+            /^~ run, function · changed/,
+            /^\+ resolve, function · added/,
+            /^− legacy_hook, function · removed/,
+        ]) {
+            await expect(await canvas.findByRole("button", { name }, READY)).toBeVisible();
+        }
         const side = within(canvas.getByRole("region", { name: "compare" }));
         await expect(side.getByText("~ 2 changed")).toBeVisible();
         await expect(side.getByText("→ 1 moved")).toBeVisible();
@@ -67,6 +68,12 @@ export const ChangesOnTheGraph: Story = {
 };
 
 export const ChangesOnTheGraphLight: Story = { ...ChangesOnTheGraph, globals: { theme: "light" } };
+
+/** The ghost needs a fresh layout frame; on a busy CI host that frame comes late (run 38309415046). */
+export const ChangesOnTheGraphSlowLayout: Story = {
+    ...ChangesOnTheGraph,
+    beforeEach: slowNewNodes(1_000),
+};
 
 export const ListWithChangeWords: Story = {
     decorators: [viewing("list"), withData(drillServer(snapshot), AT)],

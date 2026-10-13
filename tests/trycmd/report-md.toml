@@ -333,10 +333,12 @@ Every effective key with its origin — the `config show --sources` page.
 | setup.dry_run | false | default |
 | setup.force | false | default |
 | setup.gemini.dir | ~/.gemini | default |
+| setup.goose.config_path | ~/.config/goose/config.yaml | default |
 | setup.grok.config_path | ~/.grok/config.toml | default |
 | setup.hook_timeout_s | 5 | default |
 | setup.kilo.config_path | ~/.config/kilo/kilo.json | default |
 | setup.kimi.config_path | ~/.kimi-code/config.toml | default |
+| setup.kiro.mcp_path | ~/.kiro/settings/mcp.json | default |
 | setup.mcp | true | default |
 | setup.mimo.config_path | ~/.config/mimocode/mimocode.json | default |
 | setup.modes | [] | default |
@@ -445,7 +447,7 @@ Every effective key with its origin — the `config show --sources` page.
 | worktree.enabled | true | default |
 | worktree.root | ~/.rtok/worktrees | default |
 
-399 keys.
+401 keys.
 
 ## Doctor
 
@@ -654,11 +656,31 @@ agents
     mcp     not installed
     proxy   not supported: CodeBuddy Code takes its endpoint from the CODEBUDDY_BASE_URL environment variable; there is no config file to point at the proxy
     plugin  not installed (--yes)
+  goose (cli)
+    hooks   not supported: Goose runs hooks from Open Plugins directories with its own event names, tool names and decision shape; rtok has no adapter for that payload yet
+    mcp     not installed
+    proxy   not supported: Goose documents its provider endpoint as the GOOSE_PROVIDER__HOST environment variable only; there is no file to point at the proxy
+    plugin  not supported: Goose plugins are Open Plugins directories (plugin.json, hooks/hooks.json); rtok ships no bundle in that format yet
+  goose (desktop)
+    hooks   not supported: Goose runs hooks from Open Plugins directories with its own event names, tool names and decision shape; rtok has no adapter for that payload yet
+    mcp     not installed
+    proxy   not supported: Goose documents its provider endpoint as the GOOSE_PROVIDER__HOST environment variable only; there is no file to point at the proxy
+    plugin  not supported: Goose plugins are Open Plugins directories (plugin.json, hooks/hooks.json); rtok ships no bundle in that format yet
   droid (cli)
     hooks   not supported: Droid documents hooks, but rtok has no checked mapping of its tool names and PreToolUse output yet
     mcp     not installed
     proxy   not supported: Droid has no single model base-URL setting; each customModels entry carries its own baseUrl
     plugin  not supported: Droid plugins install into its own cache through `droid plugin install`; rtok ships no Droid plugin
+  kiro (cli)
+    hooks   not supported: Kiro's hooks page does not state the exit-code or output-to-context rules of command hooks
+    mcp     not installed
+    proxy   not supported: Kiro documents no model base-URL setting
+    plugin  not supported: Kiro documents no local plugin directory to link
+  kiro (desktop)
+    hooks   not supported: Kiro's hooks page does not state the exit-code or output-to-context rules of command hooks
+    mcp     not installed
+    proxy   not supported: Kiro documents no model base-URL setting
+    plugin  not supported: Kiro documents no local plugin directory to link
 skills (1 listed, 154 desc bytes ≈ 38 tokens per request)
   descriptions over 120 chars: 1 skills, ≈ 8 tokens/request recoverable
   dry-refactoring project desc 154c body 2772B calls - WARN desc>120 WARN never invoked

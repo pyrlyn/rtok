@@ -86,7 +86,9 @@ pub const HOSTS: &[&str] = &[
     "roo",
     "qwen",
     "codebuddy",
+    "goose",
     "droid",
+    "kiro",
 ];
 
 /// Adapters `[tasks] adapter` accepts. `tasks::run::ADAPTERS` re-exports this.
@@ -789,7 +791,9 @@ section! {
         roo: SetupRoo = SetupRoo::default(),
         qwen: SetupQwen = SetupQwen::default(),
         codebuddy: SetupCodebuddy = SetupCodebuddy::default(),
+        goose: SetupGoose = SetupGoose::default(),
         droid: SetupDroid = SetupDroid::default(),
+        kiro: SetupKiro = SetupKiro::default(),
     }
 }
 
@@ -934,6 +938,12 @@ section! {
 }
 
 section! {
+    /// `[setup.goose]` — Goose's `config.yaml`, where `extensions.rtok` goes (T413.6). Desktop
+    /// and CLI read the same file; `GOOSE_PATH_ROOT` moves it to `<root>/config/config.yaml`.
+    SetupGoose { config_path: PathBuf = p("~/.config/goose/config.yaml") }
+}
+
+section! {
     /// `[setup.codebuddy]` — CodeBuddy Code's config directory (`settings.json` `hooks`, the
     /// MCP file, `plugins/`; `CODEBUDDY_CONFIG_DIR` moves it) and WorkBuddy Desktop's, which
     /// embeds the same CLI (T560.2).
@@ -946,6 +956,11 @@ section! {
 section! {
     /// `[setup.droid]` — Factory Droid's user-level MCP file (T413.3).
     SetupDroid { mcp_path: PathBuf = p("~/.factory/mcp.json") }
+}
+
+section! {
+    /// `[setup.kiro]` — Kiro IDE and CLI user-level MCP file (T413.4).
+    SetupKiro { mcp_path: PathBuf = p("~/.kiro/settings/mcp.json") }
 }
 
 section! {
@@ -1697,9 +1712,11 @@ impl Config {
             setup.cline.mcp_path,
             setup.gemini.dir,
             setup.qwen.dir,
+            setup.goose.config_path,
             setup.codebuddy.dir,
             setup.codebuddy.workbuddy_dir,
             setup.droid.mcp_path,
+            setup.kiro.mcp_path,
             setup.codewhale.dir,
             setup.mimo.config_path,
             setup.antigravity.plugins_path,

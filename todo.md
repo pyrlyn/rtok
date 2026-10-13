@@ -4,7 +4,6 @@
 - T134. Probe: does a CLI command hook's `PostToolUse` `updatedToolOutput` replace native tool output?
 
 - T156. Probe: `WorktreeCreate`/`WorktreeRemove` hooks and reflink-seeded `target/`
-- T262.3. Codex: spawn brief on `SubagentStart`
 - T261. CI takes ~9.5 min on macOS; the webui check recompiles 183 crates every run
 - T275. Install/update removes rtok's MCP entry from an agent's config while a plugin serves MCP (every host)
 - T275.1. `rtok mcp ping <agent>`: prove the agent's rtok MCP server is alive and answering
@@ -28,9 +27,7 @@
 - T396. Verify the usage readers against real files
 - T398. Probe editors on a `worktree.useRelativePaths` worktree
 - T413. More agent hosts: popular agents rtok does not install into yet
-- T413.4. `rtok agents install kiro` — Kiro IDE and CLI
 - T413.5. `rtok agents install amp` — Amp
-- T413.6. `rtok agents install goose` — Goose
 - T413.7. `rtok agents install continue` — Continue
 - T413.8. `rtok agents install augment` — Augment Code and Auggie CLI
 - T413.9. `rtok agents install junie` — JetBrains Junie
@@ -45,10 +42,14 @@
 - T428. SessionStart hook back under the 10 ms budget
 - T436.3. Shared operation-icon crate for rtok and ketch
 - T436.4. Spinner on `agents install/update` through T276's `ProgressRunner`
-- T640. File and directory work through `fs-kit`
 - T522. `read` and `expand` accept the line ranges agents sent this week
 - T523. `worktree add` takes `T504 read-hook-same-path` as an id plus a slug
 - T524. Worktree `--idle` accepts `30m` and `0s`
 - T525. SubagentStart and PreCompact under the 10 ms hook budget
 - T526. `worktree_list` and `search` when `rtok mcp` was started in the home directory
 - T527. A worktree claim does not stay held by an agent idle for days
+- T647.1. One project-root method and a path-containment guard
+- T647.2. Every project-root caller goes through the T647.1 method
+- T647.3. Worktrees nested in the project do not leak into walks, gc or clean
+- T647.4. Default worktree root `<project>/.rtok/worktrees`, `.rtok/` ignored
+- T647.5. `rtok worktree migrate` moves worktrees into the configured root

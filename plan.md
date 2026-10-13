@@ -23,7 +23,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T131 | todo | P2 | 3 | 70% | |
 | T134 | todo | P1 | 2 | 40% | |
 | T156 | in progress | P3 | 3 | 50% | Claude Code / claude-opus-5-5 |
-| T262.3 | todo | P2 | 2 | 0% | |
 | T261 | in progress | P2 | 3 | 95% | Cursor / grok 4.7 |
 | T275 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
 | T275.1 | in progress | P2 | 3 | 80% | Cursor / grok 4.7 |
@@ -47,15 +46,13 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T396 | todo | P3 | 2 | 80% | |
 | T398 | todo | P3 | 1 | 30% | |
 | T413 | todo | P2 | 3 | 0% | |
-| T413.4 | in progress | P2 | 3 | 0% | Cursor / grok 4.7 |
 | T413.5 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
-| T413.6 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
-| T413.7 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
-| T413.8 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
+| T413.7 | in progress | P3 | 3 | 0% | Claude Code / sonnet-5.5 |
+| T413.8 | in progress | P3 | 3 | 0% | Claude Code / sonnet-5.5 |
 | T413.9 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
 | T413.11 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T413.12 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
-| T413.13 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
+| T413.13 | todo | P3 | 2 | 0% | |
 | T413.14 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T413.15 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T414 | in progress | P1 | 4 | 20% | Claude Code / opus-5.5 |
@@ -64,15 +61,68 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T428 | in progress | P2 | 3 | 85% | Claude Code / sonnet-5.5 |
 | T436.3 | todo | P2 | 2 | 50% | |
 | T436.4 | todo | P3 | 2 | 90% | |
-| T640 | in progress | P2 | 4 | 90% | Claude / opus-5.5 |
 | T522 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T523 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T524 | in progress | P2 | 1 | 0% | MiMo / mimo |
 | T525 | in progress | P2 | 3 | 0% | MiMo / mimo |
 | T526 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T527 | in progress | P2 | 3 | 0% | MiMo / mimo |
+| T647.1 | in progress | P1 | 3 | 0% | Claude / opus-5.5 |
+| T647.2 | todo | P1 | 3 | 0% | |
+| T647.3 | todo | P1 | 3 | 0% | |
+| T647.4 | todo | P1 | 3 | 0% | |
+| T647.5 | todo | P2 | 3 | 0% | |
 
 
+
+### T647.1. One project-root method and a path-containment guard
+
+Part of T647: worktrees move into `<project>/.rtok/worktrees`, and rtok gets one way to find a project root. Today six sites decide it differently: `git_root` (`crates/rtok-config/src/layers.rs`) stops at a linked worktree's `.git` file, `common_git_dir` (`src/project.rs`) resolves to the main checkout, `src/doctor.rs` has a private copy of `git_root`, and `checkpoint`/`tasks/run.rs` mix both. Nothing checks that a path rtok builds stays inside the project.
+
+Done: one module in the lowest crate that needs it (the config crate reads `.rtok.toml` through it), lexical, no git subprocess (hook budget), over the existing `ReadFs`:
+
+- `ProjectRoot::find(cwd)` → `checkout` (toplevel of the checkout `cwd` is in, a linked worktree's own dir) and `main` (the main checkout, through `commondir`; a submodule is its own project), plus the common `.git` dir.
+- `contain(root, path)`: the path made absolute against `root`, lexically normalized, then resolved through its deepest existing ancestor (symlinks); `Err` when it leaves `root`. Reuse `path_starts_with` (`crates/rtok-store/src/paths.rs`) and `worktree/add.rs::resolved` instead of new code.
+- `src/project.rs` (`project_name`, `project_key`) runs on it; no behaviour change.
+- Docs: a "Project root" section in `architecture.md` (which root each caller wants and why).
+
+Execution plan:
+
+1. Move `common_git_dir`/`common_dir` and `git_root` into the new module; `ReadFs` goes wherever both crates can see it.
+2. `contain` on top of `resolved` + `path_starts_with`.
+3. Tests (Vfs and a tempdir with real symlinks): main checkout; linked worktree with absolute and relative `gitdir`/`commondir`; submodule; no repo; cwd deep inside; `..` escape; absolute path outside; symlink escape; symlink inside that stays inside; root itself.
+4. `just check`.
+
+Check: the tests above pass and `project_name`/`project_key` tests are unchanged.
+
+### T647.2. Every project-root caller goes through the T647.1 method
+
+Needs T647.1. Switch every caller to `ProjectRoot` and say explicitly whether it wants `checkout` or `main`: `layers.rs` `.rtok.toml` layer (`checkout`: each worktree reads its own checked-out file), `agents/command.rs --project`, `plugins/checkpoint.rs`, `guard/grep_symbol.rs`, `memory/files.rs::project_root`, `tasks/run.rs` (both sites), `model/agents.rs::worktree_label`. Delete `git_root` and the duplicate in `src/doctor.rs`. `checkpoint::project_of_cx` returns the worktree basename today while `project_name` returns the main repo's name; it moves to `main` so a checkpoint made in a worktree files under the same project. `memory/files.rs::relative` uses `contain` so a symlink cannot point a note outside the root.
+
+Check: one test per changed site for a linked worktree; a test that the checkpoint project name is the same from the main checkout and from a worktree; a symlink-escape test for memory paths; `just check`.
+
+### T647.3. Worktrees nested in the project do not leak into walks, gc or clean
+
+Needs T647.1; lands before T647.4. With worktrees under `<main>/.rtok/worktrees`, several places would see them as part of main:
+
+- graph walk (`plugins/graph/walk.rs`), `search`/`tree` (`read/search.rs`) and the watcher (`graph/watch.rs`, root `.gitignore` only) descend into them when `.rtok/` is not ignored: skip any directory holding a `.git` file (a nested checkout), like `worktree/list.rs::walk` already does.
+- `worktree/gc.rs` and `worktree/clean.rs` call a worktree current by `here.starts_with(dir)`, so from a nested worktree main counts as current too: pick the deepest match.
+- `worktree/origin.rs` names `<main>/.rtok/worktrees` its own `rtok` pool.
+- `worktree/claim.rs::copy_symbol_index` copies no rows under `.rtok/`.
+
+Check: a test per bullet with a worktree nested under `.rtok/worktrees` and no ignore rule; `just check`.
+
+### T647.4. Default worktree root `<project>/.rtok/worktrees`, `.rtok/` ignored
+
+Needs T647.1 and T647.3. The `[worktree] root` default becomes `.rtok/worktrees`. A relative root resolves against `ProjectRoot::main` (not the process cwd, as today), so a worktree created from inside another worktree still lands under the main checkout; `~` and absolute roots keep today's meaning. `add::plan` checks the new path with `contain`. Before creating the first worktree, rtok makes sure `.rtok/` is ignored: nothing to do when `git check-ignore` already ignores it; else append `.rtok/` to `<main>/.gitignore` when that file exists (rest byte-for-byte, a missing final newline added first); else to `<main>/.git/info/exclude`. Existing worktrees elsewhere keep working. Docs: `README.md`, `docs/agents-and-worktrees.md`, `docs/config.md` (+ `docs/ru`, `docs/uk`), `crates/rtok-config/default.toml`, `skills/rtok-worktrees/SKILL.md`, `CHANGELOG.md`.
+
+Check: tests for the default path from main and from a linked worktree, a relative custom root, an absolute root, an escaping root (`../x` with a task id) refused; `.gitignore` present without the rule / with it / without a final newline, no `.gitignore` → `info/exclude`, idempotent on a second add; the `the_default_root_is_under_the_rtok_home` test is replaced; `just check`.
+
+### T647.5. `rtok worktree migrate` moves worktrees into the configured root
+
+Needs T647.4. Moves this repository's worktrees that live outside the configured root to `<root>/<repo>-<task>` with `git worktree move`, keeping lock and claim records in step. Dry run without `--yes`. Skips, with a reason: main, the worktree holding the cwd, a worktree locked or claimed by another agent or by a live session, a worktree with submodules (`git worktree move` refuses them), a target that already exists. CLI only; new-command gates (trycmd fence, `surface_parity`, `config_coverage`). Docs with T647.4's pages.
+
+Check: tests on a temp repo for move, each skip reason and dry run; lock and claim follow the move; `just check`.
 
 **Source audit (T530).**
 
@@ -110,14 +160,6 @@ Progress (2026-09-25, `research.md` §18.4 second data point): part (2) measured
 Check: `research.md` §18 gains the hook payloads and a dated table (cold vs seeded: seconds, bytes); T159's card is corrected against the recorded payloads; seeding gets a follow-up task or an `ideas.md` entry from the numbers; no file under `src/` changes.
 
 Execution (2026-09-27): (1) a probe kit in the session scratchpad (never committed), like T281, that logs `WorktreeCreate`/`WorktreeRemove` payloads and returns a `_worktrees/` path; the creator runs it with `claude --worktree`, a sub-agent `isolation: worktree` and the desktop app. The documented payload fields go into `research.md` §18.3 now, with sources. (2) Seeded (`cp -c -R target`) and cold worktrees of this repo: wall time of `just check` and physical disk delta (`df` before/after, not `du`). The cold run only happens with ≥ 30 GiB free; otherwise the row says so. Result: a dated row in `research.md` §18.4.
-
-### T262.3. Codex: spawn brief on `SubagentStart`
-
-`research.md` §23: Codex fires `SubagentStart` and adds the hook's stdout (or its hook-specific context) to the subagent as developer context. Add `SubagentStart` to `plugins/codex/hooks/hooks.json` and the Codex installer's list, and make `rtok hook SubagentStart` answer in the shape Codex reads.
-
-Unblocked by T645 (done 2026-10-12): Codex `PreToolUse` is wired. Found 2026-09-24 while claiming: the brief is built from `PreToolUse` rows whose `tool_name` is `Read|Edit|Write` (`ledger()` in `src/plugins/memory/handoff.rs`); Codex names file edits `apply_patch` and has no `Read` tool, so the ledger must read those rows too.
-
-Check: a Codex `SubagentStart` payload through `rtok hook` returns the brief in Codex's shape (test); `just check` green.
 
 ### T261. CI takes ~9.5 min on macOS; the webui check recompiles 183 crates every run
 
@@ -639,13 +681,6 @@ Shared shape for every sub-task, per `architecture.md` "New host" and D21:
 
 Check: every sub-task below is closed in `done.md` with its per-host check.
 
-### T413.4. `rtok agents install kiro` — Kiro IDE and CLI
-
-Two variants (IDE and CLI) if both are documented. Hooks and MCP; `research.md` already cites Kiro specs, which this task does not touch.
-
-Check: the T413 per-host check (step 5) for this host.
-
-Plan: vendor docs for IDE and CLI config paths; one variant per documented file; share a helper if the JSON matches an existing host.
 
 ### T413.5. `rtok agents install amp` — Amp
 
@@ -654,14 +689,6 @@ Amp (Sourcegraph). MCP plus its plugin system if documented (`~/.config/amp/plug
 Check: the T413 per-host check (step 5) for this host.
 
 Plan: Sourcegraph docs for the MCP entry and the plugin directory; `HostPlugin` only if the load path is documented.
-
-### T413.6. `rtok agents install goose` — Goose
-
-Goose (Block), CLI and desktop. MCP-native, so the minimum is the MCP entry; hooks only if documented.
-
-Check: the T413 per-host check (step 5) for this host.
-
-Plan: Block's docs for the MCP config file; hooks only if a payload is documented. MCP-only host via the existing stdio or local helper, whichever the file matches.
 
 ### T413.7. `rtok agents install continue` — Continue
 
@@ -710,6 +737,8 @@ Trae IDE (ByteDance). MCP; check whether its config mirrors the VS Code layout `
 Check: the T413 per-host check (step 5) for this host.
 
 Plan: Trae docs for the MCP file. Reuse the VS Code helper only if the key and path match; otherwise a thin host of its own.
+
+Finding (2026-10-12, `research.md` §32.13): Trae's docs name only a project `.trae/mcp.json`, which is the project's, and a user-level `mcp.json` behind the app's Raw Config button with no path. No installer is written until a documented user-level path exists.
 
 ### T413.14. `rtok agents install openhands` — OpenHands
 
@@ -972,16 +1001,3 @@ The 14 portable ideas and where each landed:
 12. Memory RRF / file affinity — T373, T374.
 13. Edit robustness (fuzzy `old_string`) — does not fit now: I-43 / T58.3 measured 1.3 % `old_string` misses; below the gate.
 14. Shell output compress / tee — already covered by the `cmd` rules (`src/plugins/cmd/rules.rs`) and the archive (`expand <id>`).
-
-### T640. File and directory work through `fs-kit`
-
-The creator's call (2026-10-12): every project takes its file and directory helpers from one shared crate, `fs-kit` in `packages/crates` (crates-packages PR #57), instead of its own copies. Line caps lifted by the creator for this task.
-
-Plan:
-1. Depend on `fs-kit` (a path to the crates checkout until it is on crates.io, then the version); drop the direct `dunce` dependency.
-2. Duplicates go: `rtok-store/src/paths.rs` re-exports `fs_kit::path`; `src/fs.rs` `normalize` and `same_dir`; the junk walk (`disk_usage_until`, `Usage`) from `fs_kit::tree`; `rtok-agent-sdk` `write_atomic`/`link_target`/`clear_readonly` and `copy_dir` from `fs_kit::write` and `fs_kit::tree`; completions `read`/`write_if_changed`.
-3. Every `dunce::` and `std::fs::canonicalize` call goes through `fs_kit::path`.
-4. Left for later slices: the `_backup` folder with pruning (`rtok-agent-sdk` `backup`) and `info.rs` `dir_usage` (apparent size, a different number from disk usage) stay until `fs-kit` grows those variants; plain `std::fs::write`/`create_dir_all` calls move subsystem by subsystem.
-5. `fs-kit` 0.1.0 is on crates.io, so the dependency is the registry version (`fs-kit = "0.1"`), not a path.
-
-Check: `just check` green on `fs-kit` 0.1 from crates.io; `fs-kit` unit tests cover each moved helper (atomic write through a symlink, permissions kept, `if_changed`, tree usage and copy, path folding), and the existing rtok tests for `paths`, `junk`, completions install and the agent SDK pass unchanged.

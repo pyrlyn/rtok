@@ -1412,6 +1412,44 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    /// T262.3: an `apply_patch` call lands in the ledger, and the `SubagentStart` that follows
+    /// answers with a brief naming the file, in the shape Codex reads as developer context.
+    #[test]
+    fn codex_subagent_start_brief_lists_the_files_a_patch_touched() {
+        let dir = unique_dir("rtok-hook-codex-brief");
+        let mut cfg = cline_cfg(&dir);
+        cfg.hook.host = "codex".into();
+        let fixture = |name: &str| -> serde_json::Value {
+            let path = format!(
+                "{}/tests/fixtures/hooks/codex/{name}.json",
+                env!("CARGO_MANIFEST_DIR")
+            );
+            serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap()
+        };
+        let mut pre = fixture("pre_tool_bash");
+        pre["tool_name"] = "apply_patch".into();
+        pre["tool_input"] = serde_json::json!({
+            "command": "*** Begin Patch\n*** Update File: src/lib.rs\n@@\n-a\n+b\n*** End Patch\n"
+        });
+        let out =
+            dispatch_owned_strict(&serde_json::to_vec(&pre).unwrap(), "PreToolUse", &cfg).unwrap();
+        assert_eq!(out, b"{}", "a patch call is never rewritten");
+
+        let start = serde_json::to_vec(&fixture("subagent_start")).unwrap();
+        let out = dispatch_owned_strict(&start, "SubagentStart", &cfg).unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&out).unwrap();
+        let h = &v["hookSpecificOutput"];
+        assert_eq!(h["hookEventName"], "SubagentStart", "{v}");
+        assert!(
+            h["additionalContext"]
+                .as_str()
+                .unwrap()
+                .contains("/home/user/project/src/lib.rs"),
+            "{v}"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn cline_pre_tool_use_rewrites_single_command_and_fails_open() {
         let dir = unique_dir("rtok-hook-cline");

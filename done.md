@@ -768,6 +768,19 @@ Check: `cargo test --lib plugins::graph::review`; `graph_surface_is_five_tools_u
 
 Result: 8 review tests passed; the MCP surface stays five tools. `just check` ran the full gate (trycmd snapshots are a shared input): 2978 passed, 6 skipped.
 
+### T646. `rtok graph review` finishes inside the CI time limit
+
+The `Graph review` job (`.github/workflows/graph-review.yml`, `timeout 180` around `rtok graph review --since origin/main`) has posted "review did not finish within 3 minutes" on every pull request since T454 (#887): the build takes about 3 minutes, then the review is killed at exactly 180 s. Neither the index build nor the cache is the cost, and a bigger limit would not help: on a debug build with a warm index `graph impact rank_name --depth 3` took 118 s, `impact canon` 487 s, and a 206-file diff ran past 20 minutes. `review` walks callers to depth 3 from up to 400 changed definitions, and every visited name costs three store answers. Sampled profiles, one layer at a time:
+
+1. No `sqlite_stat1`, so SQLite served `ORDER BY path` from `symbols_root_path (root=?)`, every row of the root, in `symbol_defs`, `symbol_ref_groups` and `symbol_import_follow`. `rebuild_symbol_idf`, which ends every index pass, now runs `ANALYZE symbols` under `analysis_limit = 1000` (`sql_ext::analyze_symbols`; Diesel has no form for either statement).
+2. `symbol_name_freq` parsed the whole IDF JSON (117 KB here) for every name. The store keeps the last parse and reuses it while the kv body is unchanged, so a rebuild by another process is still seen.
+3. `symbol_imported_defs` split every specifier and definition path once per pair; now once each.
+4. Each of the 400 walks asked the store again for names an earlier walk had answered. `impact_walk_memo` takes a `WalkMemo` of rank, reference groups and import follows per `(root, name)`; `review` shares one for its run, every other caller still gets a fresh one.
+
+Check: `just check` green; new tests `rebuild_symbol_idf_leaves_planner_statistics_for_symbols` (fails without step 1: no statistics table), `name_freq_follows_a_rebuilt_idf_cache`, `shared_walk_memo_keeps_rows_and_reuses_visited_names`; the existing `import_matches_file` and `imported_defs` tests cover step 3. Cold review of the #1008, #1010, #1011, #1013, #1014 diffs (fresh `RTOK_HOME`, index from nothing) with output byte-identical to the build with step 1 alone (#1013, #1014); the PR's own `Graph review` comment holds a review, not the timeout line.
+
+Result: `just check` 3702 passed, 8 skipped. Cold `graph review` (debug build, fresh `RTOK_HOME`, index from nothing) of the #1008, #1010, #1011, #1013, #1014 diffs: 29, 37, 30, 44, 43 s. Warm #1014: 345 s with step 1 only, 139 s after step 2, 78 s after step 3, 29 s after step 4. `rebuild_symbol_idf_leaves_planner_statistics_for_symbols` fails with step 1 removed.
+
 ### T368. Rank ambiguous `callers` / `impact` / `explore` hits by import evidence and name IDF
 
 From the Empryo study (2026-10-02; idea-only, clean-room — Empryo is BSL 1.1, no code copied; Empryo `src/core/intelligence/repo-map.ts` @ `669ff91` was read for the idea only). Today a common name (`new`, `run`, `parse`) returns every same-named definition and every reference to any of them; `annotate_ambiguous` only says "ambiguous", and `impact_bfs` walks all of them. Resolve an edge by (a) whether the referencing file imports the defining file and (b) the IDF of the name, `ln(N_files / df)`, and drop names referenced in more than ~5% of files from ranking. The full import path is stored in `scope` on `import` rows (no new column).
@@ -1568,6 +1581,12 @@ Check result: fail-first shown by swapping in `origin/main`'s `src/hooks/mod.rs`
 Status: done 2026-09-24
 Model: Claude Code / claude-opus-5-5
 
+### T262.3. Codex: spawn brief on `SubagentStart`
+
+`research.md` §23: Codex fires `SubagentStart` and adds the hook's stdout (or its hook-specific context) to the subagent as developer context. Add `SubagentStart` to `plugins/codex/hooks/hooks.json` and the Codex installer's list, and make `rtok hook SubagentStart` answer in the shape Codex reads.
+
+Result (2026-10-12): `hook_events.rs` gains the Codex `SubagentStart` row and widens `PreToolUse` to `Bash|apply_patch`; the installer and `plugins/codex/hooks/hooks.json` both register them as `rtok hook <event> --host codex`. The existing `SubagentStart` answer (`hookSpecificOutput.additionalContext`) is what Codex reads, confirmed live on codex-cli 0.162.1 (`research.md` §40), so no new output adapter was needed. Codex has no `Read` tool and edits through `apply_patch`, so the memory plugin's `ledger()` reads the `*** Add/Update/Delete File:` and `*** Move to:` headers of the patch text (paths relative to the session `cwd`). Tests: `ledger()` over a patch, `codex_subagent_start_brief_lists_the_files_a_patch_touched` (a patch call, then the live `SubagentStart` fixture). Not verified live: the `apply_patch` hook payload (the fake-model run never offered that tool; the docs' `tool_input.command` shape is assumed).
+
 ### T645. Codex `PreToolUse` and `PostToolUse` through `rtok hook` (idea I-88)
 
 Creator approved 2026-10-12 (idea I-88, unblocks T262.3). Wire Codex's `PreToolUse` (Bash `updatedInput.command` rewrite and deny) and `PostToolUse` (`additionalContext`) into both the Codex installer and `plugins/codex/hooks/hooks.json`, as `rtok hook <event> --host codex` so the store attributes the calls to the `codex` host instead of the `claude` default. The live Codex payloads (codex-cli 0.162.1, a scratch `CODEX_HOME` against a local fake Responses server, no login) are recorded in `research.md` §40 and kept as sanitized fixtures.
@@ -2004,6 +2023,21 @@ Check: `storybook build` succeeds; stories run as Vitest browser tests with no a
 Execution: components in `web/src/ui/` (one file each plus `*.stories.tsx`), styled from `design/html` tokens and `components.html`; Storybook config in `web/.storybook/` (theme toolbar switching the app's `data-theme`, axe violations set to fail); `web/vite.config.ts` gets two Vitest projects, `unit` (the existing tests, `npm test`) and `storybook` (browser mode, `npm run test:stories`); `just spa-stories` and `just spa-storybook` wrap them.
 
 Result (2026-10-03, Claude Code / sonnet-5): `Panel`, `Kpi`, `Pill`, `Switch`, `Search`, `Chip`, `Sparkline` and a virtualized `DataTable` (TanStack Table v9 `useTable` for the model, TanStack Virtual for the rows, ARIA table roles with `aria-rowcount`/`aria-rowindex`, keyboard-selectable rows, loading/empty/error slots through the shared states) live in `web/src/ui/`; `Icon` inlines the bundled SVGs and the sidebar uses it for the pages that have one (calls, doctor, logs, overview, plugins, sessions, skills; the design has no icons for stats, graph, hosts, config, services and worktrees, so those keep an empty slot). 48 stories cover every state (off/on/disabled, tones in dark and light, flat/short sparklines, 10,000-row table, empty/loading/failed table, offline/error/empty/loading panels) and five have play functions (switch, chip and search interaction, row windowing, keyboard row selection). `storybook build` succeeds and all 48 stories pass as Vitest browser tests with axe violations set to fail; the run found and fixed one real violation (the table's scroll region was not keyboard-focusable). The browser project needs Chromium: `npx playwright install chromium`, or `SPA_BROWSER_CHANNEL=chrome` to use an installed Chrome. CI wiring is T310.11.
+
+### T647. Deterministic graph compare and drill-down stories
+
+`ci / spa` failed intermittently on `GraphCompare.stories.tsx > Changes On The Graph Light` (run 38309415046, PR #1020: no button `− legacy_hook, function · removed`) and on `GraphDrill.stories.tsx > More On A Large Project` (job 114262428057: 15 s test timeout), and the failing job cancels the whole run.
+
+Root causes:
+- Compare: `Scene2D` draws a node only once the layout worker has placed it. The ghost `legacy_hook` enters the layout only when Compare turns on, while `run` and `resolve` are already placed, so the play function's `findBy(run)` passed and the `getBy(legacy_hook)` right after it lost the race whenever the new layout frame came late.
+- Large project: the play function took ~0.8 s locally, but the a11y check that runs after it took ~2.3 s over ~5,900 elements (600 drawn nodes); with the CPU throttled 4× through CDP the story took 18.0 s and timed out (6×: 33.5 s).
+
+Fix:
+- `web/src/pages/slowLayout.ts`: `slowNewNodes(ms)`, a story `beforeEach` that withholds the position of a node a later topology adds for `ms` after the frame that first carries it, so the slow-worker case replays on every run. `Changes On The Graph Slow Layout` uses it: with the old play function it failed 3/3 with the CI message; it now passes.
+- `Changes On The Graph` awaits every node it asserts (`findBy`), since each needs its own layout frame.
+- `More On A Large Project` turns its a11y check off: by the time axe runs, the "+100 more" button is gone, and the node and panel markup is checked in `Files`. Throttled 4×/6× it now takes 3.4 s/5.2 s.
+
+Check: `just js`, `just spa-stories` (255/255) pass. `just spa-test`: the unit project does not import the changed files; on this host, under load average 50–290, 1–5 unrelated tests hit their 5 s timeout and the set changed from run to run.
 
 ### T310.6. Pages: overview, plugins (toggle), calls (expand)
 
@@ -8841,11 +8875,24 @@ Check: targeted nextest filter from the landing PR; #760 CI green on main.
 Status: done 2026-10-05 (#760)
 Model: Cursor / grok 4.7
 
+### T413.6. `rtok agents install goose` — Goose
+
+Goose (Block, now under the Agentic AI Foundation), CLI and desktop. MCP-native, so the minimum is the MCP entry; hooks only if documented.
+
+Done: `src/agents/goose/` writes `extensions.rtok` (stdio: `name`, `type`, `cmd`, `args`, `enabled`) into `config.yaml` as a text-level block edit validated with the existing `serde-saphyr`, so comments and every other byte stay; keys Goose adds on re-save are not an edit; `[setup.goose] config_path`; variants Goose CLI and Goose (Desktop). Hooks (Open Plugins, no adapter), proxy (env var only) and plugin report a factual reason. Research in `research.md` §32.6.
+
+Check: unit tests for the block edit (add, replace, remove, CRLF, foreign YAML, resave defaults), the real-config round trip, `agents_doc`, `host_docs`, trycmd snapshots; `just check`.
 ### T413.3. `rtok agents install droid` — Factory Droid
 
 `rtok agents usage` already lists Droid as `unsupported` (`research.md` §30.4). This adds the installer: MCP, and hooks or plugins if Factory documents them.
 
 Done: `src/agents/droid/` (one CLI variant, `droid` on PATH): `mcpServers.rtok` in `~/.factory/mcp.json` through `register_stdio_mcp` (no second copy of the Cline/Roo/Windsurf JSON), `[setup.droid] mcp_path` moves it, host registered in `HOSTS`/`host()`/`mcp.rs`, `NO_ROWS` (nothing about Droid's caches is documented), docs in en/ru/uk. Hooks, proxy and plugin stay `Support::No` with reasons: Factory documents hooks (`research.md` section 32.3) but no tool-name list or `PreToolUse` rewrite output to build the mapping from, so a hooks task has to verify both; `customModels` carry a `baseUrl` each; the plugin needs a `plugins/droid` unit (D21). Research with sources and the 2026-10-12 check date in `research.md` section 32.3. Tests: `droid` unit tests (dry run, idempotent round trip, foreign servers kept, apply twice), `agents_install` matrix row, `droid_keeps_the_real_mcp_json` (foreign server kept byte-for-byte), `EXPECTED_VARIANTS`, `host_docs`, `agents_doc`. Per-host check: `droid` is not installed here, so no manual `--dry-run`.
+
+### T413.4. `rtok agents install kiro` — Kiro IDE and CLI
+
+Two variants (IDE and CLI) if both are documented. Hooks and MCP; `research.md` already cites Kiro specs, which this task does not touch.
+
+Done: `src/agents/kiro/` with two variants, `Kiro CLI` (`kiro-cli` on PATH) and `Kiro IDE` (`/Applications/Kiro.app`, `~/Applications/Kiro.app`; other OS paths unverified, not probed). Both edit one file, `~/.kiro/settings/mcp.json`, through `register_stdio_mcp` (no second copy of the Cline/Roo/Windsurf JSON); `shared()` is true, so a plain install writes it once and lists the IDE as the CLI's sibling. `[setup.kiro] mcp_path` moves the file. Registered in `HOSTS`/`host()`/`mcp.rs`, `NO_ROWS` (no caches documented), docs in en/ru/uk. Hooks, proxy and plugin stay `Support::No` with reasons: the hooks page states no exit-code or output-to-context rules for command hooks. Research with sources and the 2026-10-12 check date in `research.md` section 32.4; two doc pages disagree on the global path (`settings/mcp.json` vs `~/.kiro/mcp.json`) and the CLI-reads-the-same-file point is unverified, both recorded there. Tests: `kiro` unit tests (dry run, idempotent round trip, foreign servers kept, shared-file variants, apply twice), `agents_install` matrix row, `kiro_keeps_the_real_mcp_json`, `EXPECTED_VARIANTS` (CLI and IDE), `host_docs`, `agents_doc`. Per-host check: Kiro is not installed here (no `kiro-cli`, no `~/.kiro`), so no manual `--dry-run`.
 
 Check: the T413 per-host check (step 5) for this host.
 
@@ -13339,6 +13386,24 @@ Check: `write_refuses_a_symlink_cycle_and_leaves_every_link_alone`, `write_follo
 
 Status: done 2026-10-12
 Model: Claude Code / claude-sonnet-5-5
+
+### T640. File and directory work through `fs-kit`
+
+The creator's call (2026-10-12): every project takes its file and directory helpers from one shared crate, `fs-kit` in `packages/crates` (crates-packages PR #57), instead of its own copies. Line caps lifted by the creator for this task.
+
+Plan:
+1. Depend on `fs-kit` (a path to the crates checkout until it is on crates.io, then the version); drop the direct `dunce` dependency.
+2. Duplicates go: `rtok-store/src/paths.rs` re-exports `fs_kit::path`; `src/fs.rs` `normalize` and `same_dir`; the junk walk (`disk_usage_until`, `Usage`) from `fs_kit::tree`; `rtok-agent-sdk` `write_atomic`/`link_target`/`clear_readonly` and `copy_dir` from `fs_kit::write` and `fs_kit::tree`; completions `read`/`write_if_changed`.
+3. Every `dunce::` and `std::fs::canonicalize` call goes through `fs_kit::path`.
+4. Left for later slices: the `_backup` folder with pruning (`rtok-agent-sdk` `backup`) and `info.rs` `dir_usage` (apparent size, a different number from disk usage) stay until `fs-kit` grows those variants; plain `std::fs::write`/`create_dir_all` calls move subsystem by subsystem.
+5. `fs-kit` 0.1.0 is on crates.io, so the dependency is the registry version (`fs-kit = "0.1"`), not a path.
+
+Check: `just check` green on `fs-kit` 0.1 from crates.io; `fs-kit` unit tests cover each moved helper (atomic write through a symlink, permissions kept, `if_changed`, tree usage and copy, path folding), and the existing rtok tests for `paths`, `junk`, completions install and the agent SDK pass unchanged.
+
+Result: rtok takes paths, atomic writes, tree usage and copies from `fs-kit` 0.1 on crates.io (pyrlyn/crates-packages#57); the copies in `rtok-store` paths, `src/fs.rs`, the junk walk, the agent SDK and completions are gone, and `dunce` is no longer a direct dependency (pyrlyn/rtok#998).
+
+Status: done 2026-10-12
+Model: Claude Code / claude-opus-5-5
 
 ### T577. Protect nested package-manager lockfiles during junk cleanup
 
