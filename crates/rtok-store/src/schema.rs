@@ -214,6 +214,7 @@ diesel::table! {
     }
 }
 
+// 0050 (T592): `end_seq`, the place a session took in the order sessions ended; 0 = still open.
 diesel::table! {
     sessions (id) {
         id -> Text,
@@ -223,6 +224,7 @@ diesel::table! {
         source -> Nullable<Text>,
         started_at -> BigInt,
         ended_at -> Nullable<BigInt>,
+        end_seq -> BigInt,
     }
 }
 

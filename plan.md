@@ -47,14 +47,12 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T396 | todo | P3 | 2 | 80% | |
 | T398 | todo | P3 | 1 | 30% | |
 | T413 | todo | P2 | 3 | 0% | |
-| T413.4 | in progress | P2 | 3 | 0% | Cursor / grok 4.7 |
 | T413.5 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
-| T413.6 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
-| T413.7 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
-| T413.8 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
+| T413.7 | in progress | P3 | 3 | 0% | Claude Code / sonnet-5.5 |
+| T413.8 | in progress | P3 | 3 | 0% | Claude Code / sonnet-5.5 |
 | T413.11 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T413.12 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
-| T413.13 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
+| T413.13 | todo | P3 | 2 | 0% | |
 | T413.14 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T413.15 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T414 | in progress | P1 | 4 | 20% | Claude Code / opus-5.5 |
@@ -63,14 +61,12 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T428 | in progress | P2 | 3 | 85% | Claude Code / sonnet-5.5 |
 | T436.3 | todo | P2 | 2 | 50% | |
 | T436.4 | todo | P3 | 2 | 90% | |
-| T640 | in progress | P2 | 4 | 90% | Claude / opus-5.5 |
 | T522 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T523 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T524 | in progress | P2 | 1 | 0% | MiMo / mimo |
 | T525 | in progress | P2 | 3 | 0% | MiMo / mimo |
 | T526 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T527 | in progress | P2 | 3 | 0% | MiMo / mimo |
-| T592 | todo | P2 | 3 | 0% | |
 | T623.2 | todo | P2 | 3 | 0% | |
 
 
@@ -96,21 +92,6 @@ Execution plan:
 3. Tests: fake-clock timeout/retry with two different selections (plan A times out, plan B sent, late A frame must not resolve B), same-project graph/diff and export/import variants, concurrent requests, connection closure; focused Doctor UI tests. Run `just spa-test`, `just js`, `just spa-stories`, `just spa-e2e`.
 
 Check: every resolved promise receives only its own request's answer, including after a timeout, and `just check` passes.
-
-### T592. Keep late same-second sessions from moving behind the OTel cursor
-
-Confirmed using the actual Store and [advance_sessions](src/otel/export.rs#L315): create sessions `z-first` and `a-late`, end and export `z-first` at timestamp 1700000000, then end `a-late` at that same timestamp. The next pending batch contains `z-first` again instead of `a-late`; after advancing, the following batch is empty, so `a-late` is never exported. Reversing the lexical ID order exports the late session correctly. [SessionsPending](crates/rtok-store/src/sql_ext.rs#L18) recomputes `ROW_NUMBER` ordered by session ID, while [sessions_pending_export](crates/rtok-store/src/otel.rs#L262) resumes using a count at the watermark second. A late lower ID shifts the already-exported row after the count and hides the new row before it. The flush lock serializes exporters, not session writers.
-
-This is an uncovered case of completed T36.12's same-second delivery guarantee, not another active copy of that task. Its [integration test](tests/otel.rs#L178) uses `s1` then `s2` and checks counts, so the row-identity failure is missed. No claim is made that the backend displays duplicates: the repeated span has a stable ID, but the late session's root span is absent altogether.
-
-Execution plan:
-
-1. Add store and exporter regressions with both sessions already present, a later completion at the watermark second, and lexical ID orders in both directions. Inspect emitted session/span IDs, not just batch lengths or POST counts; the late session must be delivered and the next flush must drain.
-2. Replace the mutable rank/count cursor with durable delivery state that cannot move behind already-exported rows. Prefer a monotonic completion/outbox sequence or explicit acknowledged session identities; a timestamp plus lexical last-ID cursor alone still skips late lower IDs. Keep database access in Store and use Diesel under the existing SQL policy.
-3. Advance the new delivery state only after successful export and update related cursor state atomically. Define migration from existing timestamp/tail marks without assuming that a count identifies which tied sessions were delivered; allow deliberate replay using stable span IDs where needed to avoid loss.
-4. Cover more than one BATCH of equal timestamps, session writes during a flush, HTTP failure/retry and restart with persisted marks. Retain stream isolation and bounded batches, and rerun the existing T36.12/T16 exporter tests.
-
-Check: every newly ended session is eventually selected regardless of lexical ID order at an already-covered timestamp, acknowledged deliveries survive restart, and `just check` passes. The offline scratch executable linked the actual `rtok-store` crate, exercised an in-memory database and compiled the actual cursor-advance function; it used no SQL stubs, real host data or collector. HTTP/CLI integration was source-traced, not executed.
 
 ### T131. Measure the spawn brief: cost row and on/off re-read share
 Rule: a saving that is not a `Measurement` row does not exist, and the brief is a cost first. Needs T128 and T130.2.
@@ -666,13 +647,6 @@ Shared shape for every sub-task, per `architecture.md` "New host" and D21:
 
 Check: every sub-task below is closed in `done.md` with its per-host check.
 
-### T413.4. `rtok agents install kiro` — Kiro IDE and CLI
-
-Two variants (IDE and CLI) if both are documented. Hooks and MCP; `research.md` already cites Kiro specs, which this task does not touch.
-
-Check: the T413 per-host check (step 5) for this host.
-
-Plan: vendor docs for IDE and CLI config paths; one variant per documented file; share a helper if the JSON matches an existing host.
 
 ### T413.5. `rtok agents install amp` — Amp
 
@@ -681,14 +655,6 @@ Amp (Sourcegraph). MCP plus its plugin system if documented (`~/.config/amp/plug
 Check: the T413 per-host check (step 5) for this host.
 
 Plan: Sourcegraph docs for the MCP entry and the plugin directory; `HostPlugin` only if the load path is documented.
-
-### T413.6. `rtok agents install goose` — Goose
-
-Goose (Block), CLI and desktop. MCP-native, so the minimum is the MCP entry; hooks only if documented.
-
-Check: the T413 per-host check (step 5) for this host.
-
-Plan: Block's docs for the MCP config file; hooks only if a payload is documented. MCP-only host via the existing stdio or local helper, whichever the file matches.
 
 ### T413.7. `rtok agents install continue` — Continue
 
@@ -729,6 +695,8 @@ Trae IDE (ByteDance). MCP; check whether its config mirrors the VS Code layout `
 Check: the T413 per-host check (step 5) for this host.
 
 Plan: Trae docs for the MCP file. Reuse the VS Code helper only if the key and path match; otherwise a thin host of its own.
+
+Finding (2026-10-12, `research.md` §32.13): Trae's docs name only a project `.trae/mcp.json`, which is the project's, and a user-level `mcp.json` behind the app's Raw Config button with no path. No installer is written until a documented user-level path exists.
 
 ### T413.14. `rtok agents install openhands` — OpenHands
 
@@ -991,16 +959,3 @@ The 14 portable ideas and where each landed:
 12. Memory RRF / file affinity — T373, T374.
 13. Edit robustness (fuzzy `old_string`) — does not fit now: I-43 / T58.3 measured 1.3 % `old_string` misses; below the gate.
 14. Shell output compress / tee — already covered by the `cmd` rules (`src/plugins/cmd/rules.rs`) and the archive (`expand <id>`).
-
-### T640. File and directory work through `fs-kit`
-
-The creator's call (2026-10-12): every project takes its file and directory helpers from one shared crate, `fs-kit` in `packages/crates` (crates-packages PR #57), instead of its own copies. Line caps lifted by the creator for this task.
-
-Plan:
-1. Depend on `fs-kit` (a path to the crates checkout until it is on crates.io, then the version); drop the direct `dunce` dependency.
-2. Duplicates go: `rtok-store/src/paths.rs` re-exports `fs_kit::path`; `src/fs.rs` `normalize` and `same_dir`; the junk walk (`disk_usage_until`, `Usage`) from `fs_kit::tree`; `rtok-agent-sdk` `write_atomic`/`link_target`/`clear_readonly` and `copy_dir` from `fs_kit::write` and `fs_kit::tree`; completions `read`/`write_if_changed`.
-3. Every `dunce::` and `std::fs::canonicalize` call goes through `fs_kit::path`.
-4. Left for later slices: the `_backup` folder with pruning (`rtok-agent-sdk` `backup`) and `info.rs` `dir_usage` (apparent size, a different number from disk usage) stay until `fs-kit` grows those variants; plain `std::fs::write`/`create_dir_all` calls move subsystem by subsystem.
-5. `fs-kit` 0.1.0 is on crates.io, so the dependency is the registry version (`fs-kit = "0.1"`), not a path.
-
-Check: `just check` green on `fs-kit` 0.1 from crates.io; `fs-kit` unit tests cover each moved helper (atomic write through a symlink, permissions kept, `if_changed`, tree usage and copy, path folding), and the existing rtok tests for `paths`, `junk`, completions install and the agent SDK pass unchanged.

@@ -1,4 +1,3 @@
-- T592. Keep late same-second sessions from moving behind the OTel cursor
 - T623.2. Match `/ws` replies to their request by `req` in the web client
 - T124. Realized `tools_rewrite` saving as a dated `research.md` row
 
@@ -30,9 +29,7 @@
 - T396. Verify the usage readers against real files
 - T398. Probe editors on a `worktree.useRelativePaths` worktree
 - T413. More agent hosts: popular agents rtok does not install into yet
-- T413.4. `rtok agents install kiro` — Kiro IDE and CLI
 - T413.5. `rtok agents install amp` — Amp
-- T413.6. `rtok agents install goose` — Goose
 - T413.7. `rtok agents install continue` — Continue
 - T413.8. `rtok agents install augment` — Augment Code and Auggie CLI
 - T413.11. `rtok agents install crush` — Crush
@@ -46,7 +43,6 @@
 - T428. SessionStart hook back under the 10 ms budget
 - T436.3. Shared operation-icon crate for rtok and ketch
 - T436.4. Spinner on `agents install/update` through T276's `ProgressRunner`
-- T640. File and directory work through `fs-kit`
 - T522. `read` and `expand` accept the line ranges agents sent this week
 - T523. `worktree add` takes `T504 read-hook-same-path` as an id plus a slug
 - T524. Worktree `--idle` accepts `30m` and `0s`

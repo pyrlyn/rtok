@@ -68,7 +68,9 @@ pub fn write_cfg(home: &Path) -> PathBuf {
         ".junie/mcp",
         ".codebuddy",
         ".workbuddy",
+        ".config/goose",
         ".factory",
+        ".kiro/settings",
     ] {
         fs::create_dir_all(home.join(sub)).unwrap();
     }
@@ -108,7 +110,9 @@ pub fn write_cfg(home: &Path) -> PathBuf {
               [setup.junie]\nmcp_path = \"{h}/.junie/mcp/mcp.json\"\n\
               [setup.qwen]\ndir = \"{h}/.qwen\"\n\
               [setup.codebuddy]\ndir = \"{h}/.codebuddy\"\nworkbuddy_dir = \"{h}/.workbuddy\"\n\
-              [setup.droid]\nmcp_path = \"{h}/.factory/mcp.json\"\n"
+              [setup.goose]\nconfig_path = \"{h}/.config/goose/config.yaml\"\n\
+              [setup.droid]\nmcp_path = \"{h}/.factory/mcp.json\"\n\
+              [setup.kiro]\nmcp_path = \"{h}/.kiro/settings/mcp.json\"\n"
         ),
     )
     .unwrap();
