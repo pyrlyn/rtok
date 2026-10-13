@@ -105,8 +105,16 @@ const HOSTS: &[Host] = &[
         ],
     },
     Host {
+        id: "junie",
+        files: &[".junie/mcp/mcp.json"],
+    },
+    Host {
         id: "qwen",
         files: &[".qwen/settings.json"],
+    },
+    Host {
+        id: "goose",
+        files: &[".config/goose/config.yaml"],
     },
     Host {
         id: "droid",
@@ -115,10 +123,6 @@ const HOSTS: &[Host] = &[
     Host {
         id: "kiro",
         files: &[".kiro/settings/mcp.json"],
-    },
-    Host {
-        id: "goose",
-        files: &[".config/goose/config.yaml"],
     },
     Host {
         id: "continue",
@@ -231,6 +235,7 @@ fn fixture(rel: &str) -> &'static str {
         | ".omp/agent/mcp.json"
         | ".factory/mcp.json"
         | ".kiro/settings/mcp.json"
+        | ".junie/mcp/mcp.json"
         | "Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json" => {
             r#"{"mcpServers":{"foreign":{"command":"x"}}}"#
         }
@@ -365,9 +370,10 @@ real_config_round_trip! {
     devin_keeps_the_real_config_and_mcp_json => "devin",
     roo_keeps_the_real_mcp_settings_json => "roo",
     qwen_keeps_the_real_settings_json => "qwen",
+    goose_keeps_the_real_config_yaml => "goose",
     droid_keeps_the_real_mcp_json => "droid",
     kiro_keeps_the_real_mcp_json => "kiro",
-    goose_keeps_the_real_config_yaml => "goose",
+    junie_keeps_the_real_mcp_json => "junie",
     continue_keeps_the_real_config_yaml => "continue",
 }
 

@@ -83,6 +83,7 @@ Skill `worktrees` розповідає агентові все це: `worktree_a
 | `gemini` | так | хуки | не знайдено | `worktree_add` |
 | `cline` | так | хуки | немає (checkpoints, не worktree) | `worktree_add` |
 | `roo` | ні | MCP | ще не перевірено | `worktree_add` |
+| `junie` | ні | MCP | ще не перевірено | `worktree_add` |
 | `droid` | ні | MCP | ще не перевірено | `worktree_add` |
 | `kiro` | ні | MCP | ще не перевірено | `worktree_add` |
 | `qwen` | так | хуки | ще не перевірено | `worktree_add` |

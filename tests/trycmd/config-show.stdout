@@ -290,6 +290,7 @@ setup.gemini.dir = ~/.gemini
 setup.goose.config_path = ~/.config/goose/config.yaml
 setup.grok.config_path = ~/.grok/config.toml
 setup.hook_timeout_s = 5
+setup.junie.mcp_path = 
 setup.kilo.config_path = ~/.config/kilo/kilo.json
 setup.kimi.config_path = ~/.kimi-code/config.toml
 setup.kiro.mcp_path = ~/.kiro/settings/mcp.json
