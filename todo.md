@@ -39,8 +39,7 @@
 - T525. SubagentStart and PreCompact under the 10 ms hook budget
 - T526. `worktree_list` and `search` when `rtok mcp` was started in the home directory
 - T527. A worktree claim does not stay held by an agent idle for days
-- T647.1. One project-root method and a path-containment guard
-- T647.2. Every project-root caller goes through the T647.1 method
-- T647.3. Worktrees nested in the project do not leak into walks, gc or clean
-- T647.4. Default worktree root `<project>/.rtok/worktrees`, `.rtok/` ignored
-- T647.5. `rtok worktree migrate` moves worktrees into the configured root
+- T660.2. Every project-root caller goes through the T660.1 method
+- T660.3. Worktrees nested in the project do not leak into walks, gc or clean
+- T660.4. Default worktree root `<project>/.rtok/worktrees`, `.rtok/` ignored
+- T660.5. `rtok worktree migrate` moves worktrees into the configured root

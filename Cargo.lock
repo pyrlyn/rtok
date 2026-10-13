@@ -4411,6 +4411,7 @@ dependencies = [
  "change-preview",
  "dotenvy",
  "figment",
+ "fs-kit",
  "globset",
  "rstest",
  "rtok-agent-sdk",
