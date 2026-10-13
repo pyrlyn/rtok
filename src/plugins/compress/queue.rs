@@ -146,7 +146,10 @@ mod tests {
                         })
                     })
                     .collect();
-                handles.into_iter().filter_map(|h| h.join().unwrap().then_some(())).count()
+                handles
+                    .into_iter()
+                    .filter_map(|h| h.join().unwrap().then_some(()))
+                    .count()
             });
             assert!(admitted <= 1, "round {round}: cap 1 admitted {admitted}");
             assert_eq!(in_flight(&q), 0, "every slot is released");
