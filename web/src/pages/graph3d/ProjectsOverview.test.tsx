@@ -143,7 +143,7 @@ describe("re-index and remove from the node menu (T329.54)", () => {
         const confirm = within(region).getByRole("button", { name: /Remove ketch/ });
         expect(confirm.hasAttribute("disabled")).toBe(true);
         act(() =>
-            w.frame({
+            w.answer({
                 type: "projectplan",
                 project: "2",
                 plan: "would remove /x/ketch\n  files untouched; nothing removed (dry run)\n",
@@ -165,7 +165,7 @@ describe("re-index and remove from the node menu (T329.54)", () => {
         await menuOf("rtok");
         fireEvent.click(await screen.findByRole("menuitem", { name: "Remove…" }));
         const region = await screen.findByRole("region", { name: "remove rtok" });
-        act(() => w.frame({ type: "projectplan", project: "1", plan: "would remove /x/rtok\n" }));
+        act(() => w.answer({ type: "projectplan", project: "1", plan: "would remove /x/rtok\n" }));
         fireEvent.click(within(region).getByRole("button", { name: "Cancel" }));
         expect(screen.queryByRole("region", { name: "remove rtok" })).toBeNull();
         expect(asked(w)).toEqual([{ action: "remove", project: "1", confirmed: false }]);
