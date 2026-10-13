@@ -264,6 +264,7 @@ fn fixture(rel: &str) -> &'static str {
         ".config/amp/settings.json" => r#"{"amp.mcpServers":{"foreign":{"command":"x"}}}"#,
         ".config/crush/crush.json" => {
             r#"{"$schema":"https://charm.land/crush.json","options":{"debug":true},"mcp":{"foreign":{"type":"http","url":"https://x"}}}"#
+        }
         ".augment/settings.json" => {
             r#"{"mcpServers":{"foreign":{"command":"x"}},"hooks":{"Stop":[{"hooks":[{"type":"command","command":"/x/stop.sh"}]}]}}"#
         }
