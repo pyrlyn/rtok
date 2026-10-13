@@ -69,7 +69,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T660.3 | todo | P1 | 3 | 0% | |
 | T660.4 | todo | P1 | 3 | 0% | |
 | T660.5 | todo | P2 | 3 | 0% | |
-| T663 | in progress | P0 | 2 | 10% | Claude / opus-5.5 |
 
 
 
@@ -101,14 +100,6 @@ Check: tests for the default path from main and from a linked worktree, a relati
 Needs T660.4. Moves this repository's worktrees that live outside the configured root to `<root>/<repo>-<task>` with `git worktree move`, keeping lock and claim records in step. Dry run without `--yes`. Skips, with a reason: main, the worktree holding the cwd, a worktree locked or claimed by another agent or by a live session, a worktree with submodules (`git worktree move` refuses them), a target that already exists. CLI only; new-command gates (trycmd fence, `surface_parity`, `config_coverage`). Docs with T660.4's pages.
 
 Check: tests on a temp repo for move, each skip reason and dry run; lock and claim follow the move; `just check`.
-
-### T663. `just dup` back under the 2% jscpd threshold
-
-`just dup` fails on `main` at `6557b6d1`: 424 clones, 3812 duplicated lines (2.09%) over the 2.0% threshold, so `ci / lint` goes red once T662 fixes `fmt-check` and `js`. The rise came with the T413 `rtok agents install` hosts (Amp, Continue, Crush, OpenHands, Augment, Reasonix; 387 clones at `9d325f96`, 1.88%): each repeats the same `impl Agent` head (`id`/`variants`/`readme`) and the same MCP-only test bodies. Remove the duplication by extracting shared helpers; the threshold and the ignore list stay as they are.
-
-Plan: (1) a `macro_rules!` in `src/agents/mod.rs` for the identical `id`/`variants`/`readme` methods, used by every host whose methods have exactly that shape; (2) shared test assertions in `src/agents/mod.rs` for the dry-run and apply-idempotent bodies the MCP-only hosts repeat; (3) re-run `just dup` until it is under 2.0%.
-
-Check: `just dup` passes; `just check` passes (the moved test bodies still run in every host).
 
 **Source audit (T530).**
 

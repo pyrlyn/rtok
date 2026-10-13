@@ -9027,6 +9027,17 @@ Check: `agents_doc`, `host_docs`, `agents_install`, `agents_list_content`, `agen
 Status: done 2026-10-12
 Model: Claude Code / claude-sonnet-5-5
 
+### T663. `just dup` back under the 2% jscpd threshold
+
+`just dup` failed on `main` at `6557b6d1`: 424 clones, 3812 duplicated lines (2.09%) over the 2.0% threshold, so `ci / lint` would go red once T662 fixed `fmt-check` and `js`. The rise came with the T413 `rtok agents install` hosts (387 clones, 1.88% at `9d325f96`; 404 after Continue, 414 after OpenHands, 424 after Reasonix): each repeated the same `impl Agent` head and the same MCP-only test bodies. Threshold and ignore list unchanged.
+
+Done: `agent_identity!` in `src/agents/mod.rs` writes the `id`/`variants`/`readme` head for all 36 hosts (CodeWhale's reordering to dodge the detector is gone too); `mcp_only_file!` writes `files`/`installed`/`apply` for the eight single-file MCP-only hosts (Augment, Crush, Droid, Junie, Kiro, OpenHands, Roo, Warp); `assert_mcp_only_apply_idempotent` replaces the `apply_is_idempotent_via_the_agent_trait` body in ten hosts. `just dup`: 388 clones, 3298 lines (1.81%).
+
+Check: `just dup` passes; `cargo clippy --all-targets -D warnings` clean; `cargo nextest run --workspace agents` 544 passed (the README parity test proves each host's `include_str!` still reads its own `README.md`); full `cargo nextest run --workspace --no-fail-fast`: everything passes (`agents_worktrees every_host_gets_the_same_worktree_rule_lock_and_row`, `cli_trycmd cli` and `commands_e2e doctor_reports_the_chain` hit the 180 s timeout at load average 44, after passing in an earlier `just check` run on the same code) except two `report_ai` tests (`empty_store_ai_says_so`, `ai_carries_the_section_set_with_md_numbers`), which fail on `main` too: the T413 hosts pushed the `doctor` section past the default AI-report budget, and a `main` binary drops it the same way, with byte-identical doctor output.
+
+Status: done 2026-10-13
+Model: Claude Code / claude-opus-5-5
+
 ### T426. Install refuses a host whose app is not installed
 
 `present()` counts a host as installed when only its config folder (or that folder's parent) exists, so `rtok agents install gemini` writes rtok into `~/.gemini` with no Gemini CLI on the machine. Done: a host variant is present only when its app bundle or binary is found (`app_path`); leftover config folders no longer count, in `agents list`, `install`, `update`, `doctor` and `junk` alike. `agents install|update <host>` whose wanted variants are all absent writes nothing and exits non-zero with `error: <host> is not installed`; with several hosts, any absent one refuses the whole run before any backup. A host with one present variant still installs into it, and the absent sibling prints `— not found` as today. `--remove` is unchanged.
