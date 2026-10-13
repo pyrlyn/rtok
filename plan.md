@@ -46,7 +46,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T396 | todo | P3 | 2 | 80% | |
 | T398 | todo | P3 | 1 | 30% | |
 | T413 | todo | P2 | 3 | 0% | |
-| T413.5 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
 | T413.7 | in progress | P3 | 3 | 0% | Claude Code / sonnet-5.5 |
 | T413.11 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T413.12 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
@@ -57,7 +56,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T414.7 | in progress | P3 | 1 | 0% | MiMo / mimo |
 | T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
 | T428 | in progress | P2 | 3 | 85% | Claude Code / sonnet-5.5 |
-| T436.3 | todo | P2 | 2 | 50% | |
 | T436.4 | todo | P3 | 2 | 90% | |
 | T522 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T523 | in progress | P2 | 2 | 0% | MiMo / mimo |
@@ -65,7 +63,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T525 | in progress | P2 | 3 | 0% | MiMo / mimo |
 | T526 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T527 | in progress | P2 | 3 | 0% | MiMo / mimo |
-| T623.2 | todo | P2 | 3 | 0% | |
 | T647.1 | in progress | P1 | 3 | 0% | Claude / opus-5.5 |
 | T647.2 | todo | P1 | 3 | 0% | |
 | T647.3 | todo | P1 | 3 | 0% | |
@@ -133,17 +130,6 @@ Existing tasks, including uncommitted T522–T527 in the shared checkout, were c
 overlap and were not copied or reassigned. This is a bounded review of the core data
 paths, not a claim that every bug or host/platform combination has been exhausted.
 
-### T623.2. Match `/ws` replies to their request by `req` in the web client
-
-Second half of T623; needs T623.1. The client sends a fresh `req` with every doctor/junk/graph/diff/export/import request and resolves a pending promise only for the frame carrying its `req`.
-
-Execution plan:
-
-1. `web/src/api/query.tsx`: replace the kind/key match in `settleDoctor` with the `req` match, ignore replies for expired or unknown requests, fail only the request a `message` frame names (a `message` without `req` still fails every request in flight), keep a counter that survives reconnects so an old socket's late frame cannot match.
-2. `web/src/api/ws.ts` `parseFrame` keeps `req`; `sample.ts`, `sampleDrill/Diff/Export.ts` and `web/e2e/rtok.spec.ts` echo it.
-3. Tests: fake-clock timeout/retry with two different selections (plan A times out, plan B sent, late A frame must not resolve B), same-project graph/diff and export/import variants, concurrent requests, connection closure; focused Doctor UI tests. Run `just spa-test`, `just js`, `just spa-stories`, `just spa-e2e`.
-
-Check: every resolved promise receives only its own request's answer, including after a timeout, and `just check` passes.
 
 ### T131. Measure the spawn brief: cost row and on/off re-read share
 Rule: a saving that is not a `Measurement` row does not exist, and the brief is a cost first. Needs T128 and T130.2.
@@ -692,13 +678,6 @@ Shared shape for every sub-task, per `architecture.md` "New host" and D21:
 Check: every sub-task below is closed in `done.md` with its per-host check.
 
 
-### T413.5. `rtok agents install amp` — Amp
-
-Amp (Sourcegraph). MCP plus its plugin system if documented (`~/.config/amp/plugins` exists on this machine, `plan.md` T352 note). A plugin follows the `agents::plugin::HostPlugin` shape.
-
-Check: the T413 per-host check (step 5) for this host.
-
-Plan: Sourcegraph docs for the MCP entry and the plugin directory; `HostPlugin` only if the load path is documented.
 
 ### T413.7. `rtok agents install continue` — Continue
 
@@ -794,11 +773,6 @@ Execution plan:
 
 Status: steps 1-3 done. On the rtok repo SessionStart dispatch is 2-4 ms on an idle host; the `slow` warnings come from write-lock waits and host load, so the fix cuts commits and reads. Left: re-run the `tests/latency.rs` release gate on a quiet host (it fails for every event at load average 35-60 because the spawn floor is already about 9-10 ms) and the five manual runs.
 
-### T436.3. Shared operation-icon crate for rtok and ketch
-
-Split from T436 (2026-10-08), item 5: `OPERATION_ICONS`, `icon()`, `ICON_WIDTH` and the gutter padding are the same code in `apps/ketch/src/ui.rs` and rtok's `src/ui/style.rs` (only ketch's `Tone` vs rtok's `Kind` differs). Extract them into a crate with a neutral name in `packages/crates` (released by that repository's release-plz pipeline, as `change-preview` is in T416), then use it from both. No output change in either tool.
-
-Check: the crate's unit tests (icon per verb, fallback, width); rtok's `src/ui/style.rs` and `tests/ui_style.rs` green on the crate; ketch's own tests green; `just check`.
 
 Execution plan (2026-10-12): 1. a neutral-name crate in `packages/crates` (own worktree and PR there, its AGENTS.md rules) holding `OPERATION_ICONS`, `icon()`, `ICON_WIDTH` and the gutter padding, generic over the tone/kind type, with unit tests; 2. after release-plz publishes it, rtok's `src/ui/style.rs` and ketch's `src/ui.rs` depend on the crates.io version with no output change; until then this card stays in progress with the crate PR linked.
 

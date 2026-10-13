@@ -314,6 +314,7 @@ Every effective key with its origin — the `config show --sources` page.
 | report.out |  | default |
 | report.since | 30d | default |
 | setup.aider.config_path | ~/.aider.conf.yml | default |
+| setup.amp.settings_path | ~/.config/amp/settings.json | default |
 | setup.antigravity.cli_plugins_path | ~/.gemini/antigravity-cli/plugins | default |
 | setup.antigravity.plugins_path | ~/.gemini/config/plugins | default |
 | setup.augment.settings_path | ~/.augment/settings.json | default |
@@ -449,7 +450,7 @@ Every effective key with its origin — the `config show --sources` page.
 | worktree.enabled | true | default |
 | worktree.root | ~/.rtok/worktrees | default |
 
-403 keys.
+404 keys.
 
 ## Doctor
 
@@ -688,6 +689,11 @@ agents
     mcp     not installed
     proxy   not supported: Junie has no documented model base-URL file
     plugin  not supported: Junie has no documented local plugin directory to link
+  amp (cli)
+    hooks   not supported: Amp has no shell hook events; its plugin events (tool.call, tool.result) are TypeScript handlers
+    mcp     not installed
+    proxy   not supported: amp.url is Amp's own server URL, not a model-provider base URL
+    plugin  not supported: Amp loads .ts and .js plugins from its plugins directory, but rtok ships no plugin for its API yet
   augment (cli)
     hooks   not supported: Augment hooks must be script files and PreToolUse can only deny (no updatedInput), so rtok cannot rewrite a call through them
     mcp     not installed

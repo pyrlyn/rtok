@@ -280,6 +280,20 @@ Result: `src/web/protocol.rs` gains the `Request` and `Reply` envelopes (an opti
 
 Status: done 2026-10-12 · Model: Claude Code / sonnet-5.5
 
+### T623.2. Match `/ws` replies to their request by `req` in the web client
+
+Second half of T623; needs T623.1. The client sends a fresh `req` with every doctor/junk/graph/diff/export/import request and resolves a pending promise only for the frame carrying its `req`.
+
+Execution plan:
+
+1. `web/src/api/query.tsx`: replace the kind/key match in `settleDoctor` with the `req` match, ignore replies for expired or unknown requests, fail only the request a `message` frame names (a `message` without `req` still fails every request in flight), keep a counter that survives reconnects so an old socket's late frame cannot match.
+2. `web/src/api/ws.ts` `parseFrame` keeps `req`; `sample.ts`, `sampleDrill/Diff/Export.ts` and `web/e2e/rtok.spec.ts` echo it.
+3. Tests: fake-clock timeout/retry with two different selections (plan A times out, plan B sent, late A frame must not resolve B), same-project graph/diff and export/import variants, concurrent requests, connection closure; focused Doctor UI tests. Run `just spa-test`, `just js`, `just spa-stories`, `just spa-e2e`.
+
+Check: every resolved promise receives only its own request's answer, including after a timeout, and `just check` passes.
+
+Result: `askDoctor` sends a fresh `req` (a counter that lives as long as the page, so it survives reconnects) and `settleDoctor` matches a reply by `req` and kind only; a reply without an id, with an unknown or expired id, or of another kind settles nothing. A `message` carrying `req` fails just that request (`rejectDoctor`); one without it still fails every request in flight. `parseFrame` keeps `req`, and the sample servers (`sample.ts`, `sampleDrill.ts`), the `wire` test helper (`answer`) and the e2e interceptor echo it. Tests in `query.test.ts` ("reply correlation") cover the timed-out-then-retried case, a missing id, a wrong kind, per-request refusals, reconnects and export/import in flight together; they fail on the previous matcher.
+
 ### T591. Audit OpenTelemetry export cursors and cumulative metrics
 
 Source audit only; no product code changed. Reviewed OTel export selection and watermark advancement, stream failure isolation, span/log mapping, metric sums and encoding against the module design and existing tests. This was a sampled audit; retention and all transport/platform behavior were not exhaustively verified.
@@ -2078,6 +2092,22 @@ Check: `npx playwright test` green locally and in CI; breaking the toggle round-
 Execution: `@playwright/test` (the runner of the `playwright` package already pinned for the story tests) in `web/e2e/`. `e2e/rtok.ts` owns one `rtok web` process per test: a `mkdtemp` store used as `HOME` and `RTOK_HOME`, a minimal environment (`PATH=/usr/bin:/bin`, so no real `claude`/`codex` is detected by the hosts page and `RTOK_WEB_DIST` cannot replace the embedded SPA), a free port, a seed through the product's own entry points (`rtok hook SessionStart`, then `rtok mcp` `mem_save` with a request above `core.call_io_inline_bytes`, which the ledger archives, so the calls page has a call with an archive id), a `/health` wait, `stop()`/`start()` that only touch the child it spawned, and removal of the store. `e2e/fixtures.ts` makes it a test-scoped fixture and the `baseURL`; no `webServer`, because one shared server could not be stopped for the offline test or mutated by the toggle test. `e2e/rtok.spec.ts`: one test per entry of `PAGES` (heading, title, nav `aria-current`, connection `open`, no loading skeleton, error or empty state, no console error or page error, which also catches a CSP violation), the `toon` toggle off and on (the switch follows the next snapshot and `config.toml` gets `enabled = false`, then `true`), expand of the `mem_save` call (the payload shows the first archived line), and stop/start of the server (Offline banner, then `open` again). `just spa-e2e` builds the SPA, the debug binary and runs `just spa-e2e-run` (`npm run test:e2e`); `SPA_BROWSER_CHANNEL=chrome` uses an installed Chrome like the story tests.
 
 Result (2026-10-03, Claude Code / sonnet-5): `web/playwright.config.ts`, `web/e2e/{rtok,fixtures}.ts` and `web/e2e/rtok.spec.ts` drive the real debug binary, which embeds the SPA built by `just spa-build`, with 4 workers (13 servers at once starved the first snapshot past the default expectation). 16 tests, green twice in a row locally (7.5 s to 21 s): 13 pages, toggle round-trip, expand, offline/reconnect. Breaking the round-trip on purpose (the SPA asking for `plugins.<id>.enabledX`, rebuilt into the binary) failed the toggle test at the switch state after 15 s; reverted and rebuilt, 16 green. `@playwright/test` and `@types/node` (already in the tree, now direct) are in `toolchain.md`; `tsconfig.json` covers `e2e/` and the config; `web/test-results/` and `web/playwright-report/` are ignored. CI: a Linux-only step of the ubuntu `check` job in `.github/workflows/ci.yml` runs `just spa-browsers spa-e2e-run` after `just test`, which has just built `target/debug/rtok` with the SPA embedded; that is cheaper than the `spa` job, which has no Rust toolchain and would need its own cold cargo build, and `spa-e2e-run` skips the `touch build.rs` rebuild that `just spa-e2e` does. The merge of `origin/t310.11-spa-ci` (which carries T310.7) left two copies of the story and test helpers (`storyKit`/`testing` and `storyData`/`testHelpers`, identical): one is kept, and `app.test.tsx` now takes its empty and data states from `/calls` since no page is a placeholder any more. Not done: no Playwright-managed Chromium was installed here, so the runs used `SPA_BROWSER_CHANNEL=chrome`; only the debug binary was tested; one browser, one viewport (Desktop Chrome), no screenshot comparison.
+
+### T642. The e2e harness waits for every process `rtok web` started before removing its home
+
+`just spa-e2e` failed once (2026-10-12) in "offline takes the whole screen when the server stops; Reconnect brings it back": `Rtok.dispose()` threw `ENOTEMPTY, Directory not empty` on the temp home. `stop()` waits for `rtok web` alone, but a cold snapshot spawns children that outlive it: the doctor probe `rtok mcp` (`doctor::list_tools` → `mcp_roundtrip`, same `RTOK_HOME`) and `git -C <home> …` from the worktree scan. A `rtok mcp` that starts after its parent died creates `rtok.db-wal` and `rtok.db-shm` in the home root while `rmSync` walks it. The offline test is the one that stops the server right after `live`, mid-snapshot. Sampling `rtok web`'s children in the suite showed both `rtok mcp` and `git` at stop time, and `lsof +D <home>` found orphaned `git`/`xcodebuild` there after `stop()` returned.
+
+Done: `stop()` returns only after every process the test's `rtok web` started has exited; `dispose()` removes the home with no retry.
+
+Plan:
+
+1. `web/e2e/group.ts`: spawn a process as the leader of its own process group (`detached: true`); stop it by sending SIGTERM to the group, SIGKILL after 5 s, then poll `kill(-pgid, 0)` until `ESRCH`. Only that group is signalled. A worker that exits early kills the groups it still owns.
+2. `web/e2e/rtok.ts`: `start()` and `stop()` go through it.
+3. `web/e2e/group.spec.ts`: a `sh` leader whose child keeps recreating a file in a temp dir; after the stop the child is gone and the dir is removed and stays removed. Fails against the old stop (only the leader waited for).
+
+Check: `group.spec.ts` fails before the fix and passes after; `just spa-e2e` green; the offline test with `--repeat-each` green.
+
+Result (2026-10-12, Claude Code / claude-opus-5-5): `web/e2e/group.ts` spawns `rtok web` as a process-group leader (`detached: true`). `stopGroup` sends SIGTERM to the group, SIGKILL after 5 s, and polls `kill(-pgid, 0)` until `ESRCH`. A worker's `exit` handler SIGKILLs any group it still owns. `Rtok.start()` and `stop()` use it, and `dispose()` still does one `rmSync` with no retry. `group.spec.ts` has two tests: a child that keeps writing, and one that ignores SIGTERM with a 300 ms grace. Both failed against the old stop (the writer was still alive) and pass 20/20 with the fix. Suite: 40 passed. The offline test passed 40/40 with `--repeat-each 40`. Three suite runs passed 119/120; the one failure was the seed's `rtok mcp` in `metrics-fold`, killed by the 30 s `spawnSync` timeout. That failure also happened before the fix and is a separate bug. Not done: the runs used a debug `rtok` built from a sibling worktree at `77faf2102`, since the change touches no Rust; `just check` is left to CI.
 
 ### T310.11. CI job for the SPA
 
@@ -8880,6 +8910,12 @@ Two variants (IDE and CLI) if both are documented. Hooks and MCP; `research.md` 
 
 Done: `src/agents/kiro/` with two variants, `Kiro CLI` (`kiro-cli` on PATH) and `Kiro IDE` (`/Applications/Kiro.app`, `~/Applications/Kiro.app`; other OS paths unverified, not probed). Both edit one file, `~/.kiro/settings/mcp.json`, through `register_stdio_mcp` (no second copy of the Cline/Roo/Windsurf JSON); `shared()` is true, so a plain install writes it once and lists the IDE as the CLI's sibling. `[setup.kiro] mcp_path` moves the file. Registered in `HOSTS`/`host()`/`mcp.rs`, `NO_ROWS` (no caches documented), docs in en/ru/uk. Hooks, proxy and plugin stay `Support::No` with reasons: the hooks page states no exit-code or output-to-context rules for command hooks. Research with sources and the 2026-10-12 check date in `research.md` section 32.4; two doc pages disagree on the global path (`settings/mcp.json` vs `~/.kiro/mcp.json`) and the CLI-reads-the-same-file point is unverified, both recorded there. Tests: `kiro` unit tests (dry run, idempotent round trip, foreign servers kept, shared-file variants, apply twice), `agents_install` matrix row, `kiro_keeps_the_real_mcp_json`, `EXPECTED_VARIANTS` (CLI and IDE), `host_docs`, `agents_doc`. Per-host check: Kiro is not installed here (no `kiro-cli`, no `~/.kiro`), so no manual `--dry-run`.
 
+### T413.5. `rtok agents install amp` — Amp
+
+Amp (Sourcegraph). MCP plus its plugin system if documented (`~/.config/amp/plugins` exists on this machine, `plan.md` T352 note). A plugin follows the `agents::plugin::HostPlugin` shape.
+
+Done: `src/agents/amp/` (one CLI variant, `amp` on PATH): `amp.mcpServers.rtok = {command, args}` in `~/.config/amp/settings.json`, edited as JSONC through `jsonc::upsert_entry` / `remove_entry` so comments survive, `[setup.amp] settings_path` moves the file; a lone `settings.jsonc` is edited in place through the new `jsonc::lone_sibling`, which `mimo`'s `.jsonc` rule now calls too (one body, mimo's output unchanged). Registered in `HOSTS`/`host()`/`mcp.rs`, `NO_ROWS`, docs in en/ru/uk. Hooks, proxy and plugin stay `Support::No` with reasons: Amp has no shell hook events; `amp.url` is Amp's own server; the documented plugin API (`.ts`/`.js` in `~/.config/amp/plugins`, `tool.call` / `tool.result`) needs an rtok plugin unit under `plugins/` (D21) and Amp's tool names, neither of which exist yet. Research with sources and the 2026-10-12 check date in `research.md` section 32.5. Tests: `amp` unit tests (dry run, dotted-key entry with foreign settings and comments kept, lone `.jsonc`, idempotent apply twice), `agents_install` matrix row, `amp_keeps_the_real_mcp_json` (foreign server kept), `EXPECTED_VARIANTS`, `host_docs`, `agents_doc`, mimo's existing `.jsonc` test for the shared helper. Per-host check: `amp` is not on PATH here (`~/.config/amp` holds only `AGENTS.md` and `plugins`), so no manual `--dry-run`.
+
 Check: the T413 per-host check (step 5) for this host.
 
 Status: done 2026-10-12
@@ -11987,6 +12023,14 @@ Result: `crates/rtok-sys/src/proc/` gains `ProgressRunner::batch(label, total, u
 
 Status: done 2026-10-11
 Model: Claude Code / sonnet-5.5
+
+### T436.3. Shared operation-icon crate for rtok and ketch
+
+Split from T436 (2026-10-08), item 5: `OPERATION_ICONS`, `icon()`, `ICON_WIDTH` and the gutter padding are the same code in `apps/ketch/src/ui.rs` and rtok's `src/ui/style.rs` (only ketch's `Tone` vs rtok's `Kind` differs). Extract them into a crate with a neutral name in `packages/crates` (released by that repository's release-plz pipeline, as `change-preview` is in T416), then use it from both. No output change in either tool.
+
+Check: the crate's unit tests (icon per verb, fallback, width); rtok's `src/ui/style.rs` and `tests/ui_style.rs` green on the crate; ketch's own tests green; `just check`.
+
+Result: the crate is `operation-icons` in `packages/crates` (listepo/crates-packages #56): `OPERATION_ICONS`, `icon`, `icon_in` (a caller's own rows after the shared ones), `ICON_WIDTH`, `padding` and `gutter`, with unit tests for every verb, the order of `uninstall` and `install`, the fallback and the width. `src/ui/style.rs` keeps only what is rtok's: `Kind`, the rows from `index` to `stop` (`OWN_ICONS`, looked up after the shared table, so the lookup order is unchanged) and the fallback to the `Kind` icon. ketch's `src/ui.rs` drops its own table, `ICON_WIDTH` and padding for the same crate. `unicode-width` moved to dev-dependencies in both (only the width tests use it). No output change: `tests/ui_style.rs` and the trycmd snapshots are untouched and green.
 
 ### T276.4. `ProgressRunner` in `bench`, `plugins/cmd/run` and `agents/restart`
 

@@ -125,6 +125,10 @@ const HOSTS: &[Host] = &[
         files: &[".kiro/settings/mcp.json"],
     },
     Host {
+        id: "amp",
+        files: &[".config/amp/settings.json"],
+    },
+    Host {
         id: "augment",
         files: &[".augment/settings.json"],
     },
@@ -239,6 +243,7 @@ fn fixture(rel: &str) -> &'static str {
         | "Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json" => {
             r#"{"mcpServers":{"foreign":{"command":"x"}}}"#
         }
+        ".config/amp/settings.json" => r#"{"amp.mcpServers":{"foreign":{"command":"x"}}}"#,
         ".augment/settings.json" => {
             r#"{"mcpServers":{"foreign":{"command":"x"}},"hooks":{"Stop":[{"hooks":[{"type":"command","command":"/x/stop.sh"}]}]}}"#
         }
@@ -374,6 +379,7 @@ real_config_round_trip! {
     droid_keeps_the_real_mcp_json => "droid",
     kiro_keeps_the_real_mcp_json => "kiro",
     junie_keeps_the_real_mcp_json => "junie",
+    amp_keeps_the_real_mcp_json => "amp",
     augment_keeps_the_real_settings_json => "augment",
 }
 
