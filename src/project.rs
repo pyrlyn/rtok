@@ -6,15 +6,15 @@
 //! worktree and its main checkout share one name — for notes (`memory`) and for the
 //! `sessions.project` every hook call attributes (T154).
 //!
-//! Lexical only — `.git` files, `commondir` and `config` are read, git is never spawned, so
-//! the hook budget (≤ 10 ms) holds. Runs over [`ReadFs`] so unit tests use `Vfs`.
+//! Lexical only — the checkout walk is [`ProjectRoot`]; here `config` is read, git is never
+//! spawned, so the hook budget (≤ 10 ms) holds. Runs over [`ReadFs`] so unit tests use `Vfs`.
 
-use std::io::ErrorKind;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 pub mod refs;
 
 use crate::fs::{HostFs, ReadFs, normalize};
+use rtok_config::root::ProjectRoot;
 
 /// Name of the project `cwd` lies in, if it is inside a git checkout: the `origin` repo name
 /// (`git@host:owner/repo.git`, `https://…/repo`, `file:///…/repo.git` → `repo`), else the
@@ -24,11 +24,14 @@ pub fn project_name(cwd: &Path) -> Option<String> {
 }
 
 pub(crate) fn project_name_with(fs: &impl ReadFs, cwd: &Path) -> Option<String> {
-    let common = common_git_dir(fs, cwd)?;
-    let main = common.parent()?;
-    origin_url(fs, &common)
+    let root = ProjectRoot::find_with(fs, cwd)?;
+    origin_url(fs, &root.git_dir)
         .and_then(|url| url_name(&url))
-        .or_else(|| main.file_name().map(|s| s.to_string_lossy().into_owned()))
+        .or_else(|| {
+            root.main
+                .file_name()
+                .map(|s| s.to_string_lossy().into_owned())
+        })
 }
 
 /// The key rtok's per-project state is filed under (T441.3 task counters): the `origin`
@@ -42,9 +45,8 @@ pub fn project_key(cwd: &Path) -> Option<String> {
 }
 
 pub(crate) fn project_key_with(fs: &impl ReadFs, cwd: &Path) -> Option<String> {
-    let common = common_git_dir(fs, cwd)?;
-    let main = common.parent()?;
-    let origin = origin_url(fs, &common);
+    let root = ProjectRoot::find_with(fs, cwd)?;
+    let (main, origin) = (&root.main, origin_url(fs, &root.git_dir));
     // A relative path means a different repository from each checkout, so it is resolved
     // before it is a key (T586).
     if let Some(path) = origin.as_deref().and_then(local_remote) {
@@ -53,7 +55,7 @@ pub(crate) fn project_key_with(fs: &impl ReadFs, cwd: &Path) -> Option<String> {
     if let Some(url) = origin.and_then(|u| canonical_url(&u)) {
         return Some(url);
     }
-    let main = fs.canonicalize(main).unwrap_or_else(|| main.to_path_buf());
+    let main = fs.canonicalize(main).unwrap_or_else(|| main.clone());
     Some(main.to_string_lossy().into_owned())
 }
 
@@ -89,41 +91,6 @@ fn local_key(fs: &impl ReadFs, main: &Path, path: &str) -> String {
     let abs = abs.to_string_lossy();
     let abs = abs.trim_end_matches(['/', '\\']);
     abs.strip_suffix(".git").unwrap_or(abs).to_string()
-}
-
-/// `<main>/.git` of the checkout `cwd` lies in, through a linked worktree's `commondir`.
-fn common_git_dir(fs: &impl ReadFs, cwd: &Path) -> Option<PathBuf> {
-    let mut root = cwd.to_path_buf();
-    let common = loop {
-        let dot = root.join(".git");
-        match fs.read_to_string(&dot) {
-            // A linked worktree: `.git` is a file naming its admin dir, whose `commondir`
-            // names the main checkout's `.git`. Anything else with a `.git` file (a
-            // submodule) keeps the old answer: this directory is the project.
-            Ok(text) => break common_dir(fs, &root, &text).unwrap_or(dot),
-            // Missing on the host (Vfs also answers NotFound for a directory key, so the
-            // existence check is `canonicalize`): keep climbing.
-            Err(e) if e.kind() == ErrorKind::NotFound && fs.canonicalize(&dot).is_none() => {}
-            // Exists but does not read as a file: the `.git` directory of a main checkout.
-            Err(_) => break dot,
-        }
-        if !root.pop() {
-            return None;
-        }
-    };
-    Some(common)
-}
-
-/// `<main>/.git` for a worktree whose `.git` file reads `gitdir: <admin dir>`; both that path
-/// and the admin dir's `commondir` may be relative (`worktree.useRelativePaths`).
-fn common_dir(fs: &impl ReadFs, root: &Path, dot_git: &str) -> Option<PathBuf> {
-    let gitdir = dot_git
-        .lines()
-        .find_map(|l| l.strip_prefix("gitdir:"))?
-        .trim();
-    let gitdir = normalize(root, Path::new(gitdir));
-    let common = fs.read_to_string(&gitdir.join("commondir")).ok()?;
-    Some(normalize(&gitdir, Path::new(common.trim())))
 }
 
 /// `[remote "origin"] url` in `<common>/config`.
@@ -218,6 +185,22 @@ mod tests {
         let linked = project_name_with(&vfs, Path::new("/home/me/_worktrees/rtok-t133/src"));
         assert_eq!(main.as_deref(), Some("rtok-notes"));
         assert_eq!(linked, main);
+    }
+
+    /// T647.1: the walk over the in-memory filesystem gives the same two roots as on disk.
+    #[test]
+    fn project_root_separates_the_worktree_from_the_main_checkout() {
+        let vfs = fixture("https://github.com/pyrlyn/rtok");
+        let linked = ProjectRoot::find_with(&vfs, Path::new("/home/me/_worktrees/rtok-t133/src"));
+        let linked = linked.unwrap();
+        assert_eq!(linked.checkout, Path::new("/home/me/_worktrees/rtok-t133"));
+        assert_eq!(linked.main, Path::new("/home/me/rtok"));
+        assert_eq!(linked.git_dir, Path::new("/home/me/rtok/.git"));
+        let main = ProjectRoot::find_with(&vfs, Path::new("/home/me/rtok")).unwrap();
+        assert_eq!(
+            (main.checkout, main.main),
+            ("/home/me/rtok".into(), "/home/me/rtok".into())
+        );
     }
 
     #[test]

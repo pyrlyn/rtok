@@ -35,6 +35,7 @@ mod since;
 pub use since::{parse_since, parse_since_from};
 
 pub mod layers;
+pub mod root;
 pub mod validate;
 
 use std::borrow::Cow;

@@ -12,28 +12,13 @@
 
 #[cfg(feature = "read")]
 use std::path::Component;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+#[cfg(any(feature = "read", test))]
+use std::path::PathBuf;
 
-/// Read bytes as UTF-8 text and canonicalize (follow symlinks when the backend supports them).
-pub trait ReadFs {
-    fn read_to_string(&self, path: &Path) -> std::io::Result<String>;
-    /// Canonical path when the entry exists; `None` if missing (caller keeps the lexical abs).
-    fn canonicalize(&self, path: &Path) -> Option<PathBuf>;
-}
-
-/// Host disk backend for production `read` / `resolve`.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct HostFs;
-
-impl ReadFs for HostFs {
-    fn read_to_string(&self, path: &Path) -> std::io::Result<String> {
-        std::fs::read_to_string(path)
-    }
-
-    fn canonicalize(&self, path: &Path) -> Option<PathBuf> {
-        fs_kit::path::canonicalize(path).ok()
-    }
-}
+// The trait and the host backend live in `rtok-config` beside `ProjectRoot::find`, the lowest
+// crate that walks the filesystem this way; `Vfs` implements the trait below.
+pub use rtok_config::root::{HostFs, ReadFs};
 
 /// Lexical join of `path` onto `root`; not clamped, so confinement stays at the boundary —
 /// `read::resolve_with` rejects anything outside the allow-roots via `under()`.

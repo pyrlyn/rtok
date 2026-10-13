@@ -9,6 +9,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail, ensure};
+use rtok_config::root::resolved;
 
 use super::{Owner, git};
 
@@ -36,19 +37,6 @@ fn ident(what: &str, raw: &str) -> Result<String> {
         "{what} `{raw}` must match [a-z0-9][a-z0-9._-]* and be a valid branch name"
     );
     Ok(id)
-}
-
-/// Symlinks resolved through the deepest ancestor that exists, the rest appended: a root
-/// that does not exist yet still has to be judged by where it would land.
-fn resolved(path: &Path) -> PathBuf {
-    // Not std canonicalize: its `\\?\` prefix makes `starts_with` miss the temp dir.
-    let real = |a: &Path| {
-        let canon = fs_kit::path::canonicalize(a).ok()?;
-        let rel = path.strip_prefix(a).ok()?;
-        Some(canon.join(rel))
-    };
-    let landed = path.ancestors().find_map(real);
-    landed.unwrap_or_else(|| crate::fs::canon(path))
 }
 
 /// `temp` lists the directories the OS may purge; a worktree under one of them loses
