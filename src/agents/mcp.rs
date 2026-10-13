@@ -235,6 +235,7 @@ pub(crate) fn surfaces(agent: &dyn super::Agent, cfg: &Config, kind: Kind) -> Ve
             grok_row.plugin = grok_row.plugin.or(import);
             return vec![grok_row];
         }
+        "junie" => (super::junie::mcp_path(cfg), SERVERS),
         "kilo" => (s.kilo.config_path.clone(), "mcp"),
         "kimi" => (kimi::mcp_path(cfg), SERVERS),
         "mimo" => (super::mimo::config_path(cfg), "mcp"),

@@ -2624,6 +2624,14 @@ Factory moved its docs from `docs.factory.ai` to `docs.factory.com` (308 redirec
 - Proxy: only the `GOOSE_PROVIDER__HOST` environment variable is documented (environment-variables.md above), so there is no file to write; plugin: Goose's Open Plugins bundle is not shipped by rtok.
 - Desktop app: https://github.com/Homebrew/homebrew-cask/blob/master/Casks/b/block-goose.rb (cask `block-goose`, app `Goose.app`; linked from https://github.com/aaif-goose/goose/blob/main/documentation/docs/getting-started/installation.md). The CLI binary is `goose`.
 
+### 32.9 JetBrains Junie (T413.9, checked 2026-10-12)
+
+- CLI binary `junie`. User MCP file `~/.junie/mcp/mcp.json`, project file `.junie/mcp/mcp.json`. A stdio server is `mcpServers.<name>` with `command`, `args`, optional `env`; a remote one uses `url` and `headers`. The page shows no `type` key and names no environment variable that moves the directory (only the CLI options `--mcp-default-locations` and `--mcp-location <path>`). https://junie.jetbrains.com/docs/junie-cli-mcp-configuration.html
+- Config files: user `~/.junie/config.json`, project `<project-root>/.junie/config.json` (read only for a trusted project), extra files via `--config-location` or `JUNIE_CONFIG_LOCATION`. The page names no variable that relocates `~/.junie`. https://junie.jetbrains.com/docs/junie-cli-configuration.html
+- Hooks: a `hooks` object in `~/.junie/config.json`; hooks in the default project config are ignored. The only documented event is `SessionStart` (matcher `startup` or `resume`, command hook, `timeout` seconds, default 10). There is no tool-use event, so rtok's hooks have nothing to attach to. https://junie.jetbrains.com/docs/junie-cli-hooks.html
+- IDE plugin: the MCP settings page describes the IDE settings dialog and gives no file path, so there is no IDE variant. https://junie.jetbrains.com/docs/junie-plugin-mcp-settings.html
+- Proxy and plugin directory: neither page documents a model base-URL file or a linkable plugin directory. Both stay `Support::No`.
+
 ### 32.10 Amazon Q Developer CLI (T413.10, checked 2026-10-12)
 
 Result: no `amazonq` host. The CLI is succeeded by Kiro CLI, which T413.4 covers.
@@ -2896,4 +2904,4 @@ Question: what does Codex send and read on these three events, so rtok can wire 
 | Plain stdout | ignored on `PreToolUse` and `PostToolUse`; developer context on `SessionStart`, `UserPromptSubmit` and `SubagentStart` | docs |
 | Tool names | `Bash` (shell and `exec_command`), `apply_patch`, `mcp__<server>__<tool>`, other local tools by name; `spawn_agent` also matches `Agent`; hosted tools such as web search are not hooked | docs |
 
-Consequences for rtok: Codex's `Bash` is Claude's `Bash`, so the existing Bash rewrite and deny paths apply once the output carries `allow`; there is no `Read` tool (reads go through `Bash`), and file edits are `apply_patch` with the patch text in `tool_input.command`, so T262.3's ledger cannot count Codex reads and must parse paths out of a patch. Not verified: whether `allow` also skips Codex's own approval prompt on a rewritten command (the scratch run used `approval_policy = "never"`), and the exact `apply_patch` payload (the fake server only produced function calls).
+Consequences for rtok: Codex's `Bash` is Claude's `Bash`, so the existing Bash rewrite and deny paths apply once the output carries `allow`; there is no `Read` tool (reads go through `Bash`), and file edits are `apply_patch` with the patch text in `tool_input.command`, so T262.3's ledger cannot count Codex reads and parses the `*** Add/Update/Delete File:` and `*** Move to:` headers out of the patch text in `tool_input.command` (the docs' shape). Not verified: whether `allow` also skips Codex's own approval prompt on a rewritten command (the scratch run used `approval_policy = "never"`), and the `apply_patch` payload itself: the fake model's tool list (`exec_command`, `write_stdin`, `request_user_input`, `view_image`, goal and agent tools) offered no `apply_patch`, with or without `-s workspace-write`, `features.apply_patch_freeform` or a bundled model name, so the hook never fired on one.

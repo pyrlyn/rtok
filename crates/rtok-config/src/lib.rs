@@ -89,6 +89,7 @@ pub const HOSTS: &[&str] = &[
     "goose",
     "droid",
     "kiro",
+    "junie",
     "amp",
 ];
 
@@ -790,6 +791,7 @@ section! {
         antigravity: SetupAntigravity = SetupAntigravity::default(),
         devin: SetupDevin = SetupDevin::default(),
         roo: SetupRoo = SetupRoo::default(),
+        junie: SetupJunie = SetupJunie::default(),
         qwen: SetupQwen = SetupQwen::default(),
         codebuddy: SetupCodebuddy = SetupCodebuddy::default(),
         goose: SetupGoose = SetupGoose::default(),
@@ -931,6 +933,12 @@ section! {
     /// `mcp_path` means the VS Code user dir plus
     /// `globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json`.
     SetupRoo { mcp_path: PathBuf = PathBuf::new() }
+}
+
+section! {
+    /// `[setup.junie]` — Junie CLI's user `mcp.json` (T413.9). Empty `mcp_path`
+    /// means `~/.junie/mcp/mcp.json`; the docs name no variable that moves it.
+    SetupJunie { mcp_path: PathBuf = PathBuf::new() }
 }
 
 section! {
@@ -1725,6 +1733,7 @@ impl Config {
             setup.codebuddy.workbuddy_dir,
             setup.droid.mcp_path,
             setup.kiro.mcp_path,
+            setup.junie.mcp_path,
             setup.amp.settings_path,
             setup.codewhale.dir,
             setup.mimo.config_path,
