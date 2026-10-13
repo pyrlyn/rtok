@@ -105,8 +105,16 @@ const HOSTS: &[Host] = &[
         ],
     },
     Host {
+        id: "junie",
+        files: &[".junie/mcp/mcp.json"],
+    },
+    Host {
         id: "qwen",
         files: &[".qwen/settings.json"],
+    },
+    Host {
+        id: "goose",
+        files: &[".config/goose/config.yaml"],
     },
     Host {
         id: "droid",
@@ -223,6 +231,7 @@ fn fixture(rel: &str) -> &'static str {
         | ".omp/agent/mcp.json"
         | ".factory/mcp.json"
         | ".kiro/settings/mcp.json"
+        | ".junie/mcp/mcp.json"
         | "Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json" => {
             r#"{"mcpServers":{"foreign":{"command":"x"}}}"#
         }
@@ -239,6 +248,9 @@ fn fixture(rel: &str) -> &'static str {
         }
         ".kimi-code/config.toml" => "[[hooks]]\nevent = \"Stop\"\ncommand = \"echo other\"\n",
         ".aider.conf.yml" => "model: foreign\n",
+        ".config/goose/config.yaml" => {
+            "# KEEP: foreign\nGOOSE_PROVIDER: openai\nextensions:\n  developer:\n    type: builtin\n    name: developer\n    enabled: true\nGOOSE_MODE: auto\n"
+        }
         ".config/zed/settings.json" => {
             // KEEP is last and has no trailing comma: install inserts `,\n  context_servers`
             // at the root brace (KEEP's line unchanged), and remove takes that comma with
@@ -351,8 +363,10 @@ real_config_round_trip! {
     devin_keeps_the_real_config_and_mcp_json => "devin",
     roo_keeps_the_real_mcp_settings_json => "roo",
     qwen_keeps_the_real_settings_json => "qwen",
+    goose_keeps_the_real_config_yaml => "goose",
     droid_keeps_the_real_mcp_json => "droid",
     kiro_keeps_the_real_mcp_json => "kiro",
+    junie_keeps_the_real_mcp_json => "junie",
 }
 
 /// Zed writes JSONC. The fixture carries a `//` comment; the installer edits the text

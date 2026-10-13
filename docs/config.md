@@ -437,11 +437,15 @@ cli_plugins_path = "~/.gemini/antigravity-cli/plugins" # agy plugin install stag
 config_path   = "~/.config/devin/config.json"  # mcp_config.json is read beside it; Windows: %APPDATA%\devin\
 [setup.roo]
 mcp_path      = ""                               # empty: <Code user dir>/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json
+[setup.junie]
+mcp_path      = ""                               # empty: ~/.junie/mcp/mcp.json (Junie CLI user MCP file)
 [setup.qwen]
 dir           = "~/.qwen"                    # settings.json (hooks, mcpServers); QWEN_HOME moves the directory
 [setup.codebuddy]
 dir           = "~/.codebuddy"               # CodeBuddy Code: settings.json (hooks), .mcp.json, plugins/; CODEBUDDY_CONFIG_DIR moves it
 workbuddy_dir = "~/.workbuddy"               # WorkBuddy Desktop: the same files (embedded CodeBuddy Code; unverified)
+[setup.goose]
+config_path   = "~/.config/goose/config.yaml"  # Goose CLI and Desktop: extensions.rtok; Windows: %APPDATA%/Block/goose/config/config.yaml; GOOSE_PATH_ROOT: <root>/config/config.yaml
 [setup.droid]
 mcp_path      = "~/.factory/mcp.json"        # Factory Droid: user-level MCP servers (mcpServers)
 [setup.kiro]

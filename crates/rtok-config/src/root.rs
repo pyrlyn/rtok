@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
-//! Where a project lives (T647.1): the one lexical walk from a directory to its git
+//! Where a project lives (T660.1): the one lexical walk from a directory to its git
 //! checkout, and the one guard that keeps a path rtok builds inside it.
 //!
 //! Lexical only — `.git` files, `commondir` and `config` are read, git is never spawned, so

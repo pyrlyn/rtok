@@ -97,7 +97,7 @@ fn hooks_are_the_installer_rows() {
 fn hook_commands_resolve_path_then_ketch_then_exit_open() {
     let sh = common::HookShell::new("t250.1-codex-hooks");
     let hooks = read("hooks/hooks.json")["hooks"].clone();
-    for event in ["PreToolUse", "PostToolUse", "PreCompact", "PostCompact"] {
+    for event in hook_events::for_host("codex").map(|r| r.host_event) {
         let command = hooks[event][0]["hooks"][0]["command"].as_str().unwrap();
         let run = || {
             let (ok, stdout) = sh.run(command);

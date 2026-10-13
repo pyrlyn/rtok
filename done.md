@@ -1567,6 +1567,12 @@ Check result: fail-first shown by swapping in `origin/main`'s `src/hooks/mod.rs`
 Status: done 2026-09-24
 Model: Claude Code / claude-opus-5-5
 
+### T262.3. Codex: spawn brief on `SubagentStart`
+
+`research.md` §23: Codex fires `SubagentStart` and adds the hook's stdout (or its hook-specific context) to the subagent as developer context. Add `SubagentStart` to `plugins/codex/hooks/hooks.json` and the Codex installer's list, and make `rtok hook SubagentStart` answer in the shape Codex reads.
+
+Result (2026-10-12): `hook_events.rs` gains the Codex `SubagentStart` row and widens `PreToolUse` to `Bash|apply_patch`; the installer and `plugins/codex/hooks/hooks.json` both register them as `rtok hook <event> --host codex`. The existing `SubagentStart` answer (`hookSpecificOutput.additionalContext`) is what Codex reads, confirmed live on codex-cli 0.162.1 (`research.md` §40), so no new output adapter was needed. Codex has no `Read` tool and edits through `apply_patch`, so the memory plugin's `ledger()` reads the `*** Add/Update/Delete File:` and `*** Move to:` headers of the patch text (paths relative to the session `cwd`). Tests: `ledger()` over a patch, `codex_subagent_start_brief_lists_the_files_a_patch_touched` (a patch call, then the live `SubagentStart` fixture). Not verified live: the `apply_patch` hook payload (the fake-model run never offered that tool; the docs' `tool_input.command` shape is assumed).
+
 ### T645. Codex `PreToolUse` and `PostToolUse` through `rtok hook` (idea I-88)
 
 Creator approved 2026-10-12 (idea I-88, unblocks T262.3). Wire Codex's `PreToolUse` (Bash `updatedInput.command` rewrite and deny) and `PostToolUse` (`additionalContext`) into both the Codex installer and `plugins/codex/hooks/hooks.json`, as `rtok hook <event> --host codex` so the store attributes the calls to the `codex` host instead of the `claude` default. The live Codex payloads (codex-cli 0.162.1, a scratch `CODEX_HOME` against a local fake Responses server, no login) are recorded in `research.md` §40 and kept as sanitized fixtures.
@@ -2003,6 +2009,21 @@ Check: `storybook build` succeeds; stories run as Vitest browser tests with no a
 Execution: components in `web/src/ui/` (one file each plus `*.stories.tsx`), styled from `design/html` tokens and `components.html`; Storybook config in `web/.storybook/` (theme toolbar switching the app's `data-theme`, axe violations set to fail); `web/vite.config.ts` gets two Vitest projects, `unit` (the existing tests, `npm test`) and `storybook` (browser mode, `npm run test:stories`); `just spa-stories` and `just spa-storybook` wrap them.
 
 Result (2026-10-03, Claude Code / sonnet-5): `Panel`, `Kpi`, `Pill`, `Switch`, `Search`, `Chip`, `Sparkline` and a virtualized `DataTable` (TanStack Table v9 `useTable` for the model, TanStack Virtual for the rows, ARIA table roles with `aria-rowcount`/`aria-rowindex`, keyboard-selectable rows, loading/empty/error slots through the shared states) live in `web/src/ui/`; `Icon` inlines the bundled SVGs and the sidebar uses it for the pages that have one (calls, doctor, logs, overview, plugins, sessions, skills; the design has no icons for stats, graph, hosts, config, services and worktrees, so those keep an empty slot). 48 stories cover every state (off/on/disabled, tones in dark and light, flat/short sparklines, 10,000-row table, empty/loading/failed table, offline/error/empty/loading panels) and five have play functions (switch, chip and search interaction, row windowing, keyboard row selection). `storybook build` succeeds and all 48 stories pass as Vitest browser tests with axe violations set to fail; the run found and fixed one real violation (the table's scroll region was not keyboard-focusable). The browser project needs Chromium: `npx playwright install chromium`, or `SPA_BROWSER_CHANNEL=chrome` to use an installed Chrome. CI wiring is T310.11.
+
+### T647. Deterministic graph compare and drill-down stories
+
+`ci / spa` failed intermittently on `GraphCompare.stories.tsx > Changes On The Graph Light` (run 38309415046, PR #1020: no button `− legacy_hook, function · removed`) and on `GraphDrill.stories.tsx > More On A Large Project` (job 114262428057: 15 s test timeout), and the failing job cancels the whole run.
+
+Root causes:
+- Compare: `Scene2D` draws a node only once the layout worker has placed it. The ghost `legacy_hook` enters the layout only when Compare turns on, while `run` and `resolve` are already placed, so the play function's `findBy(run)` passed and the `getBy(legacy_hook)` right after it lost the race whenever the new layout frame came late.
+- Large project: the play function took ~0.8 s locally, but the a11y check that runs after it took ~2.3 s over ~5,900 elements (600 drawn nodes); with the CPU throttled 4× through CDP the story took 18.0 s and timed out (6×: 33.5 s).
+
+Fix:
+- `web/src/pages/slowLayout.ts`: `slowNewNodes(ms)`, a story `beforeEach` that withholds the position of a node a later topology adds for `ms` after the frame that first carries it, so the slow-worker case replays on every run. `Changes On The Graph Slow Layout` uses it: with the old play function it failed 3/3 with the CI message; it now passes.
+- `Changes On The Graph` awaits every node it asserts (`findBy`), since each needs its own layout frame.
+- `More On A Large Project` turns its a11y check off: by the time axe runs, the "+100 more" button is gone, and the node and panel markup is checked in `Files`. Throttled 4×/6× it now takes 3.4 s/5.2 s.
+
+Check: `just js`, `just spa-stories` (255/255) pass. `just spa-test`: the unit project does not import the changed files; on this host, under load average 50–290, 1–5 unrelated tests hit their 5 s timeout and the set changed from run to run.
 
 ### T310.6. Pages: overview, plugins (toggle), calls (expand)
 
@@ -8840,6 +8861,13 @@ Check: targeted nextest filter from the landing PR; #760 CI green on main.
 Status: done 2026-10-05 (#760)
 Model: Cursor / grok 4.7
 
+### T413.6. `rtok agents install goose` — Goose
+
+Goose (Block, now under the Agentic AI Foundation), CLI and desktop. MCP-native, so the minimum is the MCP entry; hooks only if documented.
+
+Done: `src/agents/goose/` writes `extensions.rtok` (stdio: `name`, `type`, `cmd`, `args`, `enabled`) into `config.yaml` as a text-level block edit validated with the existing `serde-saphyr`, so comments and every other byte stay; keys Goose adds on re-save are not an edit; `[setup.goose] config_path`; variants Goose CLI and Goose (Desktop). Hooks (Open Plugins, no adapter), proxy (env var only) and plugin report a factual reason. Research in `research.md` §32.6.
+
+Check: unit tests for the block edit (add, replace, remove, CRLF, foreign YAML, resave defaults), the real-config round trip, `agents_doc`, `host_docs`, trycmd snapshots; `just check`.
 ### T413.3. `rtok agents install droid` — Factory Droid
 
 `rtok agents usage` already lists Droid as `unsupported` (`research.md` §30.4). This adds the installer: MCP, and hooks or plugins if Factory documents them.
@@ -8853,6 +8881,17 @@ Two variants (IDE and CLI) if both are documented. Hooks and MCP; `research.md` 
 Done: `src/agents/kiro/` with two variants, `Kiro CLI` (`kiro-cli` on PATH) and `Kiro IDE` (`/Applications/Kiro.app`, `~/Applications/Kiro.app`; other OS paths unverified, not probed). Both edit one file, `~/.kiro/settings/mcp.json`, through `register_stdio_mcp` (no second copy of the Cline/Roo/Windsurf JSON); `shared()` is true, so a plain install writes it once and lists the IDE as the CLI's sibling. `[setup.kiro] mcp_path` moves the file. Registered in `HOSTS`/`host()`/`mcp.rs`, `NO_ROWS` (no caches documented), docs in en/ru/uk. Hooks, proxy and plugin stay `Support::No` with reasons: the hooks page states no exit-code or output-to-context rules for command hooks. Research with sources and the 2026-10-12 check date in `research.md` section 32.4; two doc pages disagree on the global path (`settings/mcp.json` vs `~/.kiro/mcp.json`) and the CLI-reads-the-same-file point is unverified, both recorded there. Tests: `kiro` unit tests (dry run, idempotent round trip, foreign servers kept, shared-file variants, apply twice), `agents_install` matrix row, `kiro_keeps_the_real_mcp_json`, `EXPECTED_VARIANTS` (CLI and IDE), `host_docs`, `agents_doc`. Per-host check: Kiro is not installed here (no `kiro-cli`, no `~/.kiro`), so no manual `--dry-run`.
 
 Check: the T413 per-host check (step 5) for this host.
+
+Status: done 2026-10-12
+Model: Claude Code / sonnet-5.5
+
+### T413.9. `rtok agents install junie` — JetBrains Junie
+
+Junie in JetBrains IDEs and its CLI if one is documented. MCP first.
+
+Done: `src/agents/junie/` CLI-only, MCP-only host (`junie`). `mcpServers.rtok` → `rtok mcp --host junie` goes into `~/.junie/mcp/mcp.json` through the shared `register_stdio_mcp` / `unregister_stdio_mcp` (no second copy); `[setup.junie] mcp_path` overrides the file (the docs name no variable that moves `~/.junie`). The project `.junie/mcp/mcp.json` is committed with repositories, so setup never writes it. No IDE variant: the plugin's MCP page names no file. Hooks stay `Support::No`: the only documented hook event is `SessionStart`. Research in `research.md` §32.9 (checked 2026-10-12); host registered in `HOSTS`, `agent_for`, `mcp::rows`, `junk_map::NO_ROWS`, the config section and default, `docs/agents.md`, `docs/agents-and-worktrees.md`, `audit-coverage.md`, the trycmd snapshots and the host tests.
+
+Check: `agents::junie` unit tests (dry run, idempotent stdio entry, foreign servers kept, `apply` via the trait), `agents_real_config` (`junie_keeps_the_real_mcp_json`), `host_docs`, `agents_list_content`, config-init / config-show / report-md snapshots.
 
 Status: done 2026-10-12
 Model: Claude Code / sonnet-5.5
@@ -13363,9 +13402,9 @@ Result: rtok takes paths, atomic writes, tree usage and copies from `fs-kit` 0.1
 Status: done 2026-10-12
 Model: Claude Code / claude-opus-5-5
 
-### T647.1. One project-root method and a path-containment guard
+### T660.1. One project-root method and a path-containment guard
 
-Part of T647: worktrees move into `<project>/.rtok/worktrees`, and rtok gets one way to find a project root. Today six sites decide it differently: `git_root` (`crates/rtok-config/src/layers.rs`) stops at a linked worktree's `.git` file, `common_git_dir` (`src/project.rs`) resolves to the main checkout, `src/doctor.rs` has a private copy of `git_root`, and `checkpoint`/`tasks/run.rs` mix both. Nothing checks that a path rtok builds stays inside the project.
+Part of T660: worktrees move into `<project>/.rtok/worktrees`, and rtok gets one way to find a project root. Today six sites decide it differently: `git_root` (`crates/rtok-config/src/layers.rs`) stops at a linked worktree's `.git` file, `common_git_dir` (`src/project.rs`) resolves to the main checkout, `src/doctor.rs` has a private copy of `git_root`, and `checkpoint`/`tasks/run.rs` mix both. Nothing checks that a path rtok builds stays inside the project.
 
 Done: one module in the lowest crate that needs it (the config crate reads `.rtok.toml` through it), lexical, no git subprocess (hook budget), over the existing `ReadFs`:
 
@@ -13383,7 +13422,7 @@ Execution plan:
 
 Check: the tests above pass and `project_name`/`project_key` tests are unchanged.
 
-Result: `crates/rtok-config/src/root.rs` holds `ReadFs`/`HostFs` (moved from `src/fs.rs`, re-exported there), `ProjectRoot { checkout, main, git_dir }`, `resolved` (moved from `worktree/add.rs`) and `contain`. `src/project.rs` and `layers.rs::git_root` run on it; callers are unchanged until T647.2. Review fix: `contain` first normalized lexically and then followed symlinks, so `link/../secret` with `link` pointing outside passed as `root/secret`; it now follows symlinks through the deepest existing ancestor first and applies `..` lexically only to the missing tail (test `contain_follows_symlinks`, failing before the fix). "Project root" subsection in `architecture.md` §7.
+Result: `crates/rtok-config/src/root.rs` holds `ReadFs`/`HostFs` (moved from `src/fs.rs`, re-exported there), `ProjectRoot { checkout, main, git_dir }`, `resolved` (moved from `worktree/add.rs`) and `contain`. `src/project.rs` and `layers.rs::git_root` run on it; callers are unchanged until T660.2. Review fix: `contain` first normalized lexically and then followed symlinks, so `link/../secret` with `link` pointing outside passed as `root/secret`; it now follows symlinks through the deepest existing ancestor first and applies `..` lexically only to the missing tail (test `contain_follows_symlinks`, failing before the fix). "Project root" subsection in `architecture.md` §7.
 
 Status: done 2026-10-13
 Model: Claude Code / claude-opus-5-5 (code by a claude-sonnet-5-5 subagent, reviewed)

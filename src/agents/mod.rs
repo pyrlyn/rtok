@@ -26,9 +26,11 @@ pub mod cursor;
 pub mod devin;
 pub mod droid;
 pub mod gemini;
+pub mod goose;
 pub mod grok;
 pub mod hook_events;
 pub mod jsonc;
+pub mod junie;
 pub mod junk;
 pub mod junk_cache;
 pub mod junk_clear;
@@ -110,8 +112,10 @@ pub fn host(id: &str) -> Option<&'static dyn Agent> {
         "antigravity" => Some(&antigravity::Antigravity),
         "devin" => Some(&devin::Devin),
         "roo" => Some(&roo::Roo),
+        "junie" => Some(&junie::Junie),
         "qwen" => Some(&qwen::Qwen),
         "codebuddy" => Some(&codebuddy::Codebuddy),
+        "goose" => Some(&goose::Goose),
         "droid" => Some(&droid::Droid),
         "kiro" => Some(&kiro::Kiro),
         _ => None,
