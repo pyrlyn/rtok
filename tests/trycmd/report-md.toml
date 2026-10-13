@@ -452,7 +452,7 @@ Every effective key with its origin — the `config show --sources` page.
 | worktree.enabled | true | default |
 | worktree.root | ~/.rtok/worktrees | default |
 
-405 keys.
+406 keys.
 
 ## Doctor
 
@@ -711,6 +711,11 @@ agents
     mcp     not installed
     proxy   not supported: Continue sets a model's apiBase per model in config.yaml; there is no single endpoint file to point at the proxy
     plugin  not supported: Continue has no documented local plugin directory to link; blocks and rules live in config.yaml and .continue/
+  crush (cli)
+    hooks   not supported: Crush documents only a PreToolUse hook, and rtok has no checked mapping of its tool names
+    mcp     not installed
+    proxy   not supported: Crush takes provider base URLs per provider entry; rtok has no checked single endpoint to point at the proxy
+    plugin  not supported: Crush has no documented local plugin directory to link; it loads skills, not plugins
 skills (1 listed, 154 desc bytes ≈ 38 tokens per request)
   descriptions over 120 chars: 1 skills, ≈ 8 tokens/request recoverable
   dry-refactoring project desc 154c body 2772B calls - WARN desc>120 WARN never invoked

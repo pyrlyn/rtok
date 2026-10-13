@@ -4,7 +4,7 @@ stdout = """
 target/tmp/t60-2-config-init.toml
 --- a/target/tmp/t60-2-config-init.toml
 +++ b/target/tmp/t60-2-config-init.toml
-@@ -0,0 +1,580 @@
+@@ -0,0 +1,582 @@
 +# rtok configuration. Every CLI flag has a key here; flags and RTOK_* env vars override.
 +# Precedence: defaults < this file < <git root>/.rtok.toml < env < flags.
 +# Docs: docs/config.md. Check: `rtok config validate`. Where a value came from: `rtok config show --sources`.
@@ -405,6 +405,8 @@ target/tmp/t60-2-config-init.toml
 +# mcp_path      = "~/.warp/.mcp.json"          # Warp: user-level MCP servers (mcpServers)
 +[setup.continue]
 +# config_path   = "~/.continue/config.yaml"      # Continue (VS Code, JetBrains, cn): mcpServers item rtok; Windows: %USERPROFILE%/.continue/; CONTINUE_GLOBAL_DIR moves it
++[setup.crush]
++# config_path   = "~/.config/crush/crush.json" # Crush: global JSON config (mcp.rtok); CRUSH_GLOBAL_CONFIG or XDG_CONFIG_HOME move it
 +
 +[expand]                              # rtok expand <id>
 +# max_lines = 0                         # 0 = unlimited   (--lines a-b is per call)
@@ -585,7 +587,7 @@ target/tmp/t60-2-config-init.toml
 +[plugins.wasm]
 +# enabled = false
 +# dir = "~/.rtok/plugins"
-1 file changed, 580 insertions(+)
+1 file changed, 582 insertions(+)
 """
 
 # Hermetic by construction: isolated HOME/RTOK_HOME, inherit = false.
