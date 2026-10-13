@@ -91,6 +91,7 @@ pub const HOSTS: &[&str] = &[
     "kiro",
     "junie",
     "amp",
+    "warp",
     "augment",
 ];
 
@@ -799,6 +800,7 @@ section! {
         droid: SetupDroid = SetupDroid::default(),
         kiro: SetupKiro = SetupKiro::default(),
         amp: SetupAmp = SetupAmp::default(),
+        warp: SetupWarp = SetupWarp::default(),
         augment: SetupAugment = SetupAugment::default(),
     }
 }
@@ -979,6 +981,11 @@ section! {
     /// `[setup.amp]` — Amp (Sourcegraph) user settings file (`amp.mcpServers`, T413.5);
     /// `settings.jsonc` is used when it is the only one.
     SetupAmp { settings_path: PathBuf = p("~/.config/amp/settings.json") }
+}
+
+section! {
+    /// `[setup.warp]` — Warp's user-level MCP file (T413.12).
+    SetupWarp { mcp_path: PathBuf = p("~/.warp/.mcp.json") }
 }
 
 section! {
@@ -1742,6 +1749,7 @@ impl Config {
             setup.kiro.mcp_path,
             setup.junie.mcp_path,
             setup.amp.settings_path,
+            setup.warp.mcp_path,
             setup.augment.settings_path,
             setup.codewhale.dir,
             setup.mimo.config_path,

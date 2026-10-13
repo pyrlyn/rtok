@@ -2109,6 +2109,21 @@ Check: `group.spec.ts` fails before the fix and passes after; `just spa-e2e` gre
 
 Result (2026-10-12, Claude Code / claude-opus-5-5): `web/e2e/group.ts` spawns `rtok web` as a process-group leader (`detached: true`). `stopGroup` sends SIGTERM to the group, SIGKILL after 5 s, and polls `kill(-pgid, 0)` until `ESRCH`. A worker's `exit` handler SIGKILLs any group it still owns. `Rtok.start()` and `stop()` use it, and `dispose()` still does one `rmSync` with no retry. `group.spec.ts` has two tests: a child that keeps writing, and one that ignores SIGTERM with a 300 ms grace. Both failed against the old stop (the writer was still alive) and pass 20/20 with the fix. Suite: 40 passed. The offline test passed 40/40 with `--repeat-each 40`. Three suite runs passed 119/120; the one failure was the seed's `rtok mcp` in `metrics-fold`, killed by the 30 s `spawnSync` timeout. That failure also happened before the fix and is a separate bug. Not done: the runs used a debug `rtok` built from a sibling worktree at `77faf2102`, since the change touches no Rust; `just check` is left to CI.
 
+### T641. Let `rtok web` bind port 0 so e2e servers never race for a port
+
+The Playwright helper [`freePort`](web/e2e/rtok.ts#L24) and the Rust e2e helper [`free_port`](tests/web_e2e.rs#L34) bind port 0, close the probe and pass the number to `rtok web --port`. With four parallel workers another process can take the port in between, and `rtok web` exits 1 (`rtok web exited early (1)`, CI on PR #997, `e2e/rtok.spec.ts:17`); worse, the `/health` poll can reach another worker's server. `rtok web --port 0` is already accepted, but the startup line prints `:0` and `/health` reports port 0.
+
+Execution plan:
+
+1. `src/web/mod.rs`: after binding, take the listener's real address and write its port back into the config, so the stderr line `rtok web http://<addr>` and `/health` report the bound port.
+2. `tests/web_e2e.rs`: a regression test that starts `rtok web --port 0`, reads the port from the stderr line and checks `/health` answers there with that port (fails before step 1); `start_with` uses the same path and drops `free_port`.
+3. `web/e2e/rtok.ts`: the first `start()` passes `--port 0` and reads the port from stderr; a restart (the offline test) reuses that port so the open page reconnects.
+4. Verify: `just spa-e2e`, `just check`.
+
+Check: no e2e helper probes a port and hands it to a child; `rtok web --port 0` prints and serves the bound port.
+
+Result (2026-10-12, Claude Code / claude-opus-5-5): `serve` takes the listener's local address after binding and writes its port into the config, so `rtok web --port 0` prints `rtok web http://127.0.0.1:<port>` and `/health` answers with that port. `tests/web_e2e.rs` starts every server with `--port 0` and reads the address from stderr on a thread that keeps draining the pipe; `free_port` is gone. The new `port_zero_reports_the_bound_port` failed before the fix (`rtok web never answered /health` after 20 s, the line said `:0`) and passes after; `--test web --test web_e2e` 22/22. `web/e2e/rtok.ts` spawns with `--port 0` on the first start, takes the port from the same line (racing the child's exit and a 20 s timer), and a restart asks for that port again so the offline test's page reconnects; an early exit now carries the last 20 stderr lines, so a CI flake names its cause. `just spa-e2e` 38/38, then `--repeat-each 3` 114/114 with 4 workers. Not done: a restart on the remembered port can still lose it to another process while the server is down; only the offline test restarts.
+
 ### T310.11. CI job for the SPA
 
 One CI job: `npm ci`, typecheck, oxlint/oxfmt, Vitest, Storybook tests, Playwright, `vite build`; cache npm and Playwright browsers.
@@ -8951,6 +8966,21 @@ Check: the T413 per-host check (step 5) for this host.
 Status: done 2026-10-12
 Model: Claude Code / sonnet-5.5
 
+### T413.12. `rtok agents install warp` — Warp
+
+Warp terminal's agent. MCP and rules if they live in a file setup can edit; a setting stored only in the app's database is out of scope.
+
+Check: the T413 per-host check (step 5) for this host.
+
+Plan: Warp docs for a file-based MCP or rules path. If the setting lives only in the app database, close with that finding and no installer writes.
+
+Done: `src/agents/warp/` (`mod.rs`, `README.md`): one Desktop variant, detected by the macOS bundle `/Applications/Warp.app` (Windows and Linux install paths and a `--version` flag are undocumented, so no bin). `mcpServers.rtok` → `rtok mcp --host warp` as `{command, args}` in `~/.warp/.mcp.json` through `register_stdio_mcp` (the helper Cline, Roo Code, Windsurf and Droid share); `[setup.warp] mcp_path` moves it. Hooks, proxy and plugin stay `Support::No` (nothing documented). Servers added in Warp's app settings and project `.warp/.mcp.json` files are never written. Registered in `HOSTS` and `host()`, `config/default.toml`, `docs/config.md`, `docs/agents.md` (and `ru`/`uk`), `agents_install` matrix, list/real-config/host-docs tests and trycmd goldens. Research in `research.md` §32.12.
+
+Check: `agents_doc`, `host_docs`, `agents_install`, `agents_list_content`, `agents_real_config`, `config_coverage`, `cli_trycmd` and the `warp` unit tests green; `just check` green. Manual: `rtok agents install warp --dry-run` on this machine (Warp.app installed here) names `~/.warp/.mcp.json` and `mcpServers.rtok: rtok mcp --host warp` and writes nothing.
+
+Status: done 2026-10-12
+Model: Claude Code / claude-sonnet-5-5
+
 ### T426. Install refuses a host whose app is not installed
 
 `present()` counts a host as installed when only its config folder (or that folder's parent) exists, so `rtok agents install gemini` writes rtok into `~/.gemini` with no Gemini CLI on the machine. Done: a host variant is present only when its app bundle or binary is found (`app_path`); leftover config folders no longer count, in `agents list`, `install`, `update`, `doctor` and `junk` alike. `agents install|update <host>` whose wanted variants are all absent writes nothing and exits non-zero with `error: <host> is not installed`; with several hosts, any absent one refuses the whole run before any backup. A host with one present variant still installs into it, and the absent sibling prints `— not found` as today. `--remove` is unchanged.
@@ -13787,6 +13817,22 @@ Check: `a_descendant_holding_the_pipe_does_not_stall_the_bench` failed before (5
 
 Status: done 2026-10-12
 Model: Claude Code / claude-sonnet-5-5
+
+### T643. e2e homes outside the crowded `$TMPDIR`
+
+`just spa-e2e` sometimes failed in fixture setup with `rtok mcp exited null:` (empty stderr): `spawnSync` killed the seed's `rtok mcp` at the 30 s `SEED_TIMEOUT_MS`. `rtok mcp` does not hang: after stdin EOF it exits at once. Under the suite's load it waited in the kernel. A `sample` of a stalled seed showed the main thread inside `mem_save` → `Store::auto_add_project` → `fs_kit::path::is_unwalkable_root` → `canonicalize` → `realpath` → `getattrlist` for the whole window, on the throwaway home in `os.tmpdir()`. On the creator's Mac that directory holds ~94,000 entries, mostly leaked test dirs (T644). While the suite ran, `realpath` on a dir in `$TMPDIR` took p50 165 ms, p99 1.8 s, max 2.7 s. In `/tmp` it took max 3 ms; `stat` in `$TMPDIR` took max 5 ms; a dir nested a level deeper in `$TMPDIR` was just as slow. Without the suite, `realpath` in `$TMPDIR` stayed under 120 ms. Every `canonicalize` rtok does on the home pays this, so a seed and other `rtok` calls ran past their timeouts.
+
+Plan:
+1. `web/e2e/rtok.ts`: each home is made under `/tmp` (Windows keeps `os.tmpdir()`), through one helper.
+2. `Rtok.run`: a timed-out call says `timed out after 30 s` instead of `exited null`.
+3. Test: `web/e2e/fixture.spec.ts`. Kernel slowness cannot be reproduced in CI; the measurements above are the evidence.
+
+Result: `makeHome` creates every home under `/tmp`; `failure` turns a killed `spawnSync` into `timed out after N s` (or the spawn error) and keeps `exited N` for a real exit code.
+
+Check: `the throwaway home lives under /tmp, not the per-user temp dir` failed before (home under `/var/folders/…/T/`) and passes after; `a call killed by its timeout says it timed out`; `just js`, `web` typecheck. Three full `spa-e2e` runs with every `rtok mcp` call timed: no seed failed and none read `exited null` (before: one in each of the first runs); `Rtok.create` took 0.4 s instead of 17.6 s. The longest call was the 500-call burst at 22 s under load average 52, spread over its calls rather than one stall. Not fixed here and failing with `main`'s fixture too: `Compare colours …` and `Export downloads …` time out even alone; `hosts page …` and `clear safe junk …` pass alone and fail only under that load.
+
+Status: done 2026-10-12
+Model: Claude Code / claude-opus-5-5
 
 ### T631. Track the real Git metadata when embedding a worktree build SHA
 
