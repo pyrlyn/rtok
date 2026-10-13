@@ -181,6 +181,21 @@ an applied migration is forbidden; add the next directory.
 
 Raw payloads live on disk under `archive_dir/<id>`; the DB holds size, sha256 and path.
 
+### Project root
+
+`rtok_config::root::ProjectRoot::find(cwd)` is the one way to find the project a directory
+belongs to: a lexical walk (no git subprocess, so the hook budget holds) over `.git` files and
+`commondir`. It returns two roots, which differ only inside a linked worktree:
+
+| Root | Is | Wanted by |
+|------|----|-----------|
+| `checkout` | the directory holding the nearest `.git` entry; a worktree's own directory | per-checkout files each worktree owns: `.rtok.toml` |
+| `main` | the main checkout, the parent of the common `.git` (`git_dir`) | per-project identity (name, key, notes, tasks) and where worktrees are placed |
+
+A submodule is its own project, so there `main == checkout`. `rtok_config::root::contain(root,
+path)` is the one guard for a path rtok builds from untrusted input: it normalizes, follows
+symlinks through the deepest existing ancestor, and refuses a result outside `root`.
+
 ## 8. Measurement is the product
 
 The metric is **context-token-turns**: a tool result of T tokens produced at turn t of an

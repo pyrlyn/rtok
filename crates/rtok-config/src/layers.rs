@@ -174,9 +174,9 @@ fn leaf_value(root: &Dict, dotted: &str) -> Option<Value> {
     None
 }
 
-/// Walk up from `start` looking for a `.git` entry (no subprocess). `None` outside a repo.
+/// The directory holding the nearest `.git` entry (no subprocess). `None` outside a repo.
 pub fn git_root(start: &Path) -> Option<PathBuf> {
-    find_up(start, ".git", Path::exists)
+    crate::root::ProjectRoot::find(start).map(|r| r.checkout)
 }
 
 /// The nearest directory at or above `start` whose `name` entry satisfies `is_match`.
