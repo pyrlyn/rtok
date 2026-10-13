@@ -13530,10 +13530,6 @@ Result: rtok takes paths, atomic writes, tree usage and copies from `fs-kit` 0.1
 Status: done 2026-10-12
 Model: Claude Code / claude-opus-5-5
 
-### T647.1. One project-root method and a path-containment guard
-
-Part of T647: worktrees move into `<project>/.rtok/worktrees`, and rtok gets one way to find a project root. Today six sites decide it differently: `git_root` (`crates/rtok-config/src/layers.rs`) stops at a linked worktree's `.git` file, `common_git_dir` (`src/project.rs`) resolves to the main checkout, `src/doctor.rs` has a private copy of `git_root`, and `checkpoint`/`tasks/run.rs` mix both. Nothing checks that a path rtok builds stays inside the project.
-
 ### T660.1. One project-root method and a path-containment guard
 
 Part of T660: worktrees move into `<project>/.rtok/worktrees`, and rtok gets one way to find a project root. Today six sites decide it differently: `git_root` (`crates/rtok-config/src/layers.rs`) stops at a linked worktree's `.git` file, `common_git_dir` (`src/project.rs`) resolves to the main checkout, `src/doctor.rs` has a private copy of `git_root`, and `checkpoint`/`tasks/run.rs` mix both. Nothing checks that a path rtok builds stays inside the project.
@@ -13554,7 +13550,6 @@ Execution plan:
 
 Check: the tests above pass and `project_name`/`project_key` tests are unchanged.
 
-Result: `crates/rtok-config/src/root.rs` holds `ReadFs`/`HostFs` (moved from `src/fs.rs`, re-exported there), `ProjectRoot { checkout, main, git_dir }`, `resolved` (moved from `worktree/add.rs`) and `contain`. `src/project.rs` and `layers.rs::git_root` run on it; callers are unchanged until T647.2. Review fix: `contain` first normalized lexically and then followed symlinks, so `link/../secret` with `link` pointing outside passed as `root/secret`; it now follows symlinks through the deepest existing ancestor first and applies `..` lexically only to the missing tail (test `contain_follows_symlinks`, failing before the fix). "Project root" subsection in `architecture.md` §7.
 Result: `crates/rtok-config/src/root.rs` holds `ReadFs`/`HostFs` (moved from `src/fs.rs`, re-exported there), `ProjectRoot { checkout, main, git_dir }`, `resolved` (moved from `worktree/add.rs`) and `contain`. `src/project.rs` and `layers.rs::git_root` run on it; callers are unchanged until T660.2. Review fix: `contain` first normalized lexically and then followed symlinks, so `link/../secret` with `link` pointing outside passed as `root/secret`; it now follows symlinks through the deepest existing ancestor first and applies `..` lexically only to the missing tail (test `contain_follows_symlinks`, failing before the fix). "Project root" subsection in `architecture.md` §7.
 
 Status: done 2026-10-13
