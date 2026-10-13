@@ -39,7 +39,7 @@ This is a source-audit ledger, not a test-coverage report. The continuation clos
 | Host extension packages in `plugins/` | Production scripts/TypeScript and JSON manifests, including Pi/OMP mixed results, OpenCode filters, Claude worktree fallback and host hook commands. Host applications were not launched. | T622, T635 |
 | Build, release, package and repository tooling | `build.rs`, Cargo/profile/dist configuration, workflow/build-setup source, release/publish/version/share/check scripts, npm/PyPI wrappers, web generation/Vite configuration, brand/asset generation. Review of generated release YAML is structural, not an executed release. | T624, T631, T634 |
 
-Host adapter set: `aider`, `antigravity`, `claude`, `cline`, `codebuddy`, `codewhale`, `codex`, `commandcode`, `copilot`, `cursor`, `devin`, `gemini`, `grok`, `kilo`, `kimi`, `mimo`, `omp`, `opencode`, `pi`, `qwen`, `roo`, `vscode`, `windsurf`, `zcode`, `zed`.
+Host adapter set: `aider`, `antigravity`, `claude`, `cline`, `codebuddy`, `codewhale`, `codex`, `commandcode`, `copilot`, `cursor`, `devin`, `gemini`, `grok`, `junie`, `kilo`, `kimi`, `mimo`, `omp`, `opencode`, `pi`, `qwen`, `roo`, `vscode`, `windsurf`, `zcode`, `zed`.
 
 ## Executed evidence for the final continuation
 

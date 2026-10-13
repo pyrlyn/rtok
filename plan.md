@@ -48,7 +48,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T413 | todo | P2 | 3 | 0% | |
 | T413.5 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
 | T413.7 | in progress | P3 | 3 | 0% | Claude Code / sonnet-5.5 |
-| T413.9 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
 | T413.11 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T413.12 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T413.13 | todo | P3 | 2 | 0% | |
@@ -709,13 +708,6 @@ Check: the T413 per-host check (step 5) for this host.
 
 Plan: Continue docs for each config location; one variant per documented file; no guessed rules path.
 
-### T413.9. `rtok agents install junie` — JetBrains Junie
-
-Junie in JetBrains IDEs and its CLI if one is documented. MCP first.
-
-Check: the T413 per-host check (step 5) for this host.
-
-Plan: JetBrains docs for the MCP file; a CLI variant only if its config path is documented.
 
 ### T413.11. `rtok agents install crush` — Crush
 

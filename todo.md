@@ -30,7 +30,6 @@
 - T413. More agent hosts: popular agents rtok does not install into yet
 - T413.5. `rtok agents install amp` — Amp
 - T413.7. `rtok agents install continue` — Continue
-- T413.9. `rtok agents install junie` — JetBrains Junie
 - T413.11. `rtok agents install crush` — Crush
 - T413.12. `rtok agents install warp` — Warp
 - T413.13. `rtok agents install trae` — Trae
