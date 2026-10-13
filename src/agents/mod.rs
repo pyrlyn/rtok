@@ -69,7 +69,6 @@ pub mod task_list;
 pub mod usage;
 pub mod vscode;
 pub mod warp;
-pub mod openhands;
 pub mod windsurf;
 mod yaml_text;
 pub mod zcode;

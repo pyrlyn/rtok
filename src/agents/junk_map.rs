@@ -95,14 +95,17 @@ const ELECTRON_CACHES: [&str; 5] = ["Cache", "Code Cache", "GPUCache", "CachedDa
 /// (the config folder they already name through their markers is still listed). Keeping the
 /// list explicit makes a new host in `HOSTS` fail a test until it has a row or joins this list.
 pub const NO_ROWS: [&str; 12] = [
-    "kilo", "aider", "roo", "droid", "goose", "kiro", "junie", "amp", "warp", "continue", "crush", "openhands",
-pub const NO_ROWS: [&str; 7] = [
     "kilo",
     "aider",
     "roo",
     "droid",
     "goose",
     "kiro",
+    "junie",
+    "amp",
+    "warp",
+    "continue",
+    "crush",
     "openhands",
 ];
 
