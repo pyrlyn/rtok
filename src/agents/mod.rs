@@ -53,6 +53,7 @@ pub(crate) mod mcp;
 pub mod mimo;
 pub mod omp;
 pub mod opencode;
+pub mod openhands;
 mod outdated;
 pub mod pi;
 pub mod plugin;
@@ -128,6 +129,7 @@ pub fn host(id: &str) -> Option<&'static dyn Agent> {
         "amp" => Some(&amp::Amp),
         "warp" => Some(&warp::Warp),
         "continue" => Some(&continue_dev::Continue),
+        "openhands" => Some(&openhands::OpenHands),
         _ => None,
     }
 }

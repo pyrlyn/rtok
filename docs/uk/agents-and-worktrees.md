@@ -89,6 +89,7 @@ Skill `worktrees` розповідає агентові все це: `worktree_a
 | `amp` | ні | MCP | ще не перевірено | `worktree_add` |
 | `warp` | ні | MCP | ще не перевірено | `worktree_add` |
 | `crush` | ні | MCP | ще не перевірено | `worktree_add` |
+| `openhands` | ні | MCP | ще не перевірено | `worktree_add` |
 | `qwen` | так | хуки | ще не перевірено | `worktree_add` |
 | `codebuddy` | так | хуки | ще не перевірено | `worktree_add` |
 | `goose` | ні | MCP | ще не перевірено | `worktree_add` |

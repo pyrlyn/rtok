@@ -2688,6 +2688,17 @@ Crush (https://github.com/charmbracelet/crush, v0.98.1 released 2026-10-09, not 
 - Hooks: only `PreToolUse` exists. Config is `hooks.PreToolUse[]` with `command` (required), `matcher` (regex on the tool name), `name`, `timeout` (seconds, default 30); stdin is `{event, session_id, cwd, tool_name, tool_input}`; output is exit codes (0, 2 block, 49 halt) or a JSON envelope with `decision`, `reason`, `context`, `updated_input`. The payload is documented and Claude-shaped, but its tool names (`bash`, `edit`, `write`, ...) are lower case and rtok has no checked mapping of them, so hooks stay `Support::No` (same reason as Droid). https://github.com/charmbracelet/crush/blob/main/docs/hooks/README.md (sections "Reference", "Claude Code compatibility")
 - Proxy and plugin directory: per-provider base URLs only and skills, no plugin directory; both stay `Support::No`.
 
+### 32.14 OpenHands (T413.14, checked 2026-10-12)
+
+OpenHands CLI. All facts are from the vendor's docs (docs.openhands.dev), fetched 2026-10-12.
+
+- User-level MCP file: `~/.openhands/mcp.json` ("Configuration File Location"; `openhands mcp add|remove|enable|disable` edit it), https://docs.openhands.dev/openhands/usage/cli/mcp-servers. `openhands mcp list|get` read it.
+- Format: top-level `mcpServers`, each server keyed by name with `command`, `args`, `env` for a stdio server (the page links the FastMCP configuration format); the examples carry no `type` for stdio, so the entry is the `{command, args}` shape `register_stdio_mcp` writes.
+- A running conversation does not pick up a changed file; the page says to restart the conversation to load new configurations, so setup does not restart anything.
+- Hooks: `.openhands/hooks.json` in the repository root, events `PreToolUse`, `PostToolUse` and others, `snake_case` keys, https://docs.openhands.dev/openhands/usage/customization/hooks. The page names no user-level hooks file, so hooks stay `Support::No` and a project file is never written (it belongs to the project).
+- Install: `uv tool install openhands --python 3.12`, or `curl -fsSL https://install.openhands.dev/install.sh | sh` for an executable binary; both put an `openhands` command on PATH, https://docs.openhands.dev/openhands/usage/cli/installation. Detection is the `openhands` binary; no `--version` flag is relied on.
+- A model endpoint setting and a plugin format for rtok were not checked, so proxy and plugin stay `Support::No`.
+
 ## 33. Which tests a change reaches (T420, 2026-10-06)
 
 Question: what picks the tests for `just check` so that a docs-only change runs no cargo tests and an edit to one source file runs its unit tests plus the integration tests that reach it. All sources checked 2026-10-06.

@@ -48,7 +48,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T413 | todo | P2 | 3 | 0% | |
 | T413.8 | in progress | P3 | 3 | 0% | Claude Code / sonnet-5.5 |
 | T413.13 | todo | P3 | 2 | 0% | |
-| T413.14 | in progress | P3 | 2 | 0% | Claude Code / sonnet-5.5 |
 | T413.15 | in progress | P3 | 2 | 0% | Claude Code / sonnet-5.5 |
 | T414 | in progress | P1 | 4 | 20% | Claude Code / opus-5.5 |
 | T414.7 | in progress | P3 | 1 | 0% | MiMo / mimo |
@@ -696,14 +695,6 @@ Check: the T413 per-host check (step 5) for this host.
 Plan: Trae docs for the MCP file. Reuse the VS Code helper only if the key and path match; otherwise a thin host of its own.
 
 Finding (2026-10-12, `research.md` §32.13): Trae's docs name only a project `.trae/mcp.json`, which is the project's, and a user-level `mcp.json` behind the app's Raw Config button with no path. No installer is written until a documented user-level path exists.
-
-### T413.14. `rtok agents install openhands` — OpenHands
-
-OpenHands CLI (the local variant only; the cloud service is out of scope). MCP and any documented hooks.
-
-Check: the T413 per-host check (step 5) for this host.
-
-Plan: OpenHands local CLI docs for the MCP file. Cloud config stays out. Hooks only with a documented payload.
 
 ### T413.15. `rtok agents install reasonix` — DeepSeek Reasonix
 

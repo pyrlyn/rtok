@@ -140,6 +140,10 @@ const HOSTS: &[Host] = &[
         id: "crush",
         files: &[".config/crush/crush.json"],
     },
+    Host {
+        id: "openhands",
+        files: &[".openhands/mcp.json"],
+    },
 ];
 
 /// True for anything rtok owns: install puts it there and remove takes it away, so it is the
@@ -249,6 +253,7 @@ fn fixture(rel: &str) -> &'static str {
         | ".kiro/settings/mcp.json"
         | ".junie/mcp/mcp.json"
         | ".warp/.mcp.json"
+        | ".openhands/mcp.json"
         | "Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json" => {
             r#"{"mcpServers":{"foreign":{"command":"x"}}}"#
         }
@@ -395,6 +400,7 @@ real_config_round_trip! {
     warp_keeps_the_real_mcp_json => "warp",
     continue_keeps_the_real_config_yaml => "continue",
     crush_keeps_the_real_crush_json => "crush",
+    openhands_keeps_the_real_mcp_json => "openhands",
 }
 
 /// Zed writes JSONC. The fixture carries a `//` comment; the installer edits the text

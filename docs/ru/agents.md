@@ -69,6 +69,7 @@ lang: ru
 | [`continue`](https://github.com/pyrlyn/rtok/blob/main/src/agents/continue/README.md) | Continue CLI | CLI | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
 | [`continue`](https://github.com/pyrlyn/rtok/blob/main/src/agents/continue/README.md) | Continue | Desktop | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
 | [`crush`](https://github.com/pyrlyn/rtok/blob/main/src/agents/crush/README.md) | Crush | CLI | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
+| [`openhands`](https://github.com/pyrlyn/rtok/blob/main/src/agents/openhands/README.md) | OpenHands | CLI | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
 <!-- agents-table:end -->
 
 Таблица генерируется из кода хостов (`src/agents/<host>/mod.rs` и каталог плагинов) тестом `tests/agents_doc.rs`, который падает, если она устарела. После изменения хоста, добавления нового или изменения интерфейсов плагина перегенерируйте её:
