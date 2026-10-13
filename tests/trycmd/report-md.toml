@@ -453,7 +453,7 @@ Every effective key with its origin — the `config show --sources` page.
 | worktree.enabled | true | default |
 | worktree.root | ~/.rtok/worktrees | default |
 
-406 keys.
+407 keys.
 
 ## Doctor
 
@@ -717,6 +717,11 @@ agents
     mcp     not installed
     proxy   not supported: Crush takes provider base URLs per provider entry; rtok has no checked single endpoint to point at the proxy
     plugin  not supported: Crush has no documented local plugin directory to link; it loads skills, not plugins
+  openhands (cli)
+    hooks   not supported: OpenHands documents hooks only as a project `.openhands/hooks.json`; no user-level file is documented
+    mcp     not installed
+    proxy   not supported: rtok has not checked OpenHands's LLM base-URL setting, so it writes none
+    plugin  not supported: rtok ships no OpenHands plugin
 skills (1 listed, 154 desc bytes ≈ 38 tokens per request)
   descriptions over 120 chars: 1 skills, ≈ 8 tokens/request recoverable
   dry-refactoring project desc 154c body 2772B calls - WARN desc>120 WARN never invoked
