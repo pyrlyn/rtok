@@ -64,6 +64,26 @@ Each finding in `plan.md` contains the input, observed failure, relevant control
 | T638 | Actual bounded-run helper with synthetic shell descendants | macOS only; no real agent benchmark |
 | T639 | Actual Calls table with Ratatui 0.30.2 TestBackend | Fixture data/theme; full navigation source-traced |
 
+## Bounded continuation from PR #986
+
+Evidence baseline: `eb7d980af235f0ccb3d8ff58471d24b8267af35d` (2026-10-13). Against the original `ea999781d7a48733e3a5c92e711cfad291c13536`, `git ls-files` listed 1,624 tracked paths and the diff had 353 changed paths (+22,715/−4,282); 241 paths were under `src/`, `crates/`, `plugins/`, or `web/`, and the bounded source filter retained 210 production-oriented paths. These counts route review only; they do not estimate reviewed lines. The continuation also compared current worktree HEAD with local main `0c222f3061123f8e8e887608987fc03cb5972c8c`: 279 paths (+17,815/−3,978), with 195 source-family paths and 172 in the same source filter. Prior findings remain attributed to their original evidence revisions; this pass does not imply rereading the entire prior ledger.
+
+The current family pass included targeted review of proxy wire/routing, hooks dispatch/resident protocol, archive/compress, graph index/diff, task disk/claims, Store summaries/OTel, Codex usage measurement, report/PDF, host Droid/Kiro and MCP, build/selective-check tooling, web ws/query, and demon lifecycle. Finding-driven review covered MCP config read/write failure handling, process timeout modes, semantic-cache usage accounting and OTel aggregation, graph unreadable-file stat reuse, compressor queue admission/credential routing, and worktree/cache age decisions. The coordinator also reviewed `src/web` origin authority/port validation (`origin_allowed`, lines 238–321), guard pre/post-tool handling (`src/plugins/guard`, lines 1–155), and TUI run/event-loop behavior (`src/tui`, lines 35–90); these were targeted source reviews with no new distinct bug and no live UI session. Review was not limited to changed lines where a concrete current contract needed tracing.
+
+| Finding/proposal | Evidence | Boundary |
+|---|---|---|
+| T651 | Actual `rtok-sys` path-dependency harness; Capture timed out at 44 ms while Inherit returned success at 267 ms with a 30 ms timeout | `crates/rtok-sys/src/proc/mod.rs:141–151,205,320`; synthetic direct child only |
+| T652 | Actual `rtok-mcp::config::write_entry` and `rtok-agent-sdk::write` through disk-backed synthetic Fs/Writer; mode-000 JSON with backup disabled was replaced and foreign entry lost | `src/agents/mcp.rs:385–405`, `crates/rtok-mcp/src/config.rs:122+`; temporary file, no host config |
+| T653 | Actual `rtok-store` in-memory API; two ordinary usage rows matching source-traced live/cache paths aggregated to input 200/output 50 | No proxy HTTP run or external provider |
+| T654 | Executed chmod 000→644 fixture preserved mtime and size; graph index source stages `EMPTY_SHA` then skips matching stats | Full graph invocation source-traced, not executed |
+| T655 | Deterministic extracted two-thread schedule synchronized after cap load and before increment; cap 1 admitted two | No compressor/network call |
+| T656 | Source-only gc/clean decision and walk paths; missing/incomplete age evidence can reach delete eligibility | No executed decision probe, worktree or cache deletion |
+| T657 | Source-derived credential and request-routing call path from eligible archived result to `/v1/messages` and provider selection | No HTTP call or credentials used |
+| I-130 | Strict-JSON synthetic write retained foreign semantics but changed formatting/key order | Improvement proposal only; no semantic data loss shown |
+| I-131 | `each_parsed` source shows bounded channel but an unbounded reorder map | Improvement proposal only; no memory/performance measurement |
+
+The current pass added no tests or product code. Active task cards T651–T657 in `plan.md` contain source locations, evidence levels, correction order and regression checks. Full `just check` is outside this docs-only change; an earlier broad invocation was stopped while compiling after the scoped changed-code check found no code changes. Current docs-only checks are recorded with the audit diff. Temporary probes are under `/tmp/rtok-t650-*` and are not repository artifacts.
+
 ## Exclusions and follow-up boundaries
 
 - The tracked-path inventories are navigation aids. A file appearing in a list, a source citation, a grep result or a bundle does not establish that its full body was reviewed. No inventory count is presented as an audit completion percentage.
