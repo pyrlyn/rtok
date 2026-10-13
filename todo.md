@@ -50,3 +50,4 @@
 - T647.3. Worktrees nested in the project do not leak into walks, gc or clean
 - T647.4. Default worktree root `<project>/.rtok/worktrees`, `.rtok/` ignored
 - T647.5. `rtok worktree migrate` moves worktrees into the configured root
+- T644. Tests remove the temp dirs they create

@@ -69,6 +69,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T647.3 | todo | P1 | 3 | 0% | |
 | T647.4 | todo | P1 | 3 | 0% | |
 | T647.5 | todo | P2 | 3 | 0% | |
+| T644 | todo | P2 | 3 | 0% | |
 
 
 
@@ -978,3 +979,9 @@ The 14 portable ideas and where each landed:
 12. Memory RRF / file affinity — T373, T374.
 13. Edit robustness (fuzzy `old_string`) — does not fit now: I-43 / T58.3 measured 1.3 % `old_string` misses; below the gate.
 14. Shell output compress / tee — already covered by the `cmd` rules (`src/plugins/cmd/rules.rs`) and the archive (`expand <id>`).
+
+### T644. Tests remove the temp dirs they create
+
+The tests leak their temp dirs into `$TMPDIR`: on the creator's Mac about 24,000 `rtok-mem-*` (`Runtime::in_memory` in `src/plugin.rs` creates one per call and never removes it), 6,300 `rtok-tui-*`, 2,000 `rtok-guard-*`, 1,300 `rtok-usage-*` and more. A directory that size makes `realpath` in it slow under load (T643). Each test helper that makes a temp dir removes it (a guard or `tempfile::TempDir`), `Runtime::in_memory` first.
+
+Check: a test shows a dropped `Runtime::in_memory` leaves no directory behind, and a full `just test` run adds no `rtok-*` entry to `$TMPDIR`.
