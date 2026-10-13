@@ -58,7 +58,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T655 | in progress | P2 | 2 | 60% | Claude Code / sonnet-5.5 |
 | T656 | in progress | P2 | 2 | 60% | Claude Code / sonnet-5.5 |
 | T657 | in progress | P1 | 2 | 55% | Claude Code / sonnet-5.5 |
-| T662 | in progress | P1 | 1 | 10% | Claude / opus-5.5 |
 | T436.4 | todo | P3 | 2 | 90% | |
 | T522 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T523 | in progress | P2 | 2 | 0% | MiMo / mimo |
@@ -186,13 +185,6 @@ Evidence baseline: `eb7d980af235f0ccb3d8ff58471d24b8267af35d`. Where: [`Auth::fr
 3. Run focused compressor/proxy tests and `just check`.
 
 Check: an OpenAI bearer is never presented as an Anthropic credential by default; valid configured internal provider requests continue to work.
-
-### T662. oxfmt `web/e2e/rtok.ts` so `just js` passes on main
-
-`just js` fails on `main`: `oxfmt --check` (0.68.0, pinned in `mise.toml`) wants the `spawnGroup(BIN, ["web", "--host", ...], {...})` call in `web/e2e/rtok.ts` wrapped across lines. CI's `ci / lint` runs `just fmt-check lint build-min dup js python`; it stops at `fmt-check` today (pyrlyn/rtok#1041), so `js` is the next failure once that merges.
-
-1. `mise exec -- oxfmt web/e2e/rtok.ts` — formatting only, no logic change.
-2. Verify: `mise exec -- oxfmt --check web/e2e/rtok.ts` fails before the rewrite; `just js` exits 0 after it.
 
 
 ### T131. Measure the spawn brief: cost row and on/off re-read share

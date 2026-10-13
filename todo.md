@@ -45,7 +45,6 @@
 - T655. Make compressor in-flight admission atomic
 - T656. Keep worktrees and caches when their age cannot be established
 - T657. Match compressor credentials to the internal provider
-- T662. oxfmt `web/e2e/rtok.ts` so `just js` passes on main
 - T651. Honor ProgressRunner timeouts with inherited output
 - T660.2. Every project-root caller goes through the T660.1 method
 - T660.3. Worktrees nested in the project do not leak into walks, gc or clean
