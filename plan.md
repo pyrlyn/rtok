@@ -680,14 +680,6 @@ Check: every sub-task below is closed in `done.md` with its per-host check.
 
 
 
-### T413.7. `rtok agents install continue` — Continue
-
-VS Code / JetBrains extension and the `cn` CLI. MCP and rules; variants per documented config location.
-
-Check: the T413 per-host check (step 5) for this host.
-
-Plan: Continue docs for each config location; one variant per documented file; no guessed rules path.
-
 ### T413.8. `rtok agents install augment` — Augment Code and Auggie CLI
 
 IDE extension and Auggie CLI. MCP and hooks if documented.
