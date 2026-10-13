@@ -2615,6 +2615,15 @@ Factory moved its docs from `docs.factory.ai` to `docs.factory.com` (308 redirec
 - No model base-URL setting and no local plugin directory are documented on the pages above, so proxy and plugin stay `Support::No`.
 - Migration: see 32.10 (T413.10): the Amazon Q CLI migration copies `~/.aws/amazonq/mcp.json` to `~/.kiro/settings/mcp.json`, which supports `~/.kiro/settings/mcp.json` as the CLI's user file.
 
+### 32.6 Goose (T413.6, checked 2026-10-12)
+
+- Config file: https://github.com/aaif-goose/goose/blob/main/documentation/docs/guides/config-files.md — `~/.config/goose/config.yaml` on macOS and Linux, `%APPDATA%\Block\goose\config\config.yaml` on Windows. The CLI and the Desktop app share it.
+- `GOOSE_PATH_ROOT` moves every goose directory: https://github.com/aaif-goose/goose/blob/main/documentation/docs/guides/environment-variables.md. The installer reads it only through `[setup.goose] config_path`, not from the environment.
+- Stdio extension shape: https://github.com/aaif-goose/goose/blob/main/documentation/docs/getting-started/using-extensions.md (section on editing the config file) — `extensions.<key>` with `name`, `type: stdio`, `cmd`, `args`, `enabled`; `envs` and `timeout` are optional. Goose adds defaults when it re-saves an entry, so the installer compares only `name`, `type`, `cmd`, `args`, `enabled`.
+- Hooks: https://github.com/aaif-goose/goose/blob/main/documentation/docs/guides/context-engineering/hooks.md documents Open Plugins hooks with their own payload and decision shape. rtok has no adapter for it, so hooks stay off (`support` says so).
+- Proxy: only the `GOOSE_PROVIDER__HOST` environment variable is documented (environment-variables.md above), so there is no file to write; plugin: Goose's Open Plugins bundle is not shipped by rtok.
+- Desktop app: https://github.com/Homebrew/homebrew-cask/blob/master/Casks/b/block-goose.rb (cask `block-goose`, app `Goose.app`; linked from https://github.com/aaif-goose/goose/blob/main/documentation/docs/getting-started/installation.md). The CLI binary is `goose`.
+
 ### 32.10 Amazon Q Developer CLI (T413.10, checked 2026-10-12)
 
 Result: no `amazonq` host. The CLI is succeeded by Kiro CLI, which T413.4 covers.

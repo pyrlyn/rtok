@@ -67,6 +67,7 @@ pub fn write_cfg(home: &Path) -> PathBuf {
         ".qwen",
         ".codebuddy",
         ".workbuddy",
+        ".config/goose",
         ".factory",
         ".kiro/settings",
         ".openhands",
@@ -108,6 +109,7 @@ pub fn write_cfg(home: &Path) -> PathBuf {
               [setup.roo]\nmcp_path = \"{h}/Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json\"\n\
               [setup.qwen]\ndir = \"{h}/.qwen\"\n\
               [setup.codebuddy]\ndir = \"{h}/.codebuddy\"\nworkbuddy_dir = \"{h}/.workbuddy\"\n\
+              [setup.goose]\nconfig_path = \"{h}/.config/goose/config.yaml\"\n\
               [setup.droid]\nmcp_path = \"{h}/.factory/mcp.json\"\n\
               [setup.kiro]\nmcp_path = \"{h}/.kiro/settings/mcp.json\"\n\
               [setup.openhands]\nmcp_path = \"{h}/.openhands/mcp.json\"\n"
