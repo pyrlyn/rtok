@@ -2548,6 +2548,7 @@ What `rtok agents usage --source logs` reads per host, from each host's own sour
 
 - xAI's own guide, shipped in `~/.grok/docs/user-guide/17-sessions.md` of grok 1.0.34 (read 2026-10-03; `~/.grok/version.json`): sessions are `~/.grok/sessions/<encoded-cwd>/<session-id>/` (`$GROK_HOME` moves the base), and `signals.json` holds "token usage, tool/turn counters". It names no keys. The same page documents `grok usage <session-id>` ("Use this instead of reading session files") that prints per-session and per-turn tokens and cost as JSON.
 - Verdict: `unsupported`. The documented route is another program, which rtok does not run (D6), and the file's keys are not documented. Reading `signals.json` from observed keys would be a guess. If the creator accepts observed keys as a source, it is a small reader.
+- The creator accepted observed keys on 2026-10-13 (T396), but there are none to observe: grok 1.0.34 (`~/.grok/version.json`) has 3 sessions on this machine and none holds a `signals.json`; their `summary.json`, `updates.jsonl`, `events.jsonl`, `chat_history.jsonl` and `prompt_context.json` have no key path containing `token`, `usage` or `cost` (key names listed with `jq paths`, no content read). The verdict stays `unsupported` until a session with a `signals.json` exists.
 
 ### 30.8 ZCode (T358.4)
 
