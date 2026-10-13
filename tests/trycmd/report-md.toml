@@ -448,7 +448,7 @@ Every effective key with its origin — the `config show --sources` page.
 | worktree.enabled | true | default |
 | worktree.root | ~/.rtok/worktrees | default |
 
-401 keys.
+402 keys.
 
 ## Doctor
 
