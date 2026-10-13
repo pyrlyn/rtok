@@ -1615,36 +1615,76 @@ pub(crate) fn impact_walk_roots(
     depth: u32,
     follow_imports: bool,
 ) -> Result<Vec<(usize, u32, String, String)>> {
+    impact_walk_memo(
+        cx,
+        roots,
+        name,
+        depth,
+        follow_imports,
+        &mut WalkMemo::default(),
+    )
+}
+
+/// Store answers for one `(root, name)`, kept across walks over an index that does not change
+/// meanwhile. `review` walks hundreds of definitions whose callers overlap; asking again for
+/// each walk was most of its time (T646).
+#[derive(Default)]
+pub(crate) struct WalkMemo {
+    ranked: HashMap<RootName, resolve::Hit>,
+    refs: HashMap<RootName, Vec<RefGroup>>,
+    follows: HashMap<RootName, Vec<(String, String)>>,
+}
+
+type RootName = (String, String);
+/// One `symbol_ref_groups` row: path, scope, count, first line.
+type RefGroup = (String, String, i64, i32);
+
+pub(crate) fn impact_walk_memo(
+    cx: &Ctx,
+    roots: &[&str],
+    name: &str,
+    depth: u32,
+    follow_imports: bool,
+    memo: &mut WalkMemo,
+) -> Result<Vec<(usize, u32, String, String)>> {
     let mut seen: HashSet<String> = HashSet::from([name.to_string()]);
     let mut frontier = vec![name.to_string()];
     let mut out = Vec::new();
-    // Resolved once per root and name: an ambiguous callee only follows the winning definition (T368).
-    let mut ranked: HashMap<(usize, String), resolve::Hit> = HashMap::new();
     for d in 1..=depth.clamp(1, 4) {
         let mut next = Vec::new();
         for from in &frontier {
             for (i, root) in roots.iter().enumerate() {
-                let key = (i, from.clone());
-                if !ranked.contains_key(&key) {
-                    ranked.insert(key.clone(), resolve::rank_name(cx, root, from)?);
+                let key = (root.to_string(), from.clone());
+                // Resolved once per root and name: an ambiguous callee only follows the winning definition (T368).
+                if !memo.ranked.contains_key(&key) {
+                    memo.ranked
+                        .insert(key.clone(), resolve::rank_name(cx, root, from)?);
                 }
-                let allow = &ranked[&key];
-                for (path, scope, ..) in cx.symbol_ref_groups(root, from)? {
-                    if !allow.allows(&path) {
+                if !memo.refs.contains_key(&key) {
+                    memo.refs
+                        .insert(key.clone(), cx.symbol_ref_groups(root, from)?);
+                }
+                let allow = &memo.ranked[&key];
+                for (path, scope, ..) in &memo.refs[&key] {
+                    if !allow.allows(path) {
                         continue;
                     }
                     if scope.is_empty() {
-                        out.push((i, d, path, String::new()));
+                        out.push((i, d, path.clone(), String::new()));
                     } else if seen.insert(scope.clone()) {
-                        out.push((i, d, path, scope.clone()));
-                        next.push(scope);
+                        out.push((i, d, path.clone(), scope.clone()));
+                        next.push(scope.clone());
                     }
                 }
                 if follow_imports {
-                    for (path, def) in cx.symbol_import_follow(root, from)? {
+                    if !memo.follows.contains_key(&key) {
+                        memo.follows
+                            .insert(key.clone(), cx.symbol_import_follow(root, from)?);
+                    }
+                    for (path, def) in &memo.follows[&key] {
                         if seen.insert(def.clone()) {
-                            out.push((i, d, path, def.clone()));
-                            next.push(def);
+                            out.push((i, d, path.clone(), def.clone()));
+                            next.push(def.clone());
                         }
                     }
                 }
@@ -2440,6 +2480,34 @@ mod tests {
         bfs.sort();
         assert!(!cte.is_empty(), "fan-out-10 must reach sink");
         assert_eq!(cte, bfs, "query vs BFS");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T646: walks sharing one `WalkMemo` return what fresh walks return, and a name already
+    /// visited by an earlier walk is answered from the memo, not the store.
+    #[test]
+    fn shared_walk_memo_keeps_rows_and_reuses_visited_names() {
+        let (cx, dir) = cx("walk-memo");
+        let mut src = String::from("fn sink() {}\n");
+        for i in 0..4 {
+            src.push_str(&format!("fn a{i}() {{ sink(); }}\n"));
+            src.push_str(&format!("fn b{i}() {{ a{i}(); }}\n"));
+            src.push_str(&format!("fn c{i}() {{ b{i}(); }}\n"));
+        }
+        fs::write(dir.join("fan.rs"), src).unwrap();
+        let ctx = Ctx::new(&cx);
+        index::run(&ctx, &dir, false).unwrap();
+        let key = index::canon(&dir);
+        let mut memo = WalkMemo::default();
+        for name in ["sink", "a1", "b2", "sink"] {
+            let shared = impact_walk_memo(&ctx, &[&key], name, 3, true, &mut memo).unwrap();
+            let fresh = impact_walk_roots(&ctx, &[&key], name, 3, true).unwrap();
+            assert_eq!(shared, fresh, "{name}");
+        }
+        let asked = memo.refs.len();
+        assert!(asked > 1, "{asked}");
+        impact_walk_memo(&ctx, &[&key], "a2", 3, true, &mut memo).unwrap();
+        assert_eq!(memo.refs.len(), asked, "a2 was reached from sink");
         let _ = fs::remove_dir_all(dir);
     }
 

@@ -24,6 +24,7 @@ pub mod commandcode;
 pub mod copilot;
 pub mod cursor;
 pub mod devin;
+pub mod droid;
 pub mod gemini;
 pub mod grok;
 pub mod hook_events;
@@ -40,6 +41,7 @@ pub mod junk_web;
 pub mod junk_worktrees;
 pub mod kilo;
 pub mod kimi;
+pub mod kiro;
 pub mod link;
 pub(crate) mod mcp;
 pub mod mimo;
@@ -110,6 +112,8 @@ pub fn host(id: &str) -> Option<&'static dyn Agent> {
         "roo" => Some(&roo::Roo),
         "qwen" => Some(&qwen::Qwen),
         "codebuddy" => Some(&codebuddy::Codebuddy),
+        "droid" => Some(&droid::Droid),
+        "kiro" => Some(&kiro::Kiro),
         _ => None,
     }
 }

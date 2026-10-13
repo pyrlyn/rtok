@@ -45,6 +45,7 @@ After an rtok upgrade, `rtok agents update` brings every installed host up to da
 | [`gemini`](https://github.com/pyrlyn/rtok/blob/main/src/agents/gemini/README.md) | Gemini CLI | CLI | yes | yes | — | `--yes` | measure, cmd, read, json_tree (off), archive, inject, guard, memory, graph, toon, docs (off) |
 | [`codewhale`](https://github.com/pyrlyn/rtok/blob/main/src/agents/codewhale/README.md) | CodeWhale | CLI | yes | yes | — | — | measure, cmd, read, json_tree (off), archive, inject, guard, memory, graph, toon, docs (off) |
 | [`mimo`](https://github.com/pyrlyn/rtok/blob/main/src/agents/mimo/README.md) | MiMo Code | CLI | — | yes | — | yes | measure, cmd, read, json_tree (off), archive, guard, memory, graph, toon, docs (off) |
+| [`mimo`](https://github.com/pyrlyn/rtok/blob/main/src/agents/mimo/README.md) | MiMo Desktop | Desktop | — | yes | — | yes | measure, cmd, read, json_tree (off), archive, guard, memory, graph, toon, docs (off) |
 | [`antigravity`](https://github.com/pyrlyn/rtok/blob/main/src/agents/antigravity/README.md) | Antigravity CLI | CLI | — | — | — | `--yes` | read, json_tree (off), archive, memory, graph, toon, docs (off) |
 | [`antigravity`](https://github.com/pyrlyn/rtok/blob/main/src/agents/antigravity/README.md) | Antigravity | Desktop | — | — | — | `--yes` | read, json_tree (off), archive, memory, graph, toon, docs (off) |
 | [`devin`](https://github.com/pyrlyn/rtok/blob/main/src/agents/devin/README.md) | Devin CLI | CLI | yes | yes | — | `--yes` | measure, cmd, read, json_tree (off), archive, inject, guard, memory, graph, toon, docs (off) |
@@ -53,6 +54,9 @@ After an rtok upgrade, `rtok agents update` brings every installed host up to da
 | [`qwen`](https://github.com/pyrlyn/rtok/blob/main/src/agents/qwen/README.md) | Qwen Code | CLI | yes | yes | — | `--yes` | measure, cmd, read, json_tree (off), archive, inject, guard, memory, graph, toon, docs (off) |
 | [`codebuddy`](https://github.com/pyrlyn/rtok/blob/main/src/agents/codebuddy/README.md) | CodeBuddy Code | CLI | yes | yes | — | `--yes` | measure, cmd, read, json_tree (off), archive, inject, guard, memory, graph, toon, docs (off) |
 | [`codebuddy`](https://github.com/pyrlyn/rtok/blob/main/src/agents/codebuddy/README.md) | WorkBuddy | Desktop | yes | yes | — | `--yes` | measure, cmd, read, json_tree (off), archive, inject, guard, memory, graph, toon, docs (off) |
+| [`droid`](https://github.com/pyrlyn/rtok/blob/main/src/agents/droid/README.md) | Factory Droid | CLI | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
+| [`kiro`](https://github.com/pyrlyn/rtok/blob/main/src/agents/kiro/README.md) | Kiro CLI | CLI | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
+| [`kiro`](https://github.com/pyrlyn/rtok/blob/main/src/agents/kiro/README.md) | Kiro IDE | Desktop | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
 <!-- agents-table:end -->
 
 The table is generated from the host code (`src/agents/<host>/mod.rs` and the plugin catalogue) by `tests/agents_doc.rs`, which fails when it is stale. After changing a host, adding one, or changing a plugin's surfaces, regenerate it:

@@ -70,6 +70,7 @@ impl Store {
             conn: Mutex::new(conn),
             wait,
             store_raw: std::sync::atomic::AtomicBool::new(false),
+            idf_memo: Mutex::new(None),
         };
         store.migrate()?;
         Ok(store)

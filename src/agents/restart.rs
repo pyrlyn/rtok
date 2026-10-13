@@ -15,6 +15,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::{Context, Result};
+use rtok_sys::proc::ProgressRunner;
 
 use super::{Agent, Kind, Request, Variant};
 use crate::config::Config;
@@ -40,9 +41,8 @@ pub trait Procs {
 #[cfg(target_os = "windows")]
 fn tasklist_running(name: &str) -> bool {
     let exe = image_name(name);
-    std::process::Command::new("tasklist")
-        .args(["/FI", &format!("IMAGENAME eq {exe}")])
-        .output()
+    ProgressRunner::quiet("tasklist", ["/FI", &format!("IMAGENAME eq {exe}")])
+        .run()
         .map(|o| {
             String::from_utf8_lossy(&o.stdout)
                 .to_ascii_lowercase()
@@ -56,15 +56,11 @@ fn tasklist_running(name: &str) -> bool {
 /// about).
 #[cfg(not(target_os = "windows"))]
 fn pgrep_running(name: &str) -> bool {
-    // `pgrep` prints matching PIDs; only the exit status is wanted, so the PIDs must not
-    // leak into rtok's own stdout.
-    std::process::Command::new("pgrep")
-        .args(["-x", name])
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
+    // `pgrep` prints matching PIDs; only the exit status is wanted, and the runner keeps them
+    // out of rtok's own stdout.
+    ProgressRunner::quiet("pgrep", ["-x", name])
+        .run()
+        .is_ok_and(|o| o.status.success())
 }
 
 /// Real OS process control: macOS uses `osascript` (the same name resolution `tell application
@@ -76,11 +72,12 @@ impl Procs for RealProcs {
     fn app_running(&self, name: &str) -> bool {
         #[cfg(target_os = "macos")]
         {
-            std::process::Command::new("osascript")
-                .args(["-e", &format!("application \"{name}\" is running")])
-                .output()
-                .map(|o| String::from_utf8_lossy(&o.stdout).trim() == "true")
-                .unwrap_or(false)
+            ProgressRunner::quiet(
+                "osascript",
+                ["-e", &format!("application \"{name}\" is running")],
+            )
+            .run()
+            .is_ok_and(|o| String::from_utf8_lossy(&o.stdout).trim() == "true")
         }
         #[cfg(target_os = "windows")]
         {
@@ -112,22 +109,25 @@ impl Procs for RealProcs {
         #[cfg(target_os = "macos")]
         {
             run_ok(
-                std::process::Command::new("osascript")
-                    .args(["-e", &format!("tell application \"{name}\" to quit")]),
+                ProgressRunner::new(
+                    &closing(name),
+                    "osascript",
+                    ["-e", &format!("tell application \"{name}\" to quit")],
+                ),
                 &format!("osascript quit {name}"),
             )
         }
         #[cfg(target_os = "windows")]
         {
             run_ok(
-                std::process::Command::new("taskkill").args(["/IM", &image_name(name), "/F"]),
+                ProgressRunner::new(&closing(name), "taskkill", ["/IM", &image_name(name), "/F"]),
                 &format!("taskkill {name}"),
             )
         }
         #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         {
             run_ok(
-                std::process::Command::new("killall").arg(name),
+                ProgressRunner::new(&closing(name), "killall", [name]),
                 &format!("killall {name}"),
             )
         }
@@ -138,29 +138,32 @@ impl Procs for RealProcs {
         {
             let _ = path;
             run_ok(
-                std::process::Command::new("open").args(["-a", name]),
+                ProgressRunner::new(&reopening(name), "open", ["-a", name]),
                 &format!("open -a {name}"),
             )
         }
         #[cfg(target_os = "windows")]
         {
             run_ok(
-                std::process::Command::new("cmd").args([
-                    "/C",
-                    "start",
-                    "",
-                    path.to_str().unwrap_or(name),
-                ]),
+                ProgressRunner::new(
+                    &reopening(name),
+                    "cmd",
+                    ["/C", "start", "", path.to_str().unwrap_or(name)],
+                ),
                 &format!("start {name}"),
             )
         }
         #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         {
-            if path.exists() {
-                std::process::Command::new(path).spawn()?;
+            // A desktop app outlives this command, so it gets no pipes to fill and no spinner.
+            let (program, args): (&OsStr, &[&str]) = if path.exists() {
+                (path.as_os_str(), &[])
             } else {
-                std::process::Command::new("xdg-open").arg(name).spawn()?;
-            }
+                (OsStr::new("xdg-open"), &[name])
+            };
+            ProgressRunner::new("", program, args)
+                .output(rtok_sys::proc::Output::Detached)
+                .spawn()?;
             Ok(())
         }
     }
@@ -169,11 +172,8 @@ impl Procs for RealProcs {
 /// Run `cmd` to completion and fail on a non-zero exit, carrying its stderr: `open -a` on an
 /// app that is still shutting down exits non-zero, and checking only that it started hid that
 /// failure — the app stayed closed with no warning (T434).
-fn run_ok(cmd: &mut std::process::Command, what: &str) -> Result<()> {
-    let out = cmd
-        .stdout(std::process::Stdio::null())
-        .output()
-        .with_context(|| what.to_string())?;
+fn run_ok(cmd: ProgressRunner, what: &str) -> Result<()> {
+    let out = cmd.run().with_context(|| what.to_string())?;
     if !out.status.success() {
         anyhow::bail!(
             "{what}: {} {}",
@@ -182,6 +182,15 @@ fn run_ok(cmd: &mut std::process::Command, what: &str) -> Result<()> {
         );
     }
     Ok(())
+}
+
+fn closing(name: &str) -> String {
+    format!("closing {name}…")
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+fn reopening(name: &str) -> String {
+    format!("reopening {name}…")
 }
 
 /// The Windows image name for an app/binary `name`: `name` plus `.exe`, unless it already ends
@@ -565,13 +574,13 @@ mod tests {
     #[test]
     fn run_ok_fails_on_a_non_zero_exit() {
         let err = run_ok(
-            std::process::Command::new("sh").args(["-c", "echo nope >&2; exit 3"]),
+            ProgressRunner::quiet("sh", ["-c", "echo nope >&2; exit 3"]),
             "probe",
         )
         .unwrap_err();
         let msg = format!("{err:#}");
         assert!(msg.contains("probe") && msg.contains("nope"), "{msg}");
-        run_ok(&mut std::process::Command::new("true"), "probe").unwrap();
+        run_ok(ProgressRunner::quiet("true", [] as [&str; 0]), "probe").unwrap();
     }
 
     #[test]
@@ -694,6 +703,8 @@ mod tests {
             "Cline for VS Code" => "Visual Studio Code",
             "Kilo Code for VS Code" => "Visual Studio Code",
             "Kimi Code Desktop" => "Kimi Code",
+            "Kiro IDE" => "Kiro",
+            "MiMo Desktop" => "Xiaomi MiMo AI",
             "OpenCode Desktop" => "OpenCode",
             "Roo Code" => "Visual Studio Code",
             "VS Code" => "Visual Studio Code",

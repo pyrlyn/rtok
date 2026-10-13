@@ -442,6 +442,10 @@ dir           = "~/.qwen"                    # settings.json (hooks, mcpServers)
 [setup.codebuddy]
 dir           = "~/.codebuddy"               # CodeBuddy Code: settings.json (hooks), .mcp.json, plugins/; CODEBUDDY_CONFIG_DIR moves it
 workbuddy_dir = "~/.workbuddy"               # WorkBuddy Desktop: the same files (embedded CodeBuddy Code; unverified)
+[setup.droid]
+mcp_path      = "~/.factory/mcp.json"        # Factory Droid: пользовательский файл MCP-серверов (mcpServers)
+[setup.kiro]
+mcp_path      = "~/.kiro/settings/mcp.json"      # Kiro IDE and CLI: user-level MCP servers (mcpServers)
 
 [expand]                              # rtok expand <id>
 max_lines = 0                         # 0 = unlimited   (--lines a-b is per call)
@@ -590,6 +594,17 @@ min_rows = 5
 
 [plugins.compress]
 enabled = true                        # extractive summaries of archived tool output; runs only in proxy.mode = "compress"
+
+[plugins.compress.llm]
+enabled           = false             # P28: model summaries of archived output via the internal lane; needs proxy.mode = "compress"
+url               = ""                # where the compressor posts; empty = this proxy (proxy.bind:proxy.port)
+model             = "claude-haiku-4-5"
+max_input_bytes   = 65536             # larger archived results keep the extractive view
+max_output_tokens = 512
+max_spans         = 64                # more must-keep spans than this keep the extractive view
+max_in_flight     = 2                 # compressor calls at once
+timeout_s         = 60
+code              = false             # also summarise diffs and source; off = logs and prose only
 
 [plugins.docs]
 enabled        = false                # local rustdoc from Cargo.lock + cached docs.rs JSON (T455)

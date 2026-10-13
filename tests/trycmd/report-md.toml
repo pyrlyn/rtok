@@ -150,6 +150,15 @@ Every effective key with its origin — the `config show --sources` page.
 | plugins.cmd.shell |  | default |
 | plugins.cmd.trailer_min_lines | 40 | default |
 | plugins.compress.enabled | true | default |
+| plugins.compress.llm.code | false | default |
+| plugins.compress.llm.enabled | false | default |
+| plugins.compress.llm.max_in_flight | 2 | default |
+| plugins.compress.llm.max_input_bytes | 65536 | default |
+| plugins.compress.llm.max_output_tokens | 512 | default |
+| plugins.compress.llm.max_spans | 64 | default |
+| plugins.compress.llm.model | claude-haiku-4-5 | default |
+| plugins.compress.llm.timeout_s | 60 | default |
+| plugins.compress.llm.url |  | default |
 | plugins.docs.enabled | false | default |
 | plugins.docs.max_tokens | 800 | default |
 | plugins.docs.query_limit | 5 | default |
@@ -320,6 +329,7 @@ Every effective key with its origin — the `config show --sources` page.
 | setup.copilot.dir | ~/.copilot | default |
 | setup.cursor.hooks_path | ~/.cursor/hooks.json | default |
 | setup.devin.config_path | ~/.config/devin/config.json | default |
+| setup.droid.mcp_path | ~/.factory/mcp.json | default |
 | setup.dry_run | false | default |
 | setup.force | false | default |
 | setup.gemini.dir | ~/.gemini | default |
@@ -327,6 +337,7 @@ Every effective key with its origin — the `config show --sources` page.
 | setup.hook_timeout_s | 5 | default |
 | setup.kilo.config_path | ~/.config/kilo/kilo.json | default |
 | setup.kimi.config_path | ~/.kimi-code/config.toml | default |
+| setup.kiro.mcp_path | ~/.kiro/settings/mcp.json | default |
 | setup.mcp | true | default |
 | setup.mimo.config_path | ~/.config/mimocode/mimocode.json | default |
 | setup.modes | [] | default |
@@ -435,7 +446,7 @@ Every effective key with its origin — the `config show --sources` page.
 | worktree.enabled | true | default |
 | worktree.root | ~/.rtok/worktrees | default |
 
-389 keys.
+400 keys.
 
 ## Doctor
 
@@ -599,6 +610,11 @@ agents
     mcp     not installed
     proxy   not supported: MiMo Code has no documented base-URL override; MIMOCODE_HOME/MIMOCODE_CONFIG relocate config, not the model endpoint
     plugin  not installed
+  mimo (desktop)
+    hooks   not supported: MiMo Code has no shell hook events; the linked plugin filters bash output instead
+    mcp     not installed
+    proxy   not supported: MiMo Code has no documented base-URL override; MIMOCODE_HOME/MIMOCODE_CONFIG relocate config, not the model endpoint
+    plugin  not installed
   antigravity (cli)
     hooks   not supported: Antigravity's PreToolUse cannot rewrite tool input and PostToolUse cannot add context
     mcp     not supported: rtok's MCP ships inside the plugin, the only install path
@@ -639,6 +655,21 @@ agents
     mcp     not installed
     proxy   not supported: CodeBuddy Code takes its endpoint from the CODEBUDDY_BASE_URL environment variable; there is no config file to point at the proxy
     plugin  not installed (--yes)
+  droid (cli)
+    hooks   not supported: Droid documents hooks, but rtok has no checked mapping of its tool names and PreToolUse output yet
+    mcp     not installed
+    proxy   not supported: Droid has no single model base-URL setting; each customModels entry carries its own baseUrl
+    plugin  not supported: Droid plugins install into its own cache through `droid plugin install`; rtok ships no Droid plugin
+  kiro (cli)
+    hooks   not supported: Kiro's hooks page does not state the exit-code or output-to-context rules of command hooks
+    mcp     not installed
+    proxy   not supported: Kiro documents no model base-URL setting
+    plugin  not supported: Kiro documents no local plugin directory to link
+  kiro (desktop)
+    hooks   not supported: Kiro's hooks page does not state the exit-code or output-to-context rules of command hooks
+    mcp     not installed
+    proxy   not supported: Kiro documents no model base-URL setting
+    plugin  not supported: Kiro documents no local plugin directory to link
 skills (1 listed, 154 desc bytes ≈ 38 tokens per request)
   descriptions over 120 chars: 1 skills, ≈ 8 tokens/request recoverable
   dry-refactoring project desc 154c body 2772B calls - WARN desc>120 WARN never invoked

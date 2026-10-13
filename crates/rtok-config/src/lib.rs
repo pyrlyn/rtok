@@ -86,6 +86,8 @@ pub const HOSTS: &[&str] = &[
     "roo",
     "qwen",
     "codebuddy",
+    "droid",
+    "kiro",
 ];
 
 /// Adapters `[tasks] adapter` accepts. `tasks::run::ADAPTERS` re-exports this.
@@ -788,6 +790,8 @@ section! {
         roo: SetupRoo = SetupRoo::default(),
         qwen: SetupQwen = SetupQwen::default(),
         codebuddy: SetupCodebuddy = SetupCodebuddy::default(),
+        droid: SetupDroid = SetupDroid::default(),
+        kiro: SetupKiro = SetupKiro::default(),
     }
 }
 
@@ -939,6 +943,16 @@ section! {
         dir: PathBuf = p("~/.codebuddy"),
         workbuddy_dir: PathBuf = p("~/.workbuddy"),
     }
+}
+
+section! {
+    /// `[setup.droid]` — Factory Droid's user-level MCP file (T413.3).
+    SetupDroid { mcp_path: PathBuf = p("~/.factory/mcp.json") }
+}
+
+section! {
+    /// `[setup.kiro]` — Kiro IDE and CLI user-level MCP file (T413.4).
+    SetupKiro { mcp_path: PathBuf = p("~/.kiro/settings/mcp.json") }
 }
 
 section! {
@@ -1351,6 +1365,30 @@ section! {
     /// `[plugins.compress]`
     Compress {
         enabled: bool = true,
+        llm: CompressLlm = CompressLlm::default(),
+    }
+}
+
+section! {
+    /// `[plugins.compress.llm]` — P28 compressor (T385.9), off by default. Summarises an
+    /// archived tool result through the proxy's own `internal` lane and shows the cached summary
+    /// in place of the extractive view; the original stays under `expand <id>`.
+    CompressLlm {
+        enabled: bool = false,
+        /// Where the compressor posts; empty = this proxy (`proxy.bind:proxy.port`), so the
+        /// call is tagged `internal` and `[proxy.routing.internal]` applies.
+        url: String = String::new(),
+        model: String = s("claude-haiku-4-5"),
+        /// Larger archived results are left to the extractive view.
+        max_input_bytes: u64 = 65536,
+        max_output_tokens: u32 = 512,
+        /// More must-keep spans than this and the result is left to the extractive view.
+        max_spans: u32 = 64,
+        /// Compressor calls in flight at once.
+        max_in_flight: u32 = 2,
+        timeout_s: u64 = 60,
+        /// Also summarise diffs and source code; off, only logs and prose are.
+        code: bool = false,
     }
 }
 
@@ -1668,6 +1706,8 @@ impl Config {
             setup.qwen.dir,
             setup.codebuddy.dir,
             setup.codebuddy.workbuddy_dir,
+            setup.droid.mcp_path,
+            setup.kiro.mcp_path,
             setup.codewhale.dir,
             setup.mimo.config_path,
             setup.antigravity.plugins_path,

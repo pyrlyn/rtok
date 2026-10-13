@@ -238,6 +238,8 @@ pub(crate) fn surfaces(agent: &dyn super::Agent, cfg: &Config, kind: Kind) -> Ve
         "opencode" => (s.opencode.config_path.clone(), "mcp"),
         "qwen" => (super::qwen::settings_path(cfg), SERVERS),
         "roo" => (super::roo::mcp_path(cfg), SERVERS),
+        "droid" => (super::droid::mcp_path(cfg), SERVERS),
+        "kiro" => (super::kiro::mcp_path(cfg), SERVERS),
         "windsurf" => (s.windsurf.config_path.clone(), SERVERS),
         "zcode" => (s.zcode.config_path.clone(), "mcp.servers"),
         "zed" => (s.zed.config_path.clone(), "context_servers"),

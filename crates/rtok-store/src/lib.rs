@@ -31,6 +31,8 @@ pub use task_id::{MAX_DEPTH, MAX_PREFIX, TaskId, check_prefix};
 // Agent registry (T282, D34): one row per host session rtok sees, one per sub-agent.
 mod agents;
 pub use agents::{AgentDetail, AgentRow, idle_secs};
+// T385.9.1: the P28 compressor's summaries.
+mod archive_summaries;
 // Graph call events the web page streams (T329.15).
 mod graph_events;
 pub use graph_events::{EventPhase, GraphEvent, MeasurementSample};
@@ -142,6 +144,8 @@ pub struct Store {
     wait: LockWait,
     /// `[core] store_raw` (T431): save request bodies verbatim instead of cleaned.
     store_raw: std::sync::atomic::AtomicBool,
+    /// The last parsed graph IDF cache (T646).
+    idf_memo: Mutex<Option<symbols::IdfMemo>>,
 }
 
 /// How long one connection waits on another process's lock (T178).
