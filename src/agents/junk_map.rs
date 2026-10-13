@@ -94,7 +94,7 @@ const ELECTRON_CACHES: [&str; 5] = ["Cache", "Code Cache", "GPUCache", "CachedDa
 /// Hosts with no `specs` row on purpose: §22 reads "not documented" for every path they write
 /// (the config folder they already name through their markers is still listed). Keeping the
 /// list explicit makes a new host in `HOSTS` fail a test until it has a row or joins this list.
-pub const NO_ROWS: [&str; 12] = [
+pub const NO_ROWS: [&str; 13] = [
     "kilo",
     "aider",
     "roo",
@@ -107,6 +107,7 @@ pub const NO_ROWS: [&str; 12] = [
     "continue",
     "crush",
     "openhands",
+    "augment",
 ];
 
 /// The §22 rows and the desktop-app folders of `host`. A host §22 reads "not documented" for

@@ -144,6 +144,10 @@ const HOSTS: &[Host] = &[
         id: "openhands",
         files: &[".openhands/mcp.json"],
     },
+    Host {
+        id: "augment",
+        files: &[".augment/settings.json"],
+    },
 ];
 
 /// True for anything rtok owns: install puts it there and remove takes it away, so it is the
@@ -260,6 +264,9 @@ fn fixture(rel: &str) -> &'static str {
         ".config/amp/settings.json" => r#"{"amp.mcpServers":{"foreign":{"command":"x"}}}"#,
         ".config/crush/crush.json" => {
             r#"{"$schema":"https://charm.land/crush.json","options":{"debug":true},"mcp":{"foreign":{"type":"http","url":"https://x"}}}"#
+        }
+        ".augment/settings.json" => {
+            r#"{"mcpServers":{"foreign":{"command":"x"}},"hooks":{"Stop":[{"hooks":[{"type":"command","command":"/x/stop.sh"}]}]}}"#
         }
         ".claude/settings.json" => {
             r#"{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"other-tool run"}]}]},"env":{"KEEP":"1"}}"#
@@ -401,6 +408,7 @@ real_config_round_trip! {
     continue_keeps_the_real_config_yaml => "continue",
     crush_keeps_the_real_crush_json => "crush",
     openhands_keeps_the_real_mcp_json => "openhands",
+    augment_keeps_the_real_settings_json => "augment",
 }
 
 /// Zed writes JSONC. The fixture carries a `//` comment; the installer edits the text

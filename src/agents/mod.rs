@@ -15,6 +15,7 @@
 pub mod aider;
 pub mod amp;
 pub mod antigravity;
+pub mod augment;
 pub mod claude;
 pub mod cline;
 pub mod codebuddy;
@@ -130,6 +131,7 @@ pub fn host(id: &str) -> Option<&'static dyn Agent> {
         "warp" => Some(&warp::Warp),
         "continue" => Some(&continue_dev::Continue),
         "openhands" => Some(&openhands::OpenHands),
+        "augment" => Some(&augment::Augment),
         _ => None,
     }
 }
