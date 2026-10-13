@@ -430,6 +430,17 @@ pub fn remove_member(
     Ok((body, true))
 }
 
+/// `json` when it exists or has no `.jsonc` sibling, else the sibling: a host that writes
+/// `settings.jsonc` itself (MiMo, Amp) has its lone file edited rather than a second one made.
+pub(crate) fn lone_sibling(json: &Path) -> std::path::PathBuf {
+    let sibling = json.with_extension("jsonc");
+    if !json.exists() && sibling.exists() {
+        sibling
+    } else {
+        json.to_path_buf()
+    }
+}
+
 /// [`upsert_member`] on a host's JSONC file, written under the run's `apply` gates. `report`
 /// words the outcome, because each host prints its own line shape; the document is parsed
 /// back before it is written, so a malformed result never reaches the file.

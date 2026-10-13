@@ -31,6 +31,7 @@ uuid = { version = "1.26", features = ["v4"] } # agent ids in the store; already
 thiserror = "2.0" # public error enums: rtok-store and rtok-config
 figment = { version = "0.10", features = ["toml", "env"] } # config layering; the CLI builds flag dicts
 change-preview = "0.1.0" # config and file-edit previews, byte sizes (replaces the in-tree diff and bytes renderers)
+operation-icons = "0.1.0" # verb icons and the icon gutter, shared with ketch (T436.3)
 globset = "0.4" # junk globs and config validation of agents.junk.exclude
 url = "2.5" # file:// MCP roots and http(s) checks in config
 
@@ -150,6 +151,7 @@ schemars = { workspace = true } # JSON Schema of the /ws protocol, TS types gene
 shlex = "2.0.1" # POSIX word splitting of a hook command, to find the file it runs (T331.1)
 sha2 = { workspace = true } # call_io archive checksums (T13.3); the store crate owns the writer
 change-preview = { workspace = true } # unified diff, colour and byte sizes for `--dry-run` output
+operation-icons = { workspace = true } # verb icons and the icon gutter of status lines, shared with ketch (T436.3)
 wasmi = { version = "2.0", optional = true } # pure-Rust WASM interpreter for optional out-of-tree plugin host (P32)
 toml_edit = { workspace = true } # `config set` (T12.3) edits in place, preserving comments
 toml = "0.8" # Cargo.lock [[package]] parse for docs_resolve (already in the lock via figment)
@@ -166,7 +168,6 @@ serde-saphyr = "1.3.0" # `pnpm-workspace.yaml` of project references (T329.7); m
 notify = "9.0.0-rc.5" # recursive file watching for the graph background indexer (T8.16); 9 drops windows-sys 0.60 (T223)
 indicatif = "0.18" # progress for `graph index` (T21.2); `ProgressBar::hidden()` keeps it off the MCP path
 owo-colors = { version = "4", features = ["supports-colors"] } # ANSI + the tty/NO_COLOR/CLICOLOR/TERM=dumb question in one call (T20.2)
-unicode-width = "0.2" # measure each operation icon so its column pads to one width, as ketch does (T436); already in the tree through indicatif
 printpdf = "0.12.8" # paged-PDF renderer for `rtok report --format pdf` (T22.0 survey choice, T22.3)
 regex = { workspace = true } # search pattern (T4.5)
 tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "net", "time", "fs"] }
@@ -210,6 +211,7 @@ base64 = { version = "0.23.1", optional = true } # T329.40: the graph page recei
 workspace-hack = { version = "0.1", path = "workspace-hack" }
 
 [dev-dependencies]
+unicode-width = "0.2" # style tests: every icon measures the same width (T436); already in the tree through indicatif
 rtok-store = { path = "crates/rtok-store", features = ["test-util"] } # store test helpers; off the library build
 assert_cmd = "2" # CLI e2e through `Command::cargo_bin` (plan Working agreement)
 divan = "0.1" # divan benches in benches/ (default harness for new benches)

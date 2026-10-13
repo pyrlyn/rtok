@@ -7,13 +7,13 @@
 import type {
   CallsView,
   Cleared,
-  ClientMessage,
   DiffReport,
   DrillGraph,
   Export,
   ExportFile,
   Fixed,
   Plan,
+  Request,
   ServerFrame,
   Snapshot,
 } from "./snapshot.gen";
@@ -22,10 +22,17 @@ export type ConnectionState = "connecting" | "open" | "closed";
 
 // The server's panic fallback is `{"type":"snapshot","error":...}` with none of the page
 // fields, so a snapshot frame is split in two rather than cast blindly to `Snapshot`.
-export type Frame =
+// `req` is the id of the request a frame answers (T623): the server echoes it on every reply,
+// a refusal included, and a push such as a snapshot carries none.
+export type Frame = (
   | { type: "snapshot"; snapshot: Snapshot }
   | { type: "snapshot_error"; error: string }
-  | ServerFrame;
+  | ServerFrame
+) & { req?: number };
+
+/** `frame` as the server sends it for a request that carried `req`; a request without one gets it bare. */
+export const echoReq = (frame: Frame, req?: number | null): Frame =>
+  typeof req === "number" ? { ...frame, req } : frame;
 
 export interface Handlers {
   onState(state: ConnectionState): void;
@@ -34,7 +41,7 @@ export interface Handlers {
 
 export interface Connection {
   /** `false` when the frame was not sent because the link is not open. */
-  send(message: ClientMessage): boolean;
+  send(message: Request): boolean;
   close(): void;
 }
 
@@ -70,6 +77,11 @@ export function parseFrame(raw: unknown): Frame | null {
   }
   if (typeof value !== "object" || value === null) return null;
   const v = value as Record<string, unknown>;
+  const frame = parseBody(v);
+  return frame && typeof v.req === "number" ? { ...frame, req: v.req } : frame;
+}
+
+function parseBody(v: Record<string, unknown>): Frame | null {
   switch (v.type) {
     case "message":
       return typeof v.text === "string" ? { type: "message", text: v.text } : null;

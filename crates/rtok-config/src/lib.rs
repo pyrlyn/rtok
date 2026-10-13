@@ -90,6 +90,7 @@ pub const HOSTS: &[&str] = &[
     "droid",
     "kiro",
     "junie",
+    "amp",
     "openhands",
 ];
 
@@ -797,6 +798,7 @@ section! {
         goose: SetupGoose = SetupGoose::default(),
         droid: SetupDroid = SetupDroid::default(),
         kiro: SetupKiro = SetupKiro::default(),
+        amp: SetupAmp = SetupAmp::default(),
         openhands: SetupOpenhands = SetupOpenhands::default(),
     }
 }
@@ -971,6 +973,12 @@ section! {
 section! {
     /// `[setup.kiro]` — Kiro IDE and CLI user-level MCP file (T413.4).
     SetupKiro { mcp_path: PathBuf = p("~/.kiro/settings/mcp.json") }
+}
+
+section! {
+    /// `[setup.amp]` — Amp (Sourcegraph) user settings file (`amp.mcpServers`, T413.5);
+    /// `settings.jsonc` is used when it is the only one.
+    SetupAmp { settings_path: PathBuf = p("~/.config/amp/settings.json") }
 }
 
 section! {
@@ -1733,6 +1741,7 @@ impl Config {
             setup.droid.mcp_path,
             setup.kiro.mcp_path,
             setup.junie.mcp_path,
+            setup.amp.settings_path,
             setup.openhands.mcp_path,
             setup.codewhale.dir,
             setup.mimo.config_path,
