@@ -51,13 +51,13 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T414.7 | in progress | P3 | 1 | 0% | MiMo / mimo |
 | T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
 | T428 | in progress | P2 | 3 | 85% | Claude Code / sonnet-5.5 |
-| T651 | todo | P2 | 2 | 35% | |
-| T652 | todo | P1 | 2 | 60% | |
-| T653 | todo | P2 | 2 | 55% | |
-| T654 | todo | P2 | 2 | 65% | |
-| T655 | todo | P2 | 2 | 60% | |
-| T656 | todo | P2 | 2 | 60% | |
-| T657 | todo | P1 | 2 | 55% | |
+| T651 | in progress | P2 | 2 | 35% | Claude Code / sonnet-5.5 |
+| T652 | in progress | P1 | 2 | 60% | Claude Code / sonnet-5.5 |
+| T653 | in progress | P2 | 2 | 55% | Claude Code / sonnet-5.5 |
+| T654 | in progress | P2 | 2 | 65% | Claude Code / sonnet-5.5 |
+| T655 | in progress | P2 | 2 | 60% | Claude Code / sonnet-5.5 |
+| T656 | in progress | P2 | 2 | 60% | Claude Code / sonnet-5.5 |
+| T657 | in progress | P1 | 2 | 55% | Claude Code / sonnet-5.5 |
 | T436.4 | todo | P3 | 2 | 90% | |
 | T522 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T523 | in progress | P2 | 2 | 0% | MiMo / mimo |
