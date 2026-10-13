@@ -28,7 +28,6 @@
 - T398. Probe editors on a `worktree.useRelativePaths` worktree
 - T413. More agent hosts: popular agents rtok does not install into yet
 - T413.8. `rtok agents install augment` — Augment Code and Auggie CLI
-- T413.11. `rtok agents install crush` — Crush
 - T413.13. `rtok agents install trae` — Trae
 - T413.14. `rtok agents install openhands` — OpenHands
 - T413.15. `rtok agents install reasonix` — DeepSeek Reasonix
