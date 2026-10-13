@@ -15,6 +15,15 @@ const preview: Preview = {
         },
     },
     initialGlobals: { theme: "dark" },
+    // Every story file runs in an iframe of one origin, so a graph view one story saved would
+    // pick the view of a later story by file order (T661).
+    beforeEach: () => {
+        try {
+            localStorage.clear();
+        } catch {
+            // Blocked storage keeps nothing to clear.
+        }
+    },
     decorators: [
         (Story, { globals }) => {
             const dark = globals["theme"] !== "light";
