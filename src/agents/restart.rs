@@ -707,6 +707,7 @@ mod tests {
             "MiMo Desktop" => "Xiaomi MiMo AI",
             "OpenCode Desktop" => "OpenCode",
             "Roo Code" => "Visual Studio Code",
+            "Goose" => "Goose",
             "VS Code" => "Visual Studio Code",
             "VS Code - Insiders" => "Visual Studio Code - Insiders",
             "Warp" => "Warp",

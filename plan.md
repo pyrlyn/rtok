@@ -48,9 +48,8 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T398 | todo | P3 | 1 | 30% | |
 | T413 | todo | P2 | 3 | 0% | |
 | T413.5 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
-| T413.6 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
-| T413.7 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
-| T413.8 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
+| T413.7 | in progress | P3 | 3 | 0% | Claude Code / sonnet-5.5 |
+| T413.8 | in progress | P3 | 3 | 0% | Claude Code / sonnet-5.5 |
 | T413.9 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
 | T413.11 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T413.13 | todo | P3 | 2 | 0% | |
@@ -62,7 +61,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T428 | in progress | P2 | 3 | 85% | Claude Code / sonnet-5.5 |
 | T436.3 | todo | P2 | 2 | 50% | |
 | T436.4 | todo | P3 | 2 | 90% | |
-| T640 | in progress | P2 | 4 | 90% | Claude / opus-5.5 |
 | T522 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T523 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T524 | in progress | P2 | 1 | 0% | MiMo / mimo |
@@ -658,14 +656,6 @@ Check: the T413 per-host check (step 5) for this host.
 
 Plan: Sourcegraph docs for the MCP entry and the plugin directory; `HostPlugin` only if the load path is documented.
 
-### T413.6. `rtok agents install goose` — Goose
-
-Goose (Block), CLI and desktop. MCP-native, so the minimum is the MCP entry; hooks only if documented.
-
-Check: the T413 per-host check (step 5) for this host.
-
-Plan: Block's docs for the MCP config file; hooks only if a payload is documented. MCP-only host via the existing stdio or local helper, whichever the file matches.
-
 ### T413.7. `rtok agents install continue` — Continue
 
 VS Code / JetBrains extension and the `cn` CLI. MCP and rules; variants per documented config location.
@@ -969,16 +959,3 @@ The 14 portable ideas and where each landed:
 12. Memory RRF / file affinity — T373, T374.
 13. Edit robustness (fuzzy `old_string`) — does not fit now: I-43 / T58.3 measured 1.3 % `old_string` misses; below the gate.
 14. Shell output compress / tee — already covered by the `cmd` rules (`src/plugins/cmd/rules.rs`) and the archive (`expand <id>`).
-
-### T640. File and directory work through `fs-kit`
-
-The creator's call (2026-10-12): every project takes its file and directory helpers from one shared crate, `fs-kit` in `packages/crates` (crates-packages PR #57), instead of its own copies. Line caps lifted by the creator for this task.
-
-Plan:
-1. Depend on `fs-kit` (a path to the crates checkout until it is on crates.io, then the version); drop the direct `dunce` dependency.
-2. Duplicates go: `rtok-store/src/paths.rs` re-exports `fs_kit::path`; `src/fs.rs` `normalize` and `same_dir`; the junk walk (`disk_usage_until`, `Usage`) from `fs_kit::tree`; `rtok-agent-sdk` `write_atomic`/`link_target`/`clear_readonly` and `copy_dir` from `fs_kit::write` and `fs_kit::tree`; completions `read`/`write_if_changed`.
-3. Every `dunce::` and `std::fs::canonicalize` call goes through `fs_kit::path`.
-4. Left for later slices: the `_backup` folder with pruning (`rtok-agent-sdk` `backup`) and `info.rs` `dir_usage` (apparent size, a different number from disk usage) stay until `fs-kit` grows those variants; plain `std::fs::write`/`create_dir_all` calls move subsystem by subsystem.
-5. `fs-kit` 0.1.0 is on crates.io, so the dependency is the registry version (`fs-kit = "0.1"`), not a path.
-
-Check: `just check` green on `fs-kit` 0.1 from crates.io; `fs-kit` unit tests cover each moved helper (atomic write through a symlink, permissions kept, `if_changed`, tree usage and copy, path folding), and the existing rtok tests for `paths`, `junk`, completions install and the agent SDK pass unchanged.

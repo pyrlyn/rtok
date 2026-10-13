@@ -754,6 +754,19 @@ Check: `cargo test --lib plugins::graph::review`; `graph_surface_is_five_tools_u
 
 Result: 8 review tests passed; the MCP surface stays five tools. `just check` ran the full gate (trycmd snapshots are a shared input): 2978 passed, 6 skipped.
 
+### T646. `rtok graph review` finishes inside the CI time limit
+
+The `Graph review` job (`.github/workflows/graph-review.yml`, `timeout 180` around `rtok graph review --since origin/main`) has posted "review did not finish within 3 minutes" on every pull request since T454 (#887): the build takes about 3 minutes, then the review is killed at exactly 180 s. Neither the index build nor the cache is the cost, and a bigger limit would not help: on a debug build with a warm index `graph impact rank_name --depth 3` took 118 s, `impact canon` 487 s, and a 206-file diff ran past 20 minutes. `review` walks callers to depth 3 from up to 400 changed definitions, and every visited name costs three store answers. Sampled profiles, one layer at a time:
+
+1. No `sqlite_stat1`, so SQLite served `ORDER BY path` from `symbols_root_path (root=?)`, every row of the root, in `symbol_defs`, `symbol_ref_groups` and `symbol_import_follow`. `rebuild_symbol_idf`, which ends every index pass, now runs `ANALYZE symbols` under `analysis_limit = 1000` (`sql_ext::analyze_symbols`; Diesel has no form for either statement).
+2. `symbol_name_freq` parsed the whole IDF JSON (117 KB here) for every name. The store keeps the last parse and reuses it while the kv body is unchanged, so a rebuild by another process is still seen.
+3. `symbol_imported_defs` split every specifier and definition path once per pair; now once each.
+4. Each of the 400 walks asked the store again for names an earlier walk had answered. `impact_walk_memo` takes a `WalkMemo` of rank, reference groups and import follows per `(root, name)`; `review` shares one for its run, every other caller still gets a fresh one.
+
+Check: `just check` green; new tests `rebuild_symbol_idf_leaves_planner_statistics_for_symbols` (fails without step 1: no statistics table), `name_freq_follows_a_rebuilt_idf_cache`, `shared_walk_memo_keeps_rows_and_reuses_visited_names`; the existing `import_matches_file` and `imported_defs` tests cover step 3. Cold review of the #1008, #1010, #1011, #1013, #1014 diffs (fresh `RTOK_HOME`, index from nothing) with output byte-identical to the build with step 1 alone (#1013, #1014); the PR's own `Graph review` comment holds a review, not the timeout line.
+
+Result: `just check` 3702 passed, 8 skipped. Cold `graph review` (debug build, fresh `RTOK_HOME`, index from nothing) of the #1008, #1010, #1011, #1013, #1014 diffs: 29, 37, 30, 44, 43 s. Warm #1014: 345 s with step 1 only, 139 s after step 2, 78 s after step 3, 29 s after step 4. `rebuild_symbol_idf_leaves_planner_statistics_for_symbols` fails with step 1 removed.
+
 ### T368. Rank ambiguous `callers` / `impact` / `explore` hits by import evidence and name IDF
 
 From the Empryo study (2026-10-02; idea-only, clean-room — Empryo is BSL 1.1, no code copied; Empryo `src/core/intelligence/repo-map.ts` @ `669ff91` was read for the idea only). Today a common name (`new`, `run`, `parse`) returns every same-named definition and every reference to any of them; `annotate_ambiguous` only says "ambiguous", and `impact_bfs` walks all of them. Resolve an edge by (a) whether the referencing file imports the defining file and (b) the IDF of the name, `ln(N_files / df)`, and drop names referenced in more than ~5% of files from ranking. The full import path is stored in `scope` on `import` rows (no new column).
@@ -8827,6 +8840,13 @@ Check: targeted nextest filter from the landing PR; #760 CI green on main.
 Status: done 2026-10-05 (#760)
 Model: Cursor / grok 4.7
 
+### T413.6. `rtok agents install goose` — Goose
+
+Goose (Block, now under the Agentic AI Foundation), CLI and desktop. MCP-native, so the minimum is the MCP entry; hooks only if documented.
+
+Done: `src/agents/goose/` writes `extensions.rtok` (stdio: `name`, `type`, `cmd`, `args`, `enabled`) into `config.yaml` as a text-level block edit validated with the existing `serde-saphyr`, so comments and every other byte stay; keys Goose adds on re-save are not an edit; `[setup.goose] config_path`; variants Goose CLI and Goose (Desktop). Hooks (Open Plugins, no adapter), proxy (env var only) and plugin report a factual reason. Research in `research.md` §32.6.
+
+Check: unit tests for the block edit (add, replace, remove, CRLF, foreign YAML, resave defaults), the real-config round trip, `agents_doc`, `host_docs`, trycmd snapshots; `just check`.
 ### T413.3. `rtok agents install droid` — Factory Droid
 
 `rtok agents usage` already lists Droid as `unsupported` (`research.md` §30.4). This adds the installer: MCP, and hooks or plugins if Factory documents them.
@@ -13346,6 +13366,24 @@ Check: `write_refuses_a_symlink_cycle_and_leaves_every_link_alone`, `write_follo
 
 Status: done 2026-10-12
 Model: Claude Code / claude-sonnet-5-5
+
+### T640. File and directory work through `fs-kit`
+
+The creator's call (2026-10-12): every project takes its file and directory helpers from one shared crate, `fs-kit` in `packages/crates` (crates-packages PR #57), instead of its own copies. Line caps lifted by the creator for this task.
+
+Plan:
+1. Depend on `fs-kit` (a path to the crates checkout until it is on crates.io, then the version); drop the direct `dunce` dependency.
+2. Duplicates go: `rtok-store/src/paths.rs` re-exports `fs_kit::path`; `src/fs.rs` `normalize` and `same_dir`; the junk walk (`disk_usage_until`, `Usage`) from `fs_kit::tree`; `rtok-agent-sdk` `write_atomic`/`link_target`/`clear_readonly` and `copy_dir` from `fs_kit::write` and `fs_kit::tree`; completions `read`/`write_if_changed`.
+3. Every `dunce::` and `std::fs::canonicalize` call goes through `fs_kit::path`.
+4. Left for later slices: the `_backup` folder with pruning (`rtok-agent-sdk` `backup`) and `info.rs` `dir_usage` (apparent size, a different number from disk usage) stay until `fs-kit` grows those variants; plain `std::fs::write`/`create_dir_all` calls move subsystem by subsystem.
+5. `fs-kit` 0.1.0 is on crates.io, so the dependency is the registry version (`fs-kit = "0.1"`), not a path.
+
+Check: `just check` green on `fs-kit` 0.1 from crates.io; `fs-kit` unit tests cover each moved helper (atomic write through a symlink, permissions kept, `if_changed`, tree usage and copy, path folding), and the existing rtok tests for `paths`, `junk`, completions install and the agent SDK pass unchanged.
+
+Result: rtok takes paths, atomic writes, tree usage and copies from `fs-kit` 0.1 on crates.io (pyrlyn/crates-packages#57); the copies in `rtok-store` paths, `src/fs.rs`, the junk walk, the agent SDK and completions are gone, and `dunce` is no longer a direct dependency (pyrlyn/rtok#998).
+
+Status: done 2026-10-12
+Model: Claude Code / claude-opus-5-5
 
 ### T577. Protect nested package-manager lockfiles during junk cleanup
 
