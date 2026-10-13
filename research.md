@@ -2615,6 +2615,15 @@ Factory moved its docs from `docs.factory.ai` to `docs.factory.com` (308 redirec
 - No model base-URL setting and no local plugin directory are documented on the pages above, so proxy and plugin stay `Support::No`.
 - Migration: see 32.10 (T413.10): the Amazon Q CLI migration copies `~/.aws/amazonq/mcp.json` to `~/.kiro/settings/mcp.json`, which supports `~/.kiro/settings/mcp.json` as the CLI's user file.
 
+### 32.6 Goose (T413.6, checked 2026-10-12)
+
+- Config file: https://github.com/aaif-goose/goose/blob/main/documentation/docs/guides/config-files.md — `~/.config/goose/config.yaml` on macOS and Linux, `%APPDATA%\Block\goose\config\config.yaml` on Windows. The CLI and the Desktop app share it.
+- `GOOSE_PATH_ROOT` moves every goose directory: https://github.com/aaif-goose/goose/blob/main/documentation/docs/guides/environment-variables.md. The installer reads it only through `[setup.goose] config_path`, not from the environment.
+- Stdio extension shape: https://github.com/aaif-goose/goose/blob/main/documentation/docs/getting-started/using-extensions.md (section on editing the config file) — `extensions.<key>` with `name`, `type: stdio`, `cmd`, `args`, `enabled`; `envs` and `timeout` are optional. Goose adds defaults when it re-saves an entry, so the installer compares only `name`, `type`, `cmd`, `args`, `enabled`.
+- Hooks: https://github.com/aaif-goose/goose/blob/main/documentation/docs/guides/context-engineering/hooks.md documents Open Plugins hooks with their own payload and decision shape. rtok has no adapter for it, so hooks stay off (`support` says so).
+- Proxy: only the `GOOSE_PROVIDER__HOST` environment variable is documented (environment-variables.md above), so there is no file to write; plugin: Goose's Open Plugins bundle is not shipped by rtok.
+- Desktop app: https://github.com/Homebrew/homebrew-cask/blob/master/Casks/b/block-goose.rb (cask `block-goose`, app `Goose.app`; linked from https://github.com/aaif-goose/goose/blob/main/documentation/docs/getting-started/installation.md). The CLI binary is `goose`.
+
 ### 32.10 Amazon Q Developer CLI (T413.10, checked 2026-10-12)
 
 Result: no `amazonq` host. The CLI is succeeded by Kiro CLI, which T413.4 covers.
@@ -2890,4 +2899,4 @@ Question: what does Codex send and read on these three events, so rtok can wire 
 | Plain stdout | ignored on `PreToolUse` and `PostToolUse`; developer context on `SessionStart`, `UserPromptSubmit` and `SubagentStart` | docs |
 | Tool names | `Bash` (shell and `exec_command`), `apply_patch`, `mcp__<server>__<tool>`, other local tools by name; `spawn_agent` also matches `Agent`; hosted tools such as web search are not hooked | docs |
 
-Consequences for rtok: Codex's `Bash` is Claude's `Bash`, so the existing Bash rewrite and deny paths apply once the output carries `allow`; there is no `Read` tool (reads go through `Bash`), and file edits are `apply_patch` with the patch text in `tool_input.command`, so T262.3's ledger cannot count Codex reads and must parse paths out of a patch. Not verified: whether `allow` also skips Codex's own approval prompt on a rewritten command (the scratch run used `approval_policy = "never"`), and the exact `apply_patch` payload (the fake server only produced function calls).
+Consequences for rtok: Codex's `Bash` is Claude's `Bash`, so the existing Bash rewrite and deny paths apply once the output carries `allow`; there is no `Read` tool (reads go through `Bash`), and file edits are `apply_patch` with the patch text in `tool_input.command`, so T262.3's ledger cannot count Codex reads and parses the `*** Add/Update/Delete File:` and `*** Move to:` headers out of the patch text in `tool_input.command` (the docs' shape). Not verified: whether `allow` also skips Codex's own approval prompt on a rewritten command (the scratch run used `approval_policy = "never"`), and the `apply_patch` payload itself: the fake model's tool list (`exec_command`, `write_stdin`, `request_user_input`, `view_image`, goal and agent tools) offered no `apply_patch`, with or without `-s workspace-write`, `features.apply_patch_freeform` or a bundled model name, so the hook never fired on one.

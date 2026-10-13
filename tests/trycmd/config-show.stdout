@@ -287,6 +287,7 @@ setup.droid.mcp_path = ~/.factory/mcp.json
 setup.dry_run = false
 setup.force = false
 setup.gemini.dir = ~/.gemini
+setup.goose.config_path = ~/.config/goose/config.yaml
 setup.grok.config_path = ~/.grok/config.toml
 setup.hook_timeout_s = 5
 setup.kilo.config_path = ~/.config/kilo/kilo.json

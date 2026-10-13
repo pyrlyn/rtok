@@ -5,7 +5,6 @@
 - T134. Probe: does a CLI command hook's `PostToolUse` `updatedToolOutput` replace native tool output?
 
 - T156. Probe: `WorktreeCreate`/`WorktreeRemove` hooks and reflink-seeded `target/`
-- T262.3. Codex: spawn brief on `SubagentStart`
 - T261. CI takes ~9.5 min on macOS; the webui check recompiles 183 crates every run
 - T275. Install/update removes rtok's MCP entry from an agent's config while a plugin serves MCP (every host)
 - T275.1. `rtok mcp ping <agent>`: prove the agent's rtok MCP server is alive and answering
@@ -30,7 +29,6 @@
 - T398. Probe editors on a `worktree.useRelativePaths` worktree
 - T413. More agent hosts: popular agents rtok does not install into yet
 - T413.5. `rtok agents install amp` — Amp
-- T413.6. `rtok agents install goose` — Goose
 - T413.7. `rtok agents install continue` — Continue
 - T413.9. `rtok agents install junie` — JetBrains Junie
 - T413.11. `rtok agents install crush` — Crush
@@ -50,3 +48,8 @@
 - T525. SubagentStart and PreCompact under the 10 ms hook budget
 - T526. `worktree_list` and `search` when `rtok mcp` was started in the home directory
 - T527. A worktree claim does not stay held by an agent idle for days
+- T647.1. One project-root method and a path-containment guard
+- T647.2. Every project-root caller goes through the T647.1 method
+- T647.3. Worktrees nested in the project do not leak into walks, gc or clean
+- T647.4. Default worktree root `<project>/.rtok/worktrees`, `.rtok/` ignored
+- T647.5. `rtok worktree migrate` moves worktrees into the configured root
