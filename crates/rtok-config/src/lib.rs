@@ -86,6 +86,7 @@ pub const HOSTS: &[&str] = &[
     "roo",
     "qwen",
     "codebuddy",
+    "goose",
     "droid",
     "kiro",
 ];
@@ -790,6 +791,7 @@ section! {
         roo: SetupRoo = SetupRoo::default(),
         qwen: SetupQwen = SetupQwen::default(),
         codebuddy: SetupCodebuddy = SetupCodebuddy::default(),
+        goose: SetupGoose = SetupGoose::default(),
         droid: SetupDroid = SetupDroid::default(),
         kiro: SetupKiro = SetupKiro::default(),
     }
@@ -933,6 +935,12 @@ section! {
     /// `[setup.qwen]` — Qwen Code's `settings.json` (`hooks`, `mcpServers`) lives under
     /// `dir` (T413.2). `QWEN_HOME` moves that directory; this key is the override.
     SetupQwen { dir: PathBuf = p("~/.qwen") }
+}
+
+section! {
+    /// `[setup.goose]` — Goose's `config.yaml`, where `extensions.rtok` goes (T413.6). Desktop
+    /// and CLI read the same file; `GOOSE_PATH_ROOT` moves it to `<root>/config/config.yaml`.
+    SetupGoose { config_path: PathBuf = p("~/.config/goose/config.yaml") }
 }
 
 section! {
@@ -1704,6 +1712,7 @@ impl Config {
             setup.cline.mcp_path,
             setup.gemini.dir,
             setup.qwen.dir,
+            setup.goose.config_path,
             setup.codebuddy.dir,
             setup.codebuddy.workbuddy_dir,
             setup.droid.mcp_path,

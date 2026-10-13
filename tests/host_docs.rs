@@ -71,6 +71,7 @@ const DOC_DOMAINS: &[(&str, &str)] = &[
     ("src/agents/droid", "docs.factory.com"),
     ("src/agents/kiro", "kiro.dev"),
     ("src/agents/gemini", "geminicli.com"),
+    ("src/agents/goose", "github.com"),
     ("src/agents/grok", "docs.x.ai"),
     ("src/agents/kilo", "kilo.ai"),
     ("src/agents/kimi", "moonshotai.github.io"),
