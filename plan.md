@@ -687,14 +687,6 @@ Plan: Trae docs for the MCP file. Reuse the VS Code helper only if the key and p
 
 Finding (2026-10-12, `research.md` §32.13): Trae's docs name only a project `.trae/mcp.json`, which is the project's, and a user-level `mcp.json` behind the app's Raw Config button with no path. No installer is written until a documented user-level path exists.
 
-### T413.15. `rtok agents install reasonix` — DeepSeek Reasonix
-
-DeepSeek-Reasonix (https://github.com/esengine/DeepSeek-Reasonix), CLI plus editor extension. Its docs list MCP, skills, memory and hooks in `~/.reasonix/config.json` (lead, checked 2026-10-05: https://esengine.github.io/DeepSeek-Reasonix/configuration.html); confirm the keys before writing them.
-
-Check: the T413 per-host check (step 5) for this host.
-
-Plan: re-read configuration.html and write only the keys it names. Skills and memory stay out unless that page says setup may edit them.
-
 ### T414. Web dashboard restyle on the brand pack, built from `brand/` sources
 
 Creator request 2026-10-05: a new look for the `rtok web` SPA from the brand pack in `brand/` (tokens, logos, icons, `DESIGN.md`, on top of the `@pyrlyn/brand` base it pins). Creator decisions 2026-10-05: a restyle by the brandbook (pages and navigation stay; shell, panels, tables, KPIs and charts change); a mockup first, approved before the pages; our own `web/src/ui` React components on the brand roles (`--pyr-*`), not the base `.pyr-*` classes. Creator decisions 2026-10-05, later: UI/UX additions (grouped sidebar, command palette and shortcuts, clickable KPIs, live status with pause) and features (Δtok savings trend, table filters in the URL, CSV/JSON export), one sub-task each (T414.8–T414.14). Creator decisions 2026-10-05, later still: charts draw on canvas through ECharts 6, behind our own chart abstraction so the library can be swapped; hover shows a tooltip, and other places change live with the hover where that does not repeat the tooltip; small marks (budget grid, plugin bitset, token mix, share bars) stay DOM and share the same tooltip (T414.15, T414.16). Creator decision 2026-10-05, after the charts: open-source UI toolkits are allowed; behaviour (focus, keyboard, overlays, menus, dialogs, listboxes) comes from React Aria Components, styled by us on the `--pyr-*` roles, so the look stays ours (from T414.9 on; its `Autocomplete` serves the palette, so no `cmdk`).
