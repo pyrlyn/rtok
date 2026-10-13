@@ -532,14 +532,16 @@ mod tests {
 
     /// T638: a descendant that outlives the child keeps the pipe open; the drain after the
     /// child's exit is finite, so the bench neither stalls nor loses the child's output.
+    /// The run budget only has to cover `sh` starting (slow on Windows runners); the stall
+    /// this guards against would wait out the descendant's `sleep`, far past the bound.
     #[test]
     fn a_descendant_holding_the_pipe_does_not_stall_the_bench() {
-        let cmd = ProgressRunner::quiet("sh", ["-c", "sleep 5 & printf parent; exit 0"]);
+        let cmd = ProgressRunner::quiet("sh", ["-c", "sleep 10 & printf parent; exit 0"]);
         let start = Instant::now();
-        let out = run_bounded(cmd, Duration::from_millis(100)).expect("child exited cleanly");
+        let out = run_bounded(cmd, Duration::from_secs(3)).expect("child exited cleanly");
         assert_eq!(out, b"parent");
         assert!(
-            start.elapsed() < Duration::from_secs(3),
+            start.elapsed() < Duration::from_secs(6),
             "{:?}",
             start.elapsed()
         );
