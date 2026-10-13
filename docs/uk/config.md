@@ -453,6 +453,8 @@ mcp_path      = "~/.factory/mcp.json"        # Factory Droid: користува
 mcp_path      = "~/.kiro/settings/mcp.json"      # Kiro IDE and CLI: user-level MCP servers (mcpServers)
 [setup.amp]
 settings_path = "~/.config/amp/settings.json"    # Amp: user settings; amp.mcpServers holds MCP servers (settings.jsonc if it is the only one)
+[setup.warp]
+mcp_path      = "~/.warp/.mcp.json"          # Warp: користувацький файл MCP-серверів (mcpServers)
 
 [expand]                              # rtok expand <id>
 max_lines = 0                         # 0 = без обмежень (--lines a-b задається для виклику)
