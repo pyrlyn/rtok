@@ -54,20 +54,7 @@ fn as_opencode(cfg: &Config) -> Config {
 }
 
 impl Agent for Kilo {
-    /// Return the stable host identifier used by `rtok agents` commands.
-    fn id(&self) -> &'static str {
-        "kilo"
-    }
-
-    /// Return the CLI and VS Code surfaces that share Kilo's configuration.
-    fn variants(&self) -> &'static [Variant] {
-        &VARIANTS
-    }
-
-    /// Return the bundled installation notes for Kilo Code.
-    fn readme(&self) -> &'static str {
-        include_str!("README.md")
-    }
+    super::agent_identity!("kilo");
 
     /// Report that both Kilo variants use the same installed files.
     fn shared(&self) -> bool {

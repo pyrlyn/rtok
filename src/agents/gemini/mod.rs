@@ -257,17 +257,7 @@ fn plugin(cfg: &Config, remove: bool) -> Result<String> {
 }
 
 impl Agent for Gemini {
-    fn id(&self) -> &'static str {
-        "gemini"
-    }
-
-    fn variants(&self) -> &'static [Variant] {
-        &VARIANTS
-    }
-
-    fn readme(&self) -> &'static str {
-        include_str!("README.md")
-    }
+    super::agent_identity!("gemini");
 
     fn support(&self, _kind: Kind, module: &str) -> Support {
         match module {
