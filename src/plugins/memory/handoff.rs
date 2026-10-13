@@ -96,21 +96,35 @@ fn ledger(cx: &Ctx) -> Vec<Pointer> {
             continue;
         };
         let tool = v.get("tool_name").and_then(|t| t.as_str()).unwrap_or("");
+        let cwd = v.get("cwd").and_then(|c| c.as_str()).unwrap_or(".");
+        let input = v.get("tool_input");
+        let mut note = |path: String| {
+            *seen.entry(path.clone()).or_insert_with(|| {
+                touched.push((path, cwd.to_string(), Vec::new()));
+                touched.len() - 1
+            })
+        };
+        if tool == "apply_patch" {
+            // Codex edits files through one patch text and has no `Read` tool (research.md
+            // section 40), so the paths come out of the patch headers.
+            let patch = input
+                .and_then(|i| i.get("command"))
+                .and_then(|c| c.as_str());
+            for path in patch.map(patch_paths).unwrap_or_default() {
+                note(under_cwd(cwd, &path));
+            }
+            continue;
+        }
         if !matches!(tool, "Read" | "Edit" | "Write") {
             continue;
         }
-        let input = v.get("tool_input");
         let Some(path) = input
             .and_then(|i| i.get("file_path").or_else(|| i.get("path")))
             .and_then(|p| p.as_str())
         else {
             continue;
         };
-        let at = *seen.entry(path.to_string()).or_insert_with(|| {
-            let cwd = v.get("cwd").and_then(|c| c.as_str()).unwrap_or(".");
-            touched.push((path.to_string(), cwd.to_string(), Vec::new()));
-            touched.len() - 1
-        });
+        let at = note(path.to_string());
         let int = |k: &str| input.and_then(|i| i.get(k)).and_then(|n| n.as_i64());
         let touch = match tool {
             "Read" if int("offset").is_some() || int("limit").is_some() => {
@@ -136,6 +150,39 @@ fn ledger(cx: &Ctx) -> Vec<Pointer> {
             path,
         })
         .collect()
+}
+
+/// The file paths a Codex `apply_patch` text names (`*** Add File:`, `*** Update File:`,
+/// `*** Delete File:` and `*** Move to:` headers), in order.
+fn patch_paths(patch: &str) -> Vec<String> {
+    const HEADERS: [&str; 4] = [
+        "*** Add File: ",
+        "*** Update File: ",
+        "*** Delete File: ",
+        "*** Move to: ",
+    ];
+    patch
+        .lines()
+        .filter_map(|l| HEADERS.iter().find_map(|h| l.strip_prefix(h)))
+        .map(|p| p.trim().to_string())
+        .filter(|p| !p.is_empty())
+        .collect()
+}
+
+/// A patch header path made absolute under `cwd`. Patch headers are `/`-separated, so the
+/// join uses the cwd's own separator rather than `Path::join`, which on Windows would give a
+/// mixed `/repo\src/a.rs` that never matches the same file read through `Read`.
+fn under_cwd(cwd: &str, path: &str) -> String {
+    if path.starts_with(['/', '\\']) || std::path::Path::new(path).is_absolute() {
+        return path.to_string();
+    }
+    let sep = if cwd.contains('\\') && !cwd.contains('/') {
+        '\\'
+    } else {
+        '/'
+    };
+    let path = path.replace(['/', '\\'], &sep.to_string());
+    format!("{}{sep}{path}", cwd.trim_end_matches(['/', '\\']))
 }
 
 /// Widens each touch to the innermost indexed definition that encloses it (T130.3), newest
@@ -394,6 +441,46 @@ mod tests {
         assert!(
             tight.contains(&lib) && !tight.contains("1-4 alpha"),
             "{tight}"
+        );
+    }
+
+    /// T262.3: Codex has no `Read`/`Edit` tool, only `apply_patch` whose text names the files.
+    #[test]
+    fn apply_patch_headers_enter_the_ledger_relative_paths_under_the_cwd() {
+        let cx = crate::plugin::Runtime::in_memory("t262-3-patch").unwrap();
+        let patch = "*** Begin Patch\n*** Add File: new.txt\n+hi\n*** Update File: src/a.rs\n\
+                     *** Move to: src/b.rs\n@@\n-x\n+y\n*** Delete File: /abs/old.rs\n*** End Patch\n";
+        touch_at(
+            &cx,
+            "/repo",
+            "apply_patch",
+            serde_json::json!({"command": patch}),
+        );
+        let text = build_brief(&Ctx::new(&cx), 300, "").unwrap();
+        for path in [
+            "/repo/new.txt",
+            "/repo/src/a.rs",
+            "/repo/src/b.rs",
+            "/abs/old.rs",
+        ] {
+            assert!(text.lines().any(|l| l == path), "{path} in\n{text}");
+        }
+    }
+
+    #[test]
+    fn a_patch_path_takes_the_separator_of_its_cwd() {
+        assert_eq!(under_cwd("/repo", "src/a.rs"), "/repo/src/a.rs");
+        assert_eq!(under_cwd("/repo/", "src/a.rs"), "/repo/src/a.rs");
+        assert_eq!(under_cwd(r"C:\repo", "src/a.rs"), r"C:\repo\src\a.rs");
+        assert_eq!(under_cwd("/repo", "/abs/old.rs"), "/abs/old.rs");
+        assert_eq!(under_cwd(r"C:\repo", r"\abs\old.rs"), r"\abs\old.rs");
+    }
+
+    #[test]
+    fn patch_paths_ignores_everything_but_the_file_headers() {
+        assert_eq!(
+            patch_paths("*** Update File: a b.rs\n+*** Add File: not-a-header\n*** Add File: \n"),
+            ["a b.rs"]
         );
     }
 
