@@ -46,7 +46,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T396 | todo | P3 | 2 | 80% | |
 | T398 | todo | P3 | 1 | 30% | |
 | T413 | todo | P2 | 3 | 0% | |
-| T413.7 | in progress | P3 | 3 | 0% | Claude Code / sonnet-5.5 |
 | T413.8 | in progress | P3 | 3 | 0% | Claude Code / sonnet-5.5 |
 | T413.11 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T413.13 | todo | P3 | 2 | 0% | |
@@ -679,14 +678,6 @@ Shared shape for every sub-task, per `architecture.md` "New host" and D21:
 Check: every sub-task below is closed in `done.md` with its per-host check.
 
 
-
-### T413.7. `rtok agents install continue` — Continue
-
-VS Code / JetBrains extension and the `cn` CLI. MCP and rules; variants per documented config location.
-
-Check: the T413 per-host check (step 5) for this host.
-
-Plan: Continue docs for each config location; one variant per documented file; no guessed rules path.
 
 ### T413.8. `rtok agents install augment` — Augment Code and Auggie CLI
 

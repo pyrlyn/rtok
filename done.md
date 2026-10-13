@@ -8973,6 +8973,17 @@ Check: `agents_doc`, `host_docs`, `agents_install`, `agents_list_content`, `agen
 Status: done 2026-10-12
 Model: Claude Code / claude-sonnet-5-5
 
+### T413.7. `rtok agents install continue` — Continue
+
+VS Code / JetBrains extension and the `cn` CLI. MCP and rules; variants per documented config location.
+
+Done: `src/agents/continue/` writes the `rtok` item of `mcpServers` (stdio: `name`, `type`, `command`, `args`) into `~/.continue/config.yaml` as a text-level list-item edit validated with the existing `serde-saphyr`; a missing file is created with the required `name`, `version`, `schema`; `[setup.continue] config_path`; variants Continue CLI (`cn`) and Continue (extensions, detected through VS Code). The line-level YAML helpers Goose already had moved to `src/agents/yaml_text.rs` and both hosts use them. No rules, hooks, proxy or plugin: none has a documented file. Research in `research.md` §32.7.
+
+Check: unit tests for the list edit (create, append, flush-indent list, empty and flow values, CRLF, foreign YAML, extra item keys, declined remove), the real-config round trip, `agents_doc`, `host_docs`, trycmd snapshots; `just check`.
+
+Status: done 2026-10-12
+Model: Claude Code / sonnet-5.5
+
 ### T426. Install refuses a host whose app is not installed
 
 `present()` counts a host as installed when only its config folder (or that folder's parent) exists, so `rtok agents install gemini` writes rtok into `~/.gemini` with no Gemini CLI on the machine. Done: a host variant is present only when its app bundle or binary is found (`app_path`); leftover config folders no longer count, in `agents list`, `install`, `update`, `doctor` and `junk` alike. `agents install|update <host>` whose wanted variants are all absent writes nothing and exits non-zero with `error: <host> is not installed`; with several hosts, any absent one refuses the whole run before any backup. A host with one present variant still installs into it, and the absent sibling prints `— not found` as today. `--remove` is unchanged.
