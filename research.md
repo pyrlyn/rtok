@@ -2624,6 +2624,14 @@ Factory moved its docs from `docs.factory.ai` to `docs.factory.com` (308 redirec
 - Proxy: only the `GOOSE_PROVIDER__HOST` environment variable is documented (environment-variables.md above), so there is no file to write; plugin: Goose's Open Plugins bundle is not shipped by rtok.
 - Desktop app: https://github.com/Homebrew/homebrew-cask/blob/master/Casks/b/block-goose.rb (cask `block-goose`, app `Goose.app`; linked from https://github.com/aaif-goose/goose/blob/main/documentation/docs/getting-started/installation.md). The CLI binary is `goose`.
 
+### 32.9 JetBrains Junie (T413.9, checked 2026-10-12)
+
+- CLI binary `junie`. User MCP file `~/.junie/mcp/mcp.json`, project file `.junie/mcp/mcp.json`. A stdio server is `mcpServers.<name>` with `command`, `args`, optional `env`; a remote one uses `url` and `headers`. The page shows no `type` key and names no environment variable that moves the directory (only the CLI options `--mcp-default-locations` and `--mcp-location <path>`). https://junie.jetbrains.com/docs/junie-cli-mcp-configuration.html
+- Config files: user `~/.junie/config.json`, project `<project-root>/.junie/config.json` (read only for a trusted project), extra files via `--config-location` or `JUNIE_CONFIG_LOCATION`. The page names no variable that relocates `~/.junie`. https://junie.jetbrains.com/docs/junie-cli-configuration.html
+- Hooks: a `hooks` object in `~/.junie/config.json`; hooks in the default project config are ignored. The only documented event is `SessionStart` (matcher `startup` or `resume`, command hook, `timeout` seconds, default 10). There is no tool-use event, so rtok's hooks have nothing to attach to. https://junie.jetbrains.com/docs/junie-cli-hooks.html
+- IDE plugin: the MCP settings page describes the IDE settings dialog and gives no file path, so there is no IDE variant. https://junie.jetbrains.com/docs/junie-plugin-mcp-settings.html
+- Proxy and plugin directory: neither page documents a model base-URL file or a linkable plugin directory. Both stay `Support::No`.
+
 ### 32.10 Amazon Q Developer CLI (T413.10, checked 2026-10-12)
 
 Result: no `amazonq` host. The CLI is succeeded by Kiro CLI, which T413.4 covers.

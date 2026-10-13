@@ -112,6 +112,7 @@ fn hosts(home: &Path) -> Vec<(&'static str, Vec<&'static str>, Option<PathBuf>)>
         ("devin", vec!["--yes"], Some(home.join("devin/config.json"))),
         ("droid", vec![], Some(home.join(".factory/mcp.json"))),
         ("kiro", vec![], Some(home.join(".kiro/settings/mcp.json"))),
+        ("junie", vec![], Some(home.join(".junie/mcp/mcp.json"))),
         ("crush", vec![], Some(home.join(".config/crush/crush.json"))),
     ]
 }

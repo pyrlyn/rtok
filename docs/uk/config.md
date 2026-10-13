@@ -438,6 +438,8 @@ cli_plugins_path = "~/.gemini/antigravity-cli/plugins" # сюди готує ф�
 config_path   = "~/.config/devin/config.json"  # mcp_config.json читається поруч; Windows: %APPDATA%\devin\
 [setup.roo]
 mcp_path      = ""                               # порожньо: <Code user dir>/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json
+[setup.junie]
+mcp_path      = ""                               # порожньо: ~/.junie/mcp/mcp.json (користувацький файл MCP Junie CLI)
 [setup.qwen]
 dir           = "~/.qwen"                    # settings.json (хуки, mcpServers); QWEN_HOME переносить каталог
 [setup.codebuddy]
