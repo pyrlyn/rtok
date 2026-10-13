@@ -52,7 +52,6 @@ pub mod names;
 pub mod otel;
 pub mod plugin;
 pub mod plugins;
-pub mod proc;
 pub mod progress;
 pub mod project;
 pub mod proxy;
