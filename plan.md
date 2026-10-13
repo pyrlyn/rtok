@@ -63,7 +63,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T647.3 | todo | P1 | 3 | 0% | |
 | T647.4 | todo | P1 | 3 | 0% | |
 | T647.5 | todo | P2 | 3 | 0% | |
-| T644 | todo | P2 | 3 | 0% | |
 
 
 
