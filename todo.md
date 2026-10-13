@@ -1,5 +1,4 @@
-- T592. Keep late same-second sessions from moving behind the OTel cursor
-- T623. Correlate web replies across request timeouts and retries
+- T623.2. Match `/ws` replies to their request by `req` in the web client
 - T124. Realized `tools_rewrite` saving as a dated `research.md` row
 
 - T131. Measure the spawn brief: cost row and on/off re-read share
@@ -12,7 +11,6 @@
 - T275.1. `rtok mcp ping <agent>`: prove the agent's rtok MCP server is alive and answering
 - T276. Spinner audit: every place rtok runs an external command and the user waits for its output
 - T276.3. Shared agent helpers on `ProgressRunner`: `run_cli`, `spawn_cli`, `app_version`, doctor MCP probe
-- T276.4. `ProgressRunner` in `bench`, `plugins/cmd/run` and `agents/restart`
 - T276.6. Retire the point indicators, turn on the `Command::new` ban, docs and changelog
 - T277. Move rtok's MCP core into its own crate `crates/rtok-mcp`
 - T278. `rtok agents info <agent>` reports the real MCP state, not "mcp installed" by assumption
@@ -31,12 +29,10 @@
 - T396. Verify the usage readers against real files
 - T398. Probe editors on a `worktree.useRelativePaths` worktree
 - T413. More agent hosts: popular agents rtok does not install into yet
-- T413.4. `rtok agents install kiro` — Kiro IDE and CLI
 - T413.5. `rtok agents install amp` — Amp
 - T413.6. `rtok agents install goose` — Goose
 - T413.7. `rtok agents install continue` — Continue
 - T413.9. `rtok agents install junie` — JetBrains Junie
-- T413.10. `rtok agents install amazonq` — Amazon Q Developer CLI
 - T413.11. `rtok agents install crush` — Crush
 - T413.12. `rtok agents install warp` — Warp
 - T413.13. `rtok agents install trae` — Trae
@@ -48,7 +44,6 @@
 - T428. SessionStart hook back under the 10 ms budget
 - T436.3. Shared operation-icon crate for rtok and ketch
 - T436.4. Spinner on `agents install/update` through T276's `ProgressRunner`
-- T640. File and directory work through `fs-kit`
 - T522. `read` and `expand` accept the line ranges agents sent this week
 - T523. `worktree add` takes `T504 read-hook-same-path` as an id plus a slug
 - T524. Worktree `--idle` accepts `30m` and `0s`

@@ -238,6 +238,48 @@ Validation: `CHECK_BASE=ee8d66288b1d1b850ba24b7f9a9a70481695c3ca mise exec -- ju
 Status: done 2026-10-11
 Model: OpenAI / GPT-6
 
+### T592. Keep late same-second sessions from moving behind the OTel cursor
+
+Confirmed using the actual Store and [advance_sessions](src/otel/export.rs#L315): create sessions `z-first` and `a-late`, end and export `z-first` at timestamp 1700000000, then end `a-late` at that same timestamp. The next pending batch contains `z-first` again instead of `a-late`; after advancing, the following batch is empty, so `a-late` is never exported. Reversing the lexical ID order exports the late session correctly. [SessionsPending](crates/rtok-store/src/sql_ext.rs#L18) recomputes `ROW_NUMBER` ordered by session ID, while [sessions_pending_export](crates/rtok-store/src/otel.rs#L262) resumes using a count at the watermark second. A late lower ID shifts the already-exported row after the count and hides the new row before it. The flush lock serializes exporters, not session writers.
+
+This is an uncovered case of completed T36.12's same-second delivery guarantee, not another active copy of that task. Its [integration test](tests/otel.rs#L178) uses `s1` then `s2` and checks counts, so the row-identity failure is missed. No claim is made that the backend displays duplicates: the repeated span has a stable ID, but the late session's root span is absent altogether.
+
+Execution plan:
+
+1. Add store and exporter regressions with both sessions already present, a later completion at the watermark second, and lexical ID orders in both directions. Inspect emitted session/span IDs, not just batch lengths or POST counts; the late session must be delivered and the next flush must drain.
+2. Replace the mutable rank/count cursor with durable delivery state that cannot move behind already-exported rows. Prefer a monotonic completion/outbox sequence or explicit acknowledged session identities; a timestamp plus lexical last-ID cursor alone still skips late lower IDs. Keep database access in Store and use Diesel under the existing SQL policy.
+3. Advance the new delivery state only after successful export and update related cursor state atomically. Define migration from existing timestamp/tail marks without assuming that a count identifies which tied sessions were delivered; allow deliberate replay using stable span IDs where needed to avoid loss.
+4. Cover more than one BATCH of equal timestamps, session writes during a flush, HTTP failure/retry and restart with persisted marks. Retain stream isolation and bounded batches, and rerun the existing T36.12/T16 exporter tests.
+
+Chosen design: migration 0050 adds `sessions.end_seq` (next value on every end, taken in an immediate transaction like T615's `seq`); the exporter's single cursor is `otel_export.sessions_seq`, advanced to the last posted `end_seq` after a 2xx. The old `sessions`/`sessions_tail` marks are dropped and the new mark starts in front of the old mark's whole second (replay over guess). Files: `crates/rtok-store/{migrations/0049*,src/otel.rs,src/sql_ext.rs,src/schema.rs}`, `src/otel/export.rs`, `tests/otel.rs`.
+
+Check: every newly ended session is eventually selected regardless of lexical ID order at an already-covered timestamp, acknowledged deliveries survive restart, and `just check` passes. The offline scratch executable linked the actual `rtok-store` crate, exercised an in-memory database and compiled the actual cursor-advance function; it used no SQL stubs, real host data or collector. HTTP/CLI integration was source-traced, not executed.
+
+Result: migration 0050 adds `sessions.end_seq`, taken in an immediate transaction each time a session ends at a new second, and the exporter's one cursor is `otel_export.sessions_seq`, advanced to the last posted `end_seq` after a 2xx. The `ROW_NUMBER` query (`SessionsPending` in `sql_ext.rs`) and the `sessions`/`sessions_tail` marks are gone. Existing databases: sessions are numbered by `(ended_at, id)` and the new mark starts in front of the old mark's whole second, so a few already-posted sessions replay with the same span ids instead of a guess losing one. Tests: `tests/otel.rs` posts a late session after an exported one in both id orders, matching the posted span's session id (the lower-id case failed on `origin/main`, the higher-id case passed as the control) and restarts the runtime; store tests cover end order, batching, a repeated end and the 0049 backfill.
+
+Status: done 2026-10-12 · Model: Claude Code / sonnet-5.5
+
+### T623.1. Request ids on the `/ws` protocol: the server echoes `req` on every answer
+
+First half of T623, split when claimed (the whole task exceeds 500 lines: Rust protocol, schema, generated types, client queue, mocks and tests).
+
+Confirmed on `2c7c40b2d8af0673f085d71d8d3e1da0051084e5` in [askDoctor and settleDoctor](web/src/api/query.tsx#L180). Pending requests are matched by answer kind and optional project key. A timeout removes the old entry, but its eventual answer still matches the next request of that kind. The client then resolves the new request with the old payload and ignores the actual new answer. Sequential server processing does not prevent this when the first operation outlasts the client timer.
+
+A Vitest fake-clock/transport probe exercised the verbatim `createApi` implementation: plan A timed out, plan B was sent, and the late A frame resolved B with A's selection/diff. A timely-response control passed. [DoctorFix](web/src/pages/DoctorFix.tsx#L29) protects component effect generations, but cannot detect a response already assigned to the wrong API promise. This is separate from T576's server-side preview/apply selection drift and the already documented snapshot/write acknowledgement behavior.
+
+Execution plan:
+
+1. `src/web/protocol.rs`: a `req: Option<u64>` envelope on requests and replies (`Request`, `Reply`, flattened over `ClientMessage` and `ServerFrame`) so the committed schema and `snapshot.gen.ts` carry it; `tag_reply` writes it into an already rendered frame.
+2. `src/web/mod.rs`: `inbound` reads `req` from the request and tags whatever it answers with, errors included (`message` frames), so a failed answer names its request. A request without `req` is answered as before.
+3. Bless `web/src/api/ws.schema.json`, run `npm --prefix web run gen:api`; run the web gates after `git add`.
+4. Tests: `protocol.rs` units (`tag_reply` equals the serialized envelope, requests with and without `req` parse) and `tests/web_e2e.rs` (a doctor plan and a refused request echo their `req` over a real socket).
+
+Check: every answer to a request that carried `req` carries the same `req`, success or failure; a request without it is answered unchanged; `just check` passes.
+
+Result: `src/web/protocol.rs` gains the `Request` and `Reply` envelopes (an optional `req`, flattened over `ClientMessage` and `ServerFrame`) and `tag_reply`; `inbound` in `src/web/mod.rs` reads `req` off the request and writes it into whatever answers it, `message` refusals and parse errors included. The committed schema and `snapshot.gen.ts` carry the new types. Nothing in the client sends `req` yet, so behavior is unchanged until T623.2. Tests: `protocol.rs` units (`tag_reply` equals the serialized envelope, requests parse with and without `req`) and `tests/web_e2e.rs::answers_echo_the_request_id_and_only_that_one` over a real socket; the e2e test fails with the tagging removed.
+
+Status: done 2026-10-12 · Model: Claude Code / sonnet-5.5
+
 ### T591. Audit OpenTelemetry export cursors and cumulative metrics
 
 Source audit only; no product code changed. Reviewed OTel export selection and watermark advancement, stream failure isolation, span/log mapping, metric sums and encoding against the module design and existing tests. This was a sampled audit; retention and all transport/platform behavior were not exhaustively verified.
@@ -711,6 +753,19 @@ Result: `just check` 2981 passed, 6 skipped. `cargo test -p rtok json_tree -- --
 Check: `cargo test --lib plugins::graph::review`; `graph_surface_is_five_tools_under_150_tokens`; `just check`.
 
 Result: 8 review tests passed; the MCP surface stays five tools. `just check` ran the full gate (trycmd snapshots are a shared input): 2978 passed, 6 skipped.
+
+### T646. `rtok graph review` finishes inside the CI time limit
+
+The `Graph review` job (`.github/workflows/graph-review.yml`, `timeout 180` around `rtok graph review --since origin/main`) has posted "review did not finish within 3 minutes" on every pull request since T454 (#887): the build takes about 3 minutes, then the review is killed at exactly 180 s. Neither the index build nor the cache is the cost, and a bigger limit would not help: on a debug build with a warm index `graph impact rank_name --depth 3` took 118 s, `impact canon` 487 s, and a 206-file diff ran past 20 minutes. `review` walks callers to depth 3 from up to 400 changed definitions, and every visited name costs three store answers. Sampled profiles, one layer at a time:
+
+1. No `sqlite_stat1`, so SQLite served `ORDER BY path` from `symbols_root_path (root=?)`, every row of the root, in `symbol_defs`, `symbol_ref_groups` and `symbol_import_follow`. `rebuild_symbol_idf`, which ends every index pass, now runs `ANALYZE symbols` under `analysis_limit = 1000` (`sql_ext::analyze_symbols`; Diesel has no form for either statement).
+2. `symbol_name_freq` parsed the whole IDF JSON (117 KB here) for every name. The store keeps the last parse and reuses it while the kv body is unchanged, so a rebuild by another process is still seen.
+3. `symbol_imported_defs` split every specifier and definition path once per pair; now once each.
+4. Each of the 400 walks asked the store again for names an earlier walk had answered. `impact_walk_memo` takes a `WalkMemo` of rank, reference groups and import follows per `(root, name)`; `review` shares one for its run, every other caller still gets a fresh one.
+
+Check: `just check` green; new tests `rebuild_symbol_idf_leaves_planner_statistics_for_symbols` (fails without step 1: no statistics table), `name_freq_follows_a_rebuilt_idf_cache`, `shared_walk_memo_keeps_rows_and_reuses_visited_names`; the existing `import_matches_file` and `imported_defs` tests cover step 3. Cold review of the #1008, #1010, #1011, #1013, #1014 diffs (fresh `RTOK_HOME`, index from nothing) with output byte-identical to the build with step 1 alone (#1013, #1014); the PR's own `Graph review` comment holds a review, not the timeout line.
+
+Result: `just check` 3702 passed, 8 skipped. Cold `graph review` (debug build, fresh `RTOK_HOME`, index from nothing) of the #1008, #1010, #1011, #1013, #1014 diffs: 29, 37, 30, 44, 43 s. Warm #1014: 345 s with step 1 only, 139 s after step 2, 78 s after step 3, 29 s after step 4. `rebuild_symbol_idf_leaves_planner_statistics_for_symbols` fails with step 1 removed.
 
 ### T368. Rank ambiguous `callers` / `impact` / `explore` hits by import evidence and name IDF
 
@@ -1511,6 +1566,14 @@ Check result: fail-first shown by swapping in `origin/main`'s `src/hooks/mod.rs`
 
 Status: done 2026-09-24
 Model: Claude Code / claude-opus-5-5
+
+### T645. Codex `PreToolUse` and `PostToolUse` through `rtok hook` (idea I-88)
+
+Creator approved 2026-10-12 (idea I-88, unblocks T262.3). Wire Codex's `PreToolUse` (Bash `updatedInput.command` rewrite and deny) and `PostToolUse` (`additionalContext`) into both the Codex installer and `plugins/codex/hooks/hooks.json`, as `rtok hook <event> --host codex` so the store attributes the calls to the `codex` host instead of the `claude` default. The live Codex payloads (codex-cli 0.162.1, a scratch `CODEX_HOME` against a local fake Responses server, no login) are recorded in `research.md` §40 and kept as sanitized fixtures.
+
+Found by the capture: Codex applies a `PreToolUse` rewrite only with `permissionDecision: "allow"` next to `updatedInput`; Claude's shape (no decision) leaves the call unchanged and marks the hook run failed. So a Codex output adapter in `src/hooks/mod.rs` adds `allow` to a rewrite and drops `updatedMcpToolOutput`, which Codex does not read.
+
+Result (2026-10-12): `hook_events.rs` carries the `codex` rows (`PreToolUse` on Bash, `PostToolUse` on `*`, `PreCompact`, `PostCompact`) as installer rows; `run_hooks` walks them through the shared Claude-layout insert/strip with the `--host codex` spelling and still recognises the old plain one, so an upgrade rewrites a T58.2 entry in place. `hooks::codex_output` adds `permissionDecision: "allow"` to a rewrite and drops `updatedMcpToolOutput`. `plugins/codex/hooks/hooks.json`, both READMEs and `AGENTS.md` follow the table; `tests/codex_plugin.rs` compares the manifest to it. Live payloads: `research.md` §40, `tests/fixtures/hooks/codex/`. Tests: `codex_output_allows_a_rewrite_and_drops_cursor_keys`, `codex_live_payloads_dispatch_under_the_codex_host`, `hooks_json_carries_the_codex_rows_and_upgrades_the_old_spelling`. Not verified: whether `allow` skips Codex's own approval prompt.
 
 ### T262.4. Copilot CLI: spawn brief on `subagentStart`
 
@@ -8783,10 +8846,24 @@ Model: Cursor / grok 4.7
 
 Done: `src/agents/droid/` (one CLI variant, `droid` on PATH): `mcpServers.rtok` in `~/.factory/mcp.json` through `register_stdio_mcp` (no second copy of the Cline/Roo/Windsurf JSON), `[setup.droid] mcp_path` moves it, host registered in `HOSTS`/`host()`/`mcp.rs`, `NO_ROWS` (nothing about Droid's caches is documented), docs in en/ru/uk. Hooks, proxy and plugin stay `Support::No` with reasons: Factory documents hooks (`research.md` section 32.3) but no tool-name list or `PreToolUse` rewrite output to build the mapping from, so a hooks task has to verify both; `customModels` carry a `baseUrl` each; the plugin needs a `plugins/droid` unit (D21). Research with sources and the 2026-10-12 check date in `research.md` section 32.3. Tests: `droid` unit tests (dry run, idempotent round trip, foreign servers kept, apply twice), `agents_install` matrix row, `droid_keeps_the_real_mcp_json` (foreign server kept byte-for-byte), `EXPECTED_VARIANTS`, `host_docs`, `agents_doc`. Per-host check: `droid` is not installed here, so no manual `--dry-run`.
 
+### T413.4. `rtok agents install kiro` — Kiro IDE and CLI
+
+Two variants (IDE and CLI) if both are documented. Hooks and MCP; `research.md` already cites Kiro specs, which this task does not touch.
+
+Done: `src/agents/kiro/` with two variants, `Kiro CLI` (`kiro-cli` on PATH) and `Kiro IDE` (`/Applications/Kiro.app`, `~/Applications/Kiro.app`; other OS paths unverified, not probed). Both edit one file, `~/.kiro/settings/mcp.json`, through `register_stdio_mcp` (no second copy of the Cline/Roo/Windsurf JSON); `shared()` is true, so a plain install writes it once and lists the IDE as the CLI's sibling. `[setup.kiro] mcp_path` moves the file. Registered in `HOSTS`/`host()`/`mcp.rs`, `NO_ROWS` (no caches documented), docs in en/ru/uk. Hooks, proxy and plugin stay `Support::No` with reasons: the hooks page states no exit-code or output-to-context rules for command hooks. Research with sources and the 2026-10-12 check date in `research.md` section 32.4; two doc pages disagree on the global path (`settings/mcp.json` vs `~/.kiro/mcp.json`) and the CLI-reads-the-same-file point is unverified, both recorded there. Tests: `kiro` unit tests (dry run, idempotent round trip, foreign servers kept, shared-file variants, apply twice), `agents_install` matrix row, `kiro_keeps_the_real_mcp_json`, `EXPECTED_VARIANTS` (CLI and IDE), `host_docs`, `agents_doc`. Per-host check: Kiro is not installed here (no `kiro-cli`, no `~/.kiro`), so no manual `--dry-run`.
+
 Check: the T413 per-host check (step 5) for this host.
 
 Status: done 2026-10-12
 Model: Claude Code / sonnet-5.5
+
+### T413.10. `rtok agents install amazonq` — Amazon Q Developer CLI
+
+Verify first whether Amazon Q Developer CLI is still maintained or replaced by the Kiro CLI; if replaced, close this sub-task into T413.4 and say so in `done.md`.
+
+Done: closed into T413.4 without code. Kiro's own migration guide says "Kiro CLI is the next update of the Q CLI", that new features and fixes ship only in Kiro CLI, and that the one-time migration copies `~/.aws/amazonq/mcp.json` to `~/.kiro/settings/mcp.json` (https://kiro.dev/docs/upgrade-guides/migrating-from-q/, page updated 2026-08-04, checked 2026-10-12). A separate `amazonq` host would write a file Kiro CLI already copies, so T413.4 owns the CLI. Facts recorded in `research.md` §32.10.
+
+Check: nothing to run; docs-only change.
 
 ### T413.8. `rtok agents install augment` — Augment Code and Auggie CLI
 
@@ -11872,6 +11949,17 @@ Result: `crates/rtok-sys/src/proc/` gains `ProgressRunner::batch(label, total, u
 Status: done 2026-10-11
 Model: Claude Code / sonnet-5.5
 
+### T276.4. `ProgressRunner` in `bench`, `plugins/cmd/run` and `agents/restart`
+
+Split from T276 (migration plan step 3, 2026-10-11, D16): `bench.rs` (3 sites, a `Batch` over runs plus `Capture`), `plugins/cmd/run.rs` (`Stream` or `Capture`, decided from the code), `agents/restart.rs` (10 sites, `Capture`). Depends on T276.1, T276.2.
+
+Check: the T276 card's Check lines for items 4 and 5; `just check`.
+
+Result: `rtok bench` shows a `Batch` bar over its runs (`bench [###   ] 3/36`, each step named `<task> <config> <n>/<runs>`) with a `running claude -p…` spinner under it, in both the A/B table and the graph suite; the task `check` command now runs captured (its output used to be inherited and could land in the stdout table). `rtok run` is `Capture` (the output is archived and filtered, then printed at the end), so a terminal gets `running <command>…` (first line, 60 characters); a pipe gets nothing, which `tests/ui_style.rs` asserts. In `agents/restart.rs` the `pgrep`, `tasklist` and `osascript` probes are `Progress::Off`, `quit` shows `closing <app>…`, `open` shows `reopening <app>…`, and the Linux direct spawn and `xdg-open` are `Output::Detached`. To keep what `src/proc.rs::capture_capped` guaranteed for `bench` and `run`, the runner gained `run_capped(cap)` (a byte budget over stdout and stderr together, the dropped count returned), a bounded drain (200 ms) after the child exits so a descendant holding a pipe cannot stall any run (the reader threads own their state instead of living in a scope), `proc::exit_code` (128 + signal, moved from `src/proc.rs`) and Windows `raw_arg`. `src/proc.rs` lost `capture_capped`, the budget and `dropped`; what is left is `capture` for the host `--version` probe, which goes with T276.3. While the non-interactive `agents install/update/remove` loader (`with_loader`) is still there, `apply_hosts` calls `disable_progress` so the restart spinners do not draw over it; T276.3 and T276.6 retire both. The `Command::new` ban is still T276.6.
+
+Status: done 2026-10-12
+Model: Claude Code / sonnet-5.5
+
 ### T436.1. Web: a spinner on every action the user waits for, and operation icons like ketch's
 
 Creator request 2026-10-07: the same as T436, in the `rtok web` SPA. Only page loads showed a spinner; the plugin switch, project select/link, doctor plan/apply and Calls expand only disabled their buttons.
@@ -13264,6 +13352,24 @@ Check: `write_refuses_a_symlink_cycle_and_leaves_every_link_alone`, `write_follo
 
 Status: done 2026-10-12
 Model: Claude Code / claude-sonnet-5-5
+
+### T640. File and directory work through `fs-kit`
+
+The creator's call (2026-10-12): every project takes its file and directory helpers from one shared crate, `fs-kit` in `packages/crates` (crates-packages PR #57), instead of its own copies. Line caps lifted by the creator for this task.
+
+Plan:
+1. Depend on `fs-kit` (a path to the crates checkout until it is on crates.io, then the version); drop the direct `dunce` dependency.
+2. Duplicates go: `rtok-store/src/paths.rs` re-exports `fs_kit::path`; `src/fs.rs` `normalize` and `same_dir`; the junk walk (`disk_usage_until`, `Usage`) from `fs_kit::tree`; `rtok-agent-sdk` `write_atomic`/`link_target`/`clear_readonly` and `copy_dir` from `fs_kit::write` and `fs_kit::tree`; completions `read`/`write_if_changed`.
+3. Every `dunce::` and `std::fs::canonicalize` call goes through `fs_kit::path`.
+4. Left for later slices: the `_backup` folder with pruning (`rtok-agent-sdk` `backup`) and `info.rs` `dir_usage` (apparent size, a different number from disk usage) stay until `fs-kit` grows those variants; plain `std::fs::write`/`create_dir_all` calls move subsystem by subsystem.
+5. `fs-kit` 0.1.0 is on crates.io, so the dependency is the registry version (`fs-kit = "0.1"`), not a path.
+
+Check: `just check` green on `fs-kit` 0.1 from crates.io; `fs-kit` unit tests cover each moved helper (atomic write through a symlink, permissions kept, `if_changed`, tree usage and copy, path folding), and the existing rtok tests for `paths`, `junk`, completions install and the agent SDK pass unchanged.
+
+Result: rtok takes paths, atomic writes, tree usage and copies from `fs-kit` 0.1 on crates.io (pyrlyn/crates-packages#57); the copies in `rtok-store` paths, `src/fs.rs`, the junk walk, the agent SDK and completions are gone, and `dunce` is no longer a direct dependency (pyrlyn/rtok#998).
+
+Status: done 2026-10-12
+Model: Claude Code / claude-opus-5-5
 
 ### T577. Protect nested package-manager lockfiles during junk cleanup
 
