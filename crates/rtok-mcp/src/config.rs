@@ -29,6 +29,12 @@ use crate::spec::{Format, McpSpec};
 pub trait Fs {
     /// Bytes at `path`, or `None` if it does not exist.
     fn read(&self, path: &Path) -> Option<Vec<u8>>;
+    /// [`Fs::read`] for a caller about to edit and write the file back: `Err` when the file
+    /// exists but cannot be read, so an unreadable config is never mistaken for an absent one and
+    /// replaced by a fresh file (T652). The default suits an `Fs` that cannot fail to read.
+    fn try_read(&self, path: &Path) -> Result<Option<Vec<u8>>> {
+        Ok(self.read(path))
+    }
     /// Overwrite (or create) `path` with `bytes`.
     fn write(&mut self, path: &Path, bytes: Vec<u8>) -> Result<()>;
     /// Best-effort copy of `path`'s current contents before it changes.
@@ -105,7 +111,7 @@ fn parse_json(bytes: &[u8], path: &Path) -> Result<Value> {
 }
 
 fn servers_json(fs: &impl Fs, spec: &McpSpec) -> Result<Option<serde_json::Map<String, Value>>> {
-    let Some(bytes) = fs.read(&spec.config_path) else {
+    let Some(bytes) = fs.try_read(&spec.config_path)? else {
         return Ok(None);
     };
     let root = parse_json(&bytes, &spec.config_path)?;
@@ -120,7 +126,7 @@ fn walk_json<'a>(
 }
 
 fn write_json(fs: &mut impl Fs, spec: &McpSpec, entry: Option<&Value>) -> Result<Written> {
-    let mut root = match fs.read(&spec.config_path) {
+    let mut root = match fs.try_read(&spec.config_path)? {
         Some(bytes) => parse_json(&bytes, &spec.config_path)?,
         None => Value::Object(Default::default()),
     };
@@ -204,7 +210,7 @@ fn parse_jsonc(bytes: Option<Vec<u8>>, path: &Path) -> Result<CstRootNode> {
 }
 
 fn servers_jsonc(fs: &impl Fs, spec: &McpSpec) -> Result<Option<serde_json::Map<String, Value>>> {
-    let Some(bytes) = fs.read(&spec.config_path) else {
+    let Some(bytes) = fs.try_read(&spec.config_path)? else {
         return Ok(None);
     };
     let root = parse_jsonc(Some(bytes), &spec.config_path)?;
@@ -224,7 +230,7 @@ fn servers_jsonc(fs: &impl Fs, spec: &McpSpec) -> Result<Option<serde_json::Map<
 }
 
 fn write_jsonc(fs: &mut impl Fs, spec: &McpSpec, entry: Option<&Value>) -> Result<Written> {
-    let root = parse_jsonc(fs.read(&spec.config_path), &spec.config_path)?;
+    let root = parse_jsonc(fs.try_read(&spec.config_path)?, &spec.config_path)?;
     let mut obj = root
         .object_value_or_create()
         .with_context(|| format!("{}: root is not an object", spec.config_path.display()))?;
@@ -279,7 +285,7 @@ fn parse_toml(bytes: &[u8], path: &Path) -> Result<toml_edit::DocumentMut> {
 }
 
 fn servers_toml(fs: &impl Fs, spec: &McpSpec) -> Result<Option<serde_json::Map<String, Value>>> {
-    let Some(bytes) = fs.read(&spec.config_path) else {
+    let Some(bytes) = fs.try_read(&spec.config_path)? else {
         return Ok(None);
     };
     let doc = parse_toml(&bytes, &spec.config_path)?;
@@ -299,7 +305,7 @@ fn servers_toml(fs: &impl Fs, spec: &McpSpec) -> Result<Option<serde_json::Map<S
 }
 
 fn write_toml(fs: &mut impl Fs, spec: &McpSpec, entry: Option<&Value>) -> Result<Written> {
-    let mut doc = match fs.read(&spec.config_path) {
+    let mut doc = match fs.try_read(&spec.config_path)? {
         Some(bytes) => parse_toml(&bytes, &spec.config_path)?,
         None => toml_edit::DocumentMut::new(),
     };
