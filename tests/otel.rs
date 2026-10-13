@@ -169,7 +169,7 @@ fn every_row_posts_once_and_the_marks_advance() {
     assert_eq!(flush_blocking(&cx).spans, 1);
     assert_eq!(flush_blocking(&cx).spans, 0);
     root.assert_calls(1);
-    assert_eq!(cx.store.otel_mark("sessions").unwrap(), 1_700_000_000);
+    assert_eq!(cx.store.otel_mark("sessions_seq").unwrap(), 1);
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -204,9 +204,63 @@ fn session_in_watermark_second_posts_once() {
     assert_eq!(flush_blocking(&cx).spans, 0);
     traces.assert_calls(3);
     logs.assert_calls(1);
-    assert_eq!(cx.store.otel_mark("sessions").unwrap(), 1_700_000_000);
-    assert_eq!(cx.store.otel_mark("sessions_tail").unwrap(), 2);
+    assert_eq!(cx.store.otel_mark("sessions_seq").unwrap(), 2);
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// T592: a session that ends in an already-posted second must ship whatever its id sorts
+/// like. Counting posted rows per second by id re-sent `first` and never sent `late` when
+/// `late` sorted before it, so each case names the span it expects, not only a span count.
+fn late_session_ships_once(tag: &str, first: &str, late: &str) {
+    let server = MockServer::start();
+    let session = |id: &str| {
+        server.mock(|when, then| {
+            when.method(POST)
+                .path("/v1/traces")
+                .body_includes("invoke_agent")
+                .body_includes(format!("\"stringValue\":\"{id}\""));
+            then.status(200).body("{}");
+        })
+    };
+    let (first_posts, late_posts) = (session(first), session(late));
+    for path in ["/v1/traces", "/v1/logs", "/v1/metrics"] {
+        server.mock(|when, then| {
+            when.method(POST).path(path);
+            then.status(200).body("{}");
+        });
+    }
+    let dir = home(tag);
+    let cx = ctx(&dir, &server.base_url());
+    for id in [first, late] {
+        cx.store
+            .upsert_session(id, None, Some("p"), Some("/w"), Some("startup"))
+            .unwrap();
+    }
+    cx.store.end_session(first, 1_700_000_000).unwrap();
+    let r = flush_blocking(&cx);
+    assert_eq!((r.error, r.spans), (None, 1));
+    first_posts.assert_calls(1);
+    cx.store.end_session(late, 1_700_000_000).unwrap();
+    assert_eq!(flush_blocking(&cx).spans, 1);
+    late_posts.assert_calls(1);
+    first_posts.assert_calls(1);
+    assert_eq!(flush_blocking(&cx).spans, 0, "the next flush drains");
+    // The mark is stored, so a fresh process picks up where this one stopped.
+    drop(cx);
+    let cx = ctx(&dir, &server.base_url());
+    assert_eq!(flush_blocking(&cx).spans, 0);
+    late_posts.assert_calls(1);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_late_session_with_a_lower_id_ships_in_the_watermark_second() {
+    late_session_ships_once("late-low", "z-first", "a-late");
+}
+
+#[test]
+fn a_late_session_with_a_higher_id_ships_in_the_watermark_second() {
+    late_session_ships_once("late-high", "a-first", "z-late");
 }
 
 /// A proxy call whose response is still streaming has its `calls` row but no `ms` or usage

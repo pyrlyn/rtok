@@ -2603,6 +2603,27 @@ Factory moved its docs from `docs.factory.ai` to `docs.factory.com` (308 redirec
 - Settings: `~/.factory/settings.json` (macOS and Linux), `%USERPROFILE%\.factory\settings.json` (Windows); no config-directory environment variable is documented. https://docs.factory.com/cli/configuration/settings
 - No Desktop app is documented, so there is one CLI variant.
 
+### 32.4 Kiro IDE and CLI (T413.4, checked 2026-10-12)
+
+- MCP files: `~/.kiro/settings/mcp.json` (user, "applies globally across all workspaces") and `.kiro/settings/mcp.json` (workspace); both merged, workspace wins. Loading priority on the same page: agent config (`mcpServers` field of the agent JSON, no path given), workspace file, global file. https://kiro.dev/docs/mcp/configuration/
+- Stdio entry: `mcpServers.<name>` with `command` (required), `args`, `env`, `disabled`, `autoApprove`, `disabledTools`. Same page. rtok writes `{command, args}` only.
+- Surfaces: the configuration page and https://kiro.dev/docs/mcp/ carry IDE, CLI and Web tabs, but the fetched text has the file paths under the IDE tab only and states no per-surface path; the page has a Windows note for "Kiro CLI V2" about how stdio commands launch. So the CLI is taken to read the same two files, **unverified** against the CLI itself.
+- Conflict: https://kiro.dev/docs/mcp/registry/ lists "Global: ~/.kiro/mcp.json" and "Workspace: .kiro/mcp.json" for the same scopes. The configuration page is the reference for the file format, so the installer uses `settings/mcp.json`; `[setup.kiro] mcp_path` redirects it. The old `/docs/cli/mcp/` pages are redirects to the unified pages.
+- CLI: binary `kiro-cli`, install `curl -fsSL https://cli.kiro.dev/install | bash`. https://kiro.dev/docs/cli/ . The page names no config directory and no `mcp add` syntax.
+- IDE app: the installation page says to "drag Kiro from Applications to the Trash", so the macOS bundle is `/Applications/Kiro.app` (bundle id not documented); no Windows or Linux install folder is named, so only macOS paths are probed. https://kiro.dev/docs/getting-started/installation/
+- Hooks: JSON files in `.kiro/hooks/` (project) and, for CLI V3, `~/.kiro/hooks/`; each has `version: "v1"` and a `hooks` array of `{name, trigger, matcher, action: {type, command | prompt}, timeout (default 60), enabled}`; triggers named include `PostFileSave`, `PreToolUse`, `PostToolUse`, `Stop`. The command receives session context as JSON on stdin. The page states no exit-code rules and no way for command output to reach the agent's context. https://kiro.dev/docs/hooks/ . Hooks stay `Support::No`.
+- No model base-URL setting and no local plugin directory are documented on the pages above, so proxy and plugin stay `Support::No`.
+- Migration: see 32.10 (T413.10): the Amazon Q CLI migration copies `~/.aws/amazonq/mcp.json` to `~/.kiro/settings/mcp.json`, which supports `~/.kiro/settings/mcp.json` as the CLI's user file.
+
+### 32.6 Goose (T413.6, checked 2026-10-12)
+
+- Config file: https://github.com/aaif-goose/goose/blob/main/documentation/docs/guides/config-files.md — `~/.config/goose/config.yaml` on macOS and Linux, `%APPDATA%\Block\goose\config\config.yaml` on Windows. The CLI and the Desktop app share it.
+- `GOOSE_PATH_ROOT` moves every goose directory: https://github.com/aaif-goose/goose/blob/main/documentation/docs/guides/environment-variables.md. The installer reads it only through `[setup.goose] config_path`, not from the environment.
+- Stdio extension shape: https://github.com/aaif-goose/goose/blob/main/documentation/docs/getting-started/using-extensions.md (section on editing the config file) — `extensions.<key>` with `name`, `type: stdio`, `cmd`, `args`, `enabled`; `envs` and `timeout` are optional. Goose adds defaults when it re-saves an entry, so the installer compares only `name`, `type`, `cmd`, `args`, `enabled`.
+- Hooks: https://github.com/aaif-goose/goose/blob/main/documentation/docs/guides/context-engineering/hooks.md documents Open Plugins hooks with their own payload and decision shape. rtok has no adapter for it, so hooks stay off (`support` says so).
+- Proxy: only the `GOOSE_PROVIDER__HOST` environment variable is documented (environment-variables.md above), so there is no file to write; plugin: Goose's Open Plugins bundle is not shipped by rtok.
+- Desktop app: https://github.com/Homebrew/homebrew-cask/blob/master/Casks/b/block-goose.rb (cask `block-goose`, app `Goose.app`; linked from https://github.com/aaif-goose/goose/blob/main/documentation/docs/getting-started/installation.md). The CLI binary is `goose`.
+
 ### 32.10 Amazon Q Developer CLI (T413.10, checked 2026-10-12)
 
 Result: no `amazonq` host. The CLI is succeeded by Kiro CLI, which T413.4 covers.
@@ -2621,6 +2642,15 @@ Crush (https://github.com/charmbracelet/crush, v0.98.1 released 2026-10-09, not 
 - Choice: rtok writes `crush.json`, not `crushrc`. A JSON object lets rtok add and remove only its own `mcp.rtok` and leave every other byte; editing a Bash script would need marker lines whose effect rtok cannot verify, and the docs call both files "trusted code". The cost: when a `crush.json` and a `crushrc` in one directory define the same top-level key, Crush logs "Found both a JSON config and a crushrc in the same directory; merging with crushrc taking precedence" and still merges; disjoint keys do not warn. https://github.com/charmbracelet/crush/blob/main/internal/config/load.go (`loadFromConfigPaths`). A user who adds servers with `mcp add` in `crushrc` therefore sees that warning for `mcp`. Creator to confirm this trade-off.
 - Hooks: only `PreToolUse` exists. Config is `hooks.PreToolUse[]` with `command` (required), `matcher` (regex on the tool name), `name`, `timeout` (seconds, default 30); stdin is `{event, session_id, cwd, tool_name, tool_input}`; output is exit codes (0, 2 block, 49 halt) or a JSON envelope with `decision`, `reason`, `context`, `updated_input`. The payload is documented and Claude-shaped, but its tool names (`bash`, `edit`, `write`, ...) are lower case and rtok has no checked mapping of them, so hooks stay `Support::No` (same reason as Droid). https://github.com/charmbracelet/crush/blob/main/docs/hooks/README.md (sections "Reference", "Claude Code compatibility")
 - Proxy and plugin directory: per-provider base URLs only and skills, no plugin directory; both stay `Support::No`.
+
+### 32.13 Trae (T413.13, checked 2026-10-12)
+
+Trae IDE (ByteDance). Facts are from the vendor's docs, https://docs.trae.ai/ide/add-mcp-servers, fetched 2026-10-12. Result: no installer; the documented user-level surface has no file path.
+
+- Project MCP servers: an `mcp.json` in a `.trae/` directory under the project root (step "Set up project MCP servers"). That file belongs to the project, so setup never writes it.
+- User-level MCP servers: added in the app's MCP panel. The page names the **Raw Config (JSON)** button, which opens "the mcp.json file in TRAE", but gives no path for it. The path is not in the page, and Trae is not installed on this machine to read it back.
+- VS Code layout: Trae is a VS Code fork, but the docs do not say it reads VS Code's `mcp.json` or `settings.json`, so `src/agents/vscode/` cannot be reused on a guess.
+- Because the only documented user-level file has no documented path, a fixed path would be a guess; the host stays out until the docs (or a Trae install to inspect) name one.
 
 ## 33. Which tests a change reaches (T420, 2026-10-06)
 
@@ -2868,4 +2898,4 @@ Question: what does Codex send and read on these three events, so rtok can wire 
 | Plain stdout | ignored on `PreToolUse` and `PostToolUse`; developer context on `SessionStart`, `UserPromptSubmit` and `SubagentStart` | docs |
 | Tool names | `Bash` (shell and `exec_command`), `apply_patch`, `mcp__<server>__<tool>`, other local tools by name; `spawn_agent` also matches `Agent`; hosted tools such as web search are not hooked | docs |
 
-Consequences for rtok: Codex's `Bash` is Claude's `Bash`, so the existing Bash rewrite and deny paths apply once the output carries `allow`; there is no `Read` tool (reads go through `Bash`), and file edits are `apply_patch` with the patch text in `tool_input.command`, so T262.3's ledger cannot count Codex reads and must parse paths out of a patch. Not verified: whether `allow` also skips Codex's own approval prompt on a rewritten command (the scratch run used `approval_policy = "never"`), and the exact `apply_patch` payload (the fake server only produced function calls).
+Consequences for rtok: Codex's `Bash` is Claude's `Bash`, so the existing Bash rewrite and deny paths apply once the output carries `allow`; there is no `Read` tool (reads go through `Bash`), and file edits are `apply_patch` with the patch text in `tool_input.command`, so T262.3's ledger cannot count Codex reads and parses the `*** Add/Update/Delete File:` and `*** Move to:` headers out of the patch text in `tool_input.command` (the docs' shape). Not verified: whether `allow` also skips Codex's own approval prompt on a rewritten command (the scratch run used `approval_policy = "never"`), and the `apply_patch` payload itself: the fake model's tool list (`exec_command`, `write_stdin`, `request_user_input`, `view_image`, goal and agent tools) offered no `apply_patch`, with or without `-s workspace-write`, `features.apply_patch_freeform` or a bundled model name, so the hook never fired on one.
