@@ -355,6 +355,7 @@ Every effective key with its origin — the `config show --sources` page.
 | setup.pi.tools | false | default |
 | setup.proxy | false | default |
 | setup.qwen.dir | ~/.qwen | default |
+| setup.reasonix.dir | ~/.reasonix | default |
 | setup.roo.mcp_path |  | default |
 | setup.source |  | default |
 | setup.vscode.code_user_dir |  | default |
@@ -454,7 +455,7 @@ Every effective key with its origin — the `config show --sources` page.
 | worktree.enabled | true | default |
 | worktree.root | ~/.rtok/worktrees | default |
 
-408 keys.
+409 keys.
 
 ## Doctor
 
@@ -728,6 +729,11 @@ agents
     mcp     not installed
     proxy   not supported: Augment documents no model endpoint setting or bring-your-own key to point at the proxy
     plugin  not supported: Auggie plugins come from marketplaces through `auggie plugin install`; rtok ships no Augment plugin
+  reasonix (cli)
+    hooks   not supported: Reasonix hooks (settings.json) use their own event payload and tool names, which rtok has no checked mapping for
+    mcp     not installed
+    proxy   not supported: Reasonix has no single endpoint setting; each [[providers]] entry carries its own base_url
+    plugin  not supported: Reasonix plugin packages are its own format; rtok ships no Reasonix plugin
 skills (1 listed, 154 desc bytes ≈ 38 tokens per request)
   descriptions over 120 chars: 1 skills, ≈ 8 tokens/request recoverable
   dry-refactoring project desc 154c body 2772B calls - WARN desc>120 WARN never invoked

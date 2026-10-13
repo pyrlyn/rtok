@@ -463,6 +463,8 @@ config_path   = "~/.config/crush/crush.json" # Crush: global JSON config (mcp.rt
 mcp_path      = "~/.openhands/mcp.json"     # OpenHands: користувацький файл MCP-серверів (mcpServers)
 [setup.augment]
 settings_path = "~/.augment/settings.json"   # Auggie CLI: користувацькі налаштування, mcpServers
+[setup.reasonix]
+dir           = "~/.reasonix"                # Reasonix: config.toml (MCP-сервери в [[plugins]]); REASONIX_HOME переносить каталог (Windows: %APPDATA%/reasonix)
 
 [expand]                              # rtok expand <id>
 max_lines = 0                         # 0 = без обмежень (--lines a-b задається для виклику)

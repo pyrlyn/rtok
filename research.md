@@ -2711,6 +2711,18 @@ The CLI binary is `auggie`; the IDE extension keeps MCP servers behind a setting
 - Plugins: `auggie plugin marketplace add`, `auggie plugin install`, `--plugin-dir`; Augment's own marketplace format. No Augment plugin unit exists under `plugins/` (D21), so `plugin` stays `Support::No`. https://docs.augmentcode.com/cli/reference
 - The CLI reference documents no model endpoint, bring-your-own-key setting or config-directory environment variable, so proxy stays out.
 
+### 32.15 DeepSeek Reasonix (T413.15, checked 2026-10-12)
+
+All facts are from the project's own repository (github.com/esengine/DeepSeek-Reasonix, default branch `studio`, MIT, release `studio-v2.37.0` of 2026-10-12), docs fetched 2026-10-12.
+
+- The card's lead was `~/.reasonix/config.json`. That is the legacy (0.x) file: since v1.8.1 the global config is `<Reasonix home>/config.toml`, and the old `config.json` is read only as a lowest-priority `mcpServers` source, https://github.com/esengine/DeepSeek-Reasonix/blob/studio/docs/CONFIG_PATHS.md and `docs/GUIDE.md` ("Upgrading from 0.x").
+- Reasonix home: `~/.reasonix` on macOS and Linux, `%APPDATA%\reasonix` on Windows; `REASONIX_HOME` overrides it (CONFIG_PATHS.md, "Reasonix Home"). The CLI and the desktop app share it.
+- MCP servers: one `[[plugins]]` table per server in the global `config.toml` (CONFIG_PATHS.md example, `name`, `command`); `type` selects the transport and `stdio` is the default, with `command`, `args`, `env` (GUIDE.md "Plugins (MCP)", https://github.com/esengine/DeepSeek-Reasonix/blob/studio/docs/GUIDE.md). Explicit installs are saved to the user-global `config.toml` and are the authorization; no second trust step.
+- A project `reasonix.toml` or `.mcp.json` overrides a same-named global server, so setup writes neither (they belong to the project). Names are resolved once per workspace and project declarations override same-name global installs (GUIDE.md "Plugins (MCP)").
+- Hooks: `<Reasonix home>/settings.json` under `hooks.<Event>[]` with `match`, `command`, `timeout`; the payload is one line of camelCase JSON on stdin (`toolName`, `toolArgs`, ...) and the verdict is the exit code (GUIDE.md "Hooks"). Reasonix tool names (`bash`, `read_file`) differ from Claude's and the page lists no full tool table, so rtok has no checked mapping and hooks stay `Support::No`.
+- Providers: each `[[providers]]` entry carries its own `base_url`; there is no single endpoint setting, so proxy stays `Support::No`.
+- Install: `npm install -g reasonix` puts `reasonix` (and a `dsnix` shim) on PATH (README "Install"). The desktop installers are GitHub Releases downloads with no documented install path, so there is no Desktop variant.
+
 ## 33. Which tests a change reaches (T420, 2026-10-06)
 
 Question: what picks the tests for `just check` so that a docs-only change runs no cargo tests and an edit to one source file runs its unit tests plus the integration tests that reach it. All sources checked 2026-10-06.

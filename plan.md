@@ -47,7 +47,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T398 | todo | P3 | 1 | 30% | |
 | T413 | todo | P2 | 3 | 0% | |
 | T413.13 | todo | P3 | 2 | 0% | |
-| T413.15 | in progress | P3 | 2 | 0% | Claude Code / sonnet-5.5 |
 | T414 | in progress | P1 | 4 | 20% | Claude Code / opus-5.5 |
 | T414.7 | in progress | P3 | 1 | 0% | MiMo / mimo |
 | T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
@@ -687,14 +686,6 @@ Check: the T413 per-host check (step 5) for this host.
 Plan: Trae docs for the MCP file. Reuse the VS Code helper only if the key and path match; otherwise a thin host of its own.
 
 Finding (2026-10-12, `research.md` §32.13): Trae's docs name only a project `.trae/mcp.json`, which is the project's, and a user-level `mcp.json` behind the app's Raw Config button with no path. No installer is written until a documented user-level path exists.
-
-### T413.15. `rtok agents install reasonix` — DeepSeek Reasonix
-
-DeepSeek-Reasonix (https://github.com/esengine/DeepSeek-Reasonix), CLI plus editor extension. Its docs list MCP, skills, memory and hooks in `~/.reasonix/config.json` (lead, checked 2026-10-05: https://esengine.github.io/DeepSeek-Reasonix/configuration.html); confirm the keys before writing them.
-
-Check: the T413 per-host check (step 5) for this host.
-
-Plan: re-read configuration.html and write only the keys it names. Skills and memory stay out unless that page says setup may edit them.
 
 ### T414. Web dashboard restyle on the brand pack, built from `brand/` sources
 

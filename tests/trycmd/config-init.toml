@@ -4,7 +4,7 @@ stdout = """
 target/tmp/t60-2-config-init.toml
 --- a/target/tmp/t60-2-config-init.toml
 +++ b/target/tmp/t60-2-config-init.toml
-@@ -0,0 +1,586 @@
+@@ -0,0 +1,588 @@
 +# rtok configuration. Every CLI flag has a key here; flags and RTOK_* env vars override.
 +# Precedence: defaults < this file < <git root>/.rtok.toml < env < flags.
 +# Docs: docs/config.md. Check: `rtok config validate`. Where a value came from: `rtok config show --sources`.
@@ -411,6 +411,8 @@ target/tmp/t60-2-config-init.toml
 +# mcp_path      = "~/.openhands/mcp.json"     # OpenHands: user-level MCP servers (mcpServers)
 +[setup.augment]
 +# settings_path = "~/.augment/settings.json"   # Auggie CLI: user settings, mcpServers
++[setup.reasonix]
++# dir           = "~/.reasonix"                # Reasonix: config.toml ([[plugins]] MCP servers); REASONIX_HOME moves it (Windows: %APPDATA%/reasonix)
 +
 +[expand]                              # rtok expand <id>
 +# max_lines = 0                         # 0 = unlimited   (--lines a-b is per call)
@@ -591,7 +593,7 @@ target/tmp/t60-2-config-init.toml
 +[plugins.wasm]
 +# enabled = false
 +# dir = "~/.rtok/plugins"
-1 file changed, 586 insertions(+)
+1 file changed, 588 insertions(+)
 """
 
 # Hermetic by construction: isolated HOME/RTOK_HOME, inherit = false.

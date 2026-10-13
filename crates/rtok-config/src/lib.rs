@@ -96,6 +96,7 @@ pub const HOSTS: &[&str] = &[
     "crush",
     "openhands",
     "augment",
+    "reasonix",
 ];
 
 /// Adapters `[tasks] adapter` accepts. `tasks::run::ADAPTERS` re-exports this.
@@ -808,6 +809,7 @@ section! {
         crush: SetupCrush = SetupCrush::default(),
         openhands: SetupOpenhands = SetupOpenhands::default(),
         augment: SetupAugment = SetupAugment::default(),
+        reasonix: SetupReasonix = SetupReasonix::default(),
     }
 }
 
@@ -1015,6 +1017,12 @@ section! {
 section! {
     /// `[setup.augment]` — the Auggie CLI's user settings file (T413.8).
     SetupAugment { settings_path: PathBuf = p("~/.augment/settings.json") }
+}
+
+section! {
+    /// `[setup.reasonix]` — Reasonix home (`REASONIX_HOME`, `%APPDATA%\reasonix` on Windows):
+    /// `config.toml` holds the `[[plugins]]` MCP servers (T413.15).
+    SetupReasonix { dir: PathBuf = p("~/.reasonix") }
 }
 
 section! {
@@ -1777,6 +1785,7 @@ impl Config {
             setup.crush.config_path,
             setup.openhands.mcp_path,
             setup.augment.settings_path,
+            setup.reasonix.dir,
             setup.codewhale.dir,
             setup.mimo.config_path,
             setup.antigravity.plugins_path,
