@@ -86,6 +86,7 @@ lang: ru
 | `junie` | no | MCP | ещё не проверено | `worktree_add` |
 | `droid` | no | MCP | ещё не проверено | `worktree_add` |
 | `kiro` | no | MCP | ещё не проверено | `worktree_add` |
+| `amp` | no | MCP | ещё не проверено | `worktree_add` |
 | `qwen` | yes | hooks | ещё не проверено | `worktree_add` |
 | `codebuddy` | yes | hooks | ещё не проверено | `worktree_add` |
 | `goose` | no | MCP | ещё не проверено | `worktree_add` |

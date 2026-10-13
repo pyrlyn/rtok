@@ -66,6 +66,7 @@ const EXPECTED_VARIANTS: &[(&str, Kind, &str)] = &[
     ("kiro", Kind::Cli, "Kiro CLI"),
     ("kiro", Kind::Desktop, "Kiro IDE"),
     ("junie", Kind::Cli, "Junie CLI"),
+    ("amp", Kind::Cli, "Amp"),
 ];
 
 /// `agents list`'s text form: one `CLI: <name>` / `Desktop: <name>` header per variant, in

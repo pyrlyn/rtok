@@ -113,6 +113,7 @@ fn hosts(home: &Path) -> Vec<(&'static str, Vec<&'static str>, Option<PathBuf>)>
         ("droid", vec![], Some(home.join(".factory/mcp.json"))),
         ("kiro", vec![], Some(home.join(".kiro/settings/mcp.json"))),
         ("junie", vec![], Some(home.join(".junie/mcp/mcp.json"))),
+        ("amp", vec![], Some(home.join(".config/amp/settings.json"))),
     ]
 }
 

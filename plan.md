@@ -46,7 +46,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T396 | todo | P3 | 2 | 80% | |
 | T398 | todo | P3 | 1 | 30% | |
 | T413 | todo | P2 | 3 | 0% | |
-| T413.5 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
 | T413.7 | in progress | P3 | 3 | 0% | Claude Code / sonnet-5.5 |
 | T413.8 | in progress | P3 | 3 | 0% | Claude Code / sonnet-5.5 |
 | T413.11 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
@@ -692,13 +691,6 @@ Shared shape for every sub-task, per `architecture.md` "New host" and D21:
 Check: every sub-task below is closed in `done.md` with its per-host check.
 
 
-### T413.5. `rtok agents install amp` — Amp
-
-Amp (Sourcegraph). MCP plus its plugin system if documented (`~/.config/amp/plugins` exists on this machine, `plan.md` T352 note). A plugin follows the `agents::plugin::HostPlugin` shape.
-
-Check: the T413 per-host check (step 5) for this host.
-
-Plan: Sourcegraph docs for the MCP entry and the plugin directory; `HostPlugin` only if the load path is documented.
 
 ### T413.7. `rtok agents install continue` — Continue
 
