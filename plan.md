@@ -47,7 +47,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T398 | todo | P3 | 1 | 30% | |
 | T413 | todo | P2 | 3 | 0% | |
 | T413.13 | todo | P3 | 2 | 0% | |
-| T413.15 | in progress | P3 | 2 | 0% | Claude Code / sonnet-5.5 |
 | T414 | in progress | P1 | 4 | 20% | Claude Code / opus-5.5 |
 | T414.7 | in progress | P3 | 1 | 0% | MiMo / mimo |
 | T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
