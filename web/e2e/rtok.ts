@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
-import { type ChildProcess, spawn, spawnSync } from "node:child_process";
+import { type ChildProcess, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { spawnGroup, stopGroup } from "./group";
 
 /** Two rotated log generations past `[log] files`: the junk the card offers to clear. */
 export const STALE_LOGS = ["rtok.log.7", "rtok.log.8"];
@@ -215,7 +216,7 @@ export class Rtok {
 
   async start() {
     if (this.child) throw new Error("rtok web is already running");
-    const child = spawn(BIN, ["web", "--host", "127.0.0.1", "--port", String(this.port)], {
+    const child = spawnGroup(BIN, ["web", "--host", "127.0.0.1", "--port", String(this.port)], {
       cwd: this.home,
       env: this.env(),
       stdio: "ignore",
@@ -244,16 +245,11 @@ export class Rtok {
     }
   }
 
-  /** Stops only the process this object spawned. */
+  /** Stops the process this object spawned and everything it started, and waits for all of them. */
   async stop() {
     const child = this.child;
     this.child = undefined;
-    if (!child || child.exitCode !== null || child.signalCode !== null) return;
-    const gone = new Promise((r) => child.once("exit", r));
-    child.kill("SIGTERM");
-    const timer = setTimeout(() => child.kill("SIGKILL"), 5000);
-    await gone;
-    clearTimeout(timer);
+    if (child) await stopGroup(child);
   }
 
   async dispose() {

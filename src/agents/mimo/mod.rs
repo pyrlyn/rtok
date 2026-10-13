@@ -71,10 +71,8 @@ static VARIANTS: [Variant; 2] = [
 /// that is the only one MiMo has (module doc).
 pub(crate) fn config_path(cfg: &Config) -> PathBuf {
     let json = &cfg.setup.mimo.config_path;
-    let sibling = json.with_extension("jsonc");
-    if json.file_name().is_some_and(|n| n == "mimocode.json") && !json.exists() && sibling.exists()
-    {
-        sibling
+    if json.file_name().is_some_and(|n| n == "mimocode.json") {
+        jsonc::lone_sibling(json)
     } else {
         json.clone()
     }

@@ -86,6 +86,7 @@ Skill `worktrees` розповідає агентові все це: `worktree_a
 | `junie` | ні | MCP | ще не перевірено | `worktree_add` |
 | `droid` | ні | MCP | ще не перевірено | `worktree_add` |
 | `kiro` | ні | MCP | ще не перевірено | `worktree_add` |
+| `amp` | ні | MCP | ще не перевірено | `worktree_add` |
 | `qwen` | так | хуки | ще не перевірено | `worktree_add` |
 | `codebuddy` | так | хуки | ще не перевірено | `worktree_add` |
 | `goose` | ні | MCP | ще не перевірено | `worktree_add` |

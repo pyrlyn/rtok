@@ -450,6 +450,8 @@ config_path   = "~/.config/goose/config.yaml"  # Goose CLI and Desktop: extensio
 mcp_path      = "~/.factory/mcp.json"        # Factory Droid: пользовательский файл MCP-серверов (mcpServers)
 [setup.kiro]
 mcp_path      = "~/.kiro/settings/mcp.json"      # Kiro IDE and CLI: user-level MCP servers (mcpServers)
+[setup.amp]
+settings_path = "~/.config/amp/settings.json"    # Amp: user settings; amp.mcpServers holds MCP servers (settings.jsonc if it is the only one)
 [setup.continue]
 config_path   = "~/.continue/config.yaml"        # Continue (VS Code, JetBrains, cn): mcpServers item rtok; Windows: %USERPROFILE%/.continue/; CONTINUE_GLOBAL_DIR moves it
 

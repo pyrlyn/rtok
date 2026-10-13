@@ -1,4 +1,3 @@
-- T623.2. Match `/ws` replies to their request by `req` in the web client
 - T124. Realized `tools_rewrite` saving as a dated `research.md` row
 
 - T131. Measure the spawn brief: cost row and on/off re-read share
@@ -28,7 +27,6 @@
 - T396. Verify the usage readers against real files
 - T398. Probe editors on a `worktree.useRelativePaths` worktree
 - T413. More agent hosts: popular agents rtok does not install into yet
-- T413.5. `rtok agents install amp` — Amp
 - T413.8. `rtok agents install augment` — Augment Code and Auggie CLI
 - T413.11. `rtok agents install crush` — Crush
 - T413.12. `rtok agents install warp` — Warp
@@ -39,7 +37,6 @@
 - T414.7. Re-shoot `web/screenshots/`; close the web admin gap in `brand/`
 - T416. Shared `change-preview` crate for dry-run output
 - T428. SessionStart hook back under the 10 ms budget
-- T436.3. Shared operation-icon crate for rtok and ketch
 - T436.4. Spinner on `agents install/update` through T276's `ProgressRunner`
 - T522. `read` and `expand` accept the line ranges agents sent this week
 - T523. `worktree add` takes `T504 read-hook-same-path` as an id plus a slug

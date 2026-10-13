@@ -122,6 +122,7 @@ Project programs and direct packages from the manifests.
 | log | local | https://crates.io/crates/log | T225: logging facade env_logger drains; D26 lines are mirrored into it |
 | mime_guess | local | https://crates.io/crates/mime_guess | Content-Type for the SPA files `rtok web` serves |
 | notify | local | https://crates.io/crates/notify | Rust dependency |
+| operation-icons | local | https://crates.io/crates/operation-icons | T436.3: verb icons and the icon gutter of status lines, shared with ketch |
 | owo-colors | local | https://crates.io/crates/owo-colors | Rust dependency |
 | pathdiff | local | https://crates.io/crates/pathdiff | Relative path between two paths |
 | percent-encoding | local | https://crates.io/crates/percent-encoding | T574: decode percent-escaped SPA asset URL paths |
@@ -169,7 +170,7 @@ Project programs and direct packages from the manifests.
 | pulldown-cmark | local (dev) | https://crates.io/crates/pulldown-cmark | CommonMark parse of README and docs in tests/docs_structure.rs: unclosed fences, skipped heading levels (T359) |
 | tokio-tungstenite | local | https://crates.io/crates/tokio-tungstenite | WebSocket client for the `rtok web` e2e (tests/web_e2e.rs) |
 | toml | local | https://crates.io/crates/toml | Cargo.lock `[[package]]` parse for `docs_resolve` (already in the lock via figment) |
-| unicode-width | local | https://crates.io/crates/unicode-width | T436: measures each operation icon so its gutter pads to one column width; already in the lock as a transitive dep |
+| unicode-width | local (dev) | https://crates.io/crates/unicode-width | T436: style tests measure that every icon fills one gutter width; already in the lock as a transitive dep |
 | url | local | https://crates.io/crates/url | `file://` MCP roots → path (T263) |
 | uuid | local | https://crates.io/crates/uuid | T282: random UUIDv4 rtok agent id (D34); already in the lock as a transitive dep |
 | wasmi | local | https://crates.io/crates/wasmi | Rust dependency |
