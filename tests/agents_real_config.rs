@@ -129,6 +129,10 @@ const HOSTS: &[Host] = &[
         files: &[".config/amp/settings.json"],
     },
     Host {
+        id: "warp",
+        files: &[".warp/.mcp.json"],
+    },
+    Host {
         id: "crush",
         files: &[".config/crush/crush.json"],
     },
@@ -240,6 +244,7 @@ fn fixture(rel: &str) -> &'static str {
         | ".factory/mcp.json"
         | ".kiro/settings/mcp.json"
         | ".junie/mcp/mcp.json"
+        | ".warp/.mcp.json"
         | "Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json" => {
             r#"{"mcpServers":{"foreign":{"command":"x"}}}"#
         }
@@ -380,6 +385,7 @@ real_config_round_trip! {
     kiro_keeps_the_real_mcp_json => "kiro",
     junie_keeps_the_real_mcp_json => "junie",
     amp_keeps_the_real_mcp_json => "amp",
+    warp_keeps_the_real_mcp_json => "warp",
     crush_keeps_the_real_crush_json => "crush",
 }
 
