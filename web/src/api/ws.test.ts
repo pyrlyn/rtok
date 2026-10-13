@@ -57,6 +57,25 @@ describe("wsUrl", () => {
 });
 
 describe("parseFrame", () => {
+  test("keeps the request id a reply carries, and none on a push", () => {
+    const plan = { items: [], diff: "", refused: [], token: "t" };
+    expect(parseFrame(JSON.stringify({ req: 4, type: "doctorplan", plan }))).toEqual({
+      type: "doctorplan",
+      plan,
+      req: 4,
+    });
+    expect(parseFrame('{"req":9,"type":"message","text":"no"}')).toEqual({
+      type: "message",
+      text: "no",
+      req: 9,
+    });
+    expect(parseFrame('{"req":"x","type":"message","text":"no"}')).toEqual({
+      type: "message",
+      text: "no",
+    });
+    expect(parseFrame(JSON.stringify({ type: "doctorplan", plan }))).not.toHaveProperty("req");
+  });
+
   test("snapshot, snapshot failure, message and expand", () => {
     const snap = parseFrame(JSON.stringify(sampleSnapshot));
     expect(snap).toEqual({ type: "snapshot", snapshot: sampleSnapshot });

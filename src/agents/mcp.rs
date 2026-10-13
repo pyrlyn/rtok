@@ -105,6 +105,10 @@ fn toml_value_to_json(v: &toml_edit::Value) -> Value {
 /// The server key most hosts keep their MCP servers under.
 const SERVERS: &str = "mcpServers";
 
+/// Amp's servers table: one flat top-level key that happens to contain a dot, not a nested
+/// `amp` object, so [`surface`] keeps it as a single path segment.
+pub(crate) const AMP_SERVERS: &str = "amp.mcpServers";
+
 /// One MCP surface of a host variant (T278): the [`McpSpec`] [`rtok_mcp::status`] checks, and
 /// what else serves `"rtok"` there once installed (a plugin, Grok's Claude import). Built per
 /// variant, so a plugin only counts for the surface it serves: the Claude Code plugin never
@@ -212,6 +216,7 @@ pub(crate) fn surfaces(agent: &dyn super::Agent, cfg: &Config, kind: Kind) -> Ve
             .into();
     }
     let (file, key) = match host {
+        "amp" => (super::amp::settings_path(cfg), AMP_SERVERS),
         "claude" if desktop => (claude::desktop_path(), SERVERS),
         "claude" => (cfg.doctor.claude_json.clone(), SERVERS),
         "cline" if desktop => (cline::ext_mcp_path(cfg), SERVERS),
@@ -271,7 +276,11 @@ fn surface(
         },
         config_path: file,
         format,
-        key_path: McpSpec::key_path(key),
+        key_path: if key == AMP_SERVERS {
+            vec![key.to_string()]
+        } else {
+            McpSpec::key_path(key)
+        },
         server: RTOK,
         launch: Launch::default(),
         entry_shape: EntryShape::Command,
@@ -821,6 +830,15 @@ mod tests {
         assert_eq!(rows.len(), 1);
         assert!(rows[0].spec.config_path.ends_with("commandcode/mcp.json"));
         assert_eq!(rows[0].spec.key_path, ["mcpServers"]);
+    }
+
+    /// Amp's `"amp.mcpServers"` is one flat key; split on the dot, status would look under an
+    /// `amp` object that Amp's settings file does not have and report the entry missing.
+    #[test]
+    fn amp_servers_key_stays_one_path_segment() {
+        let host = super::super::host("amp").unwrap();
+        let rows = surfaces(host, &vfs_cfg(), Kind::Cli);
+        assert_eq!(rows[0].spec.key_path, ["amp.mcpServers"]);
     }
 
     /// Before T275 the Code plugin made Desktop read as installed; with it installed and a

@@ -5,8 +5,8 @@
 import { createMemoryHistory, RouterProvider } from "@tanstack/react-router";
 import { render } from "@testing-library/react";
 import { DataProvider } from "../api/query";
-import type { ClientMessage, Snapshot } from "../api/snapshot.gen";
-import type { Connect, Frame } from "../api/ws";
+import type { Request, Snapshot } from "../api/snapshot.gen";
+import { echoReq, type Connect, type Frame } from "../api/ws";
 import { createAppRouter } from "../router";
 
 export const serving =
@@ -19,7 +19,7 @@ export const serving =
 
 /** A socket the test drives: it records what the page sends and pushes the frames it likes. */
 export function wire(first: Snapshot) {
-    const sent: ClientMessage[] = [];
+    const sent: Request[] = [];
     let push: (f: Frame) => void = () => {};
     const connect: Connect = (h) => {
         push = h.onFrame;
@@ -33,6 +33,9 @@ export function wire(first: Snapshot) {
         push: (snapshot: Snapshot) => push({ type: "snapshot", snapshot }),
         message: (text: string) => push({ type: "message", text }),
         frame: (f: Frame) => push(f),
+        /** What the server sends for `request` (the latest one with an id by default): `f` with that id. */
+        answer: (f: Frame, request: Request | undefined = sent.findLast((m) => m.req != null)) =>
+            push(echoReq(f, request?.req)),
     };
 }
 

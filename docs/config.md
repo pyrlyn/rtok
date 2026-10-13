@@ -450,6 +450,8 @@ config_path   = "~/.config/goose/config.yaml"  # Goose CLI and Desktop: extensio
 mcp_path      = "~/.factory/mcp.json"        # Factory Droid: user-level MCP servers (mcpServers)
 [setup.kiro]
 mcp_path      = "~/.kiro/settings/mcp.json"      # Kiro IDE and CLI: user-level MCP servers (mcpServers)
+[setup.amp]
+settings_path = "~/.config/amp/settings.json"    # Amp: user settings; amp.mcpServers holds MCP servers (settings.jsonc if it is the only one)
 [setup.crush]
 config_path   = "~/.config/crush/crush.json" # Crush: global JSON config (mcp.rtok); CRUSH_GLOBAL_CONFIG or XDG_CONFIG_HOME move it
 

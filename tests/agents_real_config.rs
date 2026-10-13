@@ -125,6 +125,10 @@ const HOSTS: &[Host] = &[
         files: &[".kiro/settings/mcp.json"],
     },
     Host {
+        id: "amp",
+        files: &[".config/amp/settings.json"],
+    },
+    Host {
         id: "crush",
         files: &[".config/crush/crush.json"],
     },
@@ -239,6 +243,7 @@ fn fixture(rel: &str) -> &'static str {
         | "Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json" => {
             r#"{"mcpServers":{"foreign":{"command":"x"}}}"#
         }
+        ".config/amp/settings.json" => r#"{"amp.mcpServers":{"foreign":{"command":"x"}}}"#,
         ".config/crush/crush.json" => {
             r#"{"$schema":"https://charm.land/crush.json","options":{"debug":true},"mcp":{"foreign":{"type":"http","url":"https://x"}}}"#
         }
@@ -374,6 +379,7 @@ real_config_round_trip! {
     droid_keeps_the_real_mcp_json => "droid",
     kiro_keeps_the_real_mcp_json => "kiro",
     junie_keeps_the_real_mcp_json => "junie",
+    amp_keeps_the_real_mcp_json => "amp",
     crush_keeps_the_real_crush_json => "crush",
 }
 

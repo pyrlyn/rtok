@@ -64,6 +64,7 @@ lang: ru
 | [`kiro`](https://github.com/pyrlyn/rtok/blob/main/src/agents/kiro/README.md) | Kiro CLI | CLI | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
 | [`kiro`](https://github.com/pyrlyn/rtok/blob/main/src/agents/kiro/README.md) | Kiro IDE | Desktop | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
 | [`junie`](https://github.com/pyrlyn/rtok/blob/main/src/agents/junie/README.md) | Junie CLI | CLI | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
+| [`amp`](https://github.com/pyrlyn/rtok/blob/main/src/agents/amp/README.md) | Amp | CLI | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
 | [`crush`](https://github.com/pyrlyn/rtok/blob/main/src/agents/crush/README.md) | Crush | CLI | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
 <!-- agents-table:end -->
 
