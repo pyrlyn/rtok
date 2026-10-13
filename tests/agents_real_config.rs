@@ -136,6 +136,10 @@ const HOSTS: &[Host] = &[
         id: "continue",
         files: &[".continue/config.yaml"],
     },
+    Host {
+        id: "crush",
+        files: &[".config/crush/crush.json"],
+    },
 ];
 
 /// True for anything rtok owns: install puts it there and remove takes it away, so it is the
@@ -249,6 +253,9 @@ fn fixture(rel: &str) -> &'static str {
             r#"{"mcpServers":{"foreign":{"command":"x"}}}"#
         }
         ".config/amp/settings.json" => r#"{"amp.mcpServers":{"foreign":{"command":"x"}}}"#,
+        ".config/crush/crush.json" => {
+            r#"{"$schema":"https://charm.land/crush.json","options":{"debug":true},"mcp":{"foreign":{"type":"http","url":"https://x"}}}"#
+        }
         ".claude/settings.json" => {
             r#"{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"other-tool run"}]}]},"env":{"KEEP":"1"}}"#
         }
@@ -387,6 +394,7 @@ real_config_round_trip! {
     amp_keeps_the_real_mcp_json => "amp",
     warp_keeps_the_real_mcp_json => "warp",
     continue_keeps_the_real_config_yaml => "continue",
+    crush_keeps_the_real_crush_json => "crush",
 }
 
 /// Zed writes JSONC. The fixture carries a `//` comment; the installer edits the text
