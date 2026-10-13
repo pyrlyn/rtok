@@ -46,7 +46,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T396 | todo | P3 | 2 | 80% | |
 | T398 | todo | P3 | 1 | 30% | |
 | T413 | todo | P2 | 3 | 0% | |
-| T413.8 | in progress | P3 | 3 | 0% | Claude Code / sonnet-5.5 |
 | T413.13 | todo | P3 | 2 | 0% | |
 | T413.15 | in progress | P3 | 2 | 0% | Claude Code / sonnet-5.5 |
 | T414 | in progress | P1 | 4 | 20% | Claude Code / opus-5.5 |
@@ -677,13 +676,6 @@ Check: every sub-task below is closed in `done.md` with its per-host check.
 
 
 
-### T413.8. `rtok agents install augment` — Augment Code and Auggie CLI
-
-IDE extension and Auggie CLI. MCP and hooks if documented.
-
-Check: the T413 per-host check (step 5) for this host.
-
-Plan: Augment and Auggie docs for MCP and hooks; skip a surface whose file is not documented.
 
 
 ### T413.13. `rtok agents install trae` — Trae

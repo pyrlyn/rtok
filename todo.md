@@ -27,7 +27,6 @@
 - T396. Verify the usage readers against real files
 - T398. Probe editors on a `worktree.useRelativePaths` worktree
 - T413. More agent hosts: popular agents rtok does not install into yet
-- T413.8. `rtok agents install augment` — Augment Code and Auggie CLI
 - T413.13. `rtok agents install trae` — Trae
 - T413.15. `rtok agents install reasonix` — DeepSeek Reasonix
 - T414. Web dashboard restyle on the brand pack, built from `brand/` sources
