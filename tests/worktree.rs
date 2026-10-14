@@ -490,12 +490,12 @@ fn add_creates_one_locked_worktree_per_task_from_a_fresh_base() {
     run(&tmp.join("other"), &["commit", "-q", "-m", "ignore"]);
     run(&tmp.join("other"), &["push", "-q", "origin", "main"]);
     let tip = run(&tmp.join("other"), &["rev-parse", "HEAD"]);
-    // T410: the default root is `~/.rtok/worktrees`; a `_worktrees/` beside the repository
-    // no longer pulls the worktree there.
+    // T660.4: the default root is `<main>/.rtok/worktrees`; neither a `_worktrees/` beside the
+    // repository nor `~/.rtok/worktrees` (T410) pulls the worktree there.
     std::fs::create_dir_all(tmp.join("_worktrees")).unwrap();
     let home = tmp.join("home");
     std::fs::create_dir_all(&home).unwrap();
-    let root = home.join(".rtok/worktrees");
+    let root = work.join(".rtok/worktrees");
 
     let owner = "Claude Code / sonnet";
     let add = ["worktree", "add", "T158", "Worktree-Add", "--owner", owner];
@@ -1325,7 +1325,7 @@ fn disabled_worktrees_refuse_every_command_and_drop_the_mcp_tools() {
             "{args:?}: {err}"
         );
     }
-    assert!(!tmp.join(".rtok/worktrees").exists());
+    assert!(!work.join(".rtok").exists());
 
     let (store, _) = agents(&tmp, &[]);
     let claude = store.host_id("claude").unwrap().unwrap();
@@ -1381,9 +1381,10 @@ fn whoami_shows_the_root_and_only_the_caller_s_worktrees() {
     let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
     let real = |p: &serde_json::Value| Path::new(p.as_str().unwrap()).canonicalize().unwrap();
     assert_eq!(v["agent"], me);
+    // T660.4: the default root is under the main checkout, which git reports canonical.
     assert_eq!(
-        Path::new(v["root"].as_str().unwrap()),
-        tmp.join(".rtok/worktrees")
+        real(&v["root"]),
+        work.join(".rtok/worktrees").canonicalize().unwrap()
     );
     assert_eq!(real(&v["here"]), claimed.canonicalize().unwrap());
     let mut held: Vec<std::path::PathBuf> = v["worktrees"]
@@ -1514,7 +1515,7 @@ fn worktree_create_hook_returns_the_add_path_bound_to_the_session_agent() {
         .unwrap()
         .trim_end()
         .to_string();
-    let want = tmp.join(".rtok/worktrees/rtok-bold-oak-a3f2");
+    let want = work.join(".rtok/worktrees/rtok-bold-oak-a3f2");
     assert_eq!(
         Path::new(&path).canonicalize().unwrap(),
         want.canonicalize().unwrap()
@@ -1626,7 +1627,7 @@ fn worktree_launcher_creates_a_plain_worktree_when_rtok_cannot() {
     );
     let err = String::from_utf8_lossy(&out.stderr);
     assert!(out.status.success(), "{err}");
-    let want = tmp.join(".rtok/worktrees/rtok-third");
+    let want = work.join(".rtok/worktrees/rtok-third");
     assert!(
         same(std::str::from_utf8(&out.stdout).unwrap().trim_end(), &want),
         "{out:?}"
@@ -2011,4 +2012,72 @@ fn a_new_worktree_inherits_no_symbol_rows_under_rtok() {
     let mut paths: Vec<_> = copied.keys().map(String::as_str).collect();
     paths.sort_unstable();
     assert_eq!(paths, [".rtokish/b.rs", "src/a.rs"]);
+}
+
+/// T660.4: `.rtok/` is made ignored once, in `.gitignore` when the project has one (the rest
+/// byte-for-byte, a missing final newline added first), else in `info/exclude`; a rule already
+/// in effect is left alone.
+#[test]
+fn rtok_dir_is_ignored_through_gitignore_or_info_exclude() {
+    use rtok::worktree::add::ensure_ignored;
+    let tmp = rtok::testutil::tmp_dir("worktree-ignore-rtok");
+    let work = common::git::repo(&tmp);
+    let exclude = work.join(".git/info/exclude");
+    let before = std::fs::read(&exclude).unwrap_or_default();
+
+    std::fs::write(work.join(".gitignore"), "target\n# keep\r\n*.log").unwrap();
+    ensure_ignored(&work).unwrap();
+    let want = "target\n# keep\r\n*.log\n.rtok/\n";
+    assert_eq!(
+        std::fs::read_to_string(work.join(".gitignore")).unwrap(),
+        want
+    );
+    ensure_ignored(&work).unwrap();
+    assert_eq!(
+        std::fs::read_to_string(work.join(".gitignore")).unwrap(),
+        want
+    );
+    assert_eq!(std::fs::read(&exclude).unwrap_or_default(), before);
+
+    std::fs::write(work.join(".gitignore"), "/.rtok\n").unwrap();
+    ensure_ignored(&work).unwrap();
+    assert_eq!(
+        std::fs::read_to_string(work.join(".gitignore")).unwrap(),
+        "/.rtok\n"
+    );
+
+    std::fs::remove_file(work.join(".gitignore")).unwrap();
+    ensure_ignored(&work).unwrap();
+    ensure_ignored(&work).unwrap();
+    let text = std::fs::read_to_string(&exclude).unwrap();
+    assert_eq!(text.matches(".rtok/").count(), 1, "{text}");
+    assert!(text.ends_with(".rtok/\n"), "{text}");
+    assert!(!work.join(".gitignore").exists());
+}
+
+/// T660.4: by default `rtok worktree add` puts the worktree under `<main>/.rtok/worktrees`,
+/// from main and from inside a linked worktree alike, and main stays clean.
+#[test]
+fn the_default_root_is_under_the_main_checkout_from_main_and_from_a_worktree() {
+    let tmp = rtok::testutil::tmp_dir("worktree-default-root");
+    let work = common::git::repo(&tmp);
+    let home = tmp.join("home");
+    std::fs::create_dir_all(&home).unwrap();
+    let add = |cwd: &Path, task: &str| {
+        let out = rtok_in(&home, cwd, &["worktree", "add", task, "--owner", ME], b"");
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let printed = String::from_utf8_lossy(&out.stdout).trim_end().to_string();
+        Path::new(&printed).canonicalize().unwrap()
+    };
+    let first = add(&work, "t1");
+    assert_eq!(first, work.join(".rtok/worktrees/rtok-t1"));
+    std::fs::create_dir_all(first.join("sub")).unwrap();
+    let second = add(&first.join("sub"), "t2");
+    assert_eq!(second, work.join(".rtok/worktrees/rtok-t2"));
+    assert_eq!(run(&work, &["status", "--porcelain"]), "");
+    assert!(!home.join(".rtok/worktrees").exists());
 }

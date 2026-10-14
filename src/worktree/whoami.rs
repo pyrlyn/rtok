@@ -67,7 +67,11 @@ pub fn run(cwd: &Path, root: &Path, agent: Option<&AgentDetail>, store: Option<&
     Whoami {
         agent: agent.map(|a| a.id.clone()),
         host: agent.map(|a| a.host.clone()),
-        root: root.to_path_buf(),
+        // Where `add` would put a worktree from here; outside a repository the root as set.
+        root: records.first().map_or_else(
+            || root.to_path_buf(),
+            |main| super::add::landing(&main.path, root),
+        ),
         here,
         worktrees,
     }
