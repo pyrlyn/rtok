@@ -10,7 +10,7 @@ New bugs, dead code and moves from a read-only Cursor cloud review of `main` at 
 
 | ID | Priority | Kind | Status | Where | Fix |
 | --- | --- | --- | --- | --- | --- |
-| T464 | P2 | move | compared | `crates/rtok-agent-sdk/src/lib.rs:84-163` (`backup`) → crates-packages `file-backup` | Not a drop-in (checked 2026-10-10): rtok writes to a `_backup/` folder, keeps N generations (`prune_backups`, `stale_backups`) and dedups against any file there; `file-backup` 0.1.1 writes beside the file and never prunes. The creator chose to extend `file-backup` first (crates-packages roadmap T12, with its T4 symlink fix, which the open crates-packages PR #34 also touches), then depend on it here. |
+| T464 | P2 | move | compared | `crates/rtok-agent-sdk/src/lib.rs:84-163` (`backup`) → crates `file-backup` | Not a drop-in (checked 2026-10-10): rtok writes to a `_backup/` folder, keeps N generations (`prune_backups`, `stale_backups`) and dedups against any file there; `file-backup` 0.1.1 writes beside the file and never prunes. The creator chose to extend `file-backup` first (crates roadmap T12, with its T4 symlink fix, which the open crates PR #34 also touches), then depend on it here. |
 | T465 | P2 | move | compared | `tools/dist-generate.sh`, `tools/release.sh` → `pyrlyn/ci` | Not shared copies (diffed 2026-10-10): `dist-generate.sh` differs from ketch's and swarfr's in 239 and 102 lines; `release.sh` differs from ketch, cox, runa and swarfr in 130, 121, 63 and 75 lines. Nothing to fold until the repos agree on one release flow; no move without a new creator OK. |
 | T466 | P2 | move | compared | `.github/actions/rustup-toolchain-cache` → `pyrlyn/ci/.github/actions/` | Only rtok uses it (`ci.yml`, `graph-review.yml`; checked 2026-10-10 across `apps/` and `packages/`). `pyrlyn/ci` already ships `setup-rust` (mise-pinned Rust and `rust-cache`); sharing would mean folding the toolchain cache into it. No move without a new creator OK. |
 | T470 | P3 | move | suspected | `tools/test-changed.sh`, `tools/selective-check.sh` → `scoped-check` / `pyrlyn/ci` | Overlap was claimed but not diffed against cox or `pyrlyn/ci`. Compare first; move only what matches. |
@@ -27,8 +27,8 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T275 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
 | T275.1 | in progress | P2 | 3 | 80% | Cursor / grok 4.7 |
 | T276 | in progress | P2 | 5 | 30% | Claude Code / sonnet-5.5 |
-| T276.3 | todo | P2 | 4 | 0% | |
-| T276.6 | todo | P2 | 3 | 0% | |
+| T276.3 | in progress | P2 | 4 | 0% | Claude Code / sonnet-5.5 |
+| T276.6 | in progress | P2 | 3 | 0% | Claude Code / sonnet-5.5 |
 | T277 | in progress | P2 | 5 | 30% | Claude Code / sonnet-5.5 |
 | T278 | in progress | P1 | 3 | 90% | Claude Code / claude-opus-5-5 |
 | T279 | in progress | P1 | 5 | 90% | Claude Code / claude-opus-5-5 |
@@ -43,20 +43,21 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T385.9.3 | todo | P3 | 2 | 0% | |
 | T394 | todo | P2 | 2 | 20% | |
 | T395 | todo | P3 | 2 | 20% | |
-| T396 | todo | P3 | 2 | 80% | |
+| T396 | todo | P3 | 2 | 85% | |
 | T398 | todo | P3 | 1 | 30% | |
 | T413 | todo | P2 | 3 | 0% | |
-| T413.7 | in progress | P3 | 3 | 0% | Claude Code / sonnet-5.5 |
-| T413.8 | in progress | P3 | 3 | 0% | Claude Code / sonnet-5.5 |
-| T413.11 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
-| T413.12 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T413.13 | todo | P3 | 2 | 0% | |
-| T413.14 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
-| T413.15 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T414 | in progress | P1 | 4 | 20% | Claude Code / opus-5.5 |
 | T414.7 | in progress | P3 | 1 | 0% | MiMo / mimo |
 | T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
 | T428 | in progress | P2 | 3 | 85% | Claude Code / sonnet-5.5 |
+| T651 | in progress | P2 | 2 | 35% | Claude Code / sonnet-5.5 |
+| T652 | in progress | P1 | 2 | 60% | Claude Code / sonnet-5.5 |
+| T653 | in progress | P2 | 2 | 55% | Claude Code / sonnet-5.5 |
+| T654 | in progress | P2 | 2 | 65% | Claude Code / sonnet-5.5 |
+| T655 | in progress | P2 | 2 | 60% | Claude Code / sonnet-5.5 |
+| T656 | in progress | P2 | 2 | 60% | Claude Code / sonnet-5.5 |
+| T657 | in progress | P1 | 2 | 55% | Claude Code / sonnet-5.5 |
 | T436.4 | todo | P3 | 2 | 90% | |
 | T522 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T523 | in progress | P2 | 2 | 0% | MiMo / mimo |
@@ -64,43 +65,22 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T525 | in progress | P2 | 3 | 0% | MiMo / mimo |
 | T526 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T527 | in progress | P2 | 3 | 0% | MiMo / mimo |
-| T647.1 | in progress | P1 | 3 | 0% | Claude / opus-5.5 |
-| T647.2 | todo | P1 | 3 | 0% | |
-| T647.3 | todo | P1 | 3 | 0% | |
-| T647.4 | todo | P1 | 3 | 0% | |
-| T647.5 | todo | P2 | 3 | 0% | |
+| T660.2 | todo | P1 | 3 | 0% | |
+| T660.3 | todo | P1 | 3 | 0% | |
+| T660.4 | todo | P1 | 3 | 0% | |
+| T660.5 | todo | P2 | 3 | 0% | |
 
 
 
-### T647.1. One project-root method and a path-containment guard
+### T660.2. Every project-root caller goes through the T660.1 method
 
-Part of T647: worktrees move into `<project>/.rtok/worktrees`, and rtok gets one way to find a project root. Today six sites decide it differently: `git_root` (`crates/rtok-config/src/layers.rs`) stops at a linked worktree's `.git` file, `common_git_dir` (`src/project.rs`) resolves to the main checkout, `src/doctor.rs` has a private copy of `git_root`, and `checkpoint`/`tasks/run.rs` mix both. Nothing checks that a path rtok builds stays inside the project.
-
-Done: one module in the lowest crate that needs it (the config crate reads `.rtok.toml` through it), lexical, no git subprocess (hook budget), over the existing `ReadFs`:
-
-- `ProjectRoot::find(cwd)` → `checkout` (toplevel of the checkout `cwd` is in, a linked worktree's own dir) and `main` (the main checkout, through `commondir`; a submodule is its own project), plus the common `.git` dir.
-- `contain(root, path)`: the path made absolute against `root`, lexically normalized, then resolved through its deepest existing ancestor (symlinks); `Err` when it leaves `root`. Reuse `path_starts_with` (`crates/rtok-store/src/paths.rs`) and `worktree/add.rs::resolved` instead of new code.
-- `src/project.rs` (`project_name`, `project_key`) runs on it; no behaviour change.
-- Docs: a "Project root" section in `architecture.md` (which root each caller wants and why).
-
-Execution plan:
-
-1. Move `common_git_dir`/`common_dir` and `git_root` into the new module; `ReadFs` goes wherever both crates can see it.
-2. `contain` on top of `resolved` + `path_starts_with`.
-3. Tests (Vfs and a tempdir with real symlinks): main checkout; linked worktree with absolute and relative `gitdir`/`commondir`; submodule; no repo; cwd deep inside; `..` escape; absolute path outside; symlink escape; symlink inside that stays inside; root itself.
-4. `just check`.
-
-Check: the tests above pass and `project_name`/`project_key` tests are unchanged.
-
-### T647.2. Every project-root caller goes through the T647.1 method
-
-Needs T647.1. Switch every caller to `ProjectRoot` and say explicitly whether it wants `checkout` or `main`: `layers.rs` `.rtok.toml` layer (`checkout`: each worktree reads its own checked-out file), `agents/command.rs --project`, `plugins/checkpoint.rs`, `guard/grep_symbol.rs`, `memory/files.rs::project_root`, `tasks/run.rs` (both sites), `model/agents.rs::worktree_label`. Delete `git_root` and the duplicate in `src/doctor.rs`. `checkpoint::project_of_cx` returns the worktree basename today while `project_name` returns the main repo's name; it moves to `main` so a checkpoint made in a worktree files under the same project. `memory/files.rs::relative` uses `contain` so a symlink cannot point a note outside the root.
+Needs T660.1. Switch every caller to `ProjectRoot` and say explicitly whether it wants `checkout` or `main`: `layers.rs` `.rtok.toml` layer (`checkout`: each worktree reads its own checked-out file), `agents/command.rs --project`, `plugins/checkpoint.rs`, `guard/grep_symbol.rs`, `memory/files.rs::project_root`, `tasks/run.rs` (both sites), `model/agents.rs::worktree_label`. Delete `git_root` and the duplicate in `src/doctor.rs`. `checkpoint::project_of_cx` returns the worktree basename today while `project_name` returns the main repo's name; it moves to `main` so a checkpoint made in a worktree files under the same project. `memory/files.rs::relative` uses `contain` so a symlink cannot point a note outside the root.
 
 Check: one test per changed site for a linked worktree; a test that the checkpoint project name is the same from the main checkout and from a worktree; a symlink-escape test for memory paths; `just check`.
 
-### T647.3. Worktrees nested in the project do not leak into walks, gc or clean
+### T660.3. Worktrees nested in the project do not leak into walks, gc or clean
 
-Needs T647.1; lands before T647.4. With worktrees under `<main>/.rtok/worktrees`, several places would see them as part of main:
+Needs T660.1; lands before T660.4. With worktrees under `<main>/.rtok/worktrees`, several places would see them as part of main:
 
 - graph walk (`plugins/graph/walk.rs`), `search`/`tree` (`read/search.rs`) and the watcher (`graph/watch.rs`, root `.gitignore` only) descend into them when `.rtok/` is not ignored: skip any directory holding a `.git` file (a nested checkout), like `worktree/list.rs::walk` already does.
 - `worktree/gc.rs` and `worktree/clean.rs` call a worktree current by `here.starts_with(dir)`, so from a nested worktree main counts as current too: pick the deepest match.
@@ -109,15 +89,15 @@ Needs T647.1; lands before T647.4. With worktrees under `<main>/.rtok/worktrees`
 
 Check: a test per bullet with a worktree nested under `.rtok/worktrees` and no ignore rule; `just check`.
 
-### T647.4. Default worktree root `<project>/.rtok/worktrees`, `.rtok/` ignored
+### T660.4. Default worktree root `<project>/.rtok/worktrees`, `.rtok/` ignored
 
-Needs T647.1 and T647.3. The `[worktree] root` default becomes `.rtok/worktrees`. A relative root resolves against `ProjectRoot::main` (not the process cwd, as today), so a worktree created from inside another worktree still lands under the main checkout; `~` and absolute roots keep today's meaning. `add::plan` checks the new path with `contain`. Before creating the first worktree, rtok makes sure `.rtok/` is ignored: nothing to do when `git check-ignore` already ignores it; else append `.rtok/` to `<main>/.gitignore` when that file exists (rest byte-for-byte, a missing final newline added first); else to `<main>/.git/info/exclude`. Existing worktrees elsewhere keep working. Docs: `README.md`, `docs/agents-and-worktrees.md`, `docs/config.md` (+ `docs/ru`, `docs/uk`), `crates/rtok-config/default.toml`, `skills/rtok-worktrees/SKILL.md`, `CHANGELOG.md`.
+Needs T660.1 and T660.3. The `[worktree] root` default becomes `.rtok/worktrees`. A relative root resolves against `ProjectRoot::main` (not the process cwd, as today), so a worktree created from inside another worktree still lands under the main checkout; `~` and absolute roots keep today's meaning. `add::plan` checks the new path with `contain`. Before creating the first worktree, rtok makes sure `.rtok/` is ignored: nothing to do when `git check-ignore` already ignores it; else append `.rtok/` to `<main>/.gitignore` when that file exists (rest byte-for-byte, a missing final newline added first); else to `<main>/.git/info/exclude`. Existing worktrees elsewhere keep working. Docs: `README.md`, `docs/agents-and-worktrees.md`, `docs/config.md` (+ `docs/ru`, `docs/uk`), `crates/rtok-config/default.toml`, `skills/rtok-worktrees/SKILL.md`, `CHANGELOG.md`.
 
 Check: tests for the default path from main and from a linked worktree, a relative custom root, an absolute root, an escaping root (`../x` with a task id) refused; `.gitignore` present without the rule / with it / without a final newline, no `.gitignore` → `info/exclude`, idempotent on a second add; the `the_default_root_is_under_the_rtok_home` test is replaced; `just check`.
 
-### T647.5. `rtok worktree migrate` moves worktrees into the configured root
+### T660.5. `rtok worktree migrate` moves worktrees into the configured root
 
-Needs T647.4. Moves this repository's worktrees that live outside the configured root to `<root>/<repo>-<task>` with `git worktree move`, keeping lock and claim records in step. Dry run without `--yes`. Skips, with a reason: main, the worktree holding the cwd, a worktree locked or claimed by another agent or by a live session, a worktree with submodules (`git worktree move` refuses them), a target that already exists. CLI only; new-command gates (trycmd fence, `surface_parity`, `config_coverage`). Docs with T647.4's pages.
+Needs T660.4. Moves this repository's worktrees that live outside the configured root to `<root>/<repo>-<task>` with `git worktree move`, keeping lock and claim records in step. Dry run without `--yes`. Skips, with a reason: main, the worktree holding the cwd, a worktree locked or claimed by another agent or by a live session, a worktree with submodules (`git worktree move` refuses them), a target that already exists. CLI only; new-command gates (trycmd fence, `surface_parity`, `config_coverage`). Docs with T660.4's pages.
 
 Check: tests on a temp repo for move, each skip reason and dry run; lock and claim follow the move; `just check`.
 
@@ -130,6 +110,81 @@ from source-derived reproduction steps and gives its own implementation/check se
 Existing tasks, including uncommitted T522–T527 in the shared checkout, were checked for
 overlap and were not copied or reassigned. This is a bounded review of the core data
 paths, not a claim that every bug or host/platform combination has been exhausted.
+
+### T651. Honor ProgressRunner timeouts with inherited output
+
+Evidence baseline: `eb7d980af235f0ccb3d8ff58471d24b8267af35d`. Where: [`ProgressRunner::run_capped`](crates/rtok-sys/src/proc/mod.rs#L141-L151), wait/timeout handling (L205, L320). Impact/trigger: any caller selecting `Output::Inherit` with `.timeout()` can block past the deadline. Evidence level: actual `rtok-sys` path-dependency harness; `exec sleep 0.25` with 30 ms returned success after 267 ms under Inherit; Capture returned `TimedOut` after 44 ms.
+
+Execution plan:
+1. Add a focused regression using a synthetic slow child with `Output::Inherit`; assert `TimedOut` near the configured deadline. Keep a successful inherited child control and retain the Capture/Stream timeout behavior.
+2. Apply the timeout to the inherited child wait while preserving inherited stdin/stdout/stderr and direct-child kill/reap behavior.
+3. Cover zero/short timeout, an early successful exit and spawn errors without relying on a real host or agent.
+4. Run the focused `rtok-sys` process tests and `just check`.
+
+Check: the inherited slow-child regression fails before the fix and passes after it; inherited streams remain inherited; Capture and Stream timeout behavior stays intact; `just check` passes. Probe command: temporary Cargo harness at `/tmp/rtok-t650-harness`, path dependency on this checkout's `crates/rtok-sys`, `ProgressRunner::new("probe", "sh", ["-c", "exec sleep 0.25"]).progress(Progress::Off).output(Output::Inherit).timeout(Duration::from_millis(30)).run()`.
+
+### T652. Refuse to replace an unreadable MCP host config
+
+Evidence baseline: `eb7d980af235f0ccb3d8ff58471d24b8267af35d`. Where: [`Disk::read` and `Writer::read`](src/agents/mcp.rs#L385-L405), [`write_entry`](crates/rtok-mcp/src/config.rs#L122-L145), atomic writer in `crates/rtok-agent-sdk/src/lib.rs`. Impact/trigger: installing/updating rtok with backup disabled while a valid host JSON config is unreadable silently replaces the file and drops unrelated entries. Evidence level: actual `rtok-mcp::config::write_entry` plus actual SDK writer through synthetic disk Fs/Writer; fixture was JSON `{"mcp_servers":{"other":{"command":"keep"}}}`, mode 000, backup false. The call succeeded; after permissions were restored, `other` was gone and only rtok remained. T79 concerns JSONC rejection; T277 extracted the MCP writer.
+
+Execution plan:
+1. Make the disk-backed MCP reader distinguish a missing path from a read error and propagate the latter before any edit or write; preserve the missing-file creation path.
+2. Keep the existing `rtok_agent_sdk::write` atomic swap and backup behavior; a disabled backup must not permit replacing data that could not be read.
+3. Add a Unix regression using a scratch host file at mode `000`, with backup disabled, asserting install/update returns an error and the original bytes remain after permissions are restored. Add controls for a genuinely absent file and an ordinary readable foreign entry.
+4. Run the MCP/config tests, `just check`, and the applicable config/host documentation checks.
+
+Check: an unreadable existing config never gets replaced or reported as installed, including when `[setup].backup = false`; a missing config can still be created; readable unrelated entries survive; `just check` passes.
+
+### T653. Exclude semantic-cache hits from provider-billed OTel usage
+
+Evidence baseline: `eb7d980af235f0ccb3d8ff58471d24b8267af35d`. Where: [`cache_response`](src/proxy/mod.rs#L1205) and its `Recorded::usage` call (L1237–1243); metric label [`metrics.rs`](src/otel/metrics.rs#L81-L84); aggregate [`otel_token_totals`](crates/rtok-store/src/otel.rs#L128-L162). Impact/trigger: whenever semantic cache serves a response with parseable usage, OTel labels that request's counters as provider-billed even though no provider request occurred. Evidence level: actual Store in-memory harness inserted two ordinary usage rows matching the source-traced live and cache paths and aggregated input 200/output 50 from two input-100 rows; no proxy HTTP run. T326 fixes cached slices within provider counters, not duplicate accounting of a cached response.
+
+1. Preserve per-request usage if needed for call analytics, but separate provider-billed totals from cache-served usage or exclude hits from that metric with an explicit persisted marker.
+2. Add a regression that serves a live response then its semantic-cache hit; assert the hit's request usage remains visible while provider-billed OTel totals count only the upstream request.
+3. Document the metric's semantics and run focused proxy/store tests plus `just check`.
+
+Check: a hit keeps its request usage but does not increase provider-billed totals; a live response still does.
+
+### T654. Re-read graph files after an unreadable index attempt
+
+Evidence baseline: `eb7d980af235f0ccb3d8ff58471d24b8267af35d`. Where: [`index.rs`](src/plugins/graph/index.rs#L159-L165) stat skip and unreadable staging (L346-L349). Impact/trigger: index a supported file while unreadable, then restore read permission without changing bytes, size, or mtime; the next index skips it and keeps the empty state. T542–T546 cover fingerprint, dry-run, filters and rank refresh, not this recovery path. Evidence level: executed chmod/stat fixture confirmed mtime and size stayed unchanged; full graph invocation was source-traced, not executed.
+
+1. Do not commit a reusable stat-only skip key for unreadable files; force a read on the next index run or persist an explicit unreadable state that invalidates when readability changes.
+2. Add a Unix regression: index an unreadable supported file, restore permissions without changing bytes/mtime, rerun, and assert real symbols replace the empty state. Keep a readable unchanged control.
+3. Run focused graph index tests and `just check`.
+
+Check: a file that becomes readable is re-parsed even when mtime and size are unchanged.
+
+### T655. Make compressor in-flight admission atomic
+
+Evidence baseline: `eb7d980af235f0ccb3d8ff58471d24b8267af35d`. Where: [`queue.rs`](src/plugins/compress/queue.rs#L58-L79), cap check separated from increment. Impact/trigger: concurrent `submit` calls can exceed `max_in_flight`, spawning more compressor jobs than configured. Evidence level: deterministic extracted schedule synchronized after the load and before increment; cap 1 accepted two (`/tmp/rtok-t650-queue-probe.rs`). T385.9 documents a cap but not concurrent admission.
+
+1. Reserve capacity atomically before inserting a new ID into `seen`; if capacity is full, leave the ID retryable. If it is a duplicate or the seen lock fails, release the reservation.
+2. Release the slot on every spawn/task completion path.
+3. Add a barrier-controlled distinct-ID concurrency regression for cap 1, plus duplicate, saturation/retry and completion/release controls.
+4. Run compressor queue and live-compression tests plus `just check`.
+
+Check: no concurrent schedule admits more than `max_in_flight`, and every completion/error path releases its reservation.
+
+### T656. Keep worktrees and caches when their age cannot be established
+
+Evidence baseline: `eb7d980af235f0ccb3d8ff58471d24b8267af35d`. Where: [`gc::decide`](src/worktree/gc.rs#L87-L120), [`clean::kept_because`](src/worktree/clean.rs#L31-L37), and [`list::walk`](src/worktree/list.rs#L86-L129). Impact/trigger: a merged unlocked non-current worktree with no age evidence is eligible for gc; a tagged cache with no mtime is eligible for clean. Walk errors can also hide newer files, so even `Some(old)` can be incomplete. T342's deadline-capped walk is conservative, but does not cover errors. Evidence level: source-only decision-path review; no filesystem deletion or executed decision probe.
+
+1. Treat unavailable or incomplete mtime evidence as unknown and keep the worktree/cache with an explanatory reason.
+2. Add pure-function controls for fresh Some→Keep, old Some→Remove, and None→Keep in both policies; make incomplete walks distinguishable where the walk API can report it.
+3. Run focused worktree gc/clean tests and `just check`.
+
+Check: missing age never authorizes removal; established fresh/old ages retain their policy. Do not validate by deleting real worktrees or caches.
+
+### T657. Match compressor credentials to the internal provider
+
+Evidence baseline: `eb7d980af235f0ccb3d8ff58471d24b8267af35d`. Where: [`Auth::from_headers`](src/plugins/compress/llm.rs#L58-L76) accepts arbitrary Authorization credentials; [`shape_request`](src/proxy/mod.rs#L691-L697) supplies those credentials for all wires; [`Compressor::new`](src/plugins/compress/llm.rs#L111-L127) defaults an empty URL to the local proxy and appends `/v1/messages`; [`try_run`](src/plugins/compress/llm.rs#L161-L185) applies text-size, code and span guards; [`ask`](src/plugins/compress/llm.rs#L204-L238) sends an Anthropic-shaped body and forwards the credential; [`upstream_for`](src/proxy/mod.rs#L221-L239) routes by the request wire or an explicit lane upstream. Impact/trigger: with `plugins.compress.llm.enabled=true` (off by default), proxy mode `compress`, and an offered eligible non-code archived text block, an OpenAI bearer credential can cross the credential-destination boundary and be sent with an Anthropic Messages body to the default Anthropic upstream. The mismatched request can fail authentication/protocol and the summary is skipped. An explicit internal-lane upstream can change the destination, but no provider-format conversion occurs. Evidence level: source-derived call-path review; no HTTP call or credential was used.
+
+1. Bind compressor credentials and request format to the configured internal provider, or use dedicated compressor credentials; never forward a credential from an incompatible agent wire.
+2. Add a fake-upstream test for OpenAI and Anthropic caller credentials that checks destination, headers and body format without contacting a provider.
+3. Run focused compressor/proxy tests and `just check`.
+
+Check: an OpenAI bearer is never presented as an Anthropic credential by default; valid configured internal provider requests continue to work.
 
 
 ### T131. Measure the spawn brief: cost row and on/off re-read share
@@ -654,7 +709,7 @@ Check: a fixture per confirmed shape; §30 updated with dates; `just check`.
 
 Execution plan (2026-10-12): 1. run the Kilo, Gemini CLI, Copilot CLI and pi readers read-only on this machine's own files and record the observed shapes (no content); 2. a synthetic fixture per confirmed shape; 3. check whether a resumed Copilot session writes cumulative or run-only shutdown totals and stop double counting if needed (test first); 4. date each §30 tag; Grok `signals.json` stays unverified until the creator decides.
 
-Progress (2026-10-12, `research.md` §30): Copilot CLI 1.0.80 — `tokenDetails` is authoritative (it equals `usage` plus the compaction requests), the reader now takes it (`token_details_carry_the_compaction_requests_that_usage_leaves_out`, fail-first), and `inputTokens` including the cache legs is confirmed. pi 0.85.1 — reader sums match an independent sum over 953 entries; fixture for the `reasoning`/`cacheWrite1h` shape; fork id copying confirmed from source, not observed. Copilot resume: the reader keeps the last shutdown per session, cumulative per the SDK source (`github/copilot-sdk` 6be623b, `nodejs/src/generated/session-events.ts`; fail-first `a_resumed_session_counts_its_last_shutdown_not_the_sum_of_all`), not yet seen in a real resumed log. Left: a Kilo message row (this machine's db has none), Gemini CLI (not installed here), Grok `signals.json` (creator decision).
+Progress (2026-10-12, `research.md` §30): Copilot CLI 1.0.80 — `tokenDetails` is authoritative (it equals `usage` plus the compaction requests), the reader now takes it (`token_details_carry_the_compaction_requests_that_usage_leaves_out`, fail-first), and `inputTokens` including the cache legs is confirmed. pi 0.85.1 — reader sums match an independent sum over 953 entries; fixture for the `reasoning`/`cacheWrite1h` shape; fork id copying confirmed from source, not observed. Copilot resume: the reader keeps the last shutdown per session, cumulative per the SDK source (`github/copilot-sdk` 6be623b, `nodejs/src/generated/session-events.ts`; fail-first `a_resumed_session_counts_its_last_shutdown_not_the_sum_of_all`), not yet seen in a real resumed log. Left: a Kilo message row (this machine's db has none), Gemini CLI (not installed here), Grok `signals.json` (observed keys accepted by the creator 2026-10-13, but grok 1.0.34 wrote no `signals.json` in this machine's 3 sessions, `research.md` §30.7). Rechecked 2026-10-13: still 0 Kilo `message` rows and no Gemini chat files. Needs the creator to run one Kilo, one Gemini CLI and one Grok session, then a reader and fixture per shape.
 
 ### T398. Probe editors on a `worktree.useRelativePaths` worktree
 
@@ -680,37 +735,7 @@ Check: every sub-task below is closed in `done.md` with its per-host check.
 
 
 
-### T413.7. `rtok agents install continue` — Continue
 
-VS Code / JetBrains extension and the `cn` CLI. MCP and rules; variants per documented config location.
-
-Check: the T413 per-host check (step 5) for this host.
-
-Plan: Continue docs for each config location; one variant per documented file; no guessed rules path.
-
-### T413.8. `rtok agents install augment` — Augment Code and Auggie CLI
-
-IDE extension and Auggie CLI. MCP and hooks if documented.
-
-Check: the T413 per-host check (step 5) for this host.
-
-Plan: Augment and Auggie docs for MCP and hooks; skip a surface whose file is not documented.
-
-### T413.11. `rtok agents install crush` — Crush
-
-Crush (Charm), open-source terminal agent. MCP and any documented hooks.
-
-Check: the T413 per-host check (step 5) for this host.
-
-Plan: Charm's docs and the Crush repo for the MCP config; hooks only with a documented payload.
-
-### T413.12. `rtok agents install warp` — Warp
-
-Warp terminal's agent. MCP and rules if they live in a file setup can edit; a setting stored only in the app's database is out of scope.
-
-Check: the T413 per-host check (step 5) for this host.
-
-Plan: Warp docs for a file-based MCP or rules path. If the setting lives only in the app database, close with that finding and no installer writes.
 
 ### T413.13. `rtok agents install trae` — Trae
 
@@ -721,22 +746,6 @@ Check: the T413 per-host check (step 5) for this host.
 Plan: Trae docs for the MCP file. Reuse the VS Code helper only if the key and path match; otherwise a thin host of its own.
 
 Finding (2026-10-12, `research.md` §32.13): Trae's docs name only a project `.trae/mcp.json`, which is the project's, and a user-level `mcp.json` behind the app's Raw Config button with no path. No installer is written until a documented user-level path exists.
-
-### T413.14. `rtok agents install openhands` — OpenHands
-
-OpenHands CLI (the local variant only; the cloud service is out of scope). MCP and any documented hooks.
-
-Check: the T413 per-host check (step 5) for this host.
-
-Plan: OpenHands local CLI docs for the MCP file. Cloud config stays out. Hooks only with a documented payload.
-
-### T413.15. `rtok agents install reasonix` — DeepSeek Reasonix
-
-DeepSeek-Reasonix (https://github.com/esengine/DeepSeek-Reasonix), CLI plus editor extension. Its docs list MCP, skills, memory and hooks in `~/.reasonix/config.json` (lead, checked 2026-10-05: https://esengine.github.io/DeepSeek-Reasonix/configuration.html); confirm the keys before writing them.
-
-Check: the T413 per-host check (step 5) for this host.
-
-Plan: re-read configuration.html and write only the keys it names. Skills and memory stay out unless that page says setup may edit them.
 
 ### T414. Web dashboard restyle on the brand pack, built from `brand/` sources
 
@@ -754,7 +763,7 @@ Check: `just check` green; `brand/README.md` no longer says the web admin ships 
 
 ### T416. Shared `change-preview` crate for dry-run output
 
-Every command that changes the disk should preview it the same way, and ketch and cox carry the same need (ketch has its own dry-run paths; cox depends on `similar` and `diffy`). The renderer moves out of `src/render.rs` into a crate with a neutral name in `packages/crates` (`listepo/crates-packages`, tracked there as T1), released to crates.io by that repo's release-plz pipeline; rtok then depends on the crates.io version, because a path outside this repository does not resolve in CI. Blocks T416.1-T416.4.
+Every command that changes the disk should preview it the same way, and ketch and cox carry the same need (ketch has its own dry-run paths; cox depends on `similar` and `diffy`). The renderer moves out of `src/render.rs` into a crate with a neutral name in `packages/crates` (`pyrlyn/crates`, tracked there as T1), released to crates.io by that repo's release-plz pipeline; rtok then depends on the crates.io version, because a path outside this repository does not resolve in CI. Blocks T416.1-T416.4.
 
 The crate renders two kinds of change. A file edit (path, before, after) is a unified diff with the `a/` and `b/` headers `render::unified_diff` prints today, or in stat mode a `path | 7 +++--` line; a removal (path, bytes, files) is `- path  12.1 GB  48 213 files`. Both modes end with a totals line: `3 files changed, 12 insertions(+), 4 deletions(-)` for edits, `15 paths, 1 204 311 files, -106.2 GB` for removals. Colour goes through owo-colors' `if_supports_color` exactly as `render::paint` does; byte sizes through the crate's `human_bytes` (the same binary units as `info::human_bytes`); everything derives `Serialize` for `--json`.
 
@@ -784,7 +793,7 @@ Status: steps 1-3 done. On the rtok repo SessionStart dispatch is 2-4 ms on an i
 
 Execution plan (2026-10-12): 1. a neutral-name crate in `packages/crates` (own worktree and PR there, its AGENTS.md rules) holding `OPERATION_ICONS`, `icon()`, `ICON_WIDTH` and the gutter padding, generic over the tone/kind type, with unit tests; 2. after release-plz publishes it, rtok's `src/ui/style.rs` and ketch's `src/ui.rs` depend on the crates.io version with no output change; until then this card stays in progress with the crate PR linked.
 
-Progress (2026-10-12): step 1 is done: crate `operation-icons` merged in the crates-packages repository (PR #56) and not yet published. Step 2 waits for the creator to release it (the release pipeline has Actions off there); then rtok and ketch switch to the crates.io version.
+Progress (2026-10-12): step 1 is done: crate `operation-icons` merged in the crates repository (PR #56) and not yet published. Step 2 waits for the creator to release it (the release pipeline has Actions off there); then rtok and ketch switch to the crates.io version.
 
 ### T436.4. Spinner on `agents install/update` through T276's `ProgressRunner`
 
@@ -978,3 +987,9 @@ The 14 portable ideas and where each landed:
 12. Memory RRF / file affinity — T373, T374.
 13. Edit robustness (fuzzy `old_string`) — does not fit now: I-43 / T58.3 measured 1.3 % `old_string` misses; below the gate.
 14. Shell output compress / tee — already covered by the `cmd` rules (`src/plugins/cmd/rules.rs`) and the archive (`expand <id>`).
+
+### T644. Tests remove the temp dirs they create
+
+The tests leak their temp dirs into `$TMPDIR`: on the creator's Mac about 24,000 `rtok-mem-*` (`Runtime::in_memory` in `src/plugin.rs` creates one per call and never removes it), 6,300 `rtok-tui-*`, 2,000 `rtok-guard-*`, 1,300 `rtok-usage-*` and more. A directory that size makes `realpath` in it slow under load (T643). Each test helper that makes a temp dir removes it (a guard or `tempfile::TempDir`), `Runtime::in_memory` first.
+
+Check: a test shows a dropped `Runtime::in_memory` leaves no directory behind, and a full `just test` run adds no `rtok-*` entry to `$TMPDIR`.

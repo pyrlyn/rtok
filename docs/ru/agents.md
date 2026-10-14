@@ -65,6 +65,13 @@ lang: ru
 | [`kiro`](https://github.com/pyrlyn/rtok/blob/main/src/agents/kiro/README.md) | Kiro IDE | Desktop | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
 | [`junie`](https://github.com/pyrlyn/rtok/blob/main/src/agents/junie/README.md) | Junie CLI | CLI | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
 | [`amp`](https://github.com/pyrlyn/rtok/blob/main/src/agents/amp/README.md) | Amp | CLI | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
+| [`warp`](https://github.com/pyrlyn/rtok/blob/main/src/agents/warp/README.md) | Warp | Desktop | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
+| [`continue`](https://github.com/pyrlyn/rtok/blob/main/src/agents/continue/README.md) | Continue CLI | CLI | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
+| [`continue`](https://github.com/pyrlyn/rtok/blob/main/src/agents/continue/README.md) | Continue | Desktop | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
+| [`crush`](https://github.com/pyrlyn/rtok/blob/main/src/agents/crush/README.md) | Crush | CLI | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
+| [`openhands`](https://github.com/pyrlyn/rtok/blob/main/src/agents/openhands/README.md) | OpenHands | CLI | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
+| [`augment`](https://github.com/pyrlyn/rtok/blob/main/src/agents/augment/README.md) | Augment Auggie CLI | CLI | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
+| [`reasonix`](https://github.com/pyrlyn/rtok/blob/main/src/agents/reasonix/README.md) | Reasonix | CLI | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
 <!-- agents-table:end -->
 
 Таблица генерируется из кода хостов (`src/agents/<host>/mod.rs` и каталог плагинов) тестом `tests/agents_doc.rs`, который падает, если она устарела. После изменения хоста, добавления нового или изменения интерфейсов плагина перегенерируйте её:

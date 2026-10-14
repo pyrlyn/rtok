@@ -76,7 +76,8 @@ Every span also carries `gen_ai.conversation.id`, `rtok.surface`, `rtok.kind` an
 and an error sets the span status plus `error.type`. Plugin runs and savings ride along as span
 events (`rtok.plugin.run`, `rtok.measurement` with `rtok.tokens.saved`). `logs` rows become log
 records on the same trace. Three cumulative sums go to `/v1/metrics`: `rtok.tokens`
-(by `gen_ai.token.type` and model), `rtok.tokens.saved` (by plugin) and `rtok.calls`.
+(by `gen_ai.token.type` and model; provider-billed only, so a response the semantic cache
+served is left out), `rtok.tokens.saved` (by plugin) and `rtok.calls`.
 
 Set `content = false` to keep the shape and the counts but send no prompts, arguments or
 results. With `content = true`, anything longer than `content_bytes` is cut and the span names

@@ -35,6 +35,7 @@ mod since;
 pub use since::{parse_since, parse_since_from};
 
 pub mod layers;
+pub mod root;
 pub mod validate;
 
 use std::borrow::Cow;
@@ -91,6 +92,12 @@ pub const HOSTS: &[&str] = &[
     "kiro",
     "junie",
     "amp",
+    "warp",
+    "continue",
+    "crush",
+    "openhands",
+    "augment",
+    "reasonix",
 ];
 
 /// Adapters `[tasks] adapter` accepts. `tasks::run::ADAPTERS` re-exports this.
@@ -798,6 +805,12 @@ section! {
         droid: SetupDroid = SetupDroid::default(),
         kiro: SetupKiro = SetupKiro::default(),
         amp: SetupAmp = SetupAmp::default(),
+        warp: SetupWarp = SetupWarp::default(),
+        r#continue: SetupContinue = SetupContinue::default(),
+        crush: SetupCrush = SetupCrush::default(),
+        openhands: SetupOpenhands = SetupOpenhands::default(),
+        augment: SetupAugment = SetupAugment::default(),
+        reasonix: SetupReasonix = SetupReasonix::default(),
     }
 }
 
@@ -954,6 +967,13 @@ section! {
 }
 
 section! {
+    /// `[setup.continue]` — Continue's user `config.yaml`, where the `rtok` item of `mcpServers`
+    /// goes (T413.7). The VS Code and JetBrains extensions and `cn` read the same file;
+    /// `CONTINUE_GLOBAL_DIR` moves it, and this key is the override.
+    SetupContinue { config_path: PathBuf = p("~/.continue/config.yaml") }
+}
+
+section! {
     /// `[setup.codebuddy]` — CodeBuddy Code's config directory (`settings.json` `hooks`, the
     /// MCP file, `plugins/`; `CODEBUDDY_CONFIG_DIR` moves it) and WorkBuddy Desktop's, which
     /// embeds the same CLI (T560.2).
@@ -977,6 +997,33 @@ section! {
     /// `[setup.amp]` — Amp (Sourcegraph) user settings file (`amp.mcpServers`, T413.5);
     /// `settings.jsonc` is used when it is the only one.
     SetupAmp { settings_path: PathBuf = p("~/.config/amp/settings.json") }
+}
+
+section! {
+    /// `[setup.warp]` — Warp's user-level MCP file (T413.12).
+    SetupWarp { mcp_path: PathBuf = p("~/.warp/.mcp.json") }
+}
+
+section! {
+    /// `[setup.crush]` — Crush's global JSON config (T413.11). `CRUSH_GLOBAL_CONFIG` or
+    /// `XDG_CONFIG_HOME` move it; this key is the override.
+    SetupCrush { config_path: PathBuf = p("~/.config/crush/crush.json") }
+}
+
+section! {
+    /// `[setup.openhands]` — OpenHands's user-level MCP file (T413.14).
+    SetupOpenhands { mcp_path: PathBuf = p("~/.openhands/mcp.json") }
+}
+
+section! {
+    /// `[setup.augment]` — the Auggie CLI's user settings file (T413.8).
+    SetupAugment { settings_path: PathBuf = p("~/.augment/settings.json") }
+}
+
+section! {
+    /// `[setup.reasonix]` — Reasonix home (`REASONIX_HOME`, `%APPDATA%\reasonix` on Windows):
+    /// `config.toml` holds the `[[plugins]]` MCP servers (T413.15).
+    SetupReasonix { dir: PathBuf = p("~/.reasonix") }
 }
 
 section! {
@@ -1735,6 +1782,11 @@ impl Config {
             setup.kiro.mcp_path,
             setup.junie.mcp_path,
             setup.amp.settings_path,
+            setup.warp.mcp_path,
+            setup.crush.config_path,
+            setup.openhands.mcp_path,
+            setup.augment.settings_path,
+            setup.reasonix.dir,
             setup.codewhale.dir,
             setup.mimo.config_path,
             setup.antigravity.plugins_path,
@@ -1746,6 +1798,11 @@ impl Config {
             plugins.wasm.dir,
             worktree.root,
         );
+        // `continue` is a keyword, so `stringify!` would spell the key `setup.r#continue`.
+        out.push((
+            "setup.continue.config_path".into(),
+            &mut self.setup.r#continue.config_path,
+        ));
         out.extend(
             self.bench
                 .configs

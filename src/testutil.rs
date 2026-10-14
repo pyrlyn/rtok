@@ -321,6 +321,29 @@ mod tests {
         assert_eq!(std::env::var_os("USERPROFILE"), Some(home.into_os_string()));
     }
 
+    /// T644: the dirs tests leave behind go to a per-checkout dir nextest empties each run,
+    /// never into this machine's `$TMPDIR`. Short on Unix, or `hook.sock` under it would be
+    /// past `sun_path`. Outside the checkout on every OS, or git discovery from a test's
+    /// scratch dir would find this repo.
+    #[test]
+    fn nextest_runs_under_the_test_tmp() {
+        if std::env::var_os("NEXTEST").is_none() {
+            return;
+        }
+        let tmp = std::env::temp_dir();
+        let name = tmp.file_name().unwrap().to_string_lossy();
+        assert!(name.starts_with("rtok-test-"), "{}", tmp.display());
+        assert!(
+            !tmp.starts_with(env!("CARGO_MANIFEST_DIR")),
+            "{}",
+            tmp.display()
+        );
+        if cfg!(unix) {
+            assert_eq!(tmp.parent(), Some(std::path::Path::new("/tmp")));
+        }
+        assert!(tmp.is_dir());
+    }
+
     #[test]
     fn vfs_symlink_resolve_key_and_exists() {
         let mut v = super::Vfs::new();

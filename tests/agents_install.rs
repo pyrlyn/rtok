@@ -114,6 +114,11 @@ fn hosts(home: &Path) -> Vec<(&'static str, Vec<&'static str>, Option<PathBuf>)>
         ("kiro", vec![], Some(home.join(".kiro/settings/mcp.json"))),
         ("junie", vec![], Some(home.join(".junie/mcp/mcp.json"))),
         ("amp", vec![], Some(home.join(".config/amp/settings.json"))),
+        ("warp", vec![], Some(home.join(".warp/.mcp.json"))),
+        ("crush", vec![], Some(home.join(".config/crush/crush.json"))),
+        ("openhands", vec![], Some(home.join(".openhands/mcp.json"))),
+        ("augment", vec![], Some(home.join(".augment/settings.json"))),
+        ("reasonix", vec![], Some(home.join(".reasonix/config.toml"))),
     ]
 }
 

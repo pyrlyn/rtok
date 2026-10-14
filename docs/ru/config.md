@@ -452,6 +452,18 @@ mcp_path      = "~/.factory/mcp.json"        # Factory Droid: пользоват
 mcp_path      = "~/.kiro/settings/mcp.json"      # Kiro IDE and CLI: user-level MCP servers (mcpServers)
 [setup.amp]
 settings_path = "~/.config/amp/settings.json"    # Amp: user settings; amp.mcpServers holds MCP servers (settings.jsonc if it is the only one)
+[setup.warp]
+mcp_path      = "~/.warp/.mcp.json"          # Warp: пользовательский файл MCP-серверов (mcpServers)
+[setup.continue]
+config_path   = "~/.continue/config.yaml"        # Continue (VS Code, JetBrains, cn): mcpServers item rtok; Windows: %USERPROFILE%/.continue/; CONTINUE_GLOBAL_DIR moves it
+[setup.crush]
+config_path   = "~/.config/crush/crush.json" # Crush: global JSON config (mcp.rtok); CRUSH_GLOBAL_CONFIG or XDG_CONFIG_HOME move it
+[setup.openhands]
+mcp_path      = "~/.openhands/mcp.json"     # OpenHands: пользовательский файл MCP-серверов (mcpServers)
+[setup.augment]
+settings_path = "~/.augment/settings.json"   # Auggie CLI: пользовательские настройки, mcpServers
+[setup.reasonix]
+dir           = "~/.reasonix"                # Reasonix: config.toml (MCP-серверы в [[plugins]]); REASONIX_HOME переносит каталог (Windows: %APPDATA%/reasonix)
 
 [expand]                              # rtok expand <id>
 max_lines = 0                         # 0 = unlimited   (--lines a-b is per call)

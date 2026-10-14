@@ -72,6 +72,12 @@ pub fn write_cfg(home: &Path) -> PathBuf {
         ".factory",
         ".kiro/settings",
         ".config/amp",
+        ".warp",
+        ".continue",
+        ".config/crush",
+        ".openhands",
+        ".augment",
+        ".reasonix",
     ] {
         fs::create_dir_all(home.join(sub)).unwrap();
     }
@@ -114,7 +120,13 @@ pub fn write_cfg(home: &Path) -> PathBuf {
               [setup.goose]\nconfig_path = \"{h}/.config/goose/config.yaml\"\n\
               [setup.droid]\nmcp_path = \"{h}/.factory/mcp.json\"\n\
               [setup.kiro]\nmcp_path = \"{h}/.kiro/settings/mcp.json\"\n\
-              [setup.amp]\nsettings_path = \"{h}/.config/amp/settings.json\"\n"
+              [setup.amp]\nsettings_path = \"{h}/.config/amp/settings.json\"\n\
+              [setup.warp]\nmcp_path = \"{h}/.warp/.mcp.json\"\n\
+              [setup.continue]\nconfig_path = \"{h}/.continue/config.yaml\"\n\
+              [setup.crush]\nconfig_path = \"{h}/.config/crush/crush.json\"\n\
+              [setup.openhands]\nmcp_path = \"{h}/.openhands/mcp.json\"\n\
+              [setup.augment]\nsettings_path = \"{h}/.augment/settings.json\"\n\
+              [setup.reasonix]\ndir = \"{h}/.reasonix\"\n"
         ),
     )
     .unwrap();

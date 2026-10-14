@@ -1834,6 +1834,12 @@ The one lint hit was real: `tests/node/fake-rtok.ts` used a ternary as a stateme
 
 Check: `just js` exits 0 (0 warnings, 6 files formatted); the plugin behaviour tests that drive these files (`filter::opencode_plugin_unit_test_with_api_mock`, `pi_plugin::*`, `opencode_plugin::*`) pass after the reformat; `just check` green.
 
+### T662. oxfmt `web/e2e/rtok.ts` so `just js` passes on main
+
+`just js` failed on `main`: `oxfmt --check` (0.68.0, pinned in `mise.toml`) wanted the `spawnGroup(BIN, ["web", "--host", ...], {...})` call in `web/e2e/rtok.ts` wrapped across lines. CI's `ci / lint` runs `just fmt-check lint build-min dup js python`; it stopped at `fmt-check` (pyrlyn/rtok#1041), so `js` was the next failure once that merged. Fix: `mise exec -- oxfmt web/e2e/rtok.ts` — formatting only, no logic change. #1041 (rustfmt `tests/skill.rs`) failed `js` on this file while this PR failed `fmt-check` on that one, so neither could go green alone; this PR carries the same `tests/skill.rs` rustfmt hunk, byte-identical to #1041's. `main` was also red on `dup`, which only T663 fixed, so T663 took both hunks and they reached `main` through #1065; this PR, #1049, records the task. The test is the `just js` gate itself: no new test, since the change has no behaviour.
+
+Check: `mise exec -- oxfmt --check web/e2e/rtok.ts` exited 1 before the rewrite; `just js` exits 0 after it (oxlint 0 warnings, oxfmt "All matched files use the correct format" on 261 files).
+
 ### T312. Run the non-cargo gates of just check in parallel
 
 `just check` ran `fmt-check lint test build-min dup js python` one after another. The cargo recipes share one `target/` and serialize on cargo's lock, but `dup` (jscpd), `js` (oxlint, oxfmt) and `python` (pytest) need no build.
@@ -8955,8 +8961,88 @@ Done: closed into T413.4 without code. Kiro's own migration guide says "Kiro CLI
 
 Check: nothing to run; docs-only change.
 
+### T413.8. `rtok agents install augment` — Augment Code and Auggie CLI
+
+IDE extension and Auggie CLI. MCP and hooks if documented.
+
+Done: `src/agents/augment/` (one CLI variant, `auggie` on PATH): `mcpServers.rtok` in `~/.augment/settings.json` through `register_stdio_mcp` (no second copy of the JSON shape Cline, Roo, Windsurf and Droid share), `[setup.augment] settings_path` moves it, host registered in `HOSTS`/`host()`/`mcp.rs`, `NO_ROWS`, docs in en/ru/uk. Hooks, proxy and plugin stay `Support::No` with reasons: hook commands must be script files and `PreToolUse` can only deny (no `updatedInput`), no model endpoint or key setting is documented, and Auggie plugins come from Augment's own marketplace. The IDE extension documents no config file, so it has no variant. Sources and dates in `research.md` section 32.8.
+
+Check: the T413 per-host check (step 5) for this host.
+
 Status: done 2026-10-12
 Model: Claude Code / sonnet-5.5
+
+### T413.12. `rtok agents install warp` — Warp
+
+Warp terminal's agent. MCP and rules if they live in a file setup can edit; a setting stored only in the app's database is out of scope.
+
+Check: the T413 per-host check (step 5) for this host.
+
+Plan: Warp docs for a file-based MCP or rules path. If the setting lives only in the app database, close with that finding and no installer writes.
+
+Done: `src/agents/warp/` (`mod.rs`, `README.md`): one Desktop variant, detected by the macOS bundle `/Applications/Warp.app` (Windows and Linux install paths and a `--version` flag are undocumented, so no bin). `mcpServers.rtok` → `rtok mcp --host warp` as `{command, args}` in `~/.warp/.mcp.json` through `register_stdio_mcp` (the helper Cline, Roo Code, Windsurf and Droid share); `[setup.warp] mcp_path` moves it. Hooks, proxy and plugin stay `Support::No` (nothing documented). Servers added in Warp's app settings and project `.warp/.mcp.json` files are never written. Registered in `HOSTS` and `host()`, `config/default.toml`, `docs/config.md`, `docs/agents.md` (and `ru`/`uk`), `agents_install` matrix, list/real-config/host-docs tests and trycmd goldens. Research in `research.md` §32.12.
+
+Check: `agents_doc`, `host_docs`, `agents_install`, `agents_list_content`, `agents_real_config`, `config_coverage`, `cli_trycmd` and the `warp` unit tests green; `just check` green. Manual: `rtok agents install warp --dry-run` on this machine (Warp.app installed here) names `~/.warp/.mcp.json` and `mcpServers.rtok: rtok mcp --host warp` and writes nothing.
+
+### T413.14. `rtok agents install openhands` — OpenHands
+
+OpenHands CLI (the local variant only; the cloud service is out of scope). MCP and any documented hooks.
+
+Check: the T413 per-host check (step 5) for this host.
+
+Plan: OpenHands local CLI docs for the MCP file. Cloud config stays out. Hooks only with a documented payload.
+
+Done: `src/agents/openhands/` (`mod.rs`, `README.md`): one CLI variant, the `openhands` binary on PATH. `mcpServers.rtok` -> `rtok mcp --host openhands` as `{command, args}` in `~/.openhands/mcp.json` through `register_stdio_mcp` (the helper Cline, Roo Code, Windsurf and Droid share); `[setup.openhands] mcp_path` moves it. Hooks, proxy and plugin stay `Support::No`: the docs describe hooks only as a project `.openhands/hooks.json`, which belongs to the project. Servers added with `openhands mcp add` are never touched. Registered in `HOSTS` and `host()`, `config/default.toml`, `docs/config.md`, `docs/agents.md` (and `ru`/`uk`), `agents_install` matrix, list/real-config/host-docs tests and trycmd goldens. Research in `research.md` §32.14.
+
+Check: `agents_doc`, `host_docs`, `agents_install`, `agents_list_content`, `agents_real_config`, `config_coverage`, `cli_trycmd` and the `openhands` unit tests green.
+
+Status: done 2026-10-12
+Model: Claude Code / claude-sonnet-5-5
+
+### T413.7. `rtok agents install continue` — Continue
+
+VS Code / JetBrains extension and the `cn` CLI. MCP and rules; variants per documented config location.
+
+Done: `src/agents/continue/` writes the `rtok` item of `mcpServers` (stdio: `name`, `type`, `command`, `args`) into `~/.continue/config.yaml` as a text-level list-item edit validated with the existing `serde-saphyr`; a missing file is created with the required `name`, `version`, `schema`; `[setup.continue] config_path`; variants Continue CLI (`cn`) and Continue (extensions, detected through VS Code). The line-level YAML helpers Goose already had moved to `src/agents/yaml_text.rs` and both hosts use them. No rules, hooks, proxy or plugin: none has a documented file. Research in `research.md` §32.7.
+
+Check: unit tests for the list edit (create, append, flush-indent list, empty and flow values, CRLF, foreign YAML, extra item keys, declined remove), the real-config round trip, `agents_doc`, `host_docs`, trycmd snapshots; `just check`.
+
+### T413.11. `rtok agents install crush` — Crush
+
+Crush (Charm), open-source terminal agent. MCP and any documented hooks.
+
+Done: `src/agents/crush/` (one CLI variant, `crush` on PATH): `mcp.rtok` → `rtok mcp --host crush` in the global `crush.json` as `{command, args}` (`type` defaults to `stdio`), through the new `register_stdio_mcp_in` / `unregister_stdio_mcp_in` (the existing stdio helper with the object key as a parameter, so no second copy of the entry). `[setup.crush] config_path` (default `~/.config/crush/crush.json`) is the override for `CRUSH_GLOBAL_CONFIG` / `XDG_CONFIG_HOME`. Hooks stay `Support::No`: the only documented event is `PreToolUse` and rtok has no checked mapping of Crush's tool names. Why JSON and not `crushrc`: see `research.md` §32.11. Host registered in `HOSTS`, `agent_for`, `mcp::rows`, `junk_map::NO_ROWS`, the config section and default, the docs tables (en, ru, uk) and the host tests.
+
+Check: `agents::crush` unit tests (dry run, `type`-less stdio entry under `mcp`, idempotence, foreign keys kept byte-equal after remove, `apply` via the trait), `agents_real_config` (`crush_keeps_the_real_crush_json`), `agents_install`, `host_docs`, `agents_list_content`, `agents_doc`, config and trycmd snapshots.
+
+Status: done 2026-10-12
+Model: Claude Code / sonnet-5.5
+
+### T413.15. `rtok agents install reasonix` — DeepSeek Reasonix
+
+DeepSeek-Reasonix (https://github.com/esengine/DeepSeek-Reasonix), CLI plus editor extension. Its docs list MCP, skills, memory and hooks in `~/.reasonix/config.json` (lead, checked 2026-10-05: https://esengine.github.io/DeepSeek-Reasonix/configuration.html); confirm the keys before writing them.
+
+Check: the T413 per-host check (step 5) for this host.
+
+Plan: re-read configuration.html and write only the keys it names. Skills and memory stay out unless that page says setup may edit them.
+
+Done: `src/agents/reasonix/` (`mod.rs`, `README.md`): one CLI variant, `reasonix` (or its `dsnix` shim) on PATH. One `[[plugins]]` table (`name = "rtok"`, `command`, `args = ["mcp", "--host", "reasonix"]`) in `<Reasonix home>/config.toml`, edited with `toml_edit` so comments, providers and other servers survive byte for byte; the array is keyed by `name`, so the table-keyed Codex and Grok helpers do not fit and no existing helper was reusable (`load_toml`, `judge_owned` and `toml_item_to_json` are). `[setup.reasonix] dir` moves the Reasonix home. The card's `config.json` lead is the legacy 0.x file; the documented global file is `config.toml` (`research.md` §32.15). Hooks (`settings.json`, own payload and tool names), proxy and plugin stay `Support::No`; no Desktop variant (no documented install path). Registered in `HOSTS` and `host()`, `config/default.toml`, `docs/config.md`, `docs/agents.md` (and `ru`/`uk`), `agents_install` matrix, list/real-config/host-docs tests and trycmd goldens.
+
+Check: `agents_doc`, `host_docs`, `agents_install`, `agents_list_content`, `agents_real_config`, `config_coverage`, `cli_trycmd` and the `reasonix` unit tests green.
+
+Status: done 2026-10-12
+Model: Claude Code / claude-sonnet-5-5
+
+### T663. `just dup` back under the 2% jscpd threshold
+
+`just dup` failed on `main` at `6557b6d1`: 424 clones, 3812 duplicated lines (2.09%) over the 2.0% threshold, so `ci / lint` would go red once T662 fixed `fmt-check` and `js`. The rise came with the T413 `rtok agents install` hosts (387 clones, 1.88% at `9d325f96`; 404 after Continue, 414 after OpenHands, 424 after Reasonix): each repeated the same `impl Agent` head and the same MCP-only test bodies. Threshold and ignore list unchanged.
+
+Done: `agent_identity!` in `src/agents/mod.rs` writes the `id`/`variants`/`readme` head for all 36 hosts (CodeWhale's reordering to dodge the detector is gone too); `mcp_only_file!` writes `files`/`installed`/`apply` for the eight single-file MCP-only hosts (Augment, Crush, Droid, Junie, Kiro, OpenHands, Roo, Warp); `assert_mcp_only_apply_idempotent` replaces the `apply_is_idempotent_via_the_agent_trait` body in ten hosts. `just dup`: 388 clones, 3298 lines (1.81%).
+
+Check: `just dup` passes; `cargo clippy --all-targets -D warnings` clean; `cargo nextest run --workspace agents` 544 passed (the README parity test proves each host's `include_str!` still reads its own `README.md`); full `cargo nextest run --workspace --no-fail-fast`: everything passes (`agents_worktrees every_host_gets_the_same_worktree_rule_lock_and_row`, `cli_trycmd cli` and `commands_e2e doctor_reports_the_chain` hit the 180 s timeout at load average 44, after passing in an earlier `just check` run on the same code) except two `report_ai` tests (`empty_store_ai_says_so`, `ai_carries_the_section_set_with_md_numbers`), which fail on `main` too: the T413 hosts pushed the `doctor` section past the default AI-report budget, and a `main` binary drops it the same way, with byte-identical doctor output.
+
+Status: done 2026-10-13
+Model: Claude Code / claude-opus-5-5
 
 ### T426. Install refuses a host whose app is not installed
 
@@ -13461,6 +13547,31 @@ Result: rtok takes paths, atomic writes, tree usage and copies from `fs-kit` 0.1
 Status: done 2026-10-12
 Model: Claude Code / claude-opus-5-5
 
+### T660.1. One project-root method and a path-containment guard
+
+Part of T660: worktrees move into `<project>/.rtok/worktrees`, and rtok gets one way to find a project root. Today six sites decide it differently: `git_root` (`crates/rtok-config/src/layers.rs`) stops at a linked worktree's `.git` file, `common_git_dir` (`src/project.rs`) resolves to the main checkout, `src/doctor.rs` has a private copy of `git_root`, and `checkpoint`/`tasks/run.rs` mix both. Nothing checks that a path rtok builds stays inside the project.
+
+Done: one module in the lowest crate that needs it (the config crate reads `.rtok.toml` through it), lexical, no git subprocess (hook budget), over the existing `ReadFs`:
+
+- `ProjectRoot::find(cwd)` → `checkout` (toplevel of the checkout `cwd` is in, a linked worktree's own dir) and `main` (the main checkout, through `commondir`; a submodule is its own project), plus the common `.git` dir.
+- `contain(root, path)`: the path made absolute against `root`, lexically normalized, then resolved through its deepest existing ancestor (symlinks); `Err` when it leaves `root`. Reuse `path_starts_with` (`crates/rtok-store/src/paths.rs`) and `worktree/add.rs::resolved` instead of new code.
+- `src/project.rs` (`project_name`, `project_key`) runs on it; no behaviour change.
+- Docs: a "Project root" section in `architecture.md` (which root each caller wants and why).
+
+Execution plan:
+
+1. Move `common_git_dir`/`common_dir` and `git_root` into the new module; `ReadFs` goes wherever both crates can see it.
+2. `contain` on top of `resolved` + `path_starts_with`.
+3. Tests (Vfs and a tempdir with real symlinks): main checkout; linked worktree with absolute and relative `gitdir`/`commondir`; submodule; no repo; cwd deep inside; `..` escape; absolute path outside; symlink escape; symlink inside that stays inside; root itself.
+4. `just check`.
+
+Check: the tests above pass and `project_name`/`project_key` tests are unchanged.
+
+Result: `crates/rtok-config/src/root.rs` holds `ReadFs`/`HostFs` (moved from `src/fs.rs`, re-exported there), `ProjectRoot { checkout, main, git_dir }`, `resolved` (moved from `worktree/add.rs`) and `contain`. `src/project.rs` and `layers.rs::git_root` run on it; callers are unchanged until T660.2. Review fix: `contain` first normalized lexically and then followed symlinks, so `link/../secret` with `link` pointing outside passed as `root/secret`; it now follows symlinks through the deepest existing ancestor first and applies `..` lexically only to the missing tail (test `contain_follows_symlinks`, failing before the fix). "Project root" subsection in `architecture.md` §7.
+
+Status: done 2026-10-13
+Model: Claude Code / claude-opus-5-5 (code by a claude-sonnet-5-5 subagent, reviewed)
+
 ### T577. Protect nested package-manager lockfiles during junk cleanup
 
 Confirmed with an isolated directory fixture: [recheck](src/agents/junk_clear.rs#L278) compares PACKAGE_LOCKS only with the candidate's own basename. Its protected-path list contains the store and host settings paths, not discovered descendant lockfiles. An eligible explicitly configured cache containing nested/Cargo.lock passes recheck, then [remove](src/agents/junk_clear.rs#L334) recursively discards its children and deletes that lockfile. The cache root remains, while the same Cargo.lock checked directly is refused. [extra_items](src/agents/junk_review.rs#L169) accepts the configured cache root; the plan's D36/age/running gates do not add a descendant-lockfile check. This contradicts completed T330.4's promise to refuse a path that is or holds a package-manager lockfile; T330.5.1's explicit exclude globs do not supply the missing automatic protection.
@@ -13795,6 +13906,38 @@ Check: `a_descendant_holding_the_pipe_does_not_stall_the_bench` failed before (5
 Status: done 2026-10-12
 Model: Claude Code / claude-sonnet-5-5
 
+### T643. e2e homes outside the crowded `$TMPDIR`
+
+`just spa-e2e` sometimes failed in fixture setup with `rtok mcp exited null:` (empty stderr): `spawnSync` killed the seed's `rtok mcp` at the 30 s `SEED_TIMEOUT_MS`. `rtok mcp` does not hang: after stdin EOF it exits at once. Under the suite's load it waited in the kernel. A `sample` of a stalled seed showed the main thread inside `mem_save` → `Store::auto_add_project` → `fs_kit::path::is_unwalkable_root` → `canonicalize` → `realpath` → `getattrlist` for the whole window, on the throwaway home in `os.tmpdir()`. On the creator's Mac that directory holds ~94,000 entries, mostly leaked test dirs (T644). While the suite ran, `realpath` on a dir in `$TMPDIR` took p50 165 ms, p99 1.8 s, max 2.7 s. In `/tmp` it took max 3 ms; `stat` in `$TMPDIR` took max 5 ms; a dir nested a level deeper in `$TMPDIR` was just as slow. Without the suite, `realpath` in `$TMPDIR` stayed under 120 ms. Every `canonicalize` rtok does on the home pays this, so a seed and other `rtok` calls ran past their timeouts.
+
+Plan:
+1. `web/e2e/rtok.ts`: each home is made under `/tmp` (Windows keeps `os.tmpdir()`), through one helper.
+2. `Rtok.run`: a timed-out call says `timed out after 30 s` instead of `exited null`.
+3. Test: `web/e2e/fixture.spec.ts`. Kernel slowness cannot be reproduced in CI; the measurements above are the evidence.
+
+Result: `makeHome` creates every home under `/tmp`; `failure` turns a killed `spawnSync` into `timed out after N s` (or the spawn error) and keeps `exited N` for a real exit code.
+
+Check: `the throwaway home lives under /tmp, not the per-user temp dir` failed before (home under `/var/folders/…/T/`) and passes after; `a call killed by its timeout says it timed out`; `just js`, `web` typecheck. Three full `spa-e2e` runs with every `rtok mcp` call timed: no seed failed and none read `exited null` (before: one in each of the first runs); `Rtok.create` took 0.4 s instead of 17.6 s. The longest call was the 500-call burst at 22 s under load average 52, spread over its calls rather than one stall. Not fixed here and failing with `main`'s fixture too: `Compare colours …` and `Export downloads …` time out even alone; `hosts page …` and `clear safe junk …` pass alone and fail only under that load.
+
+Status: done 2026-10-12
+Model: Claude Code / claude-opus-5-5
+
+### T644. Tests remove the temp dirs they create
+
+The tests leak their temp dirs into `$TMPDIR`: on the creator's Mac about 24,000 `rtok-mem-*` (`Runtime::in_memory` in `src/plugin.rs` creates one per call and never removes it), 6,300 `rtok-tui-*`, 2,000 `rtok-guard-*`, 1,300 `rtok-usage-*` and more. A directory that size makes `realpath` in it slow under load (T643). Each test helper that makes a temp dir removes it (a guard or `tempfile::TempDir`), `Runtime::in_memory` first.
+
+Plan: 329 `temp_dir()` calls in 158 files are far past one task's 500 lines, so two layers instead of a rewrite of every helper:
+1. `Runtime::in_memory` (`src/plugin.rs`), the 24,000 of them: the runtime owns its dir and removes it when dropped. A private guard, not `tempfile`: that would be a new runtime dependency of the shipped binary for a test helper.
+2. Everything else: the nextest setup script in `.config/nextest.toml` points `TMPDIR` (`TMP`/`TEMP` on Windows) at a per-checkout dir it empties at the start of each run, the way it already treats `target/test-home`. On Unix that dir is `/tmp/rtok-test-<cksum of the checkout path>`, not under `target/`: a home under a deep worktree path would push `hook.sock` past the 100-byte `sun_path` limit `rtok_hook::endpoint` enforces. Windows uses `target\test-home\tmp`.
+3. Tests: the drop test in `src/plugin.rs`, and a `testutil` test that under nextest `temp_dir()` is that dir. Then a full `just test` with a count of `rtok-*` in the real `$TMPDIR` before and after.
+
+Result: `Runtime` holds a `ScratchDir` that removes the dir `in_memory` made; nextest runs every test with `TMPDIR` at `/tmp/rtok-test-<cksum>` (Windows: `target\test-home\tmp`), emptied by the setup script. Helpers outside nextest (a plain `cargo test`) still write to the real temp dir.
+
+Check: `a_dropped_in_memory_runtime_leaves_no_directory` and `nextest_runs_under_the_test_tmp` failed before and pass after. A full `just test` (3736 passed): `rtok-*` in the real `$TMPDIR` 125,701 before and after, 0 entries newer than the run's start; the run's own leftovers, 850 entries, stay in its `/tmp/rtok-test-*` until the next run empties it.
+
+Status: done 2026-10-13
+Model: Claude Code / claude-opus-5-5
+
 ### T631. Track the real Git metadata when embedding a worktree build SHA
 
 Confirmed on `ea999781d7a48733e3a5c92e711cfad291c13536` using the actual [build script](build.rs#L39) in a minimal temporary Cargo package and a real linked Git worktree. `.git` is a file there, so none of `.git/HEAD`, `.git/refs/heads`, `.git/packed-refs` exists and no Git rerun hint is emitted. After an initial build and an empty commit advancing HEAD, a second `cargo run` still prints the old embedded SHA. The fixture reported new HEAD `86a42649a` while the binary retained `81b95850e`. Other rerun directives keep Cargo from using its broad default source scan. T10.4's version embedding and T310's SPA hints do not cover linked-worktree Git metadata.
@@ -13980,6 +14123,17 @@ Check: `whole_output_stays_within_the_budget` (budgets 0..1500, two estimator ra
 
 Status: done 2026-10-12
 Model: Claude Code / claude-sonnet-5-5
+
+### T664. `report --ai` keeps `#doctor` under the default budget
+
+On `6557b6d1` `tests/report_ai.rs` failed twice (`empty_store_ai_says_so`, `ai_carries_the_section_set_with_md_numbers`): with an empty `RTOK_HOME`/`HOME`, `rtok report --ai` dropped the whole `doctor` section past the default `[report] budget_tokens = 8000`. The `agents` block of the doctor text was ~16 KB of the ~35 KB document: every T413 host variant printed four module lines, most with a long `not supported: …` reason repeated per variant. The creator chose to shrink that block in the AI report only and keep the budget. `rtok doctor`, the md/html/pdf reports and the TUI keep the full lines.
+
+Result: `doctor::Report::to_compact_text` renders each host variant as one line (`claude (desktop) hooks=n/a mcp=no proxy=n/a plugin=n/a`, legend on the `agents` line, reasons left to `rtok doctor`) through `agents::module_summary`; `src/report/ai.rs` `doctor()` uses it. On an empty home the doctor section went from 16.6 KB to 3.2 KB and the whole document from 35.7 KB to 22.3 KB, `dropped: none`.
+
+Check: `doctor_agents_are_one_line_per_host_variant` (compact line, no reason, full text unchanged); the two `tests/report_ai.rs` tests pass again; `just check` green on fmt, clippy and all 3815 tests. `dup` stays over its threshold as on `origin/main` (2.13 % there, 2.09 % here; T663 owns it).
+
+Status: done 2026-10-14
+Model: Claude / opus-5.5
 
 ### T581. Filter actionable report sinks before applying the top-ten limit
 
@@ -14780,3 +14934,11 @@ Result: `upsert_note` records the previous title and body in `note_versions` ins
 
 Status: done 2026-10-08
 Model: Cursor / grok 4.7
+
+### T650. Audit project boundaries and changes since PR #986
+
+Audited project boundaries and the evidence baseline `eb7d980af235f0ccb3d8ff58471d24b8267af35d` against `ea999781d7a48733e3a5c92e711cfad291c13536` and local main `0c222f3061123f8e8e887608987fc03cb5972c8c`, including targeted review of current contracts beyond changed paths. The baseline diff contained 353 paths (+22,715/−4,282); 1,624 tracked paths were inventoried. Extended `audit-coverage.md` with the current bounded family pass, source-family counts, targeted scope, findings and evidence limits. Added distinct tasks T651–T657 for inherited-output timeout behavior, unreadable MCP config replacement, semantic-cache usage in provider-billed OTel totals, unreadable graph index recovery, compressor queue admission, unknown worktree/cache age, and compressor credential routing. Strict-JSON formatting and graph reorder buffering remain proposals I-130/I-131. Prior tasks and findings were checked for duplicate scope; this is not a claim that every line or platform was reviewed.
+
+Evidence: T651 used the real `rtok-sys` path dependency; T652 used actual MCP config and SDK writer functions on a temporary JSON file; T653 used actual `rtok-store` in-memory APIs; T654 used a chmod/stat fixture with the graph gate source-traced; T655 used a deterministic extracted thread schedule; T656 and T657 are source-derived. No product code/tests, live host/provider, or real worktree/cache deletion. `CHECK_BASE=eb7d980af235f0ccb3d8ff58471d24b8267af35d mise exec -- just check` passed as scoped and reported no code changes, so no Cargo tests ran. `mise exec -- just docs-check` passed all selected documentation integration tests; `git diff --check` passed. Full `just check`, browser/host integration and Windows/Linux matrix were not run.
+
+Status: done 2026-10-13 · Model: OpenAI / GPT-6

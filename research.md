@@ -2548,6 +2548,7 @@ What `rtok agents usage --source logs` reads per host, from each host's own sour
 
 - xAI's own guide, shipped in `~/.grok/docs/user-guide/17-sessions.md` of grok 1.0.34 (read 2026-10-03; `~/.grok/version.json`): sessions are `~/.grok/sessions/<encoded-cwd>/<session-id>/` (`$GROK_HOME` moves the base), and `signals.json` holds "token usage, tool/turn counters". It names no keys. The same page documents `grok usage <session-id>` ("Use this instead of reading session files") that prints per-session and per-turn tokens and cost as JSON.
 - Verdict: `unsupported`. The documented route is another program, which rtok does not run (D6), and the file's keys are not documented. Reading `signals.json` from observed keys would be a guess. If the creator accepts observed keys as a source, it is a small reader.
+- The creator accepted observed keys on 2026-10-13 (T396), but there are none to observe: grok 1.0.34 (`~/.grok/version.json`) has 3 sessions on this machine and none holds a `signals.json`; their `summary.json`, `updates.jsonl`, `events.jsonl`, `chat_history.jsonl` and `prompt_context.json` have no key path containing `token`, `usage` or `cost` (key names listed with `jq paths`, no content read). The verdict stays `unsupported` until a session with a `signals.json` exists.
 
 ### 30.8 ZCode (T358.4)
 
@@ -2657,6 +2658,71 @@ Trae IDE (ByteDance). Facts are from the vendor's docs, https://docs.trae.ai/ide
 - User-level MCP servers: added in the app's MCP panel. The page names the **Raw Config (JSON)** button, which opens "the mcp.json file in TRAE", but gives no path for it. The path is not in the page, and Trae is not installed on this machine to read it back.
 - VS Code layout: Trae is a VS Code fork, but the docs do not say it reads VS Code's `mcp.json` or `settings.json`, so `src/agents/vscode/` cannot be reused on a guess.
 - Because the only documented user-level file has no documented path, a fixed path would be a guess; the host stays out until the docs (or a Trae install to inspect) name one.
+
+### 32.12 Warp (T413.12, checked 2026-10-12)
+
+Warp is a desktop terminal with an agent. All facts below are from the vendor's docs; the Warp page for MCP is served as Markdown at the `.md` URL.
+
+- File-based MCP servers: global `~/.warp/.mcp.json`, project `{repo_root}/.warp/.mcp.json`. Warp's own files are "On by default"; servers detected from other agents (`~/.claude.json`, `~/.codex/config.toml`, `~/.agents/.mcp.json`) need a toggle in Settings. https://docs.warp.dev/agents/capabilities/mcp.md
+- Format: top-level `mcpServers`, each entry keyed by a unique name. A local (CLI) server takes `command`, `args`, `env`, `working_directory`; a URL server takes `url`, `headers`. No `type` key appears in the property tables or any example, so the installer writes none. Same page.
+- Project-scoped servers are detected but never started automatically (each is toggled on per session), and "Warp prevents edits to MCP config files unless you explicitly approve the change" applies to the agent editing them. The installer writes only the user file and only when the user runs it. Same page.
+- Servers added in the app's own MCP settings page are the other path; the page does not say where the app stores them, so they stay out of scope and are never read or changed.
+- Install: macOS "in your Applications folder" (`brew install --cask warp`), Windows via the Start menu (`winget install Warp.Warp`), Linux package with the `warp-terminal` command or an AppImage. No install directory, no PATH command for macOS or Windows and no `--version` flag are documented. https://docs.warp.dev/getting-started/installation-and-setup. Detection is therefore the macOS bundle `/Applications/Warp.app` only (checked present on the creator's machine on this date); `warp-terminal --version` would be a guess that may open the GUI.
+- Hooks, a plugin format and a model endpoint setting: the MCP page does not mention hooks and no page checked names the others, so hooks, plugin and proxy stay `Support::No`. Rules files (`WARP.md`, `AGENTS.md`) are not an rtok module surface here.
+
+### 32.7 Continue (T413.7, checked 2026-10-12)
+
+- Config file: https://docs.continue.dev/customize/deep-dives/configuration (source `docs/customize/deep-dives/configuration.mdx` in https://github.com/continuedev/continue) — `~/.continue/config.yaml` on macOS and Linux, `%USERPROFILE%\.continue\config.yaml` on Windows. `cn` defaults to the same file: https://docs.continue.dev/cli/configuration (`docs/cli/configuration.mdx`). `CONTINUE_GLOBAL_DIR` moves the directory: `core/util/paths.ts` and `extensions/cli` in the same repository (checked on `main`). The installer follows it only through `[setup.continue] config_path`.
+- Required top-level properties of a config: https://docs.continue.dev/reference (`docs/reference.mdx`) — `name`, `version`, `schema`; every other property is optional. A file rtok creates carries exactly those three plus `mcpServers`.
+- `mcpServers` shape: https://docs.continue.dev/customize/deep-dives/mcp (`docs/customize/deep-dives/mcp.mdx`) — a list of items; a stdio item is `name`, `type: stdio`, `command`, `args`, optional `env`; the reference adds `cwd` and `connectionTimeout`. `cn` treats an item with `command` as stdio (`extensions/cli/src/services/MCPService.ts`).
+- `.continue/mcpServers/` is documented for a workspace only ("top level of your workspace"); no global equivalent is documented, so it is not written. Rules and hooks: the docs name `rules` in `config.yaml` but no hook events, so the hooks module stays off.
+- Extension and CLI ids: VS Code `Continue.continue` (https://github.com/continuedev/continue/blob/main/extensions/vscode/package.json: `publisher` `Continue`, `name` `continue`); JetBrains `com.github.continuedev.continueintellijextension` (`extensions/intellij/gradle.properties`); `cn` is the `bin` of `@continuedev/cli` (`extensions/cli/package.json`). The Desktop variant is detected through the VS Code app, as Roo's is; a JetBrains-only install is not detected.
+
+### 32.11 Crush (T413.11, checked 2026-10-12)
+
+Crush (https://github.com/charmbracelet/crush, v0.98.1 released 2026-10-09, not archived) is a terminal agent, one CLI variant (`crush`).
+
+- Config formats: the current format is `crushrc`, a Bash script with Crush builtins (`mcp add`, `hook add`, ...), looked up as `./.crushrc`, `./crushrc`, then `$XDG_CONFIG_HOME/crush/crushrc`. "JSON is still supported but is deprecated"; legacy `.crush.json` / `crush.json` live in the same directories, are merged with `crushrc`, and `crushrc` wins on conflict. https://github.com/charmbracelet/crush/blob/main/docs/config/README.md (sections "Where config lives" and "Legacy JSON")
+- Global JSON path: `GlobalConfig()` returns `$CRUSH_GLOBAL_CONFIG/crush.json` when that variable is set, else `<home.Config()>/crush/crush.json`, where `home.Config()` is `$XDG_CONFIG_HOME` or `~/.config`. https://github.com/charmbracelet/crush/blob/main/internal/config/load.go (`GlobalConfig`) and https://github.com/charmbracelet/crush/blob/main/internal/home/home.go (`Config`)
+- JSON MCP shape: top-level `mcp.<name>` with `command`, `args`, `env`, `type` (`stdio` default, `sse`, `http`), `url`, `headers`, `timeout` (default 10), `disabled`, `disabled_tools`, `enabled_tools`. https://github.com/charmbracelet/crush/blob/main/schema.json (`MCPConfig`)
+- Choice: rtok writes `crush.json`, not `crushrc`. A JSON object lets rtok add and remove only its own `mcp.rtok` and leave every other byte; editing a Bash script would need marker lines whose effect rtok cannot verify, and the docs call both files "trusted code". The cost: when a `crush.json` and a `crushrc` in one directory define the same top-level key, Crush logs "Found both a JSON config and a crushrc in the same directory; merging with crushrc taking precedence" and still merges; disjoint keys do not warn. https://github.com/charmbracelet/crush/blob/main/internal/config/load.go (`loadFromConfigPaths`). A user who adds servers with `mcp add` in `crushrc` therefore sees that warning for `mcp`. Creator to confirm this trade-off.
+- Hooks: only `PreToolUse` exists. Config is `hooks.PreToolUse[]` with `command` (required), `matcher` (regex on the tool name), `name`, `timeout` (seconds, default 30); stdin is `{event, session_id, cwd, tool_name, tool_input}`; output is exit codes (0, 2 block, 49 halt) or a JSON envelope with `decision`, `reason`, `context`, `updated_input`. The payload is documented and Claude-shaped, but its tool names (`bash`, `edit`, `write`, ...) are lower case and rtok has no checked mapping of them, so hooks stay `Support::No` (same reason as Droid). https://github.com/charmbracelet/crush/blob/main/docs/hooks/README.md (sections "Reference", "Claude Code compatibility")
+- Proxy and plugin directory: per-provider base URLs only and skills, no plugin directory; both stay `Support::No`.
+
+### 32.14 OpenHands (T413.14, checked 2026-10-12)
+
+OpenHands CLI. All facts are from the vendor's docs (docs.openhands.dev), fetched 2026-10-12.
+
+- User-level MCP file: `~/.openhands/mcp.json` ("Configuration File Location"; `openhands mcp add|remove|enable|disable` edit it), https://docs.openhands.dev/openhands/usage/cli/mcp-servers. `openhands mcp list|get` read it.
+- Format: top-level `mcpServers`, each server keyed by name with `command`, `args`, `env` for a stdio server (the page links the FastMCP configuration format); the examples carry no `type` for stdio, so the entry is the `{command, args}` shape `register_stdio_mcp` writes.
+- A running conversation does not pick up a changed file; the page says to restart the conversation to load new configurations, so setup does not restart anything.
+- Hooks: `.openhands/hooks.json` in the repository root, events `PreToolUse`, `PostToolUse` and others, `snake_case` keys, https://docs.openhands.dev/openhands/usage/customization/hooks. The page names no user-level hooks file, so hooks stay `Support::No` and a project file is never written (it belongs to the project).
+- Install: `uv tool install openhands --python 3.12`, or `curl -fsSL https://install.openhands.dev/install.sh | sh` for an executable binary; both put an `openhands` command on PATH, https://docs.openhands.dev/openhands/usage/cli/installation. Detection is the `openhands` binary; no `--version` flag is relied on.
+- A model endpoint setting and a plugin format for rtok were not checked, so proxy and plugin stay `Support::No`.
+
+### 32.8 Augment Auggie CLI (T413.8, checked 2026-10-12)
+
+The CLI binary is `auggie`; the IDE extension keeps MCP servers behind a settings panel and documents no file, so there is one CLI variant. https://docs.augmentcode.com/cli/reference
+
+- User-level MCP file: `~/.augment/settings.json`, key `mcpServers`; `auggie mcp add <name> --command <bin> --args "<args>" --env K=V` writes it. https://docs.augmentcode.com/cli/integrations
+- Stdio entry: `command`, `args`, `env`. The settings examples omit `type`; only the `add-json` example carries `"type":"stdio"`. Same page.
+- Hooks: events `PreToolUse`, `PostToolUse`, `Stop`, `SessionStart`, `SessionEnd`, under a `hooks` key of `settings.json` (user `~/.augment/settings.json`, project `.augment/settings.json` and `.augment/settings.local.json`, system `/etc/augment/settings.json`). Entries are `{matcher, hooks: [{type: "command", command, timeout}]}` with `timeout` in milliseconds (default 60000). https://docs.augmentcode.com/cli/hooks
+- A hook command must be a script path ending in `.sh` (executable, with a shebang), `.ps1`, `.cmd` or `.bat`, so a plain `rtok hook ...` command line is not accepted. `PreToolUse` supports only `permissionDecision: "deny"` (`allow` and `ask` are reserved) and `updatedInput` is not implemented, so rtok's command rewrite has no path. Hooks stay `Support::No`. Same page.
+- Matcher tool names (case-sensitive regex): `launch-process`, `view`, `str-replace-editor`, `save-file`, `remove-files`, `web-fetch`, `web-search`, `codebase-retrieval`, `github-api`, `linear`; MCP tools as `mcp:<regex>`. Same page.
+- Plugins: `auggie plugin marketplace add`, `auggie plugin install`, `--plugin-dir`; Augment's own marketplace format. No Augment plugin unit exists under `plugins/` (D21), so `plugin` stays `Support::No`. https://docs.augmentcode.com/cli/reference
+- The CLI reference documents no model endpoint, bring-your-own-key setting or config-directory environment variable, so proxy stays out.
+
+### 32.15 DeepSeek Reasonix (T413.15, checked 2026-10-12)
+
+All facts are from the project's own repository (github.com/esengine/DeepSeek-Reasonix, default branch `studio`, MIT, release `studio-v2.37.0` of 2026-10-12), docs fetched 2026-10-12.
+
+- The card's lead was `~/.reasonix/config.json`. That is the legacy (0.x) file: since v1.8.1 the global config is `<Reasonix home>/config.toml`, and the old `config.json` is read only as a lowest-priority `mcpServers` source, https://github.com/esengine/DeepSeek-Reasonix/blob/studio/docs/CONFIG_PATHS.md and `docs/GUIDE.md` ("Upgrading from 0.x").
+- Reasonix home: `~/.reasonix` on macOS and Linux, `%APPDATA%\reasonix` on Windows; `REASONIX_HOME` overrides it (CONFIG_PATHS.md, "Reasonix Home"). The CLI and the desktop app share it.
+- MCP servers: one `[[plugins]]` table per server in the global `config.toml` (CONFIG_PATHS.md example, `name`, `command`); `type` selects the transport and `stdio` is the default, with `command`, `args`, `env` (GUIDE.md "Plugins (MCP)", https://github.com/esengine/DeepSeek-Reasonix/blob/studio/docs/GUIDE.md). Explicit installs are saved to the user-global `config.toml` and are the authorization; no second trust step.
+- A project `reasonix.toml` or `.mcp.json` overrides a same-named global server, so setup writes neither (they belong to the project). Names are resolved once per workspace and project declarations override same-name global installs (GUIDE.md "Plugins (MCP)").
+- Hooks: `<Reasonix home>/settings.json` under `hooks.<Event>[]` with `match`, `command`, `timeout`; the payload is one line of camelCase JSON on stdin (`toolName`, `toolArgs`, ...) and the verdict is the exit code (GUIDE.md "Hooks"). Reasonix tool names (`bash`, `read_file`) differ from Claude's and the page lists no full tool table, so rtok has no checked mapping and hooks stay `Support::No`.
+- Providers: each `[[providers]]` entry carries its own `base_url`; there is no single endpoint setting, so proxy stays `Support::No`.
+- Install: `npm install -g reasonix` puts `reasonix` (and a `dsnix` shim) on PATH (README "Install"). The desktop installers are GitHub Releases downloads with no documented install path, so there is no Desktop variant.
 
 ## 33. Which tests a change reaches (T420, 2026-10-06)
 

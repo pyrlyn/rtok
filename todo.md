@@ -27,13 +27,7 @@
 - T396. Verify the usage readers against real files
 - T398. Probe editors on a `worktree.useRelativePaths` worktree
 - T413. More agent hosts: popular agents rtok does not install into yet
-- T413.7. `rtok agents install continue` — Continue
-- T413.8. `rtok agents install augment` — Augment Code and Auggie CLI
-- T413.11. `rtok agents install crush` — Crush
-- T413.12. `rtok agents install warp` — Warp
 - T413.13. `rtok agents install trae` — Trae
-- T413.14. `rtok agents install openhands` — OpenHands
-- T413.15. `rtok agents install reasonix` — DeepSeek Reasonix
 - T414. Web dashboard restyle on the brand pack, built from `brand/` sources
 - T414.7. Re-shoot `web/screenshots/`; close the web admin gap in `brand/`
 - T416. Shared `change-preview` crate for dry-run output
@@ -45,8 +39,14 @@
 - T525. SubagentStart and PreCompact under the 10 ms hook budget
 - T526. `worktree_list` and `search` when `rtok mcp` was started in the home directory
 - T527. A worktree claim does not stay held by an agent idle for days
-- T647.1. One project-root method and a path-containment guard
-- T647.2. Every project-root caller goes through the T647.1 method
-- T647.3. Worktrees nested in the project do not leak into walks, gc or clean
-- T647.4. Default worktree root `<project>/.rtok/worktrees`, `.rtok/` ignored
-- T647.5. `rtok worktree migrate` moves worktrees into the configured root
+- T652. Refuse to replace an unreadable MCP host config
+- T653. Exclude semantic-cache hits from provider-billed OTel usage
+- T654. Re-read graph files after an unreadable index attempt
+- T655. Make compressor in-flight admission atomic
+- T656. Keep worktrees and caches when their age cannot be established
+- T657. Match compressor credentials to the internal provider
+- T651. Honor ProgressRunner timeouts with inherited output
+- T660.2. Every project-root caller goes through the T660.1 method
+- T660.3. Worktrees nested in the project do not leak into walks, gc or clean
+- T660.4. Default worktree root `<project>/.rtok/worktrees`, `.rtok/` ignored
+- T660.5. `rtok worktree migrate` moves worktrees into the configured root
