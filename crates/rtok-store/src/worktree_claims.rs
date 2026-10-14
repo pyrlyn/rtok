@@ -63,6 +63,47 @@ impl Store {
         Ok(())
     }
 
+    /// `rtok worktree migrate` (T660.5): the claim and parked rows of `from` now name `to`, so
+    /// the agent holding the worktree still holds it after the move. Rows already at `to` are
+    /// stale (nothing lived there) and give way. Matched by [`crate::same_path`], one transaction.
+    pub fn move_worktree_rows(&self, from: &str, to: &str) -> Result<()> {
+        use super::schema::worktree_pending;
+        let same = |stored: &String, want: &str| {
+            crate::same_path(std::path::Path::new(stored), std::path::Path::new(want))
+        };
+        let mut conn = self.lock()?;
+        conn.immediate_transaction(|conn| -> Result<()> {
+            let claimed: Vec<String> = worktree_claims::table
+                .select(worktree_claims::path)
+                .load(conn)?;
+            let parked: Vec<String> = worktree_pending::table
+                .select(worktree_pending::path)
+                .load(conn)?;
+            let at = |rows: &[String], want: &str| -> Vec<String> {
+                rows.iter().filter(|p| same(p, want)).cloned().collect()
+            };
+            diesel::delete(
+                worktree_claims::table.filter(worktree_claims::path.eq_any(at(&claimed, to))),
+            )
+            .execute(conn)?;
+            diesel::delete(
+                worktree_pending::table.filter(worktree_pending::path.eq_any(at(&parked, to))),
+            )
+            .execute(conn)?;
+            diesel::update(
+                worktree_claims::table.filter(worktree_claims::path.eq_any(at(&claimed, from))),
+            )
+            .set(worktree_claims::path.eq(to))
+            .execute(conn)?;
+            diesel::update(
+                worktree_pending::table.filter(worktree_pending::path.eq_any(at(&parked, from))),
+            )
+            .set(worktree_pending::path.eq(to))
+            .execute(conn)?;
+            Ok(())
+        })
+    }
+
     /// `(path, agent_id)` of every claim not yet released.
     pub fn open_worktree_claims(&self) -> Result<Vec<(String, String)>> {
         let mut conn = self.lock()?;
@@ -109,6 +150,31 @@ mod tests {
         store.release_worktree_claim("/w/x").unwrap();
         assert_eq!(store.open_worktree_claims().unwrap(), [("/w/y".into(), a)]);
         assert_eq!(store.session_model("s-a").unwrap(), None);
+    }
+
+    /// T660.5: a moved worktree keeps its claim and its parked row; a stale row at the target
+    /// gives way, other rows stay.
+    #[test]
+    fn moving_a_worktree_moves_its_claim_and_parked_rows() {
+        let store = Store::open_in_memory().unwrap();
+        let claude = store.host_id("claude").unwrap().unwrap();
+        let a = store
+            .register_agent(claude, "s-a", None, None, None)
+            .unwrap();
+        store.claim_worktree("/w/x", &a, "t1").unwrap();
+        store.claim_worktree("/r/x", &a, "old").unwrap();
+        store.release_worktree_claim("/r/x").unwrap();
+        store.claim_worktree("/w/y", &a, "t2").unwrap();
+        store.add_pending_worktree("/w/p", "t3").unwrap();
+        store.move_worktree_rows("/w/x", "/r/x").unwrap();
+        store.move_worktree_rows("/w/p", "/r/p").unwrap();
+        let mut claims = store.open_worktree_claims().unwrap();
+        claims.sort();
+        assert_eq!(claims, [("/r/x".into(), a.clone()), ("/w/y".into(), a)]);
+        assert_eq!(
+            store.pending_worktrees().unwrap(),
+            [("/r/p".into(), "t3".into())]
+        );
     }
 
     /// T430: a claim stored with `std::fs::canonicalize`'s prefix releases on the simplified path.

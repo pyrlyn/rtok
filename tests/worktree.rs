@@ -2081,3 +2081,123 @@ fn the_default_root_is_under_the_main_checkout_from_main_and_from_a_worktree() {
     assert_eq!(run(&work, &["status", "--porcelain"]), "");
     assert!(!home.join(".rtok/worktrees").exists());
 }
+
+/// T660.5: `migrate` moves the worktrees outside the root into it, named by their task, with
+/// lock and claim following; it skips main, the current worktree, another agent's lock or
+/// claim, a live session's worktree, one with submodules and a taken target. A dry run moves
+/// nothing.
+#[test]
+fn migrate_moves_free_worktrees_into_the_root_and_skips_held_ones() {
+    use rtok::worktree::migrate::{Held, Me, run as migrate};
+    let tmp = rtok::testutil::tmp_dir("worktree-migrate");
+    let work = common::git::repo(&tmp);
+    let store = rtok::store::Store::open_in_memory().unwrap();
+    let claude = store.host_id("claude").unwrap().unwrap();
+    let agent = store.register_agent(claude, "s", None, None, None).unwrap();
+    let other = store.register_agent(claude, "o", None, None, None).unwrap();
+    let me = agent.as_str();
+    let mine = format!("{ME} | t1 | 2026-10-14 | agent {me}");
+    add(&work, "mine", Some(&mine));
+    add(&work, "free", None);
+    add(
+        &work,
+        "theirs",
+        Some("Other / model | t3 | 2026-10-14 | agent agent-other"),
+    );
+    add(&work, "claimed", None);
+    add(&work, "live", None);
+    add(&work, "subs", None);
+    add(&work, "here", None);
+    add(&work, "taken", None);
+    std::fs::write(tmp.join("wt-subs/.gitmodules"), "").unwrap();
+    let root = work.join(".rtok/worktrees");
+    std::fs::create_dir_all(root.join("wt-taken")).unwrap();
+    let wt = |n: &str| tmp.join(format!("wt-{n}")).canonicalize().unwrap();
+
+    let path_of = |p: &Path| p.display().to_string();
+    store
+        .claim_worktree(&path_of(&wt("mine")), &agent, "t1")
+        .unwrap();
+    store
+        .claim_worktree(&path_of(&wt("claimed")), &other, "t4")
+        .unwrap();
+    let held = Held {
+        claims: store.open_worktree_claims().unwrap(),
+        pending: Vec::new(),
+        live: vec![("agent-live".into(), wt("live").join("src"))],
+    };
+    let who = Me {
+        agent: Some(me),
+        owner: None,
+    };
+    let rel = Path::new(".rtok/worktrees");
+
+    let dry = migrate(&wt("here"), rel, &who, &held, Some(&store), false).unwrap();
+    let action = |rows: &[rtok::worktree::migrate::Outcome], n: &str| {
+        let row = rows.iter().find(|o| o.path.ends_with(n)).unwrap();
+        (row.action, row.note.clone())
+    };
+    assert_eq!(action(&dry, "wt-mine").0, "move");
+    assert!(wt("mine").exists() && !root.join("rtok-t1").exists());
+
+    let done = migrate(&wt("here"), rel, &who, &held, Some(&store), true).unwrap();
+    assert_eq!(action(&done, "rtok").1, "main checkout");
+    assert_eq!(action(&done, "wt-mine"), ("move", "moved".into()));
+    assert_eq!(action(&done, "wt-free"), ("move", "moved".into()));
+    assert_eq!(action(&done, "wt-theirs").1, "locked by Other / model");
+    assert!(
+        action(&done, "wt-claimed")
+            .1
+            .starts_with("claimed by agent")
+    );
+    assert!(action(&done, "wt-live").1.starts_with("live session"));
+    assert!(action(&done, "wt-subs").1.contains("submodules"));
+    assert_eq!(
+        action(&done, "wt-here").1,
+        "the worktree this command runs from"
+    );
+    assert!(action(&done, "wt-taken").1.ends_with("already exists"));
+    assert!(done.iter().all(|o| !o.failed));
+
+    // Named by its lock's task; without a lock it keeps its directory name.
+    let moved = root.join("rtok-t1").canonicalize().unwrap();
+    assert!(root.join("wt-free").is_dir() && !tmp.join("wt-free").exists());
+    let records = git::list(&work).unwrap();
+    let record = records
+        .iter()
+        .find(|r| r.path.canonicalize().unwrap() == moved);
+    assert_eq!(record.unwrap().locked.as_deref(), Some(mine.as_str()));
+    let claims = store.open_worktree_claims().unwrap();
+    assert!(
+        claims
+            .iter()
+            .any(|(p, a)| *p == stored_claim_path(&moved) && *a == agent),
+        "{claims:?}"
+    );
+    assert_eq!(run(&work, &["status", "--porcelain"]), "");
+
+    let again = migrate(&work, rel, &who, &held, Some(&store), true).unwrap();
+    assert_eq!(action(&again, "rtok-t1").1, "already in the root");
+}
+
+/// T660.5: two worktrees that would land on one path: the plan moves one and keeps the other,
+/// rather than letting `git worktree move` fail halfway through.
+#[test]
+fn migrate_gives_one_target_to_one_worktree() {
+    use rtok::worktree::migrate::{Held, Me, run as migrate};
+    let tmp = rtok::testutil::tmp_dir("worktree-migrate-twin");
+    let work = common::git::repo(&tmp);
+    for (branch, dir) in [("a", "../a/wt"), ("b", "../b/wt")] {
+        run(&work, &["worktree", "add", "-q", "-b", branch, dir]);
+    }
+    let rel = Path::new(".rtok/worktrees");
+    let plan = migrate(&work, rel, &Me::default(), &Held::default(), None, false).unwrap();
+    let mut notes: Vec<_> = plan.iter().skip(1).map(|o| o.note.as_str()).collect();
+    notes.sort_unstable();
+    assert_eq!(notes.len(), 2, "{plan:?}");
+    assert!(
+        notes[0].ends_with("is another worktree's target"),
+        "{plan:?}"
+    );
+    assert_eq!(notes[1], "outside the root");
+}

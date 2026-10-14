@@ -46,4 +46,3 @@
 - T656. Keep worktrees and caches when their age cannot be established
 - T657. Match compressor credentials to the internal provider
 - T651. Honor ProgressRunner timeouts with inherited output
-- T660.5. `rtok worktree migrate` moves worktrees into the configured root

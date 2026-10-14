@@ -65,18 +65,9 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T525 | in progress | P2 | 3 | 0% | MiMo / mimo |
 | T526 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T527 | in progress | P2 | 3 | 0% | MiMo / mimo |
-| T660.5 | in progress | P2 | 3 | 0% | Claude Code / claude-opus-5-5 |
 
 
 
-
-### T660.5. `rtok worktree migrate` moves worktrees into the configured root
-
-Needs T660.4. Moves this repository's worktrees that live outside the configured root to `<root>/<repo>-<task>` with `git worktree move`, keeping lock and claim records in step. Dry run without `--yes`. Skips, with a reason: main, the worktree holding the cwd, a worktree locked or claimed by another agent or by a live session, a worktree with submodules (`git worktree move` refuses them), a target that already exists. CLI only; new-command gates (trycmd fence, `surface_parity`, `config_coverage`). Docs with T660.4's pages.
-
-Check: tests on a temp repo for move, each skip reason and dry run; lock and claim follow the move; `just check`.
-
-Plan: (1) `src/worktree/migrate.rs`: `plan` lists this repository's worktrees outside the resolved root, each with a target or a skip reason; `apply` runs `git worktree move`, rewrites the lock text and moves the store's claim and pending rows to the new path. (2) CLI `rtok worktree migrate [--yes] [--json]`, a dry run without `--yes`. (3) New-command gates: trycmd fence, `surface_parity`, `config_coverage`, man page. (4) Docs beside T660.4's pages. (5) `tests/worktree.rs` cases from Check; `just check`.
 
 **Source audit (T530).**
 
