@@ -11,7 +11,7 @@ plugins:
 | API proxy | `rtok proxy` — `ANTHROPIC_BASE_URL` / `OPENAI_BASE_URL` hop |
 
 > [!WARNING]
-> **Status: v0.0.1.** All ten plugins are implemented across the three surfaces, with
+> **Status: pre-1.0 (latest release v0.16.0).** All ten plugins are implemented across the three surfaces, with
 > measurement, config provenance, an OTLP export and a web dashboard. What is *not* done is
 > the number that matters: the committed A/B bench has only been run offline, so it reports
 > zeros for both configurations. rtok's claim today is "measurable", not "cheaper".
