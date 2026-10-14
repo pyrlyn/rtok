@@ -10,7 +10,7 @@ New bugs, dead code and moves from a read-only Cursor cloud review of `main` at 
 
 | ID | Priority | Kind | Status | Where | Fix |
 | --- | --- | --- | --- | --- | --- |
-| T464 | P2 | move | compared | `crates/rtok-agent-sdk/src/lib.rs:84-163` (`backup`) → crates-packages `file-backup` | Not a drop-in (checked 2026-10-10): rtok writes to a `_backup/` folder, keeps N generations (`prune_backups`, `stale_backups`) and dedups against any file there; `file-backup` 0.1.1 writes beside the file and never prunes. The creator chose to extend `file-backup` first (crates-packages roadmap T12, with its T4 symlink fix, which the open crates-packages PR #34 also touches), then depend on it here. |
+| T464 | P2 | move | compared | `crates/rtok-agent-sdk/src/lib.rs:84-163` (`backup`) → crates `file-backup` | Not a drop-in (checked 2026-10-10): rtok writes to a `_backup/` folder, keeps N generations (`prune_backups`, `stale_backups`) and dedups against any file there; `file-backup` 0.1.1 writes beside the file and never prunes. The creator chose to extend `file-backup` first (crates roadmap T12, with its T4 symlink fix, which the open crates PR #34 also touches), then depend on it here. |
 | T465 | P2 | move | compared | `tools/dist-generate.sh`, `tools/release.sh` → `pyrlyn/ci` | Not shared copies (diffed 2026-10-10): `dist-generate.sh` differs from ketch's and swarfr's in 239 and 102 lines; `release.sh` differs from ketch, cox, runa and swarfr in 130, 121, 63 and 75 lines. Nothing to fold until the repos agree on one release flow; no move without a new creator OK. |
 | T466 | P2 | move | compared | `.github/actions/rustup-toolchain-cache` → `pyrlyn/ci/.github/actions/` | Only rtok uses it (`ci.yml`, `graph-review.yml`; checked 2026-10-10 across `apps/` and `packages/`). `pyrlyn/ci` already ships `setup-rust` (mise-pinned Rust and `rust-cache`); sharing would mean folding the toolchain cache into it. No move without a new creator OK. |
 | T470 | P3 | move | suspected | `tools/test-changed.sh`, `tools/selective-check.sh` → `scoped-check` / `pyrlyn/ci` | Overlap was claimed but not diffed against cox or `pyrlyn/ci`. Compare first; move only what matches. |
@@ -27,8 +27,8 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T275 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
 | T275.1 | in progress | P2 | 3 | 80% | Cursor / grok 4.7 |
 | T276 | in progress | P2 | 5 | 30% | Claude Code / sonnet-5.5 |
-| T276.3 | todo | P2 | 4 | 0% | |
-| T276.6 | todo | P2 | 3 | 0% | |
+| T276.3 | in progress | P2 | 4 | 0% | Claude Code / sonnet-5.5 |
+| T276.6 | in progress | P2 | 3 | 0% | Claude Code / sonnet-5.5 |
 | T277 | in progress | P2 | 5 | 30% | Claude Code / sonnet-5.5 |
 | T278 | in progress | P1 | 3 | 90% | Claude Code / claude-opus-5-5 |
 | T279 | in progress | P1 | 5 | 90% | Claude Code / claude-opus-5-5 |
@@ -51,13 +51,13 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T414.7 | in progress | P3 | 1 | 0% | MiMo / mimo |
 | T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
 | T428 | in progress | P2 | 3 | 85% | Claude Code / sonnet-5.5 |
-| T651 | todo | P2 | 2 | 35% | |
-| T652 | todo | P1 | 2 | 60% | |
-| T653 | todo | P2 | 2 | 55% | |
-| T654 | todo | P2 | 2 | 65% | |
-| T655 | todo | P2 | 2 | 60% | |
-| T656 | todo | P2 | 2 | 60% | |
-| T657 | todo | P1 | 2 | 55% | |
+| T651 | in progress | P2 | 2 | 35% | Claude Code / sonnet-5.5 |
+| T652 | in progress | P1 | 2 | 60% | Claude Code / sonnet-5.5 |
+| T653 | in progress | P2 | 2 | 55% | Claude Code / sonnet-5.5 |
+| T654 | in progress | P2 | 2 | 65% | Claude Code / sonnet-5.5 |
+| T655 | in progress | P2 | 2 | 60% | Claude Code / sonnet-5.5 |
+| T656 | in progress | P2 | 2 | 60% | Claude Code / sonnet-5.5 |
+| T657 | in progress | P1 | 2 | 55% | Claude Code / sonnet-5.5 |
 | T436.4 | todo | P3 | 2 | 90% | |
 | T522 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T523 | in progress | P2 | 2 | 0% | MiMo / mimo |
@@ -763,7 +763,7 @@ Check: `just check` green; `brand/README.md` no longer says the web admin ships 
 
 ### T416. Shared `change-preview` crate for dry-run output
 
-Every command that changes the disk should preview it the same way, and ketch and cox carry the same need (ketch has its own dry-run paths; cox depends on `similar` and `diffy`). The renderer moves out of `src/render.rs` into a crate with a neutral name in `packages/crates` (`listepo/crates-packages`, tracked there as T1), released to crates.io by that repo's release-plz pipeline; rtok then depends on the crates.io version, because a path outside this repository does not resolve in CI. Blocks T416.1-T416.4.
+Every command that changes the disk should preview it the same way, and ketch and cox carry the same need (ketch has its own dry-run paths; cox depends on `similar` and `diffy`). The renderer moves out of `src/render.rs` into a crate with a neutral name in `packages/crates` (`pyrlyn/crates`, tracked there as T1), released to crates.io by that repo's release-plz pipeline; rtok then depends on the crates.io version, because a path outside this repository does not resolve in CI. Blocks T416.1-T416.4.
 
 The crate renders two kinds of change. A file edit (path, before, after) is a unified diff with the `a/` and `b/` headers `render::unified_diff` prints today, or in stat mode a `path | 7 +++--` line; a removal (path, bytes, files) is `- path  12.1 GB  48 213 files`. Both modes end with a totals line: `3 files changed, 12 insertions(+), 4 deletions(-)` for edits, `15 paths, 1 204 311 files, -106.2 GB` for removals. Colour goes through owo-colors' `if_supports_color` exactly as `render::paint` does; byte sizes through the crate's `human_bytes` (the same binary units as `info::human_bytes`); everything derives `Serialize` for `--json`.
 
@@ -793,7 +793,7 @@ Status: steps 1-3 done. On the rtok repo SessionStart dispatch is 2-4 ms on an i
 
 Execution plan (2026-10-12): 1. a neutral-name crate in `packages/crates` (own worktree and PR there, its AGENTS.md rules) holding `OPERATION_ICONS`, `icon()`, `ICON_WIDTH` and the gutter padding, generic over the tone/kind type, with unit tests; 2. after release-plz publishes it, rtok's `src/ui/style.rs` and ketch's `src/ui.rs` depend on the crates.io version with no output change; until then this card stays in progress with the crate PR linked.
 
-Progress (2026-10-12): step 1 is done: crate `operation-icons` merged in the crates-packages repository (PR #56) and not yet published. Step 2 waits for the creator to release it (the release pipeline has Actions off there); then rtok and ketch switch to the crates.io version.
+Progress (2026-10-12): step 1 is done: crate `operation-icons` merged in the crates repository (PR #56) and not yet published. Step 2 waits for the creator to release it (the release pipeline has Actions off there); then rtok and ketch switch to the crates.io version.
 
 ### T436.4. Spinner on `agents install/update` through T276's `ProgressRunner`
 
