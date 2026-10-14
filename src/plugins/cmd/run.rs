@@ -411,12 +411,12 @@ fn emit_filtered_to(
         shown.push('\n');
     }
     // T661: never worse than raw. A short valid-UTF-8 body (at or under
-    // `trailer_min_lines`, where the pointer is optional) that a grouping lengthened, or
-    // whose cut saved less than the trailer costs, prints verbatim: nothing is cut, so
-    // there is nothing to expand and no archive row. Longer bodies keep their trailer.
+    // `trailer_min_lines`) that the filter made no shorter (a dir grouping of one file per
+    // directory, say) prints verbatim: nothing is cut, so there is nothing to expand and
+    // no archive row. A real cut keeps its trailer, as before.
     if lines <= cfg.plugins.cmd.trailer_min_lines
         && std::str::from_utf8(body).is_ok()
-        && shown.len() >= body.len()
+        && filtered.trim_end().len() >= before.trim_end().len()
     {
         write_raw(out);
         let est = cx.estimate(super::bounded::host_visible_prefix(&before), Class::Code);

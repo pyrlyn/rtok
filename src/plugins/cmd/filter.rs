@@ -46,6 +46,12 @@ pub fn run_with_store(cfg: &Config, cmd: &str, input: &str) -> String {
         &filtered,
         named,
     );
+    // T661: never worse than raw, the same guard as `rtok run`.
+    if lines <= cfg.plugins.cmd.trailer_min_lines
+        && filtered.trim_end().len() >= input.trim_end().len()
+    {
+        return input.to_string();
+    }
     let mut out = filtered;
     if pointer {
         if !out.is_empty() && !out.ends_with('\n') {
@@ -53,10 +59,6 @@ pub fn run_with_store(cfg: &Config, cmd: &str, input: &str) -> String {
         }
         out.push_str(&super::run::trailer(&id, lines));
         out.push('\n');
-    }
-    // T661: never worse than raw, the same guard as `rtok run`.
-    if lines <= cfg.plugins.cmd.trailer_min_lines && out.len() >= input.len() {
-        return input.to_string();
     }
     if (pointer || named) && cx.put_archive(input.as_bytes()).is_err() {
         return compress_only(&settings, cmd, input);
