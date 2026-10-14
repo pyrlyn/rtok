@@ -154,11 +154,12 @@ fn reason(cx: &Ctx, cwd: &Path, scope: Option<&str>, name: &str) -> Option<Strin
 type Defs = Vec<(String, String, i32, i32)>;
 
 /// The definitions of `name` under the session's project: the index key of `cwd` itself, else
-/// of its git root (the index is keyed by the root it was built for, a hook's cwd may be a
+/// of its checkout root (the index is keyed by the root it was built for, a hook's cwd may be a
 /// subdirectory of it). Returns that key with the rows.
 fn definitions(cx: &Ctx, cwd: &Path, name: &str) -> Option<(String, Defs)> {
     let mut roots: Vec<PathBuf> = vec![cwd.to_path_buf()];
-    roots.extend(crate::config::layers::git_root(cwd));
+    // `checkout`, not `main`: the index is built per checkout, and a worktree's files differ.
+    roots.extend(rtok_config::root::ProjectRoot::find(cwd).map(|r| r.checkout));
     for root in roots {
         let key = index::canon(&root);
         let rows = cx.symbol_defs(&key, name).ok()?;
@@ -385,6 +386,20 @@ mod tests {
     fn subdirectory_cwd_finds_the_git_root_index() {
         let (mut rt, root) = project("t369-sub", true, &[("lib.rs", LIB)]);
         fs::create_dir_all(root.join(".git")).unwrap();
+        let sub = root.join("deep");
+        fs::create_dir_all(&sub).unwrap();
+        rt.cwd = Some(sub.to_string_lossy().into_owned());
+        assert!(grep(&rt, json!({"pattern": "parse_since"})).is_some());
+    }
+
+    /// T660.2: from inside a linked worktree the index of that worktree is found, not the main one's.
+    #[test]
+    fn linked_worktree_subdirectory_finds_its_own_index() {
+        let (mut rt, root) = project("t660-sub", true, &[("lib.rs", LIB)]);
+        let admin = root.parent().unwrap().join("main/.git/worktrees/proj");
+        fs::create_dir_all(&admin).unwrap();
+        fs::write(admin.join("commondir"), "../..\n").unwrap();
+        fs::write(root.join(".git"), format!("gitdir: {}\n", admin.display())).unwrap();
         let sub = root.join("deep");
         fs::create_dir_all(&sub).unwrap();
         rt.cwd = Some(sub.to_string_lossy().into_owned());
