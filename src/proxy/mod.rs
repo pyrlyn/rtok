@@ -693,7 +693,10 @@ fn shape_request(
             let offered = crate::plugins::compress::take_offered();
             if let Some(queue) = state.summaries.as_ref().filter(|_| !offered.is_empty()) {
                 queue.submit(
-                    crate::plugins::compress::llm::Auth::from_headers(headers),
+                    crate::plugins::compress::llm::Auth::from_headers(
+                        headers,
+                        wire.map(Wire::provider),
+                    ),
                     offered,
                 );
             }

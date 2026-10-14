@@ -9,6 +9,10 @@
 //! `web/dist`. `RTOK_WEB_EMBED=require` (the release job) turns a missing SPA into a build
 //! failure instead of a binary without a UI.
 
+// A build script runs before any workspace crate is built for the target, so it cannot reach
+// `rtok_sys::proc::ProgressRunner` and spawns git itself.
+#![allow(clippy::disallowed_methods)]
+
 use std::path::Path;
 use std::process::Command;
 

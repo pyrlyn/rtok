@@ -6,6 +6,7 @@ use crate::config::Config;
 use crate::ui::style;
 use anyhow::Result;
 use clap::Subcommand;
+use rtok_sys::proc::{ProgressRunner, Unit};
 use std::path::PathBuf;
 
 /// T329.4.2: which project a graph subcommand answers for, instead of a `path` or the cwd.
@@ -221,12 +222,11 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: GraphCmd) -> Result<()>
             dry_run,
         } => {
             let root = crate::plugins::graph::cli_root_for(&cx.store, path, project.project)?;
-            let pb = crate::render::spinner("indexing");
             let r = crate::plugins::graph::index::run_with(
                 &crate::plugin::Ctx::new(&cx),
                 &root,
                 dry_run,
-                &pb,
+                |n| ProgressRunner::batch("indexing", n, Unit::Items),
             )?;
             let summary = format!(
                 "indexed {} files · {} rows · {} skipped · {} read · exclude {} · include {} · mapped {}",

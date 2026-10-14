@@ -149,7 +149,7 @@ pub fn update(
 fn apply_hosts(cfg: &mut Config, req: &Request, no_restart: bool) -> Result<()> {
     // T141: closes a running desktop app before the write if it would change that host's
     // config, and reopens it after; CLI-only hosts just get a "restart your session" note.
-    // The per-host bar lives in `agents::run`, which knows when a question may be asked (T81).
+    // The per-host bar lives in `agents::run` (T436.4).
     let out = super::restart::run(cfg, req, no_restart)?;
     crate::log::stdout(&out);
     // T279 step 3/6 "Failure": a Claude reinstall that removed the old plugin and then failed

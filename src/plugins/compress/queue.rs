@@ -61,27 +61,127 @@ impl Queue {
             return;
         };
         for id in ids {
-            if self.in_flight.load(Ordering::Acquire) >= self.max_in_flight {
-                break;
-            }
-            {
-                let Ok(mut seen) = self.seen.lock() else {
-                    return;
-                };
-                if seen.len() >= SEEN_CAP {
-                    seen.clear();
-                }
-                if !seen.insert(id.clone()) {
-                    continue;
-                }
-            }
-            self.in_flight.fetch_add(1, Ordering::AcqRel);
-            let slot = Slot(self.clone());
+            let slot = match self.admit(&id) {
+                Admit::Full => break,
+                Admit::Seen => continue,
+                Admit::Poisoned => return,
+                Admit::Run(slot) => slot,
+            };
             let auth = auth.clone();
             runtime.spawn(async move {
                 // `run` warns about every failure itself.
                 slot.0.compressor.run(&slot.0.store, &auth, &id).await;
             });
         }
+    }
+
+    /// T655: the slot is taken before the id is marked seen, in one compare-and-swap, so
+    /// concurrent submits cannot both pass the cap, and an id refused at the cap stays
+    /// retryable. A refused id drops its slot, which hands the reservation back.
+    fn admit(self: &Arc<Self>, id: &str) -> Admit {
+        let reserved = self
+            .in_flight
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| {
+                (n < self.max_in_flight).then_some(n + 1)
+            });
+        if reserved.is_err() {
+            return Admit::Full;
+        }
+        let slot = Slot(self.clone());
+        let Ok(mut seen) = self.seen.lock() else {
+            return Admit::Poisoned;
+        };
+        if seen.len() >= SEEN_CAP {
+            seen.clear();
+        }
+        if !seen.insert(id.to_string()) {
+            return Admit::Seen;
+        }
+        Admit::Run(slot)
+    }
+}
+
+enum Admit {
+    Full,
+    Seen,
+    Poisoned,
+    Run(Slot),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Barrier;
+
+    fn queue(tag: &str, cap: u32) -> (Arc<Queue>, std::path::PathBuf) {
+        let (mut cfg, dir) = crate::testutil::config(tag);
+        cfg.plugins.compress.llm.enabled = true;
+        cfg.plugins.compress.llm.max_in_flight = cap;
+        (Queue::new(&cfg).unwrap().expect("flag on"), dir)
+    }
+
+    fn in_flight(q: &Queue) -> usize {
+        q.in_flight.load(Ordering::Acquire)
+    }
+
+    /// The race the card measured: every thread passes the cap check before any increments.
+    /// With the reservation in one CAS, exactly one distinct id is admitted at cap 1.
+    #[test]
+    fn concurrent_distinct_ids_never_exceed_the_cap() {
+        const THREADS: usize = 32;
+        for round in 0..20 {
+            let (q, dir) = queue(&format!("t655-race-{round}"), 1);
+            let start = Barrier::new(THREADS);
+            let hold = Barrier::new(THREADS);
+            let admitted = std::thread::scope(|s| {
+                let handles: Vec<_> = (0..THREADS)
+                    .map(|i| {
+                        let (q, start, hold) = (&q, &start, &hold);
+                        s.spawn(move || {
+                            start.wait();
+                            let got = q.admit(&format!("id-{i}"));
+                            // Slots stay held until every thread has tried.
+                            hold.wait();
+                            matches!(got, Admit::Run(_))
+                        })
+                    })
+                    .collect();
+                handles
+                    .into_iter()
+                    .filter_map(|h| h.join().unwrap().then_some(()))
+                    .count()
+            });
+            assert!(admitted <= 1, "round {round}: cap 1 admitted {admitted}");
+            assert_eq!(in_flight(&q), 0, "every slot is released");
+            let _ = std::fs::remove_dir_all(dir);
+        }
+    }
+
+    #[test]
+    fn an_id_refused_at_the_cap_is_retried_once_a_slot_frees() {
+        let (q, dir) = queue("t655-retry", 1);
+        let Admit::Run(first) = q.admit("a") else {
+            panic!("empty queue admits");
+        };
+        assert!(matches!(q.admit("b"), Admit::Full));
+        assert_eq!(in_flight(&q), 1);
+        drop(first);
+        assert!(
+            matches!(q.admit("b"), Admit::Run(_)),
+            "b was not marked seen"
+        );
+        assert_eq!(in_flight(&q), 0);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_duplicate_hands_its_reservation_back() {
+        let (q, dir) = queue("t655-dup", 2);
+        let Admit::Run(_held) = q.admit("a") else {
+            panic!("empty queue admits");
+        };
+        assert!(matches!(q.admit("a"), Admit::Seen));
+        assert_eq!(in_flight(&q), 1, "only the running job holds a slot");
+        let _ = std::fs::remove_dir_all(dir);
     }
 }

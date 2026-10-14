@@ -46,8 +46,11 @@ fmt-check:
 
 # rtok-wasm-demo-guest is no_std cdylib for wasm32; host `--all-targets` cannot
 # compile its lib (unwind without std). Lint it as `(lib test)` instead.
+# T276.6: the `Command::new` ban in `clippy.toml` binds libraries and binaries only; test
+# fixtures spawn their own children.
 lint:
-    {{cargo}} clippy --workspace --all-targets --all-features --exclude rtok-wasm-demo-guest -- -D warnings
+    {{cargo}} clippy --workspace --all-targets --all-features --exclude rtok-wasm-demo-guest -- -D warnings -A clippy::disallowed_methods
+    {{cargo}} clippy --workspace --lib --bins --all-features --exclude rtok-wasm-demo-guest -- -D warnings
     {{cargo}} clippy -p rtok-wasm-demo-guest --tests -- -D warnings
 
 # T26.0: copy-paste detector. Config, paths and threshold live in `.jscpd.json`; jscpd exits
