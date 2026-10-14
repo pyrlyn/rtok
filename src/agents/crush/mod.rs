@@ -24,8 +24,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 
 use super::{
-    Agent, Kind, Mode, Support, Variant, apply_mcp_only, installed_mcp_only, register_stdio_mcp_in,
-    support_mcp_only, unregister_stdio_mcp_in,
+    Agent, Kind, Support, Variant, register_stdio_mcp_in, support_mcp_only, unregister_stdio_mcp_in,
 };
 use crate::config::Config;
 
@@ -60,17 +59,7 @@ pub fn unregister_mcp(cfg: &Config) -> Result<String> {
 }
 
 impl Agent for Crush {
-    fn id(&self) -> &'static str {
-        HOST
-    }
-
-    fn variants(&self) -> &'static [Variant] {
-        &VARIANTS
-    }
-
-    fn readme(&self) -> &'static str {
-        include_str!("README.md")
-    }
+    super::agent_identity!(HOST);
 
     fn support(&self, _kind: Kind, module: &str) -> Support {
         support_mcp_only(
@@ -81,17 +70,7 @@ impl Agent for Crush {
         )
     }
 
-    fn files(&self, cfg: &Config, _kind: Kind) -> Vec<PathBuf> {
-        vec![config_path(cfg)]
-    }
-
-    fn installed(&self, cfg: &Config, _kind: Kind) -> Vec<&'static str> {
-        installed_mcp_only(&config_path(cfg))
-    }
-
-    fn apply(&self, cfg: &Config, _kind: Kind, mode: Mode) -> Result<Vec<String>> {
-        apply_mcp_only(cfg, mode, register_mcp, unregister_mcp)
-    }
+    super::mcp_only_file!(config_path, register_mcp, unregister_mcp);
 }
 
 #[cfg(test)]
@@ -163,20 +142,7 @@ mod tests {
     #[test]
     fn apply_is_idempotent_via_the_agent_trait() {
         let (c, path) = cfg("apply", false);
-        let lines = Crush.apply(&c, Kind::Cli, Mode::Install).unwrap();
-        assert!(lines[0].starts_with("mcp.rtok: "), "{lines:?}");
-        assert_eq!(
-            Crush.apply(&c, Kind::Cli, Mode::Install).unwrap(),
-            [NO_CHANGES]
-        );
-        assert_eq!(
-            Crush.apply(&c, Kind::Cli, Mode::Remove).unwrap(),
-            ["- mcp.rtok"]
-        );
-        assert_eq!(
-            Crush.apply(&c, Kind::Cli, Mode::Remove).unwrap(),
-            [NO_CHANGES]
-        );
+        super::super::assert_mcp_only_apply_idempotent(&Crush, &c, Kind::Cli, "mcp");
         let _ = fs::remove_dir_all(path.parent().unwrap());
     }
 }

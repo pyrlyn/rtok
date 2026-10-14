@@ -128,17 +128,7 @@ pub fn unregister_mcp(cfg: &Config) -> Result<String> {
 }
 
 impl Agent for Reasonix {
-    fn id(&self) -> &'static str {
-        HOST
-    }
-
-    fn variants(&self) -> &'static [Variant] {
-        &VARIANTS
-    }
-
-    fn readme(&self) -> &'static str {
-        include_str!("README.md")
-    }
+    super::agent_identity!(HOST);
 
     fn support(&self, _kind: Kind, module: &str) -> Support {
         super::support_mcp_only(
@@ -278,20 +268,7 @@ mod tests {
     #[test]
     fn apply_is_idempotent_via_the_agent_trait() {
         let (c, path) = cfg("apply", false);
-        let lines = Reasonix.apply(&c, Kind::Cli, Mode::Install).unwrap();
-        assert!(lines[0].starts_with("plugins.rtok: "), "{lines:?}");
-        assert_eq!(
-            Reasonix.apply(&c, Kind::Cli, Mode::Install).unwrap(),
-            [NO_CHANGES]
-        );
-        assert_eq!(
-            Reasonix.apply(&c, Kind::Cli, Mode::Remove).unwrap(),
-            ["- plugins.rtok"]
-        );
-        assert_eq!(
-            Reasonix.apply(&c, Kind::Cli, Mode::Remove).unwrap(),
-            [NO_CHANGES]
-        );
+        super::super::assert_mcp_only_apply_idempotent(&Reasonix, &c, Kind::Cli, "plugins");
         let _ = fs::remove_dir_all(path.parent().unwrap());
     }
 }

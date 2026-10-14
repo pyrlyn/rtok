@@ -34,17 +34,7 @@ static VARIANTS: [Variant; 1] = [Variant {
 const NAME: &str = "rtok";
 
 impl Agent for Omp {
-    fn id(&self) -> &'static str {
-        "omp"
-    }
-
-    fn variants(&self) -> &'static [Variant] {
-        &VARIANTS
-    }
-
-    fn readme(&self) -> &'static str {
-        include_str!("README.md")
-    }
+    super::agent_identity!("omp");
 
     fn support(&self, _kind: Kind, module: &str) -> Support {
         match module {
