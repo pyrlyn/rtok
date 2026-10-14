@@ -396,6 +396,20 @@ impl Store {
         }
     }
 
+    /// Every archive id starting with `prefix` (hex only, so `LIKE` has no wildcards to
+    /// escape), at most `limit`. T661: `rtok expand` takes the 12-char trailer prefix.
+    pub fn archive_ids_with_prefix(&self, prefix: &str, limit: i64) -> Result<Vec<String>> {
+        if prefix.is_empty() || !prefix.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return Ok(Vec::new());
+        }
+        let mut conn = self.lock()?;
+        Ok(archive::table
+            .filter(archive::id.like(format!("{}%", prefix.to_ascii_lowercase())))
+            .select(archive::id)
+            .limit(limit)
+            .load(&mut *conn)?)
+    }
+
     /// Path and bytes for `rtok expand <id>`. `None` if the id is unknown
     /// or the payload file is gone. `dir` is the live `[core] archive_dir`;
     /// the stored path is only a fallback for rows written under an old dir.

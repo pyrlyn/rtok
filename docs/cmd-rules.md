@@ -33,7 +33,7 @@ The same engine cuts foreign MCP results behind `rtok mcp -- <server argv>` (T59
 `[mcp]` section is the rule for every wrapped server's `tools/call` text block, the default
 rule when there is none. Only text blocks longer than `max_lines` of a non-`isError` result
 are touched; the raw block is archived first and the cut ends with the same
-`[rtok <id> · N lines · expand: rtok expand <id>]` trailer `rtok run` prints. The saving
+`[rtok <id12> · N lines]` trailer `rtok run` prints. The saving
 lands as a `cmd` / `wrap` measurement with `ref_id = <server>/<tool>:<id>`.
 
 | Field | Type | Default | Meaning |

@@ -220,9 +220,14 @@ pub(crate) fn names_the_id(filtered: &str, id: &str) -> bool {
 /// The pointer line appended after a filtered body: names the id, the line count and
 /// how to expand it. The one spelling shared by `rtok run`, `rtok filter --archive`
 /// and `rtok filter --stdin` so the three surfaces stay byte-identical.
+/// T661: the first 12 hex chars name the archive; `rtok expand` resolves a unique prefix.
 pub(crate) fn trailer(id: &str, lines: u32) -> String {
-    format!("[rtok {id} · {lines} lines · expand: rtok expand {id}]")
+    let short = &id[..id.len().min(SHORT_ID)];
+    format!("[rtok {short} · {lines} lines]")
 }
+
+/// Hex chars of the archive id the trailer prints.
+pub(crate) const SHORT_ID: usize = 12;
 
 /// `body` up to the noise a filter may remove without a reader losing anything:
 /// whitespace runs (padding, trailing newline) and ANSI escapes, compared line by line.
@@ -393,15 +398,17 @@ fn emit_filtered_to(
     // through this id. A shortening that took only whitespace/ANSI has nothing to expand
     // (T160) — and then nothing references the id, so the archive row is skipped too.
     let named = names_the_id(&filtered, &id);
-    let pointer = needs_pointer(
-        lines,
-        cfg.plugins.cmd.trailer_min_lines,
-        body,
-        &filtered,
-        named,
-    );
+    let pointer = cfg.plugins.cmd.trailer
+        && needs_pointer(
+            lines,
+            cfg.plugins.cmd.trailer_min_lines,
+            body,
+            &filtered,
+            named,
+        );
     // T247: measure exactly what the host receives — the padding newline and the trailer
     // line are part of the returned bytes, so `after` must count them too.
+    let no_shorter = filtered.trim_end().len() >= before.trim_end().len();
     let mut shown = filtered;
     if !shown.is_empty() && !shown.ends_with('\n') {
         shown.push('\n');
@@ -414,9 +421,12 @@ fn emit_filtered_to(
     // `trailer_min_lines`) that the filter made no shorter (a dir grouping of one file per
     // directory, say) prints verbatim: nothing is cut, so there is nothing to expand and
     // no archive row. A real cut keeps its trailer, as before.
-    if lines <= cfg.plugins.cmd.trailer_min_lines
-        && std::str::from_utf8(body).is_ok()
-        && filtered.trim_end().len() >= before.trim_end().len()
+    // Above `trailer_min_lines` the same holds for the printed bytes: when the filter
+    // kept everything (a `tree` it cannot shorten) the trailer would only add to raw.
+    let min = cfg.plugins.cmd.trailer_min_lines;
+    if std::str::from_utf8(body).is_ok()
+        && ((lines <= min && no_shorter)
+            || (lines > min && shown.len() >= body.len()))
     {
         write_raw(out);
         let est = cx.estimate(super::bounded::host_visible_prefix(&before), Class::Code);

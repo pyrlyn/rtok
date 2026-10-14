@@ -31,6 +31,8 @@ pub fn fetch(cx: &Runtime, id: &str) -> Result<Option<Vec<u8>>> {
 /// payload's real line count before anything is frozen or charged, so a range past the end
 /// fails without turning a decision permanent for an expansion that returned no bytes.
 pub fn fetch_range(cx: &Runtime, id: &str, lines: Option<&str>) -> Result<Option<Vec<u8>>> {
+    let full = resolve_id(cx, id)?;
+    let id = full.as_str();
     let Some(bytes) = cx
         .store
         .get_archive(id, Some(&cx.config.core.archive_dir))?
@@ -67,11 +69,27 @@ pub fn fetch_range(cx: &Runtime, id: &str, lines: Option<&str>) -> Result<Option
     Ok(Some(bytes))
 }
 
+/// T661: a hex prefix of at least 8 chars (the trailer prints 12) names the one archive
+/// that starts with it. A full id, or a prefix with no match, passes through unchanged so
+/// the caller reports it as unknown; two matches is an error naming the ambiguity.
+pub fn resolve_id(cx: &Runtime, id: &str) -> Result<String> {
+    const MIN_PREFIX: usize = 8;
+    if id.len() >= 64 || id.len() < MIN_PREFIX || !id.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Ok(id.to_string());
+    }
+    let hits = cx.store.archive_ids_with_prefix(id, 2)?;
+    match hits.as_slice() {
+        [one] => Ok(one.clone()),
+        [] => Ok(id.to_string()),
+        _ => bail!("archive id prefix {id} is ambiguous; pass more characters"),
+    }
+}
+
 /// The error text for an id with no archive row. An id that cannot be one — `-`,
 /// `/dev/stdin`, anything but the 64-char hex sha256 — gets a hint (T354): agents guess a
 /// stdin form (`cmd | rtok expand -`) to reach raw output, and nothing reads stdin.
 pub fn unknown_id_message(id: &str) -> String {
-    if id.len() == 64 && id.bytes().all(|b| b.is_ascii_hexdigit()) {
+    if id.len() >= 8 && id.len() <= 64 && id.bytes().all(|b| b.is_ascii_hexdigit()) {
         format!("unknown archive id: {id}")
     } else {
         format!(

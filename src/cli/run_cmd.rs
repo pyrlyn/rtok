@@ -16,6 +16,9 @@ pub(super) struct RunArgs {
     /// Sub-agent id from PreToolUse; scopes the dedup pointer
     #[arg(long, value_name = "ID")]
     pub(super) agent: Option<String>,
+    /// Do not print the reference line after a cut
+    #[arg(long)]
+    pub(super) no_ref: bool,
     #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
     pub(super) command: Vec<String>,
 }
@@ -31,13 +34,26 @@ pub(super) struct FilterArgs {
     /// Archive stdin and print the expand trailer (same path as `run`)
     #[arg(long)]
     pub(super) archive: bool,
+    /// Do not print the reference line after a cut
+    #[arg(long)]
+    pub(super) no_ref: bool,
+    /// Exit code of the command that printed stdin (with `--archive`); formatters read it.
+    #[arg(long, hide = true, default_value_t = 0, allow_negative_numbers = true)]
+    pub(super) exit: i32,
 }
 
 pub(super) fn run(config_file: &Option<PathBuf>, args: RunArgs) -> Result<()> {
     match args {
         #[cfg(feature = "cmd")]
-        RunArgs { agent, command } => {
-            let cfg = Config::load_with(config_file.as_deref(), None)?;
+        RunArgs {
+            agent,
+            no_ref,
+            command,
+        } => {
+            let mut cfg = Config::load_with(config_file.as_deref(), None)?;
+            if no_ref {
+                cfg.plugins.cmd.trailer = false;
+            }
             let code = crate::plugins::cmd::run::run(&cfg, &command, agent.as_deref())?;
             std::process::exit(code);
         }
@@ -60,8 +76,13 @@ pub(super) fn filter(config_file: &Option<PathBuf>, args: FilterArgs) -> Result<
             stdin: _,
             cmd,
             archive,
+            no_ref,
+            exit,
         } => {
-            let cfg = Config::load_with(config_file.as_deref(), None)?;
+            let mut cfg = Config::load_with(config_file.as_deref(), None)?;
+            if no_ref {
+                cfg.plugins.cmd.trailer = false;
+            }
             let hint = cmd.unwrap_or_else(|| cfg.filter.cmd.clone());
             if archive {
                 let mut buf = Vec::new();
@@ -69,7 +90,7 @@ pub(super) fn filter(config_file: &Option<PathBuf>, args: FilterArgs) -> Result<
                 let argv: Vec<String> = hint.split_whitespace().map(str::to_string).collect();
                 // No dispatch-time context reaches this surface (OpenCode's
                 // `tool.execute.after`, not the Claude Code PreToolUse rewrite).
-                crate::plugins::cmd::run::emit_filtered(&cfg, &argv, &buf, 0, None);
+                crate::plugins::cmd::run::emit_filtered(&cfg, &argv, &buf, exit, None);
             } else {
                 let buf = read_lossy(io::stdin())?;
                 print!(
