@@ -2012,3 +2012,71 @@ fn a_new_worktree_inherits_no_symbol_rows_under_rtok() {
     paths.sort_unstable();
     assert_eq!(paths, [".rtokish/b.rs", "src/a.rs"]);
 }
+
+/// T660.4: `.rtok/` is made ignored once, in `.gitignore` when the project has one (the rest
+/// byte-for-byte, a missing final newline added first), else in `info/exclude`; a rule already
+/// in effect is left alone.
+#[test]
+fn rtok_dir_is_ignored_through_gitignore_or_info_exclude() {
+    use rtok::worktree::add::ensure_ignored;
+    let tmp = rtok::testutil::tmp_dir("worktree-ignore-rtok");
+    let work = common::git::repo(&tmp);
+    let exclude = work.join(".git/info/exclude");
+    let before = std::fs::read(&exclude).unwrap_or_default();
+
+    std::fs::write(work.join(".gitignore"), "target\n# keep\r\n*.log").unwrap();
+    ensure_ignored(&work).unwrap();
+    let want = "target\n# keep\r\n*.log\n.rtok/\n";
+    assert_eq!(
+        std::fs::read_to_string(work.join(".gitignore")).unwrap(),
+        want
+    );
+    ensure_ignored(&work).unwrap();
+    assert_eq!(
+        std::fs::read_to_string(work.join(".gitignore")).unwrap(),
+        want
+    );
+    assert_eq!(std::fs::read(&exclude).unwrap_or_default(), before);
+
+    std::fs::write(work.join(".gitignore"), "/.rtok\n").unwrap();
+    ensure_ignored(&work).unwrap();
+    assert_eq!(
+        std::fs::read_to_string(work.join(".gitignore")).unwrap(),
+        "/.rtok\n"
+    );
+
+    std::fs::remove_file(work.join(".gitignore")).unwrap();
+    ensure_ignored(&work).unwrap();
+    ensure_ignored(&work).unwrap();
+    let text = std::fs::read_to_string(&exclude).unwrap();
+    assert_eq!(text.matches(".rtok/").count(), 1, "{text}");
+    assert!(text.ends_with(".rtok/\n"), "{text}");
+    assert!(!work.join(".gitignore").exists());
+}
+
+/// T660.4: by default `rtok worktree add` puts the worktree under `<main>/.rtok/worktrees`,
+/// from main and from inside a linked worktree alike, and main stays clean.
+#[test]
+fn the_default_root_is_under_the_main_checkout_from_main_and_from_a_worktree() {
+    let tmp = rtok::testutil::tmp_dir("worktree-default-root");
+    let work = common::git::repo(&tmp);
+    let home = tmp.join("home");
+    std::fs::create_dir_all(&home).unwrap();
+    let add = |cwd: &Path, task: &str| {
+        let out = rtok_in(&home, cwd, &["worktree", "add", task, "--owner", ME], b"");
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let printed = String::from_utf8_lossy(&out.stdout).trim_end().to_string();
+        Path::new(&printed).canonicalize().unwrap()
+    };
+    let first = add(&work, "t1");
+    assert_eq!(first, work.join(".rtok/worktrees/rtok-t1"));
+    std::fs::create_dir_all(first.join("sub")).unwrap();
+    let second = add(&first.join("sub"), "t2");
+    assert_eq!(second, work.join(".rtok/worktrees/rtok-t2"));
+    assert_eq!(run(&work, &["status", "--porcelain"]), "");
+    assert!(!home.join(".rtok/worktrees").exists());
+}
