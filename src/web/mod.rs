@@ -21,7 +21,7 @@ use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use axum::Json;
 use axum::Router;
 use axum::extract::State;
@@ -154,6 +154,29 @@ impl DashState {
     }
 }
 
+/// Opt-in for a dashboard bound beyond loopback: `RTOK_WEB_ALLOW_REMOTE=1`.
+pub const ALLOW_REMOTE_ENV: &str = "RTOK_WEB_ALLOW_REMOTE";
+
+/// The dashboard socket has no login: it can change config, apply `doctor --fix` and clear junk.
+/// A non-loopback `web.host` would hand that to every host on the network, so it needs the
+/// explicit opt-in. `localhost` and loopback IPs always pass.
+fn remote_bind_allowed(host: &str, opted_in: bool) -> Result<()> {
+    let loopback = host.eq_ignore_ascii_case("localhost")
+        || host
+            .trim_start_matches('[')
+            .trim_end_matches(']')
+            .parse::<std::net::IpAddr>()
+            .is_ok_and(|ip| ip.is_loopback());
+    if loopback || opted_in {
+        return Ok(());
+    }
+    bail!(
+        "rtok web: refusing to bind {host}: the dashboard has no authentication and would let \
+         anyone on the network change config and delete files. Bind 127.0.0.1, or set \
+         {ALLOW_REMOTE_ENV}=1 if the network is trusted"
+    )
+}
+
 /// `rtok web`: bind `host:port` and serve until killed.
 pub fn serve_blocking(cfg: Config) -> Result<()> {
     let rt = tokio::runtime::Builder::new_multi_thread()
@@ -164,6 +187,10 @@ pub fn serve_blocking(cfg: Config) -> Result<()> {
 }
 
 pub async fn serve(mut cfg: Config) -> Result<()> {
+    remote_bind_allowed(
+        &cfg.web.host,
+        std::env::var_os(ALLOW_REMOTE_ENV).is_some_and(|v| v == "1"),
+    )?;
     let addr: SocketAddr = format!("{}:{}", cfg.web.host, cfg.web.port)
         .parse()
         .with_context(|| format!("dashboard bind {}:{}", cfg.web.host, cfg.web.port))?;
@@ -299,8 +326,10 @@ fn origin_authority(origin: &str) -> Option<&str> {
 }
 
 fn host_authority(host: &str) -> Option<&str> {
-    let host = host.split(',').next_back()?.trim();
-    if host.is_empty() {
+    // A comma means several `Host` values joined; picking one could pass the equality with a
+    // crafted `Origin`, so the request is refused instead.
+    let host = host.trim();
+    if host.is_empty() || host.contains(',') {
         return None;
     }
     host.split('@').next_back()
@@ -752,6 +781,29 @@ mod tests {
                 "{origin} {host}"
             );
         }
+    }
+
+    /// S2: a dashboard bound beyond loopback needs the explicit opt-in.
+    #[test]
+    fn remote_bind_needs_opt_in() {
+        for host in ["127.0.0.1", "localhost", "::1", "[::1]"] {
+            assert!(remote_bind_allowed(host, false).is_ok(), "{host}");
+        }
+        for host in ["0.0.0.0", "::", "192.168.1.5", "example.com"] {
+            assert!(remote_bind_allowed(host, false).is_err(), "{host}");
+            assert!(remote_bind_allowed(host, true).is_ok(), "{host}");
+        }
+    }
+
+    /// S6: several `Host` values joined by a comma are refused, not resolved to one.
+    #[test]
+    fn comma_joined_host_is_refused() {
+        assert_eq!(host_authority("127.0.0.1:4444"), Some("127.0.0.1:4444"));
+        assert_eq!(host_authority("evil.example, 127.0.0.1:4444"), None);
+        assert!(!origin_allowed(&headers(
+            Some("http://127.0.0.1:4444"),
+            "evil.example,127.0.0.1:4444"
+        )));
     }
 
     /// The port is part of the origin: a page served by another local app
