@@ -116,8 +116,12 @@ pub fn decide(
             Some(b) => keep(&format!("not merged into the base; check `gh pr view {b}`")),
             None => keep("detached HEAD not merged into the base"),
         },
-        _ if age(p.idle).is_some_and(|a| a < p.idle) => keep("modified within the idle window"),
-        _ => Verdict::Remove,
+        _ => match age(p.idle) {
+            Some(a) if a < p.idle => keep("modified within the idle window"),
+            Some(_) => Verdict::Remove,
+            // T656: no evidence of age is no evidence of idleness.
+            None => keep(super::clean::AGE_UNKNOWN),
+        },
     }
 }
 
@@ -407,6 +411,36 @@ mod tests {
         };
         let verdict = decide(&entry, |_| None, false, &policy);
         assert_eq!(verdict, Verdict::Keep(format!("locked by {ME}")));
+    }
+
+    /// T656: a merged, unlocked worktree whose newest mtime is unknown stays; with an old one
+    /// it goes.
+    #[rstest]
+    #[case::unknown(None, "keep:age unknown: a file or its mtime could not be read")]
+    #[case::old(Some(0), "remove")]
+    #[case::fresh(Some(990), "keep:modified within the idle window")]
+    fn an_unknown_age_keeps_a_merged_worktree(#[case] modified: Option<u64>, #[case] want: &str) {
+        let entry = Entry {
+            record: Record {
+                branch: Some("t1".into()),
+                ..Record::default()
+            },
+            state: State::Merged,
+            merged: true,
+            done: false,
+        };
+        let policy = Policy {
+            owner: Some(ME),
+            idle: Duration::from_secs(100),
+            stale_lock: Duration::from_secs(500),
+            now: at(1_000),
+            live: Default::default(),
+            pending: Vec::new(),
+        };
+        assert_eq!(
+            label(decide(&entry, |_| modified.map(at), false, &policy)),
+            want
+        );
     }
 
     const LIVE: &str = "Cursor / grok | t1 | 2026-09-22 | agent 0193ab12-live";

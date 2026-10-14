@@ -190,7 +190,8 @@ impl ProgressRunner {
             Output::Capture | Output::Stream => self.run_piped(cap),
             Output::Inherit => {
                 self.prepare(false);
-                let status = self.cmd.status()?;
+                // `Command::status` cannot be bounded, so spawn and share the piped path's wait.
+                let status = wait(&mut self.cmd.spawn()?, self.timeout)?;
                 Ok((
                     Captured {
                         status,
@@ -633,6 +634,52 @@ mod tests {
                 .status
                 .success()
         );
+    }
+
+    /// T651: an inherited child used to be waited on without the limit.
+    #[test]
+    fn an_inherited_slow_child_is_killed_at_the_timeout() {
+        let start = Instant::now();
+        let err = sh("exec sleep 2")
+            .output(Output::Inherit)
+            .timeout(Duration::from_millis(100))
+            .run()
+            .unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::TimedOut);
+        assert!(
+            start.elapsed() < Duration::from_secs(1),
+            "{:?}",
+            start.elapsed()
+        );
+    }
+
+    #[test]
+    fn an_inherited_child_inside_its_timeout_keeps_its_own_status() {
+        let done = sh("exit 3")
+            .output(Output::Inherit)
+            .timeout(Duration::from_secs(5))
+            .run()
+            .unwrap();
+        assert_eq!(
+            (done.status.code(), done.stdout.len(), done.stderr.len()),
+            (Some(3), 0, 0)
+        );
+        let err = sh("exec sleep 2")
+            .output(Output::Inherit)
+            .timeout(Duration::ZERO)
+            .run()
+            .unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::TimedOut);
+    }
+
+    #[test]
+    fn an_inherited_child_that_cannot_start_fails_to_spawn_not_to_time_out() {
+        let err = ProgressRunner::quiet("/nonexistent/rtok-t651", ["x"])
+            .output(Output::Inherit)
+            .timeout(Duration::from_secs(5))
+            .run()
+            .unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::NotFound);
     }
 
     struct Record(Arc<Mutex<Vec<(Stream, String)>>>);
