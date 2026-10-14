@@ -14135,6 +14135,17 @@ Check: `doctor_agents_are_one_line_per_host_variant` (compact line, no reason, f
 Status: done 2026-10-14
 Model: Claude / opus-5.5
 
+### T666. `commands_e2e` runs `rtok` outside the checkout
+
+`tests/commands_e2e.rs`'s `cmd()` helper isolated `HOME`/`RTOK_HOME` but left the cwd at the checkout, so `doctor_reports_the_chain` ran `rtok doctor` there and its junk section (`agents::junk::report` → `junk_worktrees` → `worktree::list::walk`) walked every real worktree of the repository. On 2026-10-14, with ~10 sibling worktrees of 20+ GB `target/` each and load ~80, the test hit nextest's 180 s terminate-after twice. The other harnesses that reach the junk report (`agents_junk.rs`, `web_e2e.rs`, `doctor_checklist_pty.rs`, the `doctor --fix` cases in this file) already ran in the temp home.
+
+Result: `cmd()` sets `current_dir(home)`; the two per-test `current_dir` calls in the `doctor --fix` cases are gone. A time budget for `doctor`'s junk section for real users is I-132 in `ideas.md`.
+
+Check: `commands_run_in_the_temp_home_not_the_checkout` (`rtok run pwd -P` through `cmd()` prints the temp home) failed before the fix with the checkout path and passes after; `cargo nextest run --test commands_e2e` 22/22, `doctor_reports_the_chain` 4.7 s; `just check`.
+
+Status: done 2026-10-14
+Model: Claude Code / claude-opus-5-5
+
 ### T581. Filter actionable report sinks before applying the top-ten limit
 
 Confirmed through actual aggregation and recommendation functions: [report_sinks](src/model/report.rs#L284) groups all catalogue plugins, sorts by before_bytes and truncates to ten. Only afterwards [top_sinks](src/report/advice.rs#L253) skips classes other than read/cmd/mcp. Ten larger archive rows with distinct references therefore displace a smaller Read sink, yielding no top-sinks recommendation; the Read-only control yields one. The archive rows are valid measurements, but deliberately have no actionable switch in this rule. T59.8 and docs/report.md promise the ten largest file/command/MCP sinks; T302 changed ranking units, not filtering before truncation.

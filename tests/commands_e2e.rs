@@ -14,7 +14,12 @@ use std::path::{Path, PathBuf};
 
 fn cmd(args: &[&str], home: &Path) -> AssertCmd {
     let mut c = AssertCmd::cargo_bin("rtok").unwrap();
-    c.args(args).env("RTOK_HOME", home).env("HOME", home);
+    // The checkout as cwd would make `doctor`'s junk section walk the repository's real
+    // worktrees (T666).
+    c.args(args)
+        .env("RTOK_HOME", home)
+        .env("HOME", home)
+        .current_dir(home);
     c
 }
 
@@ -290,6 +295,22 @@ fn bench_dry_run_lists_the_schedule() {
     let _ = fs::remove_dir_all(&home);
 }
 
+/// T666: every command here runs in its temp home, not the checkout. From the checkout,
+/// `doctor`'s junk section walked every real worktree of the repository and blew nextest's
+/// 180 s limit on a machine with many large worktrees.
+#[cfg(unix)] // `pwd`
+#[test]
+fn commands_run_in_the_temp_home_not_the_checkout() {
+    let home = tmp("cwd");
+    let out = ok(&["run", "pwd", "-P"], &home);
+    assert_eq!(
+        PathBuf::from(out.trim()),
+        fs::canonicalize(&home).unwrap(),
+        "{out}"
+    );
+    let _ = fs::remove_dir_all(&home);
+}
+
 #[test]
 fn doctor_reports_the_chain() {
     let home = tmp("doctor");
@@ -459,11 +480,7 @@ fn doctor_fix_removes_only_the_broken_hook_after_a_backup() {
         home.display()
     );
     fs::write(&settings, &raw).unwrap();
-    let run = |args: &[&str]| {
-        let mut c = cmd(args, &home);
-        c.current_dir(&home);
-        c.assert().get_output().clone()
-    };
+    let run = |args: &[&str]| cmd(args, &home).assert().get_output().clone();
 
     let dry = run(&["doctor", "--fix"]);
     assert_eq!(dry.status.code(), Some(0));
@@ -500,12 +517,13 @@ fn doctor_fix_removes_an_extra_mcp_copy_and_nothing_else() {
     let json = home.join(".claude.json");
     let before = "{\n  \"theme\": \"dark\",\n  \"mcpServers\": {\n    \"a\": {\"command\": \"/bin/tool\"},\n    \"b\": {\"command\": \"/bin/tool\"}\n  }\n}\n";
     fs::write(&json, before).unwrap();
-    let mut c = cmd(
+    let out = cmd(
         &["doctor", "--fix", "--yes", "--only", "duplicate-mcp"],
         &home,
-    );
-    c.current_dir(&home);
-    let out = c.assert().get_output().clone();
+    )
+    .assert()
+    .get_output()
+    .clone();
     let text = String::from_utf8_lossy(&out.stdout);
     assert_eq!(out.status.code(), Some(0), "{text}");
     assert!(text.contains("1 entry removed, 0 left"), "{text}");
