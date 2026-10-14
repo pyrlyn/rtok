@@ -298,6 +298,29 @@ fn doctor_reports_the_chain() {
     let _ = fs::remove_dir_all(&home);
 }
 
+/// T276.3: the MCP probe draws a bar on a terminal only; a piped stderr gets no bar bytes.
+#[cfg(unix)] // POSIX command path
+#[test]
+fn doctor_probing_mcp_servers_writes_no_bar_to_a_pipe() {
+    let home = tmp("doctor-bar");
+    let servers = r#"{"mcpServers":{"fake":{"command":"/bin/sh","args":["-c","exit 0"]}}}"#;
+    fs::write(home.join(".claude.json"), servers).unwrap();
+    // Outside any repository, so doctor does not size every worktree of the checkout.
+    let out = cmd(&["doctor"], &home)
+        .current_dir(&home)
+        .assert()
+        .success()
+        .get_output()
+        .clone();
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(String::from_utf8_lossy(&out.stdout).contains("fake"));
+    assert!(
+        !err.contains("probing") && !err.contains('\u{1b}') && !err.contains('\r'),
+        "{err:?}"
+    );
+    let _ = fs::remove_dir_all(&home);
+}
+
 #[test]
 fn stats_json_parses() {
     let home = tmp("stats");

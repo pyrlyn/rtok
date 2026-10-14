@@ -4319,7 +4319,6 @@ dependencies = [
  "httpmock",
  "humantime",
  "ignore",
- "indicatif",
  "inquire",
  "insta",
  "jiff",

@@ -7,10 +7,9 @@
 //! Headless hosts run the agent's own non-interactive command. Every other variant
 //! spawns the `command` / `args` / `env` written in that host's config and calls `ping`.
 
+use rtok_sys::proc::ProgressRunner;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
-use std::process::{Command, Stdio};
-use std::sync::mpsc;
 use std::time::Duration;
 
 use anyhow::{Result, bail};
@@ -386,9 +385,7 @@ fn run_headless(
     };
     let mut missing = String::new();
     for (i, bin) in bins.iter().enumerate() {
-        let mut cmd = agents::spawn_cli(std::ffi::OsStr::new(bin));
-        cmd.args(&args);
-        match capture(&mut cmd, timeout) {
+        match capture(bin, &args, timeout) {
             Err(reason) if i + 1 < bins.len() => missing = reason,
             Err(reason) => return Err(reason),
             Ok((_, true)) => return Err(format!("timed out after {}s", timeout.as_secs())),
@@ -644,32 +641,17 @@ pub fn probe(launch: &Launch, agent: &str, timeout: Duration) -> Result<String, 
         .to_string())
 }
 
-fn capture(cmd: &mut Command, timeout: Duration) -> Result<(String, bool), String> {
-    let mut child = cmd
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .map_err(|e| format!("failed to start: {e}"))?;
-    let stdout = child.stdout.take();
-    let (tx, rx) = mpsc::channel();
-    std::thread::spawn(move || {
-        let mut buf = Vec::new();
-        if let Some(mut so) = stdout {
-            let _ = std::io::Read::read_to_end(&mut so, &mut buf);
-        }
-        let _ = tx.send(buf);
-    });
-    match rx.recv_timeout(timeout) {
-        Ok(buf) => {
-            let _ = child.wait();
-            Ok((String::from_utf8_lossy(&buf).into_owned(), false))
-        }
-        Err(_) => {
-            let _ = child.kill();
-            let _ = child.wait();
-            Ok((String::new(), true))
-        }
+/// `bin`'s stdout, and whether it was killed at `timeout`. Windows npm shims go through
+/// `cmd.exe` (T139).
+fn capture(bin: &str, args: &[String], timeout: Duration) -> Result<(String, bool), String> {
+    let run = ProgressRunner::new(&format!("asking {bin}…"), bin, args)
+        .windows_shim()
+        .timeout(timeout)
+        .run();
+    match run {
+        Ok(out) => Ok((String::from_utf8_lossy(&out.stdout).into_owned(), false)),
+        Err(e) if e.kind() == std::io::ErrorKind::TimedOut => Ok((String::new(), true)),
+        Err(e) => Err(format!("failed to start: {e}")),
     }
 }
 

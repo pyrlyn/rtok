@@ -93,6 +93,45 @@ fn only_wasm_plugin_depends_on_wasmi() {
     );
 }
 
+/// T276.6: `indicatif` draws only behind `rtok_sys::proc`, so every spinner and bar obeys one
+/// terminal check, `RTOK_NO_PROGRESS` and `disable_progress`.
+#[test]
+fn only_rtok_sys_depends_on_indicatif() {
+    assert_eq!(owners_of("indicatif"), ["rtok-sys"]);
+    assert_eq!(files_mentioning(&["indicatif::"]), Vec::<String>::new());
+}
+
+/// T276.6: `just lint` denies `Command::new` in libraries and binaries; only the all-targets
+/// pass, which lints tests too, allows it, and only `rtok-sys` opts out in code.
+#[test]
+fn the_lint_gate_bans_command_new_outside_rtok_sys() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let clippy = std::fs::read_to_string(root.join("clippy.toml")).unwrap();
+    assert!(
+        clippy.contains(r#"path = "std::process::Command::new""#),
+        "{clippy}"
+    );
+    let just = std::fs::read_to_string(root.join("justfile")).unwrap();
+    let lint: Vec<&str> = just
+        .lines()
+        .skip_while(|l| *l != "lint:")
+        .skip(1)
+        .take_while(|l| l.starts_with("    "))
+        .collect();
+    assert!(
+        lint.iter()
+            .any(|l| l.contains("--lib --bins") && !l.contains("disallowed_methods")),
+        "{lint:?}"
+    );
+    let allow = ["allow(clippy::disallowed_methods)"];
+    assert_eq!(files_mentioning(&allow), Vec::<String>::new());
+    let crates = files_mentioning_under("crates", &allow);
+    assert!(
+        crates.iter().all(|p| p.starts_with("crates/rtok-sys/")),
+        "{crates:?}"
+    );
+}
+
 /// `tree-sitter*` parses for `read` and `graph`, both under `src/plugins/`.
 #[test]
 fn only_plugins_depend_on_tree_sitter() {

@@ -76,7 +76,6 @@ mod yaml_text;
 pub mod zcode;
 pub mod zed;
 
-use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
@@ -462,25 +461,18 @@ fn host_program(bin: &str) -> Option<std::ffi::OsString> {
     find_on_path(bin).map(PathBuf::into_os_string)
 }
 
-/// Spawn a host CLI (`claude`, `codex`, …) by name. Windows CLIs installed through npm ship
-/// as a `.cmd`/`.bat`/`.ps1` shim, not a `.exe` — `Command::new` only ever auto-appends `.exe`
-/// (Win32's `CreateProcess`, never `PATHEXT`), so a bare spawn silently fails to find a real,
-/// on-PATH shim. Routing through `cmd /C` there reuses the shell's own PATH + `PATHEXT`
-/// search, which does try `.cmd`/`.bat` (T139).
-pub(crate) fn spawn_cli(bin: &std::ffi::OsStr) -> std::process::Command {
-    if cfg!(windows) {
-        let mut cmd = std::process::Command::new("cmd");
-        cmd.arg("/C").arg(bin);
-        cmd
-    } else {
-        std::process::Command::new(bin)
-    }
+/// What the spinner says while `<bin> <args>` runs: the CLI and its subcommand, not the
+/// paths and ids after it.
+fn cli_label(bin: &str, args: &[&str]) -> String {
+    let verb: Vec<&str> = args.iter().take(2).copied().collect();
+    format!("running {bin} {}…", verb.join(" "))
 }
 
 /// Run one `<bin> <args>` call with stdin closed, optionally overriding one environment
 /// variable (a config-dir redirect for a non-default settings path). Returns the first
 /// stderr line — or the spawn error itself when the binary is not found — as the failure
-/// text a host's plugin offer folds into "`<bin>` failed: …".
+/// text a host's plugin offer folds into "`<bin>` failed: …". Windows npm shims go through
+/// `cmd.exe` (T139).
 pub(crate) fn run_cli(
     bin: &str,
     args: &[&str],
@@ -489,12 +481,11 @@ pub(crate) fn run_cli(
     let Some(program) = host_program(bin) else {
         return Err(format!("{bin}: not found"));
     };
-    let mut cmd = spawn_cli(&program);
-    cmd.args(args).stdin(std::process::Stdio::null());
+    let mut run = ProgressRunner::new(&cli_label(bin, args), program, args).windows_shim();
     if let Some((key, val)) = env {
-        cmd.env(key, val);
+        run = run.env(key, val);
     }
-    match cmd.output() {
+    match run.run() {
         Ok(o) if o.status.success() => Ok(()),
         Ok(o) => Err(String::from_utf8_lossy(&o.stderr)
             .lines()
@@ -528,9 +519,11 @@ pub fn app_version(v: &Variant) -> String {
         let Some(program) = host_program(bin) else {
             continue;
         };
-        let mut cmd = version_command(&program);
-        cmd.arg("--version");
-        let out = crate::proc::capture(cmd, Some(VERSION_PROBE_LIMIT));
+        // Quiet: `agents list` already draws one loader over every probe.
+        let out = ProgressRunner::quiet(program, ["--version"])
+            .windows_shim()
+            .timeout(VERSION_PROBE_LIMIT)
+            .run();
         let Ok(out) = out else { continue };
         let mut s = String::from_utf8_lossy(&out.stdout).into_owned();
         if s.trim().is_empty() {
@@ -1056,11 +1049,9 @@ pub fn run(cfg: &mut Config, req: &Request) -> Result<String> {
         }
         cfg.setup.backup = false;
     }
-    let mut bar = host_bar(cfg, agents.len());
-    let applied = apply_all(cfg, req, &agents, want, bar.as_mut());
-    if let Some(bar) = bar {
-        bar.finish();
-    }
+    let mut bar = host_bar(agents.len());
+    let applied = apply_all(cfg, req, &agents, want, Some(&mut bar));
+    bar.finish();
     let (blocks, changed) = applied?;
     if changed {
         // Pruned only now: a no-change run deletes its copies, which would cost a generation.
@@ -1090,12 +1081,11 @@ pub(crate) fn would_change(cfg: &Config, agent: &'static dyn Agent, req: &Reques
     Ok(changed)
 }
 
-/// The bar over the hosts of one run (T436.4), drawn on a terminal only. A run that may ask
-/// the plugin question draws none: a bar redraws over a prompt on the same terminal and the
-/// wait for the answer reads as a hang (T81). `--yes` and a dry run never ask.
-fn host_bar(cfg: &Config, hosts: usize) -> Option<Batch> {
-    let may_ask = std::io::stdin().is_terminal() && !cfg.setup.yes && !cfg.setup.dry_run;
-    (!may_ask).then(|| ProgressRunner::batch("updating hosts…", hosts as u64, Unit::Items))
+/// The bar over the hosts of one run (T436.4), drawn on a terminal only. A plugin question
+/// hides it while it waits for the answer (`set_prompt_pause`, T276.3), so it no longer has to
+/// stay off for every run that may ask (T81).
+fn host_bar(hosts: usize) -> Batch {
+    ProgressRunner::batch("updating hosts…", hosts as u64, Unit::Items)
 }
 
 /// The blocks of every wanted variant, and whether any step changed a file. `bar` takes one
@@ -1717,28 +1707,6 @@ fn bare_rtok_on_path(path: Option<&std::ffi::OsStr>) -> bool {
 /// No sandbox: the caller passes the `PATH` value, so a test controls it.
 pub(crate) fn bin_on_path(bin: &str, path: Option<&std::ffi::OsStr>) -> bool {
     find_bin(bin, path, None, &pathext_list()).is_some()
-}
-
-/// How to run `program --version`. A bare name or a `.cmd`/`.bat` on Windows goes through
-/// `cmd /C`, because `CreateProcess` only auto-appends `.exe` and cannot execute a batch shim.
-fn version_command(program: &std::ffi::OsStr) -> std::process::Command {
-    if shell_shim(program) {
-        spawn_cli(program)
-    } else {
-        std::process::Command::new(program)
-    }
-}
-
-fn shell_shim(program: &std::ffi::OsStr) -> bool {
-    if !cfg!(windows) {
-        return false;
-    }
-    let path = Path::new(program);
-    let bare = !path.is_absolute() && path.components().nth(1).is_none();
-    let batch = path
-        .extension()
-        .is_some_and(|e| e.eq_ignore_ascii_case("cmd") || e.eq_ignore_ascii_case("bat"));
-    bare || batch
 }
 
 /// What [`ensure_hook_client_link`] did (T357); the caller only needs it for tests and doctor.
@@ -2980,6 +2948,14 @@ mod tests {
         };
         assert_eq!(app_version(&noisy), "0.1.0 (fake copilot)");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// T276.3: the spinner names the CLI and its subcommand, never the paths or ids after it.
+    #[test]
+    fn a_host_cli_call_is_labelled_by_its_subcommand() {
+        let args = ["plugin", "install", "rtok@/some/long/marketplace/path"];
+        assert_eq!(cli_label("claude", &args), "running claude plugin install…");
+        assert_eq!(cli_label("codex", &["--help"]), "running codex --help…");
     }
 
     /// T280: a `--version` that never answers, with a helper left holding its stdout (what

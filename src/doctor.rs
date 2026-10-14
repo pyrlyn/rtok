@@ -12,6 +12,7 @@ use crate::agents::skill::SKILL_DESC_MAX;
 use crate::config::Config;
 use crate::tokens::{self, Class};
 use anyhow::Result;
+use rtok_sys::proc::{ProgressRunner, Unit};
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -19,7 +20,7 @@ use std::ffi::OsStr;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpStream, ToSocketAddrs};
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::sync::mpsc;
 use std::time::Duration;
 
@@ -559,9 +560,12 @@ pub fn page(cfg: &Config) -> Result<Report> {
         });
     }
     let mcp_timeout = Duration::from_millis(cfg.doctor.mcp_timeout_ms.max(500));
+    // Each start is often a cold `npx`/`uvx`, seconds with nothing on screen (T276.3).
+    let mut bar = ProgressRunner::batch("probing MCP servers…", servers.len() as u64, Unit::Items);
     let mcp: Vec<ServerInfo> = servers
         .iter()
         .map(|s| {
+            bar.step(&s.name);
             let (tools, desc_tokens) = list_tools(s, mcp_timeout, &cfg.estimator);
             ServerInfo {
                 name: s.name.clone(),
@@ -571,6 +575,7 @@ pub fn page(cfg: &Config) -> Result<Report> {
             }
         })
         .collect();
+    bar.finish();
     let timeout = Duration::from_millis(cfg.doctor.probe_timeout_ms.max(300));
     let anthropic = anthropic_base(settings.as_ref(), std::env::var("ANTHROPIC_BASE_URL").ok());
     let tool_search = resolve_tool_search(
@@ -1408,21 +1413,6 @@ fn mcp_servers(claude: Option<&Value>, mcp_json: &Path) -> Vec<Server> {
     out
 }
 
-/// On Windows, bare names like `npx` / `uvx` (and explicit `.cmd` / `.bat`
-/// paths) must go through `cmd.exe /D /C`: CreateProcess will not run those
-/// shims, so a probe used to report 0 tools for every npx-launched server.
-fn mcp_command(command: &str, args: &[String]) -> Command {
-    if cfg!(windows) && rtok_sys::proc::needs_cmd_host(command) {
-        let mut c = Command::new("cmd.exe");
-        c.arg("/D").arg("/C").arg(command).args(args);
-        c
-    } else {
-        let mut c = Command::new(command);
-        c.args(args);
-        c
-    }
-}
-
 /// `initialize`, `notifications/initialized`, `tools/list`, then `call` when set.
 /// One JSON-RPC response value per answered request. Used by doctor's tool count and
 /// by `rtok mcp ping` (T275.1) so both speak the same client.
@@ -1448,12 +1438,15 @@ pub(crate) fn mcp_roundtrip(
         payload.push_str(line);
         payload.push('\n');
     }
-    let mut cmd = mcp_command(command, args);
-    cmd.envs(env)
+    // The shim matters: without `cmd.exe`, every npx-launched server probed as 0 tools on
+    // Windows. The caller draws the wait; a spawned child gets no indicator of its own.
+    let run = env.iter().fold(
+        ProgressRunner::quiet(command, args).windows_shim(),
+        |run, (key, val)| run.env(key, val),
+    );
+    let mut child = run
         .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null());
-    let mut child = cmd
+        .stderr(Stdio::null())
         .spawn()
         .map_err(|e| format!("server failed to start: {e}"))?;
     let mut stdin = child.stdin.take();
