@@ -65,17 +65,11 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T525 | in progress | P2 | 3 | 0% | MiMo / mimo |
 | T526 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T527 | in progress | P2 | 3 | 0% | MiMo / mimo |
-| T660.2 | todo | P1 | 3 | 0% | |
 | T660.4 | in progress | P1 | 3 | 0% | Claude Code / claude-opus-5-5 |
 | T660.5 | in progress | P2 | 3 | 0% | Claude Code / claude-opus-5-5 |
 
 
 
-### T660.2. Every project-root caller goes through the T660.1 method
-
-Needs T660.1. Switch every caller to `ProjectRoot` and say explicitly whether it wants `checkout` or `main`: `layers.rs` `.rtok.toml` layer (`checkout`: each worktree reads its own checked-out file), `agents/command.rs --project`, `plugins/checkpoint.rs`, `guard/grep_symbol.rs`, `memory/files.rs::project_root`, `tasks/run.rs` (both sites), `model/agents.rs::worktree_label`. Delete `git_root` and the duplicate in `src/doctor.rs`. `checkpoint::project_of_cx` returns the worktree basename today while `project_name` returns the main repo's name; it moves to `main` so a checkpoint made in a worktree files under the same project. `memory/files.rs::relative` uses `contain` so a symlink cannot point a note outside the root.
-
-Check: one test per changed site for a linked worktree; a test that the checkpoint project name is the same from the main checkout and from a worktree; a symlink-escape test for memory paths; `just check`.
 
 ### T660.4. Default worktree root `<project>/.rtok/worktrees`, `.rtok/` ignored
 
