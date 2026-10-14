@@ -1,11 +1,3 @@
-commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-Author: Dev <dev@example.com>
-Date:   Wed Sep 2 00:00:00 2026
-
-    T3.3: formatters
-
-commit bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
-Author: Dev <dev@example.com>
-Date:   Tue Sep 1 00:00:00 2026
-
-    T3.2: rules
+Dev · 2026
+aaaaaaa Sep 2 T3.3: formatters
+bbbbbbb Sep 1 T3.2: rules
