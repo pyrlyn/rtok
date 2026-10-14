@@ -69,7 +69,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T660.3 | todo | P1 | 3 | 0% | |
 | T660.4 | todo | P1 | 3 | 0% | |
 | T660.5 | todo | P2 | 3 | 0% | |
-| T665 | in progress | P0 | 2 | 10% | Claude Code / claude-opus-5-5 |
+| T665 | in progress | P0 | 2 | 80% | Claude Code / claude-opus-5-5 |
 
 
 
