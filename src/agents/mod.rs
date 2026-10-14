@@ -213,6 +213,59 @@ impl Mode {
     }
 }
 
+/// The `id`/`variants`/`readme` head of a host's `impl Agent`: `$id`, the folder's `VARIANTS`
+/// static and its `README.md`. One body (T663) so a new host does not copy the same nine lines.
+/// `include_str!` resolves against the invoking `mod.rs`, so each host reads its own README.
+macro_rules! agent_identity {
+    ($id:expr) => {
+        fn id(&self) -> &'static str {
+            $id
+        }
+
+        fn variants(&self) -> &'static [$crate::agents::Variant] {
+            &VARIANTS
+        }
+
+        fn readme(&self) -> &'static str {
+            include_str!("README.md")
+        }
+    };
+}
+pub(crate) use agent_identity;
+
+/// The `files`/`installed`/`apply` tail of an MCP-only host whose one file is `$path(cfg)` and
+/// whose entry `$register`/`$unregister` write: [`installed_mcp_only`] and [`apply_mcp_only`]
+/// behind the trait. One body (T663) instead of each such host's copy.
+macro_rules! mcp_only_file {
+    ($path:path, $register:path, $unregister:path) => {
+        fn files(
+            &self,
+            cfg: &$crate::config::Config,
+            _kind: $crate::agents::Kind,
+        ) -> Vec<std::path::PathBuf> {
+            vec![$path(cfg)]
+        }
+
+        fn installed(
+            &self,
+            cfg: &$crate::config::Config,
+            _kind: $crate::agents::Kind,
+        ) -> Vec<&'static str> {
+            $crate::agents::installed_mcp_only(&$path(cfg))
+        }
+
+        fn apply(
+            &self,
+            cfg: &$crate::config::Config,
+            _kind: $crate::agents::Kind,
+            mode: $crate::agents::Mode,
+        ) -> anyhow::Result<Vec<String>> {
+            $crate::agents::apply_mcp_only(cfg, mode, $register, $unregister)
+        }
+    };
+}
+pub(crate) use mcp_only_file;
+
 /// The contract every host folder implements. The generic [`run`] loop, [`list`] and
 /// `rtok doctor` know nothing else about a host.
 pub trait Agent: Sync {
@@ -616,6 +669,14 @@ impl ModuleState {
         }
     }
 
+    fn short(self) -> &'static str {
+        match self {
+            ModuleState::Installed => "yes",
+            ModuleState::NotInstalled => "no",
+            ModuleState::NotSupported => "n/a",
+        }
+    }
+
     fn word(self) -> &'static str {
         match self {
             ModuleState::Installed => "installed",
@@ -657,6 +718,15 @@ pub fn module_lines(rows: &[ModuleRow], indent: &str, console: bool) -> String {
             row.state.line(indent, &text, console)
         })
         .collect()
+}
+
+/// `hooks=yes mcp=no proxy=n/a plugin=no`: [`module_lines`] on one line without the notes.
+/// The notes repeat across every host variant and are what outgrew the AI report (T664).
+pub fn module_summary(rows: &[ModuleRow]) -> String {
+    rows.iter()
+        .map(|row| format!("{}={}", row.name, row.state.short()))
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// The modules an install should leave behind: every `Yes` module (`mcp` only with
@@ -2030,6 +2100,24 @@ pub(crate) fn assert_stdio_mcp_roundtrip(
     let root: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
     assert!(root["mcpServers"]["rtok"].is_null(), "{root}");
     assert_eq!(root["mcpServers"]["foreign"]["command"], "x");
+}
+
+/// Shared assertion for an MCP-only host driven through [`Agent::apply`]: install reports
+/// `<key>.rtok`, a second install and a second remove change nothing, the first remove drops
+/// it. One body (T663) instead of every MCP-only host's copy.
+#[cfg(test)]
+pub(crate) fn assert_mcp_only_apply_idempotent(
+    agent: &dyn Agent,
+    cfg: &Config,
+    kind: Kind,
+    key: &str,
+) {
+    let apply = |mode| agent.apply(cfg, kind, mode).unwrap();
+    let lines = apply(Mode::Install);
+    assert!(lines[0].starts_with(&format!("{key}.rtok: ")), "{lines:?}");
+    assert_eq!(apply(Mode::Install), [NO_CHANGES]);
+    assert_eq!(apply(Mode::Remove), [format!("- {key}.rtok")]);
+    assert_eq!(apply(Mode::Remove), [NO_CHANGES]);
 }
 
 #[cfg(test)]

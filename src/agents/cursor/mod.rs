@@ -47,17 +47,7 @@ static VARIANTS: [Variant; 2] = [
 ];
 
 impl Agent for Cursor {
-    fn id(&self) -> &'static str {
-        "cursor"
-    }
-
-    fn variants(&self) -> &'static [Variant] {
-        &VARIANTS
-    }
-
-    fn readme(&self) -> &'static str {
-        include_str!("README.md")
-    }
+    super::agent_identity!("cursor");
 
     fn plugin_surfaces(&self) -> &'static [rtok_plugin_sdk::Surface] {
         &[rtok_plugin_sdk::Surface::Hook]

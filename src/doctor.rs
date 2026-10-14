@@ -204,18 +204,33 @@ impl SkillsAudit {
     }
 }
 
+/// How [`Report::render`] prints the per-host module rows.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Agents {
+    Plain,
+    Console,
+    Compact,
+}
+
 impl Report {
     /// The doctor text the reports and the TUI embed: plain, no marks or colour.
     pub fn to_text(&self) -> String {
-        self.render(false)
+        self.render(Agents::Plain)
     }
 
     /// `rtok doctor` on a console: [`Self::to_text`] with the module marks and colours.
     pub fn to_console(&self) -> String {
-        self.render(true)
+        self.render(Agents::Console)
     }
 
-    fn render(&self, console: bool) -> String {
+    /// The doctor text `rtok report --ai` embeds: [`Self::to_text`] with one line per host
+    /// variant. Four module lines per T413 host, each with its reason, pushed the section
+    /// past the default `[report] budget_tokens` (T664); `rtok doctor` keeps them.
+    pub fn to_compact_text(&self) -> String {
+        self.render(Agents::Compact)
+    }
+
+    fn render(&self, agents: Agents) -> String {
         let mut out = format!("hooks {}\n", self.hooks_total);
         for (ev, n) in &self.hooks_by_event {
             out.push_str(&format!("  {ev} {n}\n"));
@@ -264,10 +279,19 @@ impl Report {
                 out.push_str(&format!("  {line}\n"));
             }
         }
-        out.push_str("agents\n");
-        for a in &self.agents {
-            out.push_str(&format!("  {} ({})\n", a.host, a.kind));
-            out.push_str(&crate::agents::module_lines(&a.modules, "    ", console));
+        if agents == Agents::Compact {
+            out.push_str("agents (yes installed, no not installed, n/a not supported; reasons: rtok doctor)\n");
+            for a in &self.agents {
+                let summary = crate::agents::module_summary(&a.modules);
+                out.push_str(&format!("  {} ({}) {summary}\n", a.host, a.kind));
+            }
+        } else {
+            out.push_str("agents\n");
+            for a in &self.agents {
+                out.push_str(&format!("  {} ({})\n", a.host, a.kind));
+                let console = agents == Agents::Console;
+                out.push_str(&crate::agents::module_lines(&a.modules, "    ", console));
+            }
         }
         if let Some(audit) = &self.instructions {
             out.push_str("instructions\n");
