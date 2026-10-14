@@ -50,3 +50,14 @@
 - T660.3. Worktrees nested in the project do not leak into walks, gc or clean
 - T660.4. Default worktree root `<project>/.rtok/worktrees`, `.rtok/` ignored
 - T660.5. `rtok worktree migrate` moves worktrees into the configured root
+- T661. rtk filter parity and `rtok discover`
+- T662. Match sqz formatter breadth without leaving the lossless path
+- T663. Push graph reference precision toward LSP-grade (serena)
+- T664. Review/blast-radius features from code-review-graph
+- T665. Broader graph queries (codebase-memory-mcp)
+- T666. Optional automatic memory extraction (claude-mem idea)
+- T667. Richer memory features from engram
+- T668. Opt-in semantic memory path (mem0 idea)
+- T669. Hybrid memory ranking and forgetting (graymatter)
+- T670. Read modes lean-ctx still has
+- T671. Memory admission gate (MemPalace idea)
