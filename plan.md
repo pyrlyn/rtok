@@ -961,3 +961,97 @@ The 14 portable ideas and where each landed:
 The tests leak their temp dirs into `$TMPDIR`: on the creator's Mac about 24,000 `rtok-mem-*` (`Runtime::in_memory` in `src/plugin.rs` creates one per call and never removes it), 6,300 `rtok-tui-*`, 2,000 `rtok-guard-*`, 1,300 `rtok-usage-*` and more. A directory that size makes `realpath` in it slow under load (T643). Each test helper that makes a temp dir removes it (a guard or `tempfile::TempDir`), `Runtime::in_memory` first.
 
 Check: a test shows a dropped `Runtime::in_memory` leaves no directory behind, and a full `just test` run adds no `rtok-*` entry to `$TMPDIR`.
+
+## Beat sqz, lean-ctx, token-optimizer and caveman per category (T672–T686)
+
+Source: `docs/research/competitors-techniques.md` (techniques, licenses, links). Every card: keep 100 % of hashes, paths and WARN/ERROR lines, never more tokens than raw, stderr and exit line kept on failure.
+
+### T672. all (link line)
+
+Best competitor: sqz `§ref§` ~13 tok. Design: one short id `[rtok 1a2b3c4d · 111 lines]`, expand by prefix.
+
+Check: #1076 harness (`bench/c14`) shows −75 tok/call on this category with full anchor retention.
+
+### T673. grep 2260, git grep 452, rg
+
+Best competitor: t-o 89.7 %, lean-ctx 89.6 %. Design: path printed once; matches as `line:text`; collapse common indentation; trim match text around the hit to ±60 chars keeping the match itself; per-file cap by match budget with `+N more (expand)`; files sorted by path (stable) not count; keep 100 % paths.
+
+Check: #1076 harness (`bench/c14`) shows ≥ 91 %, 100 % paths on this category with full anchor retention.
+
+### T674. sed 2119 (`sed -n a,bp f`), cat 950, head 35, tail 155, awk
+
+Best competitor: lean-ctx 91.4 % (`read` rewrite). Design: detect range-print of a file: emit numbered range only once per session (session dedup by content hash, re-read → `unchanged since <id>`, changed → unified diff of the range); for full source files without range: signatures + elided bodies with line spans.
+
+Check: #1076 harness (`bench/c14`) shows ≥ 93 % on `cat` source; re-read ≥ 95 % on this category with full anchor retention.
+
+### T675. python3 1545
+
+Best competitor: none specialised. Design: detect pytest/unittest/traceback output: keep the full last traceback, collapse repeated frames, summary line; JSON stdout → TOON (#1078).
+
+Check: #1076 harness (`bench/c14`) shows ≥ t-o pytest (564→115) on this category with full anchor retention.
+
+### T676. gh 744
+
+Best competitor: lean-ctx gh.rs. Design: `gh pr/issue view`: drop empty fields, body markdown whitespace collapse; `gh run view --log`: per-step errors only; `gh pr checks`: only non-pass rows + counts; `--json` → TOON.
+
+Check: #1076 harness (`bench/c14`) shows +20 pp vs current head/tail on this category with full anchor retention.
+
+### T677. mise 660
+
+Best competitor: lean-ctx mise.rs. Design: drop install/progress lines, keep task header + failing task output; `mise run` = inner command formatter.
+
+Check: #1076 harness (`bench/c14`) shows ≥ lean-ctx on this category with full anchor retention.
+
+### T678. for 570, until 231, while
+
+Best competitor: caveman repetition. Design: loop output: normalise numbers/ids per line, collapse runs of same-shape lines into `shape ×N (vals: a..b)`; never collapse lines with error words.
+
+Check: #1076 harness (`bench/c14`) shows ≥ 80 % on polling loops on this category with full anchor retention.
+
+### T679. ls 386
+
+Best competitor: lean-ctx 66.6 %. Design: ls -l → `name size` with dirs first, drop perms unless non-default (`x` bit, symlink target kept as `a -> b`); group by extension when > 30 entries.
+
+Check: #1076 harness (`bench/c14`) shows ≥ 72 % (= rtk) on this category with full anchor retention.
+
+### T680. git status 297
+
+Best competitor: lean-ctx 40.5 %. Design: one line per section with paths grouped by dir (`src/plugins/cmd/{a,b}.rs`), sigils, drop git hints; branch + ahead/behind.
+
+Check: #1076 harness (`bench/c14`) shows ≥ 60 % (rtk 62.5 %) on this category with full anchor retention.
+
+### T681. git diff 272, git show 262
+
+Best competitor: t-o 97.9 % / sqz 44.4 %. Design: two tiers: ≤ budget → drop `index`, context 1, fold unchanged runs, strip common indent; > budget → per-file `path +A -D` table and hunk headers with function names, full hunks only for the N smallest files; 100 % paths always.
+
+Check: #1076 harness (`bench/c14`) shows ≥ 80 % big diff with 100 % paths (t-o keeps 51 %) on this category with full anchor retention.
+
+### T682. git log 174
+
+Best competitor: — (rtok wins after #1079). Design: keep #1079; add `[N commits, +A/-D]`; drop Author when all equal.
+
+Check: #1076 harness (`bench/c14`) shows keep lead on this category with full anchor retention.
+
+### T683. tail 155, cat *.log
+
+Best competitor: lean-ctx 87.4 % (rtok 94.5 %). Design: caveman-style field summary on collapsed runs: constant logfmt keys printed once.
+
+Check: #1076 harness (`bench/c14`) shows keep lead, +2 pp on this category with full anchor retention.
+
+### T684. wc 102, cargo test/build/clippy
+
+Best competitor: rtk / sqz. Design: wc: drop padding, keep `total`; cargo: #1077 + group warnings by lint code `unused_imports ×12 (files…)`.
+
+Check: #1076 harness (`bench/c14`) shows ≥ rtk on this category with full anchor retention.
+
+### T685. find 33
+
+Best competitor: rtok leads. Design: keep dir grouping but print full paths for ≤ 50 hits so the anchor check passes.
+
+Check: #1076 harness (`bench/c14`) shows 100 % paths, ≥ 69 % on this category with full anchor retention.
+
+### T686. MCP tool catalogs
+
+Best competitor: caveman 12–29 %. Design: `rtok mcp` proxy: first sentence of descriptions, drop default/examples that duplicate type, enum compaction; recovery via archive.
+
+Check: #1076 harness (`bench/c14`) shows ≥ 30 % on this category with full anchor retention.
