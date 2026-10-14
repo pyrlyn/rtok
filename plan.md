@@ -66,7 +66,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T526 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T527 | in progress | P2 | 3 | 0% | MiMo / mimo |
 | T660.2 | todo | P1 | 3 | 0% | |
-| T660.5 | in progress | P2 | 3 | 0% | Claude Code / claude-opus-5-5 |
 
 
 
@@ -75,14 +74,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 Needs T660.1. Switch every caller to `ProjectRoot` and say explicitly whether it wants `checkout` or `main`: `layers.rs` `.rtok.toml` layer (`checkout`: each worktree reads its own checked-out file), `agents/command.rs --project`, `plugins/checkpoint.rs`, `guard/grep_symbol.rs`, `memory/files.rs::project_root`, `tasks/run.rs` (both sites), `model/agents.rs::worktree_label`. Delete `git_root` and the duplicate in `src/doctor.rs`. `checkpoint::project_of_cx` returns the worktree basename today while `project_name` returns the main repo's name; it moves to `main` so a checkpoint made in a worktree files under the same project. `memory/files.rs::relative` uses `contain` so a symlink cannot point a note outside the root.
 
 Check: one test per changed site for a linked worktree; a test that the checkpoint project name is the same from the main checkout and from a worktree; a symlink-escape test for memory paths; `just check`.
-
-### T660.5. `rtok worktree migrate` moves worktrees into the configured root
-
-Needs T660.4. Moves this repository's worktrees that live outside the configured root to `<root>/<repo>-<task>` with `git worktree move`, keeping lock and claim records in step. Dry run without `--yes`. Skips, with a reason: main, the worktree holding the cwd, a worktree locked or claimed by another agent or by a live session, a worktree with submodules (`git worktree move` refuses them), a target that already exists. CLI only; new-command gates (trycmd fence, `surface_parity`, `config_coverage`). Docs with T660.4's pages.
-
-Check: tests on a temp repo for move, each skip reason and dry run; lock and claim follow the move; `just check`.
-
-Plan: (1) `src/worktree/migrate.rs`: `plan` lists this repository's worktrees outside the resolved root, each with a target or a skip reason; `apply` runs `git worktree move`, rewrites the lock text and moves the store's claim and pending rows to the new path. (2) CLI `rtok worktree migrate [--yes] [--json]`, a dry run without `--yes`. (3) New-command gates: trycmd fence, `surface_parity`, `config_coverage`, man page. (4) Docs beside T660.4's pages. (5) `tests/worktree.rs` cases from Check; `just check`.
 
 **Source audit (T530).**
 
