@@ -28,6 +28,14 @@ Competitor: [caveman](https://github.com/JuliusBrussee/caveman) · category: Com
 
 **rtok is better on correctness and on its fixture bench.** caveman's lever is real but small in independent measurement and its compressor has a known code-corruption bug.
 
+## Savings (both sides)
+
+Sourced figures only. If a side has no number for that case, the cell is `no data` — never invented.
+
+| Case | rtok saved | competitor saved | Source |
+|---|---|---|---|
+| (no paired sourced savings in rtok docs for this tool) | no data | no data | — |
+
 ## Existing numbers
 
 Vendor figures are claims unless the source says *measured*.
@@ -40,6 +48,19 @@ Vendor figures are claims unless the source says *measured*.
 
 ## Own measurements
 
-Not measured. No script in this pass.
+Numbers from the Python harness are **pending until a real run**. Do not treat empty cells as zeros.
 
-Feasible later: The prose-compress slice is LLM-free and could be re-run in the container against caveman's own compressor on rtok's 17 fixtures; not written in this pass.
+<!-- competitor-bench:begin -->
+
+### Harness results (auto-generated)
+
+Status: `pending`. Numbers below stay pending until a real `python3 bench/competitors/run_all.py caveman` run (Colima/Docker `--cpus 4 --memory 8g`, or the manual `workflow_dispatch` job).
+
+| side | tokens saved |
+|---|---|
+| rtok | pending (no run yet) |
+| caveman | pending (no run yet) |
+
+Harness: [`bench/competitors/caveman/`](../../bench/competitors/caveman/) (`run.py` on the host, `Dockerfile`, `bench.py` inside the container; shared [`bench/competitors/_lib/`](../../bench/competitors/_lib/); entry point [`run_all.py`](../../bench/competitors/run_all.py)).
+
+<!-- competitor-bench:end -->

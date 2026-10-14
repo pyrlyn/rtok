@@ -24,6 +24,16 @@ Competitor: [MemPalace](https://github.com/MemPalace/mempalace) · category: Mem
 
 **rtok is better on recall fidelity; MemPalace has the admission gate rtok lacks.**
 
+**Gap to close:** competitor ahead on memory admission gate with embedding dedup. Tracked as [T671](../../plan.md) — make rtok beat this.
+
+## Savings (both sides)
+
+Sourced figures only. If a side has no number for that case, the cell is `no data` — never invented.
+
+| Case | rtok saved | competitor saved | Source |
+|---|---|---|---|
+| (no paired sourced savings in rtok docs for this tool) | no data | no data | — |
+
 ## Existing numbers
 
 Vendor figures are claims unless the source says *measured*.
@@ -35,6 +45,17 @@ Vendor figures are claims unless the source says *measured*.
 
 ## Own measurements
 
-Not measured, and no script: this cannot be benchmarked fairly under the rules of this suite (local, fixed Colima resources, no paid API keys, no invented numbers).
+Numbers from the Python harness are **pending until a real run**. Do not treat empty cells as zeros.
 
-Why: Its admission gate needs an embeddings model; the published numbers come from LongMemEval with model calls.
+<!-- competitor-bench:begin -->
+
+### Harness results (auto-generated)
+
+Status: `skipped`. Embedding-based admission; needs model/API.
+
+| side | tokens saved |
+|---|---|
+| rtok | no data |
+| mempalace | no data |
+
+<!-- competitor-bench:end -->

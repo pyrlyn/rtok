@@ -26,6 +26,16 @@ Competitor: [code-review-graph](https://github.com/tirth8205/code-review-graph) 
 
 **rtok is better on cost; code-review-graph has richer review features.**
 
+**Gap to close:** competitor ahead on richer review/blast-radius features (~30 MCP tools). Tracked as [T664](../../plan.md) — make rtok beat this.
+
+## Savings (both sides)
+
+Sourced figures only. If a side has no number for that case, the cell is `no data` — never invented.
+
+| Case | rtok saved | competitor saved | Source |
+|---|---|---|---|
+| (no paired sourced savings in rtok docs for this tool) | no data | no data | — |
+
 ## Existing numbers
 
 Vendor figures are claims unless the source says *measured*.
@@ -37,6 +47,19 @@ Vendor figures are claims unless the source says *measured*.
 
 ## Own measurements
 
-Not measured. No script in this pass.
+Numbers from the Python harness are **pending until a real run**. Do not treat empty cells as zeros.
 
-Feasible later: Index time / query latency / size are LLM-free; not written in this pass.
+<!-- competitor-bench:begin -->
+
+### Harness results (auto-generated)
+
+Status: `pending`. Numbers below stay pending until a real `python3 bench/competitors/run_all.py code-review-graph` run (Colima/Docker `--cpus 4 --memory 8g`, or the manual `workflow_dispatch` job).
+
+| side | tokens saved |
+|---|---|
+| rtok | pending (no run yet) |
+| code-review-graph | pending (no run yet) |
+
+Harness: [`bench/competitors/code-review-graph/`](../../bench/competitors/code-review-graph/) (`run.py` on the host, `Dockerfile`, `bench.py` inside the container; shared [`bench/competitors/_lib/`](../../bench/competitors/_lib/); entry point [`run_all.py`](../../bench/competitors/run_all.py)).
+
+<!-- competitor-bench:end -->

@@ -1,5 +1,8 @@
 # rtok vs Anthropic native features
 
+> **Anthropic native features are not a competitor of rtok because they are host platform capabilities (prompt cache, context editing, memory tool) that rtok is designed to work with.**
+
+
 Competitor: [Anthropic native features](https://docs.anthropic.com/) · category: Platform · sources: rtok's own docs at `de96106a9` (2026-10-14) unless a URL is given.
 
 ## RTOK vs Anthropic native features
@@ -24,6 +27,14 @@ Competitor: [Anthropic native features](https://docs.anthropic.com/) · category
 
 **Use both.** The platform is what every tool competes with; rtok's job is to not fight it.
 
+## Savings (both sides)
+
+Sourced figures only. If a side has no number for that case, the cell is `no data` — never invented.
+
+| Case | rtok saved | competitor saved | Source |
+|---|---|---|---|
+| (no paired sourced savings in rtok docs for this tool) | no data | no data | — |
+
 ## Existing numbers
 
 Vendor figures are claims unless the source says *measured*.
@@ -35,6 +46,17 @@ Vendor figures are claims unless the source says *measured*.
 
 ## Own measurements
 
-Not measured, and no script: this cannot be benchmarked fairly under the rules of this suite (local, fixed Colima resources, no paid API keys, no invented numbers).
+Numbers from the Python harness are **pending until a real run**. Do not treat empty cells as zeros.
 
-Why: Platform feature; measurable only on live API traffic.
+<!-- competitor-bench:begin -->
+
+### Harness results (auto-generated)
+
+Status: `skipped`. Platform features of the host; not a third-party tool to bench locally.
+
+| side | tokens saved |
+|---|---|
+| rtok | no data |
+| anthropic-native | no data |
+
+<!-- competitor-bench:end -->

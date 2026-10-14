@@ -31,6 +31,20 @@ Competitor: [rtk](https://github.com/rtk-ai/rtk) · category: Command-output fil
 
 **rtok is better overall for agent work; rtk is better at filter coverage.** rtk shrinks more command families out of the box, but it is lossy and its only independent bill measurement is neutral-to-negative. rtok keeps the raw output, measures every cut, and fits the cache-aware stack. Pick rtk if you only want the biggest shell-output filter set and accept lossy cuts (`docs/comparison.md` §7 says the same). The head-to-head token and latency numbers below are still pending.
 
+**Gap to close:** competitor ahead on filter coverage (~100+ filters vs rtok's 28 rule families). Tracked as [T661](../../plan.md) — make rtok beat this.
+
+## Savings (both sides)
+
+Sourced figures only. If a side has no number for that case, the cell is `no data` — never invented.
+
+| Case | rtok saved | competitor saved | Source |
+|---|---|---|---|
+| bash bytes cut (author corpus, 5,725 cmds) | no data | 40.4 % (1.1 M of 2.8 M bytes) | `research.md` §2 A/B (T9.2) |
+| claimed bash cut | no data | 60–90 % (claim) | `research.md` §2; rtk README |
+| agentic bill (JetBrains) | no data | +7.6 % to 0 % (measured, worse/neutral) | `research.md` §1, §7; `docs/comparison.md` §2 |
+| rtok hook p95 latency | 8.25 ms (overhead, not a cut %) | no data | `docs/comparison.md` §3 (Gate P17, 2026-09-09) |
+| formatter bytes `docker ps` | 3147→1190 bytes (~62 %) | no data | `research.md` §9.3 (T58.5) |
+
 ## Existing numbers
 
 Vendor figures are claims unless the source says *measured*.
@@ -46,32 +60,19 @@ Vendor figures are claims unless the source says *measured*.
 
 ## Own measurements
 
-Not run yet. The harness is written and committed, but on 2026-10-14 the host disk (`/System/Volumes/Data`) had 128 MiB free (100 % used), and the Colima VM failed to pull the base image with `input/output error`. No number is reported until the script runs.
+Numbers from the Python harness are **pending until a real run**. Do not treat empty cells as zeros.
 
-Harness: [`bench/competitors/rtk/`](../../bench/competitors/rtk/) (`run.sh` on the macOS host, `Dockerfile`, `bench.sh` inside the container; shared `bench/competitors/_lib/`).
+<!-- competitor-bench:begin -->
 
-What it measures, per command (same command three ways: raw, `rtk <cmd>`, `rtok run <cmd>`):
+### Harness results (auto-generated)
 
-- tokens of the output with tiktoken `o200k_base` (fixed tokenizer, pinned `tiktoken==0.12.0`), and the cut against raw;
-- wall-clock latency with hyperfine, 3 warm-ups + 30 runs, median and p95.
+Status: `pending`. Numbers below stay pending until a real `python3 bench/competitors/run_all.py rtk` run (Colima/Docker `--cpus 4 --memory 8g`, or the manual `workflow_dispatch` job).
 
-Commands: `git status` (fixed dirty tree), `git log -n 50`, `git log --stat -n 10`, `git diff`, `ls -la`, `find . -name *.rs`, `grep -rn "fn main"`, `cargo build --locked` (warm), `cargo test --locked` (warm).
-
-Fixture corpus: `BurntSushi/ripgrep` at tag `14.1.1` (the commit SHA is written to `versions.txt` on each run), built once in the image so cargo replays are warm; container runs with `--network none`.
-
-Note: rtok archives the raw output on every call (the lossless path), so its latency includes that write; rtk does not archive.
-
-### Environment (to be filled from `results/<run>/env.txt` and `versions.txt` on the first run)
-
-| Item | Value |
+| side | tokens saved |
 |---|---|
-| Host | Mac15,9, Apple M3 Max, 64 GiB RAM (`sysctl hw.model machdep.cpu.brand_string hw.memsize`, 2026-10-14) |
-| Colima | v0.10.3 (git 00f6c297), profile `rtok-bench`, VM type `vz`, aarch64, runtime docker |
-| VM | 4 CPUs, 8 GiB memory, 60 GiB disk |
-| Container | `docker run --cpus 4 --memory 8g --memory-swap 8g --network none` |
-| Image | `rust:1.98.1-bookworm`, resolved to a digest by `run.sh` (recorded as `bench.base` label) |
-| rtok | this checkout, `cargo build --release --locked --bin rtok`, default features, `RUSTFLAGS` empty, `CARGO_INCREMENTAL=0` |
-| rtk | release `v1.0.1`, `rtk-aarch64-unknown-linux-gnu.tar.gz`, sha256 checked against `checksums.txt` |
-| Rust | 1.98.1 (the `mise.toml` pin) |
-| Runs | 30 per command per tool, 3 warm-ups |
-| Results | not yet run |
+| rtok | pending (no run yet) |
+| rtk | pending (no run yet) |
+
+Harness: [`bench/competitors/rtk/`](../../bench/competitors/rtk/) (`run.py` on the host, `Dockerfile`, `bench.py` inside the container; shared [`bench/competitors/_lib/`](../../bench/competitors/_lib/); entry point [`run_all.py`](../../bench/competitors/run_all.py)).
+
+<!-- competitor-bench:end -->

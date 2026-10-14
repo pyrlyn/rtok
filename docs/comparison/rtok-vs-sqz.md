@@ -31,6 +31,17 @@ Competitor: [sqz](https://github.com/ojuschugh1/sqz) · category: Command-output
 
 **Close; rtok is better as a whole system, sqz has the richer filter set.** Both are lossless Rust filters. rtok wins on surfaces and measurement and has since adopted sqz's dedup, JSON and table ideas; sqz still covers more command families. No independent numbers exist for either on a shared corpus.
 
+**Gap to close:** competitor ahead on richer formatter set (45+) and stack-trace safe mode. Tracked as [T662](../../plan.md) — make rtok beat this.
+
+## Savings (both sides)
+
+Sourced figures only. If a side has no number for that case, the cell is `no data` — never invented.
+
+| Case | rtok saved | competitor saved | Source |
+|---|---|---|---|
+| avg compression (self-reported) | no data | 24.7 % over 3,003 compressions | `research.md` §11 |
+| same-session SHA-256 repeats (gate for T65.1) | 1.9 % of result bytes (924 sessions) | no data | `research.md` §11 |
+
 ## Existing numbers
 
 Vendor figures are claims unless the source says *measured*.
@@ -43,6 +54,19 @@ Vendor figures are claims unless the source says *measured*.
 
 ## Own measurements
 
-Not measured. No script in this pass.
+Numbers from the Python harness are **pending until a real run**. Do not treat empty cells as zeros.
 
-Feasible later: Same harness shape as `rtk` (the command set and fixture corpus can be reused); not written in this pass because sqz's CLI invocation and Linux release artefacts have not been checked yet.
+<!-- competitor-bench:begin -->
+
+### Harness results (auto-generated)
+
+Status: `pending`. Numbers below stay pending until a real `python3 bench/competitors/run_all.py sqz` run (Colima/Docker `--cpus 4 --memory 8g`, or the manual `workflow_dispatch` job).
+
+| side | tokens saved |
+|---|---|
+| rtok | pending (no run yet) |
+| sqz | pending (no run yet) |
+
+Harness: [`bench/competitors/sqz/`](../../bench/competitors/sqz/) (`run.py` on the host, `Dockerfile`, `bench.py` inside the container; shared [`bench/competitors/_lib/`](../../bench/competitors/_lib/); entry point [`run_all.py`](../../bench/competitors/run_all.py)).
+
+<!-- competitor-bench:end -->

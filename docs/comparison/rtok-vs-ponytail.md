@@ -24,6 +24,14 @@ Competitor: [ponytail](https://github.com/DietrichGebert/ponytail) · category: 
 
 **Same idea; rtok's version wins its fixture bench, neither has a live bill number.**
 
+## Savings (both sides)
+
+Sourced figures only. If a side has no number for that case, the cell is `no data` — never invented.
+
+| Case | rtok saved | competitor saved | Source |
+|---|---|---|---|
+| (no paired sourced savings in rtok docs for this tool) | no data | no data | — |
+
 ## Existing numbers
 
 Vendor figures are claims unless the source says *measured*.
@@ -35,6 +43,17 @@ Vendor figures are claims unless the source says *measured*.
 
 ## Own measurements
 
-Not measured, and no script: this cannot be benchmarked fairly under the rules of this suite (local, fixed Colima resources, no paid API keys, no invented numbers).
+Numbers from the Python harness are **pending until a real run**. Do not treat empty cells as zeros.
 
-Why: Its effect is on model output; measuring it needs live model calls.
+<!-- competitor-bench:begin -->
+
+### Harness results (auto-generated)
+
+Status: `skipped`. Prompt-only; live bill needs a model.
+
+| side | tokens saved |
+|---|---|
+| rtok | no data |
+| ponytail | no data |
+
+<!-- competitor-bench:end -->

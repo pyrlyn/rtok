@@ -1,5 +1,8 @@
 # rtok vs OpenViking
 
+> **openviking is not a competitor of rtok because it is a multi-level context database, not a local agent hook/MCP/proxy token-reduction stack.**
+
+
 Competitor: [OpenViking](https://github.com/volcengine/OpenViking) · category: Memory / context DB · sources: rtok's own docs at `de96106a9` (2026-10-14) unless a URL is given.
 
 ## RTOK vs OpenViking
@@ -25,6 +28,14 @@ Competitor: [OpenViking](https://github.com/volcengine/OpenViking) · category: 
 
 **Different scope; no shared evidence.**
 
+## Savings (both sides)
+
+Sourced figures only. If a side has no number for that case, the cell is `no data` — never invented.
+
+| Case | rtok saved | competitor saved | Source |
+|---|---|---|---|
+| (no paired sourced savings in rtok docs for this tool) | no data | no data | — |
+
 ## Existing numbers
 
 Vendor figures are claims unless the source says *measured*.
@@ -36,6 +47,17 @@ Vendor figures are claims unless the source says *measured*.
 
 ## Own measurements
 
-Not measured, and no script: this cannot be benchmarked fairly under the rules of this suite (local, fixed Colima resources, no paid API keys, no invented numbers).
+Numbers from the Python harness are **pending until a real run**. Do not treat empty cells as zeros.
 
-Why: Session compression needs LLM calls.
+<!-- competitor-bench:begin -->
+
+### Harness results (auto-generated)
+
+Status: `skipped`. Multi-level context DB with session compression; no shared offline metric.
+
+| side | tokens saved |
+|---|---|
+| rtok | no data |
+| openviking | no data |
+
+<!-- competitor-bench:end -->

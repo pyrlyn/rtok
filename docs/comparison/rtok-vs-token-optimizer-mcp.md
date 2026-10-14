@@ -25,6 +25,14 @@ Competitor: [token-optimizer-mcp](https://github.com/ooples/token-optimizer-mcp)
 
 **Undecided on cost; rtok is leaner.** token-optimizer-mcp has the better published evidence (a holdout with quality), rtok has the far smaller fixed per-turn cost. A live A/B would decide it; neither side has one on a shared corpus.
 
+## Savings (both sides)
+
+Sourced figures only. If a side has no number for that case, the cell is `no data` — never invented.
+
+| Case | rtok saved | competitor saved | Source |
+|---|---|---|---|
+| (no paired sourced savings in rtok docs for this tool) | no data | no data | — |
+
 ## Existing numbers
 
 Vendor figures are claims unless the source says *measured*.
@@ -35,6 +43,17 @@ Vendor figures are claims unless the source says *measured*.
 
 ## Own measurements
 
-Not measured, and no script: this cannot be benchmarked fairly under the rules of this suite (local, fixed Colima resources, no paid API keys, no invented numbers).
+Numbers from the Python harness are **pending until a real run**. Do not treat empty cells as zeros.
 
-Why: Its own claim is a live-model holdout; reproducing it needs paid API calls, which this bench does not use.
+<!-- competitor-bench:begin -->
+
+### Harness results (auto-generated)
+
+Status: `skipped`. Needs a live MCP client plus LLM turns; no shared offline corpus.
+
+| side | tokens saved |
+|---|---|
+| rtok | no data |
+| token-optimizer-mcp | no data |
+
+<!-- competitor-bench:end -->

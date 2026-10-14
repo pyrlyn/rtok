@@ -1,5 +1,8 @@
 # rtok vs bifrost
 
+> **bifrost is not a competitor of rtok because it is an LLM gateway with semantic cache, not a local agent token-reduction stack.**
+
+
 Competitor: [bifrost](https://github.com/maximhq/bifrost) · category: Gateways · sources: rtok's own docs at `de96106a9` (2026-10-14) unless a URL is given.
 
 ## RTOK vs bifrost
@@ -25,6 +28,14 @@ Competitor: [bifrost](https://github.com/maximhq/bifrost) · category: Gateways 
 
 **Different products.** For routing use bifrost; for cutting coding-agent tokens rtok. Its semantic cache should stay off for agents.
 
+## Savings (both sides)
+
+Sourced figures only. If a side has no number for that case, the cell is `no data` — never invented.
+
+| Case | rtok saved | competitor saved | Source |
+|---|---|---|---|
+| (no paired sourced savings in rtok docs for this tool) | no data | no data | — |
+
 ## Existing numbers
 
 Vendor figures are claims unless the source says *measured*.
@@ -36,6 +47,19 @@ Vendor figures are claims unless the source says *measured*.
 
 ## Own measurements
 
-Not measured, and no script: this cannot be benchmarked fairly under the rules of this suite (local, fixed Colima resources, no paid API keys, no invented numbers).
+Numbers from the Python harness are **pending until a real run**. Do not treat empty cells as zeros.
 
-Why: A gateway's value is routing and caching of live provider calls; no LLM-free workload compares it with rtok.
+<!-- competitor-bench:begin -->
+
+### Harness results (auto-generated)
+
+Status: `skipped`. Numbers below are from the last `bench/competitors/run_all.py` run; until a real run exists they stay pending.
+
+Skipped: Gateway/semantic-cache product; not a local token-reduction tool on a fixed corpus.
+
+| side | tokens saved |
+|---|---|
+| rtok | no data |
+| bifrost | no data |
+
+<!-- competitor-bench:end -->

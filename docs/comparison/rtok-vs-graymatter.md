@@ -24,6 +24,16 @@ Competitor: [graymatter](https://github.com/angelnicolasc/graymatter) · categor
 
 **Close; rtok has the stronger measured recall on its own bench, graymatter the richer ranking.** Never cite graymatter's 83 % as rtok's.
 
+**Gap to close:** competitor ahead on hybrid ranking and forgetting. Tracked as [T669](../../plan.md) — make rtok beat this.
+
+## Savings (both sides)
+
+Sourced figures only. If a side has no number for that case, the cell is `no data` — never invented.
+
+| Case | rtok saved | competitor saved | Source |
+|---|---|---|---|
+| (no paired sourced savings in rtok docs for this tool) | no data | no data | — |
+
 ## Existing numbers
 
 Vendor figures are claims unless the source says *measured*.
@@ -35,6 +45,19 @@ Vendor figures are claims unless the source says *measured*.
 
 ## Own measurements
 
-Not measured. No script in this pass.
+Numbers from the Python harness are **pending until a real run**. Do not treat empty cells as zeros.
 
-Feasible later: Its benchmark is LLM-free (`go run ./benchmarks/token_count`, keyword embedder); a side-by-side plant-and-recall is feasible but not written in this pass.
+<!-- competitor-bench:begin -->
+
+### Harness results (auto-generated)
+
+Status: `pending`. Numbers below stay pending until a real `python3 bench/competitors/run_all.py graymatter` run (Colima/Docker `--cpus 4 --memory 8g`, or the manual `workflow_dispatch` job).
+
+| side | tokens saved |
+|---|---|
+| rtok | pending (no run yet) |
+| graymatter | pending (no run yet) |
+
+Harness: [`bench/competitors/graymatter/`](../../bench/competitors/graymatter/) (`run.py` on the host, `Dockerfile`, `bench.py` inside the container; shared [`bench/competitors/_lib/`](../../bench/competitors/_lib/); entry point [`run_all.py`](../../bench/competitors/run_all.py)).
+
+<!-- competitor-bench:end -->

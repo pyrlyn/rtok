@@ -27,6 +27,17 @@ Competitor: [serena](https://github.com/oraios/serena) · category: Code graphs 
 
 **serena is better at precision; rtok is better on cost.** Use serena when exact references matter more than ~1.5 K tokens per turn (`docs/comparison.md` §7).
 
+**Gap to close:** competitor ahead on LSP-grade symbol/reference precision. Tracked as [T663](../../plan.md) — make rtok beat this.
+
+## Savings (both sides)
+
+Sourced figures only. If a side has no number for that case, the cell is `no data` — never invented.
+
+| Case | rtok saved | competitor saved | Source |
+|---|---|---|---|
+| tool description tokens / turn | ~165 description tokens (7 ops) | ~1 494 description tokens (22 tools) | `docs/comparison.md` §2 MCP table |
+| reference recall | 0.351 → 0.924 after T387 | LSP-grade (no numeric in rtok docs) | `docs/comparison.md` §5; `research.md` §9.3 |
+
 ## Existing numbers
 
 Vendor figures are claims unless the source says *measured*.
@@ -39,6 +50,19 @@ Vendor figures are claims unless the source says *measured*.
 
 ## Own measurements
 
-Not measured. No script in this pass.
+Numbers from the Python harness are **pending until a real run**. Do not treat empty cells as zeros.
 
-Feasible later: Index time, query latency and index size on the pinned corpus are LLM-free; serena needs language servers in the image. Not written in this pass.
+<!-- competitor-bench:begin -->
+
+### Harness results (auto-generated)
+
+Status: `pending`. Numbers below stay pending until a real `python3 bench/competitors/run_all.py serena` run (Colima/Docker `--cpus 4 --memory 8g`, or the manual `workflow_dispatch` job).
+
+| side | tokens saved |
+|---|---|
+| rtok | pending (no run yet) |
+| serena | pending (no run yet) |
+
+Harness: [`bench/competitors/serena/`](../../bench/competitors/serena/) (`run.py` on the host, `Dockerfile`, `bench.py` inside the container; shared [`bench/competitors/_lib/`](../../bench/competitors/_lib/); entry point [`run_all.py`](../../bench/competitors/run_all.py)).
+
+<!-- competitor-bench:end -->

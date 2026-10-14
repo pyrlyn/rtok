@@ -1,5 +1,8 @@
 # rtok vs Backlog.md
 
+> **Backlog.md is not a competitor of rtok because it is a task/session coordination tool, not a token-reduction hook/MCP/proxy stack; rtok's docs treat it as an idea source (`research.md` §28).**
+
+
 Competitor: [Backlog.md](https://github.com/MrLesk/Backlog.md) · category: Tasks and session sync · sources: rtok's own docs at `de96106a9` (2026-10-14) unless a URL is given.
 
 ## RTOK vs Backlog.md
@@ -24,6 +27,14 @@ Competitor: [Backlog.md](https://github.com/MrLesk/Backlog.md) · category: Task
 
 **Not a token-reduction competitor; an idea source.** rtok's verdict on its features is in `research.md` §28.4; for Backlog.md the comparison is about coordination, which rtok has only partly shipped.
 
+## Savings (both sides)
+
+Sourced figures only. If a side has no number for that case, the cell is `no data` — never invented.
+
+| Case | rtok saved | competitor saved | Source |
+|---|---|---|---|
+| (no paired sourced savings in rtok docs for this tool) | no data | no data | — |
+
 ## Existing numbers
 
 Vendor figures are claims unless the source says *measured*.
@@ -35,6 +46,17 @@ Vendor figures are claims unless the source says *measured*.
 
 ## Own measurements
 
-Not measured, and no script: this cannot be benchmarked fairly under the rules of this suite (local, fixed Colima resources, no paid API keys, no invented numbers).
+Numbers from the Python harness are **pending until a real run**. Do not treat empty cells as zeros.
 
-Why: No shared metric with a token-reduction tool: these are coordination and session tools, and none of rtok's docs define a workload on which both could be timed or token-counted.
+<!-- competitor-bench:begin -->
+
+### Harness results (auto-generated)
+
+Status: `skipped`. Coordination/session tool; no shared token-reduction metric under this suite's rules.
+
+| side | tokens saved |
+|---|---|
+| rtok | no data |
+| backlog-md | no data |
+
+<!-- competitor-bench:end -->

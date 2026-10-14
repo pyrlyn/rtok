@@ -29,6 +29,17 @@ Competitor: [lean-ctx](https://github.com/yvgude/lean-ctx) · category: Read, se
 
 **rtok is better on this workload.** The per-turn fixed cost of lean-ctx is larger than what its read modes save here; rtok copies the read modes that paid off and keeps the per-turn cost small.
 
+**Gap to close:** competitor ahead on more read modes and a learned mode predictor. Tracked as [T670](../../plan.md) — make rtok beat this.
+
+## Savings (both sides)
+
+Sourced figures only. If a side has no number for that case, the cell is `no data` — never invented.
+
+| Case | rtok saved | competitor saved | Source |
+|---|---|---|---|
+| output tokens saved (author machine) | no data on same workload | 0 output saved | `research.md` §4 matrix |
+| fixed per-turn inject / description tokens | ~800 token budget; ~223 description tokens / 12 tools | ~3.0–3.1 K tokens/turn; ~697 description tokens / 12 tools | `docs/comparison.md` §2; `research.md` §9.1 |
+
 ## Existing numbers
 
 Vendor figures are claims unless the source says *measured*.
@@ -42,6 +53,19 @@ Vendor figures are claims unless the source says *measured*.
 
 ## Own measurements
 
-Not measured. No script in this pass.
+Numbers from the Python harness are **pending until a real run**. Do not treat empty cells as zeros.
 
-Feasible later: A fair bench needs an MCP client replaying a fixed read/search trace against both servers and counting result + description tokens; LLM-free and doable, not written in this pass.
+<!-- competitor-bench:begin -->
+
+### Harness results (auto-generated)
+
+Status: `pending`. Numbers below stay pending until a real `python3 bench/competitors/run_all.py lean-ctx` run (Colima/Docker `--cpus 4 --memory 8g`, or the manual `workflow_dispatch` job).
+
+| side | tokens saved |
+|---|---|
+| rtok | pending (no run yet) |
+| lean-ctx | pending (no run yet) |
+
+Harness: [`bench/competitors/lean-ctx/`](../../bench/competitors/lean-ctx/) (`run.py` on the host, `Dockerfile`, `bench.py` inside the container; shared [`bench/competitors/_lib/`](../../bench/competitors/_lib/); entry point [`run_all.py`](../../bench/competitors/run_all.py)).
+
+<!-- competitor-bench:end -->

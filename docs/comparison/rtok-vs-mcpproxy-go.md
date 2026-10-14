@@ -25,6 +25,14 @@ Competitor: [mcpproxy-go](https://github.com/smart-mcp-proxy/mcpproxy-go) · cat
 
 **Not ported; rtok's approach is better for its scope.** The honest saving (17–43 % on description bytes) is a slice of a 6.2 % slice, and host-native Tool Search covers much of it.
 
+## Savings (both sides)
+
+Sourced figures only. If a side has no number for that case, the cell is `no data` — never invented.
+
+| Case | rtok saved | competitor saved | Source |
+|---|---|---|---|
+| (no paired sourced savings in rtok docs for this tool) | no data | no data | — |
+
 ## Existing numbers
 
 Vendor figures are claims unless the source says *measured*.
@@ -36,6 +44,19 @@ Vendor figures are claims unless the source says *measured*.
 
 ## Own measurements
 
-Not measured. No script in this pass.
+Numbers from the Python harness are **pending until a real run**. Do not treat empty cells as zeros.
 
-Feasible later: Description-token counting over a fixed 45-tool corpus is LLM-free; not written in this pass.
+<!-- competitor-bench:begin -->
+
+### Harness results (auto-generated)
+
+Status: `pending`. Numbers below stay pending until a real `python3 bench/competitors/run_all.py mcpproxy-go` run (Colima/Docker `--cpus 4 --memory 8g`, or the manual `workflow_dispatch` job).
+
+| side | tokens saved |
+|---|---|
+| rtok | pending (no run yet) |
+| mcpproxy-go | pending (no run yet) |
+
+Harness: [`bench/competitors/mcpproxy-go/`](../../bench/competitors/mcpproxy-go/) (`run.py` on the host, `Dockerfile`, `bench.py` inside the container; shared [`bench/competitors/_lib/`](../../bench/competitors/_lib/); entry point [`run_all.py`](../../bench/competitors/run_all.py)).
+
+<!-- competitor-bench:end -->
