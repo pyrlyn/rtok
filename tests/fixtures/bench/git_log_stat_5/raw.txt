@@ -1,0 +1,98 @@
+commit 12ebeb972e2bea88bec939a9ca9b436db884de13
+Author: Ivan Tugay <listepo@gmail.com>
+Date:   Wed Oct 14 23:25:53 2026 +0300
+
+    feat: T660.3 nested worktrees do not leak into walks, gc or clean (#1072)
+    
+    A linked worktree nested in its project (under .rtok/worktrees) is another checkout: search, tree, the graph walk and the watcher skip it, gc and clean take the deepest worktree as current, origin names the rtok pool, and a new worktree's symbol index copies no rows under .rtok/. Submodules and nested clones stay walked.
+
+ crates/rtok-store/src/symbols.rs | 13 ++++++--
+ done.md                          | 14 +++++++++
+ plan.md                          | 13 --------
+ src/fs.rs                        | 25 +++++++++++++++
+ src/plugins/graph/index.rs       |  5 ++-
+ src/plugins/graph/walk.rs        | 36 +++++++++++++++++++++
+ src/plugins/graph/watch.rs       | 39 +++++++++++++++++++++++
+ src/plugins/read/search.rs       | 43 ++++++++++++++++++++++++-
+ src/testutil.rs                  | 23 ++++++++++++++
+ src/worktree/claim.rs            | 18 +++--------
+ src/worktree/clean.rs            |  6 ++--
+ src/worktree/gc.rs               |  6 ++--
+ src/worktree/mod.rs              | 18 +++++++++++
+ src/worktree/origin.rs           |  2 ++
+ tests/worktree.rs                | 68 ++++++++++++++++++++++++++++++++++++++++
+ todo.md                          |  1 -
+ 16 files changed, 293 insertions(+), 37 deletions(-)
+
+commit a6fcf2b71c44f8e49955b1eca2dfc9533340f4a5
+Author: Ivan Tugay <listepo@gmail.com>
+Date:   Wed Oct 14 22:58:32 2026 +0300
+
+    feat: T660.2 every project-root caller goes through ProjectRoot (#1070)
+    
+    The .rtok.toml layer, agents --project, checkpoint's legacy lookup, grep_symbol, memory files, rtok task, the doctor's instruction audit and worktree_label call ProjectRoot::find and take checkout; git_root and the doctor's copy are gone. memory/files.rs::relative passes paths through contain, so a symlink out of the project is no longer a project file.
+
+ crates/rtok-config/src/layers.rs | 52 ++++++++++++++++++++++++++++++++------
+ done.md                          | 11 ++++++++
+ plan.md                          |  7 ------
+ src/agents/command.rs            | 27 ++++++++++++++++++--
+ src/doctor.rs                    | 35 +++++++++++++++++---------
+ src/model/agents.rs              | 16 +++++++++++-
+ src/plugins/checkpoint.rs        | 25 ++++++++++++++++++-
+ src/plugins/guard/grep_symbol.rs | 19 ++++++++++++--
+ src/plugins/memory/files.rs      | 54 +++++++++++++++++++++++++++++++++++++---
+ src/tasks/run.rs                 | 32 +++++++++++++++++++++---
+ todo.md                          |  1 -
+ 11 files changed, 240 insertions(+), 39 deletions(-)
+
+commit de96106a9b5759fc348b81892b10d8bd82274966
+Author: Ivan Tugay <listepo@gmail.com>
+Date:   Wed Oct 14 22:28:06 2026 +0300
+
+    docs: claim T660.3, T660.4 and T660.5 (#1069)
+
+ plan.md | 12 +++++++++---
+ 1 file changed, 9 insertions(+), 3 deletions(-)
+
+commit 5c52c8f7d5fcd07234b7b5f4eded60e536b793de
+Author: Ivan Tugay <listepo@gmail.com>
+Date:   Wed Oct 14 15:48:20 2026 +0300
+
+    test(web): T661 deterministic graph overview and project link stories (#1047)
+    
+    * docs: T661 claim deterministic graph overview and project link stories
+    
+    * test(web): T661 deterministic graph overview and project link stories
+    
+    Projects > Link And Unlink failed when Stage3D.setScene threw on a scene
+    with no edge (fixed in #710 without a test) and the router rebuilt the
+    page under the play function. Whether the story drew 3D at all depended
+    on the graph view key other story files left in the shared localStorage.
+    
+    - Webgl Without Links: the 3D overview with no link draws; fails 2/2
+      with the #710 guard removed.
+    - preview beforeEach clears localStorage; First Visit Opens 3D fails
+      2/2 without the clear.
+    
+    * docs: T661 close deterministic graph overview and project link stories
+
+ done.md                                 | 14 ++++++++++
+ web/.storybook/preview.tsx              |  9 ++++++
+ web/src/pages/GraphOverview.stories.tsx | 49 ++++++++++++++++++++++++++++-----
+ 3 files changed, 65 insertions(+), 7 deletions(-)
+
+commit 15b3f457900bcfa91b0095aa0d66458a2f1f8516
+Author: Ivan Tugay <listepo@gmail.com>
+Date:   Wed Oct 14 15:08:18 2026 +0300
+
+    docs: refresh README and move details into docs/ (#1062)
+
+ README.md           | 421 ++++------------------------------------------------
+ docs/claude-code.md |  76 ++++++++++
+ docs/development.md |  65 ++++++++
+ docs/examples.md    | 143 ++++++++++++++++++
+ docs/install.md     |  81 ++++++++++
+ docs/measuring.md   |  43 ++++++
+ docs/overview.md    |   2 +-
+ docs/site.md        |   6 +-
+ 8 files changed, 441 insertions(+), 396 deletions(-)

@@ -1,0 +1,2 @@
+   Compiling rtok-log v0.0.1 (/fixture/crates/rtok-log)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.00s
