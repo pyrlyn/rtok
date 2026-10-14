@@ -52,7 +52,9 @@ Numbers from the Python harness are **pending until a real run**. Do not treat e
 
 ### Harness results (auto-generated)
 
-Status: `skipped`. Platform features of the host; not a third-party tool to bench locally.
+Status: `skipped`. Numbers below are from the last `bench/competitors/run_all.py` run; until a real run exists they stay pending.
+
+Skipped: Platform features of the host; not a third-party tool to bench locally.
 
 | side | tokens saved |
 |---|---|

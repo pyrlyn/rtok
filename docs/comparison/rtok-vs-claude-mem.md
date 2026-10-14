@@ -53,7 +53,9 @@ Numbers from the Python harness are **pending until a real run**. Do not treat e
 
 ### Harness results (auto-generated)
 
-Status: `skipped`. LLM extraction + vector store; needs paid API keys.
+Status: `skipped`. Numbers below are from the last `bench/competitors/run_all.py` run; until a real run exists they stay pending.
+
+Skipped: LLM extraction + vector store; needs paid API keys.
 
 | side | tokens saved |
 |---|---|

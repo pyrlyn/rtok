@@ -66,13 +66,77 @@ Numbers from the Python harness are **pending until a real run**. Do not treat e
 
 ### Harness results (auto-generated)
 
-Status: `pending`. Numbers below stay pending until a real `python3 bench/competitors/run_all.py rtk` run (Colima/Docker `--cpus 4 --memory 8g`, or the manual `workflow_dispatch` job).
+Status: `ok`. Numbers below are from the last `bench/competitors/run_all.py` run; until a real run exists they stay pending.
 
-| side | tokens saved |
+| side | tokens saved (vs raw) |
 |---|---|
-| rtok | pending (no run yet) |
-| rtk | pending (no run yet) |
+| rtok | 78.42 % |
+| rtk | 68.29 % |
 
-Harness: [`bench/competitors/rtk/`](../../bench/competitors/rtk/) (`run.py` on the host, `Dockerfile`, `bench.py` inside the container; shared [`bench/competitors/_lib/`](../../bench/competitors/_lib/); entry point [`run_all.py`](../../bench/competitors/run_all.py)).
+| case | raw tok | rtk tok | rtok tok | rtk saved | rtok saved |
+|---|---:|---:|---:|---:|---:|
+| `git status` | 117 | 31 | 152 | 73.5 % | -29.9 % |
+| `git log -n 50` | 5255 | 2095 | 326 | 60.1 % | 93.8 % |
+| `git log --stat -n 10` | 1029 | 1029 | 315 | 0.0 % | 69.4 % |
+| `git diff` | 160 | 118 | 222 | 26.2 % | -38.7 % |
+| `ls -la` | 670 | 223 | 670 | 66.7 % | 0.0 % |
+| `find . -name '*.rs' -not -path './target/*'` | 942 | 254 | 478 | 73.0 % | 49.3 % |
+| `grep -rn 'fn main' --include=*.rs .` | 421 | 421 | 421 | 0.0 % | 0.0 % |
+| `cargo build --locked` | 267 | 81 | 159 | 69.7 % | 40.4 % |
+| `cargo test --locked` | 4598 | 16 | 162 | 99.7 % | 96.5 % |
+| **total** | 13459 | 4268 | 2905 | 68.3 % | 78.4 % |
+
+| case | tool | runs | median ms | p95 ms |
+|---|---|---:|---:|---:|
+| `cargo_build_locked` | cargo | 30 | 23.54 | 25.23 |
+| `cargo_build_locked` | rtk | 30 | 26.93 | 28.15 |
+| `cargo_build_locked` | rtok | 30 | 30.35 | 31.65 |
+| `cargo_test_locked` | cargo | 30 | 917.31 | 924.78 |
+| `cargo_test_locked` | rtk | 30 | 923.41 | 935.16 |
+| `cargo_test_locked` | rtok | 30 | 929.53 | 941.04 |
+| `find_name_rs_not_path_target` | find | 30 | 2.13 | 2.70 |
+| `find_name_rs_not_path_target` | rtk | 30 | 5.85 | 6.28 |
+| `find_name_rs_not_path_target` | rtok | 30 | 6.60 | 7.01 |
+| `git_diff` | git | 30 | 1.16 | 1.37 |
+| `git_diff` | rtk | 30 | 5.36 | 6.02 |
+| `git_diff` | rtok | 30 | 6.07 | 7.71 |
+| `git_log_n_50` | git | 30 | 1.06 | 1.13 |
+| `git_log_n_50` | rtk | 30 | 3.70 | 4.16 |
+| `git_log_n_50` | rtok | 30 | 6.04 | 6.79 |
+| `git_log_stat_n_10` | git | 30 | 1.99 | 2.09 |
+| `git_log_stat_n_10` | rtk | 30 | 4.38 | 4.69 |
+| `git_log_stat_n_10` | rtok | 30 | 6.46 | 6.95 |
+| `git_status` | git | 30 | 1.53 | 1.62 |
+| `git_status` | rtk | 30 | 13.43 | 16.68 |
+| `git_status` | rtok | 30 | 15.05 | 19.04 |
+| `grep_rn_fn_main_include_rs` | grep | 30 | 3.88 | 4.92 |
+| `grep_rn_fn_main_include_rs` | rtk | 30 | 6.61 | 7.83 |
+| `grep_rn_fn_main_include_rs` | rtok | 30 | 8.76 | 9.78 |
+| `ls_la` | ls | 30 | 0.52 | 0.72 |
+| `ls_la` | rtk | 30 | 3.57 | 3.97 |
+| `ls_la` | rtok | 30 | 5.56 | 13.58 |
+
+Environment:
+
+```text
+platform: Darwin 27.0.0 arm64
+python: 3.12.15
+docker_run: --cpus 4 --memory 8g --memory-swap 8g
+image: rtokbench/rtk
+host_model: Mac15,9
+host_cpu: Apple M3 Max
+host_ncpu: 16
+host_ram_bytes: 68719476736
+macos: 27.0.1
+colima: colima version v0.10.3
+image_id: sha256:619f1aefcded01f808b50de961ec26558d9c5ef0a46d61bc970bb29ef67c3186
+base_image: rust@sha256:a8a5f0a1e5fe7dfe1d352591e4a1c7dd2c08fd70475cae872cf3458ba0df0546
+rtok: rtok 0.17.0 (78f63b381)
+rtk: rtk 1.0.1
+rustc: rustc 1.98.1 (48a229cea 2026-09-01)
+cargo: cargo 1.98.1 (797e8a9bc 2026-08-05)
+fixture_sha: 4649aa9700619f94cf9c66876e9549d83420e16c
+tokenizer: tiktoken o200k_base via /opt/tok/bin/python3
+```
 
 <!-- competitor-bench:end -->

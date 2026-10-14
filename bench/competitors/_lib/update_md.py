@@ -55,6 +55,9 @@ def render(summary: dict) -> str:
     md = summary.get("results_md")
     if md:
         lines += [md.rstrip(), ""]
+    env = summary.get("environment")
+    if env:
+        lines += ["Environment:", "", "```text", env.rstrip(), "```", ""]
     lines.append(END)
     return "\n".join(lines) + "\n"
 
@@ -91,6 +94,13 @@ def main() -> None:
         sibling = results.with_name("results.md")
         if sibling.is_file():
             summary["results_md"] = sibling.read_text(encoding="utf-8")
+        env_parts = []
+        for name in ("env.txt", "versions.txt"):
+            f = results.with_name(name)
+            if f.is_file():
+                env_parts.append(f.read_text(encoding="utf-8").rstrip())
+        if env_parts:
+            summary["environment"] = "\n".join(env_parts) + "\n"
     else:
         summary = {
             "competitor": slug,

@@ -60,13 +60,13 @@ Numbers from the Python harness are **pending until a real run**. Do not treat e
 
 ### Harness results (auto-generated)
 
-Status: `pending`. Numbers below stay pending until a real `python3 bench/competitors/run_all.py sqz` run (Colima/Docker `--cpus 4 --memory 8g`, or the manual `workflow_dispatch` job).
+Status: `skipped`. Numbers below are from the last `bench/competitors/run_all.py` run; until a real run exists they stay pending.
+
+Skipped: no installable CLI: `cargo install sqz` fails (crate sqz v0.1.0 has no binaries)
 
 | side | tokens saved |
 |---|---|
-| rtok | pending (no run yet) |
-| sqz | pending (no run yet) |
-
-Harness: [`bench/competitors/sqz/`](../../bench/competitors/sqz/) (`run.py` on the host, `Dockerfile`, `bench.py` inside the container; shared [`bench/competitors/_lib/`](../../bench/competitors/_lib/); entry point [`run_all.py`](../../bench/competitors/run_all.py)).
+| rtok | no data |
+| sqz | no data |
 
 <!-- competitor-bench:end -->

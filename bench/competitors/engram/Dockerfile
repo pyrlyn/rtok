@@ -1,5 +1,5 @@
 # Bench image for rtok vs engram. Build context = repository root.
-ARG BASE=rust:1.98.1-bookworm
+ARG BASE=rust:1.98.1-trixie
 FROM ${BASE}
 ARG BASE
 LABEL bench.base="${BASE}"

@@ -9,27 +9,30 @@
   },
   "sqz": {
     "category": "command-output-filters",
-    "measurable": true,
+    "measurable": false,
     "title": "sqz",
     "repo": "https://github.com/ojuschugh1/sqz",
     "ahead": "richer formatter set (45+) and stack-trace safe mode",
-    "plan": "T662"
+    "plan": "T662",
+    "skip_reason": "no installable CLI: `cargo install sqz` fails (crate sqz v0.1.0 has no binaries)"
   },
   "lean-ctx": {
     "category": "read-search-shell",
-    "measurable": true,
+    "measurable": false,
     "title": "lean-ctx",
     "repo": "https://github.com/yvgude/lean-ctx",
     "ahead": "more read modes and a learned mode predictor",
-    "plan": "T670"
+    "plan": "T670",
+    "skip_reason": "harness not implemented: image has no real install of the tool and the light bench only tokenizes its --help/stub output, so numbers would be meaningless"
   },
   "token-optimizer": {
     "category": "read-search-shell",
-    "measurable": true,
+    "measurable": false,
     "title": "token-optimizer",
     "repo": null,
     "ahead": null,
-    "plan": null
+    "plan": null,
+    "skip_reason": "harness not implemented: image has no real install of the tool and the light bench only tokenizes its --help/stub output, so numbers would be meaningless"
   },
   "token-optimizer-mcp": {
     "category": "read-search-shell",
@@ -51,11 +54,12 @@
   },
   "caveman": {
     "category": "compressing-proxies",
-    "measurable": true,
+    "measurable": false,
     "title": "caveman",
     "repo": "https://github.com/JuliusBrussee/caveman",
     "ahead": null,
-    "plan": null
+    "plan": null,
+    "skip_reason": "harness not implemented: image has no real install of the tool and the light bench only tokenizes its --help/stub output, so numbers would be meaningless"
   },
   "bifrost": {
     "category": "gateways",
@@ -69,43 +73,48 @@
   },
   "mcpproxy-go": {
     "category": "compressing-proxies",
-    "measurable": true,
+    "measurable": false,
     "title": "mcpproxy-go",
     "repo": "https://github.com/smart-mcp-proxy/mcpproxy-go",
     "ahead": null,
-    "plan": null
+    "plan": null,
+    "skip_reason": "harness not implemented: image has no real install of the tool and the light bench only tokenizes its --help/stub output, so numbers would be meaningless"
   },
   "serena": {
     "category": "code-graphs",
-    "measurable": true,
+    "measurable": false,
     "title": "serena",
     "repo": "https://github.com/oraios/serena",
     "ahead": "LSP-grade symbol/reference precision",
-    "plan": "T663"
+    "plan": "T663",
+    "skip_reason": "harness not implemented: image has no real install of the tool and the light bench only tokenizes its --help/stub output, so numbers would be meaningless"
   },
   "codegraph": {
     "category": "code-graphs",
-    "measurable": true,
+    "measurable": false,
     "title": "codegraph",
     "repo": null,
     "ahead": null,
-    "plan": null
+    "plan": null,
+    "skip_reason": "harness not implemented: image has no real install of the tool and the light bench only tokenizes its --help/stub output, so numbers would be meaningless"
   },
   "code-review-graph": {
     "category": "code-graphs",
-    "measurable": true,
+    "measurable": false,
     "title": "code-review-graph",
     "repo": null,
     "ahead": "richer review/blast-radius features (~30 MCP tools)",
-    "plan": "T664"
+    "plan": "T664",
+    "skip_reason": "harness not implemented: image has no real install of the tool and the light bench only tokenizes its --help/stub output, so numbers would be meaningless"
   },
   "codebase-memory-mcp": {
     "category": "code-graphs",
-    "measurable": true,
+    "measurable": false,
     "title": "codebase-memory-mcp",
     "repo": "https://github.com/DeusData/codebase-memory-mcp",
     "ahead": "broader Cypher-style graph queries",
-    "plan": "T665"
+    "plan": "T665",
+    "skip_reason": "harness not implemented: image has no real install of the tool and the light bench only tokenizes its --help/stub output, so numbers would be meaningless"
   },
   "graphify": {
     "category": "code-graphs",
@@ -119,19 +128,21 @@
   },
   "aider-repo-map": {
     "category": "code-graphs",
-    "measurable": true,
+    "measurable": false,
     "title": "aider-repo-map",
     "repo": null,
     "ahead": null,
-    "plan": null
+    "plan": null,
+    "skip_reason": "harness not implemented: image has no real install of the tool and the light bench only tokenizes its --help/stub output, so numbers would be meaningless"
   },
   "universal-ctags": {
     "category": "code-graphs",
-    "measurable": true,
+    "measurable": false,
     "title": "universal-ctags",
     "repo": null,
     "ahead": null,
-    "plan": null
+    "plan": null,
+    "skip_reason": "harness not implemented: image has no real install of the tool and the light bench only tokenizes its --help/stub output, so numbers would be meaningless"
   },
   "claude-mem": {
     "category": "memory",
@@ -144,11 +155,12 @@
   },
   "engram": {
     "category": "memory",
-    "measurable": true,
+    "measurable": false,
     "title": "engram",
     "repo": "https://github.com/Gentleman-Programming/engram",
     "ahead": "richer agent-written memory features (HTTP + MCP)",
-    "plan": "T667"
+    "plan": "T667",
+    "skip_reason": "harness not implemented: image has no real install of the tool and the light bench only tokenizes its --help/stub output, so numbers would be meaningless"
   },
   "mem0": {
     "category": "memory",
@@ -161,11 +173,12 @@
   },
   "graymatter": {
     "category": "memory",
-    "measurable": true,
+    "measurable": false,
     "title": "graymatter",
     "repo": "https://github.com/angelnicolasc/graymatter",
     "ahead": "hybrid ranking and forgetting",
-    "plan": "T669"
+    "plan": "T669",
+    "skip_reason": "harness not implemented: image has no real install of the tool and the light bench only tokenizes its --help/stub output, so numbers would be meaningless"
   },
   "openviking": {
     "category": "memory",
@@ -207,12 +220,13 @@
   },
   "toon": {
     "category": "formats",
-    "measurable": true,
+    "measurable": false,
     "title": "TOON",
     "repo": "https://github.com/toon-format/toon",
     "ahead": null,
     "plan": null,
-    "not_competitor": "TOON is not a competitor of rtok because rtok already applies the TOON format where it wins; it is a dependency/format, not an alternative stack."
+    "not_competitor": "TOON is not a competitor of rtok because rtok already applies the TOON format where it wins; it is a dependency/format, not an alternative stack.",
+    "skip_reason": "harness not implemented: image has no real install of the tool and the light bench only tokenizes its --help/stub output, so numbers would be meaningless"
   },
   "llmlingua-2": {
     "category": "formats",

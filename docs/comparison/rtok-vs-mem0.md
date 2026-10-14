@@ -51,7 +51,9 @@ Numbers from the Python harness are **pending until a real run**. Do not treat e
 
 ### Harness results (auto-generated)
 
-Status: `skipped`. Vector/LLM memory stack; typically needs Docker + Qdrant + API keys.
+Status: `skipped`. Numbers below are from the last `bench/competitors/run_all.py` run; until a real run exists they stay pending.
+
+Skipped: Vector/LLM memory stack; typically needs Docker + Qdrant + API keys.
 
 | side | tokens saved |
 |---|---|

@@ -13,7 +13,7 @@ from env import write_env
 CPUS = "4"
 MEMORY = "8g"
 PROFILE = os.environ.get("RTOKBENCH_PROFILE", "rtok-bench")
-BASE_TAG = os.environ.get("BASE_TAG", "rust:1.98.1-bookworm")
+BASE_TAG = os.environ.get("BASE_TAG", "rust:1.98.1-trixie")
 
 
 def run(argv: list[str], **kw) -> subprocess.CompletedProcess[str]:
@@ -21,9 +21,9 @@ def run(argv: list[str], **kw) -> subprocess.CompletedProcess[str]:
 
 
 def ensure_colima() -> None:
-    if sys.platform != "darwin":
+    if sys.platform != "darwin" or os.environ.get("DOCKER_HOST"):
         return
-    st = run(["colima", "status", "-p", PROFILE])
+    st = run(["colima", "status", "-p", PROFILE], cwd=str(Path.home()))
     if st.returncode == 0:
         return
     subprocess.run(
@@ -42,6 +42,7 @@ def ensure_colima() -> None:
             "vz",
         ],
         check=False,
+        cwd=str(Path.home()),
     )
     sock = Path.home() / ".colima" / PROFILE / "docker.sock"
     if sock.is_socket():
@@ -84,11 +85,16 @@ def main(slug: str) -> int:
     if build.returncode != 0:
         return build.returncode
     write_env(out, image)
+    # No bind mount: Colima/Docker Desktop only share some host paths, so a
+    # mount outside them silently lands inside the VM. Copy /out back instead.
+    name = f"rtokbench-{slug}-{out.name}"
+    run(["docker", "rm", "-f", name])
     docker_run = subprocess.run(
         [
             "docker",
             "run",
-            "--rm",
+            "--name",
+            name,
             "--cpus",
             CPUS,
             "--memory",
@@ -101,12 +107,14 @@ def main(slug: str) -> int:
             f"RUNS={os.environ.get('RUNS', '30')}",
             "-e",
             f"COMPETITOR={slug}",
-            "-v",
-            f"{out}:/out",
             image,
         ],
         check=False,
     )
+    cp = run(["docker", "cp", f"{name}:/out/.", str(out)])
+    if cp.returncode != 0:
+        print(cp.stderr, file=sys.stderr)
+    run(["docker", "rm", "-f", name])
     print(f"results: {out}")
     return docker_run.returncode
 

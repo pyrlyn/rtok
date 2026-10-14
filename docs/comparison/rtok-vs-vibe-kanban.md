@@ -52,7 +52,9 @@ Numbers from the Python harness are **pending until a real run**. Do not treat e
 
 ### Harness results (auto-generated)
 
-Status: `skipped`. Coordination/session tool; no shared token-reduction metric under this suite's rules.
+Status: `skipped`. Numbers below are from the last `bench/competitors/run_all.py` run; until a real run exists they stay pending.
+
+Skipped: Coordination/session tool; no shared token-reduction metric under this suite's rules.
 
 | side | tokens saved |
 |---|---|

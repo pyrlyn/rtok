@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import os
 import re
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -46,16 +47,15 @@ def key_for(case: str) -> str:
 
 
 def competitor_argv(case: str) -> list[str]:
-    parts = case.split()
-    return [COMPETITOR, *parts]
+    return [COMPETITOR, *shlex.split(case)]
 
 
 def rtok_argv(case: str) -> list[str]:
-    return ["rtok", "run", *case.split()]
+    return ["rtok", "run", *shlex.split(case)]
 
 
 def raw_argv(case: str) -> list[str]:
-    return case.split()
+    return shlex.split(case)
 
 
 def write_versions() -> None:
@@ -103,12 +103,13 @@ def maybe_hyperfine(case: str, key: str) -> None:
         return
     out = OUT / "hyperfine" / f"{key}.json"
     out.parent.mkdir(parents=True, exist_ok=True)
-    commands = [case, " ".join(competitor_argv(case)), " ".join(rtok_argv(case))]
+    commands = [shlex.join(raw_argv(case)), shlex.join(competitor_argv(case)), shlex.join(rtok_argv(case))]
     subprocess.run(
         [
             hf,
             "--style",
             "none",
+            "-N",
             "--warmup",
             "3",
             "--runs",
@@ -135,8 +136,8 @@ def main() -> int:
         "git log --stat -n 10",
         "git diff",
         "ls -la",
-        "find . -name *.rs -not -path ./target/*",
-        "grep -rn fn main --include=*.rs .",
+        "find . -name '*.rs' -not -path './target/*'",
+        "grep -rn 'fn main' --include=*.rs .",
         "cargo build --locked",
         "cargo test --locked",
     ]

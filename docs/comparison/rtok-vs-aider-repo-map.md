@@ -49,13 +49,13 @@ Numbers from the Python harness are **pending until a real run**. Do not treat e
 
 ### Harness results (auto-generated)
 
-Status: `pending`. Numbers below stay pending until a real `python3 bench/competitors/run_all.py aider-repo-map` run (Colima/Docker `--cpus 4 --memory 8g`, or the manual `workflow_dispatch` job).
+Status: `skipped`. Numbers below are from the last `bench/competitors/run_all.py` run; until a real run exists they stay pending.
+
+Skipped: harness not implemented: image has no real install of the tool and the light bench only tokenizes its --help/stub output, so numbers would be meaningless
 
 | side | tokens saved |
 |---|---|
-| rtok | pending (no run yet) |
-| aider-repo-map | pending (no run yet) |
-
-Harness: [`bench/competitors/aider-repo-map/`](../../bench/competitors/aider-repo-map/) (`run.py` on the host, `Dockerfile`, `bench.py` inside the container; shared [`bench/competitors/_lib/`](../../bench/competitors/_lib/); entry point [`run_all.py`](../../bench/competitors/run_all.py)).
+| rtok | no data |
+| aider-repo-map | no data |
 
 <!-- competitor-bench:end -->
