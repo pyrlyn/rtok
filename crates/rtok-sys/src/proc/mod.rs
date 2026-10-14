@@ -207,6 +207,7 @@ impl ProgressRunner {
     /// Start a child the caller owns. `Capture` pipes stdout and stderr without an indicator;
     /// `Detached` nulls them; `Inherit` shares ours.
     pub fn spawn(mut self) -> io::Result<Child> {
+        self.prepare(self.output != Output::Inherit);
         match self.output {
             Output::Stream => return Err(use_spawn("a streamed child")),
             Output::Capture => {
@@ -223,12 +224,12 @@ impl ProgressRunner {
         if let Some(stderr) = self.stderr.take() {
             self.cmd.stderr(stderr);
         }
-        self.prepare(self.output != Output::Inherit);
         self.cmd.spawn()
     }
 
-    /// Settings that wait for the last moment: the shim replaces the command, so stdin cannot be
-    /// applied to it earlier. `closed` is the stdin of a child nobody feeds.
+    /// Settings that wait for the last moment: the shim replaces the command and `Command` cannot
+    /// hand its stdio over, so stdin is applied here and stdout and stderr only after this.
+    /// `closed` is the stdin of a child nobody feeds.
     fn prepare(&mut self, closed: bool) {
         if self.shim && cfg!(windows) && needs_cmd_host(&self.cmd.get_program().to_string_lossy()) {
             self.cmd = via_cmd_host(&self.cmd);
@@ -241,8 +242,8 @@ impl ProgressRunner {
     }
 
     fn run_piped(mut self, cap: u64) -> io::Result<(Captured, u64)> {
-        self.cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
         self.prepare(true);
+        self.cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
         let mut child = self.cmd.spawn()?;
         let ind: Arc<dyn Indicator> = match self.progress {
             Progress::Off => Arc::new(Hidden),
@@ -530,6 +531,46 @@ fn echo(which: Stream, bytes: &[u8]) {
             .write_all(bytes)
             .and_then(|()| io::stderr().flush()),
     };
+}
+
+/// T276.3: a shimmed `.cmd` host once printed its `--version` straight to rtok's stdout, because
+/// the stdio set before the shim swapped the command was lost with it.
+#[cfg(all(test, windows))]
+mod windows_tests {
+    use super::*;
+
+    fn cmd_file(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("rtok-sys-shim-{name}-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("host.cmd");
+        std::fs::write(&file, "@echo off\r\necho shimmed %1\r\n").unwrap();
+        file
+    }
+
+    #[test]
+    fn a_shimmed_cmd_host_is_captured_not_printed() {
+        let file = cmd_file("run");
+        let got = ProgressRunner::quiet(&file, ["--version"])
+            .windows_shim()
+            .run()
+            .unwrap();
+        assert_eq!(
+            String::from_utf8_lossy(&got.stdout).trim(),
+            "shimmed --version"
+        );
+    }
+
+    #[test]
+    fn a_spawned_shimmed_cmd_host_writes_to_its_pipe() {
+        let file = cmd_file("spawn");
+        let got = ProgressRunner::quiet(&file, ["x"])
+            .windows_shim()
+            .spawn()
+            .unwrap()
+            .wait_with_output()
+            .unwrap();
+        assert_eq!(String::from_utf8_lossy(&got.stdout).trim(), "shimmed x");
+    }
 }
 
 #[cfg(all(test, unix))]
