@@ -47,17 +47,7 @@ static VARIANTS: [Variant; 1] = [Variant {
 // have no matcher (one there never fires).
 
 impl Agent for CommandCode {
-    fn id(&self) -> &'static str {
-        "commandcode"
-    }
-
-    fn variants(&self) -> &'static [Variant] {
-        &VARIANTS
-    }
-
-    fn readme(&self) -> &'static str {
-        include_str!("README.md")
-    }
+    super::agent_identity!("commandcode");
 
     fn shared(&self) -> bool {
         true
