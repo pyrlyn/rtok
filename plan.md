@@ -65,9 +65,9 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T525 | in progress | P2 | 3 | 0% | MiMo / mimo |
 | T526 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T527 | in progress | P2 | 3 | 0% | MiMo / mimo |
-| T660.3 | todo | P1 | 3 | 0% | |
-| T660.4 | todo | P1 | 3 | 0% | |
-| T660.5 | todo | P2 | 3 | 0% | |
+| T660.3 | in progress | P1 | 3 | 90% | Claude Code / claude-opus-5-5 |
+| T660.4 | in progress | P1 | 3 | 0% | Claude Code / claude-opus-5-5 |
+| T660.5 | in progress | P2 | 3 | 0% | Claude Code / claude-opus-5-5 |
 
 
 
@@ -82,17 +82,23 @@ Needs T660.1; lands before T660.4. With worktrees under `<main>/.rtok/worktrees`
 
 Check: a test per bullet with a worktree nested under `.rtok/worktrees` and no ignore rule; `just check`.
 
+Plan: a stalled session left the code and a test for every bullet uncommitted on branch `t660.3-nested`; adopted and rebased on `main`. Review the diff against the bullets, run `just check`, close.
+
 ### T660.4. Default worktree root `<project>/.rtok/worktrees`, `.rtok/` ignored
 
 Needs T660.1 and T660.3. The `[worktree] root` default becomes `.rtok/worktrees`. A relative root resolves against `ProjectRoot::main` (not the process cwd, as today), so a worktree created from inside another worktree still lands under the main checkout; `~` and absolute roots keep today's meaning. `add::plan` checks the new path with `contain`. Before creating the first worktree, rtok makes sure `.rtok/` is ignored: nothing to do when `git check-ignore` already ignores it; else append `.rtok/` to `<main>/.gitignore` when that file exists (rest byte-for-byte, a missing final newline added first); else to `<main>/.git/info/exclude`. Existing worktrees elsewhere keep working. Docs: `README.md`, `docs/agents-and-worktrees.md`, `docs/config.md` (+ `docs/ru`, `docs/uk`), `crates/rtok-config/default.toml`, `skills/rtok-worktrees/SKILL.md`, `CHANGELOG.md`.
 
 Check: tests for the default path from main and from a linked worktree, a relative custom root, an absolute root, an escaping root (`../x` with a task id) refused; `.gitignore` present without the rule / with it / without a final newline, no `.gitignore` → `info/exclude`, idempotent on a second add; the `the_default_root_is_under_the_rtok_home` test is replaced; `just check`.
 
+Plan: (1) `[worktree] root` default `.rtok/worktrees` in `crates/rtok-config` and `default.toml`. (2) One resolver for the root: relative → against `ProjectRoot::main`, `~` and absolute unchanged; `src/worktree/add.rs::plan` checks the target with `contain`; every other reader of `cfg.worktree.root` (`host.rs`, `ops.rs`, `whoami.rs`) goes through it. (3) `ensure_ignored(main)` before the first `git worktree add`: `git check-ignore` → append to `.gitignore` (byte-for-byte, final newline first) → `.git/info/exclude`. (4) Docs from the list above. (5) Tests from Check; `just check`.
+
 ### T660.5. `rtok worktree migrate` moves worktrees into the configured root
 
 Needs T660.4. Moves this repository's worktrees that live outside the configured root to `<root>/<repo>-<task>` with `git worktree move`, keeping lock and claim records in step. Dry run without `--yes`. Skips, with a reason: main, the worktree holding the cwd, a worktree locked or claimed by another agent or by a live session, a worktree with submodules (`git worktree move` refuses them), a target that already exists. CLI only; new-command gates (trycmd fence, `surface_parity`, `config_coverage`). Docs with T660.4's pages.
 
 Check: tests on a temp repo for move, each skip reason and dry run; lock and claim follow the move; `just check`.
+
+Plan: (1) `src/worktree/migrate.rs`: `plan` lists this repository's worktrees outside the resolved root, each with a target or a skip reason; `apply` runs `git worktree move`, rewrites the lock text and moves the store's claim and pending rows to the new path. (2) CLI `rtok worktree migrate [--yes] [--json]`, a dry run without `--yes`. (3) New-command gates: trycmd fence, `surface_parity`, `config_coverage`, man page. (4) Docs beside T660.4's pages. (5) `tests/worktree.rs` cases from Check; `just check`.
 
 **Source audit (T530).**
 
