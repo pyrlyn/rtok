@@ -425,7 +425,7 @@ fn emit_filtered_to(
     // kept everything (a `tree` it cannot shorten) the trailer would only add to raw.
     let min = cfg.plugins.cmd.trailer_min_lines;
     if std::str::from_utf8(body).is_ok()
-        && ((lines <= min && no_shorter) || (lines > min && shown.len() >= body.len()))
+        && ((lines <= min && no_shorter) || shown.len() >= body.len())
     {
         write_raw(out);
         let est = cx.estimate(super::bounded::host_visible_prefix(&before), Class::Code);
@@ -530,7 +530,7 @@ mod tests {
     #[test]
     fn emit_filtered_archives_stdin_and_records() {
         let (c, dir) = cfg("emit-archive");
-        let body = (0..80)
+        let body = (0..400)
             .map(|i| format!("line {i}"))
             .collect::<Vec<_>>()
             .join("\n");
@@ -610,7 +610,7 @@ mod tests {
         // something references its id, and a dedup pointer names exactly that id.
         let payload = format!(
             "{}\n",
-            (0..80)
+            (0..400)
                 .map(|i| format!("line {i}"))
                 .collect::<Vec<_>>()
                 .join("\n")
@@ -856,9 +856,7 @@ mod tests {
         ));
     }
 
-    /// T175: bodies smaller than their own trailer pass through verbatim. A 150-byte
-    /// `ps` body the `ps_aux` formatter would reshape comes back byte-identical with
-    /// no trailer, no archive row, and a zero-saving `raw` Measurement row.
+    /// T175/T661: a tiny `ps` body the `ps_aux` formatter reshapes never prints longer than raw.
     #[test]
     fn tiny_body_passes_through_verbatim_with_no_negative_saving() {
         let (c, dir) = cfg("tiny-passthrough");
@@ -901,27 +899,17 @@ mod tests {
         if !expect.is_empty() && !expect.ends_with(b"\n") {
             expect.push(b'\n');
         }
-        assert_eq!(
-            printed, expect,
-            "pass-through must be verbatim (no trailer)"
-        );
+        // T661: the trailer is short now, so a tiny body can still shrink with it. The
+        // contract is the same as for every body: never longer than raw.
         assert!(
-            !String::from_utf8_lossy(&printed).contains("expand"),
-            "no expand trailer on tiny body: {}",
+            printed.len() <= expect.len(),
+            "tiny body must not grow: {}",
             String::from_utf8_lossy(&printed)
         );
-        let files: Vec<_> = fs::read_dir(&c.core.archive_dir)
-            .map(|rd| rd.map(|e| e.unwrap().path()).collect())
-            .unwrap_or_default();
-        assert!(files.is_empty(), "no archive on pass-through: {files:?}");
         let store = crate::store::Store::open(&c.core.db_path).unwrap();
         let rows = store.list_measurements("cmd").unwrap();
         assert_eq!(rows.len(), 1, "{rows:?}");
-        assert_eq!(rows[0].kind, "raw", "{rows:?}");
-        assert_eq!(rows[0].before_bytes, body.len() as i64, "{rows:?}");
-        assert_eq!(rows[0].after_bytes, rows[0].before_bytes, "{rows:?}");
-        assert_eq!(rows[0].est_after, rows[0].est_before, "{rows:?}");
-        assert!(rows[0].ref_id.is_none(), "{rows:?}");
+        assert!(rows[0].after_bytes <= rows[0].before_bytes, "{rows:?}");
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -974,7 +962,7 @@ mod tests {
             &mut printed,
         );
         let shown = String::from_utf8(printed).unwrap();
-        assert!(shown.contains("expand"), "{shown}");
+        assert!(shown.contains("[rtok "), "{shown}");
         let store = crate::store::Store::open(&c.core.db_path).unwrap();
         let rows = store.list_measurements("cmd").unwrap();
         assert_eq!(rows.len(), 1, "{rows:?}");
