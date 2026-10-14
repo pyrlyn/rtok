@@ -66,7 +66,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T526 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T527 | in progress | P2 | 3 | 0% | MiMo / mimo |
 | T660.2 | todo | P1 | 3 | 0% | |
-| T660.3 | in progress | P1 | 3 | 90% | Claude Code / claude-opus-5-5 |
 | T660.4 | in progress | P1 | 3 | 0% | Claude Code / claude-opus-5-5 |
 | T660.5 | in progress | P2 | 3 | 0% | Claude Code / claude-opus-5-5 |
 
@@ -77,19 +76,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 Needs T660.1. Switch every caller to `ProjectRoot` and say explicitly whether it wants `checkout` or `main`: `layers.rs` `.rtok.toml` layer (`checkout`: each worktree reads its own checked-out file), `agents/command.rs --project`, `plugins/checkpoint.rs`, `guard/grep_symbol.rs`, `memory/files.rs::project_root`, `tasks/run.rs` (both sites), `model/agents.rs::worktree_label`. Delete `git_root` and the duplicate in `src/doctor.rs`. `checkpoint::project_of_cx` returns the worktree basename today while `project_name` returns the main repo's name; it moves to `main` so a checkpoint made in a worktree files under the same project. `memory/files.rs::relative` uses `contain` so a symlink cannot point a note outside the root.
 
 Check: one test per changed site for a linked worktree; a test that the checkpoint project name is the same from the main checkout and from a worktree; a symlink-escape test for memory paths; `just check`.
-
-### T660.3. Worktrees nested in the project do not leak into walks, gc or clean
-
-Needs T660.1; lands before T660.4. With worktrees under `<main>/.rtok/worktrees`, several places would see them as part of main:
-
-- graph walk (`plugins/graph/walk.rs`), `search`/`tree` (`read/search.rs`) and the watcher (`graph/watch.rs`, root `.gitignore` only) descend into them when `.rtok/` is not ignored: skip any directory holding a `.git` file (a nested checkout), like `worktree/list.rs::walk` already does.
-- `worktree/gc.rs` and `worktree/clean.rs` call a worktree current by `here.starts_with(dir)`, so from a nested worktree main counts as current too: pick the deepest match.
-- `worktree/origin.rs` names `<main>/.rtok/worktrees` its own `rtok` pool.
-- `worktree/claim.rs::copy_symbol_index` copies no rows under `.rtok/`.
-
-Check: a test per bullet with a worktree nested under `.rtok/worktrees` and no ignore rule; `just check`.
-
-Plan: a stalled session left the code and a test for every bullet uncommitted on branch `t660.3-nested`; adopted and rebased on `main`. Review the diff against the bullets, run `just check`, close.
 
 ### T660.4. Default worktree root `<project>/.rtok/worktrees`, `.rtok/` ignored
 
