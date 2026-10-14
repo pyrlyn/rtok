@@ -773,7 +773,10 @@ fn project_of_cx(cx: &Ctx) -> Option<String> {
 /// What handoffs were filed under before T553: the git root's basename. Only a lookup
 /// fallback for rows an older build wrote; never a place to save.
 fn legacy_project_of_cx(cx: &Ctx) -> Option<String> {
-    crate::config::layers::git_root(Path::new(cx.cwd()?))?
+    // `checkout`, not `main`: older builds filed a worktree's handoff under the worktree's own
+    // directory name, so that is the row to look for.
+    rtok_config::root::ProjectRoot::find(Path::new(cx.cwd()?))?
+        .checkout
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
 }
@@ -1590,6 +1593,26 @@ mod tests {
         .unwrap();
         let text = offer(&ctx).expect("injection").text;
         assert!(!text.contains("PRIVATE_SENTINEL"), "{text}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// T660.2: one project name from the main checkout and from its linked worktree; only the
+    /// legacy lookup keeps the per-checkout directory name older builds filed under.
+    #[test]
+    fn handoff_project_is_one_name_across_worktrees_and_legacy_is_per_checkout() {
+        let dir = crate::testutil::tmp_dir("t660-handoff-name");
+        let (main, wt) = crate::testutil::worktree_layout(&dir);
+        let name_at = |cwd: &Path| {
+            let mut rt = crate::plugin::Runtime::in_memory("t660-name").unwrap();
+            rt.cwd = Some(cwd.to_string_lossy().into_owned());
+            let cx = Ctx::new(&rt);
+            (project_of_cx(&cx), legacy_project_of_cx(&cx))
+        };
+        let (from_main, from_wt) = (name_at(&main), name_at(&wt));
+        assert_eq!(from_main.0, from_wt.0);
+        assert_eq!(from_main.0.as_deref(), Some("repo"));
+        assert_eq!(from_main.1.as_deref(), Some("repo"));
+        assert_eq!(from_wt.1.as_deref(), Some("repo-t1"));
         let _ = std::fs::remove_dir_all(&dir);
     }
 
