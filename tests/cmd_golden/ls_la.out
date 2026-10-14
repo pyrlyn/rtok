@@ -1,0 +1,9 @@
+dirs: .git/ .github/ crates/ docs/ src/ target/ tests/
+.gitignore 412B
+CHANGELOG.md 80.6K
+Cargo.lock 128.0K
+Cargo.toml 3.3K
+LICENSE 34.3K
+README.md 20.5K
+build.rs* 1.7K
+latest -> docs/v0.1

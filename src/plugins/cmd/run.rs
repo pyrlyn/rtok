@@ -400,14 +400,6 @@ fn emit_filtered_to(
         &filtered,
         named,
     );
-    if pointer || named {
-        // The archive keeps the command's bytes, not the lossy `String` used to filter
-        // and print them: `expand` must return what the command wrote, including invalid UTF-8.
-        if cx.put_archive_for(body, agent).is_err() {
-            write_raw(out);
-            return;
-        }
-    }
     // T247: measure exactly what the host receives — the padding newline and the trailer
     // line are part of the returned bytes, so `after` must count them too.
     let mut shown = filtered;
@@ -417,6 +409,36 @@ fn emit_filtered_to(
     if pointer {
         shown.push_str(&pointer_line);
         shown.push('\n');
+    }
+    // T661: never worse than raw. A short valid-UTF-8 body (at or under
+    // `trailer_min_lines`, where the pointer is optional) that a grouping lengthened, or
+    // whose cut saved less than the trailer costs, prints verbatim: nothing is cut, so
+    // there is nothing to expand and no archive row. Longer bodies keep their trailer.
+    if lines <= cfg.plugins.cmd.trailer_min_lines
+        && std::str::from_utf8(body).is_ok()
+        && shown.len() >= body.len()
+    {
+        write_raw(out);
+        let est = cx.estimate(super::bounded::host_visible_prefix(&before), Class::Code);
+        let _ = cx.record(&Measurement {
+            plugin: "cmd",
+            kind: "raw",
+            before_bytes: body.len() as u64,
+            after_bytes: body.len() as u64,
+            est_before: est,
+            est_after: est,
+            ref_id: None,
+            call_id: None,
+        });
+        return;
+    }
+    if pointer || named {
+        // The archive keeps the command's bytes, not the lossy `String` used to filter
+        // and print them: `expand` must return what the command wrote, including invalid UTF-8.
+        if cx.put_archive_for(body, agent).is_err() {
+            write_raw(out);
+            return;
+        }
     }
     let _ = out.write_all(shown.as_bytes());
     let _ = cx.record(&Measurement {
@@ -470,6 +492,30 @@ mod tests {
         assert_eq!(running_label(&a(&["a\nb"])), "running a…");
         let long = running_label(&a(&[&"x".repeat(100)]));
         assert_eq!(long.chars().count(), "running ".len() + 60 + 1, "{long}");
+    }
+
+    /// T661: a short `find` that the dir grouping would lengthen prints verbatim, with no
+    /// trailer and no archive row: the output is never worse than raw.
+    #[test]
+    fn short_output_a_filter_lengthens_prints_raw() {
+        let (c, dir) = cfg("never-worse");
+        let body: String = (0..9)
+            .map(|i| format!("crates/c{i}/Cargo.toml\n"))
+            .collect();
+        emit_filtered(
+            &c,
+            &["find".into(), "crates".into()],
+            body.as_bytes(),
+            0,
+            None,
+        );
+        let archived = fs::read_dir(&c.core.archive_dir)
+            .map(|d| d.count())
+            .unwrap_or(0);
+        assert_eq!(archived, 0);
+        let v = crate::model::plugin_stats(&c, "cmd").unwrap();
+        assert!(v.to_string().contains("raw"), "{v}");
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

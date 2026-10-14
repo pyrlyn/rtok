@@ -46,9 +46,6 @@ pub fn run_with_store(cfg: &Config, cmd: &str, input: &str) -> String {
         &filtered,
         named,
     );
-    if (pointer || named) && cx.put_archive(input.as_bytes()).is_err() {
-        return compress_only(&settings, cmd, input);
-    }
     let mut out = filtered;
     if pointer {
         if !out.is_empty() && !out.ends_with('\n') {
@@ -56,6 +53,13 @@ pub fn run_with_store(cfg: &Config, cmd: &str, input: &str) -> String {
         }
         out.push_str(&super::run::trailer(&id, lines));
         out.push('\n');
+    }
+    // T661: never worse than raw, the same guard as `rtok run`.
+    if lines <= cfg.plugins.cmd.trailer_min_lines && out.len() >= input.len() {
+        return input.to_string();
+    }
+    if (pointer || named) && cx.put_archive(input.as_bytes()).is_err() {
+        return compress_only(&settings, cmd, input);
     }
     let family = formatters::family_of(&settings, &argv, input);
     let _ = cx.record(&Measurement {
@@ -90,7 +94,7 @@ Changes not staged for commit:
 ";
         let out = run("git status", raw);
         assert!(out.contains("On branch main"), "{out}");
-        assert!(out.contains("modified:   src/lib.rs"), "{out}");
+        assert!(out.contains(" M src/lib.rs"), "{out}");
         assert!(!out.contains("Changes not staged"), "{out}");
     }
 

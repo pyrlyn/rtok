@@ -1,0 +1,33 @@
+argv: cargo test
+exit: 101
+min_saving: 70
+---
+   Compiling rtok-config v0.1.0 (/src/crates/rtok-config)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.21s
+     Running unittests src/lib.rs (target/debug/deps/rtok_config-3f2a)
+
+running 6 tests
+test layer::tests::env_overrides_file ... ok
+test layer::tests::file_overrides_default ... ok
+test bench_fail::bench_fails ... FAILED
+test schema::tests::rejects_unknown_key ... ok
+test schema::tests::accepts_empty ... ok
+test validate::tests::globs_compile ... ok
+
+failures:
+
+---- bench_fail::bench_fails stdout ----
+
+thread 'bench_fail::bench_fails' panicked at crates/rtok-config/src/lib.rs:412:9:
+assertion `left == right` failed: bench: intentional failure
+  left: 2
+ right: 3
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    bench_fail::bench_fails
+
+test result: FAILED. 5 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+error: test failed, to rerun pass `-p rtok-config --lib`
