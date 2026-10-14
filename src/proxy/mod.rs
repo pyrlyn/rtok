@@ -283,9 +283,12 @@ pub async fn serve(cfg: &Config) -> Result<()> {
     let listener = TcpListener::bind(&addr)
         .await
         .with_context(|| format!("bind {addr}"))?;
-    axum::serve(listener, app(state))
-        .await
-        .context("proxy server")
+    axum::serve(
+        listener,
+        app(state).into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    )
+    .await
+    .context("proxy server")
 }
 
 /// Upstream chunks buffered between the tee task and the client stream before the tee
