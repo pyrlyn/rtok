@@ -21,7 +21,7 @@ specify an rtok design that should beat it. Expected gains are targets to verify
 
 ## Key techniques per tool
 
-### sqz
+### sqz (found in its source)
 - Pipeline of stages over JSON and text: keep/strip fields, strip nulls, flatten, truncate strings,
   collapse arrays ([stages.rs](https://github.com/ojuschugh1/sqz/blob/cf2b03c8072729f366e48a8a4933a421bd2a1e79/sqz_engine/src/stages.rs#L39-L480)).
 - Diff fold: keep +/-/headers and N=2 context lines, replace the rest with `[N unchanged lines]`
@@ -40,7 +40,7 @@ specify an rtok design that should beat it. Expected gains are targets to verify
   ([cache_manager.rs#L17](https://github.com/ojuschugh1/sqz/blob/cf2b03c8072729f366e48a8a4933a421bd2a1e79/sqz_engine/src/cache_manager.rs#L17-L160)).
 - Token-level RLE `tok [×N]` ([rle_compressor.rs](https://github.com/ojuschugh1/sqz/blob/cf2b03c8072729f366e48a8a4933a421bd2a1e79/sqz_engine/src/rle_compressor.rs#L27)), TOON for JSON ([toon.rs](https://github.com/ojuschugh1/sqz/blob/cf2b03c8072729f366e48a8a4933a421bd2a1e79/sqz_engine/src/toon.rs#L61)).
 
-### lean-ctx
+### lean-ctx (found in its source, measured 2026-10-14)
 - ~95 per-command pattern modules ([core/patterns/](https://github.com/yvgude/lean-ctx/tree/50d68e5648c21bf4880571c6a8e8ad96f8ef9b06/rust/src/core/patterns)); every result goes through
   "only if fewer tokens" ([mod.rs#L207-L215](https://github.com/yvgude/lean-ctx/blob/50d68e5648c21bf4880571c6a8e8ad96f8ef9b06/rust/src/core/patterns/mod.rs#L207)); ANSI strip first ([mod.rs#L90](https://github.com/yvgude/lean-ctx/blob/50d68e5648c21bf4880571c6a8e8ad96f8ef9b06/rust/src/core/patterns/mod.rs#L90)).
 - git status: one line per section with sigils `+a ~b -c →r`, branch with `↑N`, `clean`
@@ -58,14 +58,14 @@ specify an rtok design that should beat it. Expected gains are targets to verify
 - `cat f`, `sed -n a,bp f`, `awk NR..`, `head -n f` are rewritten to its own `read` tool with modes
   (map/signatures/lines) ([hook_handlers/file_rewrite.rs#L440](https://github.com/yvgude/lean-ctx/blob/50d68e5648c21bf4880571c6a8e8ad96f8ef9b06/rust/src/hook_handlers/file_rewrite.rs#L440)). This is why it wins `cat rules.rs` (−91.4 %).
 
-### token-optimizer (behaviour and docs only)
+### token-optimizer (behaviour and docs only, measured 2026-10-14)
 - Allow-list of ~111 read-only commands in 22 families; others pass through (`cat` refused, `git log`, `find` untouched).
 - Archives the full original and appends an expand pointer (README "Bash Output Compression").
 - Diff summary for big diffs: −97.9 % on `git diff HEAD~5` but only 51 % of changed paths kept; worktree diff −79 % with all paths. Inferred: per-file header + change counts, hunks dropped above a size threshold.
 - Delta re-reads: a re-read file returns only the diff (README "Delta Mode"); code re-reads become a skeleton.
 - grep −89.7 %: inferred grouping by file + cap per file, like lean-ctx.
 
-### caveman (caveman-shrink)
+### caveman (caveman-shrink, found in its source, measured 2026-10-14)
 - MCP tool-catalog shrink: keep schema structure and constraint words, cut descriptions to the first sentence(s), byte cap
   ([toolschema.go#L270](https://github.com/JuliusBrussee/caveman/blob/d262ab3882952a59312ff3537cd86d894523c5ab/engine/compressors/toolschema.go#L270)); exact original stored in a durable recovery store with a handle
   ([shrink.go#L117](https://github.com/JuliusBrussee/caveman/blob/d262ab3882952a59312ff3537cd86d894523c5ab/shrink/shrink.go#L117)). Wins −10..−29 % on catalogs where rtok does 0 %.
@@ -75,7 +75,7 @@ specify an rtok design that should beat it. Expected gains are targets to verify
   ([log.go#L49-L75](https://github.com/JuliusBrussee/caveman/blob/d262ab3882952a59312ff3537cd86d894523c5ab/engine/compressors/log.go#L49)).
 - Exact repeat runs (≥ 3) → one line + count ([repetition.go#L43](https://github.com/JuliusBrussee/caveman/blob/d262ab3882952a59312ff3537cd86d894523c5ab/engine/compressors/repetition.go#L43)); diff context 2 ([diff.go#L24](https://github.com/JuliusBrussee/caveman/blob/d262ab3882952a59312ff3537cd86d894523c5ab/engine/compressors/diff.go#L24)).
 
-## Where rtok loses today (#1076)
+## Where rtok loses today (#1076, measured 2026-10-14)
 
 | Case | rtok | best competitor |
 |---|---:|---:|
@@ -89,7 +89,7 @@ specify an rtok design that should beat it. Expected gains are targets to verify
 
 rtok wins `git log` (#1079 keeps 89 % SHAs), `find`, `ls -laR`, `cat app.log`.
 
-## Proposals by category (ordered by frequency)
+## Proposals by category (ordered by frequency; rivals measured 2026-10-14 in #1076)
 
 Shared rules for every proposal: run only on exit 0 or keep stderr + exit line verbatim; keep
 every full/abbreviated hash, every path, every line matching `WARN|ERROR|error|fatal|panic|FAIL`;
