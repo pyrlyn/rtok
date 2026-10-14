@@ -69,6 +69,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T660.3 | todo | P1 | 3 | 0% | |
 | T660.4 | todo | P1 | 3 | 0% | |
 | T660.5 | todo | P2 | 3 | 0% | |
+| T665 | in progress | P0 | 2 | 10% | Claude Code / claude-opus-5-5 |
 
 
 
@@ -100,6 +101,14 @@ Check: tests for the default path from main and from a linked worktree, a relati
 Needs T660.4. Moves this repository's worktrees that live outside the configured root to `<root>/<repo>-<task>` with `git worktree move`, keeping lock and claim records in step. Dry run without `--yes`. Skips, with a reason: main, the worktree holding the cwd, a worktree locked or claimed by another agent or by a live session, a worktree with submodules (`git worktree move` refuses them), a target that already exists. CLI only; new-command gates (trycmd fence, `surface_parity`, `config_coverage`). Docs with T660.4's pages.
 
 Check: tests on a temp repo for move, each skip reason and dry run; lock and claim follow the move; `just check`.
+
+### T665. Windows nextest temp dir outside the checkout
+
+Since T644 (#1036) the Windows setup script points `TMP`/`TEMP` at `target\test-home\tmp`, inside the repository, so git discovery from a test's scratch dir finds this checkout. CI run 38478365780 (PR #1058) failed 11 tests on `windows (1/2)` and `windows (2/2)` that way, e.g. `list_splits_cache_from_source_and_reports_an_orphan`, `mcp_accepts_sibling_worktrees_and_every_client_root`, `all_live_reaches_this_project_only_and_an_ended_agent_is_refused`. The two `report_ai` failures in the same run are T664. Supersedes #1063, which moves the dir but leaves `nextest_runs_under_the_test_tmp` asserting the old path.
+
+Plan: the Windows script puts the dir at `<system temp>\rtok-test-<hash of the checkout path>`, emptied each run like the Unix one; `nextest_runs_under_the_test_tmp` asserts on every platform that the dir is a `rtok-test-*` dir outside `CARGO_MANIFEST_DIR`.
+
+Check: on macOS, a nextest config whose `TMPDIR` is inside the checkout reproduces the 11 failures and `nextest_runs_under_the_test_tmp` fails; with the fixed config they pass; `just check`; Windows CI green for these tests.
 
 **Source audit (T530).**
 
