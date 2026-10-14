@@ -490,12 +490,12 @@ fn add_creates_one_locked_worktree_per_task_from_a_fresh_base() {
     run(&tmp.join("other"), &["commit", "-q", "-m", "ignore"]);
     run(&tmp.join("other"), &["push", "-q", "origin", "main"]);
     let tip = run(&tmp.join("other"), &["rev-parse", "HEAD"]);
-    // T410: the default root is `~/.rtok/worktrees`; a `_worktrees/` beside the repository
-    // no longer pulls the worktree there.
+    // T660.4: the default root is `<main>/.rtok/worktrees`; neither a `_worktrees/` beside the
+    // repository nor `~/.rtok/worktrees` (T410) pulls the worktree there.
     std::fs::create_dir_all(tmp.join("_worktrees")).unwrap();
     let home = tmp.join("home");
     std::fs::create_dir_all(&home).unwrap();
-    let root = home.join(".rtok/worktrees");
+    let root = work.join(".rtok/worktrees");
 
     let owner = "Claude Code / sonnet";
     let add = ["worktree", "add", "T158", "Worktree-Add", "--owner", owner];
@@ -1325,7 +1325,7 @@ fn disabled_worktrees_refuse_every_command_and_drop_the_mcp_tools() {
             "{args:?}: {err}"
         );
     }
-    assert!(!tmp.join(".rtok/worktrees").exists());
+    assert!(!work.join(".rtok").exists());
 
     let (store, _) = agents(&tmp, &[]);
     let claude = store.host_id("claude").unwrap().unwrap();
@@ -1381,9 +1381,10 @@ fn whoami_shows_the_root_and_only_the_caller_s_worktrees() {
     let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
     let real = |p: &serde_json::Value| Path::new(p.as_str().unwrap()).canonicalize().unwrap();
     assert_eq!(v["agent"], me);
+    // T660.4: the default root is under the main checkout, which git reports canonical.
     assert_eq!(
-        Path::new(v["root"].as_str().unwrap()),
-        tmp.join(".rtok/worktrees")
+        real(&v["root"]),
+        work.join(".rtok/worktrees").canonicalize().unwrap()
     );
     assert_eq!(real(&v["here"]), claimed.canonicalize().unwrap());
     let mut held: Vec<std::path::PathBuf> = v["worktrees"]
@@ -1514,7 +1515,7 @@ fn worktree_create_hook_returns_the_add_path_bound_to_the_session_agent() {
         .unwrap()
         .trim_end()
         .to_string();
-    let want = tmp.join(".rtok/worktrees/rtok-bold-oak-a3f2");
+    let want = work.join(".rtok/worktrees/rtok-bold-oak-a3f2");
     assert_eq!(
         Path::new(&path).canonicalize().unwrap(),
         want.canonicalize().unwrap()
@@ -1626,7 +1627,7 @@ fn worktree_launcher_creates_a_plain_worktree_when_rtok_cannot() {
     );
     let err = String::from_utf8_lossy(&out.stderr);
     assert!(out.status.success(), "{err}");
-    let want = tmp.join(".rtok/worktrees/rtok-third");
+    let want = work.join(".rtok/worktrees/rtok-third");
     assert!(
         same(std::str::from_utf8(&out.stdout).unwrap().trim_end(), &want),
         "{out:?}"
