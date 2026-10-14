@@ -1,0 +1,7 @@
+thread 'bench_fail::bench_fails' (1481) panicked at crates/rtok-config/src/lib.rs:2640:9:
+assertion `left == right` failed: bench: intentional failure
+  left: 2
+ right: 3
+FAILED: bench_fail::bench_fails
+cargo test: 93 passed, 1 failed (1 suite)
+[rtok 3aa94a0c9e9a · 117 lines]

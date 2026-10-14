@@ -1,0 +1,8 @@
+warning: unused variable: `unused`
+   --> crates/rtok-log/src/lib.rs:321:23
+    |
+321 | fn bench_warn() { let unused = 1; }
+    |                       ^^^^^^ help: if this is intentional, prefix it with an underscore: `_unused`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+cargo build: 0 errors, 1 warnings (1 crates)

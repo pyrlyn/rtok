@@ -1,0 +1,22 @@
+src/plugins/cmd/rules.rs:76:pub struct Settings {
+src/plugins/cmd/rules.rs:81:impl Settings {
+src/plugins/cmd/rules.rs:1010:    settings: &Settings,
+src/plugins/cmd/rules.rs:1028:    settings: &Settings,
+src/plugins/cmd/rules.rs:1227:    fn settings(fail_tail_lines: u32) -> Settings {
+src/plugins/cmd/rules.rs:1228:        Settings {
+src/plugins/cmd/rules.rs:1629:    // --- disk Settings::load twins (restored; keep coverage of real path I/O) ---
+src/plugins/cmd/rules.rs:1641:        let s = Settings::load(&path, None, 80);
+src/plugins/cmd/rules.rs:1662:        let s = Settings::load(&path, None, 80);
+src/plugins/cmd/rules.rs:1688:        let s = Settings::load(&file, Some(&dropins), 80);
+… 33 lines omitted (expand bab2f148e6c5a8a83474d17419752e936e292c91e41dcfe5e14b0da8b8eafb22)
+src/plugins/cmd/formatters.rs:1477:        let settings = rules::Settings::builtin();
+src/plugins/cmd/formatters.rs:1502:        let settings = rules::Settings::builtin();
+src/plugins/cmd/formatters.rs:1638:        let settings = rules::Settings::builtin();
+src/plugins/cmd/formatters.rs:1694:        let settings = rules::Settings::builtin();
+src/plugins/cmd/filter.rs:15:        .map(|c| rules::Settings::from_config(&c))
+src/plugins/cmd/filter.rs:16:        .unwrap_or_else(|_| rules::Settings::builtin());
+src/plugins/cmd/filter.rs:23:    let settings = rules::Settings::from_config(cfg);
+src/plugins/cmd/filter.rs:74:fn compress_only(settings: &rules::Settings, cmd: &str, input: &str) -> String {
+src/plugins/cmd/run.rs:389:    let settings = rules::Settings::from_config(cfg);
+src/plugins/cmd/run.rs:818:            &rules::Settings::builtin(),
+[rtok bab2f148e6c5 · 53 lines]

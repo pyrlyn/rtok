@@ -1,0 +1,9 @@
+HEAD detached at 12ebeb97
+modified:   README.md
+modified:   rules/default.toml
+modified:   src/plugins/cmd/filter.rs
+Untracked files:
+bench-dir/
+bench-untracked.txt
+no changes added to commit (use "git add" and/or "git commit -a")
+[rtok f0891668427f3707e223fbc59e0d40056633cb51f13ed2dc926fd70bc1cc764f · 14 lines · expand: rtok expand f0891668427f3707e223fbc59e0d40056633cb51f13ed2dc926fd70bc1cc764f]

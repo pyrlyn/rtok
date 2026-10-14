@@ -1,0 +1,21 @@
+src/ (20 files)
+fuzzing.rs
+mcp/wrap.rs
+plugins/cmd/run.rs
+plugins/cmd/filter.rs
+plugins/cmd/formatters.rs
+plugins/cmd/rules.rs
+plugins/json_tree/mod.rs
+store/mod.rs
+web/protocol.rs
+hooks/mod.rs
+plugins/graph/export.rs
+measure/stats.rs
+doctor.rs
+agents/qwen/README.md
+agents/grok/README.md
+agents/qwen/mod.rs
+agents/amp/README.md
+agents/claude/README.md
+agents/roo/README.md
+agents/gemini/README.md

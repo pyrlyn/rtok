@@ -1,0 +1,113 @@
+
+running 94 tests
+test bench_fail::bench_fails ... FAILED
+test layers::tests::a_dotenv_directory_does_not_hide_the_file_above ... ok
+test layers::tests::a_malformed_dotenv_is_a_warning_and_not_an_error_file ... ok
+test layers::tests::default_only_has_default_source ... ok
+test layers::tests::dotenv_files_take_rtok_keys_project_first ... ok
+test layers::tests::dotenv_layer_sits_between_project_and_env ... ok
+test layers::tests::env_and_flags_and_legacy_and_arrays ... ok
+test layers::tests::legacy_core_log_level_loses_to_env::case_1_env ... ok
+test layers::tests::legacy_core_log_level_loses_to_env::case_2_file_only ... ok
+test layers::tests::legacy_dashboard_port_folds_when_unset ... ok
+test layers::tests::legacy_dashboard_port_loses_to_higher_layers::case_1_env ... ok
+test layers::tests::legacy_dashboard_port_loses_to_higher_layers::case_2_flag ... ok
+test layers::tests::linked_worktree_reads_its_own_project_file ... ok
+test layers::tests::malformed_dotenv_is_skipped_not_fatal ... ok
+test layers::tests::otel_headers_are_redacted_when_set ... ok
+test layers::tests::project_file_is_the_source ... ok
+test layers::tests::tui_flags_beat_env ... ok
+test layers::tests::user_file_overrides_default ... ok
+test root::tests::contain_accepts_what_stays_inside ... ok
+test root::tests::contain_follows_symlinks ... ok
+test root::tests::contain_refuses_what_leaves ... ok
+test root::tests::linked_worktree_has_its_own_checkout_and_the_main_one ... ok
+test root::tests::main_checkout_found_from_deep_inside ... ok
+test root::tests::outside_any_repo_is_none ... ok
+test root::tests::submodule_is_its_own_project ... ok
+test tests::archive_tiers_defaults_and_overlays ... ok
+test tests::compress_defaults_on_and_overlays_turn_off ... ok
+test tests::creates_reference_file_and_budget_is_800 ... ok
+test tests::default_expands_every_pathbuf ... ok
+test tests::default_toml_is_the_defaults ... ok
+test tests::every_catalogue_id_is_answered ... ok
+test tests::expand_covers_bare_tilde_and_rtok_home_dir ... ok
+test tests::expand_with_userprofile_resolves_cursor_and_claude_paths ... ok
+test tests::graph_auto_backend_keys ... ok
+test tests::graph_backend_defaults_to_tags ... ok
+test tests::graph_backend_overlay_from_toml ... ok
+test tests::graph_backend_unknown_key_is_an_error ... ok
+test tests::home_dir_absolute_never_relative ... ok
+test tests::init_refuses_to_clobber_without_force ... ok
+test tests::legacy_budget_key_migrates ... ok
+test tests::legacy_core_log_keys_migrate_into_log ... ok
+test tests::memory_embed_defaults_off ... ok
+test tests::memory_embed_enabled_from_file ... ok
+test tests::otel_is_off_until_an_endpoint_resolves ... ok
+test tests::partial_file_keeps_defaults ... ok
+test tests::read_languages_is_accepted_only_for_compatibility ... ok
+test tests::rtok_home_expands_a_literal_tilde::case_1_unset ... ok
+test tests::rtok_home_expands_a_literal_tilde::case_2_absolute ... ok
+test tests::rtok_home_expands_a_literal_tilde::case_3_rtok_tilde ... ok
+test tests::rtok_home_expands_a_literal_tilde::case_4_other_tilde ... ok
+test tests::semantic_cache_defaults_overlay_and_unknown_key ... ok
+test tests::set_plugin_enabled_flips_every_catalogue_id ... ok
+test tests::tilde_expands_for_every_path_key::case_1_report_out ... ok
+test tests::tilde_expands_for_every_path_key::case_2_bench_tasks ... ok
+test tests::tilde_expands_for_every_path_key::case_3_bench_configs ... ok
+test tests::tilde_expands_for_every_path_key::case_4_allow_paths ... ok
+test tests::tilde_expands_for_every_path_key::case_5_wasm_dir ... ok
+test tests::tilde_expands_for_every_path_key::case_6_doctor_mcp_json ... ok
+test tests::tilde_expands_for_every_path_key::case_7_worktree_root ... ok
+test tests::tools_rewrite_defaults_overlay_and_unknown_key ... ok
+test tests::unknown_key_is_an_error ... ok
+test tests::usage_dirs_follow_a_hosts_relocation_variable_until_the_file_names_one ... ok
+test tests::user_home_prefers_home_then_userprofile ... ok
+test tests::validate_rejects_legacy_core_log_keys ... ok
+test tests::wasm_disabled_by_default ... ok
+test tests::wasm_overlay_enables ... ok
+test tests::wasm_unknown_key_is_denied ... ok
+test validate::tests::a_float_is_not_a_number_for_an_integer_key ... ok
+test validate::tests::a_lane_upstream_must_be_an_http_url ... ok
+test validate::tests::a_malformed_since_window_is_rejected ... ok
+test validate::tests::a_negative_number_is_rejected_for_an_unsigned_key ... ok
+test validate::tests::a_read_cap_below_the_archive_marker_is_rejected ... ok
+test validate::tests::a_tspin_value_outside_the_set_is_rejected_by_name ... ok
+test validate::tests::agents_junk_values_are_checked_by_name ... ok
+test validate::tests::an_inline_table_is_a_table ... ok
+test validate::tests::config_subcommands_honour_config_flag ... ok
+test validate::tests::flex_policy_values_are_checked ... ok
+test validate::tests::layered_values_are_checked_and_name_their_layer ... ok
+test validate::tests::log_level_typo_and_hook_path_killing_bounds_are_rejected ... ok
+test validate::tests::payload_lines_are_skipped_by_both_scans ... ok
+test validate::tests::plugin_enabled_is_validated ... ok
+test validate::tests::port_70000_names_the_line ... ok
+test validate::tests::set_keeps_free_form_maps_and_arrays_usable ... ok
+test validate::tests::set_keeps_proxy_comment ... ok
+test validate::tests::set_keeps_the_trailing_comment_and_padding ... ok
+test validate::tests::set_leaves_multiline_string_payloads_untouched ... ok
+test validate::tests::set_refuses_a_value_the_loader_would_reject ... ok
+test validate::tests::set_refuses_values_typed_extraction_rejects ... ok
+test validate::tests::set_replaces_the_file_atomically ... ok
+test validate::tests::set_through_a_scalar_reports_instead_of_panicking ... ok
+test validate::tests::tasks_adapter_and_prefix_are_checked ... ok
+test validate::tests::the_reported_line_is_the_offending_one ... ok
+test validate::tests::unit_ratio_keys_and_embed_backend_are_range_checked ... ok
+test validate::tests::validate_reports_the_typed_error_with_key_and_line ... ok
+
+failures:
+
+---- bench_fail::bench_fails stdout ----
+
+thread 'bench_fail::bench_fails' (1481) panicked at crates/rtok-config/src/lib.rs:2640:9:
+assertion `left == right` failed: bench: intentional failure
+  left: 2
+ right: 3
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    bench_fail::bench_fails
+
+test result: FAILED. 93 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

@@ -1,0 +1,41 @@
+crates
+├── rtok-agent-sdk
+│   ├── CHANGELOG.md
+│   ├── Cargo.toml
+│   ├── LICENSE
+│   ├── README.md
+│   └── src
+├── rtok-config
+│   ├── Cargo.toml
+│   ├── default.toml
+│   └── src
+├── rtok-hook
+│   ├── Cargo.toml
+│   └── src
+├── rtok-log
+│   ├── Cargo.toml
+│   ├── README.md
+│   └── src
+├── rtok-mcp
+│   ├── Cargo.toml
+│   └── src
+├── rtok-plugin-sdk
+│   ├── CHANGELOG.md
+│   ├── Cargo.toml
+│   ├── LICENSE
+│   ├── PLAN.md
+│   ├── README.md
+│   ├── examples
+│   └── src
+├── rtok-store
+│   ├── Cargo.toml
+│   ├── migrations
+│   └── src
+├── rtok-sys
+│   ├── Cargo.toml
+│   └── src
+└── rtok-wasm-demo-guest
+    ├── Cargo.toml
+    └── src
+
+21 directories, 18 files

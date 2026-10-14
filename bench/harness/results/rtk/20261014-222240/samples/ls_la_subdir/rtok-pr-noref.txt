@@ -1,0 +1,10 @@
+AGENTS.md 3.0K
+PLAN.md 1.8K
+README.md 2.1K
+bounded.rs 15.2K
+filter.rs 5.5K
+formatters.rs 60.5K
+hook.rs 21.1K
+mod.rs 1.1K
+rules.rs 74.4K
+run.rs 40.9K

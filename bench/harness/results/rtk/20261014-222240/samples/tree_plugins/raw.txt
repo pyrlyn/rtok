@@ -1,0 +1,13 @@
+src/plugins/cmd
+├── AGENTS.md
+├── PLAN.md
+├── README.md
+├── bounded.rs
+├── filter.rs
+├── formatters.rs
+├── hook.rs
+├── mod.rs
+├── rules.rs
+└── run.rs
+
+1 directory, 10 files

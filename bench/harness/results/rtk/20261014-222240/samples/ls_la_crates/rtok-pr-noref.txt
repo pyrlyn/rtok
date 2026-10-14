@@ -1,0 +1,1 @@
+dirs: rtok-agent-sdk/ rtok-config/ rtok-hook/ rtok-log/ rtok-mcp/ rtok-plugin-sdk/ rtok-store/ rtok-sys/ rtok-wasm-demo-guest/

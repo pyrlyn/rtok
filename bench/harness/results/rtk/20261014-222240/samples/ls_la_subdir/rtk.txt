@@ -1,0 +1,10 @@
+644  AGENTS.md  3.0K
+644  PLAN.md  1.8K
+644  README.md  2.1K
+644  bounded.rs  15.2K
+644  filter.rs  5.5K
+644  formatters.rs  60.5K
+644  hook.rs  21.1K
+644  mod.rs  1.1K
+644  rules.rs  74.4K
+644  run.rs  40.9K

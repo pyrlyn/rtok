@@ -1,0 +1,1 @@
+{"argv": ["find", ".", "-name", "*.rs", "-not", "-path", "./target/*"], "cwd": "/fixture", "exit": 0}

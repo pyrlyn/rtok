@@ -1,0 +1,7 @@
+HEAD detached at 12ebeb97
+ M README.md
+ M rules/default.toml
+ M src/plugins/cmd/filter.rs
+?? bench-dir/
+?? bench-untracked.txt
+[rtok f0891668427f · 14 lines]

@@ -1,0 +1,51 @@
+# The binary crate is the workspace root (T23.1, D25). `rtok-plugin-sdk` is the published
+# plugin contract; `fuzz` is the nightly-only cargo-fuzz crate and stays out of `cargo test`.
+[workspace]
+members = ["crates/rtok-agent-sdk", "crates/rtok-config", "crates/rtok-hook", "crates/rtok-log", "crates/rtok-mcp", "crates/rtok-plugin-sdk", "crates/rtok-store", "crates/rtok-sys", "crates/rtok-wasm-demo-guest", "workspace-hack"]
+exclude = ["fuzz"]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.98.1" # the pin in mise.toml
+license = "GPL-3.0-or-later"
+repository = "https://github.com/pyrlyn/rtok" # cargo-dist hosting (T10.4)
+
+# External versions shared by more than one member. One line, one reason, so a
+# later crate cannot drift the number. Features that differ stay on the member.
+[workspace.dependencies]
+anyhow = "1.0.104" # Result on the binary, both SDKs, and rtok-mcp
+serde = { version = "1.0.229", features = ["derive"] } # contract types and the binary
+serde_json = "1.0.151" # JSON values: binary, both SDKs, rtok-mcp
+jsonc-parser = "0.34.0" # JSONC: Zed settings (binary) and host configs (rtok-mcp)
+toml_edit = "0.25" # in-place TOML: `config set` and rtok-mcp
+… 10 lines omitted (expand 7532ddf4d79b29f741b441cfd1561dc3301aeabea5a3eed3ddf874ae3e7575a0)
+thiserror = "2.0" # public error enums: rtok-store and rtok-config
+… 24 lines omitted (expand 7532ddf4d79b29f741b441cfd1561dc3301aeabea5a3eed3ddf874ae3e7575a0)
+# surface modules allow both lints; `just check` denies the warning.
+… 145 lines omitted (expand 7532ddf4d79b29f741b441cfd1561dc3301aeabea5a3eed3ddf874ae3e7575a0)
+env_logger = "0.11.11" # T225: `RUST_LOG` debug log on stderr; the filter defaults to `off`, not `error`
+… 23 lines omitted (expand 7532ddf4d79b29f741b441cfd1561dc3301aeabea5a3eed3ddf874ae3e7575a0)
+# T17.1. No profile may set `panic = "abort"`: `hooks::dispatch` fails open through five
+# `catch_unwind` sites, and aborting would break the rule that a hook exits 0 on error.
+… 2 lines omitted (expand 7532ddf4d79b29f741b441cfd1561dc3301aeabea5a3eed3ddf874ae3e7575a0)
+debug = "line-tables-only"
+
+# Nobody steps through the 450-odd dependencies, but their debug info is copied into every
+# one of the integration test binaries (one per file under tests/*.rs), which is most of
+# what the linker moves on a dev rebuild. Workspace code is not matched by `"*"`, so it
+# keeps its line tables.
+[profile.dev.package."*"]
+debug = false
+
+# Build scripts and proc macros are run, not debugged.
+[profile.dev.build-override]
+debug = false
+
+[profile.release]
+strip = "symbols"
+
+# The profile that 'dist' will build with: `dev`, so every release is a dev build
+# (unoptimized, line tables, no LTO).
+[profile.dist]
+inherits = "dev"
+[rtok 7532ddf4d79b · 249 lines]

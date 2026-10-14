@@ -1,0 +1,4 @@
+warning: unused variable: `unused`
+   --> crates/rtok-log/src/lib.rs:321:23
+Finished dev
+[rtok ec03d6133740 · 11 lines]

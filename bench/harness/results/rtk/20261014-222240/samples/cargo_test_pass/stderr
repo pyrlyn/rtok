@@ -1,0 +1,8 @@
+   Compiling workspace-hack v0.1.0 (/fixture/workspace-hack)
+   Compiling rtok-plugin-sdk v0.0.1 (/fixture/crates/rtok-plugin-sdk)
+   Compiling rtok-hook v0.0.1 (/fixture/crates/rtok-hook)
+   Compiling rtok-agent-sdk v0.0.1 (/fixture/crates/rtok-agent-sdk)
+   Compiling rtok-config v0.0.1 (/fixture/crates/rtok-config)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.00s
+     Running unittests src/lib.rs (target/debug/deps/rtok_config-7186ad6a54f36d44)
+   Doc-tests rtok_config
