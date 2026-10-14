@@ -2171,7 +2171,7 @@ fn migrate_moves_free_worktrees_into_the_root_and_skips_held_ones() {
     assert!(
         claims
             .iter()
-            .any(|(p, a)| Path::new(p) == moved && *a == agent),
+            .any(|(p, a)| *p == stored_claim_path(&moved) && *a == agent),
         "{claims:?}"
     );
     assert_eq!(run(&work, &["status", "--porcelain"]), "");
