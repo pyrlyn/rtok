@@ -454,7 +454,7 @@ Every effective key with its origin — the `config show --sources` page.
 | web.host | 127.0.0.1 | default |
 | web.port | 3333 | default |
 | worktree.enabled | true | default |
-| worktree.root | ~/.rtok/worktrees | default |
+| worktree.root | .rtok/worktrees | default |
 
 409 keys.
 

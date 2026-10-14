@@ -474,7 +474,7 @@ cmd = ""                              # command family hint when the caller know
 
 [worktree]                            # rtok worktree add | claim | remove | list | gc
 enabled = true                        # false: every `rtok worktree` command (list too) says worktrees are not enabled, MCP lists no worktree_* tool, and Claude's WorktreeCreate/WorktreeRemove hooks do what Claude does without rtok
-root = "~/.rtok/worktrees"            # where `rtok worktree add` creates worktrees, as <root>/<repo>-<task>; `~` expands
+root = ".rtok/worktrees"              # where `rtok worktree add` creates worktrees, as <root>/<repo>-<task>; relative: under the main checkout; `~` expands
 
 [tasks]                               # адаптеры задач (T441); обычно задаются для проекта в .rtok.toml
 adapter = "disk"                      # disk | github | gitlab

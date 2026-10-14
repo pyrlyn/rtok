@@ -122,6 +122,10 @@ const ALLOW_KEYS: &[&str] = &[
     // without anyone typing it; `--idle` is T153's flag with T153's default.
     "worktree.clean.yes",
     "worktree.clean.idle",
+    // `worktree migrate` (T660.5): `--yes` moves without asking, per call like `gc`; `--owner`
+    // names whose old lock this one run may move, like `claim --owner`.
+    "worktree.migrate.yes",
+    "worktree.migrate.owner",
     // `agents junk clear --yes` (T182): same per-call rule as `worktree gc`/`clean` — a
     // stored value would delete without anyone typing it, and it must not share `setup.yes`,
     // which confirms a different destructive action (`agents install --replace`).

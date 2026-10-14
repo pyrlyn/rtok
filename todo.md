@@ -46,5 +46,18 @@
 - T656. Keep worktrees and caches when their age cannot be established
 - T657. Match compressor credentials to the internal provider
 - T651. Honor ProgressRunner timeouts with inherited output
-- T660.4. Default worktree root `<project>/.rtok/worktrees`, `.rtok/` ignored
-- T660.5. `rtok worktree migrate` moves worktrees into the configured root
+- T672. all (link line): −75 tok/call (vs sqz `§ref§` ~13 tok)
+- T673. grep 2260, git grep 452, rg: ≥ 91 %, 100 % paths (vs t-o 89.7 %, lean-ctx 89.6 %)
+- T674. sed 2119 (`sed -n a,bp f`), cat 950, head 35, tail 155, awk: ≥ 93 % on `cat` source; re-read ≥ 95 % (vs lean-ctx 91.4 % (`read` rewrite))
+- T675. python3 1545: ≥ t-o pytest (564→115) (vs none specialised)
+- T676. gh 744: +20 pp vs current head/tail (vs lean-ctx gh.rs)
+- T677. mise 660: ≥ lean-ctx (vs lean-ctx mise.rs)
+- T678. for 570, until 231, while: ≥ 80 % on polling loops (vs caveman repetition)
+- T679. ls 386: ≥ 72 % (= rtk) (vs lean-ctx 66.6 %)
+- T680. git status 297: ≥ 60 % (rtk 62.5 %) (vs lean-ctx 40.5 %)
+- T681. git diff 272, git show 262: ≥ 80 % big diff with 100 % paths (t-o keeps 51 %) (vs t-o 97.9 % / sqz 44.4 %)
+- T682. git log 174: keep lead (vs — (rtok wins after #1079))
+- T683. tail 155, cat *.log: keep lead, +2 pp (vs lean-ctx 87.4 % (rtok 94.5 %))
+- T684. wc 102, cargo test/build/clippy: ≥ rtk (vs rtk / sqz)
+- T685. find 33: 100 % paths, ≥ 69 % (vs rtok leads)
+- T686. MCP tool catalogs: ≥ 30 % (vs caveman 12–29 %)
