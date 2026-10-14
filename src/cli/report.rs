@@ -4,9 +4,9 @@
 
 use super::util::emit;
 use crate::config::Config;
-use crate::render::with_loader;
 use anyhow::{Result, bail};
 use clap::ValueEnum;
+use rtok_sys::proc::ProgressRunner;
 use std::path::PathBuf;
 
 /// `--format` for `rtok report` (D14: a `ValueEnum`, like `demon`'s `Service`, so clap
@@ -91,7 +91,7 @@ pub(super) fn run(config_file: &Option<PathBuf>, args: Args) -> Result<()> {
     // D24: the command picks the renderer and the sink; every number was already
     // computed by the model (`src/report/` touches nothing else).
     let home = Config::home_dir();
-    let doc = with_loader("building the report", || {
+    let doc = ProgressRunner::wait("building the report…", || {
         crate::report::document(&cfg, &home, config_file.as_deref())
     })?;
     if cfg.report.ai {

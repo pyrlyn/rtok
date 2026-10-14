@@ -298,17 +298,7 @@ static VARIANTS: [Variant; 1] = [Variant {
 }];
 
 impl Agent for Codex {
-    fn id(&self) -> &'static str {
-        "codex"
-    }
-
-    fn variants(&self) -> &'static [Variant] {
-        &VARIANTS
-    }
-
-    fn readme(&self) -> &'static str {
-        include_str!("README.md")
-    }
+    super::agent_identity!("codex");
 
     fn support(&self, _kind: Kind, module: &str) -> Support {
         match module {

@@ -1834,6 +1834,12 @@ The one lint hit was real: `tests/node/fake-rtok.ts` used a ternary as a stateme
 
 Check: `just js` exits 0 (0 warnings, 6 files formatted); the plugin behaviour tests that drive these files (`filter::opencode_plugin_unit_test_with_api_mock`, `pi_plugin::*`, `opencode_plugin::*`) pass after the reformat; `just check` green.
 
+### T662. oxfmt `web/e2e/rtok.ts` so `just js` passes on main
+
+`just js` failed on `main`: `oxfmt --check` (0.68.0, pinned in `mise.toml`) wanted the `spawnGroup(BIN, ["web", "--host", ...], {...})` call in `web/e2e/rtok.ts` wrapped across lines. CI's `ci / lint` runs `just fmt-check lint build-min dup js python`; it stopped at `fmt-check` (pyrlyn/rtok#1041), so `js` was the next failure once that merged. Fix: `mise exec -- oxfmt web/e2e/rtok.ts` — formatting only, no logic change. #1041 (rustfmt `tests/skill.rs`) failed `js` on this file while this PR failed `fmt-check` on that one, so neither could go green alone; this PR carries the same `tests/skill.rs` rustfmt hunk, byte-identical to #1041's. `main` was also red on `dup`, which only T663 fixed, so T663 took both hunks and they reached `main` through #1065; this PR, #1049, records the task. The test is the `just js` gate itself: no new test, since the change has no behaviour.
+
+Check: `mise exec -- oxfmt --check web/e2e/rtok.ts` exited 1 before the rewrite; `just js` exits 0 after it (oxlint 0 warnings, oxfmt "All matched files use the correct format" on 261 files).
+
 ### T312. Run the non-cargo gates of just check in parallel
 
 `just check` ran `fmt-check lint test build-min dup js python` one after another. The cargo recipes share one `target/` and serialize on cargo's lock, but `dup` (jscpd), `js` (oxlint, oxfmt) and `python` (pytest) need no build.
@@ -9027,6 +9033,17 @@ Check: `agents_doc`, `host_docs`, `agents_install`, `agents_list_content`, `agen
 Status: done 2026-10-12
 Model: Claude Code / claude-sonnet-5-5
 
+### T663. `just dup` back under the 2% jscpd threshold
+
+`just dup` failed on `main` at `6557b6d1`: 424 clones, 3812 duplicated lines (2.09%) over the 2.0% threshold, so `ci / lint` would go red once T662 fixed `fmt-check` and `js`. The rise came with the T413 `rtok agents install` hosts (387 clones, 1.88% at `9d325f96`; 404 after Continue, 414 after OpenHands, 424 after Reasonix): each repeated the same `impl Agent` head and the same MCP-only test bodies. Threshold and ignore list unchanged.
+
+Done: `agent_identity!` in `src/agents/mod.rs` writes the `id`/`variants`/`readme` head for all 36 hosts (CodeWhale's reordering to dodge the detector is gone too); `mcp_only_file!` writes `files`/`installed`/`apply` for the eight single-file MCP-only hosts (Augment, Crush, Droid, Junie, Kiro, OpenHands, Roo, Warp); `assert_mcp_only_apply_idempotent` replaces the `apply_is_idempotent_via_the_agent_trait` body in ten hosts. `just dup`: 388 clones, 3298 lines (1.81%).
+
+Check: `just dup` passes; `cargo clippy --all-targets -D warnings` clean; `cargo nextest run --workspace agents` 544 passed (the README parity test proves each host's `include_str!` still reads its own `README.md`); full `cargo nextest run --workspace --no-fail-fast`: everything passes (`agents_worktrees every_host_gets_the_same_worktree_rule_lock_and_row`, `cli_trycmd cli` and `commands_e2e doctor_reports_the_chain` hit the 180 s timeout at load average 44, after passing in an earlier `just check` run on the same code) except two `report_ai` tests (`empty_store_ai_says_so`, `ai_carries_the_section_set_with_md_numbers`), which fail on `main` too: the T413 hosts pushed the `doctor` section past the default AI-report budget, and a `main` binary drops it the same way, with byte-identical doctor output.
+
+Status: done 2026-10-13
+Model: Claude Code / claude-opus-5-5
+
 ### T426. Install refuses a host whose app is not installed
 
 `present()` counts a host as installed when only its config folder (or that folder's parent) exists, so `rtok agents install gemini` writes rtok into `~/.gemini` with no Gemini CLI on the machine. Done: a host variant is present only when its app bundle or binary is found (`app_path`); leftover config folders no longer count, in `agents list`, `install`, `update`, `doctor` and `junk` alike. `agents install|update <host>` whose wanted variants are all absent writes nothing and exits non-zero with `error: <host> is not installed`; with several hosts, any absent one refuses the whole run before any backup. A host with one present variant still installs into it, and the absent sibling prints `— not found` as today. `--remove` is unchanged.
@@ -14106,6 +14123,17 @@ Check: `whole_output_stays_within_the_budget` (budgets 0..1500, two estimator ra
 
 Status: done 2026-10-12
 Model: Claude Code / claude-sonnet-5-5
+
+### T664. `report --ai` keeps `#doctor` under the default budget
+
+On `6557b6d1` `tests/report_ai.rs` failed twice (`empty_store_ai_says_so`, `ai_carries_the_section_set_with_md_numbers`): with an empty `RTOK_HOME`/`HOME`, `rtok report --ai` dropped the whole `doctor` section past the default `[report] budget_tokens = 8000`. The `agents` block of the doctor text was ~16 KB of the ~35 KB document: every T413 host variant printed four module lines, most with a long `not supported: …` reason repeated per variant. The creator chose to shrink that block in the AI report only and keep the budget. `rtok doctor`, the md/html/pdf reports and the TUI keep the full lines.
+
+Result: `doctor::Report::to_compact_text` renders each host variant as one line (`claude (desktop) hooks=n/a mcp=no proxy=n/a plugin=n/a`, legend on the `agents` line, reasons left to `rtok doctor`) through `agents::module_summary`; `src/report/ai.rs` `doctor()` uses it. On an empty home the doctor section went from 16.6 KB to 3.2 KB and the whole document from 35.7 KB to 22.3 KB, `dropped: none`.
+
+Check: `doctor_agents_are_one_line_per_host_variant` (compact line, no reason, full text unchanged); the two `tests/report_ai.rs` tests pass again; `just check` green on fmt, clippy and all 3815 tests. `dup` stays over its threshold as on `origin/main` (2.13 % there, 2.09 % here; T663 owns it).
+
+Status: done 2026-10-14
+Model: Claude / opus-5.5
 
 ### T581. Filter actionable report sinks before applying the top-ten limit
 

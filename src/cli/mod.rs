@@ -219,6 +219,8 @@ pub fn run() -> Result<()> {
     crate::log::on_stdout(|text| print!("{text}"));
     crate::log::on_stderr(|text| eprint!("{text}"));
     crate::store::install_migrate_spinner();
+    // T276.3: an installer's question hides every live bar instead of turning bars off.
+    rtok_agent_sdk::set_prompt_pause(|prompt| rtok_sys::proc::suspend(prompt));
     // T225: `RUST_LOG` debug log on stderr, before clap so a parse failure is logged too.
     crate::log::init_stderr();
     // `[ui]` takes effect for every command. Config load calls this hook instead of

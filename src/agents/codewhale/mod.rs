@@ -185,13 +185,8 @@ pub fn unregister_mcp(cfg: &Config) -> Result<String> {
 }
 
 impl Agent for Codewhale {
-    fn id(&self) -> &'static str {
-        "codewhale"
-    }
+    super::agent_identity!("codewhale");
 
-    // Support and the plugin surfaces it implies come first: the id/variants/readme
-    // boilerplate every host repeats sits last, out of the way of the parts that are
-    // actually specific to CodeWhale.
     fn support(&self, _kind: Kind, module: &str) -> Support {
         match module {
             "hooks" | "mcp" => Support::Yes,
@@ -206,14 +201,6 @@ impl Agent for Codewhale {
 
     fn plugin_surfaces(&self) -> &'static [rtok_plugin_sdk::Surface] {
         &SURFACES
-    }
-
-    fn variants(&self) -> &'static [Variant] {
-        &VARIANTS
-    }
-
-    fn readme(&self) -> &'static str {
-        include_str!("README.md")
     }
 
     fn files(&self, cfg: &Config, _kind: Kind) -> Vec<PathBuf> {
