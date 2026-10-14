@@ -1,0 +1,1 @@
+{"argv": ["cargo", "test", "--locked", "-p", "rtok-config"], "cwd": "/fixture", "exit": 101}

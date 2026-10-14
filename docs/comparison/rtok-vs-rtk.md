@@ -60,83 +60,124 @@ Vendor figures are claims unless the source says *measured*.
 
 ## Own measurements
 
-Numbers from the Python harness are **pending until a real run**. Do not treat empty cells as zeros.
+Shared clean harness, `bench/harness` (README there lists the fairness rules). Reproduce with
+`python3 bench/harness/run.py rtk --rtok-pr feat/rtk-parity-filters`.
 
-<!-- competitor-bench:begin -->
+* Workload: the rtok repo at `12ebeb972e2bea88bec939a9ca9b436db884de13`, the same commit for all three columns.
+* `rtok` = main `12ebeb972e2b`; `rtok-pr` = rtok#1077 `0129fe203dda` (built before the narrowing fix 462d3f86, which does not change these cases); `rtk` = rtk 1.0.1 (release tarball, sha256-checked).
+* Every command's real output is captured once and replayed byte-for-byte to every tool. Each call gets a fresh HOME/tool state. The tokenizer is tiktoken 0.12.0 o200k_base. Every tool runs every case twice and the outputs must match: all 29 cases were deterministic.
+* Latency: median of 30 rounds in a seeded shuffled order after 3 warmups. It is the tool's overhead on a replayed command (includes a ~30 ms Python shim for every tool), not cargo or git time.
+* Results: `bench/harness/results/rtk/20261014-212517/` (`results.json`, `samples/<case>/{raw,rtok,rtok-pr,rtk}.txt`).
 
-### Harness results (auto-generated)
+### `cargo test`
 
-Status: `ok`. Numbers below are from the last `bench/competitors/run_all.py` run; until a real run exists they stay pending.
+| case | raw | rtok | rtok-pr | rtk | ms rtok / pr / rtk |
+|---|---:|---:|---:|---:|---|
+| `cargo_test_pass` | 1756 | 158 (91.0 %) | 100 (94.3 %) | 16 (99.1 %) | 67.19 / 71.37 / 65.28 |
+| `cargo_test_fail` | 1751 | 164 (90.6 %) | 168 (90.4 %) | 136 (92.2 %) | 82.38 / 82.75 / 97.64 |
+| **total** | 3507 | **322 (90.8 %)** | **268 (92.4 %)** | **152 (95.7 %)** | |
 
-| side | tokens saved (vs raw) |
-|---|---|
-| rtok | 78.42 % |
-| rtk | 68.29 % |
+### `cargo build`
 
-| case | raw tok | rtk tok | rtok tok | rtk saved | rtok saved |
-|---|---:|---:|---:|---:|---:|
-| `git status` | 117 | 31 | 152 | 73.5 % | -29.9 % |
-| `git log -n 50` | 5255 | 2095 | 326 | 60.1 % | 93.8 % |
-| `git log --stat -n 10` | 1029 | 1029 | 315 | 0.0 % | 69.4 % |
-| `git diff` | 160 | 118 | 222 | 26.2 % | -38.7 % |
-| `ls -la` | 670 | 223 | 670 | 66.7 % | 0.0 % |
-| `find . -name '*.rs' -not -path './target/*'` | 942 | 254 | 478 | 73.0 % | 49.3 % |
-| `grep -rn 'fn main' --include=*.rs .` | 421 | 421 | 421 | 0.0 % | 0.0 % |
-| `cargo build --locked` | 267 | 81 | 159 | 69.7 % | 40.4 % |
-| `cargo test --locked` | 4598 | 16 | 162 | 99.7 % | 96.5 % |
-| **total** | 13459 | 4268 | 2905 | 68.3 % | 78.4 % |
+| case | raw | rtok | rtok-pr | rtk | ms rtok / pr / rtk |
+|---|---:|---:|---:|---:|---|
+| `cargo_build_noop` | 45 | 45 (0.0 %) | 45 (0.0 %) | 30 (33.3 %) | 91.21 / 96.06 / 110.43 |
+| `cargo_build_incremental` | 45 | 45 (0.0 %) | 45 (0.0 %) | 30 (33.3 %) | 54.1 / 65.09 / 52.61 |
+| `cargo_build_warning` | 167 | 166 (0.6 %) | 112 (32.9 %) | 103 (38.3 %) | 59.95 / 71.99 / 61.66 |
+| `cargo_build_error` | 133 | 132 (0.8 %) | 132 (0.8 %) | 88 (33.8 %) | 64.22 / 66.56 / 59.08 |
+| **total** | 390 | **388 (0.5 %)** | **334 (14.4 %)** | **251 (35.6 %)** | |
 
-| case | tool | runs | median ms | p95 ms |
-|---|---|---:|---:|---:|
-| `cargo_build_locked` | cargo | 30 | 23.54 | 25.23 |
-| `cargo_build_locked` | rtk | 30 | 26.93 | 28.15 |
-| `cargo_build_locked` | rtok | 30 | 30.35 | 31.65 |
-| `cargo_test_locked` | cargo | 30 | 917.31 | 924.78 |
-| `cargo_test_locked` | rtk | 30 | 923.41 | 935.16 |
-| `cargo_test_locked` | rtok | 30 | 929.53 | 941.04 |
-| `find_name_rs_not_path_target` | find | 30 | 2.13 | 2.70 |
-| `find_name_rs_not_path_target` | rtk | 30 | 5.85 | 6.28 |
-| `find_name_rs_not_path_target` | rtok | 30 | 6.60 | 7.01 |
-| `git_diff` | git | 30 | 1.16 | 1.37 |
-| `git_diff` | rtk | 30 | 5.36 | 6.02 |
-| `git_diff` | rtok | 30 | 6.07 | 7.71 |
-| `git_log_n_50` | git | 30 | 1.06 | 1.13 |
-| `git_log_n_50` | rtk | 30 | 3.70 | 4.16 |
-| `git_log_n_50` | rtok | 30 | 6.04 | 6.79 |
-| `git_log_stat_n_10` | git | 30 | 1.99 | 2.09 |
-| `git_log_stat_n_10` | rtk | 30 | 4.38 | 4.69 |
-| `git_log_stat_n_10` | rtok | 30 | 6.46 | 6.95 |
-| `git_status` | git | 30 | 1.53 | 1.62 |
-| `git_status` | rtk | 30 | 13.43 | 16.68 |
-| `git_status` | rtok | 30 | 15.05 | 19.04 |
-| `grep_rn_fn_main_include_rs` | grep | 30 | 3.88 | 4.92 |
-| `grep_rn_fn_main_include_rs` | rtk | 30 | 6.61 | 7.83 |
-| `grep_rn_fn_main_include_rs` | rtok | 30 | 8.76 | 9.78 |
-| `ls_la` | ls | 30 | 0.52 | 0.72 |
-| `ls_la` | rtk | 30 | 3.57 | 3.97 |
-| `ls_la` | rtok | 30 | 5.56 | 13.58 |
+### `find`
 
-Environment:
+| case | raw | rtok | rtok-pr | rtk | ms rtok / pr / rtk |
+|---|---:|---:|---:|---:|---|
+| `find_rs` | 4561 | 725 (84.1 %) | 725 (84.1 %) | 232 (94.9 %) | 83.09 / 64.85 / 85.33 |
+| `find_src_files` | 807 | 363 (55.0 %) | 363 (55.0 %) | 171 (78.8 %) | 97.43 / 84.86 / 96.98 |
+| `find_cargo_toml` | 107 | 233 (-117.8 %) | 107 (0.0 %) | 80 (25.2 %) | 82.02 / 81.09 / 53.88 |
+| `find_dirs` | 389 | 161 (58.6 %) | 161 (58.6 %) | 106 (72.8 %) | 83.68 / 81.76 / 54.57 |
+| **total** | 5864 | **1482 (74.7 %)** | **1356 (76.9 %)** | **589 (90.0 %)** | |
 
-```text
-platform: Darwin 27.0.0 arm64
-python: 3.12.15
-docker_run: --cpus 4 --memory 8g --memory-swap 8g
-image: rtokbench/rtk
-host_model: Mac15,9
-host_cpu: Apple M3 Max
-host_ncpu: 16
-host_ram_bytes: 68719476736
-macos: 27.0.1
-colima: colima version v0.10.3
-image_id: sha256:619f1aefcded01f808b50de961ec26558d9c5ef0a46d61bc970bb29ef67c3186
-base_image: rust@sha256:a8a5f0a1e5fe7dfe1d352591e4a1c7dd2c08fd70475cae872cf3458ba0df0546
-rtok: rtok 0.17.0 (78f63b381)
-rtk: rtk 1.0.1
-rustc: rustc 1.98.1 (48a229cea 2026-09-01)
-cargo: cargo 1.98.1 (797e8a9bc 2026-08-05)
-fixture_sha: 4649aa9700619f94cf9c66876e9549d83420e16c
-tokenizer: tiktoken o200k_base via /opt/tok/bin/python3
-```
+### `ls -la`
 
-<!-- competitor-bench:end -->
+| case | raw | rtok | rtok-pr | rtk | ms rtok / pr / rtk |
+|---|---:|---:|---:|---:|---|
+| `ls_la_root` | 1586 | 591 (62.7 %) | 476 (70.0 %) | 425 (73.2 %) | 65.75 / 70.35 / 87.4 |
+| `ls_la_subdir` | 285 | 285 (0.0 %) | 166 (41.8 %) | 112 (60.7 %) | 73.66 / 72.74 / 57.37 |
+| `ls_la_crates` | 270 | 270 (0.0 %) | 138 (48.9 %) | 62 (77.0 %) | 47.78 / 48.0 / 38.9 |
+| **total** | 2141 | **1146 (46.5 %)** | **780 (63.6 %)** | **599 (72.0 %)** | |
+
+### `git status`
+
+| case | raw | rtok | rtok-pr | rtk | ms rtok / pr / rtk |
+|---|---:|---:|---:|---:|---|
+| `git_status_clean` | 17 | 17 (0.0 %) | 17 (0.0 %) | 16 (5.9 %) | 77.26 / 82.83 / 79.82 |
+| `git_status_dirty` | 127 | 146 (-15.0 %) | 119 (6.3 %) | 38 (70.1 %) | 60.98 / 56.56 / 72.49 |
+| **total** | 144 | **163 (-13.2 %)** | **136 (5.6 %)** | **54 (62.5 %)** | |
+
+### `git diff`
+
+| case | raw | rtok | rtok-pr | rtk | ms rtok / pr / rtk |
+|---|---:|---:|---:|---:|---|
+| `git_diff` | 312 | 347 (-11.2 %) | 278 (10.9 %) | 249 (20.2 %) | 53.21 / 57.05 / 73.4 |
+| `git_diff_stat` | 45 | 45 (0.0 %) | 45 (0.0 %) | 45 (0.0 %) | 49.5 / 44.46 / 49.71 |
+| **total** | 357 | **392 (-9.8 %)** | **323 (9.5 %)** | **294 (17.6 %)** | |
+
+### `git log`
+
+| case | raw | rtok | rtok-pr | rtk | ms rtok / pr / rtk |
+|---|---:|---:|---:|---:|---|
+| `git_log_20` | 4027 | 449 (88.9 %) | 449 (88.9 %) | 1355 (66.4 %) | 51.06 / 49.09 / 44.92 |
+| `git_log_oneline_50` | 1200 | 551 (54.1 %) | 551 (54.1 %) | 1200 (0.0 %) | 64.19 / 61.53 / 45.28 |
+| `git_log_stat_5` | 1275 | 398 (68.8 %) | 398 (68.8 %) | 1275 (0.0 %) | 82.09 / 69.64 / 58.05 |
+| **total** | 6502 | **1398 (78.5 %)** | **1398 (78.5 %)** | **3830 (41.1 %)** | |
+
+### `grep`
+
+| case | raw | rtok | rtok-pr | rtk | ms rtok / pr / rtk |
+|---|---:|---:|---:|---:|---|
+| `grep_fn_main` | 1158 | 689 (40.5 %) | 689 (40.5 %) | 1158 (0.0 %) | 81.32 / 76.31 / 75.49 |
+| `grep_settings_src` | 1420 | 577 (59.4 %) | 577 (59.4 %) | 1420 (0.0 %) | 138.73 / 162.64 / 158.63 |
+| **total** | 2578 | **1266 (50.9 %)** | **1266 (50.9 %)** | **2578 (0.0 %)** | |
+
+### `rg`
+
+| case | raw | rtok | rtok-pr | rtk | ms rtok / pr / rtk |
+|---|---:|---:|---:|---:|---|
+| `rg_pub_fn` | 521 | 521 (0.0 %) | 521 (0.0 %) | 521 (0.0 %) | 78.92 / 98.48 / 81.71 |
+| `rg_files_with` | 150 | 283 (-88.7 %) | 150 (0.0 %) | 127 (15.3 %) | 98.09 / 89.77 / 106.4 |
+| **total** | 671 | **804 (-19.8 %)** | **671 (0.0 %)** | **648 (3.4 %)** | |
+
+### `cat`
+
+| case | raw | rtok | rtok-pr | rtk | ms rtok / pr / rtk |
+|---|---:|---:|---:|---:|---|
+| `cat_rust` | 1469 | 517 (64.8 %) | 517 (64.8 %) | 1469 (0.0 %) | 78.06 / 75.89 / 43.66 |
+| `cat_toml` | 4945 | 995 (79.9 %) | 995 (79.9 %) | 4945 (0.0 %) | 87.75 / 101.19 / 60.91 |
+| **total** | 6414 | **1512 (76.4 %)** | **1512 (76.4 %)** | **6414 (0.0 %)** | |
+
+### `tree`
+
+| case | raw | rtok | rtok-pr | rtk | ms rtok / pr / rtk |
+|---|---:|---:|---:|---:|---|
+| `tree_plugins` | 65 | 65 (0.0 %) | 65 (0.0 %) | 58 (10.8 %) | 65.57 / 70.47 / 56.84 |
+| `tree_crates_l2` | 302 | 379 (-25.5 %) | 379 (-25.5 %) | 295 (2.3 %) | 83.88 / 80.98 / 66.22 |
+| **total** | 367 | **444 (-21.0 %)** | **444 (-21.0 %)** | **353 (3.8 %)** | |
+
+### `wc`
+
+| case | raw | rtok | rtok-pr | rtk | ms rtok / pr / rtk |
+|---|---:|---:|---:|---:|---|
+| `wc_l` | 33 | 33 (0.0 %) | 33 (0.0 %) | 24 (27.3 %) | 86.91 / 86.09 / 58.84 |
+| **total** | 33 | **33 (0.0 %)** | **33 (0.0 %)** | **24 (27.3 %)** | |
+
+### What differs, case by case
+
+* **The trailer is most of the gap.** Each cut rtok output ends with `[rtok <64-hex> · N lines · expand: rtok expand <64-hex>]`, about 90 tokens. rtk prints `[full output: rtk recall <12-hex>]` or nothing. In `cargo_test_pass` rtok-pr's payload (`cargo test: 93 passed (2 suites)`) is ~9 tokens against rtk's 16, but the trailer brings the total to 100. Same story for `git_status_dirty` (payload ≈ rtk's), `ls_la_crates` and `cargo_build_warning`. Proposal: a 12-hex id printed once, with prefix lookup in `rtok expand`; that would win most of these cases.
+* **cargo test**: rtk and rtok-pr both aggregate the suite totals into one line. On a failure, rtk keeps the whole `---- name stdout ----` block plus the `note: RUST_BACKTRACE` line and the raw `test result:` line. rtok-pr keeps only the panic location, message and left/right, plus `FAILED: names`.
+* **cargo build**: rtk keeps the full rustc snippet (source line, carets, `= note`) and adds a `cargo build: N errors, M warnings` line. rtok keeps only the headline, the `-->` location and the `could not compile` verdict, so its payload is smaller but has less context. A noop or incremental build is under the 170-byte raw threshold (T175), so rtok prints it verbatim.
+* **find**: rtk prints paths relative to the search root, `dir/ a b c` with every name, and adds an extension histogram. rtok's `group = "dir"` lists 3 names per dir plus `…` (lossy, archived) and repeats `(N files):`. rtok#1077 stops the regression on short finds (−117.8 % → 0 %). Next step: print single-file dirs as plain paths and drop `files` from the count.
+* **ls -la**: rtk prints `755 name/` and `644 name 12.8K` one per line. rtok-pr prints every directory on one line and files as `name size`, which is a smaller payload. The trailer is the gap.
+* **git status / diff**: rtok-pr now uses porcelain codes like rtk. For diff it keeps one `+++ b/path` per file, while rtk adds a `--stat` summary and per-file `+N -M`. Both regressions on main (−15 %, −11 %) are fixed.
+* **git log, grep, cat**: rtok is far ahead. rtk passes `git log --oneline`, `--stat`, `grep -rn ... --include/--exclude-dir` and `rtk read` through unchanged (0 %).
+* **tree, wc, rg -l**: rtk is slightly ahead. rtok's `tree` cut at 40 lines plus the trailer is longer than the raw output on `tree -L 2 crates` (still −25.5 %, open). `rg -l` is fixed to 0 % by never-worse.
+

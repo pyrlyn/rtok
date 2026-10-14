@@ -1,0 +1,16 @@
+src/ (2 files): fuzzing.rs, doctor.rs
+src/mcp/ (1 files): wrap.rs
+src/plugins/cmd/ (4 files): run.rs, filter.rs, formatters.rs …
+src/web/ (1 files): protocol.rs
+src/measure/ (1 files): stats.rs
+src/hooks/ (1 files): mod.rs
+src/agents/amp/ (1 files): README.md
+src/agents/claude/ (1 files): README.md
+src/store/ (1 files): mod.rs
+src/agents/gemini/ (1 files): README.md
+src/agents/qwen/ (2 files): README.md, mod.rs
+src/agents/roo/ (1 files): README.md
+src/plugins/json_tree/ (1 files): mod.rs
+src/plugins/graph/ (1 files): export.rs
+src/agents/grok/ (1 files): README.md
+[rtok be9d0019e8b6d0d418a965ac7113afbbf424f0fc8a09ddba0a94c9329168575d · 20 lines · expand: rtok expand be9d0019e8b6d0d418a965ac7113afbbf424f0fc8a09ddba0a94c9329168575d]

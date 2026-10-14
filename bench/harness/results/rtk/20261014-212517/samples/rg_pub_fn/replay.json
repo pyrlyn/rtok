@@ -1,0 +1,1 @@
+{"argv": ["rg", "-n", "pub fn", "src/plugins/cmd"], "cwd": "/fixture", "exit": 0}

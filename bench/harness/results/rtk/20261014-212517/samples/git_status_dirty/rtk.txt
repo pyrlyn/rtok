@@ -1,0 +1,6 @@
+* HEAD detached at 12ebeb97
+ M README.md
+ M rules/default.toml
+ M src/plugins/cmd/filter.rs
+?? bench-dir/
+?? bench-untracked.txt

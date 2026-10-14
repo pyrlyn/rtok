@@ -1,0 +1,1 @@
+{"argv": ["grep", "-rn", "Settings", "src/plugins/cmd"], "cwd": "/fixture", "exit": 0}

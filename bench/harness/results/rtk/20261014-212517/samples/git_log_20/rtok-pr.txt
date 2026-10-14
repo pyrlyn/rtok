@@ -1,0 +1,20 @@
+commit 12ebeb972e2bea88bec939a9ca9b436db884de13
+Author: Ivan Tugay <listepo@gmail.com>
+Date:   Wed Oct 14 23:25:53 2026 +0300
+
+    feat: T660.3 nested worktrees do not leak into walks, gc or clean (#1072)
+    
+    A linked worktree nested in its project (under .rtok/worktrees) is another checkout: search, tree, the graph walk and the watcher skip it, gc and clean take the deepest worktree as current, origin names the rtok pool, and a new worktree's symbol index copies no rows under .rtok/. Submodules and nested clones stay walked.
+
+commit a6fcf2b71c44f8e49955b1eca2dfc9533340f4a5
+Author: Ivan Tugay <listepo@gmail.com>
+Date:   Wed Oct 14 22:58:32 2026 +0300
+
+    feat: T660.2 every project-root caller goes through ProjectRoot (#1070)
+    
+    The .rtok.toml layer, agents --project, checkpoint's legacy lookup, grep_symbol, memory files, rtok task, the doctor's instruction audit and worktree_label call ProjectRoot::find and take checkout; git_root and the doctor's copy are gone. memory/files.rs::relative passes paths through contain, so a symlink out of the project is no longer a project file.
+
+commit de96106a9b5759fc348b81892b10d8bd82274966
+Author: Ivan Tugay <listepo@gmail.com>
+Date:   Wed Oct 14 22:28:06 2026 +0300
+[rtok 1140c6537f1359fe62e5eda2ee1799eae42523153250735420e718a8dc35be35 · 299 lines · expand: rtok expand 1140c6537f1359fe62e5eda2ee1799eae42523153250735420e718a8dc35be35]

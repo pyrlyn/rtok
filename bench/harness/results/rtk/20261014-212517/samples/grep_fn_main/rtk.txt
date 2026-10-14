@@ -1,0 +1,44 @@
+./workspace-hack/build.rs:2:fn main() {}
+./crates/rtok-store/src/retention.rs:88:    fn maintenance<T>(&self, f: impl FnOnce(&mut SqliteConnection) -> Result<T>) -> Result<T> {
+./crates/rtok-store/src/agents.rs:179:fn main_agent_id(
+./crates/rtok-store/src/agents.rs:271:    pub fn main_agent(&self, host_id: i32, host_session: &str) -> Result<Option<String>> {
+./crates/rtok-agent-sdk/src/lib.rs:649:    fn main_desc(&self) -> String {
+./crates/rtok-plugin-sdk/examples/shrink.rs:95:fn main() {
+./crates/rtok-config/src/root.rs:179:    fn main_checkout_found_from_deep_inside() {
+./build.rs:19:fn main() {
+./tests/graph_projects.rs:57:    fs::write(a.join("lib.rs"), "fn used() {}\nfn main() { used(); }\n").unwrap();
+./tests/graph_projects.rs:99:        "fn used() {}\nfn main() { used(); used(); }\n",
+./tests/graph_alerts.rs:108:        (&a, "fn used() {}\nfn main() { used(); }\n"),
+./tests/graph_truth.rs:463:fn main_impact_text(rows: &[(u32, String, String)], ambiguous: bool) -> String {
+./tests/stats_model.rs:51:{\"type\":\"user\",\"message\":{\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"r1\",\"content\":\"fn main() {}\"}]}}
+./tests/build_git_sha.rs:16:const MAIN_RS: &str = "fn main() { println!(\"{}\", env!(\"RTOK_GIT_SHA\")); }\n";
+./benches/graph.rs:27:fn main() {
+./examples/mcp_tool.rs:74:fn main() -> Result<()> {
+./examples/hello_plugin.rs:97:fn main() -> Result<()> {
+./src/agents/junk_kinds.rs:650:        put(&wt.join("src/main.rs"), b"fn main() {}");
+./src/measure/stats.rs:2544:            result("t6", "fn main() {}"),
+./src/hooks/types.rs:827:            "toolResult": {"textResultForLlm": "fn main() {}"}
+./src/bin/rtok-hook.rs:25:fn main() -> ExitCode {
+./src/tokens.rs:63:            estimate("fn main() { println!(\"hi there\"); }", Class::Code, &RATES),
+./src/project.rs:182:    fn main_checkout_and_linked_worktree_resolve_to_one_project() {
+./src/main.rs:10:fn main() -> ExitCode {
+./src/plugins/graph/index.rs:721:                format!("fn main() {{}}\nfn {extra}() {{}}\n"),
+./src/plugins/graph/mod.rs:2744:        fs::write(dir.join("main.rs"), "fn main() {}\n").unwrap();
+./src/plugins/guard/mod.rs:931:        let resp = json!({"content": "fn main() {}"});
+./src/plugins/guard/mod.rs:1014:        let small = json!({"content": "fn main() {}"});
+./src/plugins/guard/mod.rs:1044:        let resp = json!({"content": "fn main() {}"});
+./src/plugins/guard/mod.rs:1282:        let resp = json!({"content": "fn main() {}"});
+./src/plugins/guard/mod.rs:1318:        let resp = json!({"content": "fn main() {}"});
+./src/plugins/guard/mod.rs:1356:        let resp = json!({"content": "fn main() {}"});
+./src/plugins/guard/mod.rs:1390:        let resp = json!({"content": "fn main() {}"});
+./src/plugins/guard/mod.rs:1688:                    tool_response: &json!({"content": "fn main() {}"}),
+./src/plugins/read/outline.rs:779:            ("a.rs", "fn main() {}\nfn helper() {}\n", "fn main"),
+./src/plugins/read/outline.rs:932:            ("a.rs", "use crate::foo::Bar;\nfn main() {}\n", "Bar"),
+./src/plugins/read/outline.rs:987:        let src = pad("use crate::foo::{Bar, baz::Qux as Alias};\nfn main() {}\n");
+./src/plugins/read/search.rs:184:        let out = search(&Ctx::new(&cx), "fn main", ".", None).unwrap();
+./src/plugins/read/search.rs:526:        vfs.write("src/a.rs", b"fn main() {}\n");
+./src/plugins/read/mod.rs:828:        assert!(out.contains("fn main"), "{out}");
+./src/plugins/archive/mod.rs:813:        let code = "fn main() {\n    println!(\"hi\");\n}\n".repeat(200);
+./src/plugins/cmd/bounded.rs:333:    #[case("sed -n '/fn main/,$p' a.rs")]
+./src/plugins/cmd/hook.rs:510:    fn main_window_dispatch_has_no_agent_flag() {
+./src/plugins/cmd/hook.rs:556:    fn main_session_git_commands_stay_wrapped() {

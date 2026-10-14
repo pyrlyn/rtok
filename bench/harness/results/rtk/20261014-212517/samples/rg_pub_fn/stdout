@@ -1,0 +1,19 @@
+src/plugins/cmd/run.rs:301:pub fn run(cfg: &Config, args: &[String], agent: Option<&str>) -> Result<i32> {
+src/plugins/cmd/run.rs:316:pub fn emit_filtered(cfg: &Config, argv: &[String], body: &[u8], exit: i32, agent: Option<&str>) {
+src/plugins/cmd/filter.rs:13:pub fn run(cmd: &str, input: &str) -> String {
+src/plugins/cmd/filter.rs:22:pub fn run_with_store(cfg: &Config, cmd: &str, input: &str) -> String {
+src/plugins/cmd/formatters.rs:12:pub fn compress(
+src/plugins/cmd/formatters.rs:78:pub fn family_argv(argv: &[String]) -> Vec<String> {
+src/plugins/cmd/formatters.rs:88:pub fn family(argv: &[String]) -> String {
+src/plugins/cmd/formatters.rs:110:pub fn family_of(settings: &rules::Settings, argv: &[String], output: &str) -> String {
+src/plugins/cmd/formatters.rs:141:pub fn filter_kind(settings: &rules::Settings, stem: &str) -> &'static str {
+src/plugins/cmd/rules.rs:82:    pub fn from_config(cfg: &crate::config::Config) -> Self {
+src/plugins/cmd/rules.rs:91:    pub fn builtin() -> Self {
+src/plugins/cmd/rules.rs:172:    pub fn pick(&self, bin: &str) -> Rule {
+src/plugins/cmd/rules.rs:217:pub fn parse_strict(s: &str) -> Result<Vec<Rule>, String> {
+src/plugins/cmd/rules.rs:283:pub fn issues_in(rules_path: &std::path::Path, rules_dir: &std::path::Path) -> Vec<String> {
+src/plugins/cmd/rules.rs:1009:pub fn apply(
+src/plugins/cmd/rules.rs:1173:pub fn defaults() -> Vec<Rule> {
+src/plugins/cmd/hook.rs:152:pub fn pre_tool(ev: &PreToolUse<'_>, cx: &Ctx) -> Option<PreToolDecision> {
+src/plugins/cmd/bounded.rs:19:pub fn host_visible_prefix(text: &str) -> &str {
+src/plugins/cmd/bounded.rs:28:pub fn is_bounded(snippet: &str) -> bool {

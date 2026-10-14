@@ -1,0 +1,1 @@
+{"argv": ["rg", "-l", "Settings", "src"], "cwd": "/fixture", "exit": 0}

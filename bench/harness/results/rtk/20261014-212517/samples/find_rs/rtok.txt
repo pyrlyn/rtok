@@ -1,0 +1,41 @@
+workspace-hack/ (1 files): build.rs
+workspace-hack/src/ (1 files): lib.rs
+crates/rtok-store/src/ (41 files): graph_events.rs, hook_fields.rs, symbols_tests.rs …
+crates/rtok-log/src/ (1 files): lib.rs
+crates/rtok-mcp/src/ (6 files): ops.rs, registry.rs, spec.rs …
+crates/rtok-sys/src/ (1 files): lib.rs
+crates/rtok-sys/src/proc/ (3 files): indicator.rs, parse.rs, mod.rs
+crates/rtok-agent-sdk/src/ (1 files): lib.rs
+crates/rtok-hook/src/ (1 files): lib.rs
+crates/rtok-plugin-sdk/examples/ (1 files): shrink.rs
+crates/rtok-plugin-sdk/src/ (5 files): task_prefix.rs, lib.rs, host.rs …
+crates/rtok-wasm-demo-guest/src/ (1 files): lib.rs
+crates/rtok-config/src/ (7 files): lib.rs, validate.rs, since.rs …
+. (1 files): build.rs
+tests/ (126 files): gemini_plugin.rs, demon.rs, cmd_rules.rs …
+tests/common/ (8 files): compress_fixture.rs, mcp.rs, fake_lsp.rs …
+tests/fixtures/ (1 files): read_modes_sample.rs
+benches/ (1 files): graph.rs
+examples/ (2 files): mcp_tool.rs, hello_plugin.rs
+bench/repos/mini-rs/ (1 files): lib.rs
+src/ (34 files): demon.rs, lane.rs, lib.rs …
+src/doctor/ (8 files): mcp_dupes.rs, mcp_fix.rs, dupes.rs …
+src/agents/ (27 files): hook_events.rs, command.rs, junk_cache.rs …
+src/agents/codex/ (1 files): mod.rs
+src/agents/omp/ (1 files): mod.rs
+src/agents/vscode/ (1 files): mod.rs
+src/agents/commandcode/ (1 files): mod.rs
+src/agents/kilo/ (1 files): mod.rs
+src/agents/kiro/ (1 files): mod.rs
+src/agents/droid/ (1 files): mod.rs
+src/agents/crush/ (1 files): mod.rs
+src/agents/goose/ (1 files): mod.rs
+src/agents/grok/ (1 files): mod.rs
+src/agents/opencode/ (1 files): mod.rs
+src/agents/zed/ (1 files): mod.rs
+src/agents/aider/ (1 files): mod.rs
+src/agents/zcode/ (1 files): mod.rs
+src/agents/mimo/ (1 files): mod.rs
+src/agents/openhands/ (1 files): mod.rs
+… 58 lines omitted (expand d4d4e3867627287f2567e371fa711f03167219764e5dd482dbb704d348a9462b)
+[rtok d4d4e3867627287f2567e371fa711f03167219764e5dd482dbb704d348a9462b · 546 lines · expand: rtok expand d4d4e3867627287f2567e371fa711f03167219764e5dd482dbb704d348a9462b]
