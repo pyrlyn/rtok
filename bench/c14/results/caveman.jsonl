@@ -1,0 +1,3 @@
+{"case": "catalog:lean-ctx (79 tools)", "raw": 2513, "tools": 12, "rtok": 2513, "caveman-shrink": 2207, "caveman_spread": [2207, 2207, 2207]}
+{"case": "catalog:engram (23 tools)", "raw": 5822, "tools": 23, "rtok": 5822, "caveman-shrink": 5213, "caveman_spread": [5213, 5213, 5213]}
+{"case": "catalog:caveman testdata", "raw": 279, "tools": 2, "rtok": null, "caveman-shrink": 197, "caveman_spread": [197, 197, 197]}

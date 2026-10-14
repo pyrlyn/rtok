@@ -1,0 +1,4 @@
+FROM golang:1.26.9-trixie AS cave
+RUN git clone -q --depth 1 -b v4.0.1 https://github.com/JuliusBrussee/caveman /src && cd /src && CGO_ENABLED=0 go build -o /caveman-shrink ./shrink/cmd/caveman-shrink
+FROM rtok-c14b:1
+COPY --from=cave /caveman-shrink /usr/local/bin/caveman-shrink
