@@ -113,6 +113,11 @@ pub fn serve_blocking(cfg: &Config, addr: &str) -> Result<()> {
         .with_context(|| format!("rtok mcp --http: `{addr}` is not IP:PORT"))?;
     let token = bearer_token(&cfg.mcp.token)?;
     let public = public_url(&cfg.mcp.public_url)?;
+    let cwd = std::env::current_dir().context("rtok mcp --http: current directory")?;
+    exposure_guard(&cwd, std::env::home_dir().as_deref(), addr, public.as_ref())?;
+    // Over HTTP the caller is remote: never hand it `.env`, keys or `.git/config`.
+    #[cfg(feature = "read")]
+    crate::plugins::read::roots::deny_secrets();
     let mut cfg = cfg.clone();
     // The HTTP surface gets its own allow-list through the same filter as stdio's `tools`.
     cfg.mcp.tools = cfg.mcp.http_tools.clone();
@@ -170,6 +175,34 @@ fn transport_config(addr: SocketAddr, public: Option<&url::Url>) -> StreamableHt
         // An empty list would switch the check off in rmcp; a browser page's Origin must be
         // refused unless it is the configured public one.
         .enforce_origin_validation()
+}
+
+/// Refuse a start that would expose more than one project over the network.
+///
+/// The `read` guard allows everything under the cwd, so a server started in `/` or `$HOME`
+/// would serve `~/.ssh` to any token holder. A non-loopback bind sends the bearer token in
+/// clear unless a TLS front (named by an `https` `public_url`) terminates the connection.
+fn exposure_guard(
+    cwd: &std::path::Path,
+    home: Option<&std::path::Path>,
+    addr: SocketAddr,
+    public: Option<&url::Url>,
+) -> Result<()> {
+    if crate::fs::is_unwalkable_root(cwd, home) {
+        bail!(
+            "rtok mcp --http: refusing to serve {} (the filesystem root or home directory); \
+             start it inside a project",
+            cwd.display()
+        );
+    }
+    if !addr.ip().is_loopback() && !public.is_some_and(|u| u.scheme() == "https") {
+        bail!(
+            "rtok mcp --http: {addr} is not loopback and `[mcp] public_url` is not https; the \
+             bearer token would cross the network in clear. Bind 127.0.0.1 behind a TLS tunnel \
+             and set public_url to its https URL"
+        );
+    }
+    Ok(())
 }
 
 fn bearer_token(raw: &str) -> Result<Arc<str>> {
@@ -233,6 +266,22 @@ mod tests {
         assert!(!bearer_matches(Some(&h("Basic 0123456789abcdef")), token));
         assert!(!bearer_matches(Some(&h("0123456789abcdef")), token));
         assert!(!bearer_matches(None, token));
+    }
+
+    #[test]
+    fn exposure_guard_refuses_home_root_and_plain_remote_binds() {
+        let home = std::path::Path::new("/Users/someone");
+        let project = home.join("src/app");
+        let lo: SocketAddr = "127.0.0.1:8791".parse().unwrap();
+        let wide: SocketAddr = "0.0.0.0:8791".parse().unwrap();
+        assert!(exposure_guard(home, Some(home), lo, None).is_err());
+        assert!(exposure_guard(std::path::Path::new("/"), Some(home), lo, None).is_err());
+        assert!(exposure_guard(&project, Some(home), lo, None).is_ok());
+        assert!(exposure_guard(&project, Some(home), wide, None).is_err());
+        let http = public_url("http://example.com/mcp").unwrap();
+        assert!(exposure_guard(&project, Some(home), wide, http.as_ref()).is_err());
+        let https = public_url("https://example.com/mcp").unwrap();
+        assert!(exposure_guard(&project, Some(home), wide, https.as_ref()).is_ok());
     }
 
     #[test]
