@@ -83,11 +83,7 @@ pub fn complete_pending(store: &Store, cwd: &Path, agent: &str) -> Option<String
         return None;
     }
     let here = crate::fs::canon(cwd);
-    // The deepest one wins, as in [`linked`]: worktrees may nest.
-    let (path, task) = parked
-        .into_iter()
-        .filter(|(p, _)| crate::fs::path_starts_with(&here, &crate::fs::canon(Path::new(p))))
-        .max_by_key(|(p, _)| Path::new(p).components().count())?;
+    let (path, task) = super::deepest(&here, parked, |(p, _)| PathBuf::from(p))?;
     // Taking the row first lets only one of two sessions starting together win it.
     if !store.take_pending_worktree(&path).ok()? {
         return None;
@@ -120,7 +116,8 @@ fn copy_symbol_index(store: Option<&Store>, cwd: &Path, dest: &Path) {
     if from == to {
         return;
     }
-    if let Err(e) = store.copy_symbol_rows(&from, &to) {
+    // Main's own `.rtok/` holds the other worktrees; their files are not main's.
+    if let Err(e) = store.copy_symbol_rows(&from, &to, &[".rtok"]) {
         crate::log::stderr_ln(&format!("warning: symbol index not copied: {e:#}"));
     }
 }
@@ -177,19 +174,14 @@ pub struct Adopted {
 /// The main checkout and the linked worktree that holds `path`. The deepest one wins: an
 /// agent's cwd may be a subdirectory of it.
 fn linked(path: &Path) -> Result<(PathBuf, super::Record)> {
-    let real = |p: &Path| crate::fs::canon(p);
-    let target = real(path);
+    let target = crate::fs::canon(path);
     let worktrees = git::list(&target)?;
     let main = worktrees
         .first()
         .context("git lists no worktree")?
         .path
         .clone();
-    let Some(record) = worktrees
-        .into_iter()
-        .skip(1)
-        .filter(|r| crate::fs::path_starts_with(&target, &real(&r.path)))
-        .max_by_key(|r| real(&r.path).components().count())
+    let Some(record) = super::deepest(&target, worktrees.into_iter().skip(1), |r| r.path.clone())
     else {
         bail!("{} is not a linked worktree", path.display());
     };

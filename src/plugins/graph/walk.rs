@@ -131,6 +131,12 @@ impl Matcher {
         self.included.matched(path, false).is_whitelist()
     }
 
+    /// Whether `path` is inside a linked worktree nested below the root (one under
+    /// `.rtok/worktrees`): the walk skips those, so a watcher event there is not this index's.
+    pub(super) fn in_linked_worktree(&self, path: &Path) -> bool {
+        crate::fs::under_linked_worktree(&self.root, path)
+    }
+
     pub(super) fn is_excluded(&self, path: &Path) -> bool {
         let rel = match path.strip_prefix(&self.root) {
             Ok(rel) => rel,
@@ -285,6 +291,36 @@ mod tests {
         let dir = ignored_tree("t545-walk");
         let m = matcher(&dir, &["**/generated/**", "wanted/sub/"], &["wanted/"], &[]);
         assert_eq!(indexed(&m, &dir), ["src/lib.rs", "wanted/a.rs"]);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// T660.3: a linked worktree nested in the project (one under `.rtok/worktrees`) is another
+    /// checkout's files, though no ignore rule names it; a submodule and a nested clone stay in
+    /// the walk, and the walk root itself, a worktree or not, is always walked.
+    #[test]
+    fn a_nested_linked_worktree_is_not_walked_into() {
+        let dir = ignored_tree("t660-walk");
+        let nested = crate::testutil::linked_worktree(&dir, ".rtok/worktrees/x");
+        let sub = crate::testutil::submodule(&dir, "mods/sub");
+        let clone = dir.join("deps/clone");
+        fs::create_dir_all(clone.join(".git")).unwrap();
+        for (at, name) in [(&nested, "n.rs"), (&sub, "s.rs"), (&clone, "c.rs")] {
+            fs::write(at.join(name), "fn f() {}\n").unwrap();
+        }
+        fs::write(dir.join(".rtok/notes.rs"), "fn notes() {}\n").unwrap();
+        let m = matcher(&dir, &[], &[], &[]);
+        assert_eq!(
+            indexed(&m, &dir),
+            [
+                ".rtok/notes.rs",
+                "deps/clone/c.rs",
+                "mods/sub/s.rs",
+                "src/generated/g.rs",
+                "src/lib.rs"
+            ]
+        );
+        let m = matcher(&nested, &[], &[], &[]);
+        assert_eq!(indexed(&m, &nested), ["n.rs"]);
         let _ = fs::remove_dir_all(&dir);
     }
 

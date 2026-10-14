@@ -168,11 +168,11 @@ pub fn judge(cwd: &Path, policy: &Policy) -> anyhow::Result<(PathBuf, Vec<Judged
         .first()
         .map_or(cwd, |main| main.record.path.as_path())
         .to_path_buf();
+    let current_at = super::deepest(&here, 0..entries.len(), |i| entries[*i].record.path.clone());
     // The walks are the expensive part: side by side, and stopped at the first recent file.
-    let verdicts = par_map(&entries, |_, entry| {
+    let verdicts = par_map(&entries, |i, entry| {
         let path = &entry.record.path;
-        let current =
-            fs_kit::path::canonicalize(path).is_ok_and(|p| crate::fs::path_starts_with(&here, &p));
+        let current = current_at == Some(i);
         let modified = |within| newest_until(path, |m| policy.age(m) < within);
         decide(entry, modified, current, policy)
     });

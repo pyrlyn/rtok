@@ -374,11 +374,12 @@ impl Store {
             .collect())
     }
 
-    /// Copy one root's symbol rows onto another, skipping paths `to` already has.
+    /// Copy one root's symbol rows onto another, skipping paths `to` already has and paths in
+    /// a directory of `skip_under` (relative, no trailing slash).
     /// `id` is omitted so SQLite assigns it. The extractor fingerprint is copied when
     /// `to` has none, so the next index does not treat the root as a new extractor and
     /// delete the rows. One `BEGIN IMMEDIATE`.
-    pub fn copy_symbol_rows(&self, from: &str, to: &str) -> Result<usize> {
+    pub fn copy_symbol_rows(&self, from: &str, to: &str, skip_under: &[&str]) -> Result<usize> {
         if from == to {
             return Ok(0);
         }
@@ -408,7 +409,13 @@ impl Store {
                     .load(conn)?;
                 let rows: Vec<_> = rows
                     .into_iter()
-                    .filter(|row| !have.contains(&row.0))
+                    .filter(|row| {
+                        let skipped = skip_under.iter().any(|dir| {
+                            let rest = row.0.strip_prefix(dir);
+                            rest.is_some_and(|r| r.starts_with('/'))
+                        });
+                        !skipped && !have.contains(&row.0)
+                    })
                     .collect();
                 let inserted = rows.len();
                 for chunk in rows.chunks(INSERT_CHUNK) {

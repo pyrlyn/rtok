@@ -65,24 +65,11 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T525 | in progress | P2 | 3 | 0% | MiMo / mimo |
 | T526 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T527 | in progress | P2 | 3 | 0% | MiMo / mimo |
-| T660.3 | in progress | P1 | 3 | 90% | Claude Code / claude-opus-5-5 |
 | T660.4 | in progress | P1 | 3 | 0% | Claude Code / claude-opus-5-5 |
 | T660.5 | in progress | P2 | 3 | 0% | Claude Code / claude-opus-5-5 |
 
 
 
-### T660.3. Worktrees nested in the project do not leak into walks, gc or clean
-
-Needs T660.1; lands before T660.4. With worktrees under `<main>/.rtok/worktrees`, several places would see them as part of main:
-
-- graph walk (`plugins/graph/walk.rs`), `search`/`tree` (`read/search.rs`) and the watcher (`graph/watch.rs`, root `.gitignore` only) descend into them when `.rtok/` is not ignored: skip any directory holding a `.git` file (a nested checkout), like `worktree/list.rs::walk` already does.
-- `worktree/gc.rs` and `worktree/clean.rs` call a worktree current by `here.starts_with(dir)`, so from a nested worktree main counts as current too: pick the deepest match.
-- `worktree/origin.rs` names `<main>/.rtok/worktrees` its own `rtok` pool.
-- `worktree/claim.rs::copy_symbol_index` copies no rows under `.rtok/`.
-
-Check: a test per bullet with a worktree nested under `.rtok/worktrees` and no ignore rule; `just check`.
-
-Plan: a stalled session left the code and a test for every bullet uncommitted on branch `t660.3-nested`; adopted and rebased on `main`. Review the diff against the bullets, run `just check`, close.
 
 ### T660.4. Default worktree root `<project>/.rtok/worktrees`, `.rtok/` ignored
 

@@ -1944,3 +1944,71 @@ fn adopt_without_an_agent_binds_the_one_live_agent_of_the_pools_host() {
     assert_eq!(store.open_worktree_claims().unwrap().len(), 1);
     assert_eq!(store.pending_worktrees().unwrap().len(), 3);
 }
+
+/// T660.3: a worktree nested in another counts as the current one alone; the checkout around
+/// it does not, so `clean` and `gc` run from inside it still act on the outer one.
+#[test]
+fn clean_and_gc_take_the_deepest_worktree_as_current() {
+    let tmp = rtok::testutil::tmp_dir("worktree-nested-current");
+    // With an origin, so a branch at the base commit reads as merged.
+    let work = common::git::repo(&tmp);
+    // Nested checkouts are untracked content of their parent: keep them from reading as dirty.
+    std::fs::write(work.join(".git/info/exclude"), "target/\ninner/\n").unwrap();
+    add(&work, "a", None);
+    let (outer, nested) = (tmp.join("wt-a"), tmp.join("wt-a/inner"));
+    run(&outer, &["worktree", "add", "-q", "-b", "t-inner", "inner"]);
+
+    let tag = "Signature: 8a477f597d28d172789f06886806bc55\n";
+    let old = std::time::SystemTime::now() - std::time::Duration::from_secs(3 * 86_400);
+    for dir in [&outer, &nested] {
+        std::fs::create_dir_all(dir.join("target")).unwrap();
+        let file = dir.join("target/CACHEDIR.TAG");
+        std::fs::write(&file, tag).unwrap();
+        let file = std::fs::File::options().write(true).open(file).unwrap();
+        file.set_modified(old).unwrap();
+    }
+
+    let rows = json_in(&tmp, &nested, &["worktree", "clean", "--json"]);
+    assert_eq!(by_name(&rows, "wt-a")["action"], "clean", "{rows}");
+    assert_eq!(by_name(&rows, "inner")["action"], "keep", "{rows}");
+
+    let gc = ["worktree", "gc", "--json", "--owner", ME, "--idle", "0h"];
+    let plan = json_in(&tmp, &nested, &gc);
+    assert_eq!(by_name(&plan, "wt-a")["action"], "remove", "{plan}");
+    assert_eq!(by_name(&plan, "inner")["action"], "keep", "{plan}");
+}
+
+/// T660.3: the symbol index a new worktree starts from leaves out main's `.rtok/` rows, where
+/// the other worktrees live.
+#[test]
+fn a_new_worktree_inherits_no_symbol_rows_under_rtok() {
+    let tmp = rtok::testutil::tmp_dir("worktree-copy-index");
+    let work = common::git::repo(&tmp);
+    let store = rtok::store::Store::open_in_memory().unwrap();
+    let row = rtok_plugin_sdk::SymbolRow::new("main", "function", 1, true, 1, "");
+    let main = rtok::store::canon_root(&work);
+    for path in ["src/a.rs", ".rtok/worktrees/x/src/a.rs", ".rtokish/b.rs"] {
+        let rows = std::slice::from_ref(&row);
+        store
+            .replace_symbols(&main, path, "sha", (0, 0), rows)
+            .unwrap();
+    }
+
+    let plan = rtok::worktree::claim::add(
+        Some(&store),
+        &work,
+        &tmp.join("_worktrees"),
+        ("t1", None),
+        None,
+        Some(ME.into()),
+        false,
+    )
+    .unwrap();
+
+    let copied = store
+        .symbol_stats(&rtok::store::canon_root(&plan.path))
+        .unwrap();
+    let mut paths: Vec<_> = copied.keys().map(String::as_str).collect();
+    paths.sort_unstable();
+    assert_eq!(paths, [".rtokish/b.rs", "src/a.rs"]);
+}

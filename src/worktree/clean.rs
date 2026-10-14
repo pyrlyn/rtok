@@ -91,8 +91,10 @@ pub fn run(cwd: &Path, paths: &[PathBuf], policy: &Policy, yes: bool) -> Result<
     let explicit = !paths.is_empty();
     let unix = |t: SystemTime| t.duration_since(UNIX_EPOCH).ok().map(|d| d.as_secs());
     let mut judged = Vec::new();
-    for dir in targets(cwd, paths)? {
-        let current = here.starts_with(real(&dir));
+    let dirs = targets(cwd, paths)?;
+    let current_at = super::deepest(&here, 0..dirs.len(), |i| dirs[*i].clone());
+    for (i, dir) in dirs.into_iter().enumerate() {
+        let current = current_at == Some(i);
         for cache in usage(&dir).caches {
             let kept = kept_because(&cache, current, explicit, policy);
             judged.push((dir.clone(), cache, kept));
