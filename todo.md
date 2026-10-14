@@ -47,5 +47,4 @@
 - T657. Match compressor credentials to the internal provider
 - T651. Honor ProgressRunner timeouts with inherited output
 - T660.2. Every project-root caller goes through the T660.1 method
-- T660.4. Default worktree root `<project>/.rtok/worktrees`, `.rtok/` ignored
 - T660.5. `rtok worktree migrate` moves worktrees into the configured root

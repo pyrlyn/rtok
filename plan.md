@@ -66,7 +66,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T526 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T527 | in progress | P2 | 3 | 0% | MiMo / mimo |
 | T660.2 | todo | P1 | 3 | 0% | |
-| T660.4 | in progress | P1 | 3 | 0% | Claude Code / claude-opus-5-5 |
 | T660.5 | in progress | P2 | 3 | 0% | Claude Code / claude-opus-5-5 |
 
 
@@ -76,14 +75,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 Needs T660.1. Switch every caller to `ProjectRoot` and say explicitly whether it wants `checkout` or `main`: `layers.rs` `.rtok.toml` layer (`checkout`: each worktree reads its own checked-out file), `agents/command.rs --project`, `plugins/checkpoint.rs`, `guard/grep_symbol.rs`, `memory/files.rs::project_root`, `tasks/run.rs` (both sites), `model/agents.rs::worktree_label`. Delete `git_root` and the duplicate in `src/doctor.rs`. `checkpoint::project_of_cx` returns the worktree basename today while `project_name` returns the main repo's name; it moves to `main` so a checkpoint made in a worktree files under the same project. `memory/files.rs::relative` uses `contain` so a symlink cannot point a note outside the root.
 
 Check: one test per changed site for a linked worktree; a test that the checkpoint project name is the same from the main checkout and from a worktree; a symlink-escape test for memory paths; `just check`.
-
-### T660.4. Default worktree root `<project>/.rtok/worktrees`, `.rtok/` ignored
-
-Needs T660.1 and T660.3. The `[worktree] root` default becomes `.rtok/worktrees`. A relative root resolves against `ProjectRoot::main` (not the process cwd, as today), so a worktree created from inside another worktree still lands under the main checkout; `~` and absolute roots keep today's meaning. `add::plan` checks the new path with `contain`. Before creating the first worktree, rtok makes sure `.rtok/` is ignored: nothing to do when `git check-ignore` already ignores it; else append `.rtok/` to `<main>/.gitignore` when that file exists (rest byte-for-byte, a missing final newline added first); else to `<main>/.git/info/exclude`. Existing worktrees elsewhere keep working. Docs: `README.md`, `docs/agents-and-worktrees.md`, `docs/config.md` (+ `docs/ru`, `docs/uk`), `crates/rtok-config/default.toml`, `skills/rtok-worktrees/SKILL.md`, `CHANGELOG.md`.
-
-Check: tests for the default path from main and from a linked worktree, a relative custom root, an absolute root, an escaping root (`../x` with a task id) refused; `.gitignore` present without the rule / with it / without a final newline, no `.gitignore` → `info/exclude`, idempotent on a second add; the `the_default_root_is_under_the_rtok_home` test is replaced; `just check`.
-
-Plan: (1) `[worktree] root` default `.rtok/worktrees` in `crates/rtok-config` and `default.toml`. (2) One resolver for the root: relative → against `ProjectRoot::main`, `~` and absolute unchanged; `src/worktree/add.rs::plan` checks the target with `contain`; every other reader of `cfg.worktree.root` (`host.rs`, `ops.rs`, `whoami.rs`) goes through it. (3) `ensure_ignored(main)` before the first `git worktree add`: `git check-ignore` → append to `.gitignore` (byte-for-byte, final newline first) → `.git/info/exclude`. (4) Docs from the list above. (5) Tests from Check; `just check`.
 
 ### T660.5. `rtok worktree migrate` moves worktrees into the configured root
 
