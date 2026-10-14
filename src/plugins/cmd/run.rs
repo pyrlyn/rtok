@@ -425,8 +425,7 @@ fn emit_filtered_to(
     // kept everything (a `tree` it cannot shorten) the trailer would only add to raw.
     let min = cfg.plugins.cmd.trailer_min_lines;
     if std::str::from_utf8(body).is_ok()
-        && ((lines <= min && no_shorter)
-            || (lines > min && shown.len() >= body.len()))
+        && ((lines <= min && no_shorter) || (lines > min && shown.len() >= body.len()))
     {
         write_raw(out);
         let est = cx.estimate(super::bounded::host_visible_prefix(&before), Class::Code);
