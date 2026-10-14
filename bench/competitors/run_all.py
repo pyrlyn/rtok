@@ -10,6 +10,7 @@ Cross-platform (macOS, Linux, Windows): pathlib + subprocess argv lists only.
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -106,6 +107,15 @@ def main(argv: list[str]) -> int:
             sys.argv = ["update_md.py", slug, str(js)]
             update_md_main()
             print_table(slug, json.loads(js.read_text(encoding="utf-8")))
+            continue
+        harness_tool = HERE.parent / "harness" / "tools" / slug / "Dockerfile"
+        if harness_tool.is_file():
+            # Shared clean harness (bench/harness): one image, replayed real output,
+            # fresh state per call. It writes its own results and summary.md.
+            code = subprocess.run(
+                [sys.executable, str(HERE.parent / "harness" / "run.py"), slug], check=False
+            ).returncode
+            rc = rc or code
             continue
         try:
             code = docker_main(slug)
