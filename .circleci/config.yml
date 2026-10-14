@@ -1,0 +1,88 @@
+version: 2.1
+
+# Pilot: CircleCI for private pyrlyn repositories (docs/ci/circleci.md).
+# Runs only when .github/infra.yml has `is_private: true`; otherwise every job halts
+# right after checkout and GitHub Actions (pipeline.yml) stays the CI.
+
+orbs:
+  win: circleci/windows@5.0
+
+commands:
+  gate-private:
+    steps:
+      - run:
+          name: Halt unless is_private is true
+          shell: bash
+          command: |
+            if ! grep -Eq '^is_private:[[:space:]]*true([[:space:]]|#|$)' .github/infra.yml 2>/dev/null; then
+              echo "is_private is not true in .github/infra.yml: GitHub Actions is the CI here"
+              circleci-agent step halt
+            fi
+
+jobs:
+  linux-test:
+    docker:
+      - image: cimg/rust:1.90
+    resource_class: medium
+    steps:
+      - checkout
+      - gate-private
+      - restore_cache:
+          keys:
+            - cargo-linux-v1-{{ checksum "Cargo.lock" }}
+      - run:
+          name: Rust 1.98.1 (mise.toml) and cargo-nextest
+          command: |
+            rustup default 1.98.1
+            curl -LsSf https://get.nexte.st/latest/linux | tar zxf - -C ~/.cargo/bin
+      - run:
+          name: Unit tests
+          command: cargo nextest run --workspace --locked
+      - run:
+          name: Trim cache
+          command: rm -rf target/debug/incremental target/debug/deps/*-test* ~/.cargo/registry/src
+      - save_cache:
+          key: cargo-linux-v1-{{ checksum "Cargo.lock" }}
+          paths:
+            - ~/.cargo/registry
+            - ~/.cargo/git
+            - target
+
+  windows-test:
+    executor:
+      name: win/default
+      size: medium
+    steps:
+      - checkout
+      - gate-private
+      - run:
+          name: Unit tests
+          shell: bash.exe
+          command: |
+            curl -sSf -o rustup-init.exe https://win.rustup.rs/x86_64
+            ./rustup-init.exe -y --profile minimal --default-toolchain 1.98.1
+            export PATH="$USERPROFILE/.cargo/bin:$PATH"
+            cargo test --workspace --locked
+
+  macos-test:
+    macos:
+      xcode: 16.4.0
+    resource_class: m4pro.medium
+    steps:
+      - checkout
+      - gate-private
+      - run:
+          name: Unit tests
+          command: |
+            curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain 1.98.1
+            source "$HOME/.cargo/env"
+            cargo test --workspace --locked
+
+workflows:
+  test:
+    jobs:
+      - linux-test
+      - windows-test:
+          requires: [linux-test]
+      - macos-test:
+          requires: [linux-test]

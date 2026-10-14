@@ -37,3 +37,7 @@ license:
 
 # Snyk stays off and actionlint on (pyrlyn/ci's defaults); actionlint skips the dist-generated
 # release.yml.
+
+# CI selector (docs/ci/circleci.md): true = CircleCI (.circleci/config.yml), false = GitHub Actions.
+# Needs pyrlyn/ci#73 and a bumped pin before pipeline.yml accepts the key.
+is_private: false
