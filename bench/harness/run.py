@@ -2,6 +2,13 @@
 """Host entry point: build the shared base + tool image, run, copy results out.
 
     python3 bench/harness/run.py rtk [--rtok-pr REF] [--cases a,b] [--runs N]
+        [--no-fail-on-negative] [--refresh-fixtures DIR] [--from RESULTS_DIR]
+
+After the run every command group and scenario where rtok-PR saves less than the
+competitor is printed as `WARN NEGATIVE: ...`; the exit code is then 3 (after all
+results are written) unless --no-fail-on-negative. --refresh-fixtures DIR writes
+DIR/<case>/{raw.txt,case.toml} for rtok's tests/fixtures/bench; --from reuses an
+existing results dir instead of running Docker.
 """
 from __future__ import annotations
 
@@ -14,6 +21,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
 ROOT = HERE.parents[1]
 BASE_TAG = "rust:1.98.1-trixie"
 # Pinned rtok main used both as the fixture and as the "rtok" column.
@@ -48,7 +56,15 @@ def main() -> int:
     ap.add_argument("--fixture-ref", default=DEFAULT_REF)
     ap.add_argument("--cases", default="")
     ap.add_argument("--runs", default=os.environ.get("RUNS", "30"))
+    ap.add_argument("--no-fail-on-negative", action="store_true",
+                    help="exit 0 even when rtok-PR saves less than the competitor somewhere")
+    ap.add_argument("--refresh-fixtures", default="", metavar="DIR",
+                    help="write DIR/<case>/raw.txt + case.toml (rtok tests/fixtures/bench)")
+    ap.add_argument("--from", dest="from_dir", default="", metavar="RESULTS_DIR",
+                    help="skip the run; post-process an existing results dir")
     a = ap.parse_args()
+    if a.from_dir:
+        return finish(Path(a.from_dir).resolve(), a, 0)
     tool_dir = HERE / "tools" / a.tool
     if not (tool_dir / "Dockerfile").is_file():
         print(f"no tools/{a.tool}/Dockerfile", file=sys.stderr)
@@ -92,7 +108,17 @@ def main() -> int:
     sh(["docker", "cp", f"{name}:/out/.", str(out)])
     sh(["docker", "rm", "-f", name], capture_output=True)
     print(f"results: {out}")
-    return rc
+    return finish(out, a, rc)
+
+
+def finish(out: Path, a: argparse.Namespace, rc: int) -> int:
+    import check  # bench/harness/check.py
+    if a.refresh_fixtures:
+        check.refresh_fixtures(out, Path(a.refresh_fixtures).resolve())
+    losses = check.report_negatives(out, a.tool)
+    if rc:
+        return rc
+    return 3 if losses and not a.no_fail_on_negative else 0
 
 
 if __name__ == "__main__":

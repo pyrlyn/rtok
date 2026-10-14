@@ -81,6 +81,10 @@ def main() -> int:
     tools.append(("rtok", lambda a: rtok.argv(a, "rtok")))
     if shutil.which("rtok-pr"):
         tools.append(("rtok-pr", lambda a: rtok.argv(a, "rtok-pr")))
+        # Only a PR build knows `--no-ref`; probe instead of assuming.
+        probe = subprocess.run(["rtok-pr", "run", "--help"], capture_output=True, text=True, check=False)
+        if "--no-ref" in probe.stdout:
+            tools.append(("rtok-pr-noref", lambda a: rtok.argv(a, "rtok-pr", no_ref=True)))
     comp_name = os.environ["COMPETITOR"]
     comp = load_tool(Path(f"/bench/tools/{comp_name}.py"))
     tools.append((comp_name, comp.argv))
