@@ -44,17 +44,7 @@ static VARIANTS: [Variant; 2] = [
 ];
 
 impl Agent for Zed {
-    fn id(&self) -> &'static str {
-        "zed"
-    }
-
-    fn variants(&self) -> &'static [Variant] {
-        &VARIANTS
-    }
-
-    fn readme(&self) -> &'static str {
-        include_str!("README.md")
-    }
+    super::agent_identity!("zed");
 
     fn shared(&self) -> bool {
         true
