@@ -42,6 +42,7 @@ fn filtered(home: &Path, case: &Case, raw: &[u8], no_ref: bool) -> Vec<u8> {
 }
 
 #[test]
+#[allow(clippy::print_stderr, reason = "per-case savings table")]
 fn bench_fixtures_meet_their_floors() {
     let bpe = tiktoken_rs::o200k_base().expect("o200k_base");
     let tok = |b: &[u8]| {
