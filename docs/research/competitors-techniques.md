@@ -21,7 +21,7 @@ specify an rtok design that should beat it. Expected gains are targets to verify
 
 ## Key techniques per tool
 
-### sqz (found in its source)
+### sqz (as found in its source)
 - Pipeline of stages over JSON and text: keep/strip fields, strip nulls, flatten, truncate strings,
   collapse arrays ([stages.rs](https://github.com/ojuschugh1/sqz/blob/cf2b03c8072729f366e48a8a4933a421bd2a1e79/sqz_engine/src/stages.rs#L39-L480)).
 - Diff fold: keep +/-/headers and N=2 context lines, replace the rest with `[N unchanged lines]`
