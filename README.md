@@ -69,7 +69,7 @@ measured: [docs/measuring.md](docs/measuring.md).
 | `rtok agents usage` | tokens and estimated cost per agent and month or day, from the agents' own session files (Claude Code, Codex, OpenCode, Kilo, Copilot CLI, Gemini CLI, pi, Kimi Code; Droid, Grok, ZCode and Antigravity are listed as unsupported) or what passed through rtok (`--tz`, `--since`, `--daily`, `--unpriced`, `--json`) |
 | `rtok bench` | run the fixed A/B schedule |
 | `rtok doctor` | inspect hooks, MCP servers and the proxy chain |
-| `rtok worktree add` / `claim` / `adopt` / `list` / `remove` / `gc` / `clean` | per-task git worktrees bound to agents — see [docs/agents-and-worktrees.md](docs/agents-and-worktrees.md) |
+| `rtok worktree add` / `claim` / `adopt` / `list` / `remove` / `gc` / `clean` / `migrate` | per-task git worktrees bound to agents — see [docs/agents-and-worktrees.md](docs/agents-and-worktrees.md) |
 | `rtok task init` / `create` / `list` / `status` / `next` / `claim` / `export` / `sync` | numbered tasks shared by every checkout and agent — see [docs/tasks.md](docs/tasks.md) |
 | `rtok batch submit` / `status` / `fetch` | provider Batch jobs through `rtok proxy` |
 | `rtok run -- <cmd>` | run, archive, and format a command result |

@@ -46,8 +46,6 @@
 - T656. Keep worktrees and caches when their age cannot be established
 - T657. Match compressor credentials to the internal provider
 - T651. Honor ProgressRunner timeouts with inherited output
-- T660.4. Default worktree root `<project>/.rtok/worktrees`, `.rtok/` ignored
-- T660.5. `rtok worktree migrate` moves worktrees into the configured root
 - T672. all (link line): −75 tok/call (vs sqz `§ref§` ~13 tok)
 - T673. grep 2260, git grep 452, rg: ≥ 91 %, 100 % paths (vs t-o 89.7 %, lean-ctx 89.6 %)
 - T674. sed 2119 (`sed -n a,bp f`), cat 950, head 35, tail 155, awk: ≥ 93 % on `cat` source; re-read ≥ 95 % (vs lean-ctx 91.4 % (`read` rewrite))

@@ -136,6 +136,18 @@ pub(super) enum WorktreeCmd {
         #[arg(long)]
         json: bool,
     },
+    /// Move this repository's worktrees into `[worktree] root`; dry run without `--yes`
+    Migrate {
+        /// Apply; without it this is a dry run that changes nothing
+        #[arg(long)]
+        yes: bool,
+        /// Also move old locks without an agent whose owner is this
+        #[arg(long)]
+        owner: Option<String>,
+        /// JSON instead of the table
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 pub(super) fn run(config_file: &Option<PathBuf>, action: WorktreeCmd) -> Result<()> {
@@ -286,6 +298,21 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: WorktreeCmd) -> Result<
             }
             if outcomes.iter().any(|o| o.failed) {
                 bail!("some worktrees could not be removed");
+            }
+
+            Ok(())
+        }
+        WorktreeCmd::Migrate { yes, owner, json } => {
+            let cfg = Config::load_with(config_file.as_deref(), None)?;
+            let cwd = std::env::current_dir()?;
+            let outcomes = crate::worktree::ops::migrate(&cfg, &cwd, owner.as_deref(), yes)?;
+            if json {
+                print_json(&outcomes)?;
+            } else {
+                print!("{}", crate::worktree::migrate::to_table(&outcomes, yes));
+            }
+            if outcomes.iter().any(|o| o.failed) {
+                bail!("some worktrees could not be moved");
             }
 
             Ok(())

@@ -1058,8 +1058,9 @@ section! {
         /// Off: the commands refuse, MCP lists no `worktree_*` tool and the host hooks do what
         /// the host does without rtok.
         enabled: bool = true,
-        /// Where worktrees are created, as `<root>/<repo>-<task>`.
-        root: PathBuf = p("~/.rtok/worktrees"),
+        /// Where worktrees are created, as `<root>/<repo>-<task>`. A relative root is under the
+        /// main checkout.
+        root: PathBuf = p(".rtok/worktrees"),
     }
 }
 
