@@ -282,7 +282,7 @@ fn run_changed_with(
     each_parsed(&jobs, |job, parsed| {
         pb.inc(1);
         match parsed {
-            Parsed::Unreadable => {}
+            Parsed::Unreadable | Parsed::NotText => {}
             Parsed::Unparsed => report.read += 1,
             Parsed::Same => {
                 report.read += 1;
@@ -326,7 +326,10 @@ struct Job {
 
 /// What a worker made of a [`Job`]; the calling thread turns it into store writes.
 enum Parsed {
+    /// The read itself failed (permissions, I/O); the bytes may be fine next time.
     Unreadable,
+    /// Read, but not UTF-8; stays so until the bytes change.
+    NotText,
     /// Read, but the grammar returned an error.
     Unparsed,
     /// Same bytes as the stored sha.
@@ -344,7 +347,12 @@ fn stage_parsed(
     touches: &mut Vec<(String, (i64, i64))>,
 ) {
     match parsed {
+        // T654: the unknown stat (0, 0) never matches the stat gate, so the file is read again
+        // once it is readable, even when restoring access left its mtime and size unchanged.
         Parsed::Unreadable => {
+            pending.push((job.rel.clone(), EMPTY_SHA.to_string(), (0, 0), Vec::new()))
+        }
+        Parsed::NotText => {
             pending.push((job.rel.clone(), EMPTY_SHA.to_string(), job.stat, Vec::new()))
         }
         Parsed::Unparsed => {
@@ -365,8 +373,11 @@ fn stage_parsed(
 }
 
 fn parse(job: &Job) -> Parsed {
-    let Ok(src) = std::fs::read_to_string(&job.path) else {
+    let Ok(bytes) = std::fs::read(&job.path) else {
         return Parsed::Unreadable;
+    };
+    let Ok(src) = String::from_utf8(bytes) else {
+        return Parsed::NotText;
     };
     let sha = store::hex_sha256(src.as_bytes());
     if job.known.as_deref() == Some(sha.as_str()) {
@@ -960,6 +971,47 @@ pub(crate) mod tests {
             cx.store.symbol_stat(&k, "bad.rs").unwrap().map(|s| s.0),
             Some(EMPTY_SHA.to_string())
         );
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T654: restoring read access changes neither bytes, size nor mtime, so a file indexed
+    /// while unreadable must not leave a stat the gate trusts.
+    #[cfg(unix)]
+    #[test]
+    fn a_file_unreadable_at_index_time_is_read_once_access_returns() {
+        use std::os::unix::fs::PermissionsExt;
+        let (cx, dir) = cx("t654-unreadable");
+        let file = dir.join("locked.rs");
+        fs::write(&file, "fn hidden_until_readable() {}\n").unwrap();
+        fs::set_permissions(&file, fs::Permissions::from_mode(0o000)).unwrap();
+        let unreadable = fs::read(&file).is_err(); // root ignores the mode bits
+        let ctx = Ctx::new(&cx);
+        run(&ctx, &dir, false).unwrap();
+        let before = fs::metadata(&file).unwrap();
+        fs::set_permissions(&file, fs::Permissions::from_mode(0o644)).unwrap();
+        let after = fs::metadata(&file).unwrap();
+        assert_eq!(
+            stat_key(&before),
+            stat_key(&after),
+            "chmod moved mtime or size"
+        );
+        if unreadable {
+            assert!(
+                !cx.store
+                    .has_symbol_def(&canon(&dir), "hidden_until_readable")
+                    .unwrap()
+            );
+        }
+        let again = run(&ctx, &dir, false).unwrap();
+        assert_eq!(again.indexed, 1, "{again:?}");
+        assert!(
+            cx.store
+                .has_symbol_def(&canon(&dir), "hidden_until_readable")
+                .unwrap()
+        );
+        // Control: once read, the unchanged file is skipped again.
+        let warm = run(&ctx, &dir, false).unwrap();
+        assert_eq!((warm.read, warm.skipped), (0, 1), "{warm:?}");
         let _ = fs::remove_dir_all(dir);
     }
 
