@@ -12,7 +12,7 @@ pub use rtok_store::*;
 
 /// Show the migration spinner on a terminal. [`crate::cli::run`] calls this before any open.
 pub fn install_migrate_spinner() {
-    rtok_store::on_long_migrate(|msg, f| crate::progress::with_loader(msg, f));
+    rtok_store::on_long_migrate(|msg, f| rtok_sys::proc::ProgressRunner::wait(msg, f));
 }
 
 /// `[plugins.memory.embed]` as the plain settings the store accepts.

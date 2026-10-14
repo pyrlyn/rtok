@@ -289,7 +289,7 @@ fn config(doc: &Document) -> String {
 
 fn doctor(doc: &Document) -> String {
     let mut s = String::from("units: live probes, not store rows\n");
-    s.push_str(&doc.doctor.to_text());
+    s.push_str(&doc.doctor.to_compact_text());
     if !s.ends_with('\n') {
         s.push('\n');
     }
@@ -571,6 +571,41 @@ mod tests {
         assert!(out.contains("[1]{plugin,rows,est_before,est_after,saved}:"));
         assert!(out.contains("total_saved=15tok rows=1"));
         assert!(out.contains("units:"));
+    }
+
+    /// T664: one line per host variant, no per-module reasons — those repeated across
+    /// every T413 host and pushed `#doctor` past the default budget.
+    #[test]
+    fn doctor_agents_are_one_line_per_host_variant() {
+        use crate::agents::{ModuleRow, ModuleState};
+        let row = |name, state, note: &str| ModuleRow {
+            name,
+            state,
+            note: note.into(),
+        };
+        let mut d = doc();
+        d.doctor.agents = vec![crate::doctor::AgentModules {
+            host: "claude",
+            kind: "desktop",
+            modules: vec![
+                row("hooks", ModuleState::NotSupported, ": no hook events"),
+                row("mcp", ModuleState::Installed, ""),
+                row("proxy", ModuleState::NotInstalled, " (--proxy)"),
+            ],
+        }];
+        let out = render(&d, &cfg_with_budget(8000));
+        assert!(
+            out.contains("\n  claude (desktop) hooks=n/a mcp=yes proxy=no\n"),
+            "{out}"
+        );
+        assert!(
+            !out.contains("no hook events"),
+            "reasons stay in rtok doctor: {out}"
+        );
+        assert!(
+            d.doctor.to_text().contains("no hook events"),
+            "full text unchanged"
+        );
     }
 
     /// T105 Check, same as markdown.rs/html.rs (T302): a non-finite `rate` (a

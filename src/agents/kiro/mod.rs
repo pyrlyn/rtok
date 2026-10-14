@@ -21,8 +21,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 
 use super::{
-    Agent, Kind, Mode, Support, Variant, apply_mcp_only, installed_mcp_only, register_stdio_mcp,
-    support_mcp_only, unregister_stdio_mcp,
+    Agent, Kind, Support, Variant, register_stdio_mcp, support_mcp_only, unregister_stdio_mcp,
 };
 use crate::config::Config;
 
@@ -63,17 +62,7 @@ pub fn unregister_mcp(cfg: &Config) -> Result<String> {
 }
 
 impl Agent for Kiro {
-    fn id(&self) -> &'static str {
-        HOST
-    }
-
-    fn variants(&self) -> &'static [Variant] {
-        &VARIANTS
-    }
-
-    fn readme(&self) -> &'static str {
-        include_str!("README.md")
-    }
+    super::agent_identity!(HOST);
 
     /// Both variants read `~/.kiro/settings/mcp.json`, so one apply covers them.
     fn shared(&self) -> bool {
@@ -89,24 +78,13 @@ impl Agent for Kiro {
         )
     }
 
-    fn files(&self, cfg: &Config, _kind: Kind) -> Vec<PathBuf> {
-        vec![mcp_path(cfg)]
-    }
-
-    fn installed(&self, cfg: &Config, _kind: Kind) -> Vec<&'static str> {
-        installed_mcp_only(&mcp_path(cfg))
-    }
-
-    fn apply(&self, cfg: &Config, _kind: Kind, mode: Mode) -> Result<Vec<String>> {
-        apply_mcp_only(cfg, mode, register_mcp, unregister_mcp)
-    }
+    super::mcp_only_file!(mcp_path, register_mcp, unregister_mcp);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agents::assert_stdio_mcp_roundtrip;
-    use rtok_agent_sdk::NO_CHANGES;
+    use crate::agents::{Mode, assert_stdio_mcp_roundtrip};
     use std::fs;
 
     fn cfg(name: &str, dry: bool) -> (Config, PathBuf) {
@@ -167,20 +145,7 @@ mod tests {
     #[test]
     fn apply_is_idempotent_via_the_agent_trait() {
         let (c, path) = cfg("apply", false);
-        let lines = Kiro.apply(&c, Kind::Cli, Mode::Install).unwrap();
-        assert!(lines[0].starts_with("mcpServers.rtok: "), "{lines:?}");
-        assert_eq!(
-            Kiro.apply(&c, Kind::Cli, Mode::Install).unwrap(),
-            [NO_CHANGES]
-        );
-        assert_eq!(
-            Kiro.apply(&c, Kind::Cli, Mode::Remove).unwrap(),
-            ["- mcpServers.rtok"]
-        );
-        assert_eq!(
-            Kiro.apply(&c, Kind::Cli, Mode::Remove).unwrap(),
-            [NO_CHANGES]
-        );
+        super::super::assert_mcp_only_apply_idempotent(&Kiro, &c, Kind::Cli, "mcpServers");
         let _ = fs::remove_dir_all(path.parent().unwrap());
     }
 }

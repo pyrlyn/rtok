@@ -546,6 +546,22 @@ pub fn accepted(apply: &Apply, question: &str) -> bool {
     ask(apply, question, true)
 }
 
+/// How the binary hides its live progress bars around a question; the SDK draws none itself.
+static PROMPT_PAUSE: std::sync::OnceLock<fn(&mut dyn FnMut())> = std::sync::OnceLock::new();
+
+/// Register how to hide live progress bars while a question waits for its answer (T276.3): a
+/// bar redrawn over the question makes the wait read as a hang (T81). The first one wins.
+pub fn set_prompt_pause(pause: fn(&mut dyn FnMut())) {
+    let _ = PROMPT_PAUSE.set(pause);
+}
+
+fn with_pause(prompt: &mut dyn FnMut()) {
+    match PROMPT_PAUSE.get() {
+        Some(pause) => pause(prompt),
+        None => prompt(),
+    }
+}
+
 fn ask(apply: &Apply, question: &str, default: bool) -> bool {
     if apply.yes {
         return true;
@@ -553,6 +569,13 @@ fn ask(apply: &Apply, question: &str, default: bool) -> bool {
     if !std::io::stdin().is_terminal() {
         return false;
     }
+    let mut got = None;
+    with_pause(&mut || got = Some(prompt(question, default)));
+    // A pause that never ran the prompt left the question unanswered: never act on it.
+    got.unwrap_or(false)
+}
+
+fn prompt(question: &str, default: bool) -> bool {
     use std::io::Write;
     let mut out = std::io::stdout();
     let hint = if default { "[Y/n]" } else { "[y/N]" };
@@ -1127,6 +1150,23 @@ mod tests {
         let a = Apply::default();
         assert!(!a.writes("leave a (changed by you; remove by hand)\n? b (remove asks)"));
         assert!(a.writes("leave a (changed by you; remove by hand)\n3 removed"));
+    }
+
+    /// T276.3: the registered pause wraps the question, so the binary's bars are hidden
+    /// exactly while it waits for the answer.
+    #[test]
+    fn a_registered_pause_wraps_the_question() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        static PAUSED: AtomicBool = AtomicBool::new(false);
+        set_prompt_pause(|prompt| {
+            PAUSED.store(true, Ordering::SeqCst);
+            prompt();
+            PAUSED.store(false, Ordering::SeqCst);
+        });
+        let mut seen = None;
+        with_pause(&mut || seen = Some(PAUSED.load(Ordering::SeqCst)));
+        assert_eq!(seen, Some(true));
+        assert!(!PAUSED.load(Ordering::SeqCst));
     }
 
     /// The one line `accepted` reads, judged: Enter keeps the default (yes — the old

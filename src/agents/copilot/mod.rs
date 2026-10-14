@@ -55,17 +55,7 @@ pub fn hooks_path(cfg: &Config) -> PathBuf {
 }
 
 impl Agent for Copilot {
-    fn id(&self) -> &'static str {
-        "copilot"
-    }
-
-    fn variants(&self) -> &'static [Variant] {
-        &VARIANTS
-    }
-
-    fn readme(&self) -> &'static str {
-        include_str!("README.md")
-    }
+    super::agent_identity!("copilot");
 
     fn shared(&self) -> bool {
         true

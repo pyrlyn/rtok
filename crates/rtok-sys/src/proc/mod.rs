@@ -1,8 +1,9 @@
 //! The one way rtok runs an external program (T276): a [`ProgressRunner`] that shows a spinner
 //! or a progress bar on a terminal while the child works, and nothing anywhere else.
 //!
-//! Every `Command::new` in the workspace belongs in this module; the clippy ban lands with the
-//! last call site (T276.6).
+//! Every `Command::new` in the workspace belongs in this module: `clippy.toml` bans it
+//! everywhere else (T276.6).
+#![allow(clippy::disallowed_methods)]
 
 mod indicator;
 mod parse;
@@ -95,6 +96,12 @@ impl ProgressRunner {
         Batch::new(indicator::pick_bar(label, total, unit), total, unit)
     }
 
+    /// A spinner labelled `label` while rtok works in-process (a migration, a report), cleared
+    /// before it returns so the line the caller prints next takes its place.
+    pub fn wait<T>(label: &str, f: impl FnOnce() -> T) -> T {
+        wait_on(indicator::pick(label), f)
+    }
+
     /// A call with no indicator.
     pub fn quiet<I, S>(program: impl AsRef<OsStr>, args: I) -> Self
     where
@@ -183,7 +190,8 @@ impl ProgressRunner {
             Output::Capture | Output::Stream => self.run_piped(cap),
             Output::Inherit => {
                 self.prepare(false);
-                let status = self.cmd.status()?;
+                // `Command::status` cannot be bounded, so spawn and share the piped path's wait.
+                let status = wait(&mut self.cmd.spawn()?, self.timeout)?;
                 Ok((
                     Captured {
                         status,
@@ -200,6 +208,7 @@ impl ProgressRunner {
     /// Start a child the caller owns. `Capture` pipes stdout and stderr without an indicator;
     /// `Detached` nulls them; `Inherit` shares ours.
     pub fn spawn(mut self) -> io::Result<Child> {
+        self.prepare(self.output != Output::Inherit);
         match self.output {
             Output::Stream => return Err(use_spawn("a streamed child")),
             Output::Capture => {
@@ -216,12 +225,12 @@ impl ProgressRunner {
         if let Some(stderr) = self.stderr.take() {
             self.cmd.stderr(stderr);
         }
-        self.prepare(self.output != Output::Inherit);
         self.cmd.spawn()
     }
 
-    /// Settings that wait for the last moment: the shim replaces the command, so stdin cannot be
-    /// applied to it earlier. `closed` is the stdin of a child nobody feeds.
+    /// Settings that wait for the last moment: the shim replaces the command and `Command` cannot
+    /// hand its stdio over, so stdin is applied here and stdout and stderr only after this.
+    /// `closed` is the stdin of a child nobody feeds.
     fn prepare(&mut self, closed: bool) {
         if self.shim && cfg!(windows) && needs_cmd_host(&self.cmd.get_program().to_string_lossy()) {
             self.cmd = via_cmd_host(&self.cmd);
@@ -234,8 +243,8 @@ impl ProgressRunner {
     }
 
     fn run_piped(mut self, cap: u64) -> io::Result<(Captured, u64)> {
-        self.cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
         self.prepare(true);
+        self.cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
         let mut child = self.cmd.spawn()?;
         let ind: Arc<dyn Indicator> = match self.progress {
             Progress::Off => Arc::new(Hidden),
@@ -329,7 +338,19 @@ pub struct Batch {
     running: bool,
 }
 
+fn wait_on<T>(ind: Box<dyn Indicator>, f: impl FnOnce() -> T) -> T {
+    let out = f();
+    ind.finish();
+    out
+}
+
 impl Batch {
+    /// A batch that draws nothing, for a caller that does not own the terminal (the MCP server,
+    /// a background watcher) but shares the code path of one that does.
+    pub fn hidden(total: u64, unit: Unit) -> Self {
+        Self::new(Box::new(Hidden), total, unit)
+    }
+
     fn new(ind: Box<dyn Indicator>, total: u64, unit: Unit) -> Self {
         Self {
             ind,
@@ -513,6 +534,46 @@ fn echo(which: Stream, bytes: &[u8]) {
     };
 }
 
+/// T276.3: a shimmed `.cmd` host once printed its `--version` straight to rtok's stdout, because
+/// the stdio set before the shim swapped the command was lost with it.
+#[cfg(all(test, windows))]
+mod windows_tests {
+    use super::*;
+
+    fn cmd_file(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("rtok-sys-shim-{name}-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("host.cmd");
+        std::fs::write(&file, "@echo off\r\necho shimmed %1\r\n").unwrap();
+        file
+    }
+
+    #[test]
+    fn a_shimmed_cmd_host_is_captured_not_printed() {
+        let file = cmd_file("run");
+        let got = ProgressRunner::quiet(&file, ["--version"])
+            .windows_shim()
+            .run()
+            .unwrap();
+        assert_eq!(
+            String::from_utf8_lossy(&got.stdout).trim(),
+            "shimmed --version"
+        );
+    }
+
+    #[test]
+    fn a_spawned_shimmed_cmd_host_writes_to_its_pipe() {
+        let file = cmd_file("spawn");
+        let got = ProgressRunner::quiet(&file, ["x"])
+            .windows_shim()
+            .spawn()
+            .unwrap()
+            .wait_with_output()
+            .unwrap();
+        assert_eq!(String::from_utf8_lossy(&got.stdout).trim(), "shimmed x");
+    }
+}
+
 #[cfg(all(test, unix))]
 mod tests {
     use std::sync::Arc;
@@ -573,6 +634,52 @@ mod tests {
                 .status
                 .success()
         );
+    }
+
+    /// T651: an inherited child used to be waited on without the limit.
+    #[test]
+    fn an_inherited_slow_child_is_killed_at_the_timeout() {
+        let start = Instant::now();
+        let err = sh("exec sleep 2")
+            .output(Output::Inherit)
+            .timeout(Duration::from_millis(100))
+            .run()
+            .unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::TimedOut);
+        assert!(
+            start.elapsed() < Duration::from_secs(1),
+            "{:?}",
+            start.elapsed()
+        );
+    }
+
+    #[test]
+    fn an_inherited_child_inside_its_timeout_keeps_its_own_status() {
+        let done = sh("exit 3")
+            .output(Output::Inherit)
+            .timeout(Duration::from_secs(5))
+            .run()
+            .unwrap();
+        assert_eq!(
+            (done.status.code(), done.stdout.len(), done.stderr.len()),
+            (Some(3), 0, 0)
+        );
+        let err = sh("exec sleep 2")
+            .output(Output::Inherit)
+            .timeout(Duration::ZERO)
+            .run()
+            .unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::TimedOut);
+    }
+
+    #[test]
+    fn an_inherited_child_that_cannot_start_fails_to_spawn_not_to_time_out() {
+        let err = ProgressRunner::quiet("/nonexistent/rtok-t651", ["x"])
+            .output(Output::Inherit)
+            .timeout(Duration::from_secs(5))
+            .run()
+            .unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::NotFound);
     }
 
     struct Record(Arc<Mutex<Vec<(Stream, String)>>>);
@@ -700,6 +807,25 @@ mod tests {
         batch.finish();
         // Under test stderr is not a terminal, so the runner's own pick is Hidden too.
         ProgressRunner::batch("x…", 3, Unit::Items).finish();
+    }
+
+    #[test]
+    fn a_wait_clears_its_spinner_after_the_work_and_passes_the_result_through() {
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let got = wait_on(Box::new(Seen(seen.clone())), || {
+            assert!(
+                seen.lock().unwrap().is_empty(),
+                "cleared before the work ran"
+            );
+            Err::<(), _>("boom")
+        });
+        assert_eq!(got, Err("boom"));
+        assert_eq!(
+            seen.lock().unwrap().len(),
+            1,
+            "cleared once, after the work"
+        );
+        assert_eq!(ProgressRunner::wait("x…", || 7), 7);
     }
 
     #[test]

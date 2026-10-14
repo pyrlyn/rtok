@@ -3,10 +3,10 @@
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
 use crate::config::Config;
-use crate::render::with_loader;
 use crate::ui::style;
 use anyhow::Result;
 use clap::Subcommand;
+use rtok_sys::proc::ProgressRunner;
 use std::io;
 use std::path::PathBuf;
 
@@ -150,7 +150,7 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: MemoryCmd) -> Result<()
             stat,
             remove,
             force,
-        } => with_loader("syncing memory", || {
+        } => ProgressRunner::wait("syncing memory…", || {
             crate::stat_preview::set(stat);
             crate::plugins::memory::sync::run(&cfg, file, budget, dry_run, remove, force)
         })?,

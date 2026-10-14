@@ -23,22 +23,6 @@ pub fn file_diff(path: &std::path::Path, before: &str, after: &str) -> String {
     change_preview::paint(&change_preview::unified_diff(path, before, after))
 }
 
-/// A spinner for a walk with no known length. indicatif draws to stderr and draws nothing at
-/// all when stderr is not a terminal, so a piped or redirected run stays byte-clean.
-pub fn spinner(what: &str) -> indicatif::ProgressBar {
-    let pb = indicatif::ProgressBar::new_spinner();
-    if let Ok(style) =
-        indicatif::ProgressStyle::with_template("{spinner:.cyan} {msg} {pos} files · {elapsed}")
-    {
-        pb.set_style(style);
-    }
-    pb.set_message(what.to_string());
-    pb.enable_steady_tick(std::time::Duration::from_millis(120));
-    pb
-}
-
-pub use crate::progress::{loader, with_loader};
-
 /// Colour a stored log line's level. The body lives in [`crate::log::log_line`] so the log
 /// screen does not depend on this module.
 pub use crate::log::log_line;
@@ -408,16 +392,6 @@ mod tests {
     use std::path::Path;
 
     use crate::store::SessionTotals;
-
-    /// Off a terminal indicatif draws nothing, so the wait leaves no byte behind and the closure's
-    /// value (and its error) passes through untouched.
-    #[test]
-    fn a_wait_off_a_terminal_hides_the_loader_and_passes_the_result_through() {
-        assert!(loader("x").is_hidden());
-        assert_eq!(with_loader("x", || 7), 7);
-        let err: Result<(), &str> = with_loader("x", || Err("boom"));
-        assert_eq!(err, Err("boom"));
-    }
 
     #[test]
     fn a_message_frame_names_the_sender_and_quotes_every_body_line() {

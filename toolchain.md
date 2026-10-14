@@ -101,7 +101,7 @@ Project programs and direct packages from the manifests.
 | diesel_migrations | local | https://crates.io/crates/diesel_migrations | Embedded SQLite migrations (T163.4) |
 | divan | local | https://crates.io/crates/divan | Divan benches in benches/ |
 | dotenvy | local | https://crates.io/crates/dotenvy | Rust dependency |
-| fs-kit | local | https://github.com/pyrlyn/crates-packages | One entry point for file work: paths without Windows UNC prefixes, atomic writes, tree usage and copy |
+| fs-kit | local | https://github.com/pyrlyn/crates | One entry point for file work: paths without Windows UNC prefixes, atomic writes, tree usage and copy |
 | env_logger | local | https://crates.io/crates/env_logger | T225: `RUST_LOG` debug log on stderr, off by default |
 | figment | local | https://crates.io/crates/figment | Config |
 | futures-util | local | https://crates.io/crates/futures-util | Rust dependency |
@@ -110,7 +110,7 @@ Project programs and direct packages from the manifests.
 | httpmock | local | https://crates.io/crates/httpmock | Rust dependency |
 | humantime | local | https://crates.io/crates/humantime | T282: `[agents] idle` duration parsing; already in the lock as a transitive dep |
 | ignore | local | https://crates.io/crates/ignore | Rust dependency |
-| indicatif | local | https://crates.io/crates/indicatif | Spinner and progress bar: `graph index` and the loaders in the root crate, `proc::ProgressRunner` in `crates/rtok-sys` (T276) |
+| indicatif | local | https://crates.io/crates/indicatif | Spinner and progress bar behind `proc::ProgressRunner` in `crates/rtok-sys`; the root crate draws only through it (T276.6) |
 | inquire | local | https://crates.io/crates/inquire | `rtok completions` shell picker (multi-select, crossterm backend only) |
 | insta | local | https://crates.io/crates/insta | Snapshot tests for stable text output |
 | jiff | local | https://crates.io/crates/jiff | T358: IANA time zones with DST for `rtok agents usage` day and month buckets (`--tz`); already in the lock as a transitive dep of env_logger |

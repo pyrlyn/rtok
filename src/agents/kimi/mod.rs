@@ -67,17 +67,7 @@ pub fn mcp_path(cfg: &Config) -> PathBuf {
 }
 
 impl Agent for Kimi {
-    fn id(&self) -> &'static str {
-        "kimi"
-    }
-
-    fn variants(&self) -> &'static [Variant] {
-        &VARIANTS
-    }
-
-    fn readme(&self) -> &'static str {
-        include_str!("README.md")
-    }
+    super::agent_identity!("kimi");
 
     fn support(&self, _kind: Kind, module: &str) -> Support {
         match module {
