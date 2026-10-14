@@ -6,7 +6,7 @@
 //! owner. [`plan`] decides everything from paths and strings; [`run`] is one fetch and
 //! one `git worktree add`.
 
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use anyhow::{Context, Result, bail, ensure};
 use rtok_config::root::{ProjectRoot, contain, resolved};
@@ -43,11 +43,17 @@ fn ident(what: &str, raw: &str) -> Result<String> {
 /// root is under `main`, never the process cwd: a worktree added from inside another one still
 /// lands beside its siblings. `~` was expanded when the config loaded.
 pub fn landing(main: &Path, root: &Path) -> PathBuf {
-    if root.is_relative() {
+    if in_project(root) {
         main.join(root)
     } else {
         root.to_path_buf()
     }
+}
+
+/// Whether `root` names a place inside the project. Not `is_relative`: on Windows `\x` has no
+/// drive, so it is "relative", yet it names the drive root, not a directory of the project.
+fn in_project(root: &Path) -> bool {
+    !root.has_root() && !matches!(root.components().next(), Some(Component::Prefix(_)))
 }
 
 /// `temp` lists the directories the OS may purge; a worktree under one of them loses
@@ -101,7 +107,7 @@ pub fn plan(
         .context("the main checkout has no directory name")?;
     let name = format!("{}-{task}", repo.to_string_lossy());
     let path = base.join(&name);
-    if root.is_relative() {
+    if in_project(root) {
         // A relative root is a promise to stay in the project; `../x` would break it.
         contain(main, &root.join(&name)).with_context(|| {
             format!(
@@ -264,6 +270,23 @@ mod tests {
             );
         }
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A root with no drive (`\x`, `/x` on Windows) names the drive root, not the project.
+    #[test]
+    fn a_rooted_root_is_never_inside_the_project() {
+        assert!(in_project(Path::new(".rtok/worktrees")) && in_project(Path::new("../x")));
+        assert!(!in_project(Path::new("/r/_w")));
+        assert_eq!(
+            landing(Path::new("/r/rtok"), Path::new("/r/_w")),
+            Path::new("/r/_w")
+        );
+        #[cfg(windows)]
+        {
+            assert!(!in_project(Path::new(r"\r\_w")));
+            assert!(!in_project(Path::new(r"C:\r\_w")));
+            assert!(!in_project(Path::new("C:x")));
+        }
     }
 
     #[test]
