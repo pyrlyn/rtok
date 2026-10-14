@@ -1512,6 +1512,16 @@ async fn proxy_cache_hit_records_usage_and_request_bytes() {
             .expect("measurements"),
         1
     );
+    // T653: the hit keeps its usage row above, yet only the upstream request is billed.
+    let billed = state.store.otel_token_totals().expect("token totals");
+    assert_eq!(
+        billed
+            .iter()
+            .map(|t| (t.input, t.output))
+            .collect::<Vec<_>>(),
+        vec![(10, 2)],
+        "cache hit must not count as provider-billed"
+    );
     task.abort();
 }
 
