@@ -1159,9 +1159,8 @@ fn instruction_audit(
     if let Some(dir) = cfg.doctor.settings_path.parent() {
         push_file(&mut srcs, "claude-user", &dir.join("CLAUDE.md"));
     }
-    if let Some(root) = git_root() {
-        push_file(&mut srcs, "claude-project", &root.join("CLAUDE.md"));
-        push_file(&mut srcs, "agents-project", &root.join("AGENTS.md"));
+    if let Ok(cwd) = std::env::current_dir() {
+        push_project_files(&mut srcs, &cwd);
     }
     let blob = format!(
         "{}{}",
@@ -1219,15 +1218,12 @@ fn push_file(srcs: &mut Vec<Source>, name: &str, path: &Path) {
     });
 }
 
-fn git_root() -> Option<std::path::PathBuf> {
-    let mut p = std::env::current_dir().ok()?;
-    loop {
-        if p.join(".git").exists() {
-            return Some(p);
-        }
-        if !p.pop() {
-            return None;
-        }
+/// `checkout`, not `main`: the instructions an agent in a linked worktree loads are the ones
+/// checked out there.
+fn push_project_files(srcs: &mut Vec<Source>, cwd: &Path) {
+    if let Some(root) = rtok_config::root::ProjectRoot::find(cwd) {
+        push_file(srcs, "claude-project", &root.checkout.join("CLAUDE.md"));
+        push_file(srcs, "agents-project", &root.checkout.join("AGENTS.md"));
     }
 }
 
@@ -2444,6 +2440,21 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         assert_eq!(srcs.len(), 1);
         assert!(duplicates(&srcs).is_empty());
+    }
+
+    /// T660.2: from a linked worktree's subdirectory the audit reads the worktree's own files.
+    #[test]
+    fn project_instructions_come_from_the_linked_worktree() {
+        let dir = crate::testutil::tmp_dir("t660-doctor");
+        let (main, wt) = crate::testutil::worktree_layout(&dir);
+        std::fs::create_dir_all(wt.join("src")).unwrap();
+        std::fs::write(main.join("CLAUDE.md"), "main rules").unwrap();
+        std::fs::write(wt.join("CLAUDE.md"), "worktree rules").unwrap();
+        let mut srcs = Vec::new();
+        push_project_files(&mut srcs, &wt.join("src"));
+        assert_eq!(srcs.len(), 1);
+        assert_eq!(srcs[0].text, "worktree rules");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

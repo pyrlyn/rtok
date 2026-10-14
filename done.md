@@ -13586,6 +13586,17 @@ Result: `crates/rtok-config/src/root.rs` holds `ReadFs`/`HostFs` (moved from `sr
 Status: done 2026-10-13
 Model: Claude Code / claude-opus-5-5 (code by a claude-sonnet-5-5 subagent, reviewed)
 
+### T660.2. Every project-root caller goes through the T660.1 method
+
+Needs T660.1. Switch every caller to `ProjectRoot` and say explicitly whether it wants `checkout` or `main`: `layers.rs` `.rtok.toml` layer (`checkout`: each worktree reads its own checked-out file), `agents/command.rs --project`, `plugins/checkpoint.rs`, `guard/grep_symbol.rs`, `memory/files.rs::project_root`, `tasks/run.rs` (both sites), `model/agents.rs::worktree_label`. Delete `git_root` and the duplicate in `src/doctor.rs`. `checkpoint::project_of_cx` returns the worktree basename today while `project_name` returns the main repo's name; it moves to `main` so a checkpoint made in a worktree files under the same project. `memory/files.rs::relative` uses `contain` so a symlink cannot point a note outside the root.
+
+Check: one test per changed site for a linked worktree; a test that the checkpoint project name is the same from the main checkout and from a worktree; a symlink-escape test for memory paths; `just check`.
+
+Result: `layers.rs::git_root` and the private copy in `src/doctor.rs` are gone; every site calls `ProjectRoot::find` and takes `checkout` (the `.rtok.toml` layer, `agents --project`, `checkpoint`'s legacy lookup, `grep_symbol`'s index, memory files, the tasks dir and `rtok task init`, the doctor's CLAUDE.md/AGENTS.md audit, `worktree_label`). `checkpoint::project_of_cx` already used `project_name` (main) since T553, so no change was needed there. `memory/files.rs::relative` now passes paths through `contain`: a symlink inside the project pointing out of it is no longer a project file (test `a_symlink_out_of_the_root_is_refused`, failing before the fix). One linked-worktree test per site.
+
+Status: done 2026-10-14
+Model: Claude Code / claude-opus-5-5 (code by a claude-sonnet-5-5 subagent; left uncommitted by a stalled session, adopted, rebased and re-checked)
+
 ### T577. Protect nested package-manager lockfiles during junk cleanup
 
 Confirmed with an isolated directory fixture: [recheck](src/agents/junk_clear.rs#L278) compares PACKAGE_LOCKS only with the candidate's own basename. Its protected-path list contains the store and host settings paths, not discovered descendant lockfiles. An eligible explicitly configured cache containing nested/Cargo.lock passes recheck, then [remove](src/agents/junk_clear.rs#L334) recursively discards its children and deletes that lockfile. The cache root remains, while the same Cargo.lock checked directly is refused. [extra_items](src/agents/junk_review.rs#L169) accepts the configured cache root; the plan's D36/age/running gates do not add a descendant-lockfile check. This contradicts completed T330.4's promise to refuse a path that is or holds a package-manager lockfile; T330.5.1's explicit exclude globs do not supply the missing automatic protection.
