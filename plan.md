@@ -4,6 +4,98 @@ https://github.com/pyrlyn/rtok
 
 Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured reductions, pluggable methods.
 
+## Security audit findings (2026-10-14)
+
+Find-only security review of `main` at `cd9644881` (OWASP Top 10, injection, path handling,
+access control, data at rest, CI supply chain). Nothing was fixed or exploited. Line numbers are
+as of that commit. Overlap with the closed audit PR #601 (config validation, `filter`, `memory
+import`, exit codes): none; these are new. To take one, give it a T-id, a row and a `Check:` line.
+
+| # | Severity | Finding | Where |
+| --- | --- | --- | --- |
+| S1 | high | `rtok mcp --http` started in `/` or `$HOME` lets a token holder read any file there | `src/plugins/read/mod.rs:212`, `src/mcp/http.rs:110` |
+| S2 | medium | Dashboard WebSocket has no authentication; any local user (or LAN host if bound wide) can change config, run `doctor --fix` and clear junk | `src/web/mod.rs:226`, `:259`, `:433` |
+| S3 | medium | `~/.rtok` store, archive and logs are world-readable (prompts, tool output, file contents) | `crates/rtok-store/src/handle.rs:18`, `crates/rtok-store/src/lib.rs:444` |
+| S4 | medium | `read`/`search` (also over HTTP) serve secrets inside the project: `.env`, `.git/config`, keys | `src/plugins/read/mod.rs:212` |
+| S5 | low | Proxy `/live` and `/health` answer without auth; with `proxy.bind = 0.0.0.0` they leak models and paths | `src/proxy/mod.rs:255` |
+| S6 | low | `host_authority` takes the last comma-separated `Host` value | `src/web/mod.rs:301` |
+| S7 | low | Resident hook socket is chmod-ed after `bind`, a short window at the umask mode | `src/hooks/resident.rs:71` |
+| S8 | low | `rtok mcp --http` is plain HTTP; the bearer token crosses the network in clear unless a TLS proxy fronts it | `src/mcp/http.rs:110` |
+
+### S1. HTTP MCP `read` exposes the whole launch directory
+
+The path guard allows everything under the process cwd (`resolve_with`). `walk_root_ok` refuses
+`/` and `$HOME` for walks (`search`, `tree`), but a single-file `read` has no such check. A
+`rtok mcp --http` started from a home directory (launchd, a service unit, Claude.app's `/`) lets
+any holder of the bearer token read `~/.ssh/id_*`, `~/.aws/credentials`, `~/.rtok/rtok.db`.
+Impact: remote file disclosure for the HTTP surface (`http_tools` includes `read` by default).
+Fix: refuse to start `--http` when cwd is unwalkable unless `allow_paths` names a project, and
+apply `walk_root_ok` to `read` roots on the HTTP surface.
+
+### S2. Dashboard WebSocket is unauthenticated
+
+`origin_allowed` returns `true` when no `Origin` header is sent, which covers every non-browser
+client. The socket accepts `set` (allow-listed config keys), `doctor` `apply` (writes host
+configs), `junk` `apply` (removes files), `expand` (archived prompt and tool bodies), `graph` and
+`export`. On a shared machine any local user can reach `127.0.0.1:3333`; with `web.host =
+0.0.0.0` any LAN host can. The browser side (CSRF, DNS rebinding) is handled well.
+Impact: broken access control, data disclosure and destructive actions as the owner.
+Fix: issue a per-run random token (printed in the URL like Jupyter), require it on `/ws`, refuse
+non-loopback `web.host` without it.
+
+### S3. Data at rest is world-readable
+
+`create_dir_all` and the SQLite/archive writers use the umask. On the author's Mac: `~/.rtok`
+0755, `rtok.db` 0644 (917 MB with `call_io` request/response bodies), `archive/` 0755,
+`errors.log` 0644. Other local accounts can read prompts, code and tool output.
+Impact: data leak on multi-user hosts and in backups. Fix: create `~/.rtok`, the archive dir and
+log dir with 0700 and files with 0600; `rtok doctor` warns on and fixes looser modes.
+
+### S4. No secret-file deny list on `read`
+
+Nothing stops `read` from returning `.env`, `.env.*`, `.git/config` (embedded tokens), `*.pem`,
+`id_*`. Over stdio the host's own tools can read them too, but the HTTP surface is meant for
+remote callers, and archived copies then land in the world-readable store (S3).
+Fix: a default `plugins.read.deny_globs` (overridable), enforced for HTTP always.
+
+### S5. Proxy status routes without auth
+
+`/live` returns method, path, provider and model of recent calls; `/health` returns config
+flags. Harmless on loopback, a small leak when `proxy.bind` is widened. Fix: serve them only on
+loopback peers, or behind the same token as S2.
+
+### S6. Ambiguous `Host` handling
+
+`host_authority` splits on `,` and keeps the last part. A repeated or comma-joined `Host` is not
+a valid request; picking one part can let a crafted request pass the Origin/Host equality.
+Fix: reject a `Host` containing `,` (400).
+
+### S7. Socket mode set after bind
+
+`UnixListener::bind` creates the socket with the umask mode and `set_permissions` runs after.
+Fix: create it inside a 0700 directory (or set umask around bind).
+
+### S8. Plain-HTTP bearer token
+
+The docs should say that `--http` on a non-loopback address must sit behind TLS; better, refuse
+a non-loopback bind without `public_url` using `https`.
+
+### Not run or blocked
+
+`cargo audit` could not load `~/.cargo/advisory-db` (directory present but broken; left as is).
+Tests and lints were not re-run (find-only, no code changed). CI workflows were reviewed:
+`graph-review-comment.yml` handles untrusted artifacts well (size caps, PR head SHA check).
+
+### Improvement ideas (opinion)
+
+- I-S1. A single "exposure" check in `rtok doctor`: wide binds, missing tokens, file modes.
+- I-S2. Pin GitHub Actions to commit SHAs in `release.yml` (currently tags like `@v6`).
+- I-S3. Split `~/.rtok/archive` into hashed subdirectories; it holds tens of thousands of files
+  in one directory, slow to list and back up.
+- I-S4. Retention for `call_io` bodies by default (the store reached 917 MB here).
+- I-S5. A `security.md` threat model naming each surface (hooks, stdio MCP, HTTP MCP, proxy,
+  dashboard) and who is trusted on it, so new routes get a checklist.
+
 ## Cloud review findings (2026-10-08)
 
 New bugs, dead code and moves from a read-only Cursor cloud review of `main` at `a060af58` (agent `bc-e07c8099-22ee-5d00-b1c7-3bd1ad623d52`; full report: `cloud/rtok.md` in the private `listepo/roadmap` repo). They take ids T457–T470, ordered P0, P1, P2, P3. **confirmed** means seen in the tree; **suspected** means plausible from the code but not proven (nothing was run on Windows). Line numbers are as of the review. The report's own labels T436–T449 are roadmap ids, not this plan's. T457, T458 and T459 are done (`done.md`). None of the rest is in the task table yet: to take one, add its row and a card with a `Check:` line.
