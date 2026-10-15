@@ -578,6 +578,9 @@ startup_recall = true                 # SessionStart(startup) відновлює
 handoff        = true                 # MCP-інструмент T59.6 для зведення субагента
 spawn_brief        = true             # T130: зведення-вказівник для SubagentStart
 spawn_brief_tokens = 300              # T130: бюджет токенів для брифу під час запуску
+admit              = true             # T671: mem_save відхиляє надто коротку або дубльовану нотатку
+admit_min_chars    = 5                # T671: найкоротше тіло, яке пропускає шлюз
+admit_similarity   = 85               # T671: відсоток збігу триграм, що вважається дублем
 
 [plugins.memory.embed]
 enabled    = false                    # P29: якщо false — лише FTS5; векторний пошук вмикається явно

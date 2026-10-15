@@ -874,8 +874,16 @@ fn mem_save(cx: &Runtime, args: &Value) -> Result<String> {
     let title = args["title"].as_str().unwrap_or("");
     let body = args["body"].as_str().unwrap_or("");
     let project = args["project"].as_str();
-    let (id, updated) = crate::plugins::memory::mem_save(cx, kind, title, body, project)?;
-    Ok(json!({"id": id, "updated": updated}).to_string())
+    use crate::plugins::memory::Saved;
+    Ok(
+        match crate::plugins::memory::mem_save_gated(cx, kind, title, body, project)? {
+            Saved::Stored { id, updated } => json!({"id": id, "updated": updated}),
+            Saved::Refused { reason, existing } => {
+                json!({"id": existing, "updated": false, "refused": reason})
+            }
+        }
+        .to_string(),
+    )
 }
 
 #[cfg(feature = "docs")]

@@ -577,6 +577,9 @@ startup_recall = true                 # SessionStart(startup) restores newest se
 handoff        = true                 # T59.6 sub-agent digest MCP tool
 spawn_brief        = true             # T130: SubagentStart pointer digest
 spawn_brief_tokens = 300              # T130: token budget for the spawn brief
+admit              = true             # T671: mem_save refuses a too-short or duplicate note
+admit_min_chars    = 5                # T671: shortest body the gate admits
+admit_similarity   = 85               # T671: percent trigram overlap that counts as a duplicate
 
 [plugins.memory.embed]
 enabled    = false                    # P29: FTS5-only when false; vector search is opt-in

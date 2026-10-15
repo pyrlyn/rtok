@@ -505,6 +505,35 @@ impl Store {
             .map_err(Into::into)
     }
 
+    /// The newest live notes of `project` as `(id, title, body)`, for the admission gate
+    /// (T671). Checkpoint and session rows are not notes an agent wrote, and the row that
+    /// `(kind, title)` names is the one a save would update, so neither is a duplicate.
+    pub fn admit_candidates(
+        &self,
+        project: Option<&str>,
+        kind: &str,
+        title: &str,
+        limit: u32,
+    ) -> Result<Vec<(i32, String, String)>> {
+        let mut conn = self.lock()?;
+        let mut q = notes::table
+            .filter(notes::retired.is_null())
+            .filter(notes::kind.not_like("checkpoint:%"))
+            .filter(notes::kind.not_like("session:%"))
+            .filter(diesel::dsl::not(
+                notes::kind.eq(kind).and(notes::title.eq(title)),
+            ))
+            .order(notes::id.desc())
+            .limit(i64::from(limit))
+            .select((notes::id, notes::title, notes::body))
+            .into_boxed();
+        q = match project {
+            Some(p) => q.filter(notes::project.eq(p)),
+            None => q.filter(notes::project.is_null()),
+        };
+        q.load(&mut *conn).map_err(Into::into)
+    }
+
     /// Full note body by row id.
     pub fn get_note_body(&self, id: i32) -> Result<Option<String>> {
         let mut conn = self.lock()?;

@@ -528,6 +528,9 @@
 # handoff        = true                 # sub-agent digest MCP tool
 # spawn_brief        = true             # SubagentStart pointer digest
 # spawn_brief_tokens = 300              # token budget for the spawn brief
+# admit              = true             # mem_save refuses a too-short or duplicate note
+# admit_min_chars    = 5                # shortest body the gate admits
+# admit_similarity   = 85               # percent trigram overlap that counts as a duplicate
 
 [plugins.memory.embed]
 # enabled    = false                    # P29: FTS5-only when false; vector search is opt-in

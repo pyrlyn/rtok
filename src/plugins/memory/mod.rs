@@ -4,6 +4,7 @@
 
 //! Notes API: `mem_save` / `mem_search` / `mem_get` (plan T6.1).
 
+mod admit;
 pub mod export;
 mod files;
 pub mod handoff;
@@ -420,10 +421,69 @@ pub fn mem_save(
     body: &str,
     project: Option<&str>,
 ) -> anyhow::Result<(i32, bool)> {
-    let proj = project
+    save_scoped(rt, kind, title, body, save_scope(project).as_deref())
+}
+
+fn save_scope(project: Option<&str>) -> Option<String> {
+    project
         .map(str::to_string)
-        .or_else(|| std::env::current_dir().ok().and_then(|d| project_name(&d)));
-    save_scoped(rt, kind, title, body, proj.as_deref())
+        .or_else(|| std::env::current_dir().ok().and_then(|d| project_name(&d)))
+}
+
+/// What the MCP `mem_save` did: stored the note, or refused it at the admission gate (T671).
+#[derive(Debug, PartialEq, Eq)]
+pub enum Saved {
+    Stored {
+        id: i32,
+        updated: bool,
+    },
+    /// `existing` names the stored note a duplicate repeats.
+    Refused {
+        reason: &'static str,
+        existing: Option<i32>,
+    },
+}
+
+/// [`mem_save`] behind the admission gate (`plugins.memory.admit`). A save that names an
+/// existing `(project, kind, title)` is a revision and always passes the duplicate check.
+pub fn mem_save_gated(
+    rt: &crate::plugin::Runtime,
+    kind: &str,
+    title: &str,
+    body: &str,
+    project: Option<&str>,
+) -> anyhow::Result<Saved> {
+    let cfg = &rt.config.plugins.memory;
+    let scope = save_scope(project);
+    let (clean_title, clean_body) = (strip_private(title), strip_private(body));
+    // An empty title or body keeps the rejection `save_scoped` already gives it.
+    if cfg.admit && !clean_title.is_empty() && !clean_body.is_empty() {
+        let stored =
+            rt.store
+                .admit_candidates(scope.as_deref(), kind, &clean_title, admit::WINDOW)?;
+        match admit::judge(
+            cfg.admit_min_chars,
+            cfg.admit_similarity,
+            &clean_body,
+            &stored,
+        ) {
+            admit::Verdict::Admit => {}
+            admit::Verdict::TooShort => {
+                return Ok(Saved::Refused {
+                    reason: "too_short",
+                    existing: None,
+                });
+            }
+            admit::Verdict::Duplicate(id) => {
+                return Ok(Saved::Refused {
+                    reason: "duplicate",
+                    existing: Some(id),
+                });
+            }
+        }
+    }
+    let (id, updated) = save_scoped(rt, kind, title, body, scope.as_deref())?;
+    Ok(Saved::Stored { id, updated })
 }
 
 /// `mem_save` with the scope already decided: `None` is a global note, never an
@@ -1627,5 +1687,82 @@ mod tests {
                 <= observe::MAX_PER_SESSION
         );
         assert!(ctx.estimate(&inj.text, Class::Prose) <= 200, "{}", inj.text);
+    }
+
+    fn gated(cx: &crate::plugin::Runtime, title: &str, body: &str) -> Saved {
+        mem_save_gated(cx, "note", title, body, Some("t671")).unwrap()
+    }
+
+    #[test]
+    fn a_repeated_body_under_a_new_title_is_refused_with_the_stored_id() {
+        let cx = crate::plugin::Runtime::in_memory("t671-dup").unwrap();
+        let Saved::Stored { id, .. } =
+            gated(&cx, "cache", "The walrus cache evicts the oldest entry.")
+        else {
+            panic!("first save must be stored");
+        };
+        let again = gated(
+            &cx,
+            "cache again",
+            "the walrus  cache evicts the OLDEST entry.",
+        );
+        assert_eq!(
+            again,
+            Saved::Refused {
+                reason: "duplicate",
+                existing: Some(id)
+            }
+        );
+        assert_eq!(
+            cx.store.list_note_titles(Some("t671"), 10).unwrap().len(),
+            1
+        );
+    }
+
+    #[test]
+    fn a_revision_under_the_same_topic_key_still_updates() {
+        let cx = crate::plugin::Runtime::in_memory("t671-rev").unwrap();
+        gated(&cx, "cache", "The walrus cache evicts the oldest entry.");
+        let again = gated(
+            &cx,
+            "cache",
+            "The walrus cache evicts the oldest entry first.",
+        );
+        assert!(
+            matches!(again, Saved::Stored { updated: true, .. }),
+            "{again:?}"
+        );
+    }
+
+    #[test]
+    fn a_body_under_the_floor_is_refused_and_an_ordinary_note_is_stored() {
+        let cx = crate::plugin::Runtime::in_memory("t671-short").unwrap();
+        assert_eq!(
+            gated(&cx, "tiny", "ok"),
+            Saved::Refused {
+                reason: "too_short",
+                existing: None
+            }
+        );
+        let stored = gated(&cx, "real", "Hooks exit zero within ten milliseconds.");
+        assert!(
+            matches!(stored, Saved::Stored { updated: false, .. }),
+            "{stored:?}"
+        );
+    }
+
+    #[test]
+    fn the_gate_is_per_project_and_can_be_switched_off() {
+        let mut cx = crate::plugin::Runtime::in_memory("t671-off").unwrap();
+        let body = "The walrus cache evicts the oldest entry.";
+        gated(&cx, "cache", body);
+        let other = mem_save_gated(&cx, "note", "cache", body, Some("elsewhere")).unwrap();
+        assert!(matches!(other, Saved::Stored { .. }), "{other:?}");
+        cx.config.plugins.memory.admit = false;
+        let twin = gated(&cx, "cache twin", body);
+        assert!(
+            matches!(twin, Saved::Stored { updated: false, .. }),
+            "{twin:?}"
+        );
     }
 }

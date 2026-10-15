@@ -4,7 +4,7 @@ stdout = """
 target/tmp/t60-2-config-init.toml
 --- a/target/tmp/t60-2-config-init.toml
 +++ b/target/tmp/t60-2-config-init.toml
-@@ -0,0 +1,589 @@
+@@ -0,0 +1,592 @@
 +# rtok configuration. Every CLI flag has a key here; flags and RTOK_* env vars override.
 +# Precedence: defaults < this file < <git root>/.rtok.toml < env < flags.
 +# Docs: docs/config.md. Check: `rtok config validate`. Where a value came from: `rtok config show --sources`.
@@ -535,6 +535,9 @@ target/tmp/t60-2-config-init.toml
 +# handoff        = true                 # sub-agent digest MCP tool
 +# spawn_brief        = true             # SubagentStart pointer digest
 +# spawn_brief_tokens = 300              # token budget for the spawn brief
++# admit              = true             # mem_save refuses a too-short or duplicate note
++# admit_min_chars    = 5                # shortest body the gate admits
++# admit_similarity   = 85               # percent trigram overlap that counts as a duplicate
 +
 +[plugins.memory.embed]
 +# enabled    = false                    # P29: FTS5-only when false; vector search is opt-in
@@ -594,7 +597,7 @@ target/tmp/t60-2-config-init.toml
 +[plugins.wasm]
 +# enabled = false
 +# dir = "~/.rtok/plugins"
-1 file changed, 589 insertions(+)
+1 file changed, 592 insertions(+)
 """
 
 # Hermetic by construction: isolated HOME/RTOK_HOME, inherit = false.
