@@ -10,6 +10,6 @@
 
 **Models.** Low-cost: docs, scans, commands — never code. Mid-tier: code. High-performance: research, user OK only. Re-run tests, read the diff; sub-agent "green" is not evidence.
 
-**Benchmarks.** After a bench run update numbers: `docs/agents/benchmarks.md`.
+**Benchmarks.** After a bench run, update `docs/agents/benchmarks.md`.
 
 `AGENTS.md`/`CLAUDE.md` above this repo apply too; on conflict ask the creator. Details, incl. `docs/ru|uk` sync: `CONTRIBUTING.md`. Keep under 350 tokens.
