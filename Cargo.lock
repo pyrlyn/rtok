@@ -4361,6 +4361,7 @@ dependencies = [
  "sha2 0.11.0",
  "shlex 2.0.1",
  "subtle",
+ "tiktoken-rs",
  "tokio",
  "tokio-tungstenite 0.30.0",
  "toml 0.8.23",
@@ -5504,6 +5505,20 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 3.0.4",
+]
+
+[[package]]
+name = "tiktoken-rs"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2aeff724640cfe13037336ddf35befdffd2909cbdb65cf041cc8a4cf8c584cfa"
+dependencies = [
+ "anyhow",
+ "base64 0.22.1",
+ "bstr",
+ "fancy-regex 0.19.2",
+ "regex",
+ "rustc-hash",
 ]
 
 [[package]]

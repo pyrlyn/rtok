@@ -1231,15 +1231,18 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
         'rtok;run' {
             [CompletionResult]::new('--agent', '--agent', [CompletionResultType]::ParameterName, 'Sub-agent id from PreToolUse; scopes the dedup pointer')
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
+            [CompletionResult]::new('--no-ref', '--no-ref', [CompletionResultType]::ParameterName, 'Do not print the reference line after a cut')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
         }
         'rtok;filter' {
             [CompletionResult]::new('--cmd', '--cmd', [CompletionResultType]::ParameterName, 'Command family hint (`git status`, `cargo test`, …)')
+            [CompletionResult]::new('--exit', '--exit', [CompletionResultType]::ParameterName, 'Exit code of the command that printed stdin (with `--archive`); formatters read it')
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
             [CompletionResult]::new('--stdin', '--stdin', [CompletionResultType]::ParameterName, 'Read the payload from stdin (OpenCode `tool.execute.after`)')
             [CompletionResult]::new('--archive', '--archive', [CompletionResultType]::ParameterName, 'Archive stdin and print the expand trailer (same path as `run`)')
+            [CompletionResult]::new('--no-ref', '--no-ref', [CompletionResultType]::ParameterName, 'Do not print the reference line after a cut')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break

@@ -1553,6 +1553,7 @@ _arguments "${_arguments_options[@]}" : /
 _arguments "${_arguments_options[@]}" : /
 '--agent=[Sub-agent id from PreToolUse; scopes the dedup pointer]:ID:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
+'--no-ref[Do not print the reference line after a cut]' /
 '-h[Print help]' /
 '--help[Print help]' /
 '*::command:_default' /
@@ -1561,9 +1562,11 @@ _arguments "${_arguments_options[@]}" : /
 (filter)
 _arguments "${_arguments_options[@]}" : /
 '--cmd=[Command family hint (/`git status/`, /`cargo test/`, …)]:CMD:_default' /
+'--exit=[Exit code of the command that printed stdin (with /`--archive/`); formatters read it]:EXIT:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '--stdin[Read the payload from stdin (OpenCode /`tool.execute.after/`)]' /
 '--archive[Archive stdin and print the expand trailer (same path as /`run/`)]' /
+'--no-ref[Do not print the reference line after a cut]' /
 '-h[Print help]' /
 '--help[Print help]' /
 && ret=0

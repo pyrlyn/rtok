@@ -220,9 +220,14 @@ pub(crate) fn names_the_id(filtered: &str, id: &str) -> bool {
 /// The pointer line appended after a filtered body: names the id, the line count and
 /// how to expand it. The one spelling shared by `rtok run`, `rtok filter --archive`
 /// and `rtok filter --stdin` so the three surfaces stay byte-identical.
+/// T661: the first 12 hex chars name the archive; `rtok expand` resolves a unique prefix.
 pub(crate) fn trailer(id: &str, lines: u32) -> String {
-    format!("[rtok {id} · {lines} lines · expand: rtok expand {id}]")
+    let short = &id[..id.len().min(SHORT_ID)];
+    format!("[rtok {short} · {lines} lines]")
 }
+
+/// Hex chars of the archive id the trailer prints.
+pub(crate) const SHORT_ID: usize = 12;
 
 /// `body` up to the noise a filter may remove without a reader losing anything:
 /// whitespace runs (padding, trailing newline) and ANSI escapes, compared line by line.
@@ -393,23 +398,17 @@ fn emit_filtered_to(
     // through this id. A shortening that took only whitespace/ANSI has nothing to expand
     // (T160) — and then nothing references the id, so the archive row is skipped too.
     let named = names_the_id(&filtered, &id);
-    let pointer = needs_pointer(
-        lines,
-        cfg.plugins.cmd.trailer_min_lines,
-        body,
-        &filtered,
-        named,
-    );
-    if pointer || named {
-        // The archive keeps the command's bytes, not the lossy `String` used to filter
-        // and print them: `expand` must return what the command wrote, including invalid UTF-8.
-        if cx.put_archive_for(body, agent).is_err() {
-            write_raw(out);
-            return;
-        }
-    }
+    let pointer = cfg.plugins.cmd.trailer
+        && needs_pointer(
+            lines,
+            cfg.plugins.cmd.trailer_min_lines,
+            body,
+            &filtered,
+            named,
+        );
     // T247: measure exactly what the host receives — the padding newline and the trailer
     // line are part of the returned bytes, so `after` must count them too.
+    let no_shorter = filtered.trim_end().len() >= before.trim_end().len();
     let mut shown = filtered;
     if !shown.is_empty() && !shown.ends_with('\n') {
         shown.push('\n');
@@ -417,6 +416,38 @@ fn emit_filtered_to(
     if pointer {
         shown.push_str(&pointer_line);
         shown.push('\n');
+    }
+    // T661: never worse than raw. A short valid-UTF-8 body (at or under
+    // `trailer_min_lines`) that the filter made no shorter (a dir grouping of one file per
+    // directory, say) prints verbatim: nothing is cut, so there is nothing to expand and
+    // no archive row. A real cut keeps its trailer, as before.
+    // Above `trailer_min_lines` the same holds for the printed bytes: when the filter
+    // kept everything (a `tree` it cannot shorten) the trailer would only add to raw.
+    let min = cfg.plugins.cmd.trailer_min_lines;
+    if std::str::from_utf8(body).is_ok()
+        && ((lines <= min && no_shorter) || shown.len() >= body.len())
+    {
+        write_raw(out);
+        let est = cx.estimate(super::bounded::host_visible_prefix(&before), Class::Code);
+        let _ = cx.record(&Measurement {
+            plugin: "cmd",
+            kind: "raw",
+            before_bytes: body.len() as u64,
+            after_bytes: body.len() as u64,
+            est_before: est,
+            est_after: est,
+            ref_id: None,
+            call_id: None,
+        });
+        return;
+    }
+    if pointer || named {
+        // The archive keeps the command's bytes, not the lossy `String` used to filter
+        // and print them: `expand` must return what the command wrote, including invalid UTF-8.
+        if cx.put_archive_for(body, agent).is_err() {
+            write_raw(out);
+            return;
+        }
     }
     let _ = out.write_all(shown.as_bytes());
     let _ = cx.record(&Measurement {
@@ -472,10 +503,34 @@ mod tests {
         assert_eq!(long.chars().count(), "running ".len() + 60 + 1, "{long}");
     }
 
+    /// T661: a short `find` that the dir grouping would lengthen prints verbatim, with no
+    /// trailer and no archive row: the output is never worse than raw.
+    #[test]
+    fn short_output_a_filter_lengthens_prints_raw() {
+        let (c, dir) = cfg("never-worse");
+        let body: String = (0..9)
+            .map(|i| format!("crates/c{i}/Cargo.toml\n"))
+            .collect();
+        emit_filtered(
+            &c,
+            &["find".into(), "crates".into()],
+            body.as_bytes(),
+            0,
+            None,
+        );
+        let archived = fs::read_dir(&c.core.archive_dir)
+            .map(|d| d.count())
+            .unwrap_or(0);
+        assert_eq!(archived, 0);
+        let v = crate::model::plugin_stats(&c, "cmd").unwrap();
+        assert!(v.to_string().contains("raw"), "{v}");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn emit_filtered_archives_stdin_and_records() {
         let (c, dir) = cfg("emit-archive");
-        let body = (0..80)
+        let body = (0..400)
             .map(|i| format!("line {i}"))
             .collect::<Vec<_>>()
             .join("\n");
@@ -555,7 +610,7 @@ mod tests {
         // something references its id, and a dedup pointer names exactly that id.
         let payload = format!(
             "{}\n",
-            (0..80)
+            (0..400)
                 .map(|i| format!("line {i}"))
                 .collect::<Vec<_>>()
                 .join("\n")
@@ -801,9 +856,7 @@ mod tests {
         ));
     }
 
-    /// T175: bodies smaller than their own trailer pass through verbatim. A 150-byte
-    /// `ps` body the `ps_aux` formatter would reshape comes back byte-identical with
-    /// no trailer, no archive row, and a zero-saving `raw` Measurement row.
+    /// T175/T661: a tiny `ps` body the `ps_aux` formatter reshapes never prints longer than raw.
     #[test]
     fn tiny_body_passes_through_verbatim_with_no_negative_saving() {
         let (c, dir) = cfg("tiny-passthrough");
@@ -846,27 +899,17 @@ mod tests {
         if !expect.is_empty() && !expect.ends_with(b"\n") {
             expect.push(b'\n');
         }
-        assert_eq!(
-            printed, expect,
-            "pass-through must be verbatim (no trailer)"
-        );
+        // T661: the trailer is short now, so a tiny body can still shrink with it. The
+        // contract is the same as for every body: never longer than raw.
         assert!(
-            !String::from_utf8_lossy(&printed).contains("expand"),
-            "no expand trailer on tiny body: {}",
+            printed.len() <= expect.len(),
+            "tiny body must not grow: {}",
             String::from_utf8_lossy(&printed)
         );
-        let files: Vec<_> = fs::read_dir(&c.core.archive_dir)
-            .map(|rd| rd.map(|e| e.unwrap().path()).collect())
-            .unwrap_or_default();
-        assert!(files.is_empty(), "no archive on pass-through: {files:?}");
         let store = crate::store::Store::open(&c.core.db_path).unwrap();
         let rows = store.list_measurements("cmd").unwrap();
         assert_eq!(rows.len(), 1, "{rows:?}");
-        assert_eq!(rows[0].kind, "raw", "{rows:?}");
-        assert_eq!(rows[0].before_bytes, body.len() as i64, "{rows:?}");
-        assert_eq!(rows[0].after_bytes, rows[0].before_bytes, "{rows:?}");
-        assert_eq!(rows[0].est_after, rows[0].est_before, "{rows:?}");
-        assert!(rows[0].ref_id.is_none(), "{rows:?}");
+        assert!(rows[0].after_bytes <= rows[0].before_bytes, "{rows:?}");
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -919,7 +962,7 @@ mod tests {
             &mut printed,
         );
         let shown = String::from_utf8(printed).unwrap();
-        assert!(shown.contains("expand"), "{shown}");
+        assert!(shown.contains("[rtok "), "{shown}");
         let store = crate::store::Store::open(&c.core.db_path).unwrap();
         let rows = store.list_measurements("cmd").unwrap();
         assert_eq!(rows.len(), 1, "{rows:?}");

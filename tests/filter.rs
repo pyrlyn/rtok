@@ -30,7 +30,7 @@ fn printf_git_status_returns_filtered_text() {
         let stdin = child.stdin.as_mut().unwrap();
         stdin
             .write_all(
-                b"On branch main\nChanges not staged for commit:\n\tmodified:   src/lib.rs\n",
+                b"On branch main\nChanges not staged for commit:\n  (use \"git add <file>...\" to update what will be committed)\n  (use \"git restore <file>...\" to discard changes in working directory)\n\tmodified:   src/lib.rs\n\tmodified:   src/main.rs\n\tmodified:   src/plugins/cmd/run.rs\n\nUntracked files:\n  (use \"git add <file>...\" to include in what will be committed)\n\tnotes.txt\n\nno changes added to commit (use \"git add\" and/or \"git commit -a\")\n",
             )
             .unwrap();
     }
@@ -42,7 +42,7 @@ fn printf_git_status_returns_filtered_text() {
     );
     let s = String::from_utf8_lossy(&out.stdout);
     assert!(s.contains("On branch main"), "{s}");
-    assert!(s.contains("modified:   src/lib.rs"), "{s}");
+    assert!(s.contains(" M src/lib.rs"), "{s}");
     assert!(!s.contains("Changes not staged"), "{s}");
     let _ = std::fs::remove_dir_all(&home);
 }

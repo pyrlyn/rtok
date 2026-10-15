@@ -588,16 +588,20 @@ fn strip_ansi(s: &str) -> String {
 
 fn format(argv: &[String], output: &str) -> Option<String> {
     match (bin(argv), sub(argv)) {
-        ("cargo", "test") => Some(keep(
-            output,
-            &["FAILED", "test result:", "error[", "panicked"],
-        )),
-        ("cargo", "build") | ("cargo", "clippy") => Some(keep(
-            output,
-            &["error[", "error:", "-->", "Finished", "warning:"],
-        )),
-        ("git", "status") => Some(git_status(output)),
-        ("git", "diff") => Some(git_diff(output)),
+        ("cargo", "test") => Some(
+            super::compact::cargo_test(output)
+                .unwrap_or_else(|| keep(output, &["FAILED", "test result:", "error[", "panicked"])),
+        ),
+        ("cargo", "build") | ("cargo", "clippy") => {
+            Some(super::compact::cargo_build(output).unwrap_or_else(|| {
+                keep(output, &["error[", "error:", "-->", "Finished", "warning:"])
+            }))
+        }
+        ("git", "status") => {
+            Some(super::compact::git_status(output).unwrap_or_else(|| git_status(output)))
+        }
+        ("git", "diff") => Some(super::compact::git_diff(&git_diff(output))),
+        ("ls", _) if super::compact::ls_long(argv) => super::compact::ls_l(output),
         ("git", "log") => Some(output.lines().take(20).collect::<Vec<_>>().join("\n")),
         ("pytest", _) => Some(keep(
             output,

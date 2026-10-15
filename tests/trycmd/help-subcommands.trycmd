@@ -534,6 +534,7 @@ Arguments:
 Options:
       --agent <ID>     Sub-agent id from PreToolUse; scopes the dedup pointer
       --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
+      --no-ref         Do not print the reference line after a cut
   -h, --help           Print help
 
 $ rtok filter --help
@@ -546,6 +547,7 @@ Options:
       --stdin          Read the payload from stdin (OpenCode `tool[..]cute.after`)
       --cmd <CMD>      Command family hint (`git status`, `cargo test`, …)
       --archive        Archive stdin and print the expand trailer (same path as `run`)
+      --no-ref         Do not print the reference line after a cut
   -h, --help           Print help
 
 $ rtok expand --help
