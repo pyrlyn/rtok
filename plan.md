@@ -65,9 +65,115 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T525 | in progress | P2 | 3 | 0% | MiMo / mimo |
 | T526 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T527 | in progress | P2 | 3 | 0% | MiMo / mimo |
+| T661 | todo | P2 | 3 | 0% | |
+| T662 | todo | P2 | 3 | 0% | |
+| T663 | todo | P2 | 3 | 0% | |
+| T664 | todo | P2 | 3 | 0% | |
+| T665 | todo | P2 | 3 | 0% | |
+| T666 | todo | P2 | 3 | 0% | |
+| T667 | todo | P2 | 3 | 0% | |
+| T668 | todo | P2 | 3 | 0% | |
+| T669 | todo | P2 | 3 | 0% | |
+| T670 | todo | P2 | 3 | 0% | |
+| T671 | todo | P2 | 3 | 0% | |
+| T672 | todo | P2 | 3 | 0% | |
+| T673 | todo | P2 | 3 | 0% | |
+| T674 | todo | P2 | 3 | 0% | |
+| T675 | todo | P2 | 3 | 0% | |
+| T676 | todo | P2 | 3 | 0% | |
+| T677 | todo | P2 | 3 | 0% | |
+| T678 | todo | P2 | 3 | 0% | |
+| T679 | todo | P2 | 3 | 0% | |
+| T680 | todo | P2 | 3 | 0% | |
+| T681 | todo | P2 | 3 | 0% | |
+| T682 | todo | P2 | 3 | 0% | |
+| T683 | todo | P2 | 3 | 0% | |
+| T684 | todo | P2 | 3 | 0% | |
+| T685 | todo | P2 | 3 | 0% | |
+| T686 | todo | P2 | 3 | 0% | |
 
 
 
+
+
+### T661. rtk filter parity and `rtok discover`
+
+Compare [rtk](https://github.com/rtk-ai/rtk) filters against rtok's rule families: list the filters/commands rtk covers that rtok lacks, and where rtk is broader. Prefer `docs/comparison/rtok-vs-rtk.md` from draft PR #1071 when useful.
+
+Savings for both sides (sourced only; never invent):
+
+| Case | rtok saved | rtk saved | Source |
+|---|---|---|---|
+| bash bytes cut (author corpus, 5,725 cmds) | no data | 40.4 % (1.1 M of 2.8 M bytes) | `research.md` §2 A/B (T9.2) |
+| claimed bash cut | no data | 60–90 % (claim) | `research.md` §2 |
+| agentic bill (JetBrains) | no data | +7.6 % to 0 % (worse/neutral) | `research.md` §1, §7 |
+| head-to-head harness (`bench/competitors/rtk`) | pending | pending | PR #1071 |
+
+Add `rtok discover`, analogous to `rtk discover`: analyze recorded agent shell calls from rtok's own history/DB and report frequent commands with no filter, ranked by potential token savings, so we know which filters to add next. CLI only; new-command gates (trycmd fence, `surface_parity`, `config_coverage` if config is touched). Docs: `docs/comparison/rtok-vs-rtk.md` coverage table, `CHANGELOG.md`, command help.
+
+Done when: a dated coverage table (rtk command/filter vs rtok rule family) is in the comparison doc; `rtok discover` prints the ranked gap list from a fixture store and from the live local DB.
+
+Check: unit tests for ranking and "no filter" detection on a fixture DB; trycmd fence for `discover`; coverage table committed; `just check`.
+
+### T662. Match sqz formatter breadth without leaving the lossless path
+
+sqz ships 45+ formatters and a stack-trace safe mode; rtok has fewer families (`docs/comparison/rtok-vs-sqz.md`). Close the coverage gap while keeping archive + `expand`. Reuse T65.1–T65.4 ideas already taken from sqz; extend rule families where sqz still wins. Sourced savings: sqz self-reports 24.7 % over 3,003 compressions (`research.md` §11); rtok on that corpus is **no data** until the harness runs.
+
+Check: a coverage table vs sqz in `docs/comparison/rtok-vs-sqz.md`; at least the top gap families from `rtok discover` (T661) gain rules; `just check`.
+
+### T663. Push graph reference precision toward LSP-grade (serena)
+
+serena is ahead on symbol/reference precision (`docs/comparison/rtok-vs-serena.md`). Raise rtok reference recall/precision on the existing 30-symbol set without paying serena's ~1 494 description tokens/turn. Sourced: rtok reference recall 0.351 → 0.924 after T387; serena LSP-grade with **no numeric** in rtok docs; description tokens rtok ~165 vs serena ~1 494 (`docs/comparison.md` §2).
+
+Check: updated recall/precision row in `docs/comparison/rtok-vs-serena.md` and the graph bench; description-token budget still far below serena; `just check`.
+
+### T664. Review/blast-radius features from code-review-graph
+
+code-review-graph is ahead on review features (~30 MCP tools) while rtok wins on cost (`docs/comparison/rtok-vs-code-review-graph.md`). Port only the features that save tokens or answer "what does this edit touch?" without the full tool bill. Savings both sides: **no data** in rtok docs for a shared corpus.
+
+Check: one or more graph ops (or docs) covering the chosen features; MCP description-token budget documented; `just check`.
+
+### T665. Broader graph queries (codebase-memory-mcp)
+
+codebase-memory-mcp is broader (Cypher-style queries) (`docs/comparison/rtok-vs-codebase-memory-mcp.md`). Add the small query shapes agents actually used in our logs, without a heavy MCP surface. Savings both sides: **no data** for a shared corpus.
+
+Check: query shapes documented and tested; comparison file updated; `just check`.
+
+### T666. Optional automatic memory extraction (claude-mem idea)
+
+claude-mem is ahead if you want automatic LLM-extracted memory (`docs/comparison/rtok-vs-claude-mem.md`). Not a default path (cost). Design an opt-in extractor that writes ordinary rtok memory notes, measured. Savings both sides: **no data** without paid API keys (harness skips).
+
+Check: opt-in config off by default; fixture test with a fake LLM; docs warn about cost; `just check`.
+
+### T667. Richer memory features from engram
+
+engram has more memory features (HTTP + MCP) (`docs/comparison/rtok-vs-engram.md`). Adopt only features that improve recall on rtok's own memory bench without a second daemon. Savings both sides: **no data** pending harness.
+
+Check: feature list and take/skip in the comparison file; tests for what shipped; `just check`.
+
+### T668. Opt-in semantic memory path (mem0 idea)
+
+mem0 is ahead for semantic/vector memory (`docs/comparison/rtok-vs-mem0.md`). Keep rtok's cheap note path default; optional embedding search behind a flag, no Docker/Qdrant required for the default build. Savings both sides: **no data** (harness skips; needs API/models).
+
+Check: default build has no vector dependency; opt-in path documented; `just check`.
+
+### T669. Hybrid memory ranking and forgetting (graymatter)
+
+graymatter is ahead on hybrid ranking/forgetting (`docs/comparison/rtok-vs-graymatter.md`). Improve rtok memory ranking using signals we already store; add a forget/decay policy. Savings both sides: **no data** pending harness; rtok already claims stronger measured recall on its own bench in the comparison file.
+
+Check: ranking/forget tests on a fixture store; comparison file updated; `just check`.
+
+### T670. Read modes lean-ctx still has
+
+lean-ctx is ahead on read-mode count and a learned mode predictor (`docs/comparison/rtok-vs-lean-ctx.md`). Add only modes that beat rtok's per-turn cost on a replay. Sourced: lean-ctx 0 output saved and ~3.0–3.1 K tokens/turn inject; rtok ~800 token budget / ~223 description tokens (`research.md` §4, `docs/comparison.md` §2).
+
+Check: each new mode has a fixture test and a cost row; no banner-style per-turn inject; `just check`.
+
+### T671. Memory admission gate (MemPalace idea)
+
+MemPalace is ahead on admission/dedup by embeddings (`docs/comparison/rtok-vs-mempalace.md`). Add an admission gate before notes are stored (cheap hash/trigram first; embeddings opt-in). Savings both sides: **no data** (harness skips).
+
+Check: duplicate/low-value notes rejected in tests; default path needs no network; `just check`.
 
 **Source audit (T530).**
 
