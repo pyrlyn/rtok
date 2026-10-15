@@ -5,6 +5,7 @@
 //! `rtok expand <id>` (plan T3.5) and the shared fetch used by the MCP `expand` tool (T5.4).
 
 use crate::config::Config;
+use crate::names::MIN_PREFIX;
 use crate::plugin::{Measurement, Runtime};
 use crate::tokens::Class;
 use anyhow::{Result, bail};
@@ -69,11 +70,10 @@ pub fn fetch_range(cx: &Runtime, id: &str, lines: Option<&str>) -> Result<Option
     Ok(Some(bytes))
 }
 
-/// T661: a hex prefix of at least 8 chars (the trailer prints 12) names the one archive
+/// T661: a hex prefix of at least 8 chars (the trailer prints 8) names the one archive
 /// that starts with it. A full id, or a prefix with no match, passes through unchanged so
 /// the caller reports it as unknown; two matches is an error naming the ambiguity.
 pub fn resolve_id(cx: &Runtime, id: &str) -> Result<String> {
-    const MIN_PREFIX: usize = 8;
     if id.len() >= 64 || id.len() < MIN_PREFIX || !id.bytes().all(|b| b.is_ascii_hexdigit()) {
         return Ok(id.to_string());
     }
@@ -81,8 +81,21 @@ pub fn resolve_id(cx: &Runtime, id: &str) -> Result<String> {
     match hits.as_slice() {
         [one] => Ok(one.clone()),
         [] => Ok(id.to_string()),
-        _ => bail!("archive id prefix {id} is ambiguous; pass more characters"),
+        _ => bail!("{}", ambiguous_message(id, &hits)),
     }
+}
+
+/// The ambiguity error names each candidate by a prefix four chars longer than the one
+/// given, so the next call can pick one without a lookup.
+fn ambiguous_message(id: &str, hits: &[String]) -> String {
+    let longer: Vec<&str> = hits
+        .iter()
+        .map(|h| &h[..h.len().min(id.len() + 4)])
+        .collect();
+    format!(
+        "archive id prefix {id} is ambiguous; use one of: {}",
+        longer.join(", ")
+    )
 }
 
 /// The error text for an id with no archive row. An id that cannot be one — `-`,
@@ -306,10 +319,30 @@ pub(crate) fn parse_range(spec: &str, n: usize) -> Result<(usize, usize)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::names::short_id;
     use rstest::rstest;
 
     fn cfg(name: &str) -> Config {
         crate::testutil::config(name).0
+    }
+
+    #[test]
+    fn short_id_is_the_resolvable_minimum() {
+        let id = "ab".repeat(32);
+        assert_eq!(short_id(&id), "abababab");
+        assert_eq!(short_id("abc"), "abc");
+        assert!(short_id(&id).len() >= MIN_PREFIX);
+    }
+
+    #[test]
+    fn ambiguous_prefix_lists_the_longer_candidates() {
+        let pad = "0".repeat(52);
+        let msg = ambiguous_message(
+            "abababab",
+            &[format!("abababab1111{pad}"), format!("abababab2222{pad}")],
+        );
+        assert!(msg.contains("abababab1111"), "{msg}");
+        assert!(msg.contains("abababab2222"), "{msg}");
     }
 
     /// The MCP `expand` tool takes `context` straight from the model's JSON (`u64`), so a
