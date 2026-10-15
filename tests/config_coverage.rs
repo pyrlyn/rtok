@@ -47,6 +47,9 @@ const ALLOW: &[&str] = &[
 /// `--dry-run` has a key wherever the command owns a config table (`setup`, `proxy`, `bench`);
 /// on `config init` / `config set` it sits beside `--force` and means "print, do not write".
 const ALLOW_KEYS: &[&str] = &[
+    // `discover` (T661): the window and length of one report, defaulting to `[stats] since`.
+    "discover.since",
+    "discover.top",
     // `man --dir` (T316): where one call writes the pages, not a stored setting.
     "man.dir",
     // `completions --install/--uninstall` (T318): one-shot actions, not settings.

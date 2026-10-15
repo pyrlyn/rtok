@@ -2059,6 +2059,29 @@ Fix:
 
 Check: `just spa-stories` 257/257 twice; `just spa-test` 300/300; `just js`: oxlint is clean, and oxfmt flags only `web/e2e/rtok.ts`, which is unformatted on `main` and untouched here.
 
+### T661. rtk filter parity and `rtok discover`
+
+Compare [rtk](https://github.com/rtk-ai/rtk) filters against rtok's rule families: list the filters/commands rtk covers that rtok lacks, and where rtk is broader. Prefer `docs/comparison/rtok-vs-rtk.md` from draft PR #1071 when useful.
+
+Savings for both sides (sourced only; never invent):
+
+| Case | rtok saved | rtk saved | Source |
+|---|---|---|---|
+| bash bytes cut (author corpus, 5,725 cmds) | no data | 40.4 % (1.1 M of 2.8 M bytes) | `research.md` §2 A/B (T9.2) |
+| claimed bash cut | no data | 60–90 % (claim) | `research.md` §2 |
+| agentic bill (JetBrains) | no data | +7.6 % to 0 % (worse/neutral) | `research.md` §1, §7 |
+| head-to-head harness (`bench/competitors/rtk`) | pending | pending | PR #1071 |
+
+Add `rtok discover`, analogous to `rtk discover`: analyze recorded agent shell calls from rtok's own history/DB and report frequent commands with no filter, ranked by potential token savings, so we know which filters to add next. CLI only; new-command gates (trycmd fence, `surface_parity`, `config_coverage` if config is touched). Docs: `docs/comparison/rtok-vs-rtk.md` coverage table, `CHANGELOG.md`, command help.
+
+Done when: a dated coverage table (rtk command/filter vs rtok rule family) is in the comparison doc; `rtok discover` prints the ranked gap list from a fixture store and from the live local DB.
+
+Check: unit tests for ranking and "no filter" detection on a fixture DB; trycmd fence for `discover`; coverage table committed; `just check`.
+
+Result: `rtok discover [--since 30d] [--top 15] [--json]` reads the recorded `PostToolUse` Bash hook bodies (`Store::hook_inputs_for_tool_since`, Diesel), unwraps `rtok run -- '…'`, takes the first real program of each command through the `cmd` plugin's own lexer (`bounded::stages`, `formatters::visible_argv`), drops families with a formatter or a named rule (`formatters::filter_kind`) and chains that `rtok run` sends to `[script]`, and ranks the rest by output tokens (`measure::discover`, `model::discover`). The coverage table (62 rtk filters and 58 command modules at v1.0.1 vs rtok's formatters and rules) is in `docs/comparison/rtok-vs-rtk.md`. No saving rate is applied to the ranking. Bodies over `core.call_io_inline_bytes` are not read, so the numbers are a floor. On a copy of the live store (15,625 Bash calls, 30 days) most commands are chains already covered by `[script]`; 19 families remain, the top being `tail` (75 calls, 18k tokens) and `jscpd`.
+
+Check result (2026-10-15): 8 unit tests in `measure::discover` (ranking, covered-family skip, wrapper and syntax peel, `top`, the store query with a fixture DB); trycmd `discover.toml`, `discover-json.toml`, `--help` in `help-subcommands.trycmd`; `surface_parity` and `config_coverage` entries; completions, man and help goldens re-blessed; `just check`.
+
 ### T310.6. Pages: overview, plugins (toggle), calls (expand)
 
 Check: each page matches `design/html/admin/<page>.html` in dark and light at 375 and 1280 px on sample data; toggle and expand round-trip against `rtok web`; stories and Vitest for page logic.

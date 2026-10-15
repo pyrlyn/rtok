@@ -45,7 +45,6 @@
 - T656. Keep worktrees and caches when their age cannot be established
 - T657. Match compressor credentials to the internal provider
 - T651. Honor ProgressRunner timeouts with inherited output
-- T661. rtk filter parity and `rtok discover`
 - T662. Match sqz formatter breadth without leaving the lossless path
 - T663. Push graph reference precision toward LSP-grade (serena)
 - T664. Review/blast-radius features from code-review-graph

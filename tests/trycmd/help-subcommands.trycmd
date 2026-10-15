@@ -91,6 +91,18 @@ Options:
       --price                 Show per-model USD costs from `[stats.prices]` (`--price`)
   -h, --help                  Print help
 
+$ rtok discover --help
+Bash commands no filter covers yet, ranked by the output tokens they sent to the model
+
+Usage: rtok discover [OPTIONS]
+
+Options:
+      --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
+      --since <SINCE>  How far back to read Bash calls (`30d`, `24h`)
+      --top <TOP>      Families to list [default: 15]
+      --json           JSON instead of the table
+  -h, --help           Print help
+
 $ rtok bench --help
 A/B benchmark of host configurations
 

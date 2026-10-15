@@ -18,6 +18,7 @@ build never blocks the host.
 | `rtok filter --stdin` | filter a payload without executing it (OpenCode `tool.execute.after`) |
 | `rtok expand <id>` | print an archived payload, whole or by `--lines` / `--grep` |
 | `rtok stats` | measurements from session logs and the proxy |
+| `rtok discover` | Bash commands no formatter or named rule covers, ranked by the output tokens they sent to the model (`--since`, `--top`, `--json`) |
 | `rtok doctor` | inspect hooks, MCP servers, proxy chain — including what each costs per turn, and how much space `rtok agents junk clear` would free |
 | `rtok agents install claude\|cursor\|codex\|opencode\|kilo\|pi\|zcode\|kimi\|copilot\|aider\|windsurf\|zed` | install into a host, with backups; `--dry-run` |
 | `rtok agents uninstall claude\|cursor\|codex\|opencode\|kilo\|pi\|zcode\|kimi\|copilot\|aider\|windsurf\|zed` | take rtok back out of a host, with backups; `--dry-run` |
