@@ -50,7 +50,6 @@
 - T664. Review/blast-radius features from code-review-graph
 - T665. Broader graph queries (codebase-memory-mcp)
 - T666. Optional automatic memory extraction (claude-mem idea)
-- T667. Richer memory features from engram
 - T670. Read modes lean-ctx still has
 - T687. Hooks: PreToolUse/PostToolUse p50 to 10 ms
 - T673. grep 2260, git grep 452, rg: ≥ 91 %, 100 % paths (vs t-o 89.7 %, lean-ctx 89.6 %)

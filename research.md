@@ -3032,3 +3032,19 @@ Question: what real embedding source can sit behind `[plugins.memory.embed]` wit
 Not verified: OpenAI's base URL `https://api.openai.com/v1` (the fetched reference page shows the relative path only; it is the SDK default), and the price per token (not needed: the cap is `max_chars`, not money).
 
 Decision: `provider = "http"` posts `{"model", "input"}` to `<url>/embeddings` and reads `data[0].embedding`. It sends no `dimensions` field, so a server that lacks it cannot refuse the request; the length of the answer must equal `[embed] dimensions` or the vector is dropped. Cost control is a hard `max_chars` per request, no counters in the database. Any failure falls back to the plain note search with a warning; the hook (10 ms budget) never calls the endpoint and reads only the FTS leg while a remote is configured. Remote vectors are stored under their own model key (`<model>+remote1`), so they never mix with hash vectors.
+
+## 42. engram features: take or skip (T667, checked 2026-10-16)
+
+Source: engram README at tag v3.4.0 (<https://github.com/Gentleman-Programming/engram>, read through the GitHub API on 2026-10-16). No memory-bench number exists for engram, so nothing here is a saving claim.
+
+| engram feature | Decision | Why |
+| --- | --- | --- |
+| Project-aware reads: a read uses the current project when none is named (README, "Project-aware") | **Take** (T667) | rtok's `mem_search` ranked every project's notes alike. Now a note of the searcher's project wins a near tie (`search_notes_in`, boost 1.3), another project's clearly better match still leads, and no new tool or flag is needed. |
+| Topic keys (`mem_suggest_topic_key`) | Already have | `(project, kind, title)` upsert since T66.1; the model need not ask a tool for a key. |
+| Pinned-first recall | Already have | `memory pin` leads SessionStart recall (T69.1) and, since T669, lifts a search hit. |
+| Session summary and session start/end tools | Already have | `session:*` checkpoint notes and `startup_recall` (T71.2). |
+| `mem_judge`, `mem_compare`, `mem_judge_many` (relation judging) | Skip | Spends model output on bookkeeping; the admission gate (T671) and topic keys cover duplicates without a model. |
+| `mem_consolidate` after preview and confirmation | Skip | Model-driven merging of observations; retire/supersede/forget (T69.1, T669) are reversible without it. |
+| `mem_save_prompt` | Skip | The `remember:` prompt prefix already preserves a user request. |
+| Git Sync chunks, Engram Cloud, HTTP core | Skip | A second daemon or network path; `memory export` / `import` JSONL (T294) moves notes through git already. |
+| 18 tools | Skip | About 1 865 description tokens every turn (`research.md` §13); rtok keeps 3 memory tools. |

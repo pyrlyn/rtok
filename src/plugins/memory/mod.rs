@@ -589,10 +589,24 @@ pub fn mem_search(
     query: &str,
     limit: u32,
 ) -> anyhow::Result<Vec<crate::store::NoteHit>> {
+    mem_search_in(rt, query, limit, save_scope(None).as_deref())
+}
+
+/// [`mem_search`] for an explicit `project` (T667): its notes win a near tie against other
+/// projects' notes. The vector and hybrid paths (opt-in) do not take the boost.
+pub fn mem_search_in(
+    rt: &crate::plugin::Runtime,
+    query: &str,
+    limit: u32,
+    project: Option<&str>,
+) -> anyhow::Result<Vec<crate::store::NoteHit>> {
     let lim = limit.max(1);
     let cfg = &rt.config.plugins.memory.embed;
     if !cfg.enabled {
-        return rt.store.search_notes(query, lim).map_err(Into::into);
+        return rt
+            .store
+            .search_notes_in(query, lim, project)
+            .map_err(Into::into);
     }
     let embed = crate::store::embed_settings(cfg);
     if cfg.hybrid {
@@ -1900,6 +1914,73 @@ mod tests {
         cx.config.plugins.memory.forget_after_days = 0;
         let out = mem_forget(&cx, None, None, true).unwrap();
         assert!(out.starts_with("forget is off"), "{out}");
+    }
+
+    fn first_in(cx: &crate::plugin::Runtime, query: &str, project: Option<&str>) -> String {
+        mem_search_in(cx, query, 5, project).unwrap()[0]
+            .title
+            .clone()
+    }
+
+    #[test]
+    fn the_current_project_leads_an_equal_text_twin_from_another() {
+        let cx = crate::plugin::Runtime::in_memory("t667-project").unwrap();
+        mem_save(
+            &cx,
+            "note",
+            "twin-beta",
+            "quokka ledger entry",
+            Some("beta"),
+        )
+        .unwrap();
+        mem_save(
+            &cx,
+            "note",
+            "twin-alpha",
+            "quokka ledger entry",
+            Some("alpha"),
+        )
+        .unwrap();
+        assert_eq!(
+            first_in(&cx, "quokka", None),
+            "twin-beta",
+            "no project keeps bm25 order"
+        );
+        assert_eq!(first_in(&cx, "quokka", Some("alpha")), "twin-alpha");
+        assert_eq!(first_in(&cx, "quokka", Some("beta")), "twin-beta");
+    }
+
+    #[test]
+    fn a_project_note_far_down_the_text_ranking_does_not_beat_the_best_match() {
+        let cx = crate::plugin::Runtime::in_memory("t667-far").unwrap();
+        let filler = "unrelated words about caches and hooks ".repeat(8);
+        mem_save(
+            &cx,
+            "note",
+            "best",
+            "quokka quokka quokka quokka",
+            Some("beta"),
+        )
+        .unwrap();
+        for (title, hits) in [("mid1", "quokka quokka quokka"), ("mid2", "quokka quokka")] {
+            mem_save(
+                &cx,
+                "note",
+                title,
+                &format!("{filler} {hits}"),
+                Some("beta"),
+            )
+            .unwrap();
+        }
+        mem_save(
+            &cx,
+            "note",
+            "weak",
+            &format!("{filler} quokka"),
+            Some("alpha"),
+        )
+        .unwrap();
+        assert_eq!(first_in(&cx, "quokka", Some("alpha")), "best");
     }
 
     #[test]

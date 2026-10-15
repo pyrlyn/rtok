@@ -161,7 +161,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T664 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T665 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T666 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T667 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T670 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T687 | in progress | P2 | 4 | 0% | Claude Code / claude-sonnet-5-5 |
 | T673 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
@@ -222,14 +221,6 @@ claude-mem is ahead if you want automatic LLM-extracted memory (`docs/comparison
 Check: opt-in config off by default; fixture test with a fake LLM; docs warn about cost; `just check`.
 
 **Plan.** Split because a real model call needs a provider decision (creator) and the whole feature exceeds 500 lines. **T666.1 (this slice):** an `Extractor` trait in `src/plugins/memory/extract.rs`, the config block `plugins.memory.extract` (`enabled = false`, `max_notes`, `max_input_bytes`) in the one config module, and `rtok memory extract <transcript.jsonl>` that scrubs the input (`scrub.rs`, `<private>`), asks the extractor for candidate notes and saves them through the normal `mem_save` path (so the T671 admission gate and dedup apply). Only a fake extractor ships in tests; with `enabled = false` the command refuses and nothing runs. No hook calls it. **T666.2 (todo, blocked on the creator):** a real provider-backed extractor (which provider/model, key handling, cost cap) and a docs warning about cost. Tests: fake LLM fixture, off-by-default, scrub applied, duplicate rejected, input cap; `just check`.
-
-### T667. Richer memory features from engram
-
-engram has more memory features (HTTP + MCP) (`docs/comparison/rtok-vs-engram.md`). Adopt only features that improve recall on rtok's own memory bench without a second daemon. Savings both sides: **no data** pending harness.
-
-Check: feature list and take/skip in the comparison file; tests for what shipped; `just check`.
-
-**Plan.** From `docs/comparison/rtok-vs-engram.md` (PR #1071): engram has relation judging, pinned-first recall and project identity from the origin remote that rtok lacks. Relation judging spends model output on bookkeeping: **skip**. (1) Check which of pinned-first recall and origin-remote project identity already exist (`mem_update pinned`, `project_name`); fail-first tests on `tests/fixtures/p29_memory.toml`-style fixtures for the missing ones. (2) Implement only what raises recall on rtok's own memory bench with no new MCP tool and no daemon. (3) Write the take/skip list into the comparison file (or `research.md` while #1071 is open); `just check`.
 
 ### T670. Read modes lean-ctx still has
 
