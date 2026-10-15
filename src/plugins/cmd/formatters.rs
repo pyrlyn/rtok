@@ -1513,6 +1513,10 @@ mod tests {
             "eslint_dup.in",
             "cargo_check.in",
             "dotnet_dup.in",
+            "ruff_check.in",
+            "mypy_run.in",
+            "rubocop_run.in",
+            "golangci_lint_run.in",
         ] {
             let raw = fs::read_to_string(dir.join(file)).unwrap();
             let (argv, exit, _, output) = parse_in(&raw);

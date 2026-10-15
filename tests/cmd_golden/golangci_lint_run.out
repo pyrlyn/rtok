@@ -1,0 +1,25 @@
+errcheck ×45: Error return value of `w.Write` is not checked (internal/svc/h0.go:12:2, internal/svc/h1.go:13:3, internal/svc/h2.go:14:4, …)
+	w.Write(buf0)
+	^
+	w.Write(buf1)
+	^
+	w.Write(buf2)
+	^
+	w.Write(buf3)
+… 69 lines omitted (expand deadbeef)
+	w.Write(buf38)
+	^
+	w.Write(buf39)
+	^
+	w.Write(buf40)
+	^
+	w.Write(buf41)
+	^
+	w.Write(buf42)
+	^
+	w.Write(buf43)
+	^
+	w.Write(buf44)
+	^
+45 issues:
+* errcheck: 45

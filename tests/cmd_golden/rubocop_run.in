@@ -1,0 +1,101 @@
+argv: rubocop
+exit: 0
+min_saving: 80
+---
+Inspecting 41 files
+..........C.....W....E............C......
+
+Offenses:
+
+app/models/m0.rb:10:3: C: Style/StringLiterals: Prefer single-quoted strings when you don't need string interpolation.
+x = "a0"
+    ^^^^^^
+app/models/m1.rb:11:4: C: Style/StringLiterals: Prefer single-quoted strings when you don't need string interpolation.
+x = "a1"
+    ^^^^^^
+app/models/m2.rb:12:5: C: Style/StringLiterals: Prefer single-quoted strings when you don't need string interpolation.
+x = "a2"
+    ^^^^^^
+app/models/m3.rb:13:6: C: Style/StringLiterals: Prefer single-quoted strings when you don't need string interpolation.
+x = "a3"
+    ^^^^^^
+app/models/m4.rb:14:3: C: Style/StringLiterals: Prefer single-quoted strings when you don't need string interpolation.
+x = "a4"
+    ^^^^^^
+app/models/m5.rb:15:4: C: Style/StringLiterals: Prefer single-quoted strings when you don't need string interpolation.
+x = "a5"
+    ^^^^^^
+app/models/m0.rb:16:5: C: Style/StringLiterals: Prefer single-quoted strings when you don't need string interpolation.
+x = "a6"
+    ^^^^^^
+app/models/m1.rb:17:6: C: Style/StringLiterals: Prefer single-quoted strings when you don't need string interpolation.
+x = "a7"
+    ^^^^^^
+app/models/m2.rb:18:3: C: Style/StringLiterals: Prefer single-quoted strings when you don't need string interpolation.
+x = "a8"
+    ^^^^^^
+app/models/m3.rb:19:4: C: Style/StringLiterals: Prefer single-quoted strings when you don't need string interpolation.
+x = "a9"
+    ^^^^^^
+app/models/m4.rb:20:5: C: Style/StringLiterals: Prefer single-quoted strings when you don't need string interpolation.
+x = "a10"
+    ^^^^^^
+app/models/m5.rb:21:6: C: Style/StringLiterals: Prefer single-quoted strings when you don't need string interpolation.
+x = "a11"
+    ^^^^^^
+app/models/m0.rb:22:3: C: Style/StringLiterals: Prefer single-quoted strings when you don't need string interpolation.
+x = "a12"
+    ^^^^^^
+app/models/m1.rb:23:4: C: Style/StringLiterals: Prefer single-quoted strings when you don't need string interpolation.
+x = "a13"
+    ^^^^^^
+app/models/m2.rb:24:5: C: Style/StringLiterals: Prefer single-quoted strings when you don't need string interpolation.
+x = "a14"
+    ^^^^^^
+app/models/m3.rb:25:6: C: Style/StringLiterals: Prefer single-quoted strings when you don't need string interpolation.
+x = "a15"
+    ^^^^^^
+app/models/m4.rb:26:3: C: Style/StringLiterals: Prefer single-quoted strings when you don't need string interpolation.
+x = "a16"
+    ^^^^^^
+app/models/m5.rb:27:4: C: Style/StringLiterals: Prefer single-quoted strings when you don't need string interpolation.
+x = "a17"
+    ^^^^^^
+app/models/m0.rb:28:5: C: Style/StringLiterals: Prefer single-quoted strings when you don't need string interpolation.
+x = "a18"
+    ^^^^^^
+app/models/m1.rb:29:6: C: Style/StringLiterals: Prefer single-quoted strings when you don't need string interpolation.
+x = "a19"
+    ^^^^^^
+app/models/m2.rb:30:3: C: Style/StringLiterals: Prefer single-quoted strings when you don't need string interpolation.
+x = "a20"
+    ^^^^^^
+app/models/m3.rb:31:4: C: Style/StringLiterals: Prefer single-quoted strings when you don't need string interpolation.
+x = "a21"
+    ^^^^^^
+app/models/m4.rb:32:5: C: Style/StringLiterals: Prefer single-quoted strings when you don't need string interpolation.
+x = "a22"
+    ^^^^^^
+app/models/m5.rb:33:6: C: Style/StringLiterals: Prefer single-quoted strings when you don't need string interpolation.
+x = "a23"
+    ^^^^^^
+app/models/m0.rb:34:3: C: Style/StringLiterals: Prefer single-quoted strings when you don't need string interpolation.
+x = "a24"
+    ^^^^^^
+app/models/m1.rb:35:4: C: Style/StringLiterals: Prefer single-quoted strings when you don't need string interpolation.
+x = "a25"
+    ^^^^^^
+app/models/m2.rb:36:5: C: Style/StringLiterals: Prefer single-quoted strings when you don't need string interpolation.
+x = "a26"
+    ^^^^^^
+app/models/m3.rb:37:6: C: Style/StringLiterals: Prefer single-quoted strings when you don't need string interpolation.
+x = "a27"
+    ^^^^^^
+app/models/m4.rb:38:3: C: Style/StringLiterals: Prefer single-quoted strings when you don't need string interpolation.
+x = "a28"
+    ^^^^^^
+app/models/m5.rb:39:4: C: Style/StringLiterals: Prefer single-quoted strings when you don't need string interpolation.
+x = "a29"
+    ^^^^^^
+
+41 files inspected, 30 offenses detected, 30 offenses autocorrectable
