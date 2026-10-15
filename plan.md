@@ -90,7 +90,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T684 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T685 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T686 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T901 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
 | T902 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
 
 
@@ -1191,14 +1190,6 @@ Best competitor: caveman 12–29 %. Design: `rtok mcp` proxy: first sentence of 
 Check: #1076 harness (`bench/c14`) shows ≥ 30 % on this category with full anchor retention.
 
 Plan: locate the `rtok mcp` proxy tool-description rewrite (`[proxy.tools_rewrite]`, T59.5); add first-sentence descriptions, drop default/examples duplicating the schema type, compact enums, full text recoverable via the archive; fixture catalog test with token cut ≥ 30 % and unchanged tool names/required args. Decide at start whether it overlaps T124's off-by-default gate; if it needs a creator decision, write it here and set back to `todo`.
-
-### T901. Windows: `graph_lsp_gate::lsp_backend_outlines_dart_main` fails on dart 3.9
-
-The test fails on Windows dart 3.9 with `File is not being analyzed` (surfaced by the first full local `just check` on Windows, T272–T274, `docs/windows.md`); CI never runs it because the runners have no dart. Done = the test no longer fails on Windows dart 3.9 (project gets a `dart pub get` / readiness wait, or skips on that error with the reason in a comment) and a test pins the skip/ready predicate.
-
-Check: `lsp_backend_outlines_dart_main` passes or skips with a stated reason on Windows dart 3.9; the predicate test passes on every OS; `just check`.
-
-Plan: make `lsp_backend_outlines_dart_main` robust on Windows dart 3.9: write a minimal `pubspec.yaml` in the temp project and run `dart pub get`, or skip when the server answers `File is not being analyzed`, with the reason in a comment. CI has no dart, so the proof is a unit test of the skip/ready predicate that runs everywhere.
 
 ### T902. Windows CI: run `cargo clippy --workspace` in the `windows` job
 
