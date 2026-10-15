@@ -32,6 +32,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('web', 'web', [CompletionResultType]::ParameterValue, 'Local web UI over the same data as `rtok tui` (WebSocket API + React SPA)')
             [CompletionResult]::new('tui', 'tui', [CompletionResultType]::ParameterValue, 'Terminal UI over the same data as `rtok web` (one model, two renderings)')
             [CompletionResult]::new('stats', 'stats', [CompletionResultType]::ParameterValue, 'Measurements from session logs and the proxy')
+            [CompletionResult]::new('discover', 'discover', [CompletionResultType]::ParameterValue, 'Bash commands no filter covers yet, ranked by the output tokens they sent to the model')
             [CompletionResult]::new('bench', 'bench', [CompletionResultType]::ParameterValue, 'A/B benchmark of host configurations')
             [CompletionResult]::new('doctor', 'doctor', [CompletionResultType]::ParameterValue, 'Inspect hooks, MCP servers and the proxy chain')
             [CompletionResult]::new('worktree', 'worktree', [CompletionResultType]::ParameterValue, 'Git worktrees of this repository: owner, state and disk cost')
@@ -138,6 +139,15 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--calibrate', '--calibrate', [CompletionResultType]::ParameterName, 'Fit chars-per-token via count_tokens (skipped without an API key)')
             [CompletionResult]::new('--cache', '--cache', [CompletionResultType]::ParameterName, 'Cache health per session from proxy usage rows: busts and their cause')
             [CompletionResult]::new('--price', '--price', [CompletionResultType]::ParameterName, 'Show per-model USD costs from `[stats.prices]` (`--price`)')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'rtok;discover' {
+            [CompletionResult]::new('--since', '--since', [CompletionResultType]::ParameterName, 'How far back to read Bash calls (`30d`, `24h`)')
+            [CompletionResult]::new('--top', '--top', [CompletionResultType]::ParameterName, 'Families to list')
+            [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'JSON instead of the table')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
@@ -1401,6 +1411,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('import', 'import', [CompletionResultType]::ParameterValue, 'Import `{kind,title,body}` JSONL; dedupe by body sha256')
             [CompletionResult]::new('export', 'export', [CompletionResultType]::ParameterValue, 'Print every note but session checkpoints as the JSONL `import` reads')
             [CompletionResult]::new('retire', 'retire', [CompletionResultType]::ParameterValue, 'Retire a note: a tombstone — never recalled or searched, body kept')
+            [CompletionResult]::new('forget', 'forget', [CompletionResultType]::ParameterValue, 'Retire notes nobody read for a long time (a dry run unless `--apply`)')
             [CompletionResult]::new('pin', 'pin', [CompletionResultType]::ParameterValue, 'Pin a note so it leads SessionStart recall')
             [CompletionResult]::new('unpin', 'unpin', [CompletionResultType]::ParameterValue, 'Drop a note back to newest-first recall order')
             [CompletionResult]::new('history', 'history', [CompletionResultType]::ParameterValue, 'Print the earlier title and body kept when an upsert changed this note')
@@ -1427,6 +1438,15 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
         'rtok;memory;retire' {
             [CompletionResult]::new('--superseded-by', '--superseded-by', [CompletionResultType]::ParameterName, 'The replacement note id this one is superseded by')
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'rtok;memory;forget' {
+            [CompletionResult]::new('--project', '--project', [CompletionResultType]::ParameterName, 'Only this project')
+            [CompletionResult]::new('--days', '--days', [CompletionResultType]::ParameterName, 'Idle days; default `[plugins.memory] forget_after_days`')
+            [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
+            [CompletionResult]::new('--apply', '--apply', [CompletionResultType]::ParameterName, 'Retire the notes; without it nothing is written')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
@@ -1482,6 +1502,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('import', 'import', [CompletionResultType]::ParameterValue, 'Import `{kind,title,body}` JSONL; dedupe by body sha256')
             [CompletionResult]::new('export', 'export', [CompletionResultType]::ParameterValue, 'Print every note but session checkpoints as the JSONL `import` reads')
             [CompletionResult]::new('retire', 'retire', [CompletionResultType]::ParameterValue, 'Retire a note: a tombstone — never recalled or searched, body kept')
+            [CompletionResult]::new('forget', 'forget', [CompletionResultType]::ParameterValue, 'Retire notes nobody read for a long time (a dry run unless `--apply`)')
             [CompletionResult]::new('pin', 'pin', [CompletionResultType]::ParameterValue, 'Pin a note so it leads SessionStart recall')
             [CompletionResult]::new('unpin', 'unpin', [CompletionResultType]::ParameterValue, 'Drop a note back to newest-first recall order')
             [CompletionResult]::new('history', 'history', [CompletionResultType]::ParameterValue, 'Print the earlier title and body kept when an upsert changed this note')
@@ -1498,6 +1519,9 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             break
         }
         'rtok;memory;help;retire' {
+            break
+        }
+        'rtok;memory;help;forget' {
             break
         }
         'rtok;memory;help;pin' {
@@ -2029,6 +2053,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('web', 'web', [CompletionResultType]::ParameterValue, 'Local web UI over the same data as `rtok tui` (WebSocket API + React SPA)')
             [CompletionResult]::new('tui', 'tui', [CompletionResultType]::ParameterValue, 'Terminal UI over the same data as `rtok web` (one model, two renderings)')
             [CompletionResult]::new('stats', 'stats', [CompletionResultType]::ParameterValue, 'Measurements from session logs and the proxy')
+            [CompletionResult]::new('discover', 'discover', [CompletionResultType]::ParameterValue, 'Bash commands no filter covers yet, ranked by the output tokens they sent to the model')
             [CompletionResult]::new('bench', 'bench', [CompletionResultType]::ParameterValue, 'A/B benchmark of host configurations')
             [CompletionResult]::new('doctor', 'doctor', [CompletionResultType]::ParameterValue, 'Inspect hooks, MCP servers and the proxy chain')
             [CompletionResult]::new('worktree', 'worktree', [CompletionResultType]::ParameterValue, 'Git worktrees of this repository: owner, state and disk cost')
@@ -2077,6 +2102,9 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             break
         }
         'rtok;help;stats' {
+            break
+        }
+        'rtok;help;discover' {
             break
         }
         'rtok;help;bench' {
@@ -2335,6 +2363,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('import', 'import', [CompletionResultType]::ParameterValue, 'Import `{kind,title,body}` JSONL; dedupe by body sha256')
             [CompletionResult]::new('export', 'export', [CompletionResultType]::ParameterValue, 'Print every note but session checkpoints as the JSONL `import` reads')
             [CompletionResult]::new('retire', 'retire', [CompletionResultType]::ParameterValue, 'Retire a note: a tombstone — never recalled or searched, body kept')
+            [CompletionResult]::new('forget', 'forget', [CompletionResultType]::ParameterValue, 'Retire notes nobody read for a long time (a dry run unless `--apply`)')
             [CompletionResult]::new('pin', 'pin', [CompletionResultType]::ParameterValue, 'Pin a note so it leads SessionStart recall')
             [CompletionResult]::new('unpin', 'unpin', [CompletionResultType]::ParameterValue, 'Drop a note back to newest-first recall order')
             [CompletionResult]::new('history', 'history', [CompletionResultType]::ParameterValue, 'Print the earlier title and body kept when an upsert changed this note')
@@ -2350,6 +2379,9 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             break
         }
         'rtok;help;memory;retire' {
+            break
+        }
+        'rtok;help;memory;forget' {
             break
         }
         'rtok;help;memory;pin' {

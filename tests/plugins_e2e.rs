@@ -153,6 +153,22 @@ fn memory_save_then_search() {
     assert!(found.contains("t382 milk"), "{found}");
 }
 #[test]
+fn memory_save_refuses_a_repeat_and_names_the_stored_note() {
+    let home = tmp("memory-admit");
+    let first = r#"{"title":"cache","body":"The walrus cache evicts the oldest entry."}"#;
+    let twin = r#"{"title":"cache again","body":"the walrus cache evicts the OLDEST entry."}"#;
+    let stored: serde_json::Value =
+        serde_json::from_str(&tool(&home, &home.0, "mem_save", first)).unwrap();
+    let refused: serde_json::Value =
+        serde_json::from_str(&tool(&home, &home.0, "mem_save", twin)).unwrap();
+    assert_eq!(refused["refused"], "duplicate", "{refused}");
+    assert_eq!(refused["id"], stored["id"], "{refused}");
+    let tiny = r#"{"title":"tiny","body":"ok"}"#;
+    let tiny: serde_json::Value =
+        serde_json::from_str(&tool(&home, &home.0, "mem_save", tiny)).unwrap();
+    assert_eq!(tiny["refused"], "too_short", "{tiny}");
+}
+#[test]
 fn memory_pack_returns_a_tier_and_records() {
     let home = tmp("memory-pack");
     let saved = tool(

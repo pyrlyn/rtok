@@ -289,6 +289,11 @@ jobs:
           path: nextest-archive.tar.zst
           retention-days: 1
           if-no-files-found: error
+      # T902: `cfg(windows)` code is invisible to the ubuntu `lint` job, so its lint debt (the
+      # T273/T274 class) only showed up in the first local Windows gate. Same flags as
+      # `just lint`: libs and bins keep the `Command::new` ban, tests are exempt (T276.6).
+      - run: mise exec -- cargo clippy --workspace --all-targets --all-features --exclude rtok-wasm-demo-guest -- -D warnings -A clippy::disallowed_methods
+      - run: mise exec -- cargo clippy --workspace --lib --bins --all-features --exclude rtok-wasm-demo-guest -- -D warnings
       - if: failure() && github.event_name == 'pull_request'
         uses: pyrlyn/ci/.github/actions/cancel-run@4e652d891cc6e6f0be316eda1a1f9630d76a8b7e # main
 

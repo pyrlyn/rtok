@@ -40,6 +40,19 @@ pub(super) enum MemoryCmd {
         #[arg(long)]
         superseded_by: Option<i32>,
     },
+    // T669
+    /// Retire notes nobody read for a long time (a dry run unless `--apply`)
+    Forget {
+        /// Only this project
+        #[arg(long)]
+        project: Option<String>,
+        /// Idle days; default `[plugins.memory] forget_after_days`
+        #[arg(long)]
+        days: Option<u32>,
+        /// Retire the notes; without it nothing is written
+        #[arg(long)]
+        apply: bool,
+    },
     // T69.1
     /// Pin a note so it leads SessionStart recall
     Pin { id: i32 },
@@ -123,6 +136,17 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: MemoryCmd) -> Result<()
             println!(
                 "{}",
                 crate::plugins::memory::mem_update(&cx, id, true, superseded_by, None)?
+            );
+        }
+        MemoryCmd::Forget {
+            project,
+            days,
+            apply,
+        } => {
+            let cx = crate::plugin::Runtime::open(cfg, "memory")?;
+            println!(
+                "{}",
+                crate::plugins::memory::mem_forget(&cx, project.as_deref(), days, apply)?
             );
         }
         MemoryCmd::Pin { id } => {

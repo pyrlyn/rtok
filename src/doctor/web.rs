@@ -221,6 +221,8 @@ pub fn apply_here(cfg: &Config, sel: &Selection, confirmed: &str) -> Fixed {
 }
 
 #[cfg(test)]
+// T902: every `#[test]` below is unix-only (POSIX paths), so on Windows the shared helpers are unused.
+#[cfg_attr(windows, allow(dead_code, unused_imports))]
 mod tests {
     use super::*;
     use crate::doctor::fix::KINDS;

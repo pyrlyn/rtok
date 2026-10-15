@@ -1,0 +1,14 @@
+bin.name = "rtok"
+args = "--config tests/trycmd/input/json-readers.toml discover"
+stdout = """
+0 Bash calls read, 0 command families with no filter
+nothing to add: every Bash family read has a formatter or a named rule
+"""
+
+# Hermetic by construction: an empty store in an isolated RTOK_HOME, inherit = false.
+[env]
+inherit = false
+
+[env.add]
+HOME = "target/tmp/t661-discover"
+RTOK_HOME = "target/tmp/t661-discover"
