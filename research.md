@@ -799,6 +799,38 @@ standing rtok rule (the first bullet of §3) but does not prove it for the CLI s
 `claude -p` invocation outside this sandbox — a real terminal or CI runner with its own
 OAuth session — to get an actual Bash/Read/MCP transcript.
 
+**Live probe (2026-10-15, T134): honoured, when the value has the tool's own response shape.**
+Claude Code 2.1.267, run outside the sandbox that blocked the 2026-09-25 attempt by pointing
+`claude -p` at LM Studio's local Anthropic endpoint (`ANTHROPIC_BASE_URL=http://localhost:1234`,
+`ANTHROPIC_MODEL=prism-ml/bonsai-27b`, `--setting-sources project`, `--settings <scratch>`,
+`--permission-mode acceptEdits`, `--allowedTools <tool>`). The hook is a scratch `PostToolUse`
+command hook (matcher `*`) that logs its stdin payload and prints
+`{"hookSpecificOutput":{"hookEventName":"PostToolUse","updatedToolOutput":<value>}}`. The model
+is irrelevant to the question (the hook runs in the CLI before the model sees the result); the
+`tool_result` block in the `stream-json` transcript is the evidence. Original content of the
+scratch file: `original-file-content-ABC`; replacement marker: `REPLACED-BY-HOOK-7731`.
+
+| Tool | `updatedToolOutput` sent | `tool_result` the model received |
+| --- | --- | --- |
+| Bash `cat note.txt` | string `"REPLACED-BY-HOOK-7731"` | `original-file-content-ABC` — **ignored** |
+| Bash `cat note.txt` | object in the shape of the payload's `tool_response` (`{stdout, stderr, interrupted, isImage, noOutputExpected}`) | `REPLACED-BY-HOOK-7731` — **replaced** |
+| Read of `note.txt` | string | `1\toriginal-file-content-ABC` — **ignored** |
+| Read of `note.txt` | object in the Read response shape (`{type: "text", file: {filePath, content, numLines, startLine, totalLines}}`) | `1\tREPLACED-BY-HOOK-7731` — **replaced** (the CLI renders the replaced `file.content` with its line numbers) |
+| MCP `mcp__rtok__ping` | content array `[{type: "text", text: "REPLACED-BY-HOOK-7731"}]` | `[{"type":"text","text":"REPLACED-BY-HOOK-7731"}]` — **replaced** |
+
+Findings. (1) The CLI honours `updatedToolOutput` for built-in tools and MCP tools even though
+the CLI hooks page does not list the field. (2) The value must match the tool's own response
+object (for Bash and Read, the `tool_response` the hook receives on stdin); a bare string is
+silently ignored for both. (3) The hook payload carries `tool_response` in that shape, so a
+hook can copy it, shrink one field and return it. Not probed: `WebSearch`/`WebFetch` (the local
+model cannot drive them), `Edit`/`Write`, parallel tool calls, and later Claude Code versions.
+A scratch hook, not shipped.
+
+Consequence for I-91: the gate is open. Whether rtok may shrink native Read/Bash output in place
+(pointer + `expand <id>`) contradicts the standing rule "PostToolUse can only add context", so it is the
+creator's call (`AGENTS.md` rule line, then the `cmd`/`read`/`guard` design). No product code
+changed by T134.
+
 ## 4. Comparison matrix
 
 Stars/language/license from the GitHub API on 2026-09-01. "Claimed" is the vendor's number; "Measured" is yours or an independent source.
