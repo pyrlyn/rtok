@@ -164,7 +164,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T667 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T670 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T687 | in progress | P2 | 4 | 0% | Claude Code / claude-sonnet-5-5 |
-| T673 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T675 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T676 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T677 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
@@ -1140,13 +1139,6 @@ Check: a test shows a dropped `Runtime::in_memory` leaves no directory behind, a
 
 Source: `docs/research/competitors-techniques.md` (techniques, licenses, links). Every card: keep 100 % of hashes, paths and WARN/ERROR lines, never more tokens than raw, stderr and exit line kept on failure.
 
-### T673. grep 2260, git grep 452, rg
-
-Best competitor: t-o 89.7 %, lean-ctx 89.6 %. Design: path printed once; matches as `line:text`; collapse common indentation; trim match text around the hit to ±60 chars keeping the match itself; per-file cap by match budget with `+N more (expand)`; files sorted by path (stable) not count; keep 100 % paths.
-
-Check: #1076 harness (`bench/c14`) shows ≥ 91 %, 100 % paths on this category with full anchor retention.
-
-Plan: new `grep_group` formatter in `src/plugins/cmd/compact.rs` wired in `formatters::format` for `grep`/`rg`/`git grep`: path once, `line:text` under it, common indent stripped, text trimmed to the match ±60 chars, per-file budget with `+N more (expand)`, files path-sorted; fall back to the rule when the shape is unknown. Tests: golden `grep_group*.in/out` with `min_saving:` plus a path-retention unit test. Measure on the existing grep fixtures (bench/c14 unmerged).
 
 ### T675. python3 1545
 

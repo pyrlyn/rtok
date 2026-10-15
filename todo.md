@@ -53,7 +53,6 @@
 - T667. Richer memory features from engram
 - T670. Read modes lean-ctx still has
 - T687. Hooks: PreToolUse/PostToolUse p50 to 10 ms
-- T673. grep 2260, git grep 452, rg: ≥ 91 %, 100 % paths (vs t-o 89.7 %, lean-ctx 89.6 %)
 - T675. python3 1545: ≥ t-o pytest (564→115) (vs none specialised)
 - T676. gh 744: +20 pp vs current head/tail (vs lean-ctx gh.rs)
 - T677. mise 660: ≥ lean-ctx (vs lean-ctx mise.rs)
