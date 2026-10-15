@@ -57,7 +57,6 @@
 - T669. Hybrid memory ranking and forgetting (graymatter)
 - T670. Read modes lean-ctx still has
 - T671. Memory admission gate (MemPalace idea)
-- T672. all (link line): −75 tok/call (vs sqz `§ref§` ~13 tok)
 - T673. grep 2260, git grep 452, rg: ≥ 91 %, 100 % paths (vs t-o 89.7 %, lean-ctx 89.6 %)
 - T674. sed 2119 (`sed -n a,bp f`), cat 950, head 35, tail 155, awk: ≥ 93 % on `cat` source; re-read ≥ 95 % (vs lean-ctx 91.4 % (`read` rewrite))
 - T675. python3 1545: ≥ t-o pytest (564→115) (vs none specialised)

@@ -220,14 +220,10 @@ pub(crate) fn names_the_id(filtered: &str, id: &str) -> bool {
 /// The pointer line appended after a filtered body: names the id, the line count and
 /// how to expand it. The one spelling shared by `rtok run`, `rtok filter --archive`
 /// and `rtok filter --stdin` so the three surfaces stay byte-identical.
-/// T661: the first 12 hex chars name the archive; `rtok expand` resolves a unique prefix.
+/// T661, T672: the first 8 hex chars name the archive; `rtok expand` resolves a unique prefix.
 pub(crate) fn trailer(id: &str, lines: u32) -> String {
-    let short = &id[..id.len().min(SHORT_ID)];
-    format!("[rtok {short} · {lines} lines]")
+    format!("[rtok {} · {lines} lines]", crate::names::short_id(id))
 }
-
-/// Hex chars of the archive id the trailer prints.
-pub(crate) const SHORT_ID: usize = 12;
 
 /// `body` up to the noise a filter may remove without a reader losing anything:
 /// whitespace runs (padding, trailing newline) and ANSI escapes, compared line by line.
@@ -393,11 +389,12 @@ fn emit_filtered_to(
     }
     let settings = rules::Settings::from_config(cfg);
     let family = formatters::family_of(&settings, argv, &before);
-    let (filtered, kind) = formatters::compress(&settings, argv, &before, exit, &id);
+    let (filtered, kind) =
+        formatters::compress(&settings, argv, &before, exit, crate::names::short_id(&id));
     // A formatter that trims a 29-line `git log` to 20 leaves the other 9 reachable only
     // through this id. A shortening that took only whitespace/ANSI has nothing to expand
     // (T160) — and then nothing references the id, so the archive row is skipped too.
-    let named = names_the_id(&filtered, &id);
+    let named = names_the_id(&filtered, crate::names::short_id(&id));
     let pointer = cfg.plugins.cmd.trailer
         && needs_pointer(
             lines,
@@ -566,6 +563,17 @@ mod tests {
         assert_eq!(rows[0]["kind"], "skill", "{v}");
         assert_eq!(v["plugin"], "cmd", "{v}");
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// T672: the pointer names the archive by its first 8 hex chars, not 12 or 64.
+    #[test]
+    fn trailer_names_an_eight_char_id() {
+        let id = "0123456789abcdef".repeat(4);
+        assert_eq!(trailer(&id, 5), "[rtok 01234567 · 5 lines]");
+        assert!(names_the_id(
+            "… 4 lines omitted (expand 01234567)",
+            crate::names::short_id(&id)
+        ));
     }
 
     fn on_cmd(c: &Config) -> bool {
