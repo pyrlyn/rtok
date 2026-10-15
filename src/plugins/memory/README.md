@@ -12,6 +12,9 @@ progressive disclosure.
 ## Tools
 
 - `mem_save(kind, title, body, project?)` — project defaults to the git root name of cwd.
+  Admission gate (T671, `plugins.memory.admit`): a body under `admit_min_chars`, or `admit_similarity` percent
+  trigram-alike to a stored note of the project, is refused with `{"refused": "too_short"|"duplicate", "id": <stored>}`.
+  Same project+kind+title is a revision and always passes. Local text only; the `remember:` prompt path is not gated.
   The title is the topic key: a second save with the same project, kind and title updates
   that row (`{"id", "updated": true}`) instead of adding a stale twin to recall (T66.1).
   An explicit re-save of a retired topic revives it (clears the tombstone).

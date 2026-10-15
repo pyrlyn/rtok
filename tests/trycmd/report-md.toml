@@ -197,6 +197,9 @@ Every effective key with its origin — the `config show --sources` page.
 | plugins.inject.modes_dir | ~/.rtok/modes | default |
 | plugins.json_tree.enabled | false | default |
 | plugins.measure.enabled | true | default |
+| plugins.memory.admit | true | default |
+| plugins.memory.admit_min_chars | 5 | default |
+| plugins.memory.admit_similarity | 85 | default |
 | plugins.memory.checkpoint_tokens | 400 | default |
 | plugins.memory.embed.api_key_env |  | default |
 | plugins.memory.embed.dimensions | 384 | default |
