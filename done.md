@@ -8902,6 +8902,14 @@ Status: done 2026-10-08
 
 Model: Claude Code / claude-sonnet-5-5
 
+### T668. Opt-in semantic memory path (mem0 idea)
+
+mem0 is ahead for semantic/vector memory (`docs/comparison/rtok-vs-mem0.md`). Keep rtok's cheap note path default; optional embedding search behind a flag, no Docker/Qdrant required for the default build. Savings both sides: **no data** (harness skips; needs API/models).
+
+Shipped (creator's choice: a remote OpenAI-compatible endpoint, `research.md` §41). `[plugins.memory.embed] provider = "http"` with `url`, `model`, `dimensions`, `api_key_env` and a hard per-request `max_chars` posts to `<url>/embeddings` (OpenAI, Ollama, vLLM, LM Studio) through the existing blocking `reqwest` client: no new crate, no model download, no spend unless the user points it at a paid endpoint. Defaults stay `provider = "local"` (hash vectors) and `enabled = false`. The store takes a `TextEmbedder` seam (`rtok-store`), the HTTP client lives in `src/store/http_embed.rs`. Fail open: any HTTP, parse, length or oversized-input failure logs a warning and `mem_search` serves the plain note search; indexing stops at the first failure and resumes on a later search; the hook (10 ms budget) never calls the endpoint and reads FTS only while a remote is set. Remote vectors use their own model key (`<model>+remote1`) and never mix with hash vectors. A key never travels over plain http to a non-loopback host, and `Debug` never prints it.
+
+Check: `tests/deps.rs` forbids ONNX/vector crates in every member manifest; store tests with a stub embedder (ranking of a synonym FTS misses, failure fallback, hook leg makes no call, key separation, disabled makes no call); host tests against a local `httpmock` server (wire, bearer header, `max_chars`, bad answers, unusable settings, end-to-end ranking); `just check`.
+
 ### T454. Hook recall uses the stored hybrid leg when embeddings are on
 
 `prompt_recall` ranked with FTS only while `mem_search` used `search_notes_hybrid` when `embed.enabled && embed.hybrid`. The hook now uses that same RRF over FTS and vectors already stored (`Store::search_notes_hybrid_stored`, on `Notes` / `Ctx` with an FTS default). It does not call `embed_stale`: a missing or stale row is not rewritten. An empty embedding table returns the FTS list, so the title index matches the flag-off path. `files::recall_hits` still wraps that list. Titles and ids only. One `Measurement` row, kind `prompt_recall`. Embeddings stay off by default. No change to `src/plugins/graph/`, `src/hooks/`, `src/proxy/`, or the `Plugin` trait. Amends D35: a stored-vector read is allowed on the hook only when embeddings are already on.

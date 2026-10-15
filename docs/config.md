@@ -581,10 +581,13 @@ forget_after_days = 90                # T669: `memory forget` retires notes unre
 
 [plugins.memory.embed]
 enabled    = false                    # P29: FTS5-only when false; vector search is opt-in
-provider   = "local"                  # "local" | "openai"
-model      = "all-MiniLM-L6-v2"
-dimensions = 384
+provider   = "local"                  # "local" = offline hash vectors | "http" = an OpenAI-compatible embeddings API
+model      = "all-MiniLM-L6-v2"       # "http": the endpoint's model name
+dimensions = 384                      # "http": must equal the endpoint's vector length
 hybrid     = true                     # when enabled: RRF(fts5, knn) for mem_search and prompt_recall; the hook reads stored vectors only; false = knn only
+url         = ""                      # "http": base URL, e.g. "http://localhost:11434/v1" (Ollama) or "https://api.openai.com/v1"; note text is sent there
+api_key_env = ""                      # "http": name of the env var holding the key; empty = no Authorization header
+max_chars   = 8000                    # "http": a longer text is never sent (the note search runs instead)
 
 [plugins.graph]
 enabled    = true

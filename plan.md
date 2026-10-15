@@ -163,7 +163,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T665 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T666 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T667 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T668 | todo | P2 | 3 | 0% | |
 | T669 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T670 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T671 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
@@ -254,14 +253,6 @@ engram has more memory features (HTTP + MCP) (`docs/comparison/rtok-vs-engram.md
 Check: feature list and take/skip in the comparison file; tests for what shipped; `just check`.
 
 **Plan.** From `docs/comparison/rtok-vs-engram.md` (PR #1071): engram has relation judging, pinned-first recall and project identity from the origin remote that rtok lacks. Relation judging spends model output on bookkeeping: **skip**. (1) Check which of pinned-first recall and origin-remote project identity already exist (`mem_update pinned`, `project_name`); fail-first tests on `tests/fixtures/p29_memory.toml`-style fixtures for the missing ones. (2) Implement only what raises recall on rtok's own memory bench with no new MCP tool and no daemon. (3) Write the take/skip list into the comparison file (or `research.md` while #1071 is open); `just check`.
-
-### T668. Opt-in semantic memory path (mem0 idea)
-
-mem0 is ahead for semantic/vector memory (`docs/comparison/rtok-vs-mem0.md`). Keep rtok's cheap note path default; optional embedding search behind a flag, no Docker/Qdrant required for the default build. Savings both sides: **no data** (harness skips; needs API/models).
-
-Check: default build has no vector dependency; opt-in path documented; `just check`.
-
-**Status (not claimed).** Needs the creator before any code: P29 already ships opt-in `[embed]` with a deterministic hash embedder (`crates/rtok-store/src/embed.rs`), so the remaining work is a real embedding model (a local ONNX/candle model is a heavy dependency; a remote API is paid). Pick the provider/model (or accept a local model's size) and the cost cap first.
 
 ### T669. Hybrid memory ranking and forgetting (graymatter)
 

@@ -35,6 +35,10 @@ if split out per T2.5.
   session read (`read_cache`) or the prompt names (RRF); any error there leaves the text hits.
   Text hits are FTS, or RRF of FTS and vectors already stored when `embed.enabled && embed.hybrid`
   (`search_notes_hybrid_stored`, T454); the hook does not call `embed_stale`.
+  `embed.provider = "http"` (T668, `src/store/http_embed.rs`) swaps the hash embedder for an
+  OpenAI-compatible `/embeddings` endpoint (`url`, `api_key_env`, `max_chars`). Any failure
+  returns the plain FTS search; with a remote set the hook reads FTS only (no network on the
+  hook path); remote vectors live under their own model key. Needs `embed.enabled = true`.
   A file the prompt names (T452) also recalls up to 2 of its notes the text missed, taking slots
   from the same `prompt_recall` budget; a read file only re-ranks text hits (I-115 is the wider
   variant, off until a `Measurement` shows a saving).

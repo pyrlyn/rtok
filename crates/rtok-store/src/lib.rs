@@ -40,7 +40,7 @@ pub use graph_events::{EventPhase, GraphEvent, MeasurementSample};
 mod messages;
 pub use messages::{Message, short_agent_id};
 pub mod embed;
-pub use embed::EmbedSettings;
+pub use embed::{EmbedSettings, Remote, TextEmbedder};
 // T433: hook session fields saved once, spliced back into the stdin on read.
 mod hook_fields;
 mod host_usage;
