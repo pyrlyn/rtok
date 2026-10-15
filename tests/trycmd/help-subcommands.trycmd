@@ -533,8 +533,8 @@ Arguments:
 
 Options:
       --agent <ID>     Sub-agent id from PreToolUse; scopes the dedup pointer
-      --no-ref         Do not print the reference line after a cut
       --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
+      --no-ref         Do not print the reference line after a cut
   -h, --help           Print help
 
 $ rtok filter --help

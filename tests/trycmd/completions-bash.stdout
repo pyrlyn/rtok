@@ -2909,13 +2909,17 @@ _rtok() {
             return 0
             ;;
         rtok__subcmd__filter)
-            opts="-h --stdin --cmd --archive --no-ref --config --help"
+            opts="-h --stdin --cmd --archive --no-ref --exit --config --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
                 --cmd)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --exit)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
