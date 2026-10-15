@@ -67,8 +67,10 @@ pub fn identical_result(
     let hit = host.archive_in_session(&sha, context).ok().flatten()?;
     let n = hit.turns.max(1);
     let id = hit.id;
-    let msg =
-        format!("[rtok {id} · identical to a result {n} turns ago · expand: rtok expand {id}]");
+    let short = crate::names::short_id(&id);
+    let msg = format!(
+        "[rtok {short} · identical to a result {n} turns ago · expand: rtok expand {short}]"
+    );
     if body.len() <= msg.len() {
         return None;
     }

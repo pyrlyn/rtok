@@ -440,15 +440,6 @@ must beat, and that line is the gate text below.
 
 ---
 
-## Windows developer experience
-
-Surfaced 2026-09-26 by the first full local `just check` on Windows (T272–T274, `docs/windows.md`).
-
-| Item | What | Status |
-|------|------|--------|
-| W1 | `graph_lsp_gate::lsp_backend_outlines_dart_main` fails on Windows dart 3.9 (`File is not being analyzed`): give the temp project a `dart pub get` / a readiness wait, or skip-on-error on Windows — CI never runs it (no dart on runners) | open |
-| W2 | run `cargo clippy --workspace` in the `windows` CI job so `cfg(windows)` lint debt (the T273/T274 class) fails CI instead of the first local Windows gate | open |
-
 ## MCP agent link in the Claude desktop app
 
 ### T456. Claude desktop: keep the shared desktop MCP entry from shadowing the session's own rtok MCP
