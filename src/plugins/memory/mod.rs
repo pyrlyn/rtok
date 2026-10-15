@@ -514,6 +514,35 @@ fn save_scoped(
     Ok((id, updated))
 }
 
+/// `rtok memory forget` (T669): retire the notes nobody read for `days` (default
+/// `forget_after_days`). A dry run unless `apply`; a retired note keeps its body.
+pub fn mem_forget(
+    rt: &crate::plugin::Runtime,
+    project: Option<&str>,
+    days: Option<u32>,
+    apply: bool,
+) -> anyhow::Result<String> {
+    let idle = days.unwrap_or(rt.config.plugins.memory.forget_after_days);
+    if idle == 0 {
+        return Ok("forget is off: forget_after_days is 0; pass --days N".to_string());
+    }
+    let rows = rt.store.forget_stale_notes(project, idle, apply)?;
+    let verb = if apply { "retired" } else { "would retire" };
+    let mut out = vec![format!(
+        "{verb} {} notes unread for {idle}+ days",
+        rows.len()
+    )];
+    out.extend(
+        rows.iter()
+            .take(20)
+            .map(|(id, title)| format!("{id} {title}")),
+    );
+    if rows.len() > 20 {
+        out.push(format!("… {} more", rows.len() - 20));
+    }
+    Ok(out.join("\n"))
+}
+
 pub fn mem_pack(
     rt: &crate::plugin::Runtime,
     query: &str,
@@ -1764,5 +1793,138 @@ mod tests {
             matches!(twin, Saved::Stored { updated: false, .. }),
             "{twin:?}"
         );
+    }
+
+    fn first_title(cx: &crate::plugin::Runtime, query: &str) -> String {
+        cx.store.search_notes(query, 5).unwrap()[0].title.clone()
+    }
+
+    #[test]
+    fn a_read_note_leads_an_equal_text_twin_in_search() {
+        let cx = crate::plugin::Runtime::in_memory("t669-used").unwrap();
+        let old = mem_save(&cx, "note", "rank-aaa", "quokka ledger entry", None)
+            .unwrap()
+            .0;
+        let used = mem_save(&cx, "note", "rank-bbb", "quokka ledger entry", None)
+            .unwrap()
+            .0;
+        assert_ne!(old, used);
+        assert_eq!(
+            first_title(&cx, "quokka"),
+            "rank-aaa",
+            "ties keep bm25 order"
+        );
+        for _ in 0..10 {
+            cx.store.touch_note(used).unwrap();
+        }
+        assert_eq!(first_title(&cx, "quokka"), "rank-bbb");
+    }
+
+    #[test]
+    fn a_pinned_note_leads_an_equal_text_twin_in_search() {
+        let cx = crate::plugin::Runtime::in_memory("t669-pin").unwrap();
+        mem_save(&cx, "note", "rank-aaa", "quokka ledger entry", None).unwrap();
+        let pinned = mem_save(&cx, "note", "rank-bbb", "quokka ledger entry", None)
+            .unwrap()
+            .0;
+        cx.store.set_note_pinned(pinned, true).unwrap();
+        assert_eq!(first_title(&cx, "quokka"), "rank-bbb");
+    }
+
+    const DAY: i64 = 86_400;
+
+    fn aged(cx: &crate::plugin::Runtime, kind: &str, title: &str, days_old: i64) -> i32 {
+        let ts = i64::try_from(
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+        )
+        .unwrap()
+            - days_old * DAY;
+        cx.store
+            .insert_portable_note_if_absent(crate::store::PortableNote {
+                project: None,
+                kind,
+                title,
+                body: "stale body text",
+                id: None,
+                ts: Some(ts),
+                retired: None,
+                superseded_by: None,
+                pinned: None,
+            })
+            .unwrap()
+            .unwrap()
+    }
+
+    #[test]
+    fn forget_retires_only_old_unread_unpinned_notes_and_only_on_apply() {
+        let cx = crate::plugin::Runtime::in_memory("t669-forget").unwrap();
+        let stale = aged(&cx, "note", "stale", 200);
+        let read = aged(&cx, "note", "read", 200);
+        let pinned = aged(&cx, "note", "pinned", 200);
+        let decision = aged(&cx, "decision", "decision", 200);
+        let user = aged(&cx, "user", "user", 200);
+        let fresh = aged(&cx, "note", "fresh", 3);
+        cx.store.touch_note(read).unwrap();
+        cx.store.set_note_pinned(pinned, true).unwrap();
+
+        let dry = mem_forget(&cx, None, Some(90), false).unwrap();
+        assert!(dry.starts_with("would retire 1 notes"), "{dry}");
+        assert!(dry.contains(&format!("{stale} stale")), "{dry}");
+        assert!(
+            cx.store.note_row(stale).unwrap().unwrap().retired.is_none(),
+            "dry run wrote"
+        );
+
+        let done = mem_forget(&cx, None, Some(90), true).unwrap();
+        assert!(done.starts_with("retired 1 notes"), "{done}");
+        assert!(cx.store.note_row(stale).unwrap().unwrap().retired.is_some());
+        for id in [read, pinned, decision, user, fresh] {
+            assert!(
+                cx.store.note_row(id).unwrap().unwrap().retired.is_none(),
+                "{id} was retired"
+            );
+        }
+        // Lossless: a retired note keeps its body.
+        assert_eq!(
+            cx.store.get_note_body(stale).unwrap().unwrap(),
+            "stale body text"
+        );
+    }
+
+    #[test]
+    fn forget_is_off_without_days_when_the_config_says_zero() {
+        let mut cx = crate::plugin::Runtime::in_memory("t669-off").unwrap();
+        cx.config.plugins.memory.forget_after_days = 0;
+        let out = mem_forget(&cx, None, None, true).unwrap();
+        assert!(out.starts_with("forget is off"), "{out}");
+    }
+
+    #[test]
+    fn a_pinned_weak_match_does_not_beat_a_clearly_better_one() {
+        let cx = crate::plugin::Runtime::in_memory("t669-strong").unwrap();
+        let filler = "unrelated words about caches and hooks ".repeat(8);
+        let weak = mem_save(&cx, "note", "rank-weak", &format!("{filler} quokka"), None)
+            .unwrap()
+            .0;
+        for (title, hits) in [
+            ("rank-mid", "quokka quokka"),
+            ("rank-mid2", "quokka quokka quokka"),
+            ("rank-mid3", "quokka quokka quokka quokka"),
+        ] {
+            mem_save(&cx, "note", title, &format!("{filler} {hits}"), None).unwrap();
+        }
+        mem_save(
+            &cx,
+            "note",
+            "rank-best",
+            "quokka quokka quokka quokka",
+            None,
+        )
+        .unwrap();
+        cx.store.set_note_pinned(weak, true).unwrap();
+        assert_eq!(first_title(&cx, "quokka"), "rank-best");
     }
 }

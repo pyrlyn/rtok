@@ -580,6 +580,7 @@ spawn_brief_tokens = 300              # T130: token budget for the spawn brief
 admit              = true             # T671: mem_save refuses a too-short or duplicate note
 admit_min_chars    = 5                # T671: shortest body the gate admits
 admit_similarity   = 85               # T671: percent trigram overlap that counts as a duplicate
+forget_after_days = 90                # T669: `memory forget` retires notes unread this long; 0 = needs --days
 
 [plugins.memory.embed]
 enabled    = false                    # P29: FTS5-only when false; vector search is opt-in

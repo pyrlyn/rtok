@@ -1363,6 +1363,9 @@ section! {
         admit: bool = true,
         admit_min_chars: u32 = 5,
         admit_similarity: u32 = 85,
+        /// `rtok memory forget` retires an unpinned note nobody read for this many days
+        /// (T669; 0 = the command needs `--days`). Never runs by itself.
+        forget_after_days: u32 = 90,
         embed: MemoryEmbed = MemoryEmbed::default(),
     }
 }

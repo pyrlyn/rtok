@@ -160,6 +160,7 @@ plugins.memory.embed.hybrid = true
 plugins.memory.embed.model = all-MiniLM-L6-v2
 plugins.memory.embed.provider = local
 plugins.memory.enabled = true
+plugins.memory.forget_after_days = 90
 plugins.memory.handoff = true
 plugins.memory.prompt_recall = 5
 plugins.memory.recall_titles = 5

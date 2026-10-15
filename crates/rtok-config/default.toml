@@ -531,6 +531,7 @@
 # admit              = true             # mem_save refuses a too-short or duplicate note
 # admit_min_chars    = 5                # shortest body the gate admits
 # admit_similarity   = 85               # percent trigram overlap that counts as a duplicate
+# forget_after_days = 90                # `memory forget` retires notes unread this long; 0 = needs --days
 
 [plugins.memory.embed]
 # enabled    = false                    # P29: FTS5-only when false; vector search is opt-in
