@@ -131,7 +131,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T385 | in progress | P1 | 5 | 20% | Claude Code / opus-5-5 |
 | T385.3 | todo | P1 | 3 | 20% | |
 | T385.9 | in progress | P3 | 5 | 70% | Claude Code / claude-opus-5-5 |
-| T385.9.3 | todo | P3 | 2 | 0% | |
+| T385.9.3 | todo | P3 | 2 | 10% | |
 | T394 | todo | P2 | 2 | 20% | |
 | T395 | todo | P3 | 2 | 20% | |
 | T396 | todo | P3 | 2 | 85% | |
@@ -388,6 +388,8 @@ Check: fixture with one briefed and one plain sub-agent asserts the split; after
 Progress (2026-09-25): the cost row was already recorded by T130.1 (`memory`/`brief`, before 0, after = brief tokens); `tests/hook_spawn_brief.rs` now asserts one row per fired brief and none otherwise. `rtok stats` splits the `subagents` re-read share and input tokens into `brief` / `no brief`, detected by `measure::subagents::SPAWN_BRIEF_MARKER` in a sub-agent's first user message (a `handoff.rs` test pins it inside the brief's `INSTRUCTIONS`); fixture test `briefed_and_plain_subagents_split_the_reread_share`. Left: the dated window with the flag on, the net in `research.md` §17, and the default decision.
 
 Plan: finish only the agent-doable part: confirm the fixture/cost-row tests still pass and add whatever small piece the Progress line lacks. The dated flag-on window, the `research.md` §17 net and the default decision need the creator's paid live run: leave them in the card and set the row back to `todo` at 70 %.
+
+Local attempt (2026-10-15): not possible on LM Studio (`prism-ml/bonsai-27b`): the model fails a single-turn read task, so a briefed/plain sub-agent comparison would only measure noise; nothing recorded in `research.md` §17.
 
 Remaining work needs the creator: the fixture and cost-row tests (`tests/hook_spawn_brief.rs`, `briefed_and_plain_subagents_split_the_reread_share`) are in place and pass; the dated flag-on window, the `research.md` §17 net and the default decision need a paid live run.
 
@@ -876,6 +878,8 @@ Creator decision 2026-10-11: build it behind a flag that is off by default, test
 Part of T385.9, after T385.9.2. `rtok bench` cost per passed task with the compressor on against the v0.1 lossless path, compressor tokens included, plus the must-keep fixture and `expand` recovery; one dated `research.md` row. Needs the creator's session and API spend (like T394), so an agent cannot run it alone. Green → T385.9 closes and the flag may become a default in a follow-up; red → the flag stays off with its number.
 
 Check: the dated `research.md` row with cost per passed task, pass rate and compressor tokens.
+
+Progress (2026-10-15, `research.md` §16.9): a local attempt on LM Studio (`prism-ml/bonsai-27b`) gave no evidence: the control arm returned an empty answer, and with the flag on the compressor never fired (0 summaries). Left: a bench that can pass its control (a capable model), tasks with more than `keep_turns` turns after the large results, and a compressor arm in `rtok bench`; the paid run still needs the creator.
 
 ### T394. Run the paid live benches and record them
 
