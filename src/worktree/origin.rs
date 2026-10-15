@@ -15,6 +15,7 @@ const POOLS: &[(&str, &str, &str)] = &[
     (".codex", "worktrees", "codex"),
     (".claude", "worktrees", "claude"),
     (".kilo", "worktrees", "kilo"),
+    (".rtok", "worktrees", "rtok"),
     ("conductor", "workspaces", "conductor"),
 ];
 
@@ -80,6 +81,7 @@ mod tests {
             ("/h/.codex/worktrees/1a2b/app", "codex"),
             ("/r/app/.claude/worktrees/x", "claude"),
             ("/r/app/.kilo/worktrees/x", "kilo"),
+            ("/r/app/.rtok/worktrees/app-t1", "rtok"),
             ("/h/conductor/workspaces/app/x", "conductor"),
             ("/h/_worktrees/app-t1", "other"),
             ("/h/.cursor/other/app", "other"),

@@ -122,6 +122,10 @@ const ALLOW_KEYS: &[&str] = &[
     // without anyone typing it; `--idle` is T153's flag with T153's default.
     "worktree.clean.yes",
     "worktree.clean.idle",
+    // `worktree migrate` (T660.5): `--yes` moves without asking, per call like `gc`; `--owner`
+    // names whose old lock this one run may move, like `claim --owner`.
+    "worktree.migrate.yes",
+    "worktree.migrate.owner",
     // `agents junk clear --yes` (T182): same per-call rule as `worktree gc`/`clean` — a
     // stored value would delete without anyone typing it, and it must not share `setup.yes`,
     // which confirms a different destructive action (`agents install --replace`).
@@ -223,6 +227,11 @@ const ALLOW_KEYS: &[&str] = &[
     "batch.status.url",
     "batch.fetch.provider",
     "batch.fetch.url",
+    // `run|filter --no-ref` (T661): drops the reference line for one call; the stored
+    // setting is `plugins.cmd.trailer`.
+    "plugins.cmd.no_ref",
+    // `filter --exit` (hidden): the exit code of the command whose stdin is filtered.
+    "plugins.cmd.exit",
 ];
 
 #[test]

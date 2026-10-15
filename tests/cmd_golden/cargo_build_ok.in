@@ -1,0 +1,15 @@
+argv: cargo build
+exit: 0
+min_saving: 78
+---
+   Compiling rtok-log v0.1.0 (/src/crates/rtok-log)
+warning: unused variable: `unused`
+ --> crates/rtok-log/src/lib.rs:88:22
+  |
+88 | fn bench_warn() { let unused = 1; }
+  |                       ^^^^^^ help: if this is intentional, prefix it with an underscore: `_unused`
+  |
+  = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: `rtok-log` (lib) generated 1 warning (run `cargo fix --lib -p rtok-log` to apply 1 suggestion)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.94s

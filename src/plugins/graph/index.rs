@@ -670,7 +670,10 @@ pub(crate) mod tests {
         fs::write(b.join("lib.rs"), src).unwrap();
         let ctx = Ctx::new(&cx);
         assert!(run(&ctx, &a, false).unwrap().indexed >= 1);
-        let n = cx.store.copy_symbol_rows(&canon(&a), &canon(&b)).unwrap();
+        let n = cx
+            .store
+            .copy_symbol_rows(&canon(&a), &canon(&b), &[])
+            .unwrap();
         assert!(n >= 1, "copied {n} rows");
         let later = std::time::SystemTime::now() + std::time::Duration::from_secs(5);
         fs::File::options()

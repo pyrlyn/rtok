@@ -137,6 +137,14 @@ pub fn unlock(repo: &Path, worktree: &Path) -> Result<()> {
     git_ok(repo, &["worktree", "unlock", path_arg(worktree)?]).map(drop)
 }
 
+/// `git worktree move`, never forced: git refuses a locked worktree and one with submodules.
+pub fn move_to(repo: &Path, from: &Path, to: &Path) -> Result<()> {
+    let name = from.file_name().unwrap_or_default().to_string_lossy();
+    let label = format!("moving worktree {name}…");
+    let args = ["worktree", "move", path_arg(from)?, path_arg(to)?];
+    git_slow(repo, &label, &args).map(drop)
+}
+
 /// Never `--force`: git refuses a worktree with modified or untracked files. For a
 /// record whose directory is gone this drops that one record.
 pub fn remove(repo: &Path, worktree: &Path) -> Result<()> {

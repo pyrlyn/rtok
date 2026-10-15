@@ -65,10 +65,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T525 | in progress | P2 | 3 | 0% | MiMo / mimo |
 | T526 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T527 | in progress | P2 | 3 | 0% | MiMo / mimo |
-| T660.2 | todo | P1 | 3 | 0% | |
-| T660.3 | in progress | P1 | 3 | 90% | Claude Code / claude-opus-5-5 |
-| T660.4 | in progress | P1 | 3 | 0% | Claude Code / claude-opus-5-5 |
-| T660.5 | in progress | P2 | 3 | 0% | Claude Code / claude-opus-5-5 |
 | T661 | todo | P2 | 3 | 0% | |
 | T662 | todo | P2 | 3 | 0% | |
 | T663 | todo | P2 | 3 | 0% | |
@@ -80,43 +76,24 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T669 | todo | P2 | 3 | 0% | |
 | T670 | todo | P2 | 3 | 0% | |
 | T671 | todo | P2 | 3 | 0% | |
+| T672 | todo | P2 | 3 | 0% | |
+| T673 | todo | P2 | 3 | 0% | |
+| T674 | todo | P2 | 3 | 0% | |
+| T675 | todo | P2 | 3 | 0% | |
+| T676 | todo | P2 | 3 | 0% | |
+| T677 | todo | P2 | 3 | 0% | |
+| T678 | todo | P2 | 3 | 0% | |
+| T679 | todo | P2 | 3 | 0% | |
+| T680 | todo | P2 | 3 | 0% | |
+| T681 | todo | P2 | 3 | 0% | |
+| T682 | todo | P2 | 3 | 0% | |
+| T683 | todo | P2 | 3 | 0% | |
+| T684 | todo | P2 | 3 | 0% | |
+| T685 | todo | P2 | 3 | 0% | |
+| T686 | todo | P2 | 3 | 0% | |
 
 
 
-### T660.2. Every project-root caller goes through the T660.1 method
-
-Needs T660.1. Switch every caller to `ProjectRoot` and say explicitly whether it wants `checkout` or `main`: `layers.rs` `.rtok.toml` layer (`checkout`: each worktree reads its own checked-out file), `agents/command.rs --project`, `plugins/checkpoint.rs`, `guard/grep_symbol.rs`, `memory/files.rs::project_root`, `tasks/run.rs` (both sites), `model/agents.rs::worktree_label`. Delete `git_root` and the duplicate in `src/doctor.rs`. `checkpoint::project_of_cx` returns the worktree basename today while `project_name` returns the main repo's name; it moves to `main` so a checkpoint made in a worktree files under the same project. `memory/files.rs::relative` uses `contain` so a symlink cannot point a note outside the root.
-
-Check: one test per changed site for a linked worktree; a test that the checkpoint project name is the same from the main checkout and from a worktree; a symlink-escape test for memory paths; `just check`.
-
-### T660.3. Worktrees nested in the project do not leak into walks, gc or clean
-
-Needs T660.1; lands before T660.4. With worktrees under `<main>/.rtok/worktrees`, several places would see them as part of main:
-
-- graph walk (`plugins/graph/walk.rs`), `search`/`tree` (`read/search.rs`) and the watcher (`graph/watch.rs`, root `.gitignore` only) descend into them when `.rtok/` is not ignored: skip any directory holding a `.git` file (a nested checkout), like `worktree/list.rs::walk` already does.
-- `worktree/gc.rs` and `worktree/clean.rs` call a worktree current by `here.starts_with(dir)`, so from a nested worktree main counts as current too: pick the deepest match.
-- `worktree/origin.rs` names `<main>/.rtok/worktrees` its own `rtok` pool.
-- `worktree/claim.rs::copy_symbol_index` copies no rows under `.rtok/`.
-
-Check: a test per bullet with a worktree nested under `.rtok/worktrees` and no ignore rule; `just check`.
-
-Plan: a stalled session left the code and a test for every bullet uncommitted on branch `t660.3-nested`; adopted and rebased on `main`. Review the diff against the bullets, run `just check`, close.
-
-### T660.4. Default worktree root `<project>/.rtok/worktrees`, `.rtok/` ignored
-
-Needs T660.1 and T660.3. The `[worktree] root` default becomes `.rtok/worktrees`. A relative root resolves against `ProjectRoot::main` (not the process cwd, as today), so a worktree created from inside another worktree still lands under the main checkout; `~` and absolute roots keep today's meaning. `add::plan` checks the new path with `contain`. Before creating the first worktree, rtok makes sure `.rtok/` is ignored: nothing to do when `git check-ignore` already ignores it; else append `.rtok/` to `<main>/.gitignore` when that file exists (rest byte-for-byte, a missing final newline added first); else to `<main>/.git/info/exclude`. Existing worktrees elsewhere keep working. Docs: `README.md`, `docs/agents-and-worktrees.md`, `docs/config.md` (+ `docs/ru`, `docs/uk`), `crates/rtok-config/default.toml`, `skills/rtok-worktrees/SKILL.md`, `CHANGELOG.md`.
-
-Check: tests for the default path from main and from a linked worktree, a relative custom root, an absolute root, an escaping root (`../x` with a task id) refused; `.gitignore` present without the rule / with it / without a final newline, no `.gitignore` → `info/exclude`, idempotent on a second add; the `the_default_root_is_under_the_rtok_home` test is replaced; `just check`.
-
-Plan: (1) `[worktree] root` default `.rtok/worktrees` in `crates/rtok-config` and `default.toml`. (2) One resolver for the root: relative → against `ProjectRoot::main`, `~` and absolute unchanged; `src/worktree/add.rs::plan` checks the target with `contain`; every other reader of `cfg.worktree.root` (`host.rs`, `ops.rs`, `whoami.rs`) goes through it. (3) `ensure_ignored(main)` before the first `git worktree add`: `git check-ignore` → append to `.gitignore` (byte-for-byte, final newline first) → `.git/info/exclude`. (4) Docs from the list above. (5) Tests from Check; `just check`.
-
-### T660.5. `rtok worktree migrate` moves worktrees into the configured root
-
-Needs T660.4. Moves this repository's worktrees that live outside the configured root to `<root>/<repo>-<task>` with `git worktree move`, keeping lock and claim records in step. Dry run without `--yes`. Skips, with a reason: main, the worktree holding the cwd, a worktree locked or claimed by another agent or by a live session, a worktree with submodules (`git worktree move` refuses them), a target that already exists. CLI only; new-command gates (trycmd fence, `surface_parity`, `config_coverage`). Docs with T660.4's pages.
-
-Check: tests on a temp repo for move, each skip reason and dry run; lock and claim follow the move; `just check`.
-
-Plan: (1) `src/worktree/migrate.rs`: `plan` lists this repository's worktrees outside the resolved root, each with a target or a skip reason; `apply` runs `git worktree move`, rewrites the lock text and moves the store's claim and pending rows to the new path. (2) CLI `rtok worktree migrate [--yes] [--json]`, a dry run without `--yes`. (3) New-command gates: trycmd fence, `surface_parity`, `config_coverage`, man page. (4) Docs beside T660.4's pages. (5) `tests/worktree.rs` cases from Check; `just check`.
 
 
 ### T661. rtk filter parity and `rtok discover`
@@ -1090,3 +1067,97 @@ The 14 portable ideas and where each landed:
 The tests leak their temp dirs into `$TMPDIR`: on the creator's Mac about 24,000 `rtok-mem-*` (`Runtime::in_memory` in `src/plugin.rs` creates one per call and never removes it), 6,300 `rtok-tui-*`, 2,000 `rtok-guard-*`, 1,300 `rtok-usage-*` and more. A directory that size makes `realpath` in it slow under load (T643). Each test helper that makes a temp dir removes it (a guard or `tempfile::TempDir`), `Runtime::in_memory` first.
 
 Check: a test shows a dropped `Runtime::in_memory` leaves no directory behind, and a full `just test` run adds no `rtok-*` entry to `$TMPDIR`.
+
+## Beat sqz, lean-ctx, token-optimizer and caveman per category (T672–T686)
+
+Source: `docs/research/competitors-techniques.md` (techniques, licenses, links). Every card: keep 100 % of hashes, paths and WARN/ERROR lines, never more tokens than raw, stderr and exit line kept on failure.
+
+### T672. all (link line)
+
+Best competitor: sqz `§ref§` ~13 tok. Design: one short id `[rtok 1a2b3c4d · 111 lines]`, expand by prefix.
+
+Check: #1076 harness (`bench/c14`) shows −75 tok/call on this category with full anchor retention.
+
+### T673. grep 2260, git grep 452, rg
+
+Best competitor: t-o 89.7 %, lean-ctx 89.6 %. Design: path printed once; matches as `line:text`; collapse common indentation; trim match text around the hit to ±60 chars keeping the match itself; per-file cap by match budget with `+N more (expand)`; files sorted by path (stable) not count; keep 100 % paths.
+
+Check: #1076 harness (`bench/c14`) shows ≥ 91 %, 100 % paths on this category with full anchor retention.
+
+### T674. sed 2119 (`sed -n a,bp f`), cat 950, head 35, tail 155, awk
+
+Best competitor: lean-ctx 91.4 % (`read` rewrite). Design: detect range-print of a file: emit numbered range only once per session (session dedup by content hash, re-read → `unchanged since <id>`, changed → unified diff of the range); for full source files without range: signatures + elided bodies with line spans.
+
+Check: #1076 harness (`bench/c14`) shows ≥ 93 % on `cat` source; re-read ≥ 95 % on this category with full anchor retention.
+
+### T675. python3 1545
+
+Best competitor: none specialised. Design: detect pytest/unittest/traceback output: keep the full last traceback, collapse repeated frames, summary line; JSON stdout → TOON (#1078).
+
+Check: #1076 harness (`bench/c14`) shows ≥ t-o pytest (564→115) on this category with full anchor retention.
+
+### T676. gh 744
+
+Best competitor: lean-ctx gh.rs. Design: `gh pr/issue view`: drop empty fields, body markdown whitespace collapse; `gh run view --log`: per-step errors only; `gh pr checks`: only non-pass rows + counts; `--json` → TOON.
+
+Check: #1076 harness (`bench/c14`) shows +20 pp vs current head/tail on this category with full anchor retention.
+
+### T677. mise 660
+
+Best competitor: lean-ctx mise.rs. Design: drop install/progress lines, keep task header + failing task output; `mise run` = inner command formatter.
+
+Check: #1076 harness (`bench/c14`) shows ≥ lean-ctx on this category with full anchor retention.
+
+### T678. for 570, until 231, while
+
+Best competitor: caveman repetition. Design: loop output: normalise numbers/ids per line, collapse runs of same-shape lines into `shape ×N (vals: a..b)`; never collapse lines with error words.
+
+Check: #1076 harness (`bench/c14`) shows ≥ 80 % on polling loops on this category with full anchor retention.
+
+### T679. ls 386
+
+Best competitor: lean-ctx 66.6 %. Design: ls -l → `name size` with dirs first, drop perms unless non-default (`x` bit, symlink target kept as `a -> b`); group by extension when > 30 entries.
+
+Check: #1076 harness (`bench/c14`) shows ≥ 72 % (= rtk) on this category with full anchor retention.
+
+### T680. git status 297
+
+Best competitor: lean-ctx 40.5 %. Design: one line per section with paths grouped by dir (`src/plugins/cmd/{a,b}.rs`), sigils, drop git hints; branch + ahead/behind.
+
+Check: #1076 harness (`bench/c14`) shows ≥ 60 % (rtk 62.5 %) on this category with full anchor retention.
+
+### T681. git diff 272, git show 262
+
+Best competitor: t-o 97.9 % / sqz 44.4 %. Design: two tiers: ≤ budget → drop `index`, context 1, fold unchanged runs, strip common indent; > budget → per-file `path +A -D` table and hunk headers with function names, full hunks only for the N smallest files; 100 % paths always.
+
+Check: #1076 harness (`bench/c14`) shows ≥ 80 % big diff with 100 % paths (t-o keeps 51 %) on this category with full anchor retention.
+
+### T682. git log 174
+
+Best competitor: — (rtok wins after #1079). Design: keep #1079; add `[N commits, +A/-D]`; drop Author when all equal.
+
+Check: #1076 harness (`bench/c14`) shows keep lead on this category with full anchor retention.
+
+### T683. tail 155, cat *.log
+
+Best competitor: lean-ctx 87.4 % (rtok 94.5 %). Design: caveman-style field summary on collapsed runs: constant logfmt keys printed once.
+
+Check: #1076 harness (`bench/c14`) shows keep lead, +2 pp on this category with full anchor retention.
+
+### T684. wc 102, cargo test/build/clippy
+
+Best competitor: rtk / sqz. Design: wc: drop padding, keep `total`; cargo: #1077 + group warnings by lint code `unused_imports ×12 (files…)`.
+
+Check: #1076 harness (`bench/c14`) shows ≥ rtk on this category with full anchor retention.
+
+### T685. find 33
+
+Best competitor: rtok leads. Design: keep dir grouping but print full paths for ≤ 50 hits so the anchor check passes.
+
+Check: #1076 harness (`bench/c14`) shows 100 % paths, ≥ 69 % on this category with full anchor retention.
+
+### T686. MCP tool catalogs
+
+Best competitor: caveman 12–29 %. Design: `rtok mcp` proxy: first sentence of descriptions, drop default/examples that duplicate type, enum compaction; recovery via archive.
+
+Check: #1076 harness (`bench/c14`) shows ≥ 30 % on this category with full anchor retention.

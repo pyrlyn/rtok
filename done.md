@@ -13586,6 +13586,49 @@ Result: `crates/rtok-config/src/root.rs` holds `ReadFs`/`HostFs` (moved from `sr
 Status: done 2026-10-13
 Model: Claude Code / claude-opus-5-5 (code by a claude-sonnet-5-5 subagent, reviewed)
 
+### T660.2. Every project-root caller goes through the T660.1 method
+
+Needs T660.1. Switch every caller to `ProjectRoot` and say explicitly whether it wants `checkout` or `main`: `layers.rs` `.rtok.toml` layer (`checkout`: each worktree reads its own checked-out file), `agents/command.rs --project`, `plugins/checkpoint.rs`, `guard/grep_symbol.rs`, `memory/files.rs::project_root`, `tasks/run.rs` (both sites), `model/agents.rs::worktree_label`. Delete `git_root` and the duplicate in `src/doctor.rs`. `checkpoint::project_of_cx` returns the worktree basename today while `project_name` returns the main repo's name; it moves to `main` so a checkpoint made in a worktree files under the same project. `memory/files.rs::relative` uses `contain` so a symlink cannot point a note outside the root.
+
+Check: one test per changed site for a linked worktree; a test that the checkpoint project name is the same from the main checkout and from a worktree; a symlink-escape test for memory paths; `just check`.
+
+Result: `layers.rs::git_root` and the private copy in `src/doctor.rs` are gone; every site calls `ProjectRoot::find` and takes `checkout` (the `.rtok.toml` layer, `agents --project`, `checkpoint`'s legacy lookup, `grep_symbol`'s index, memory files, the tasks dir and `rtok task init`, the doctor's CLAUDE.md/AGENTS.md audit, `worktree_label`). `checkpoint::project_of_cx` already used `project_name` (main) since T553, so no change was needed there. `memory/files.rs::relative` now passes paths through `contain`: a symlink inside the project pointing out of it is no longer a project file (test `a_symlink_out_of_the_root_is_refused`, failing before the fix). One linked-worktree test per site.
+
+Status: done 2026-10-14
+Model: Claude Code / claude-opus-5-5 (code by a claude-sonnet-5-5 subagent; left uncommitted by a stalled session, adopted, rebased and re-checked)
+
+### T660.3. Worktrees nested in the project do not leak into walks, gc or clean
+
+Needs T660.1; lands before T660.4. With worktrees under `<main>/.rtok/worktrees`, several places would see them as part of main:
+
+- graph walk (`plugins/graph/walk.rs`), `search`/`tree` (`read/search.rs`) and the watcher (`graph/watch.rs`, root `.gitignore` only) descend into them when `.rtok/` is not ignored: skip any directory holding a `.git` file (a nested checkout), like `worktree/list.rs::walk` already does.
+- `worktree/gc.rs` and `worktree/clean.rs` call a worktree current by `here.starts_with(dir)`, so from a nested worktree main counts as current too: pick the deepest match.
+- `worktree/origin.rs` names `<main>/.rtok/worktrees` its own `rtok` pool.
+- `worktree/claim.rs::copy_symbol_index` copies no rows under `.rtok/`.
+
+Check: a test per bullet with a worktree nested under `.rtok/worktrees` and no ignore rule; `just check`.
+
+Result: `fs::is_linked_worktree` (a `.git` file whose admin dir has a `commondir`) is the one test for "another checkout": `search`/`tree` and the graph walk skip such a directory below the walk root through `skip_git`, and the watcher drops its events (`Matcher::in_linked_worktree`). Submodules and nested clones stay walked: they are this project's files, so the card's "any `.git` file" was narrowed. `worktree::deepest` picks the current worktree for `gc`, `clean`, `claim::linked` and `complete_pending`; `origin.rs` names `.rtok/worktrees` the `rtok` pool; `copy_symbol_rows` takes directories to skip and `copy_symbol_index` passes `.rtok`. Tests: `a_nested_linked_worktree_is_not_walked_into`, `search_and_tree_skip_a_nested_linked_worktree`, `events_inside_a_nested_linked_worktree_are_ignored`, `clean_and_gc_take_the_deepest_worktree_as_current`, `a_new_worktree_inherits_no_symbol_rows_under_rtok`, the `origin` pool row.
+Model: Claude Code / claude-opus-5-5 (adopted from a stalled claude-opus-5-5 session's uncommitted work, reviewed)
+
+### T660.4. Default worktree root `<project>/.rtok/worktrees`, `.rtok/` ignored
+
+Needs T660.1 and T660.3. The `[worktree] root` default becomes `.rtok/worktrees`. A relative root resolves against `ProjectRoot::main` (not the process cwd, as today), so a worktree created from inside another worktree still lands under the main checkout; `~` and absolute roots keep today's meaning. `add::plan` checks the new path with `contain`. Before creating the first worktree, rtok makes sure `.rtok/` is ignored: nothing to do when `git check-ignore` already ignores it; else append `.rtok/` to `<main>/.gitignore` when that file exists (rest byte-for-byte, a missing final newline added first); else to `<main>/.git/info/exclude`. Existing worktrees elsewhere keep working. Docs: `README.md`, `docs/agents-and-worktrees.md`, `docs/config.md` (+ `docs/ru`, `docs/uk`), `crates/rtok-config/default.toml`, `skills/rtok-worktrees/SKILL.md`, `CHANGELOG.md`.
+
+Check: tests for the default path from main and from a linked worktree, a relative custom root, an absolute root, an escaping root (`../x` with a task id) refused; `.gitignore` present without the rule / with it / without a final newline, no `.gitignore` → `info/exclude`, idempotent on a second add; the `the_default_root_is_under_the_rtok_home` test is replaced; `just check`.
+
+Result: `[worktree] root` defaults to `.rtok/worktrees`. `add::landing` resolves a relative root against the main checkout (git's first worktree), so `add` from inside a linked worktree lands beside its siblings; `whoami` reports the same resolved root. A relative root whose target leaves main fails `contain` with a hint to use an absolute root. `add::ensure_ignored` runs before a worktree is created inside main: nothing when `git check-ignore` already ignores `.rtok/`, else an appended `.rtok/` in `.gitignore` (a missing final newline added first, rest byte-for-byte), else in the clone's `info/exclude`. Docs: `docs/agents-and-worktrees.md`, `docs/config.md` with `ru`/`uk`, `default.toml`. `CHANGELOG.md` is generated by git-cliff from commits, so it was not edited by hand; README and the worktrees skill name no default root. Tests: `a_relative_root_is_under_the_main_checkout_and_may_not_leave_it` (replaces `the_default_root_is_under_the_rtok_home`), `rtok_dir_is_ignored_through_gitignore_or_info_exclude`, `the_default_root_is_under_the_main_checkout_from_main_and_from_a_worktree`.
+Model: Claude Code / claude-opus-5-5
+
+### T660.5. `rtok worktree migrate` moves worktrees into the configured root
+
+Needs T660.4. Moves this repository's worktrees that live outside the configured root to `<root>/<repo>-<task>` with `git worktree move`, keeping lock and claim records in step. Dry run without `--yes`. Skips, with a reason: main, the worktree holding the cwd, a worktree locked or claimed by another agent or by a live session, a worktree with submodules (`git worktree move` refuses them), a target that already exists. CLI only; new-command gates (trycmd fence, `surface_parity`, `config_coverage`). Docs with T660.4's pages.
+
+Check: tests on a temp repo for move, each skip reason and dry run; lock and claim follow the move; `just check`.
+
+Result: `rtok worktree migrate [--yes] [--owner <owner>] [--json]` (`src/worktree/migrate.rs`). `plan` lists the repository's worktrees and gives each a target `<root>/<repo>-<task>` (a worktree without a lock keeps its directory name) or a skip reason: main, already in the root, directory gone, the worktree holding the cwd (deepest match), a lock with no owner or another owner, another agent's open claim, a pending claim, a live session of another agent working in it, `.gitmodules`, an existing target, or a target another worktree of the plan already takes. With `--yes` each move unlocks, runs `git worktree move`, locks the new path with the same reason (a failed move re-locks the old path), makes `.rtok/` ignored when the target is inside main, and `Store::move_worktree_rows` moves the claim and pending rows in one transaction. Gates: trycmd help fence and completions, `surface_parity` exemption (CLI only), `config_coverage` keys. Docs: README commands row, `docs/agents-and-worktrees.md` with `ru`/`uk`. Tests: `migrate_moves_free_worktrees_into_the_root_and_skips_held_ones`, `migrate_gives_one_target_to_one_worktree`, `moving_a_worktree_moves_its_claim_and_parked_rows`.
+Model: Claude Code / claude-opus-5-5
+
 ### T577. Protect nested package-manager lockfiles during junk cleanup
 
 Confirmed with an isolated directory fixture: [recheck](src/agents/junk_clear.rs#L278) compares PACKAGE_LOCKS only with the candidate's own basename. Its protected-path list contains the store and host settings paths, not discovered descendant lockfiles. An eligible explicitly configured cache containing nested/Cargo.lock passes recheck, then [remove](src/agents/junk_clear.rs#L334) recursively discards its children and deletes that lockfile. The cache root remains, while the same Cargo.lock checked directly is refused. [extra_items](src/agents/junk_review.rs#L169) accepts the configured cache root; the plan's D36/age/running gates do not add a descendant-lockfile check. This contradicts completed T330.4's promise to refuse a path that is or holds a package-manager lockfile; T330.5.1's explicit exclude globs do not supply the missing automatic protection.
@@ -14967,3 +15010,13 @@ Audited project boundaries and the evidence baseline `eb7d980af235f0ccb3d8ff5847
 Evidence: T651 used the real `rtok-sys` path dependency; T652 used actual MCP config and SDK writer functions on a temporary JSON file; T653 used actual `rtok-store` in-memory APIs; T654 used a chmod/stat fixture with the graph gate source-traced; T655 used a deterministic extracted thread schedule; T656 and T657 are source-derived. No product code/tests, live host/provider, or real worktree/cache deletion. `CHECK_BASE=eb7d980af235f0ccb3d8ff58471d24b8267af35d mise exec -- just check` passed as scoped and reported no code changes, so no Cargo tests ran. `mise exec -- just docs-check` passed all selected documentation integration tests; `git diff --check` passed. Full `just check`, browser/host integration and Windows/Linux matrix were not run.
 
 Status: done 2026-10-13 · Model: OpenAI / GPT-6
+
+### T900. Update vulnerable dependencies
+
+The creator authorized dependency updates across the audit. Update only vulnerable dependencies and the resolver-required graph without weakening existing guards or advisory policy.
+
+Execution plan: reproduce the advisory audit; apply compatible package-manager updates; review the lockfile diff; run advisory regression checks and the project test/lint/format gates; publish a PR and merge only after required checks pass. No custom dependency implementation is needed. Rollback is a revert of the dependency-update commit.
+
+Check: RustSec audit has no vulnerabilities; full workspace nextest, clippy, format, minimum-feature build, duplication, JavaScript and Python gates pass with diagnostic environment variables unset.
+
+Validation: rustls 0.23.46 and quinn-proto 0.11.19 leave no RustSec vulnerabilities. All 3857 workspace tests passed across the complete run and focused retries (8 configured skips): the complete run passed 3853; two load-related timeouts and the claim-lock test passed at one test thread, and the plan-card check passed after adding its required Check line. CLI snapshots require the ambient RUST_LOG variable unset. Clippy (default and all features), formatting, duplication, JS checks and 43 Python tests passed. Minimum-feature build passed with existing unused-import warnings. Hakari generate --diff is clean. Existing dependencies are reused; no new source implementation was added.

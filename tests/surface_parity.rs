@@ -1013,6 +1013,10 @@ const EXEMPT: &[(&str, &str)] = &[
         "deletes tagged build caches on the checkout's file system, not the store (T152)",
     ),
     (
+        "worktree migrate",
+        "moves git worktrees into the configured root with their locks and claim rows (T660.5)",
+    ),
+    (
         "agents junk clear",
         "deletes log siblings and archive payloads on rtok's own file system, not the store (T182)",
     ),

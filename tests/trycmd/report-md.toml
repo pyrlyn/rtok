@@ -148,6 +148,7 @@ Every effective key with its origin — the `config show --sources` page.
 | plugins.cmd.rules | ~/.rtok/rules.toml | default |
 | plugins.cmd.rules_dir | ~/.rtok/rules.d | default |
 | plugins.cmd.shell |  | default |
+| plugins.cmd.trailer | true | default |
 | plugins.cmd.trailer_min_lines | 40 | default |
 | plugins.compress.enabled | true | default |
 | plugins.compress.llm.code | false | default |
@@ -453,9 +454,9 @@ Every effective key with its origin — the `config show --sources` page.
 | web.host | 127.0.0.1 | default |
 | web.port | 3333 | default |
 | worktree.enabled | true | default |
-| worktree.root | ~/.rtok/worktrees | default |
+| worktree.root | .rtok/worktrees | default |
 
-409 keys.
+410 keys.
 
 ## Doctor
 

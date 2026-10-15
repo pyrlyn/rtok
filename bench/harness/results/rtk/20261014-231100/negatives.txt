@@ -1,0 +1,11 @@
+WARN NEGATIVE: wc rtok 0.0% vs rtk 27.3%
+WARN NEGATIVE: tree rtok 1.9% vs rtk 3.8%
+WARN NEGATIVE: rg rtok 0.0% vs rtk 3.4%
+WARN NEGATIVE: find rtok 81.2% vs rtk 90.0%
+WARN NEGATIVE: find [find_rs] rtok 85.9% vs rtk 94.9%
+WARN NEGATIVE: find [find_src_files] rtok 66.4% vs rtk 78.8%
+WARN NEGATIVE: find [find_cargo_toml] rtok 0.0% vs rtk 25.2%
+WARN NEGATIVE: git status [git_status_clean] rtok 0.0% vs rtk 5.9%
+WARN NEGATIVE: rg [rg_files_with] rtok 0.0% vs rtk 15.3%
+WARN NEGATIVE: tree [tree_plugins] rtok 0.0% vs rtk 10.8%
+WARN NEGATIVE: wc [wc_l] rtok 0.0% vs rtk 27.3%

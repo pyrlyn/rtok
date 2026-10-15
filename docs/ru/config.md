@@ -474,7 +474,7 @@ cmd = ""                              # command family hint when the caller know
 
 [worktree]                            # rtok worktree add | claim | remove | list | gc
 enabled = true                        # false: every `rtok worktree` command (list too) says worktrees are not enabled, MCP lists no worktree_* tool, and Claude's WorktreeCreate/WorktreeRemove hooks do what Claude does without rtok
-root = "~/.rtok/worktrees"            # where `rtok worktree add` creates worktrees, as <root>/<repo>-<task>; `~` expands
+root = ".rtok/worktrees"              # where `rtok worktree add` creates worktrees, as <root>/<repo>-<task>; relative: under the main checkout; `~` expands
 
 [tasks]                               # адаптеры задач (T441); обычно задаются для проекта в .rtok.toml
 adapter = "disk"                      # disk | github | gitlab
@@ -516,7 +516,8 @@ rewrite  = true                       # PreToolUse(Bash) → `rtok run -- …`
 shell    = ""                         # "" = $SHELL
 rules    = "~/.rtok/rules.toml"       # extra filter rules; missing → built-in rules/default.toml
 rules_dir = "~/.rtok/rules.d"         # drop-ins: every *.toml merges after rules in name order (T50.2)
-trailer_min_lines = 40                # add `[rtok <id> · N lines · expand …]` above this
+trailer  = true                       # print `[rtok <id12> · N lines]` after a cut; false = `--no-ref`
+trailer_min_lines = 40                # add `[rtok <id12> · N lines]` above this
 fail_tail_lines   = 80                # non-zero exit → last N lines verbatim
 never_wrap = ["rtok", "sudo"]         # first-word deny list; heredocs, `&`, -i are always skipped
 

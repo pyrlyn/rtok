@@ -1058,8 +1058,9 @@ section! {
         /// Off: the commands refuse, MCP lists no `worktree_*` tool and the host hooks do what
         /// the host does without rtok.
         enabled: bool = true,
-        /// Where worktrees are created, as `<root>/<repo>-<task>`.
-        root: PathBuf = p("~/.rtok/worktrees"),
+        /// Where worktrees are created, as `<root>/<repo>-<task>`. A relative root is under the
+        /// main checkout.
+        root: PathBuf = p(".rtok/worktrees"),
     }
 }
 
@@ -1218,6 +1219,9 @@ section! {
         rules: PathBuf = p("~/.rtok/rules.toml"),
         /// Drop-in dir: every `*.toml` merges after `rules` in name order (T50.2).
         rules_dir: PathBuf = p("~/.rtok/rules.d"),
+        /// Print the `[rtok <id12> · N lines]` reference line after a cut (T661).
+        /// `false` (`RTOK_PLUGINS_CMD_TRAILER=false`, `rtok run --no-ref`) drops it.
+        trailer: bool = true,
         trailer_min_lines: u32 = 40,
         fail_tail_lines: u32 = 80,
         never_wrap: Vec<String> = strs(&["rtok", "sudo"]),

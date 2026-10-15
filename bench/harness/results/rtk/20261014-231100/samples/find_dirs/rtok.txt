@@ -1,0 +1,9 @@
+src
+src/ (22 files): doctor, agents, proxy …
+src/agents/ (36 files): codex, omp, vscode …
+src/measure/ (1 files): usage
+src/tasks/ (1 files): export
+src/report/ (1 files): snapshots
+src/project/ (1 files): refs
+src/plugins/ (13 files): graph, guard, proxy …
+[rtok 44de009a630d7ba064502151b747ebaf6e873a795317dd3e2cb30e65400392f8 · 76 lines · expand: rtok expand 44de009a630d7ba064502151b747ebaf6e873a795317dd3e2cb30e65400392f8]

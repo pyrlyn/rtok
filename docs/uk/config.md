@@ -475,7 +475,7 @@ cmd = ""                              # підказка сімейства ко
 
 [worktree]                            # rtok worktree add | claim | remove | list | gc
 enabled = true                        # false: кожна команда `rtok worktree` (і list) каже, що worktree не ввімкнено, MCP не показує жодного інструмента worktree_*, а хуки Claude WorktreeCreate/WorktreeRemove роблять те, що Claude робить без rtok
-root = "~/.rtok/worktrees"            # де `rtok worktree add` створює worktree, як <root>/<repo>-<task>; `~` розкривається
+root = ".rtok/worktrees"              # де `rtok worktree add` створює worktree, як <root>/<repo>-<task>; відносний: у основному checkout; `~` розкривається
 
 [tasks]                               # адаптери задач (T441); зазвичай задаються для проєкту в .rtok.toml
 adapter = "disk"                      # disk | github | gitlab
@@ -517,7 +517,8 @@ rewrite  = true                       # PreToolUse(Bash) → `rtok run -- …`
 shell    = ""                         # "" = $SHELL
 rules    = "~/.rtok/rules.toml"       # додаткові правила фільтрування; якщо немає → вбудований rules/default.toml
 rules_dir = "~/.rtok/rules.d"         # drop-in-файли: кожен *.toml об'єднується після rules у порядку назв (T50.2)
-trailer_min_lines = 40                # додавати `[rtok <id> · N lines · expand …]` понад це
+trailer  = true                       # друкувати `[rtok <id12> · N lines]` після скорочення; false = `--no-ref`
+trailer_min_lines = 40                # додавати `[rtok <id12> · N lines]` понад це
 fail_tail_lines   = 80                # ненульовий код виходу → останні N рядків дослівно
 never_wrap = ["rtok", "sudo"]         # список заборонених перших слів; heredoc, `&`, -i завжди пропускаються
 

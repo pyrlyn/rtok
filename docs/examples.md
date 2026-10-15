@@ -46,7 +46,7 @@ output to `~/.rtok/archive/<id>`, and prints a per-family summary. Anything over
 gets a trailer naming its id:
 
 ```text
-[rtok 7f3a91 · 412 lines · expand: rtok expand 7f3a91]
+[rtok 7f3a91c04b2e · 412 lines]
 ```
 
 Nothing is redacted, a non-zero exit prints the last 80 lines verbatim, and the original is

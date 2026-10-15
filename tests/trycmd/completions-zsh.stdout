@@ -274,6 +274,16 @@ _arguments "${_arguments_options[@]}" : /
 '*::paths -- Only these worktrees; the one this command runs from is cleaned only when named:_files' /
 && ret=0
 ;;
+(migrate)
+_arguments "${_arguments_options[@]}" : /
+'--owner=[Also move old locks without an agent whose owner is this]:OWNER:_default' /
+'--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
+'--yes[Apply; without it this is a dry run that changes nothing]' /
+'--json[JSON instead of the table]' /
+'-h[Print help]' /
+'--help[Print help]' /
+&& ret=0
+;;
 (help)
 _arguments "${_arguments_options[@]}" : /
 ":: :_rtok__subcmd__worktree__subcmd__help_commands" /
@@ -315,6 +325,10 @@ _arguments "${_arguments_options[@]}" : /
 && ret=0
 ;;
 (clean)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(migrate)
 _arguments "${_arguments_options[@]}" : /
 && ret=0
 ;;
@@ -1539,6 +1553,7 @@ _arguments "${_arguments_options[@]}" : /
 _arguments "${_arguments_options[@]}" : /
 '--agent=[Sub-agent id from PreToolUse; scopes the dedup pointer]:ID:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
+'--no-ref[Do not print the reference line after a cut]' /
 '-h[Print help]' /
 '--help[Print help]' /
 '*::command:_default' /
@@ -1547,9 +1562,11 @@ _arguments "${_arguments_options[@]}" : /
 (filter)
 _arguments "${_arguments_options[@]}" : /
 '--cmd=[Command family hint (/`git status/`, /`cargo test/`, …)]:CMD:_default' /
+'--exit=[Exit code of the command that printed stdin (with /`--archive/`); formatters read it]:EXIT:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '--stdin[Read the payload from stdin (OpenCode /`tool.execute.after/`)]' /
 '--archive[Archive stdin and print the expand trailer (same path as /`run/`)]' /
+'--no-ref[Do not print the reference line after a cut]' /
 '-h[Print help]' /
 '--help[Print help]' /
 && ret=0
@@ -2727,6 +2744,10 @@ _arguments "${_arguments_options[@]}" : /
 && ret=0
 ;;
 (clean)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(migrate)
 _arguments "${_arguments_options[@]}" : /
 && ret=0
 ;;
@@ -4964,6 +4985,7 @@ _rtok__subcmd__help__subcmd__worktree_commands() {
 'whoami:Your agent, where new worktrees go, the worktree you are in and the ones you hold' /
 'gc:Remove merged, clean, idle worktrees with their branches; drop records of deleted ones' /
 'clean:Delete idle tagged build caches (/`CACHEDIR.TAG/`) and keep the worktrees; dry run without /`--yes/`' /
+'migrate:Move this repository'/''s worktrees into /`/[worktree/] root/`; dry run without /`--yes/`' /
     )
     _describe -t commands 'rtok help worktree commands' commands "$@"
 }
@@ -4996,6 +5018,11 @@ _rtok__subcmd__help__subcmd__worktree__subcmd__gc_commands() {
 _rtok__subcmd__help__subcmd__worktree__subcmd__list_commands() {
     local commands; commands=()
     _describe -t commands 'rtok help worktree list commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__help__subcmd__worktree__subcmd__migrate_commands] )) ||
+_rtok__subcmd__help__subcmd__worktree__subcmd__migrate_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok help worktree migrate commands' commands "$@"
 }
 (( $+functions[_rtok__subcmd__help__subcmd__worktree__subcmd__remove_commands] )) ||
 _rtok__subcmd__help__subcmd__worktree__subcmd__remove_commands() {
@@ -5516,6 +5543,7 @@ _rtok__subcmd__worktree_commands() {
 'whoami:Your agent, where new worktrees go, the worktree you are in and the ones you hold' /
 'gc:Remove merged, clean, idle worktrees with their branches; drop records of deleted ones' /
 'clean:Delete idle tagged build caches (/`CACHEDIR.TAG/`) and keep the worktrees; dry run without /`--yes/`' /
+'migrate:Move this repository'/''s worktrees into /`/[worktree/] root/`; dry run without /`--yes/`' /
 'help:Print this message or the help of the given subcommand(s)' /
     )
     _describe -t commands 'rtok worktree commands' commands "$@"
@@ -5556,6 +5584,7 @@ _rtok__subcmd__worktree__subcmd__help_commands() {
 'whoami:Your agent, where new worktrees go, the worktree you are in and the ones you hold' /
 'gc:Remove merged, clean, idle worktrees with their branches; drop records of deleted ones' /
 'clean:Delete idle tagged build caches (/`CACHEDIR.TAG/`) and keep the worktrees; dry run without /`--yes/`' /
+'migrate:Move this repository'/''s worktrees into /`/[worktree/] root/`; dry run without /`--yes/`' /
 'help:Print this message or the help of the given subcommand(s)' /
     )
     _describe -t commands 'rtok worktree help commands' commands "$@"
@@ -5595,6 +5624,11 @@ _rtok__subcmd__worktree__subcmd__help__subcmd__list_commands() {
     local commands; commands=()
     _describe -t commands 'rtok worktree help list commands' commands "$@"
 }
+(( $+functions[_rtok__subcmd__worktree__subcmd__help__subcmd__migrate_commands] )) ||
+_rtok__subcmd__worktree__subcmd__help__subcmd__migrate_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok worktree help migrate commands' commands "$@"
+}
 (( $+functions[_rtok__subcmd__worktree__subcmd__help__subcmd__remove_commands] )) ||
 _rtok__subcmd__worktree__subcmd__help__subcmd__remove_commands() {
     local commands; commands=()
@@ -5609,6 +5643,11 @@ _rtok__subcmd__worktree__subcmd__help__subcmd__whoami_commands() {
 _rtok__subcmd__worktree__subcmd__list_commands() {
     local commands; commands=()
     _describe -t commands 'rtok worktree list commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__worktree__subcmd__migrate_commands] )) ||
+_rtok__subcmd__worktree__subcmd__migrate_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok worktree migrate commands' commands "$@"
 }
 (( $+functions[_rtok__subcmd__worktree__subcmd__remove_commands] )) ||
 _rtok__subcmd__worktree__subcmd__remove_commands() {
