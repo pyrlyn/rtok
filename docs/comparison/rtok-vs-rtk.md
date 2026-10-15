@@ -68,7 +68,7 @@ Re-run on 2026-10-14 (Docker, Colima profile `rtok-bench`, 4 CPU / 8 GiB) of the
 
 ## Performance figures
 
-Token savings per command (total over its cases, tiktoken o200k_base, higher is better; cells are output tokens and saving vs raw):
+Token savings per command, re-run 2026-10-14 (total over its cases, tiktoken o200k_base, higher is better; cells are output tokens and saving vs raw):
 
 | Command | raw | rtok main | rtok PR | rtok PR `--no-ref` | rtk |
 |---|---:|---:|---:|---:|---:|
