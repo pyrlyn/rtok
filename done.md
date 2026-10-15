@@ -2059,29 +2059,6 @@ Fix:
 
 Check: `just spa-stories` 257/257 twice; `just spa-test` 300/300; `just js`: oxlint is clean, and oxfmt flags only `web/e2e/rtok.ts`, which is unformatted on `main` and untouched here.
 
-### T661. rtk filter parity and `rtok discover`
-
-Compare [rtk](https://github.com/rtk-ai/rtk) filters against rtok's rule families: list the filters/commands rtk covers that rtok lacks, and where rtk is broader. Prefer `docs/comparison/rtok-vs-rtk.md` from draft PR #1071 when useful.
-
-Savings for both sides (sourced only; never invent):
-
-| Case | rtok saved | rtk saved | Source |
-|---|---|---|---|
-| bash bytes cut (author corpus, 5,725 cmds) | no data | 40.4 % (1.1 M of 2.8 M bytes) | `research.md` §2 A/B (T9.2) |
-| claimed bash cut | no data | 60–90 % (claim) | `research.md` §2 |
-| agentic bill (JetBrains) | no data | +7.6 % to 0 % (worse/neutral) | `research.md` §1, §7 |
-| head-to-head harness (`bench/competitors/rtk`) | pending | pending | PR #1071 |
-
-Add `rtok discover`, analogous to `rtk discover`: analyze recorded agent shell calls from rtok's own history/DB and report frequent commands with no filter, ranked by potential token savings, so we know which filters to add next. CLI only; new-command gates (trycmd fence, `surface_parity`, `config_coverage` if config is touched). Docs: `docs/comparison/rtok-vs-rtk.md` coverage table, `CHANGELOG.md`, command help.
-
-Done when: a dated coverage table (rtk command/filter vs rtok rule family) is in the comparison doc; `rtok discover` prints the ranked gap list from a fixture store and from the live local DB.
-
-Check: unit tests for ranking and "no filter" detection on a fixture DB; trycmd fence for `discover`; coverage table committed; `just check`.
-
-Result: `rtok discover [--since 30d] [--top 15] [--json]` reads the recorded `PostToolUse` Bash hook bodies (`Store::hook_inputs_for_tool_since`, Diesel), unwraps `rtok run -- '…'`, takes the first real program of each command through the `cmd` plugin's own lexer (`bounded::stages`, `formatters::visible_argv`), drops families with a formatter or a named rule (`formatters::filter_kind`) and chains that `rtok run` sends to `[script]`, and ranks the rest by output tokens (`measure::discover`, `model::discover`). The coverage table (62 rtk filters and 58 command modules at v1.0.1 vs rtok's formatters and rules) is in `docs/comparison/rtok-vs-rtk.md`. No saving rate is applied to the ranking. Bodies over `core.call_io_inline_bytes` are not read, so the numbers are a floor. On a copy of the live store (15,625 Bash calls, 30 days) most commands are chains already covered by `[script]`; 19 families remain, the top being `tail` (75 calls, 18k tokens) and `jscpd`.
-
-Check result (2026-10-15): 8 unit tests in `measure::discover` (ranking, covered-family skip, wrapper and syntax peel, `top`, the store query with a fixture DB); trycmd `discover.toml`, `discover-json.toml`, `--help` in `help-subcommands.trycmd`; `surface_parity` and `config_coverage` entries; completions, man and help goldens re-blessed; `just check`.
-
 ### T310.6. Pages: overview, plugins (toggle), calls (expand)
 
 Check: each page matches `design/html/admin/<page>.html` in dark and light at 375 and 1280 px on sample data; toggle and expand round-trip against `rtok web`; stories and Vitest for page logic.
@@ -8792,6 +8769,32 @@ Check: the `DEFAULT_TOML` unit test (every default commented out, parsing yields
 Plan: comment assignment lines in `config/default.toml` (and map-table headers whose empty presence would replace a non-empty default: `[bench.configs]`, `[stats.prices."…"]`). `init_maybe` keeps writing `DEFAULT_TOML` verbatim. A unit test in `src/config/mod.rs` asserts every assignment is commented and that both the commented file and the same file with those lines uncommented parse to `Config::default()` (the uncomment pass keeps the documented values from drifting). `config set` revives a commented key in place via the existing `assign` decor swap in `src/config/validate.rs`, so padding and the trailing comment stay. Pinned-default notes live in that same module (reuse `loc` / `line_of` and the serialized `Config::default()` schema): explicit leaves whose value differs from the default, formatted with key, value, default and line, not as errors. `doctor::page` prints them; a fixture with `[plugins.toon] enabled = false` shows the note. Re-bless `tests/trycmd/config-init.toml`. Fix `src/plugins/toon/AGENTS.md` and `research.md` §16.1. Verify with those tests, `rtok config init --dry-run` on a scratch home, and `just check`.
 
 Result: `config/default.toml` comments every assignment and the map headers `[bench.configs]` and `[stats.prices."…"]` (an empty map would wipe a non-empty default; an empty struct table would not, so those headers stay). `init_maybe` still writes that file. `config set` uncomments the documented assignment along the path, including an intermediate scalar, so `set proxy.port.foo` still reports "not a table" and a real set keeps padding and the trailing comment. Notes name key, value, default and line on `rtok doctor` text and on `rtok config validate` stdout; they are not errors and nothing is rewritten. Equal values and unknown open-map keys are silent. Doctor JSON skips the notes (`serde`/`schemars` skip). `docs/config.md` prose matches; its embedded sample stays the readable uncommented form. `src/plugins/toon/AGENTS.md` and `research.md` §16.1 now say toon is on by default since T127. Checked: `default_toml_is_the_defaults`, `toon_pinned_off_is_a_config_note`, trycmd `config-init` / `report-md`, scratch `config init --dry-run` (only commented values); `just check` green (2479 passed, 6 skipped).
+
+### T688. rtk filter parity and `rtok discover`
+
+Compare [rtk](https://github.com/rtk-ai/rtk) filters against rtok's rule families: list the filters/commands rtk covers that rtok lacks, and where rtk is broader. Prefer `docs/comparison/rtok-vs-rtk.md` from draft PR #1071 when useful.
+
+Savings for both sides (sourced only; never invent):
+
+| Case | rtok saved | rtk saved | Source |
+|---|---|---|---|
+| bash bytes cut (author corpus, 5,725 cmds) | no data | 40.4 % (1.1 M of 2.8 M bytes) | `research.md` §2 A/B (T9.2) |
+| claimed bash cut | no data | 60–90 % (claim) | `research.md` §2 |
+| agentic bill (JetBrains) | no data | +7.6 % to 0 % (worse/neutral) | `research.md` §1, §7 |
+| head-to-head harness (`bench/competitors/rtk`) | pending | pending | PR #1071 |
+
+Add `rtok discover`, analogous to `rtk discover`: analyze recorded agent shell calls from rtok's own history/DB and report frequent commands with no filter, ranked by potential token savings, so we know which filters to add next. CLI only; new-command gates (trycmd fence, `surface_parity`, `config_coverage` if config is touched). Docs: `docs/comparison/rtok-vs-rtk.md` coverage table, `CHANGELOG.md`, command help.
+
+Plan (execution):
+1. Coverage table: rtk filters from its repo files (cited commit, checked 2026-10-15) against `rules/default.toml` and the `FORMATTER_STEMS` families; dated table in `docs/comparison/rtok-vs-rtk.md`.
+2. `rtok discover`: `Store::hook_inputs_since` (Diesel, PostToolUse hook bodies across sessions) -> `measure::discover` (pure ranking: `bash_family` + `filter_kind == "default"` over `Settings::from_config`, ranked by estimated tokens of output the agent read) -> `crate::model::discover` -> `cli/discover.rs`. The `rtok run` wrap strip moves from `guard` to `names.rs` so both reuse it.
+3. Tests: fixture-store unit tests (ranking, no-filter detection, wrapped commands), trycmd fence, `surface_parity`, `man.stdout` `v[..]`; CHANGELOG, docs/commands.md, docs ru/uk.
+4. Verify: `just check`.
+Done when: a dated coverage table (rtk command/filter vs rtok rule family) is in the comparison doc; `rtok discover` prints the ranked gap list from a fixture store and from the live local DB.
+
+Check: unit tests for ranking and "no filter" detection on a fixture DB; trycmd fence for `discover`; coverage table committed; `just check`.
+
+Result: `docs/comparison/rtok-vs-rtk.md` has a dated (2026-10-15) coverage table of all 92 commands in rtk's `src/discover/rules.rs` at commit `5eb0509` (release v1.0.1) against rtok's families: 11 `formatter`, 20 `rule`, 61 `none`; rtok is broader on nine stems. `rtok discover [--since] [--limit] [--json]` reads the stored `PostToolUse` shell bodies (`Store::hook_inputs_since`, Diesel), maps each command with `bash_family` and `filter_kind` over the effective rules (user rules included) and ranks the families with no rule or formatter by output tokens read. It claims no saving. The `rtok run` wrap strip moved from `guard` to `names.rs` and both use it. Tests: `measure::discover` unit tests on strings and on a fixture store, trycmd `discover-json` / `discover-table`, `surface_parity`, `config_coverage`. The follow-up that adds rule families for the top gaps is T662 and later cards.
 
 ### T137. `rtok stats`: image blocks row
 Gate for a multimodal token gate (`research.md` §16.3 #9). Screenshots from browser and simulator tools enter the live zone as image blocks; rtok measures bytes of text only, so their share is unknown.
