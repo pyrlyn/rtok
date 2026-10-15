@@ -111,7 +111,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 
 | # | Status | Priority | Complexity | Readiness | Agent |
 | --- | --- | --- | --- | --- | --- |
-| T124 | todo | P3 | 2 | 0% | |
+| T124 | todo | P3 | 2 | 60% | |
 | T131 | todo | P2 | 3 | 70% | |
 | T134 | todo | P1 | 2 | 40% | |
 | T156 | in progress | P3 | 3 | 50% | Claude Code / claude-opus-5-5 |
@@ -400,6 +400,8 @@ Progress (2026-09-25, `research.md` §3 "T134"): Claude Code 2.1.267; the CLI ho
 ### T124. Realized `tools_rewrite` saving as a dated `research.md` row
 6.2 % (T59.5) is the ceiling, not a saving: no dated row shows what `[proxy.tools_rewrite]` removes with the default `max_description_tokens = 60`. Precondition, by the creator: turn it on for this machine's proxy for at least 20 sessions. Then sum the `kind = tools_rewrite` Measurement rows against session input for the same window (`rtok stats` / `rtok gain`, dated command in the row), and write one row into `research.md` §2 next to the T59.5 row; update `docs/comparison.md` only if it cites the number. If the realized share is under the 3 % gate, say so in the row and leave the default off.
 Check: the row cites the command, date, sessions, before/after tokens and the share; no number in prose without it.
+
+Progress (2026-10-15, `research.md` §2): a local reference run (20 one-request sessions through a scratch proxy to LM Studio) puts the saving at 16.2 K tokens per request (42.0 % of a bare request, API-counted); the row says it is not the gate. Left: the creator's 20 real sessions on this machine's own proxy, and an answer-quality check with truncated built-in tool descriptions. Default stays off.
 
 ### T156. Probe: `WorktreeCreate`/`WorktreeRemove` hooks and reflink-seeded `target/`
 
