@@ -1185,10 +1185,14 @@ Plan: locate the `rtok mcp` proxy tool-description rewrite (`[proxy.tools_rewrit
 
 The test fails on Windows dart 3.9 with `File is not being analyzed` (surfaced by the first full local `just check` on Windows, T272–T274, `docs/windows.md`); CI never runs it because the runners have no dart. Done = the test no longer fails on Windows dart 3.9 (project gets a `dart pub get` / readiness wait, or skips on that error with the reason in a comment) and a test pins the skip/ready predicate.
 
+Check: `lsp_backend_outlines_dart_main` passes or skips with a stated reason on Windows dart 3.9; the predicate test passes on every OS; `just check`.
+
 Plan: make `lsp_backend_outlines_dart_main` robust on Windows dart 3.9: write a minimal `pubspec.yaml` in the temp project and run `dart pub get`, or skip when the server answers `File is not being analyzed`, with the reason in a comment. CI has no dart, so the proof is a unit test of the skip/ready predicate that runs everywhere.
 
 ### T902. Windows CI: run `cargo clippy --workspace` in the `windows` job
 
 `cfg(windows)` lint debt (the T273/T274 class) is only found by the first local Windows gate. Done = the `windows` CI job runs `cargo clippy --workspace` and is green, so such debt fails CI.
+
+Check: the `windows` job of this PR runs the clippy step and is green.
 
 Plan: add `cargo clippy --workspace` to the `windows` job in the CI workflow (reusing the lint flags the Linux job uses); fix any `cfg(windows)` lint it surfaces in this PR if small; proof is the green CI run of the PR.
