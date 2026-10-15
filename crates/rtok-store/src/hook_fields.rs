@@ -204,10 +204,10 @@ mod tests {
         assert_eq!(json(otel.as_bytes()), json(PRE.as_bytes()));
     }
 
-    /// `rtok discover` reads only one event's bodies for one tool, and only from the cutoff on,
-    /// with the session fields put back.
+    /// `rtok discover` reads only one event's bodies, and only from the cutoff on, with the
+    /// session fields put back.
     #[test]
-    fn tool_bodies_are_filtered_by_event_tool_and_cutoff() {
+    fn event_bodies_are_filtered_by_event_and_cutoff() {
         let s = Store::open_in_memory().unwrap();
         s.upsert_session("s1", None, None, None, None).unwrap();
         let (pre, post) = (hook_call(&s, "PreToolUse"), hook_call(&s, "PostToolUse"));
@@ -215,20 +215,12 @@ mod tests {
             .unwrap();
         s.insert_hook_call_io(post, POST.as_bytes(), Some(b"{}"), 65536)
             .unwrap();
-        let got = s
-            .hook_inputs_for_tool_since("PostToolUse", "Read", 0, 10)
-            .unwrap();
+        let got = s.hook_inputs_since("PostToolUse", 0, 10).unwrap();
         assert_eq!(got.len(), 1, "{got:?}");
         assert_eq!(json(got[0].as_bytes()), json(POST.as_bytes()));
-        for (event, tool, since) in [
-            ("PostToolUse", "Bash", 0),
-            ("PostToolUse", "Read", i64::MAX),
-            ("Stop", "Read", 0),
-        ] {
-            let none = s
-                .hook_inputs_for_tool_since(event, tool, since, 10)
-                .unwrap();
-            assert!(none.is_empty(), "{event} {tool} {since}: {none:?}");
+        for (event, since) in [("PostToolUse", i64::MAX), ("Stop", 0)] {
+            let none = s.hook_inputs_since(event, since, 10).unwrap();
+            assert!(none.is_empty(), "{event} {since}: {none:?}");
         }
     }
 

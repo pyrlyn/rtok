@@ -186,9 +186,9 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 
 sqz ships 45+ formatters and a stack-trace safe mode; rtok has fewer families (`docs/comparison/rtok-vs-sqz.md`). Close the coverage gap while keeping archive + `expand`. Reuse T65.1–T65.4 ideas already taken from sqz; extend rule families where sqz still wins. Sourced savings: sqz self-reports 24.7 % over 3,003 compressions (`research.md` §11); rtok on that corpus is **no data** until the harness runs.
 
-Check: a coverage table vs sqz in `docs/comparison/rtok-vs-sqz.md`; at least the top gap families from `rtok discover` (T661) gain rules; `just check`.
+Check: a coverage table vs sqz in `docs/comparison/rtok-vs-sqz.md`; at least the top gap families from `rtok discover` (T688) gain rules; `just check`.
 
-Plan: read `docs/comparison/rtok-vs-sqz.md`; build the coverage table sqz-formatter → rtok rule; add rules (in `rules/default.toml` through the existing rule engine, no new engine) for the top missing families, each with a fixture and a no-worse-than-raw test. `rtok discover` (T661) is not on main: pick families by the sqz list and say so in the card.
+Plan: read `docs/comparison/rtok-vs-sqz.md`; build the coverage table sqz-formatter → rtok rule; add rules (in `rules/default.toml` through the existing rule engine, no new engine) for the top missing families, each with a fixture and a no-worse-than-raw test. `rtok discover` (T688) ranks the families your own history runs; read it with the sqz list.
 
 ### T663. Push graph reference precision toward LSP-grade (serena)
 
