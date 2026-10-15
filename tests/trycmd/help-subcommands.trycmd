@@ -91,6 +91,18 @@ Options:
       --price                 Show per-model USD costs from `[stats.prices]` (`--price`)
   -h, --help                  Print help
 
+$ rtok discover --help
+Shell commands your agents ran that have no rule or formatter, most output first
+
+Usage: rtok discover [OPTIONS]
+
+Options:
+      --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
+      --since <SINCE>  How far back to read recorded shell calls (`30d`, `24h`) [default: 30d]
+      --limit <LIMIT>  Rows to print, most output first [default: 20]
+      --json           JSON instead of the table
+  -h, --help           Print help
+
 $ rtok bench --help
 A/B benchmark of host configurations
 

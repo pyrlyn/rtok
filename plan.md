@@ -4,6 +4,98 @@ https://github.com/pyrlyn/rtok
 
 Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured reductions, pluggable methods.
 
+## Security audit findings (2026-10-14)
+
+Find-only security review of `main` at `cd9644881` (OWASP Top 10, injection, path handling,
+access control, data at rest, CI supply chain). Nothing was fixed or exploited. Line numbers are
+as of that commit. Overlap with the closed audit PR #601 (config validation, `filter`, `memory
+import`, exit codes): none; these are new. To take one, give it a T-id, a row and a `Check:` line.
+
+| # | Severity | Finding | Where |
+| --- | --- | --- | --- |
+| S1 | high | `rtok mcp --http` started in `/` or `$HOME` lets a token holder read any file there | `src/plugins/read/mod.rs:212`, `src/mcp/http.rs:110` |
+| S2 | medium | Dashboard WebSocket has no authentication; any local user (or LAN host if bound wide) can change config, run `doctor --fix` and clear junk | `src/web/mod.rs:226`, `:259`, `:433` |
+| S3 | medium | `~/.rtok` store, archive and logs are world-readable (prompts, tool output, file contents) | `crates/rtok-store/src/handle.rs:18`, `crates/rtok-store/src/lib.rs:444` |
+| S4 | medium | `read`/`search` (also over HTTP) serve secrets inside the project: `.env`, `.git/config`, keys | `src/plugins/read/mod.rs:212` |
+| S5 | low | Proxy `/live` and `/health` answer without auth; with `proxy.bind = 0.0.0.0` they leak models and paths | `src/proxy/mod.rs:255` |
+| S6 | low | `host_authority` takes the last comma-separated `Host` value | `src/web/mod.rs:301` |
+| S7 | low | Resident hook socket is chmod-ed after `bind`, a short window at the umask mode | `src/hooks/resident.rs:71` |
+| S8 | low | `rtok mcp --http` is plain HTTP; the bearer token crosses the network in clear unless a TLS proxy fronts it | `src/mcp/http.rs:110` |
+
+### S1. HTTP MCP `read` exposes the whole launch directory
+
+The path guard allows everything under the process cwd (`resolve_with`). `walk_root_ok` refuses
+`/` and `$HOME` for walks (`search`, `tree`), but a single-file `read` has no such check. A
+`rtok mcp --http` started from a home directory (launchd, a service unit, Claude.app's `/`) lets
+any holder of the bearer token read `~/.ssh/id_*`, `~/.aws/credentials`, `~/.rtok/rtok.db`.
+Impact: remote file disclosure for the HTTP surface (`http_tools` includes `read` by default).
+Fix: refuse to start `--http` when cwd is unwalkable unless `allow_paths` names a project, and
+apply `walk_root_ok` to `read` roots on the HTTP surface.
+
+### S2. Dashboard WebSocket is unauthenticated
+
+`origin_allowed` returns `true` when no `Origin` header is sent, which covers every non-browser
+client. The socket accepts `set` (allow-listed config keys), `doctor` `apply` (writes host
+configs), `junk` `apply` (removes files), `expand` (archived prompt and tool bodies), `graph` and
+`export`. On a shared machine any local user can reach `127.0.0.1:3333`; with `web.host =
+0.0.0.0` any LAN host can. The browser side (CSRF, DNS rebinding) is handled well.
+Impact: broken access control, data disclosure and destructive actions as the owner.
+Fix: issue a per-run random token (printed in the URL like Jupyter), require it on `/ws`, refuse
+non-loopback `web.host` without it.
+
+### S3. Data at rest is world-readable
+
+`create_dir_all` and the SQLite/archive writers use the umask. On the author's Mac: `~/.rtok`
+0755, `rtok.db` 0644 (917 MB with `call_io` request/response bodies), `archive/` 0755,
+`errors.log` 0644. Other local accounts can read prompts, code and tool output.
+Impact: data leak on multi-user hosts and in backups. Fix: create `~/.rtok`, the archive dir and
+log dir with 0700 and files with 0600; `rtok doctor` warns on and fixes looser modes.
+
+### S4. No secret-file deny list on `read`
+
+Nothing stops `read` from returning `.env`, `.env.*`, `.git/config` (embedded tokens), `*.pem`,
+`id_*`. Over stdio the host's own tools can read them too, but the HTTP surface is meant for
+remote callers, and archived copies then land in the world-readable store (S3).
+Fix: a default `plugins.read.deny_globs` (overridable), enforced for HTTP always.
+
+### S5. Proxy status routes without auth
+
+`/live` returns method, path, provider and model of recent calls; `/health` returns config
+flags. Harmless on loopback, a small leak when `proxy.bind` is widened. Fix: serve them only on
+loopback peers, or behind the same token as S2.
+
+### S6. Ambiguous `Host` handling
+
+`host_authority` splits on `,` and keeps the last part. A repeated or comma-joined `Host` is not
+a valid request; picking one part can let a crafted request pass the Origin/Host equality.
+Fix: reject a `Host` containing `,` (400).
+
+### S7. Socket mode set after bind
+
+`UnixListener::bind` creates the socket with the umask mode and `set_permissions` runs after.
+Fix: create it inside a 0700 directory (or set umask around bind).
+
+### S8. Plain-HTTP bearer token
+
+The docs should say that `--http` on a non-loopback address must sit behind TLS; better, refuse
+a non-loopback bind without `public_url` using `https`.
+
+### Not run or blocked
+
+`cargo audit` could not load `~/.cargo/advisory-db` (directory present but broken; left as is).
+Tests and lints were not re-run (find-only, no code changed). CI workflows were reviewed:
+`graph-review-comment.yml` handles untrusted artifacts well (size caps, PR head SHA check).
+
+### Improvement ideas (opinion)
+
+- I-S1. A single "exposure" check in `rtok doctor`: wide binds, missing tokens, file modes.
+- I-S2. Pin GitHub Actions to commit SHAs in `release.yml` (currently tags like `@v6`).
+- I-S3. Split `~/.rtok/archive` into hashed subdirectories; it holds tens of thousands of files
+  in one directory, slow to list and back up.
+- I-S4. Retention for `call_io` bodies by default (the store reached 917 MB here).
+- I-S5. A `security.md` threat model naming each surface (hooks, stdio MCP, HTTP MCP, proxy,
+  dashboard) and who is trusted on it, so new routes get a checklist.
+
 ## Cloud review findings (2026-10-08)
 
 New bugs, dead code and moves from a read-only Cursor cloud review of `main` at `a060af58` (agent `bc-e07c8099-22ee-5d00-b1c7-3bd1ad623d52`; full report: `cloud/rtok.md` in the private `listepo/roadmap` repo). They take ids T457–T470, ordered P0, P1, P2, P3. **confirmed** means seen in the tree; **suspected** means plausible from the code but not proven (nothing was run on Windows). Line numbers are as of the review. The report's own labels T436–T449 are roadmap ids, not this plan's. T457, T458 and T459 are done (`done.md`). None of the rest is in the task table yet: to take one, add its row and a card with a `Check:` line.
@@ -19,9 +111,8 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 
 | # | Status | Priority | Complexity | Readiness | Agent |
 | --- | --- | --- | --- | --- | --- |
-| T124 | todo | P3 | 2 | 0% | |
+| T124 | todo | P3 | 2 | 60% | |
 | T131 | todo | P2 | 3 | 70% | |
-| T134 | todo | P1 | 2 | 40% | |
 | T156 | in progress | P3 | 3 | 50% | Claude Code / claude-opus-5-5 |
 | T261 | in progress | P2 | 3 | 95% | Cursor / grok 4.7 |
 | T275 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
@@ -40,10 +131,10 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T385 | in progress | P1 | 5 | 20% | Claude Code / opus-5-5 |
 | T385.3 | todo | P1 | 3 | 20% | |
 | T385.9 | in progress | P3 | 5 | 70% | Claude Code / claude-opus-5-5 |
-| T385.9.3 | todo | P3 | 2 | 0% | |
+| T385.9.3 | todo | P3 | 2 | 10% | |
 | T394 | todo | P2 | 2 | 20% | |
 | T395 | todo | P3 | 2 | 20% | |
-| T396 | todo | P3 | 2 | 85% | |
+| T396 | todo | P3 | 2 | 90% | |
 | T398 | todo | P3 | 1 | 30% | |
 | T413 | todo | P2 | 3 | 0% | |
 | T413.13 | todo | P3 | 2 | 0% | |
@@ -71,7 +162,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T665 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T666 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T667 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T668 | todo | P2 | 3 | 0% | |
 | T669 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T670 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T671 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
@@ -100,9 +190,9 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 
 sqz ships 45+ formatters and a stack-trace safe mode; rtok has fewer families (`docs/comparison/rtok-vs-sqz.md`). Close the coverage gap while keeping archive + `expand`. Reuse T65.1–T65.4 ideas already taken from sqz; extend rule families where sqz still wins. Sourced savings: sqz self-reports 24.7 % over 3,003 compressions (`research.md` §11); rtok on that corpus is **no data** until the harness runs.
 
-Check: a coverage table vs sqz in `docs/comparison/rtok-vs-sqz.md`; at least the top gap families from `rtok discover` (T661) gain rules; `just check`.
+Check: a coverage table vs sqz in `docs/comparison/rtok-vs-sqz.md`; at least the top gap families from `rtok discover` (T688) gain rules; `just check`.
 
-Plan: read `docs/comparison/rtok-vs-sqz.md`; build the coverage table sqz-formatter → rtok rule; add rules (in `rules/default.toml` through the existing rule engine, no new engine) for the top missing families, each with a fixture and a no-worse-than-raw test. `rtok discover` (T661) is not on main: pick families by the sqz list and say so in the card.
+Plan: read `docs/comparison/rtok-vs-sqz.md`; build the coverage table sqz-formatter → rtok rule; add rules (in `rules/default.toml` through the existing rule engine, no new engine) for the top missing families, each with a fixture and a no-worse-than-raw test. `rtok discover` (T688) ranks the families your own history runs; read it with the sqz list.
 
 ### T663. Push graph reference precision toward LSP-grade (serena)
 
@@ -143,14 +233,6 @@ engram has more memory features (HTTP + MCP) (`docs/comparison/rtok-vs-engram.md
 Check: feature list and take/skip in the comparison file; tests for what shipped; `just check`.
 
 **Plan.** From `docs/comparison/rtok-vs-engram.md` (PR #1071): engram has relation judging, pinned-first recall and project identity from the origin remote that rtok lacks. Relation judging spends model output on bookkeeping: **skip**. (1) Check which of pinned-first recall and origin-remote project identity already exist (`mem_update pinned`, `project_name`); fail-first tests on `tests/fixtures/p29_memory.toml`-style fixtures for the missing ones. (2) Implement only what raises recall on rtok's own memory bench with no new MCP tool and no daemon. (3) Write the take/skip list into the comparison file (or `research.md` while #1071 is open); `just check`.
-
-### T668. Opt-in semantic memory path (mem0 idea)
-
-mem0 is ahead for semantic/vector memory (`docs/comparison/rtok-vs-mem0.md`). Keep rtok's cheap note path default; optional embedding search behind a flag, no Docker/Qdrant required for the default build. Savings both sides: **no data** (harness skips; needs API/models).
-
-Check: default build has no vector dependency; opt-in path documented; `just check`.
-
-**Status (not claimed).** Needs the creator before any code: P29 already ships opt-in `[embed]` with a deterministic hash embedder (`crates/rtok-store/src/embed.rs`), so the remaining work is a real embedding model (a local ONNX/candle model is a heavy dependency; a remote API is paid). Pick the provider/model (or accept a local model's size) and the cost cap first.
 
 ### T669. Hybrid memory ranking and forgetting (graymatter)
 
@@ -278,16 +360,15 @@ Progress (2026-09-25): the cost row was already recorded by T130.1 (`memory`/`br
 
 Plan: finish only the agent-doable part: confirm the fixture/cost-row tests still pass and add whatever small piece the Progress line lacks. The dated flag-on window, the `research.md` §17 net and the default decision need the creator's paid live run: leave them in the card and set the row back to `todo` at 70 %.
 
+Local attempt (2026-10-15): not possible on LM Studio (`prism-ml/bonsai-27b`): the model fails a single-turn read task, so a briefed/plain sub-agent comparison would only measure noise; nothing recorded in `research.md` §17.
+
 Remaining work needs the creator: the fixture and cost-row tests (`tests/hook_spawn_brief.rs`, `briefed_and_plain_subagents_split_the_reread_share`) are in place and pass; the dated flag-on window, the `research.md` §17 net and the default decision need a paid live run.
 
-### T134. Probe: does a CLI command hook's `PostToolUse` `updatedToolOutput` replace native tool output?
-Gate for I-91 (`research.md` §17.2). The Agent SDK hooks page says `updatedToolOutput` "works for any tool"; rtok's standing rule says PostToolUse can only add context. If the CLI honours it, native Read/Bash output could be shrunk in place (pointer + `expand <id>`) instead of wrapped or denied — that changes the design of `cmd`, `read` and `guard`, so it is a creator decision, not a silent change. No product code in this task.
-Plan: throwaway hook script (scratch, not committed) returning `hookSpecificOutput.updatedToolOutput` for `Read` and `Bash` on the current Claude Code; run one Read and one Bash; check what the model received in the transcript. Repeat for an MCP tool.
-Check: a dated row in `research.md` §3 with the Claude Code version, the payload sent and what the transcript shows, per tool kind. Honoured → the `AGENTS.md` rule line and I-91 are put to the creator with the row; not honoured → I-91 closes with the date.
-Progress (2026-09-25, `research.md` §3 "T134"): Claude Code 2.1.267; the CLI hooks page lists no `updatedToolOutput` for `PostToolUse` (only `additionalContext`, `systemMessage`, `terminalSequence`), the Agent SDK page does. The live run is blocked in agent sessions (`claude -p` fails with an expired OAuth session, as in T53.1); left: the creator runs the scratch probe (hook logging the payload and returning `updatedToolOutput`, one Bash / Read / MCP call on `--model haiku`) from a real terminal, and the per-tool verdict goes into the row.
 ### T124. Realized `tools_rewrite` saving as a dated `research.md` row
 6.2 % (T59.5) is the ceiling, not a saving: no dated row shows what `[proxy.tools_rewrite]` removes with the default `max_description_tokens = 60`. Precondition, by the creator: turn it on for this machine's proxy for at least 20 sessions. Then sum the `kind = tools_rewrite` Measurement rows against session input for the same window (`rtok stats` / `rtok gain`, dated command in the row), and write one row into `research.md` §2 next to the T59.5 row; update `docs/comparison.md` only if it cites the number. If the realized share is under the 3 % gate, say so in the row and leave the default off.
 Check: the row cites the command, date, sessions, before/after tokens and the share; no number in prose without it.
+
+Progress (2026-10-15, `research.md` §2): a local reference run (20 one-request sessions through a scratch proxy to LM Studio) puts the saving at 16.2 K tokens per request (42.0 % of a bare request, API-counted); the row says it is not the gate. Left: the creator's 20 real sessions on this machine's own proxy, and an answer-quality check with truncated built-in tool descriptions. Default stays off.
 
 ### T156. Probe: `WorktreeCreate`/`WorktreeRemove` hooks and reflink-seeded `target/`
 
@@ -771,6 +852,8 @@ Part of T385.9, after T385.9.2. `rtok bench` cost per passed task with the compr
 
 Check: the dated `research.md` row with cost per passed task, pass rate and compressor tokens.
 
+Progress (2026-10-15, `research.md` §16.9): a local attempt on LM Studio (`prism-ml/bonsai-27b`) gave no evidence: the control arm returned an empty answer, and with the flag on the compressor never fired (0 summaries). Left: a bench that can pass its control (a capable model), tasks with more than `keep_turns` turns after the large results, and a compressor arm in `rtok bench`; the paid run still needs the creator.
+
 ### T394. Run the paid live benches and record them
 
 From `research.md` §3 (coaching nudges A/B) and §2 (A/B bench T9.2, `graph` T68.9): every live arm is unrun ("No live token, cache, or USD rows … the gate is do not enable"; T68.9 "Live API clause remains open"). Gate P9 and P8b clause 4 stay open until they run. Needs the creator's session and API spend: an agent sandbox cannot run them (OAuth expired).
@@ -797,7 +880,7 @@ Check: a fixture per confirmed shape; §30 updated with dates; `just check`.
 
 Execution plan (2026-10-12): 1. run the Kilo, Gemini CLI, Copilot CLI and pi readers read-only on this machine's own files and record the observed shapes (no content); 2. a synthetic fixture per confirmed shape; 3. check whether a resumed Copilot session writes cumulative or run-only shutdown totals and stop double counting if needed (test first); 4. date each §30 tag; Grok `signals.json` stays unverified until the creator decides.
 
-Progress (2026-10-12, `research.md` §30): Copilot CLI 1.0.80 — `tokenDetails` is authoritative (it equals `usage` plus the compaction requests), the reader now takes it (`token_details_carry_the_compaction_requests_that_usage_leaves_out`, fail-first), and `inputTokens` including the cache legs is confirmed. pi 0.85.1 — reader sums match an independent sum over 953 entries; fixture for the `reasoning`/`cacheWrite1h` shape; fork id copying confirmed from source, not observed. Copilot resume: the reader keeps the last shutdown per session, cumulative per the SDK source (`github/copilot-sdk` 6be623b, `nodejs/src/generated/session-events.ts`; fail-first `a_resumed_session_counts_its_last_shutdown_not_the_sum_of_all`), not yet seen in a real resumed log. Left: a Kilo message row (this machine's db has none), Gemini CLI (not installed here), Grok `signals.json` (observed keys accepted by the creator 2026-10-13, but grok 1.0.34 wrote no `signals.json` in this machine's 3 sessions, `research.md` §30.7). Rechecked 2026-10-13: still 0 Kilo `message` rows and no Gemini chat files. Needs the creator to run one Kilo, one Gemini CLI and one Grok session, then a reader and fixture per shape.
+Progress (2026-10-12, `research.md` §30): Copilot CLI 1.0.80 — `tokenDetails` is authoritative (it equals `usage` plus the compaction requests), the reader now takes it (`token_details_carry_the_compaction_requests_that_usage_leaves_out`, fail-first), and `inputTokens` including the cache legs is confirmed. pi 0.85.1 — reader sums match an independent sum over 953 entries; fixture for the `reasoning`/`cacheWrite1h` shape; fork id copying confirmed from source, not observed. Copilot resume: the reader keeps the last shutdown per session, cumulative per the SDK source (`github/copilot-sdk` 6be623b, `nodejs/src/generated/session-events.ts`; fail-first `a_resumed_session_counts_its_last_shutdown_not_the_sum_of_all`), not yet seen in a real resumed log. Left: a Kilo message row (this machine's db has none), Gemini CLI (not installed here), Grok `signals.json` (observed keys accepted by the creator 2026-10-13, but grok 1.0.34 wrote no `signals.json` in this machine's 3 sessions, `research.md` §30.7). Rechecked 2026-10-13: still 0 Kilo `message` rows and no Gemini chat files. Kilo done 2026-10-15 (`research.md` §30.1: a real `message` row read through LM Studio, fixture added). Still needs the creator to run one Gemini CLI (not installed here) and one Grok session (xAI-only, not runnable on a local model), then a reader and fixture per shape.
 
 ### T398. Probe editors on a `worktree.useRelativePaths` worktree
 

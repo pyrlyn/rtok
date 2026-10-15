@@ -197,7 +197,37 @@ rtk is broader: the 61 `none` rows below, mostly ecosystems rtok has no family f
 
 Sources (all checked 2026-10-15): [`src/discover/rules.rs`](https://github.com/rtk-ai/rtk/blob/5eb0509690a6f0110bb9bdd453fcf75c480e0d05/src/discover/rules.rs), [`src/filters/`](https://github.com/rtk-ai/rtk/tree/5eb0509690a6f0110bb9bdd453fcf75c480e0d05/src/filters), [`src/cmds/`](https://github.com/rtk-ai/rtk/tree/5eb0509690a6f0110bb9bdd453fcf75c480e0d05/src/cmds), release [v1.0.1](https://github.com/rtk-ai/rtk/releases/tag/v1.0.1). The `rtk implementation` column is matched by file name, so `rewrite rule only` means no file of that name, not that rtk has no filter.
 
-Close the gap in order: run `rtok discover` on your own history first. It lists the commands your agents actually ran that have no rtok filter, ranked by the output tokens they read, so the next rule family is picked from your data rather than from this table.
+Close the gap in order, and not all of it: a family is worth a rule only if agents run it. `rtok discover --since 30d --limit 20` ranks exactly that from the local store. It reads the recorded `PostToolUse` Bash bodies, unwraps the `rtok run --` wrapper, buckets each command with the family bucketing `rtok stats` uses, drops the families that already have a formatter or a named rule, and lists the rest by the output tokens that reached the model. Bodies over `core.call_io_inline_bytes` are not stored inline, so the biggest outputs can be missing and the numbers are a floor.
+
+### By area
+
+The same data grouped by ecosystem, with the gap named per area. The rtok side of this table was cross-checked at rtok commit `1932bc928`; the rtk side is the same `v1.0.1` tree as above. Where rtok is broader: `sqlite3`, `awk` and `apt` have no rtk counterpart in the tree; every rtok filter writes a `Measurement` row, archives the raw output for `rtok expand`, and runs from hooks, MCP and the proxy, which rtk's filters do not.
+
+| Area | rtk (filter or module) | rtok | Gap |
+|---|---|---|---|
+| Version control | `git`, `diff`, `gh`, `glab`, `gt`, `jj`, `yadm` | `git` formatter, `gh` rule | `glab`, `gt`, `jj`, `yadm` |
+| Rust | `cargo` (+ runner) | `cargo` formatter and rule | none |
+| Go | `go`, `golangci-lint` | `go` formatter and rule | `golangci-lint` |
+| JavaScript | `npm`, `pnpm`, `bun`, `deno`, `next`, `nx`, `turbo`, `playwright`, `prettier`, `prisma`, `tsc`, `vitest`, lint, `biome`, `oxlint` | `npm`, `pnpm`, `node`, `tsc`, `eslint` rules; `jest`, `vitest` formatters | `bun`, `deno`, `next`, `nx`, `turbo`, `playwright`, `prettier`, `prisma`, `biome`, `oxlint` |
+| Python | `pytest`, `pip`, `uv`, `mypy`, `ruff`, `sqlfluff`, `poetry-install`, `basedpyright`, `ty`, `uv-sync` | `pytest` formatter; `pip`, `uv`, `python`, `python3` rules | `mypy`, `ruff`, `sqlfluff`, `poetry`, `basedpyright`, `ty` |
+| JVM and .NET | `mvn`, `gradlew`, `sbt`, `dotnet` (build, format, trx), `spring-boot` | `mvn`, `gradle`, `dotnet` rules | `sbt`, `spring-boot`, `dotnet` format/trx |
+| PHP and Ruby | `artisan`, `ecs`, `paratest`, `pest`, `phpstan`, `phpunit`, `pint`, `rake`, `rspec`, `rubocop`, `bundle-install`, `composer-install`, `mix` | none | all |
+| C, C++ and Apple | `gcc`, `ctest`, `xcodebuild`, `swift-build`, `pio-run`, `make` | `make`, `cmake` rules | `gcc`, `ctest`, `xcodebuild`, `swift-build`, `pio-run` |
+| Containers and cloud | `docker`/`container`, `kubectl`, `helm`, `aws`, `gcloud`, `skopeo`, `hadolint`, `terraform`, `tofu`, `pulumi`, `ansible-playbook`, `sops` | `docker`, `kubectl` formatters; `aws` rule | `helm`, `gcloud`, `skopeo`, `hadolint`, `terraform`/`tofu`, `pulumi`, `ansible-playbook`, `sops` |
+| System | `ls`, `find`, `tree`, `df`, `du`, `ps`, `stat`, `wc`, `env`, `ping`, `ssh`, `rsync`, `systemctl-status`, `iptables`, `fail2ban-client`, `curl`, `wget`, `psql`, `jq` | `ls`, `find`, `curl` rules; `tree`, `df`, `ps` formatters | `du`, `stat`, `wc`, `env`, `ping`, `ssh`, `rsync`, `systemctl`, `iptables`, `fail2ban-client`, `wget`, `psql`, `jq` |
+| Search and files | `search`, `read`, `log` | `grep`, `rg`, `sed`, `cat`, `awk` rules | none (`log` is covered by the shared head/tail/dedupe pass) |
+| Lint and CI | `shellcheck`, `yamllint`, `markdownlint`, `pre-commit`, `trunk-build`, `liquibase` | none | all |
+| Task runners | `just`, `mise`, `task` | wrapper peel (`just -c`, `mise exec`, echoed recipe line) | `task` |
+| Misc | `jira`, `ollama`, `shopify-theme`, `quarto-render`, `brew-install` | `brew`, `apt` rules, `sqlite3` formatter | `jira`, `ollama`, `shopify-theme`, `quarto-render` |
+
+### Savings, sourced only
+
+| Case | rtok saved | rtk saved | Source |
+|---|---|---|---|
+| bash bytes cut (author corpus, 5,725 cmds) | no data | 40.4 % (1.1 M of 2.8 M bytes) | `research.md` §2 A/B (T9.2) |
+| claimed bash cut | no data | 60–90 % (claim) | `research.md` §2 |
+| agentic bill (JetBrains) | no data | +7.6 % to 0 % (worse/neutral) | `research.md` §1, §7 |
+| head-to-head harness (`bench/competitors/rtk`) | see "Results" above | see "Results" above | `bench/harness/results/rtk/20261014-231100/summary.md` |
 
 ## Command table
 

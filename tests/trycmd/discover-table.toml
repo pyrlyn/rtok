@@ -7,4 +7,4 @@ args = "--config tests/trycmd/input/json-readers.toml discover"
 inherit = false
 
 [env.add]
-RTOK_HOME = "target/tmp/t661-discover-table"
+RTOK_HOME = "target/tmp/t688-discover-table"

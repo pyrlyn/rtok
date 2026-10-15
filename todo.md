@@ -1,7 +1,6 @@
 - T124. Realized `tools_rewrite` saving as a dated `research.md` row
 
 - T131. Measure the spawn brief: cost row and on/off re-read share
-- T134. Probe: does a CLI command hook's `PostToolUse` `updatedToolOutput` replace native tool output?
 
 - T156. Probe: `WorktreeCreate`/`WorktreeRemove` hooks and reflink-seeded `target/`
 - T261. CI takes ~9.5 min on macOS; the webui check recompiles 183 crates every run
@@ -52,7 +51,6 @@
 - T665. Broader graph queries (codebase-memory-mcp)
 - T666. Optional automatic memory extraction (claude-mem idea)
 - T667. Richer memory features from engram
-- T668. Opt-in semantic memory path (mem0 idea)
 - T669. Hybrid memory ranking and forgetting (graymatter)
 - T670. Read modes lean-ctx still has
 - T671. Memory admission gate (MemPalace idea)

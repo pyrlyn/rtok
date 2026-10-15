@@ -582,10 +582,13 @@ forget_after_days = 90                # T669: «memory forget» вилучає �
 
 [plugins.memory.embed]
 enabled    = false                    # P29: якщо false — лише FTS5; векторний пошук вмикається явно
-provider   = "local"                  # "local" | "openai"
-model      = "all-MiniLM-L6-v2"
-dimensions = 384
+provider   = "local"                  # "local" = офлайн-хеш-вектори | "http" = OpenAI-сумісний API ембедингів
+model      = "all-MiniLM-L6-v2"       # "http": назва моделі на сервері
+dimensions = 384                      # "http": має збігатися з довжиною вектора сервера
 hybrid     = true                     # коли ввімкнено: RRF(fts5, knn) для mem_search і prompt_recall; хук читає лише збережені вектори; false = лише knn
+url         = ""                      # "http": базовий URL, напр. "http://localhost:11434/v1" (Ollama) або "https://api.openai.com/v1"; текст нотаток надсилається туди
+api_key_env = ""                      # "http": назва змінної середовища з ключем; порожньо = без заголовка Authorization
+max_chars   = 8000                    # "http": довший текст не надсилається (працює звичайний пошук по нотатках)
 
 [plugins.graph]
 enabled    = true
