@@ -28,7 +28,8 @@ pub fn run_with_store(cfg: &Config, cmd: &str, input: &str) -> String {
     };
     // The id is the body's sha256, so the filter can name it before any store write.
     let id = crate::store::hex_sha256(input.as_bytes());
-    let (filtered, kind) = formatters::compress(&settings, &argv, input, 0, &id);
+    let (filtered, kind) =
+        formatters::compress(&settings, &argv, input, 0, crate::names::short_id(&id));
     let lines = if input.is_empty() {
         0
     } else {
@@ -38,7 +39,7 @@ pub fn run_with_store(cfg: &Config, cmd: &str, input: &str) -> String {
     // nothing references the id, so the archive row is skipped too. An inline
     // `expand <id>` marker already is the pointer and suppresses the trailer, but the
     // archive it names must exist.
-    let named = super::run::names_the_id(&filtered, &id);
+    let named = super::run::names_the_id(&filtered, crate::names::short_id(&id));
     let pointer = cfg.plugins.cmd.trailer
         && super::run::needs_pointer(
             lines,

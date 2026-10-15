@@ -20,7 +20,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | # | Status | Priority | Complexity | Readiness | Agent |
 | --- | --- | --- | --- | --- | --- |
 | T124 | todo | P3 | 2 | 0% | |
-| T131 | todo | P2 | 3 | 70% | |
+| T131 | in progress | P2 | 3 | 70% | Claude Code / claude-sonnet-5-5 |
 | T134 | todo | P1 | 2 | 40% | |
 | T156 | in progress | P3 | 3 | 50% | Claude Code / claude-opus-5-5 |
 | T261 | in progress | P2 | 3 | 95% | Cursor / grok 4.7 |
@@ -66,7 +66,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T526 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T527 | in progress | P2 | 3 | 0% | MiMo / mimo |
 | T661 | todo | P2 | 3 | 0% | |
-| T662 | todo | P2 | 3 | 0% | |
+| T662 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T663 | todo | P2 | 3 | 0% | |
 | T664 | todo | P2 | 3 | 0% | |
 | T665 | todo | P2 | 3 | 0% | |
@@ -74,23 +74,24 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T667 | todo | P2 | 3 | 0% | |
 | T668 | todo | P2 | 3 | 0% | |
 | T669 | todo | P2 | 3 | 0% | |
-| T670 | todo | P2 | 3 | 0% | |
+| T670 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T671 | todo | P2 | 3 | 0% | |
-| T672 | todo | P2 | 3 | 0% | |
-| T673 | todo | P2 | 3 | 0% | |
-| T674 | todo | P2 | 3 | 0% | |
-| T675 | todo | P2 | 3 | 0% | |
-| T676 | todo | P2 | 3 | 0% | |
-| T677 | todo | P2 | 3 | 0% | |
-| T678 | todo | P2 | 3 | 0% | |
-| T679 | todo | P2 | 3 | 0% | |
-| T680 | todo | P2 | 3 | 0% | |
-| T681 | todo | P2 | 3 | 0% | |
-| T682 | todo | P2 | 3 | 0% | |
-| T683 | todo | P2 | 3 | 0% | |
-| T684 | todo | P2 | 3 | 0% | |
-| T685 | todo | P2 | 3 | 0% | |
-| T686 | todo | P2 | 3 | 0% | |
+| T673 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T674 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T675 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T676 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T677 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T678 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T679 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T680 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T681 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T682 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T683 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T684 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T685 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T686 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T901 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
+| T902 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
 
 
 
@@ -120,6 +121,8 @@ Check: unit tests for ranking and "no filter" detection on a fixture DB; trycmd 
 sqz ships 45+ formatters and a stack-trace safe mode; rtok has fewer families (`docs/comparison/rtok-vs-sqz.md`). Close the coverage gap while keeping archive + `expand`. Reuse T65.1–T65.4 ideas already taken from sqz; extend rule families where sqz still wins. Sourced savings: sqz self-reports 24.7 % over 3,003 compressions (`research.md` §11); rtok on that corpus is **no data** until the harness runs.
 
 Check: a coverage table vs sqz in `docs/comparison/rtok-vs-sqz.md`; at least the top gap families from `rtok discover` (T661) gain rules; `just check`.
+
+Plan: read `docs/comparison/rtok-vs-sqz.md`; build the coverage table sqz-formatter → rtok rule; add rules (in `rules/default.toml` through the existing rule engine, no new engine) for the top missing families, each with a fixture and a no-worse-than-raw test. `rtok discover` (T661) is not on main: pick families by the sqz list and say so in the card.
 
 ### T663. Push graph reference precision toward LSP-grade (serena)
 
@@ -168,6 +171,8 @@ Check: ranking/forget tests on a fixture store; comparison file updated; `just c
 lean-ctx is ahead on read-mode count and a learned mode predictor (`docs/comparison/rtok-vs-lean-ctx.md`). Add only modes that beat rtok's per-turn cost on a replay. Sourced: lean-ctx 0 output saved and ~3.0–3.1 K tokens/turn inject; rtok ~800 token budget / ~223 description tokens (`research.md` §4, `docs/comparison.md` §2).
 
 Check: each new mode has a fixture test and a cost row; no banner-style per-turn inject; `just check`.
+
+Plan: list lean-ctx read modes missing in `src/plugins/read` (see `docs/comparison/rtok-vs-lean-ctx.md`); add only modes that beat rtok per-turn cost on a replay over the existing fixtures, reusing existing mode plumbing; one fixture test and one cost row per mode; no per-turn banner inject.
 
 ### T671. Memory admission gate (MemPalace idea)
 
@@ -266,6 +271,9 @@ Rule: a saving that is not a `Measurement` row does not exist, and the brief is 
 Plan: T130.1's hook records a `Measurement` (`plugin: "memory"`, `kind: "brief"`) with the tokens it added (before = 0, after = brief) so the cost shows as negative saving; `rtok stats` `subagents` row splits the re-read share and sub-agent input tokens by "spawned with a brief" (the brief's archive id in the sub-agent's first user message) vs without.
 Check: fixture with one briefed and one plain sub-agent asserts the split; after a dated window with the flag on, `research.md` §17 gets the measured net; default flips to on only if net tokens saved > 0 — otherwise the card closes with the number and T130 stays off.
 Progress (2026-09-25): the cost row was already recorded by T130.1 (`memory`/`brief`, before 0, after = brief tokens); `tests/hook_spawn_brief.rs` now asserts one row per fired brief and none otherwise. `rtok stats` splits the `subagents` re-read share and input tokens into `brief` / `no brief`, detected by `measure::subagents::SPAWN_BRIEF_MARKER` in a sub-agent's first user message (a `handoff.rs` test pins it inside the brief's `INSTRUCTIONS`); fixture test `briefed_and_plain_subagents_split_the_reread_share`. Left: the dated window with the flag on, the net in `research.md` §17, and the default decision.
+
+Plan: finish only the agent-doable part: confirm the fixture/cost-row tests still pass and add whatever small piece the Progress line lacks. The dated flag-on window, the `research.md` §17 net and the default decision need the creator's paid live run: leave them in the card and set the row back to `todo` at 70 %.
+
 ### T134. Probe: does a CLI command hook's `PostToolUse` `updatedToolOutput` replace native tool output?
 Gate for I-91 (`research.md` §17.2). The Agent SDK hooks page says `updatedToolOutput` "works for any tool"; rtok's standing rule says PostToolUse can only add context. If the CLI honours it, native Read/Bash output could be shrunk in place (pointer + `expand <id>`) instead of wrapped or denied — that changes the design of `cmd`, `read` and `guard`, so it is a creator decision, not a silent change. No product code in this task.
 Plan: throwaway hook script (scratch, not committed) returning `hookSpecificOutput.updatedToolOutput` for `Read` and `Bash` on the current Claude Code; run one Read and one Bash; check what the model received in the transcript. Repeat for an MCP tool.
@@ -1072,17 +1080,13 @@ Check: a test shows a dropped `Runtime::in_memory` leaves no directory behind, a
 
 Source: `docs/research/competitors-techniques.md` (techniques, licenses, links). Every card: keep 100 % of hashes, paths and WARN/ERROR lines, never more tokens than raw, stderr and exit line kept on failure.
 
-### T672. all (link line)
-
-Best competitor: sqz `§ref§` ~13 tok. Design: one short id `[rtok 1a2b3c4d · 111 lines]`, expand by prefix.
-
-Check: #1076 harness (`bench/c14`) shows −75 tok/call on this category with full anchor retention.
-
 ### T673. grep 2260, git grep 452, rg
 
 Best competitor: t-o 89.7 %, lean-ctx 89.6 %. Design: path printed once; matches as `line:text`; collapse common indentation; trim match text around the hit to ±60 chars keeping the match itself; per-file cap by match budget with `+N more (expand)`; files sorted by path (stable) not count; keep 100 % paths.
 
 Check: #1076 harness (`bench/c14`) shows ≥ 91 %, 100 % paths on this category with full anchor retention.
+
+Plan: new `grep_group` formatter in `src/plugins/cmd/compact.rs` wired in `formatters::format` for `grep`/`rg`/`git grep`: path once, `line:text` under it, common indent stripped, text trimmed to the match ±60 chars, per-file budget with `+N more (expand)`, files path-sorted; fall back to the rule when the shape is unknown. Tests: golden `grep_group*.in/out` with `min_saving:` plus a path-retention unit test. Measure on the existing grep fixtures (bench/c14 unmerged).
 
 ### T674. sed 2119 (`sed -n a,bp f`), cat 950, head 35, tail 155, awk
 
@@ -1090,11 +1094,15 @@ Best competitor: lean-ctx 91.4 % (`read` rewrite). Design: detect range-print of
 
 Check: #1076 harness (`bench/c14`) shows ≥ 93 % on `cat` source; re-read ≥ 95 % on this category with full anchor retention.
 
+Plan: for `cat <source>` without a range, emit signatures with elided bodies and line spans (reuse the tree-sitter outline already used by `rtok read`); for `sed -n a,bp f` keep the numbered range and, on a repeat in one session, print `unchanged since <id>` or a unified diff of the range (content hash kept in the archive store, no new table unless Diesel schema needs it). Tests: golden for cat source, session re-read unit tests. Stay under the bounded-passthrough rules in `bounded.rs`.
+
 ### T675. python3 1545
 
 Best competitor: none specialised. Design: detect pytest/unittest/traceback output: keep the full last traceback, collapse repeated frames, summary line; JSON stdout → TOON (#1078).
 
 Check: #1076 harness (`bench/c14`) shows ≥ t-o pytest (564→115) on this category with full anchor retention.
+
+Plan: add a `python` formatter in `compact.rs`: pytest/unittest output keeps the summary and the full last traceback, collapses repeated frames and repeated failing-test headers; JSON stdout is printed as a TOON table through the existing #1078 path if merged, otherwise left to a follow-up (written in this card). Tests: golden `python_pytest.in/out`, `python_traceback.in/out`.
 
 ### T676. gh 744
 
@@ -1102,11 +1110,15 @@ Best competitor: lean-ctx gh.rs. Design: `gh pr/issue view`: drop empty fields, 
 
 Check: #1076 harness (`bench/c14`) shows +20 pp vs current head/tail on this category with full anchor retention.
 
+Plan: `gh` formatter in `compact.rs`: `pr/issue view` drops empty fields and collapses markdown whitespace; `pr checks` keeps non-pass rows plus counts; `run view --log` keeps per-step error blocks; `--json` goes through the TOON helper if present. Tests: golden files per subcommand with `min_saving:`; failing check rows and URLs kept.
+
 ### T677. mise 660
 
 Best competitor: lean-ctx mise.rs. Design: drop install/progress lines, keep task header + failing task output; `mise run` = inner command formatter.
 
 Check: #1076 harness (`bench/c14`) shows ≥ lean-ctx on this category with full anchor retention.
+
+Plan: `mise` formatter: drop install/progress lines, keep the task header and a failing task's output, delegate `mise run <task>` output to the inner command formatter via the existing echoed-line peel in `formatters.rs`. Tests: golden `mise_*` fixtures, error lines and exit line kept.
 
 ### T678. for 570, until 231, while
 
@@ -1114,11 +1126,15 @@ Best competitor: caveman repetition. Design: loop output: normalise numbers/ids 
 
 Check: #1076 harness (`bench/c14`) shows ≥ 80 % on polling loops on this category with full anchor retention.
 
+Plan: new loop-output collapser in `compact.rs` used for `for`/`while`/`until` scripts: normalise digits/ids per line, collapse runs of same-shape lines into `shape ×N (vals: a..b)`, never collapse a line with an error word. Tests: golden polling-loop fixture with `min_saving: 80`, unit test that error lines stay verbatim.
+
 ### T679. ls 386
 
 Best competitor: lean-ctx 66.6 %. Design: ls -l → `name size` with dirs first, drop perms unless non-default (`x` bit, symlink target kept as `a -> b`); group by extension when > 30 entries.
 
 Check: #1076 harness (`bench/c14`) shows ≥ 72 % (= rtk) on this category with full anchor retention.
+
+Plan: #1077 already ships `ls -l` (dirs on one line, human sizes, exec marker, symlink target). Remaining: dirs first, group by extension above 30 entries, `ls -la` dotfiles. Extend `ls_l` in `compact.rs`; measure against the current golden `ls*` fixtures and raise their `min_saving:` floors to the new numbers.
 
 ### T680. git status 297
 
@@ -1126,11 +1142,15 @@ Best competitor: lean-ctx 40.5 %. Design: one line per section with paths groupe
 
 Check: #1076 harness (`bench/c14`) shows ≥ 60 % (rtk 62.5 %) on this category with full anchor retention.
 
+Plan: #1077 prints `git status` as porcelain XY codes. Remaining: group paths by directory (`src/plugins/cmd/{a,b}.rs`), one line per section, branch + ahead/behind, drop hints. Extend `git_status` in `compact.rs`; keep every path (test counts paths in/out); update golden `git_status*` floors.
+
 ### T681. git diff 272, git show 262
 
 Best competitor: t-o 97.9 % / sqz 44.4 %. Design: two tiers: ≤ budget → drop `index`, context 1, fold unchanged runs, strip common indent; > budget → per-file `path +A -D` table and hunk headers with function names, full hunks only for the N smallest files; 100 % paths always.
 
 Check: #1076 harness (`bench/c14`) shows ≥ 80 % big diff with 100 % paths (t-o keeps 51 %) on this category with full anchor retention.
+
+Plan: #1077 already drops `index`/`diff --git` lines. Remaining: two tiers in `compact::git_diff`: within budget context 1, folded unchanged runs, stripped common indent; above budget a per-file `path +A -D` table plus hunk headers with function names and full hunks only for the N smallest files; `git show` routed to the same code. Tests: big-diff golden with 100% paths, small-diff golden, `git show`.
 
 ### T682. git log 174
 
@@ -1138,11 +1158,15 @@ Best competitor: — (rtok wins after #1079). Design: keep #1079; add `[N commit
 
 Check: #1076 harness (`bench/c14`) shows keep lead on this category with full anchor retention.
 
+Plan: first confirm #1079 (git log one line) is merged; if not, branch on top of main without touching its hunks and keep this task `todo`. Then add a `[N commits, +A/-D]` header and drop the Author column when every author is equal in `src/plugins/cmd` git-log formatter; fixture test for both, fail-first; measure with `bench/fixtures` (the #1076 harness is not on main).
+
 ### T683. tail 155, cat *.log
 
 Best competitor: lean-ctx 87.4 % (rtok 94.5 %). Design: caveman-style field summary on collapsed runs: constant logfmt keys printed once.
 
 Check: #1076 harness (`bench/c14`) shows keep lead, +2 pp on this category with full anchor retention.
+
+Plan: extend the existing log run-collapser in `src/plugins/cmd` so collapsed logfmt runs print constant `key=value` pairs once and list only varying keys; keep error/WARN lines verbatim; fixture test asserting anchors retained and tokens ≤ raw, `expand <id>` returns raw; measure on `bench/fixtures` logs.
 
 ### T684. wc 102, cargo test/build/clippy
 
@@ -1150,14 +1174,36 @@ Best competitor: rtk / sqz. Design: wc: drop padding, keep `total`; cargo: #1077
 
 Check: #1076 harness (`bench/c14`) shows ≥ rtk on this category with full anchor retention.
 
+Plan: wc formatter drops padding and keeps `total`; cargo clippy/build warnings (on top of #1077) group by lint code `lint ×N (files…)`, keeping every distinct path and all errors; fixture tests per formatter; never worse than raw.
+
 ### T685. find 33
 
 Best competitor: rtok leads. Design: keep dir grouping but print full paths for ≤ 50 hits so the anchor check passes.
 
 Check: #1076 harness (`bench/c14`) shows 100 % paths, ≥ 69 % on this category with full anchor retention.
 
+Plan: in the find formatter print full paths for ≤ 50 hits (grouping only above that); fixture test asserting 100 % paths and fewer tokens than raw; measure on `bench/fixtures`.
+
 ### T686. MCP tool catalogs
 
 Best competitor: caveman 12–29 %. Design: `rtok mcp` proxy: first sentence of descriptions, drop default/examples that duplicate type, enum compaction; recovery via archive.
 
 Check: #1076 harness (`bench/c14`) shows ≥ 30 % on this category with full anchor retention.
+
+Plan: locate the `rtok mcp` proxy tool-description rewrite (`[proxy.tools_rewrite]`, T59.5); add first-sentence descriptions, drop default/examples duplicating the schema type, compact enums, full text recoverable via the archive; fixture catalog test with token cut ≥ 30 % and unchanged tool names/required args. Decide at start whether it overlaps T124's off-by-default gate; if it needs a creator decision, write it here and set back to `todo`.
+
+### T901. Windows: `graph_lsp_gate::lsp_backend_outlines_dart_main` fails on dart 3.9
+
+The test fails on Windows dart 3.9 with `File is not being analyzed` (surfaced by the first full local `just check` on Windows, T272–T274, `docs/windows.md`); CI never runs it because the runners have no dart. Done = the test no longer fails on Windows dart 3.9 (project gets a `dart pub get` / readiness wait, or skips on that error with the reason in a comment) and a test pins the skip/ready predicate.
+
+Check: `lsp_backend_outlines_dart_main` passes or skips with a stated reason on Windows dart 3.9; the predicate test passes on every OS; `just check`.
+
+Plan: make `lsp_backend_outlines_dart_main` robust on Windows dart 3.9: write a minimal `pubspec.yaml` in the temp project and run `dart pub get`, or skip when the server answers `File is not being analyzed`, with the reason in a comment. CI has no dart, so the proof is a unit test of the skip/ready predicate that runs everywhere.
+
+### T902. Windows CI: run `cargo clippy --workspace` in the `windows` job
+
+`cfg(windows)` lint debt (the T273/T274 class) is only found by the first local Windows gate. Done = the `windows` CI job runs `cargo clippy --workspace` and is green, so such debt fails CI.
+
+Check: the `windows` job of this PR runs the clippy step and is green.
+
+Plan: add `cargo clippy --workspace` to the `windows` job in the CI workflow (reusing the lint flags the Linux job uses); fix any `cfg(windows)` lint it surfaces in this PR if small; proof is the green CI run of the PR.

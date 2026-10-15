@@ -21,7 +21,7 @@ On branch main
  M src/main.rs
  M src/plugins/cmd/run.rs
 ?? notes.txt
-[rtok 59cc4b713b9a · 13 lines]
+[rtok 59cc4b71 · 13 lines]
 """
 
 # Hermetic by construction: isolated HOME/RTOK_HOME, inherit = false.
