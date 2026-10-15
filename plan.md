@@ -88,7 +88,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T682 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T683 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T684 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T685 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T686 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T901 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
 | T902 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
@@ -1175,14 +1174,6 @@ Best competitor: rtk / sqz. Design: wc: drop padding, keep `total`; cargo: #1077
 Check: #1076 harness (`bench/c14`) shows ≥ rtk on this category with full anchor retention.
 
 Plan: wc formatter drops padding and keeps `total`; cargo clippy/build warnings (on top of #1077) group by lint code `lint ×N (files…)`, keeping every distinct path and all errors; fixture tests per formatter; never worse than raw.
-
-### T685. find 33
-
-Best competitor: rtok leads. Design: keep dir grouping but print full paths for ≤ 50 hits so the anchor check passes.
-
-Check: #1076 harness (`bench/c14`) shows 100 % paths, ≥ 69 % on this category with full anchor retention.
-
-Plan: in the find formatter print full paths for ≤ 50 hits (grouping only above that); fixture test asserting 100 % paths and fewer tokens than raw; measure on `bench/fixtures`.
 
 ### T686. MCP tool catalogs
 
