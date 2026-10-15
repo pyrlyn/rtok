@@ -8,11 +8,12 @@
 //! command`, so no key or provider is ever stored here, and nothing runs while `enabled` is
 //! false. No hook calls it.
 
-use std::io::Write;
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
+use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
+use rtok_sys::proc::ProgressRunner;
 use serde::Deserialize;
 
 use crate::plugin::Runtime;
@@ -54,22 +55,14 @@ impl CommandExtractor {
 
 impl Extractor for CommandExtractor {
     fn extract(&self, transcript: &str, max_notes: usize) -> Result<Vec<Candidate>> {
-        let mut child = Command::new(&self.argv[0])
-            .args(&self.argv[1..])
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .spawn()
-            .with_context(|| format!("starting the extractor `{}`", self.argv[0]))?;
-        let mut stdin = child.stdin.take().context("extractor stdin")?;
-        let text = transcript.to_string();
-        // A writer thread keeps a large transcript from deadlocking against a full stdout pipe.
-        let writer = std::thread::spawn(move || stdin.write_all(text.as_bytes()));
-        let out = child
-            .wait_with_output()
-            .context("waiting for the extractor")?;
-        // A program that exits without reading its stdin breaks the pipe; its exit code says why.
-        let _ = writer.join();
+        // The transcript goes in as a file on stdin: `ProgressRunner` takes a `Stdio`, and a file
+        // cannot deadlock against a full stdout pipe the way a hand-fed pipe can.
+        let input = ScratchFile::write(transcript)?;
+        let out = ProgressRunner::quiet(&self.argv[0], &self.argv[1..])
+            .stdin(Stdio::from(input.open()?))
+            .timeout(RUN_LIMIT)
+            .run()
+            .with_context(|| format!("running the extractor `{}`", self.argv[0]))?;
         if !out.status.success() {
             bail!(
                 "the extractor `{}` exited with {}",
@@ -81,6 +74,34 @@ impl Extractor for CommandExtractor {
             &String::from_utf8_lossy(&out.stdout),
             max_notes,
         ))
+    }
+}
+
+/// A model call can be slow, but never unbounded.
+const RUN_LIMIT: Duration = Duration::from_secs(600);
+
+/// The transcript on disk for the length of one extractor run; removed on drop.
+struct ScratchFile(std::path::PathBuf);
+
+impl ScratchFile {
+    fn write(text: &str) -> Result<Self> {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_nanos());
+        let path =
+            std::env::temp_dir().join(format!("rtok-extract-{}-{nanos}.txt", std::process::id()));
+        std::fs::write(&path, text).with_context(|| format!("writing {}", path.display()))?;
+        Ok(Self(path))
+    }
+
+    fn open(&self) -> Result<std::fs::File> {
+        std::fs::File::open(&self.0).with_context(|| format!("opening {}", self.0.display()))
+    }
+}
+
+impl Drop for ScratchFile {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
     }
 }
 
@@ -182,9 +203,11 @@ pub fn run(rt: &Runtime, extractor: &dyn Extractor, transcript: &Path) -> Result
     let found = extractor.extract(input, cfg.max_notes as usize)?;
     let (mut saved, mut skipped) = (0, 0);
     for c in found.iter().take(cfg.max_notes as usize) {
-        match super::mem_save(rt, "note", &c.title, &c.body, None) {
-            Ok(_) => saved += 1,
-            Err(_) => skipped += 1,
+        // The gated save is the same door an MCP `mem_save` uses, so a candidate that repeats
+        // a stored note is refused here too.
+        match super::mem_save_gated(rt, "note", &c.title, &c.body, None) {
+            Ok(super::Saved::Stored { .. }) => saved += 1,
+            Ok(super::Saved::Refused { .. }) | Err(_) => skipped += 1,
         }
     }
     Ok(format!(
@@ -293,6 +316,18 @@ mod tests {
         let seen = spy.0.borrow();
         assert!(seen.len() <= 40, "{}", seen.len());
         assert!(seen.trim_end().ends_with("done"), "{seen}");
+    }
+
+    #[test]
+    fn a_candidate_repeating_a_stored_note_is_skipped_by_the_admission_gate() {
+        let rt = rt("t666-gate", true);
+        let file = transcript(&rt, SESSION);
+        let fake = Fake(vec![
+            cand("first take", "the cache lives in sqlite"),
+            cand("second take", "the cache lives in sqlite"),
+        ]);
+        let out = run(&rt, &fake, &file).unwrap();
+        assert!(out.contains("saved 1, skipped 1"), "{out}");
     }
 
     #[test]
