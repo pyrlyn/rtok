@@ -2790,6 +2790,36 @@ Check: a fixture with three notes asserts the injected text has ids, titles and 
 
 **Result (2026-10-04).** The recall index carries a body token estimate and names `mem_get` (`INDEX_GUIDE` in `src/plugins/memory/mod.rs`); `mem_get` records one `mem_get` measurement row and returns the full body (tests in the same file).
 
+### T671. Memory admission gate (MemPalace idea)
+
+MemPalace is ahead on admission/dedup by embeddings (`docs/comparison/rtok-vs-mempalace.md`). Add an admission gate before notes are stored (cheap hash/trigram first; embeddings opt-in). Savings both sides: **no data** (harness skips).
+
+Check: duplicate/low-value notes rejected in tests; default path needs no network; `just check`.
+
+**Source audit (T530).**
+
+T531–T539 are confirmed source defects on `0b14b88e`, filed for implementation rather
+than fixed during this audit. Start with the incorrect-response cases T532/T533, then
+the remaining independent P2 fixes. Each card distinguishes executed function probes
+from source-derived reproduction steps and gives its own implementation/check sequence.
+Existing tasks, including uncommitted T522–T527 in the shared checkout, were checked for
+overlap and were not copied or reassigned. This is a bounded review of the core data
+paths, not a claim that every bug or host/platform combination has been exhausted.
+
+**Plan.** (1) New `src/plugins/memory/admit.rs`: normalize (lowercase, collapse whitespace), exact-hash and trigram-Jaccard check against the notes of the same project (newest 200), reject empty/too-short bodies and near-duplicates (>= 0.9) with the existing note id in the reply; a same project+kind+title save still updates in place. (2) Wire into `mem_save` and the `remember:` path only (never a hook, never network); thresholds under `plugins.memory.admit` (`enabled = true`, `min_body_chars`, `dup_similarity`) in the one config module. (3) Embedding similarity stays opt-in: used only when `embed.enabled`. (4) Fail-first tests: exact dup, whitespace/case dup, near-dup, distinct note admitted, short body rejected, gate off; `just check`.
+
+**Result (2026-10-15).** PR #1090. `mem_save` now runs an admission gate (`src/plugins/memory/admit.rs`): a body shorter than `plugins.memory.admit_min_chars` (5) is refused, and so is a body whose normalized character-trigram Jaccard similarity to one of the project's newest 200 live notes reaches `admit_similarity` (85 %); the refusal names the stored note (`{"id", "updated": false, "refused": "duplicate"|"too_short"}` over MCP). A same project+kind+title save still updates in place. `admit = false` turns the gate off. The keys live flat in `[plugins.memory]` rather than in a new `admit` section. Not done: the `remember:` prompt path is not gated (it never calls `mem_save`), and the opt-in embedding-similarity leg was left out.
+
+### T669. Hybrid memory ranking and forgetting (graymatter)
+
+graymatter is ahead on hybrid ranking/forgetting (`docs/comparison/rtok-vs-graymatter.md`). Improve rtok memory ranking using signals we already store; add a forget/decay policy. Savings both sides: **no data** pending harness; rtok already claims stronger measured recall on its own bench in the comparison file.
+
+Check: ranking/forget tests on a fixture store; comparison file updated; `just check`.
+
+**Plan.** Signals already stored: touch count, pin, retire/supersede, timestamps, file links. (1) Fail-first fixture tests (`src/plugins/memory`) for a recency/usage-aware score on top of bm25: a recently touched note outranks an equal-text stale one, a pinned note never decays. (2) A pure `rank` function (no I/O) used by `mem_search`/`mem_pack`/recall, default weights in the one config module (`plugins.memory.rank`), byte-stable output. (3) A forget policy: notes untouched past `forget.after_days`, unpinned and not a decision, are retired (reversible tombstone, never deleted; `mem_update` can revive), default off, run by `rtok memory forget` (dry-run first), never from a hook. (4) Measure on the memory bench fixture, record the row in `research.md` and the comparison file; `just check`.
+
+**Result (2026-10-15).** PR #1096. `search_notes` takes the best `3 × limit` bm25 hits and re-ranks them with `rank_blend(rank, retention_score(...))` (reciprocal rank offset 8, scaled by `0.4 + 0.6 × retention`), so a pinned or well-read note overtakes a neighbour of equal text while a match several places better stays ahead; a store with no use signal ranks as before. New `rtok memory forget [--project P] [--days N] [--apply]` retires unpinned, never-read notes older than `plugins.memory.forget_after_days` (default 90, 0 = needs `--days`); a dry run unless `--apply`; `user` and `decision` kinds, checkpoints and sessions are never forgotten, and a retired body stays readable. Tests: three ranking tests, two forget tests, a trycmd case, config coverage. The memory-bench row was not recorded and the comparison docs were not updated.
+
 ### T294. Export rows that can carry a tombstone
 
 A later sync lives in a private repo. That repo was not in the local tree or in `gh repo list` / `gh search` on 2026-09-27 (the only cloud-sync hit was Fern in `listepo/budget-app`, a different product). This repo does not grow a protocol (D8). `export.rs` writes `{kind, title, body, project}` and drops `id`, timestamps, `retired`, `superseded_by` and `pinned`, so a replicator cannot apply a tombstone.
