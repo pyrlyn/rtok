@@ -143,6 +143,16 @@ _arguments "${_arguments_options[@]}" : /
 '--help[Print help]' /
 && ret=0
 ;;
+(discover)
+_arguments "${_arguments_options[@]}" : /
+'--since=[How far back to read Bash calls (/`30d/`, /`24h/`)]:SINCE:_default' /
+'--top=[Families to list]:TOP:_default' /
+'--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
+'--json[JSON instead of the table]' /
+'-h[Print help]' /
+'--help[Print help]' /
+&& ret=0
+;;
 (bench)
 _arguments "${_arguments_options[@]}" : /
 '--tasks=[Task list TOML]:TASKS:_files' /
@@ -274,6 +284,16 @@ _arguments "${_arguments_options[@]}" : /
 '*::paths -- Only these worktrees; the one this command runs from is cleaned only when named:_files' /
 && ret=0
 ;;
+(migrate)
+_arguments "${_arguments_options[@]}" : /
+'--owner=[Also move old locks without an agent whose owner is this]:OWNER:_default' /
+'--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
+'--yes[Apply; without it this is a dry run that changes nothing]' /
+'--json[JSON instead of the table]' /
+'-h[Print help]' /
+'--help[Print help]' /
+&& ret=0
+;;
 (help)
 _arguments "${_arguments_options[@]}" : /
 ":: :_rtok__subcmd__worktree__subcmd__help_commands" /
@@ -315,6 +335,10 @@ _arguments "${_arguments_options[@]}" : /
 && ret=0
 ;;
 (clean)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(migrate)
 _arguments "${_arguments_options[@]}" : /
 && ret=0
 ;;
@@ -1539,6 +1563,7 @@ _arguments "${_arguments_options[@]}" : /
 _arguments "${_arguments_options[@]}" : /
 '--agent=[Sub-agent id from PreToolUse; scopes the dedup pointer]:ID:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
+'--no-ref[Do not print the reference line after a cut]' /
 '-h[Print help]' /
 '--help[Print help]' /
 '*::command:_default' /
@@ -1547,9 +1572,11 @@ _arguments "${_arguments_options[@]}" : /
 (filter)
 _arguments "${_arguments_options[@]}" : /
 '--cmd=[Command family hint (/`git status/`, /`cargo test/`, …)]:CMD:_default' /
+'--exit=[Exit code of the command that printed stdin (with /`--archive/`); formatters read it]:EXIT:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '--stdin[Read the payload from stdin (OpenCode /`tool.execute.after/`)]' /
 '--archive[Archive stdin and print the expand trailer (same path as /`run/`)]' /
+'--no-ref[Do not print the reference line after a cut]' /
 '-h[Print help]' /
 '--help[Print help]' /
 && ret=0
@@ -1802,6 +1829,16 @@ _arguments "${_arguments_options[@]}" : /
 ':id:_default' /
 && ret=0
 ;;
+(forget)
+_arguments "${_arguments_options[@]}" : /
+'--project=[Only this project]:PROJECT:_default' /
+'--days=[Idle days; default /`/[plugins.memory/] forget_after_days/`]:DAYS:_default' /
+'--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
+'--apply[Retire the notes; without it nothing is written]' /
+'-h[Print help]' /
+'--help[Print help]' /
+&& ret=0
+;;
 (pin)
 _arguments "${_arguments_options[@]}" : /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
@@ -1880,6 +1917,10 @@ _arguments "${_arguments_options[@]}" : /
 && ret=0
 ;;
 (retire)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(forget)
 _arguments "${_arguments_options[@]}" : /
 && ret=0
 ;;
@@ -2678,6 +2719,10 @@ _arguments "${_arguments_options[@]}" : /
 _arguments "${_arguments_options[@]}" : /
 && ret=0
 ;;
+(discover)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
 (bench)
 _arguments "${_arguments_options[@]}" : /
 && ret=0
@@ -2727,6 +2772,10 @@ _arguments "${_arguments_options[@]}" : /
 && ret=0
 ;;
 (clean)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(migrate)
 _arguments "${_arguments_options[@]}" : /
 && ret=0
 ;;
@@ -3062,6 +3111,10 @@ _arguments "${_arguments_options[@]}" : /
 _arguments "${_arguments_options[@]}" : /
 && ret=0
 ;;
+(forget)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
 (pin)
 _arguments "${_arguments_options[@]}" : /
 && ret=0
@@ -3340,6 +3393,7 @@ _rtok_commands() {
 'web:Local web UI over the same data as /`rtok tui/` (WebSocket API + React SPA)' /
 'tui:Terminal UI over the same data as /`rtok web/` (one model, two renderings)' /
 'stats:Measurements from session logs and the proxy' /
+'discover:Bash commands no filter covers yet, ranked by the output tokens they sent to the model' /
 'bench:A/B benchmark of host configurations' /
 'doctor:Inspect hooks, MCP servers and the proxy chain' /
 'worktree:Git worktrees of this repository/: owner, state and disk cost' /
@@ -3937,6 +3991,11 @@ _rtok__subcmd__demon__subcmd__upgrade_commands() {
     local commands; commands=()
     _describe -t commands 'rtok demon upgrade commands' commands "$@"
 }
+(( $+functions[_rtok__subcmd__discover_commands] )) ||
+_rtok__subcmd__discover_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok discover commands' commands "$@"
+}
 (( $+functions[_rtok__subcmd__docs_commands] )) ||
 _rtok__subcmd__docs_commands() {
     local commands; commands=(
@@ -4273,6 +4332,7 @@ _rtok__subcmd__help_commands() {
 'web:Local web UI over the same data as /`rtok tui/` (WebSocket API + React SPA)' /
 'tui:Terminal UI over the same data as /`rtok web/` (one model, two renderings)' /
 'stats:Measurements from session logs and the proxy' /
+'discover:Bash commands no filter covers yet, ranked by the output tokens they sent to the model' /
 'bench:A/B benchmark of host configurations' /
 'doctor:Inspect hooks, MCP servers and the proxy chain' /
 'worktree:Git worktrees of this repository/: owner, state and disk cost' /
@@ -4553,6 +4613,11 @@ _rtok__subcmd__help__subcmd__demon__subcmd__upgrade_commands() {
     local commands; commands=()
     _describe -t commands 'rtok help demon upgrade commands' commands "$@"
 }
+(( $+functions[_rtok__subcmd__help__subcmd__discover_commands] )) ||
+_rtok__subcmd__help__subcmd__discover_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok help discover commands' commands "$@"
+}
 (( $+functions[_rtok__subcmd__help__subcmd__docs_commands] )) ||
 _rtok__subcmd__help__subcmd__docs_commands() {
     local commands; commands=(
@@ -4745,6 +4810,7 @@ _rtok__subcmd__help__subcmd__memory_commands() {
 'import:Import /`{kind,title,body}/` JSONL; dedupe by body sha256' /
 'export:Print every note but session checkpoints as the JSONL /`import/` reads' /
 'retire:Retire a note/: a tombstone — never recalled or searched, body kept' /
+'forget:Retire notes nobody read for a long time (a dry run unless /`--apply/`)' /
 'pin:Pin a note so it leads SessionStart recall' /
 'unpin:Drop a note back to newest-first recall order' /
 'history:Print the earlier title and body kept when an upsert changed this note' /
@@ -4758,6 +4824,11 @@ _rtok__subcmd__help__subcmd__memory_commands() {
 _rtok__subcmd__help__subcmd__memory__subcmd__export_commands() {
     local commands; commands=()
     _describe -t commands 'rtok help memory export commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__help__subcmd__memory__subcmd__forget_commands] )) ||
+_rtok__subcmd__help__subcmd__memory__subcmd__forget_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok help memory forget commands' commands "$@"
 }
 (( $+functions[_rtok__subcmd__help__subcmd__memory__subcmd__history_commands] )) ||
 _rtok__subcmd__help__subcmd__memory__subcmd__history_commands() {
@@ -4964,6 +5035,7 @@ _rtok__subcmd__help__subcmd__worktree_commands() {
 'whoami:Your agent, where new worktrees go, the worktree you are in and the ones you hold' /
 'gc:Remove merged, clean, idle worktrees with their branches; drop records of deleted ones' /
 'clean:Delete idle tagged build caches (/`CACHEDIR.TAG/`) and keep the worktrees; dry run without /`--yes/`' /
+'migrate:Move this repository'/''s worktrees into /`/[worktree/] root/`; dry run without /`--yes/`' /
     )
     _describe -t commands 'rtok help worktree commands' commands "$@"
 }
@@ -4996,6 +5068,11 @@ _rtok__subcmd__help__subcmd__worktree__subcmd__gc_commands() {
 _rtok__subcmd__help__subcmd__worktree__subcmd__list_commands() {
     local commands; commands=()
     _describe -t commands 'rtok help worktree list commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__help__subcmd__worktree__subcmd__migrate_commands] )) ||
+_rtok__subcmd__help__subcmd__worktree__subcmd__migrate_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok help worktree migrate commands' commands "$@"
 }
 (( $+functions[_rtok__subcmd__help__subcmd__worktree__subcmd__remove_commands] )) ||
 _rtok__subcmd__help__subcmd__worktree__subcmd__remove_commands() {
@@ -5102,6 +5179,7 @@ _rtok__subcmd__memory_commands() {
 'import:Import /`{kind,title,body}/` JSONL; dedupe by body sha256' /
 'export:Print every note but session checkpoints as the JSONL /`import/` reads' /
 'retire:Retire a note/: a tombstone — never recalled or searched, body kept' /
+'forget:Retire notes nobody read for a long time (a dry run unless /`--apply/`)' /
 'pin:Pin a note so it leads SessionStart recall' /
 'unpin:Drop a note back to newest-first recall order' /
 'history:Print the earlier title and body kept when an upsert changed this note' /
@@ -5117,12 +5195,18 @@ _rtok__subcmd__memory__subcmd__export_commands() {
     local commands; commands=()
     _describe -t commands 'rtok memory export commands' commands "$@"
 }
+(( $+functions[_rtok__subcmd__memory__subcmd__forget_commands] )) ||
+_rtok__subcmd__memory__subcmd__forget_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok memory forget commands' commands "$@"
+}
 (( $+functions[_rtok__subcmd__memory__subcmd__help_commands] )) ||
 _rtok__subcmd__memory__subcmd__help_commands() {
     local commands; commands=(
 'import:Import /`{kind,title,body}/` JSONL; dedupe by body sha256' /
 'export:Print every note but session checkpoints as the JSONL /`import/` reads' /
 'retire:Retire a note/: a tombstone — never recalled or searched, body kept' /
+'forget:Retire notes nobody read for a long time (a dry run unless /`--apply/`)' /
 'pin:Pin a note so it leads SessionStart recall' /
 'unpin:Drop a note back to newest-first recall order' /
 'history:Print the earlier title and body kept when an upsert changed this note' /
@@ -5137,6 +5221,11 @@ _rtok__subcmd__memory__subcmd__help_commands() {
 _rtok__subcmd__memory__subcmd__help__subcmd__export_commands() {
     local commands; commands=()
     _describe -t commands 'rtok memory help export commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__memory__subcmd__help__subcmd__forget_commands] )) ||
+_rtok__subcmd__memory__subcmd__help__subcmd__forget_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok memory help forget commands' commands "$@"
 }
 (( $+functions[_rtok__subcmd__memory__subcmd__help__subcmd__help_commands] )) ||
 _rtok__subcmd__memory__subcmd__help__subcmd__help_commands() {
@@ -5516,6 +5605,7 @@ _rtok__subcmd__worktree_commands() {
 'whoami:Your agent, where new worktrees go, the worktree you are in and the ones you hold' /
 'gc:Remove merged, clean, idle worktrees with their branches; drop records of deleted ones' /
 'clean:Delete idle tagged build caches (/`CACHEDIR.TAG/`) and keep the worktrees; dry run without /`--yes/`' /
+'migrate:Move this repository'/''s worktrees into /`/[worktree/] root/`; dry run without /`--yes/`' /
 'help:Print this message or the help of the given subcommand(s)' /
     )
     _describe -t commands 'rtok worktree commands' commands "$@"
@@ -5556,6 +5646,7 @@ _rtok__subcmd__worktree__subcmd__help_commands() {
 'whoami:Your agent, where new worktrees go, the worktree you are in and the ones you hold' /
 'gc:Remove merged, clean, idle worktrees with their branches; drop records of deleted ones' /
 'clean:Delete idle tagged build caches (/`CACHEDIR.TAG/`) and keep the worktrees; dry run without /`--yes/`' /
+'migrate:Move this repository'/''s worktrees into /`/[worktree/] root/`; dry run without /`--yes/`' /
 'help:Print this message or the help of the given subcommand(s)' /
     )
     _describe -t commands 'rtok worktree help commands' commands "$@"
@@ -5595,6 +5686,11 @@ _rtok__subcmd__worktree__subcmd__help__subcmd__list_commands() {
     local commands; commands=()
     _describe -t commands 'rtok worktree help list commands' commands "$@"
 }
+(( $+functions[_rtok__subcmd__worktree__subcmd__help__subcmd__migrate_commands] )) ||
+_rtok__subcmd__worktree__subcmd__help__subcmd__migrate_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok worktree help migrate commands' commands "$@"
+}
 (( $+functions[_rtok__subcmd__worktree__subcmd__help__subcmd__remove_commands] )) ||
 _rtok__subcmd__worktree__subcmd__help__subcmd__remove_commands() {
     local commands; commands=()
@@ -5609,6 +5705,11 @@ _rtok__subcmd__worktree__subcmd__help__subcmd__whoami_commands() {
 _rtok__subcmd__worktree__subcmd__list_commands() {
     local commands; commands=()
     _describe -t commands 'rtok worktree list commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__worktree__subcmd__migrate_commands] )) ||
+_rtok__subcmd__worktree__subcmd__migrate_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok worktree migrate commands' commands "$@"
 }
 (( $+functions[_rtok__subcmd__worktree__subcmd__remove_commands] )) ||
 _rtok__subcmd__worktree__subcmd__remove_commands() {

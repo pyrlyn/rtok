@@ -4,6 +4,98 @@ https://github.com/pyrlyn/rtok
 
 Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured reductions, pluggable methods.
 
+## Security audit findings (2026-10-14)
+
+Find-only security review of `main` at `cd9644881` (OWASP Top 10, injection, path handling,
+access control, data at rest, CI supply chain). Nothing was fixed or exploited. Line numbers are
+as of that commit. Overlap with the closed audit PR #601 (config validation, `filter`, `memory
+import`, exit codes): none; these are new. To take one, give it a T-id, a row and a `Check:` line.
+
+| # | Severity | Finding | Where |
+| --- | --- | --- | --- |
+| S1 | high | `rtok mcp --http` started in `/` or `$HOME` lets a token holder read any file there | `src/plugins/read/mod.rs:212`, `src/mcp/http.rs:110` |
+| S2 | medium | Dashboard WebSocket has no authentication; any local user (or LAN host if bound wide) can change config, run `doctor --fix` and clear junk | `src/web/mod.rs:226`, `:259`, `:433` |
+| S3 | medium | `~/.rtok` store, archive and logs are world-readable (prompts, tool output, file contents) | `crates/rtok-store/src/handle.rs:18`, `crates/rtok-store/src/lib.rs:444` |
+| S4 | medium | `read`/`search` (also over HTTP) serve secrets inside the project: `.env`, `.git/config`, keys | `src/plugins/read/mod.rs:212` |
+| S5 | low | Proxy `/live` and `/health` answer without auth; with `proxy.bind = 0.0.0.0` they leak models and paths | `src/proxy/mod.rs:255` |
+| S6 | low | `host_authority` takes the last comma-separated `Host` value | `src/web/mod.rs:301` |
+| S7 | low | Resident hook socket is chmod-ed after `bind`, a short window at the umask mode | `src/hooks/resident.rs:71` |
+| S8 | low | `rtok mcp --http` is plain HTTP; the bearer token crosses the network in clear unless a TLS proxy fronts it | `src/mcp/http.rs:110` |
+
+### S1. HTTP MCP `read` exposes the whole launch directory
+
+The path guard allows everything under the process cwd (`resolve_with`). `walk_root_ok` refuses
+`/` and `$HOME` for walks (`search`, `tree`), but a single-file `read` has no such check. A
+`rtok mcp --http` started from a home directory (launchd, a service unit, Claude.app's `/`) lets
+any holder of the bearer token read `~/.ssh/id_*`, `~/.aws/credentials`, `~/.rtok/rtok.db`.
+Impact: remote file disclosure for the HTTP surface (`http_tools` includes `read` by default).
+Fix: refuse to start `--http` when cwd is unwalkable unless `allow_paths` names a project, and
+apply `walk_root_ok` to `read` roots on the HTTP surface.
+
+### S2. Dashboard WebSocket is unauthenticated
+
+`origin_allowed` returns `true` when no `Origin` header is sent, which covers every non-browser
+client. The socket accepts `set` (allow-listed config keys), `doctor` `apply` (writes host
+configs), `junk` `apply` (removes files), `expand` (archived prompt and tool bodies), `graph` and
+`export`. On a shared machine any local user can reach `127.0.0.1:3333`; with `web.host =
+0.0.0.0` any LAN host can. The browser side (CSRF, DNS rebinding) is handled well.
+Impact: broken access control, data disclosure and destructive actions as the owner.
+Fix: issue a per-run random token (printed in the URL like Jupyter), require it on `/ws`, refuse
+non-loopback `web.host` without it.
+
+### S3. Data at rest is world-readable
+
+`create_dir_all` and the SQLite/archive writers use the umask. On the author's Mac: `~/.rtok`
+0755, `rtok.db` 0644 (917 MB with `call_io` request/response bodies), `archive/` 0755,
+`errors.log` 0644. Other local accounts can read prompts, code and tool output.
+Impact: data leak on multi-user hosts and in backups. Fix: create `~/.rtok`, the archive dir and
+log dir with 0700 and files with 0600; `rtok doctor` warns on and fixes looser modes.
+
+### S4. No secret-file deny list on `read`
+
+Nothing stops `read` from returning `.env`, `.env.*`, `.git/config` (embedded tokens), `*.pem`,
+`id_*`. Over stdio the host's own tools can read them too, but the HTTP surface is meant for
+remote callers, and archived copies then land in the world-readable store (S3).
+Fix: a default `plugins.read.deny_globs` (overridable), enforced for HTTP always.
+
+### S5. Proxy status routes without auth
+
+`/live` returns method, path, provider and model of recent calls; `/health` returns config
+flags. Harmless on loopback, a small leak when `proxy.bind` is widened. Fix: serve them only on
+loopback peers, or behind the same token as S2.
+
+### S6. Ambiguous `Host` handling
+
+`host_authority` splits on `,` and keeps the last part. A repeated or comma-joined `Host` is not
+a valid request; picking one part can let a crafted request pass the Origin/Host equality.
+Fix: reject a `Host` containing `,` (400).
+
+### S7. Socket mode set after bind
+
+`UnixListener::bind` creates the socket with the umask mode and `set_permissions` runs after.
+Fix: create it inside a 0700 directory (or set umask around bind).
+
+### S8. Plain-HTTP bearer token
+
+The docs should say that `--http` on a non-loopback address must sit behind TLS; better, refuse
+a non-loopback bind without `public_url` using `https`.
+
+### Not run or blocked
+
+`cargo audit` could not load `~/.cargo/advisory-db` (directory present but broken; left as is).
+Tests and lints were not re-run (find-only, no code changed). CI workflows were reviewed:
+`graph-review-comment.yml` handles untrusted artifacts well (size caps, PR head SHA check).
+
+### Improvement ideas (opinion)
+
+- I-S1. A single "exposure" check in `rtok doctor`: wide binds, missing tokens, file modes.
+- I-S2. Pin GitHub Actions to commit SHAs in `release.yml` (currently tags like `@v6`).
+- I-S3. Split `~/.rtok/archive` into hashed subdirectories; it holds tens of thousands of files
+  in one directory, slow to list and back up.
+- I-S4. Retention for `call_io` bodies by default (the store reached 917 MB here).
+- I-S5. A `security.md` threat model naming each surface (hooks, stdio MCP, HTTP MCP, proxy,
+  dashboard) and who is trusted on it, so new routes get a checklist.
+
 ## Cloud review findings (2026-10-08)
 
 New bugs, dead code and moves from a read-only Cursor cloud review of `main` at `a060af58` (agent `bc-e07c8099-22ee-5d00-b1c7-3bd1ad623d52`; full report: `cloud/rtok.md` in the private `listepo/roadmap` repo). They take ids T457–T470, ordered P0, P1, P2, P3. **confirmed** means seen in the tree; **suspected** means plausible from the code but not proven (nothing was run on Windows). Line numbers are as of the review. The report's own labels T436–T449 are roadmap ids, not this plan's. T457, T458 and T459 are done (`done.md`). None of the rest is in the task table yet: to take one, add its row and a card with a `Check:` line.
@@ -19,9 +111,8 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 
 | # | Status | Priority | Complexity | Readiness | Agent |
 | --- | --- | --- | --- | --- | --- |
-| T124 | todo | P3 | 2 | 0% | |
+| T124 | todo | P3 | 2 | 60% | |
 | T131 | todo | P2 | 3 | 70% | |
-| T134 | todo | P1 | 2 | 40% | |
 | T156 | in progress | P3 | 3 | 50% | Claude Code / claude-opus-5-5 |
 | T261 | in progress | P2 | 3 | 95% | Cursor / grok 4.7 |
 | T275 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
@@ -40,10 +131,10 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T385 | in progress | P1 | 5 | 20% | Claude Code / opus-5-5 |
 | T385.3 | todo | P1 | 3 | 20% | |
 | T385.9 | in progress | P3 | 5 | 70% | Claude Code / claude-opus-5-5 |
-| T385.9.3 | todo | P3 | 2 | 0% | |
+| T385.9.3 | todo | P3 | 2 | 10% | |
 | T394 | todo | P2 | 2 | 20% | |
 | T395 | todo | P3 | 2 | 20% | |
-| T396 | todo | P3 | 2 | 85% | |
+| T396 | todo | P3 | 2 | 90% | |
 | T398 | todo | P3 | 1 | 30% | |
 | T413 | todo | P2 | 3 | 0% | |
 | T413.13 | todo | P3 | 2 | 0% | |
@@ -65,18 +156,105 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T525 | in progress | P2 | 3 | 0% | MiMo / mimo |
 | T526 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T527 | in progress | P2 | 3 | 0% | MiMo / mimo |
-| T660.5 | in progress | P2 | 3 | 0% | Claude Code / claude-opus-5-5 |
+| T662 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T663 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T664 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T665 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T666 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T667 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T669 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T670 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T671 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T687 | in progress | P2 | 4 | 0% | Claude Code / claude-sonnet-5-5 |
+| T673 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T675 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T676 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T677 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T678 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T679 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T680 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T681 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T682 | todo | P2 | 3 | 0% | |
+| T683 | todo | P2 | 3 | 0% | |
+| T684 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T685 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T686 | todo | P2 | 3 | 0% | |
+| T901 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
+| T902 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
 
 
 
 
-### T660.5. `rtok worktree migrate` moves worktrees into the configured root
 
-Needs T660.4. Moves this repository's worktrees that live outside the configured root to `<root>/<repo>-<task>` with `git worktree move`, keeping lock and claim records in step. Dry run without `--yes`. Skips, with a reason: main, the worktree holding the cwd, a worktree locked or claimed by another agent or by a live session, a worktree with submodules (`git worktree move` refuses them), a target that already exists. CLI only; new-command gates (trycmd fence, `surface_parity`, `config_coverage`). Docs with T660.4's pages.
+### T662. Match sqz formatter breadth without leaving the lossless path
 
-Check: tests on a temp repo for move, each skip reason and dry run; lock and claim follow the move; `just check`.
+sqz ships 45+ formatters and a stack-trace safe mode; rtok has fewer families (`docs/comparison/rtok-vs-sqz.md`). Close the coverage gap while keeping archive + `expand`. Reuse T65.1–T65.4 ideas already taken from sqz; extend rule families where sqz still wins. Sourced savings: sqz self-reports 24.7 % over 3,003 compressions (`research.md` §11); rtok on that corpus is **no data** until the harness runs.
 
-Plan: (1) `src/worktree/migrate.rs`: `plan` lists this repository's worktrees outside the resolved root, each with a target or a skip reason; `apply` runs `git worktree move`, rewrites the lock text and moves the store's claim and pending rows to the new path. (2) CLI `rtok worktree migrate [--yes] [--json]`, a dry run without `--yes`. (3) New-command gates: trycmd fence, `surface_parity`, `config_coverage`, man page. (4) Docs beside T660.4's pages. (5) `tests/worktree.rs` cases from Check; `just check`.
+Check: a coverage table vs sqz in `docs/comparison/rtok-vs-sqz.md`; at least the top gap families from `rtok discover` (T661) gain rules; `just check`.
+
+Plan: read `docs/comparison/rtok-vs-sqz.md`; build the coverage table sqz-formatter → rtok rule; add rules (in `rules/default.toml` through the existing rule engine, no new engine) for the top missing families, each with a fixture and a no-worse-than-raw test. `rtok discover` (T661) is not on main: pick families by the sqz list and say so in the card.
+
+### T663. Push graph reference precision toward LSP-grade (serena)
+
+serena is ahead on symbol/reference precision (`docs/comparison/rtok-vs-serena.md`). Raise rtok reference recall/precision on the existing 30-symbol set without paying serena's ~1 494 description tokens/turn. Sourced: rtok reference recall 0.351 → 0.924 after T387; serena LSP-grade with **no numeric** in rtok docs; description tokens rtok ~165 vs serena ~1 494 (`docs/comparison.md` §2).
+
+Check: updated recall/precision row in `docs/comparison/rtok-vs-serena.md` and the graph bench; description-token budget still far below serena; `just check`.
+
+**Plan.** (1) Read `tests/graph_truth.rs` and `tests/fixtures/graph_truth.toml`; list the reference sites still missed (ref recall 0.924) and group them by cause (qualified paths, method calls through `self`, re-exports, macros, same-name definitions across files). (2) Fail-first fixture rows for the top cause, then fix it in the tags resolver (`src/plugins/graph/resolve.rs`, `scope.rs`) with no new MCP tool and no description growth. (3) Raise the `graph_truth` floors to the new numbers; record before/after in `research.md` and the serena row of `docs/comparison/rtok-vs-serena.md` once PR #1071 is on `main` (until then, only `research.md`). (4) `tests/graph_contract.rs` and the surface description-token gate stay green; `just check`.
+
+### T664. Review/blast-radius features from code-review-graph
+
+code-review-graph is ahead on review features (~30 MCP tools) while rtok wins on cost (`docs/comparison/rtok-vs-code-review-graph.md`). Port only the features that save tokens or answer "what does this edit touch?" without the full tool bill. Savings both sides: **no data** in rtok docs for a shared corpus.
+
+Check: one or more graph ops (or docs) covering the chosen features; MCP description-token budget documented; `just check`.
+
+**Plan.** Already shipped: `impact`, `graph_diff` (T329.18), `rtok graph review` (T454, CLI only), blast grouping. (1) Read the feature list in `docs/comparison/rtok-vs-code-review-graph.md` (PR #1071) and the code-review-graph README; mark each feature take / skip / already have. (2) Take at most the features that answer "what does this edit touch?" with no new MCP tool (the surface gate is 170 tokens): candidates are a test-gap list (changed defs with no test caller) and a risk summary line on `graph_diff`. (3) Fail-first tests on a fixture repo in `src/plugins/graph/review.rs` / `diff.rs`; keep `tests/graph_contract.rs` strings unchanged unless the commit says why. (4) Take/skip table in the comparison file (or `research.md` while #1071 is open); `just check`.
+
+### T665. Broader graph queries (codebase-memory-mcp)
+
+codebase-memory-mcp is broader (Cypher-style queries) (`docs/comparison/rtok-vs-codebase-memory-mcp.md`). Add the small query shapes agents actually used in our logs, without a heavy MCP surface. Savings both sides: **no data** for a shared corpus.
+
+Check: query shapes documented and tested; comparison file updated; `just check`.
+
+**Plan.** (1) List the query shapes agents used in our logs (`rtok stats`, `graph_events`) that `symbol`/`callers`/`impact`/`explore` do not answer in one call; compare with the Cypher shapes in `docs/comparison/rtok-vs-codebase-memory-mcp.md`. (2) Add at most two shapes as parameters of existing operations (no seventh/eighth tool): e.g. `callers` with `depth` and a `kind`/`path` filter, `outline` with `kind`. (3) Fail-first tests in `src/plugins/graph` + `tests/graph_contract.rs` for each shape, on the SQLite store only. (4) Document the shapes in `src/plugins/graph/README.md` and the comparison file; description tokens stay under the surface gate; `just check`.
+
+### T666. Optional automatic memory extraction (claude-mem idea)
+
+claude-mem is ahead if you want automatic LLM-extracted memory (`docs/comparison/rtok-vs-claude-mem.md`). Not a default path (cost). Design an opt-in extractor that writes ordinary rtok memory notes, measured. Savings both sides: **no data** without paid API keys (harness skips).
+
+Check: opt-in config off by default; fixture test with a fake LLM; docs warn about cost; `just check`.
+
+**Plan.** Split because a real model call needs a provider decision (creator) and the whole feature exceeds 500 lines. **T666.1 (this slice):** an `Extractor` trait in `src/plugins/memory/extract.rs`, the config block `plugins.memory.extract` (`enabled = false`, `max_notes`, `max_input_bytes`) in the one config module, and `rtok memory extract <transcript.jsonl>` that scrubs the input (`scrub.rs`, `<private>`), asks the extractor for candidate notes and saves them through the normal `mem_save` path (so the T671 admission gate and dedup apply). Only a fake extractor ships in tests; with `enabled = false` the command refuses and nothing runs. No hook calls it. **T666.2 (todo, blocked on the creator):** a real provider-backed extractor (which provider/model, key handling, cost cap) and a docs warning about cost. Tests: fake LLM fixture, off-by-default, scrub applied, duplicate rejected, input cap; `just check`.
+
+### T667. Richer memory features from engram
+
+engram has more memory features (HTTP + MCP) (`docs/comparison/rtok-vs-engram.md`). Adopt only features that improve recall on rtok's own memory bench without a second daemon. Savings both sides: **no data** pending harness.
+
+Check: feature list and take/skip in the comparison file; tests for what shipped; `just check`.
+
+**Plan.** From `docs/comparison/rtok-vs-engram.md` (PR #1071): engram has relation judging, pinned-first recall and project identity from the origin remote that rtok lacks. Relation judging spends model output on bookkeeping: **skip**. (1) Check which of pinned-first recall and origin-remote project identity already exist (`mem_update pinned`, `project_name`); fail-first tests on `tests/fixtures/p29_memory.toml`-style fixtures for the missing ones. (2) Implement only what raises recall on rtok's own memory bench with no new MCP tool and no daemon. (3) Write the take/skip list into the comparison file (or `research.md` while #1071 is open); `just check`.
+
+### T669. Hybrid memory ranking and forgetting (graymatter)
+
+graymatter is ahead on hybrid ranking/forgetting (`docs/comparison/rtok-vs-graymatter.md`). Improve rtok memory ranking using signals we already store; add a forget/decay policy. Savings both sides: **no data** pending harness; rtok already claims stronger measured recall on its own bench in the comparison file.
+
+Check: ranking/forget tests on a fixture store; comparison file updated; `just check`.
+
+**Plan.** Signals already stored: touch count, pin, retire/supersede, timestamps, file links. (1) Fail-first fixture tests (`src/plugins/memory`) for a recency/usage-aware score on top of bm25: a recently touched note outranks an equal-text stale one, a pinned note never decays. (2) A pure `rank` function (no I/O) used by `mem_search`/`mem_pack`/recall, default weights in the one config module (`plugins.memory.rank`), byte-stable output. (3) A forget policy: notes untouched past `forget.after_days`, unpinned and not a decision, are retired (reversible tombstone, never deleted; `mem_update` can revive), default off, run by `rtok memory forget` (dry-run first), never from a hook. (4) Measure on the memory bench fixture, record the row in `research.md` and the comparison file; `just check`.
+
+### T670. Read modes lean-ctx still has
+
+lean-ctx is ahead on read-mode count and a learned mode predictor (`docs/comparison/rtok-vs-lean-ctx.md`). Add only modes that beat rtok's per-turn cost on a replay. Sourced: lean-ctx 0 output saved and ~3.0–3.1 K tokens/turn inject; rtok ~800 token budget / ~223 description tokens (`research.md` §4, `docs/comparison.md` §2).
+
+Check: each new mode has a fixture test and a cost row; no banner-style per-turn inject; `just check`.
+
+Plan: list lean-ctx read modes missing in `src/plugins/read` (see `docs/comparison/rtok-vs-lean-ctx.md`); add only modes that beat rtok per-turn cost on a replay over the existing fixtures, reusing existing mode plumbing; one fixture test and one cost row per mode; no per-turn banner inject.
+
+### T671. Memory admission gate (MemPalace idea)
+
+MemPalace is ahead on admission/dedup by embeddings (`docs/comparison/rtok-vs-mempalace.md`). Add an admission gate before notes are stored (cheap hash/trigram first; embeddings opt-in). Savings both sides: **no data** (harness skips).
+
+Check: duplicate/low-value notes rejected in tests; default path needs no network; `just check`.
 
 **Source audit (T530).**
 
@@ -87,6 +265,16 @@ from source-derived reproduction steps and gives its own implementation/check se
 Existing tasks, including uncommitted T522–T527 in the shared checkout, were checked for
 overlap and were not copied or reassigned. This is a bounded review of the core data
 paths, not a claim that every bug or host/platform combination has been exhausted.
+
+**Plan.** (1) New `src/plugins/memory/admit.rs`: normalize (lowercase, collapse whitespace), exact-hash and trigram-Jaccard check against the notes of the same project (newest 200), reject empty/too-short bodies and near-duplicates (>= 0.9) with the existing note id in the reply; a same project+kind+title save still updates in place. (2) Wire into `mem_save` and the `remember:` path only (never a hook, never network); thresholds under `plugins.memory.admit` (`enabled = true`, `min_body_chars`, `dup_similarity`) in the one config module. (3) Embedding similarity stays opt-in: used only when `embed.enabled`. (4) Fail-first tests: exact dup, whitespace/case dup, near-dup, distinct note admitted, short body rejected, gate off; `just check`.
+
+### T687. Hooks: PreToolUse/PostToolUse p50 to 10 ms
+
+Creator-approved (moved from `roadmap.md`, from T178). Cut another ~10 ms off the §19.2 harness p50 so PreToolUse and PostToolUse reach 10 ms as Claude Code sees them (today `research.md` §19.7: 12.3 / 12.5 ms on `rtok-hook`).
+
+**Plan.** (1) Re-measure first with the §19.2 harness on an idle machine (load average low; if it is high, say so and record no number). (2) Profile the hook path (process start, config parse, store open, plugin dispatch) and remove the largest avoidable cost with a fail-first latency test. (3) Record a dated `research.md` row. The fail-open and byte-stable rules stay.
+
+Check: p50 as Claude Code sees it is at or under 10 ms for both events on the §19.2 harness, or the measured floor and the reason are written up; `just check`.
 
 ### T651. Honor ProgressRunner timeouts with inherited output
 
@@ -169,14 +357,18 @@ Rule: a saving that is not a `Measurement` row does not exist, and the brief is 
 Plan: T130.1's hook records a `Measurement` (`plugin: "memory"`, `kind: "brief"`) with the tokens it added (before = 0, after = brief) so the cost shows as negative saving; `rtok stats` `subagents` row splits the re-read share and sub-agent input tokens by "spawned with a brief" (the brief's archive id in the sub-agent's first user message) vs without.
 Check: fixture with one briefed and one plain sub-agent asserts the split; after a dated window with the flag on, `research.md` §17 gets the measured net; default flips to on only if net tokens saved > 0 — otherwise the card closes with the number and T130 stays off.
 Progress (2026-09-25): the cost row was already recorded by T130.1 (`memory`/`brief`, before 0, after = brief tokens); `tests/hook_spawn_brief.rs` now asserts one row per fired brief and none otherwise. `rtok stats` splits the `subagents` re-read share and input tokens into `brief` / `no brief`, detected by `measure::subagents::SPAWN_BRIEF_MARKER` in a sub-agent's first user message (a `handoff.rs` test pins it inside the brief's `INSTRUCTIONS`); fixture test `briefed_and_plain_subagents_split_the_reread_share`. Left: the dated window with the flag on, the net in `research.md` §17, and the default decision.
-### T134. Probe: does a CLI command hook's `PostToolUse` `updatedToolOutput` replace native tool output?
-Gate for I-91 (`research.md` §17.2). The Agent SDK hooks page says `updatedToolOutput` "works for any tool"; rtok's standing rule says PostToolUse can only add context. If the CLI honours it, native Read/Bash output could be shrunk in place (pointer + `expand <id>`) instead of wrapped or denied — that changes the design of `cmd`, `read` and `guard`, so it is a creator decision, not a silent change. No product code in this task.
-Plan: throwaway hook script (scratch, not committed) returning `hookSpecificOutput.updatedToolOutput` for `Read` and `Bash` on the current Claude Code; run one Read and one Bash; check what the model received in the transcript. Repeat for an MCP tool.
-Check: a dated row in `research.md` §3 with the Claude Code version, the payload sent and what the transcript shows, per tool kind. Honoured → the `AGENTS.md` rule line and I-91 are put to the creator with the row; not honoured → I-91 closes with the date.
-Progress (2026-09-25, `research.md` §3 "T134"): Claude Code 2.1.267; the CLI hooks page lists no `updatedToolOutput` for `PostToolUse` (only `additionalContext`, `systemMessage`, `terminalSequence`), the Agent SDK page does. The live run is blocked in agent sessions (`claude -p` fails with an expired OAuth session, as in T53.1); left: the creator runs the scratch probe (hook logging the payload and returning `updatedToolOutput`, one Bash / Read / MCP call on `--model haiku`) from a real terminal, and the per-tool verdict goes into the row.
+
+Plan: finish only the agent-doable part: confirm the fixture/cost-row tests still pass and add whatever small piece the Progress line lacks. The dated flag-on window, the `research.md` §17 net and the default decision need the creator's paid live run: leave them in the card and set the row back to `todo` at 70 %.
+
+Local attempt (2026-10-15): not possible on LM Studio (`prism-ml/bonsai-27b`): the model fails a single-turn read task, so a briefed/plain sub-agent comparison would only measure noise; nothing recorded in `research.md` §17.
+
+Remaining work needs the creator: the fixture and cost-row tests (`tests/hook_spawn_brief.rs`, `briefed_and_plain_subagents_split_the_reread_share`) are in place and pass; the dated flag-on window, the `research.md` §17 net and the default decision need a paid live run.
+
 ### T124. Realized `tools_rewrite` saving as a dated `research.md` row
 6.2 % (T59.5) is the ceiling, not a saving: no dated row shows what `[proxy.tools_rewrite]` removes with the default `max_description_tokens = 60`. Precondition, by the creator: turn it on for this machine's proxy for at least 20 sessions. Then sum the `kind = tools_rewrite` Measurement rows against session input for the same window (`rtok stats` / `rtok gain`, dated command in the row), and write one row into `research.md` §2 next to the T59.5 row; update `docs/comparison.md` only if it cites the number. If the realized share is under the 3 % gate, say so in the row and leave the default off.
 Check: the row cites the command, date, sessions, before/after tokens and the share; no number in prose without it.
+
+Progress (2026-10-15, `research.md` §2): a local reference run (20 one-request sessions through a scratch proxy to LM Studio) puts the saving at 16.2 K tokens per request (42.0 % of a bare request, API-counted); the row says it is not the gate. Left: the creator's 20 real sessions on this machine's own proxy, and an answer-quality check with truncated built-in tool descriptions. Default stays off.
 
 ### T156. Probe: `WorktreeCreate`/`WorktreeRemove` hooks and reflink-seeded `target/`
 
@@ -660,6 +852,8 @@ Part of T385.9, after T385.9.2. `rtok bench` cost per passed task with the compr
 
 Check: the dated `research.md` row with cost per passed task, pass rate and compressor tokens.
 
+Progress (2026-10-15, `research.md` §16.9): a local attempt on LM Studio (`prism-ml/bonsai-27b`) gave no evidence: the control arm returned an empty answer, and with the flag on the compressor never fired (0 summaries). Left: a bench that can pass its control (a capable model), tasks with more than `keep_turns` turns after the large results, and a compressor arm in `rtok bench`; the paid run still needs the creator.
+
 ### T394. Run the paid live benches and record them
 
 From `research.md` §3 (coaching nudges A/B) and §2 (A/B bench T9.2, `graph` T68.9): every live arm is unrun ("No live token, cache, or USD rows … the gate is do not enable"; T68.9 "Live API clause remains open"). Gate P9 and P8b clause 4 stay open until they run. Needs the creator's session and API spend: an agent sandbox cannot run them (OAuth expired).
@@ -686,7 +880,7 @@ Check: a fixture per confirmed shape; §30 updated with dates; `just check`.
 
 Execution plan (2026-10-12): 1. run the Kilo, Gemini CLI, Copilot CLI and pi readers read-only on this machine's own files and record the observed shapes (no content); 2. a synthetic fixture per confirmed shape; 3. check whether a resumed Copilot session writes cumulative or run-only shutdown totals and stop double counting if needed (test first); 4. date each §30 tag; Grok `signals.json` stays unverified until the creator decides.
 
-Progress (2026-10-12, `research.md` §30): Copilot CLI 1.0.80 — `tokenDetails` is authoritative (it equals `usage` plus the compaction requests), the reader now takes it (`token_details_carry_the_compaction_requests_that_usage_leaves_out`, fail-first), and `inputTokens` including the cache legs is confirmed. pi 0.85.1 — reader sums match an independent sum over 953 entries; fixture for the `reasoning`/`cacheWrite1h` shape; fork id copying confirmed from source, not observed. Copilot resume: the reader keeps the last shutdown per session, cumulative per the SDK source (`github/copilot-sdk` 6be623b, `nodejs/src/generated/session-events.ts`; fail-first `a_resumed_session_counts_its_last_shutdown_not_the_sum_of_all`), not yet seen in a real resumed log. Left: a Kilo message row (this machine's db has none), Gemini CLI (not installed here), Grok `signals.json` (observed keys accepted by the creator 2026-10-13, but grok 1.0.34 wrote no `signals.json` in this machine's 3 sessions, `research.md` §30.7). Rechecked 2026-10-13: still 0 Kilo `message` rows and no Gemini chat files. Needs the creator to run one Kilo, one Gemini CLI and one Grok session, then a reader and fixture per shape.
+Progress (2026-10-12, `research.md` §30): Copilot CLI 1.0.80 — `tokenDetails` is authoritative (it equals `usage` plus the compaction requests), the reader now takes it (`token_details_carry_the_compaction_requests_that_usage_leaves_out`, fail-first), and `inputTokens` including the cache legs is confirmed. pi 0.85.1 — reader sums match an independent sum over 953 entries; fixture for the `reasoning`/`cacheWrite1h` shape; fork id copying confirmed from source, not observed. Copilot resume: the reader keeps the last shutdown per session, cumulative per the SDK source (`github/copilot-sdk` 6be623b, `nodejs/src/generated/session-events.ts`; fail-first `a_resumed_session_counts_its_last_shutdown_not_the_sum_of_all`), not yet seen in a real resumed log. Left: a Kilo message row (this machine's db has none), Gemini CLI (not installed here), Grok `signals.json` (observed keys accepted by the creator 2026-10-13, but grok 1.0.34 wrote no `signals.json` in this machine's 3 sessions, `research.md` §30.7). Rechecked 2026-10-13: still 0 Kilo `message` rows and no Gemini chat files. Kilo done 2026-10-15 (`research.md` §30.1: a real `message` row read through LM Studio, fixture added). Still needs the creator to run one Gemini CLI (not installed here) and one Grok session (xAI-only, not runnable on a local model), then a reader and fixture per shape.
 
 ### T398. Probe editors on a `worktree.useRelativePaths` worktree
 
@@ -970,3 +1164,133 @@ The 14 portable ideas and where each landed:
 The tests leak their temp dirs into `$TMPDIR`: on the creator's Mac about 24,000 `rtok-mem-*` (`Runtime::in_memory` in `src/plugin.rs` creates one per call and never removes it), 6,300 `rtok-tui-*`, 2,000 `rtok-guard-*`, 1,300 `rtok-usage-*` and more. A directory that size makes `realpath` in it slow under load (T643). Each test helper that makes a temp dir removes it (a guard or `tempfile::TempDir`), `Runtime::in_memory` first.
 
 Check: a test shows a dropped `Runtime::in_memory` leaves no directory behind, and a full `just test` run adds no `rtok-*` entry to `$TMPDIR`.
+
+## Beat sqz, lean-ctx, token-optimizer and caveman per category (T672–T686)
+
+Source: `docs/research/competitors-techniques.md` (techniques, licenses, links). Every card: keep 100 % of hashes, paths and WARN/ERROR lines, never more tokens than raw, stderr and exit line kept on failure.
+
+### T673. grep 2260, git grep 452, rg
+
+Best competitor: t-o 89.7 %, lean-ctx 89.6 %. Design: path printed once; matches as `line:text`; collapse common indentation; trim match text around the hit to ±60 chars keeping the match itself; per-file cap by match budget with `+N more (expand)`; files sorted by path (stable) not count; keep 100 % paths.
+
+Check: #1076 harness (`bench/c14`) shows ≥ 91 %, 100 % paths on this category with full anchor retention.
+
+Plan: new `grep_group` formatter in `src/plugins/cmd/compact.rs` wired in `formatters::format` for `grep`/`rg`/`git grep`: path once, `line:text` under it, common indent stripped, text trimmed to the match ±60 chars, per-file budget with `+N more (expand)`, files path-sorted; fall back to the rule when the shape is unknown. Tests: golden `grep_group*.in/out` with `min_saving:` plus a path-retention unit test. Measure on the existing grep fixtures (bench/c14 unmerged).
+
+### T675. python3 1545
+
+Best competitor: none specialised. Design: detect pytest/unittest/traceback output: keep the full last traceback, collapse repeated frames, summary line; JSON stdout → TOON (#1078).
+
+Check: #1076 harness (`bench/c14`) shows ≥ t-o pytest (564→115) on this category with full anchor retention.
+
+Plan: add a `python` formatter in `compact.rs`: pytest/unittest output keeps the summary and the full last traceback, collapses repeated frames and repeated failing-test headers; JSON stdout is printed as a TOON table through the existing #1078 path if merged, otherwise left to a follow-up (written in this card). Tests: golden `python_pytest.in/out`, `python_traceback.in/out`.
+
+### T676. gh 744
+
+Best competitor: lean-ctx gh.rs. Design: `gh pr/issue view`: drop empty fields, body markdown whitespace collapse; `gh run view --log`: per-step errors only; `gh pr checks`: only non-pass rows + counts; `--json` → TOON.
+
+Check: #1076 harness (`bench/c14`) shows +20 pp vs current head/tail on this category with full anchor retention.
+
+Plan: `gh` formatter in `compact.rs`: `pr/issue view` drops empty fields and collapses markdown whitespace; `pr checks` keeps non-pass rows plus counts; `run view --log` keeps per-step error blocks; `--json` goes through the TOON helper if present. Tests: golden files per subcommand with `min_saving:`; failing check rows and URLs kept.
+
+### T677. mise 660
+
+Best competitor: lean-ctx mise.rs. Design: drop install/progress lines, keep task header + failing task output; `mise run` = inner command formatter.
+
+Check: #1076 harness (`bench/c14`) shows ≥ lean-ctx on this category with full anchor retention.
+
+Plan: `mise` formatter: drop install/progress lines, keep the task header and a failing task's output, delegate `mise run <task>` output to the inner command formatter via the existing echoed-line peel in `formatters.rs`. Tests: golden `mise_*` fixtures, error lines and exit line kept.
+
+### T678. for 570, until 231, while
+
+Best competitor: caveman repetition. Design: loop output: normalise numbers/ids per line, collapse runs of same-shape lines into `shape ×N (vals: a..b)`; never collapse lines with error words.
+
+Check: #1076 harness (`bench/c14`) shows ≥ 80 % on polling loops on this category with full anchor retention.
+
+Plan: new loop-output collapser in `compact.rs` used for `for`/`while`/`until` scripts: normalise digits/ids per line, collapse runs of same-shape lines into `shape ×N (vals: a..b)`, never collapse a line with an error word. Tests: golden polling-loop fixture with `min_saving: 80`, unit test that error lines stay verbatim.
+
+### T679. ls 386
+
+Best competitor: lean-ctx 66.6 %. Design: ls -l → `name size` with dirs first, drop perms unless non-default (`x` bit, symlink target kept as `a -> b`); group by extension when > 30 entries.
+
+Check: #1076 harness (`bench/c14`) shows ≥ 72 % (= rtk) on this category with full anchor retention.
+
+Plan: #1077 already ships `ls -l` (dirs on one line, human sizes, exec marker, symlink target). Remaining: dirs first, group by extension above 30 entries, `ls -la` dotfiles. Extend `ls_l` in `compact.rs`; measure against the current golden `ls*` fixtures and raise their `min_saving:` floors to the new numbers.
+
+### T680. git status 297
+
+Best competitor: lean-ctx 40.5 %. Design: one line per section with paths grouped by dir (`src/plugins/cmd/{a,b}.rs`), sigils, drop git hints; branch + ahead/behind.
+
+Check: #1076 harness (`bench/c14`) shows ≥ 60 % (rtk 62.5 %) on this category with full anchor retention.
+
+Plan: #1077 prints `git status` as porcelain XY codes. Remaining: group paths by directory (`src/plugins/cmd/{a,b}.rs`), one line per section, branch + ahead/behind, drop hints. Extend `git_status` in `compact.rs`; keep every path (test counts paths in/out); update golden `git_status*` floors.
+
+### T681. git diff 272, git show 262
+
+Best competitor: t-o 97.9 % / sqz 44.4 %. Design: two tiers: ≤ budget → drop `index`, context 1, fold unchanged runs, strip common indent; > budget → per-file `path +A -D` table and hunk headers with function names, full hunks only for the N smallest files; 100 % paths always.
+
+Check: #1076 harness (`bench/c14`) shows ≥ 80 % big diff with 100 % paths (t-o keeps 51 %) on this category with full anchor retention.
+
+Plan: #1077 already drops `index`/`diff --git` lines. Remaining: two tiers in `compact::git_diff`: within budget context 1, folded unchanged runs, stripped common indent; above budget a per-file `path +A -D` table plus hunk headers with function names and full hunks only for the N smallest files; `git show` routed to the same code. Tests: big-diff golden with 100% paths, small-diff golden, `git show`.
+
+### T682. git log 174
+
+Best competitor: — (rtok wins after #1079). Design: keep #1079; add `[N commits, +A/-D]`; drop Author when all equal.
+
+Check: #1076 harness (`bench/c14`) shows keep lead on this category with full anchor retention.
+
+Plan: first confirm #1079 (git log one line) is merged; if not, branch on top of main without touching its hunks and keep this task `todo`. Then add a `[N commits, +A/-D]` header and drop the Author column when every author is equal in `src/plugins/cmd` git-log formatter; fixture test for both, fail-first; measure with `bench/fixtures` (the #1076 harness is not on main).
+
+Blocked: stacks on #1079 (git log one line per commit), which is still open; a second change to the same formatter would conflict. Take it again once #1079 is on main. The #1076 harness (`bench/c14`) the Check cites is also not on main yet.
+
+### T683. tail 155, cat *.log
+
+Best competitor: lean-ctx 87.4 % (rtok 94.5 %). Design: caveman-style field summary on collapsed runs: constant logfmt keys printed once.
+
+Check: #1076 harness (`bench/c14`) shows keep lead, +2 pp on this category with full anchor retention.
+
+Plan: extend the existing log run-collapser in `src/plugins/cmd` so collapsed logfmt runs print constant `key=value` pairs once and list only varying keys; keep error/WARN lines verbatim; fixture test asserting anchors retained and tokens ≤ raw, `expand <id>` returns raw; measure on `bench/fixtures` logs.
+
+Blocked: (1) `cmd` has no logfmt run-collapser to extend today, only `dedupe = "normalized"` (`rules.rs`, no default rule uses it), so this is a new collapse mode, not a tweak; (2) the Check (+2 pp, rtok already 94.5 % vs lean-ctx 87.4 %) is measurable only with the #1076 harness (`bench/c14`, PR open, not on main). Take it again after #1076 merges.
+
+### T684. wc 102, cargo test/build/clippy
+
+Best competitor: rtk / sqz. Design: wc: drop padding, keep `total`; cargo: #1077 + group warnings by lint code `unused_imports ×12 (files…)`.
+
+Check: #1076 harness (`bench/c14`) shows ≥ rtk on this category with full anchor retention.
+
+Plan: wc formatter drops padding and keeps `total`; cargo clippy/build warnings (on top of #1077) group by lint code `lint ×N (files…)`, keeping every distinct path and all errors; fixture tests per formatter; never worse than raw.
+
+### T685. find 33
+
+Best competitor: rtok leads. Design: keep dir grouping but print full paths for ≤ 50 hits so the anchor check passes.
+
+Check: #1076 harness (`bench/c14`) shows 100 % paths, ≥ 69 % on this category with full anchor retention.
+
+Plan: in the find formatter print full paths for ≤ 50 hits (grouping only above that); fixture test asserting 100 % paths and fewer tokens than raw; measure on `bench/fixtures`.
+
+### T686. MCP tool catalogs
+
+Best competitor: caveman 12–29 %. Design: `rtok mcp` proxy: first sentence of descriptions, drop default/examples that duplicate type, enum compaction; recovery via archive.
+
+Check: #1076 harness (`bench/c14`) shows ≥ 30 % on this category with full anchor retention.
+
+Plan: locate the `rtok mcp` proxy tool-description rewrite (`[proxy.tools_rewrite]`, T59.5); add first-sentence descriptions, drop default/examples duplicating the schema type, compact enums, full text recoverable via the archive; fixture catalog test with token cut ≥ 30 % and unchanged tool names/required args. Decide at start whether it overlaps T124's off-by-default gate; if it needs a creator decision, write it here and set back to `todo`.
+
+Blocked, needs a creator decision: the `tools_rewrite` invariant says `input_schema` is never touched (`src/plugins/proxy/AGENTS.md`, `src/proxy/tools_rewrite.rs`), but `default`, `examples` and `enum` live inside `input_schema` properties, so this task cannot be done without relaxing that rule. It also overlaps T124 (the feature is off by default and its 3 % gate is not measured yet). Decide: allow rewriting `description`/`default`/`examples` strings inside `input_schema`, or keep the rule and cut this task to top-level descriptions only (already T59.5).
+
+### T901. Windows: `graph_lsp_gate::lsp_backend_outlines_dart_main` fails on dart 3.9
+
+The test fails on Windows dart 3.9 with `File is not being analyzed` (surfaced by the first full local `just check` on Windows, T272–T274, `docs/windows.md`); CI never runs it because the runners have no dart. Done = the test no longer fails on Windows dart 3.9 (project gets a `dart pub get` / readiness wait, or skips on that error with the reason in a comment) and a test pins the skip/ready predicate.
+
+Check: `lsp_backend_outlines_dart_main` passes or skips with a stated reason on Windows dart 3.9; the predicate test passes on every OS; `just check`.
+
+Plan: make `lsp_backend_outlines_dart_main` robust on Windows dart 3.9: write a minimal `pubspec.yaml` in the temp project and run `dart pub get`, or skip when the server answers `File is not being analyzed`, with the reason in a comment. CI has no dart, so the proof is a unit test of the skip/ready predicate that runs everywhere.
+
+### T902. Windows CI: run `cargo clippy --workspace` in the `windows` job
+
+`cfg(windows)` lint debt (the T273/T274 class) is only found by the first local Windows gate. Done = the `windows` CI job runs `cargo clippy --workspace` and is green, so such debt fails CI.
+
+Check: the `windows` job of this PR runs the clippy step and is green.
+
+Plan: add `cargo clippy --workspace` to the `windows` job in the CI workflow (reusing the lint flags the Linux job uses); fix any `cfg(windows)` lint it surfaces in this PR if small; proof is the green CI run of the PR.

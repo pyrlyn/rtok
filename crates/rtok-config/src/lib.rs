@@ -1219,6 +1219,9 @@ section! {
         rules: PathBuf = p("~/.rtok/rules.toml"),
         /// Drop-in dir: every `*.toml` merges after `rules` in name order (T50.2).
         rules_dir: PathBuf = p("~/.rtok/rules.d"),
+        /// Print the `[rtok <id12> · N lines]` reference line after a cut (T661).
+        /// `false` (`RTOK_PLUGINS_CMD_TRAILER=false`, `rtok run --no-ref`) drops it.
+        trailer: bool = true,
         trailer_min_lines: u32 = 40,
         fail_tail_lines: u32 = 80,
         never_wrap: Vec<String> = strs(&["rtok", "sudo"]),
@@ -1332,6 +1335,13 @@ section! {
         model: String = s("all-MiniLM-L6-v2"),
         dimensions: u32 = 384,
         hybrid: bool = true,
+        /// `provider = "http"` (T668): base URL of an OpenAI-compatible embeddings API; rtok
+        /// posts to `<url>/embeddings`.
+        url: String = String::new(),
+        /// Name of the environment variable that holds the API key; empty sends none.
+        api_key_env: String = String::new(),
+        /// Longest text sent to the endpoint, in characters; a longer one is never sent.
+        max_chars: u32 = 8000,
     }
 }
 
@@ -1354,6 +1364,9 @@ section! {
         spawn_brief: bool = true,
         /// Token budget for the spawn brief (T130).
         spawn_brief_tokens: u32 = 300,
+        /// `rtok memory forget` retires an unpinned note nobody read for this many days
+        /// (T669; 0 = the command needs `--days`). Never runs by itself.
+        forget_after_days: u32 = 90,
         embed: MemoryEmbed = MemoryEmbed::default(),
     }
 }

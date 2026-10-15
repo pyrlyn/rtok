@@ -517,7 +517,8 @@ rewrite  = true                       # PreToolUse(Bash) → `rtok run -- …`
 shell    = ""                         # "" = $SHELL
 rules    = "~/.rtok/rules.toml"       # додаткові правила фільтрування; якщо немає → вбудований rules/default.toml
 rules_dir = "~/.rtok/rules.d"         # drop-in-файли: кожен *.toml об'єднується після rules у порядку назв (T50.2)
-trailer_min_lines = 40                # додавати `[rtok <id> · N lines · expand …]` понад це
+trailer  = true                       # друкувати `[rtok <id12> · N lines]` після скорочення; false = `--no-ref`
+trailer_min_lines = 40                # додавати `[rtok <id12> · N lines]` понад це
 fail_tail_lines   = 80                # ненульовий код виходу → останні N рядків дослівно
 never_wrap = ["rtok", "sudo"]         # список заборонених перших слів; heredoc, `&`, -i завжди пропускаються
 
@@ -577,13 +578,17 @@ startup_recall = true                 # SessionStart(startup) відновлює
 handoff        = true                 # MCP-інструмент T59.6 для зведення субагента
 spawn_brief        = true             # T130: зведення-вказівник для SubagentStart
 spawn_brief_tokens = 300              # T130: бюджет токенів для брифу під час запуску
+forget_after_days = 90                # T669: «memory forget» вилучає нотатки, які не читали так довго; 0 — потрібен --days
 
 [plugins.memory.embed]
 enabled    = false                    # P29: якщо false — лише FTS5; векторний пошук вмикається явно
-provider   = "local"                  # "local" | "openai"
-model      = "all-MiniLM-L6-v2"
-dimensions = 384
+provider   = "local"                  # "local" = офлайн-хеш-вектори | "http" = OpenAI-сумісний API ембедингів
+model      = "all-MiniLM-L6-v2"       # "http": назва моделі на сервері
+dimensions = 384                      # "http": має збігатися з довжиною вектора сервера
 hybrid     = true                     # коли ввімкнено: RRF(fts5, knn) для mem_search і prompt_recall; хук читає лише збережені вектори; false = лише knn
+url         = ""                      # "http": базовий URL, напр. "http://localhost:11434/v1" (Ollama) або "https://api.openai.com/v1"; текст нотаток надсилається туди
+api_key_env = ""                      # "http": назва змінної середовища з ключем; порожньо = без заголовка Authorization
+max_chars   = 8000                    # "http": довший текст не надсилається (працює звичайний пошук по нотатках)
 
 [plugins.graph]
 enabled    = true

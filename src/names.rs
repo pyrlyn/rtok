@@ -25,6 +25,16 @@ pub(crate) fn cmd_stem(path: &str) -> &str {
     }
 }
 
+/// Shortest archive-id prefix `rtok expand` resolves, and the one every pointer prints (T672).
+pub(crate) const MIN_PREFIX: usize = 8;
+
+/// T672: the id as a pointer prints it. Eight hex chars (32 bits) keep the link line to a
+/// few tokens; the rare collision is answered by the ambiguity error in `expand`, which
+/// names each candidate by a longer prefix, not by a longer id on every call.
+pub fn short_id(id: &str) -> &str {
+    &id[..id.len().min(MIN_PREFIX)]
+}
+
 /// Host tool names (`bash`, `read_file`, `edit`, …) to the Claude names `plugins::guard` matches.
 pub(crate) fn canonical_tool_name(name: &str) -> String {
     let l = name.to_ascii_lowercase();

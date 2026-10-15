@@ -1,7 +1,6 @@
 - T124. Realized `tools_rewrite` saving as a dated `research.md` row
 
 - T131. Measure the spawn brief: cost row and on/off re-read share
-- T134. Probe: does a CLI command hook's `PostToolUse` `updatedToolOutput` replace native tool output?
 
 - T156. Probe: `WorktreeCreate`/`WorktreeRemove` hooks and reflink-seeded `target/`
 - T261. CI takes ~9.5 min on macOS; the webui check recompiles 183 crates every run
@@ -46,4 +45,28 @@
 - T656. Keep worktrees and caches when their age cannot be established
 - T657. Match compressor credentials to the internal provider
 - T651. Honor ProgressRunner timeouts with inherited output
-- T660.5. `rtok worktree migrate` moves worktrees into the configured root
+- T662. Match sqz formatter breadth without leaving the lossless path
+- T663. Push graph reference precision toward LSP-grade (serena)
+- T664. Review/blast-radius features from code-review-graph
+- T665. Broader graph queries (codebase-memory-mcp)
+- T666. Optional automatic memory extraction (claude-mem idea)
+- T667. Richer memory features from engram
+- T669. Hybrid memory ranking and forgetting (graymatter)
+- T670. Read modes lean-ctx still has
+- T671. Memory admission gate (MemPalace idea)
+- T687. Hooks: PreToolUse/PostToolUse p50 to 10 ms
+- T673. grep 2260, git grep 452, rg: ≥ 91 %, 100 % paths (vs t-o 89.7 %, lean-ctx 89.6 %)
+- T675. python3 1545: ≥ t-o pytest (564→115) (vs none specialised)
+- T676. gh 744: +20 pp vs current head/tail (vs lean-ctx gh.rs)
+- T677. mise 660: ≥ lean-ctx (vs lean-ctx mise.rs)
+- T678. for 570, until 231, while: ≥ 80 % on polling loops (vs caveman repetition)
+- T679. ls 386: ≥ 72 % (= rtk) (vs lean-ctx 66.6 %)
+- T680. git status 297: ≥ 60 % (rtk 62.5 %) (vs lean-ctx 40.5 %)
+- T681. git diff 272, git show 262: ≥ 80 % big diff with 100 % paths (t-o keeps 51 %) (vs t-o 97.9 % / sqz 44.4 %)
+- T682. git log 174: keep lead (vs — (rtok wins after #1079))
+- T683. tail 155, cat *.log: keep lead, +2 pp (vs lean-ctx 87.4 % (rtok 94.5 %))
+- T684. wc 102, cargo test/build/clippy: ≥ rtk (vs rtk / sqz)
+- T685. find 33: 100 % paths, ≥ 69 % (vs rtok leads)
+- T686. MCP tool catalogs: ≥ 30 % (vs caveman 12–29 %)
+- T901. Windows: `graph_lsp_gate::lsp_backend_outlines_dart_main` fails on dart 3.9
+- T902. Windows CI: run `cargo clippy --workspace` in the `windows` job
