@@ -227,6 +227,11 @@ const ALLOW_KEYS: &[&str] = &[
     "batch.status.url",
     "batch.fetch.provider",
     "batch.fetch.url",
+    // `run|filter --no-ref` (T661): drops the reference line for one call; the stored
+    // setting is `plugins.cmd.trailer`.
+    "plugins.cmd.no_ref",
+    // `filter --exit` (hidden): the exit code of the command whose stdin is filtered.
+    "plugins.cmd.exit",
 ];
 
 #[test]
