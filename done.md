@@ -2059,29 +2059,6 @@ Fix:
 
 Check: `just spa-stories` 257/257 twice; `just spa-test` 300/300; `just js`: oxlint is clean, and oxfmt flags only `web/e2e/rtok.ts`, which is unformatted on `main` and untouched here.
 
-### T661. rtk filter parity and `rtok discover`
-
-Compare [rtk](https://github.com/rtk-ai/rtk) filters against rtok's rule families: list the filters/commands rtk covers that rtok lacks, and where rtk is broader. Prefer `docs/comparison/rtok-vs-rtk.md` from draft PR #1071 when useful.
-
-Savings for both sides (sourced only; never invent):
-
-| Case | rtok saved | rtk saved | Source |
-|---|---|---|---|
-| bash bytes cut (author corpus, 5,725 cmds) | no data | 40.4 % (1.1 M of 2.8 M bytes) | `research.md` §2 A/B (T9.2) |
-| claimed bash cut | no data | 60–90 % (claim) | `research.md` §2 |
-| agentic bill (JetBrains) | no data | +7.6 % to 0 % (worse/neutral) | `research.md` §1, §7 |
-| head-to-head harness (`bench/competitors/rtk`) | pending | pending | PR #1071 |
-
-Add `rtok discover`, analogous to `rtk discover`: analyze recorded agent shell calls from rtok's own history/DB and report frequent commands with no filter, ranked by potential token savings, so we know which filters to add next. CLI only; new-command gates (trycmd fence, `surface_parity`, `config_coverage` if config is touched). Docs: `docs/comparison/rtok-vs-rtk.md` coverage table, `CHANGELOG.md`, command help.
-
-Done when: a dated coverage table (rtk command/filter vs rtok rule family) is in the comparison doc; `rtok discover` prints the ranked gap list from a fixture store and from the live local DB.
-
-Check: unit tests for ranking and "no filter" detection on a fixture DB; trycmd fence for `discover`; coverage table committed; `just check`.
-
-Result: `rtok discover [--since 30d] [--top 15] [--json]` reads the recorded `PostToolUse` Bash hook bodies (`Store::hook_inputs_for_tool_since`, Diesel), unwraps `rtok run -- '…'`, takes the first real program of each command through the `cmd` plugin's own lexer (`bounded::stages`, `formatters::visible_argv`), drops families with a formatter or a named rule (`formatters::filter_kind`) and chains that `rtok run` sends to `[script]`, and ranks the rest by output tokens (`measure::discover`, `model::discover`). The coverage table (62 rtk filters and 58 command modules at v1.0.1 vs rtok's formatters and rules) is in `docs/comparison/rtok-vs-rtk.md`. No saving rate is applied to the ranking. Bodies over `core.call_io_inline_bytes` are not read, so the numbers are a floor. On a copy of the live store (15,625 Bash calls, 30 days) most commands are chains already covered by `[script]`; 19 families remain, the top being `tail` (75 calls, 18k tokens) and `jscpd`.
-
-Check result (2026-10-15): 8 unit tests in `measure::discover` (ranking, covered-family skip, wrapper and syntax peel, `top`, the store query with a fixture DB); trycmd `discover.toml`, `discover-json.toml`, `--help` in `help-subcommands.trycmd`; `surface_parity` and `config_coverage` entries; completions, man and help goldens re-blessed; `just check`.
-
 ### T310.6. Pages: overview, plugins (toggle), calls (expand)
 
 Check: each page matches `design/html/admin/<page>.html` in dark and light at 375 and 1280 px on sample data; toggle and expand round-trip against `rtok web`; stories and Vitest for page logic.
@@ -2789,6 +2766,36 @@ Plan:
 Check: a fixture with three notes asserts the injected text has ids, titles and token counts and does not contain a body secret; an empty project asserts the one-line key; `mem_get` records one `memory` measurement and returns the full body; `just check`.
 
 **Result (2026-10-04).** The recall index carries a body token estimate and names `mem_get` (`INDEX_GUIDE` in `src/plugins/memory/mod.rs`); `mem_get` records one `mem_get` measurement row and returns the full body (tests in the same file).
+
+### T671. Memory admission gate (MemPalace idea)
+
+MemPalace is ahead on admission/dedup by embeddings (`docs/comparison/rtok-vs-mempalace.md`). Add an admission gate before notes are stored (cheap hash/trigram first; embeddings opt-in). Savings both sides: **no data** (harness skips).
+
+Check: duplicate/low-value notes rejected in tests; default path needs no network; `just check`.
+
+**Source audit (T530).**
+
+T531–T539 are confirmed source defects on `0b14b88e`, filed for implementation rather
+than fixed during this audit. Start with the incorrect-response cases T532/T533, then
+the remaining independent P2 fixes. Each card distinguishes executed function probes
+from source-derived reproduction steps and gives its own implementation/check sequence.
+Existing tasks, including uncommitted T522–T527 in the shared checkout, were checked for
+overlap and were not copied or reassigned. This is a bounded review of the core data
+paths, not a claim that every bug or host/platform combination has been exhausted.
+
+**Plan.** (1) New `src/plugins/memory/admit.rs`: normalize (lowercase, collapse whitespace), exact-hash and trigram-Jaccard check against the notes of the same project (newest 200), reject empty/too-short bodies and near-duplicates (>= 0.9) with the existing note id in the reply; a same project+kind+title save still updates in place. (2) Wire into `mem_save` and the `remember:` path only (never a hook, never network); thresholds under `plugins.memory.admit` (`enabled = true`, `min_body_chars`, `dup_similarity`) in the one config module. (3) Embedding similarity stays opt-in: used only when `embed.enabled`. (4) Fail-first tests: exact dup, whitespace/case dup, near-dup, distinct note admitted, short body rejected, gate off; `just check`.
+
+**Result (2026-10-15).** PR #1090. `mem_save` now runs an admission gate (`src/plugins/memory/admit.rs`): a body shorter than `plugins.memory.admit_min_chars` (5) is refused, and so is a body whose normalized character-trigram Jaccard similarity to one of the project's newest 200 live notes reaches `admit_similarity` (85 %); the refusal names the stored note (`{"id", "updated": false, "refused": "duplicate"|"too_short"}` over MCP). A same project+kind+title save still updates in place. `admit = false` turns the gate off. The keys live flat in `[plugins.memory]` rather than in a new `admit` section. Not done: the `remember:` prompt path is not gated (it never calls `mem_save`), and the opt-in embedding-similarity leg was left out.
+
+### T669. Hybrid memory ranking and forgetting (graymatter)
+
+graymatter is ahead on hybrid ranking/forgetting (`docs/comparison/rtok-vs-graymatter.md`). Improve rtok memory ranking using signals we already store; add a forget/decay policy. Savings both sides: **no data** pending harness; rtok already claims stronger measured recall on its own bench in the comparison file.
+
+Check: ranking/forget tests on a fixture store; comparison file updated; `just check`.
+
+**Plan.** Signals already stored: touch count, pin, retire/supersede, timestamps, file links. (1) Fail-first fixture tests (`src/plugins/memory`) for a recency/usage-aware score on top of bm25: a recently touched note outranks an equal-text stale one, a pinned note never decays. (2) A pure `rank` function (no I/O) used by `mem_search`/`mem_pack`/recall, default weights in the one config module (`plugins.memory.rank`), byte-stable output. (3) A forget policy: notes untouched past `forget.after_days`, unpinned and not a decision, are retired (reversible tombstone, never deleted; `mem_update` can revive), default off, run by `rtok memory forget` (dry-run first), never from a hook. (4) Measure on the memory bench fixture, record the row in `research.md` and the comparison file; `just check`.
+
+**Result (2026-10-15).** PR #1096. `search_notes` takes the best `3 × limit` bm25 hits and re-ranks them with `rank_blend(rank, retention_score(...))` (reciprocal rank offset 8, scaled by `0.4 + 0.6 × retention`), so a pinned or well-read note overtakes a neighbour of equal text while a match several places better stays ahead; a store with no use signal ranks as before. New `rtok memory forget [--project P] [--days N] [--apply]` retires unpinned, never-read notes older than `plugins.memory.forget_after_days` (default 90, 0 = needs `--days`); a dry run unless `--apply`; `user` and `decision` kinds, checkpoints and sessions are never forgotten, and a retired body stays readable. Tests: three ranking tests, two forget tests, a trycmd case, config coverage. The memory-bench row was not recorded and the comparison docs were not updated.
 
 ### T294. Export rows that can carry a tombstone
 
@@ -8772,6 +8779,32 @@ Check: the `DEFAULT_TOML` unit test (every default commented out, parsing yields
 Plan: comment assignment lines in `config/default.toml` (and map-table headers whose empty presence would replace a non-empty default: `[bench.configs]`, `[stats.prices."…"]`). `init_maybe` keeps writing `DEFAULT_TOML` verbatim. A unit test in `src/config/mod.rs` asserts every assignment is commented and that both the commented file and the same file with those lines uncommented parse to `Config::default()` (the uncomment pass keeps the documented values from drifting). `config set` revives a commented key in place via the existing `assign` decor swap in `src/config/validate.rs`, so padding and the trailing comment stay. Pinned-default notes live in that same module (reuse `loc` / `line_of` and the serialized `Config::default()` schema): explicit leaves whose value differs from the default, formatted with key, value, default and line, not as errors. `doctor::page` prints them; a fixture with `[plugins.toon] enabled = false` shows the note. Re-bless `tests/trycmd/config-init.toml`. Fix `src/plugins/toon/AGENTS.md` and `research.md` §16.1. Verify with those tests, `rtok config init --dry-run` on a scratch home, and `just check`.
 
 Result: `config/default.toml` comments every assignment and the map headers `[bench.configs]` and `[stats.prices."…"]` (an empty map would wipe a non-empty default; an empty struct table would not, so those headers stay). `init_maybe` still writes that file. `config set` uncomments the documented assignment along the path, including an intermediate scalar, so `set proxy.port.foo` still reports "not a table" and a real set keeps padding and the trailing comment. Notes name key, value, default and line on `rtok doctor` text and on `rtok config validate` stdout; they are not errors and nothing is rewritten. Equal values and unknown open-map keys are silent. Doctor JSON skips the notes (`serde`/`schemars` skip). `docs/config.md` prose matches; its embedded sample stays the readable uncommented form. `src/plugins/toon/AGENTS.md` and `research.md` §16.1 now say toon is on by default since T127. Checked: `default_toml_is_the_defaults`, `toon_pinned_off_is_a_config_note`, trycmd `config-init` / `report-md`, scratch `config init --dry-run` (only commented values); `just check` green (2479 passed, 6 skipped).
+
+### T688. rtk filter parity and `rtok discover`
+
+Compare [rtk](https://github.com/rtk-ai/rtk) filters against rtok's rule families: list the filters/commands rtk covers that rtok lacks, and where rtk is broader. Prefer `docs/comparison/rtok-vs-rtk.md` from draft PR #1071 when useful.
+
+Savings for both sides (sourced only; never invent):
+
+| Case | rtok saved | rtk saved | Source |
+|---|---|---|---|
+| bash bytes cut (author corpus, 5,725 cmds) | no data | 40.4 % (1.1 M of 2.8 M bytes) | `research.md` §2 A/B (T9.2) |
+| claimed bash cut | no data | 60–90 % (claim) | `research.md` §2 |
+| agentic bill (JetBrains) | no data | +7.6 % to 0 % (worse/neutral) | `research.md` §1, §7 |
+| head-to-head harness (`bench/competitors/rtk`) | pending | pending | PR #1071 |
+
+Add `rtok discover`, analogous to `rtk discover`: analyze recorded agent shell calls from rtok's own history/DB and report frequent commands with no filter, ranked by potential token savings, so we know which filters to add next. CLI only; new-command gates (trycmd fence, `surface_parity`, `config_coverage` if config is touched). Docs: `docs/comparison/rtok-vs-rtk.md` coverage table, `CHANGELOG.md`, command help.
+
+Plan (execution):
+1. Coverage table: rtk filters from its repo files (cited commit, checked 2026-10-15) against `rules/default.toml` and the `FORMATTER_STEMS` families; dated table in `docs/comparison/rtok-vs-rtk.md`.
+2. `rtok discover`: `Store::hook_inputs_since` (Diesel, PostToolUse hook bodies across sessions) -> `measure::discover` (pure ranking: `bash_family` + `filter_kind == "default"` over `Settings::from_config`, ranked by estimated tokens of output the agent read) -> `crate::model::discover` -> `cli/discover.rs`. The `rtok run` wrap strip moves from `guard` to `names.rs` so both reuse it.
+3. Tests: fixture-store unit tests (ranking, no-filter detection, wrapped commands), trycmd fence, `surface_parity`, `man.stdout` `v[..]`; CHANGELOG, docs/commands.md, docs ru/uk.
+4. Verify: `just check`.
+Done when: a dated coverage table (rtk command/filter vs rtok rule family) is in the comparison doc; `rtok discover` prints the ranked gap list from a fixture store and from the live local DB.
+
+Check: unit tests for ranking and "no filter" detection on a fixture DB; trycmd fence for `discover`; coverage table committed; `just check`.
+
+Result: `docs/comparison/rtok-vs-rtk.md` has a dated (2026-10-15) coverage table of all 92 commands in rtk's `src/discover/rules.rs` at commit `5eb0509` (release v1.0.1) against rtok's families: 11 `formatter`, 20 `rule`, 61 `none`; rtok is broader on nine stems. `rtok discover [--since] [--limit] [--json]` reads the stored `PostToolUse` shell bodies (`Store::hook_inputs_since`, Diesel), maps each command with `bash_family` and `filter_kind` over the effective rules (user rules included) and ranks the families with no rule or formatter by output tokens read. It claims no saving. The `rtok run` wrap strip moved from `guard` to `names.rs` and both use it. Tests: `measure::discover` unit tests on strings and on a fixture store, trycmd `discover-json` / `discover-table`, `surface_parity`, `config_coverage`. The follow-up that adds rule families for the top gaps is T662 and later cards.
 
 ### T137. `rtok stats`: image blocks row
 Gate for a multimodal token gate (`research.md` §16.3 #9). Screenshots from browser and simulator tools enter the live zone as image blocks; rtok measures bytes of text only, so their share is unknown.

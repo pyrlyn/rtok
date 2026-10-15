@@ -50,9 +50,7 @@
 - T665. Broader graph queries (codebase-memory-mcp)
 - T666. Optional automatic memory extraction (claude-mem idea)
 - T667. Richer memory features from engram
-- T669. Hybrid memory ranking and forgetting (graymatter)
 - T670. Read modes lean-ctx still has
-- T671. Memory admission gate (MemPalace idea)
 - T687. Hooks: PreToolUse/PostToolUse p50 to 10 ms
 - T673. grep 2260, git grep 452, rg: ≥ 91 %, 100 % paths (vs t-o 89.7 %, lean-ctx 89.6 %)
 - T675. python3 1545: ≥ t-o pytest (564→115) (vs none specialised)
