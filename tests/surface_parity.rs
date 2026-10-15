@@ -1113,6 +1113,10 @@ const EXEMPT: &[(&str, &str)] = &[
         "logs export",
         "the same Logs selection, unnumbered and uncoloured",
     ),
+    (
+        "discover",
+        "an on-demand query of the recorded shell history (`model::discover`), not a snapshot page; the ranking is one function the CLI renders (T661)",
+    ),
 ];
 
 /// Every runnable command path, space-joined — the walk `config_coverage` already
@@ -1179,6 +1183,7 @@ fn every_command_is_exempt_or_renders_a_page_of_the_model() {
 /// Table-printing readers must accept `--json` and serialize the model page (T60.1).
 const JSON_READERS: &[&str] = &[
     "stats",
+    "discover",
     "info",
     "config show",
     "config get",

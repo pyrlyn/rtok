@@ -87,6 +87,118 @@ Token savings per command, re-run 2026-10-14 (total over its cases, tiktoken o20
 
 Latency is flat (re-run 2026-10-14, about 31–35 ms for every tool): it is dominated by the ~30 ms Python replay shim, so it says nothing about filter speed.
 
+## Filter coverage (checked 2026-10-15)
+
+Which commands rtk filters and what rtok does for the same command. Both sides come from repository files, not from either project's marketing:
+
+* rtk: `src/discover/rules.rs` (the table of commands `rtk` rewrites) and the file listing of `src/cmds/` and `src/filters/` at commit [`5eb0509`](https://github.com/rtk-ai/rtk/tree/5eb0509690a6f0110bb9bdd453fcf75c480e0d05) on `develop`, release v1.0.1 (GitHub API, 2026-10-15). 92 distinct commands; the tree holds 62 declarative `src/filters/*.toml` files and 54 `src/cmds/**/*_cmd.rs` modules.
+* rtok: `rules/default.toml` (29 rule families) and `FORMATTER_STEMS` in `src/plugins/cmd/formatters.rs` (12 stems, 2 of them also have a rule) at the commit this branch is cut from. 39 distinct stems.
+
+Columns: `formatter` = a Rust formatter for the stem, `rule` = a `[<stem>]` table in `rules/default.toml`, `none` = no rule and no formatter; the command still gets the default cut (`Rule::default`: 40 lines kept as 10 head + 10 tail, adjacent-duplicate fold, column collapse) and an archive, and `rtok discover` lists it when it shows up often. A row says nothing about how well either tool shortens the output: no savings number is implied.
+
+Totals over rtk's 92 commands: **11 `formatter`, 20 `rule`, 61 `none`**.
+
+rtk is broader: the 61 `none` rows below, mostly ecosystems rtok has no family for (PHP, Ruby, Terraform/OpenTofu/Pulumi, JS test and lint runners other than `jest`/`vitest`/`tsc`/`eslint`, Swift, Scala, system tools such as `systemctl`, `du`, `ping`). rtok is broader on nine stems rtk has no rewrite rule for: `apt`, `awk`, `cmake`, `node`, `python`, `python3`, `sed`, `sqlite3`, `script` (the bucket for a Bash line that chains several programs).
+
+| rtk command | rtk implementation | rtok today |
+| --- | --- | --- |
+| `rtk ansible-playbook` | `filters/ansible-playbook.toml` | none |
+| `rtk ast-grep` | rewrite rule only | none |
+| `rtk aws` | `cmds/cloud/aws_cmd.rs` | rule |
+| `rtk brew` | `filters/brew-install.toml` | rule |
+| `rtk bun` | `cmds/js/bun_cmd.rs` | none |
+| `rtk bundle` | `filters/bundle-install.toml` | none |
+| `rtk bunx` | rewrite rule only | none |
+| `rtk cargo` | `cmds/rust/cargo_cmd.rs` | formatter |
+| `rtk composer` | `filters/composer-install.toml` | none |
+| `rtk ctest` | `cmds/system/ctest_cmd.rs` | none |
+| `rtk curl` | `cmds/cloud/curl_cmd.rs` | rule |
+| `rtk deno` | `cmds/js/deno_cmd.rs` | none |
+| `rtk df` | `filters/df.toml` | formatter |
+| `rtk diff` | `cmds/git/diff_cmd.rs` | none |
+| `rtk docker` | rewrite rule only | formatter |
+| `rtk dotnet` | `cmds/dotnet/dotnet_cmd.rs`, `filters/dotnet-build.toml` | rule |
+| `rtk du` | `filters/du.toml` | none |
+| `rtk ecs` | `cmds/php/ecs_cmd.rs` | none |
+| `rtk fail2ban-client` | `filters/fail2ban-client.toml` | none |
+| `rtk find` | `cmds/system/find_cmd.rs` | rule |
+| `rtk gcloud` | `filters/gcloud.toml` | none |
+| `rtk gh` | `cmds/git/gh_cmd.rs` | rule |
+| `rtk git` | `cmds/git/git_cmd.rs` | formatter |
+| `rtk glab` | `cmds/git/glab_cmd.rs` | none |
+| `rtk go` | `cmds/go/go_cmd.rs` | formatter |
+| `rtk golangci-lint run` | rewrite rule only | none |
+| `rtk gradlew` | `cmds/jvm/gradlew_cmd.rs` | rule |
+| `rtk grep` | rewrite rule only | rule |
+| `rtk gt` | `cmds/git/gt_cmd.rs` | none |
+| `rtk hadolint` | `filters/hadolint.toml` | none |
+| `rtk helm` | `filters/helm.toml` | none |
+| `rtk iptables` | `filters/iptables.toml` | none |
+| `rtk jest` | rewrite rule only | formatter |
+| `rtk kubectl` | rewrite rule only | formatter |
+| `rtk lint` | `cmds/js/lint_cmd.rs` | rule |
+| `rtk liquibase` | `filters/liquibase.toml` | none |
+| `rtk ls` | `cmds/system/ls.rs` | rule |
+| `rtk make` | `filters/make.toml` | rule |
+| `rtk markdownlint` | `filters/markdownlint.toml` | none |
+| `rtk mix` | `filters/mix-compile.toml`, `filters/mix-format.toml` | none |
+| `rtk mvn` | `cmds/jvm/mvn_cmd.rs` | rule |
+| `rtk mvnd` | rewrite rule only | rule |
+| `rtk mypy` | `cmds/python/mypy_cmd.rs` | none |
+| `rtk next` | `cmds/js/next_cmd.rs` | none |
+| `rtk npm` | `cmds/js/npm_cmd.rs` | rule |
+| `rtk npx` | rewrite rule only | none |
+| `rtk oc` | rewrite rule only | none |
+| `rtk paratest` | `cmds/php/paratest_cmd.rs` | none |
+| `rtk pest` | `cmds/php/pest_cmd.rs` | none |
+| `rtk php` | `cmds/php/php_cmd.rs` | none |
+| `rtk phpstan` | `cmds/php/phpstan_cmd.rs` | none |
+| `rtk phpt` | `cmds/php/phpt_cmd.rs` | none |
+| `rtk phpunit` | `cmds/php/phpunit_cmd.rs` | none |
+| `rtk ping` | `filters/ping.toml` | none |
+| `rtk pint` | `cmds/php/pint_cmd.rs` | none |
+| `rtk pio` | `filters/pio-run.toml` | none |
+| `rtk pip` | `cmds/python/pip_cmd.rs` | rule |
+| `rtk playwright` | `cmds/js/playwright_cmd.rs` | none |
+| `rtk pnpm` | `cmds/js/pnpm_cmd.rs` | rule |
+| `rtk poetry` | `filters/poetry-install.toml` | none |
+| `rtk pre-commit` | `filters/pre-commit.toml` | none |
+| `rtk prettier` | `cmds/js/prettier_cmd.rs` | none |
+| `rtk prisma` | `cmds/js/prisma_cmd.rs` | none |
+| `rtk ps` | `filters/ps.toml` | formatter |
+| `rtk psql` | `cmds/cloud/psql_cmd.rs` | none |
+| `rtk pulumi` | `filters/pulumi-destroy.toml`, `filters/pulumi-preview.toml`, `filters/pulumi-refresh.toml`, `filters/pulumi-stack.toml`, `filters/pulumi-up.toml` | none |
+| `rtk pytest` | `cmds/python/pytest_cmd.rs` | formatter |
+| `rtk quarto` | `filters/quarto-render.toml` | none |
+| `rtk rake` | `cmds/ruby/rake_cmd.rs` | none |
+| `rtk read` | `cmds/system/read.rs` | rule |
+| `rtk rg` | rewrite rule only | rule |
+| `rtk rspec` | `cmds/ruby/rspec_cmd.rs` | none |
+| `rtk rsync` | `filters/rsync.toml` | none |
+| `rtk rubocop` | `cmds/ruby/rubocop_cmd.rs` | none |
+| `rtk ruff` | `cmds/python/ruff_cmd.rs` | none |
+| `rtk sbt` | `cmds/scala/sbt_cmd.rs` | none |
+| `rtk shellcheck` | `filters/shellcheck.toml` | none |
+| `rtk shopify` | `filters/shopify-theme.toml` | none |
+| `rtk sops` | `filters/sops.toml` | none |
+| `rtk sqlfluff` | `cmds/python/sqlfluff_cmd.rs` | none |
+| `rtk swift` | `filters/swift-build.toml` | none |
+| `rtk systemctl` | `filters/systemctl-status.toml` | none |
+| `rtk terraform` | `filters/terraform-plan.toml` | none |
+| `rtk tofu` | `filters/tofu-fmt.toml`, `filters/tofu-init.toml`, `filters/tofu-plan.toml`, `filters/tofu-validate.toml` | none |
+| `rtk tree` | `cmds/system/tree.rs` | formatter |
+| `rtk trunk` | `filters/trunk-build.toml` | none |
+| `rtk tsc` | `cmds/js/tsc_cmd.rs` | rule |
+| `rtk uv` | `cmds/python/uv_cmd.rs`, `filters/uv-sync.toml` | rule |
+| `rtk vitest` | `cmds/js/vitest_cmd.rs` | formatter |
+| `rtk wc` | `cmds/system/wc_cmd.rs` | none |
+| `rtk wget` | `cmds/cloud/wget_cmd.rs` | none |
+| `rtk yamllint` | `filters/yamllint.toml` | none |
+
+Sources (all checked 2026-10-15): [`src/discover/rules.rs`](https://github.com/rtk-ai/rtk/blob/5eb0509690a6f0110bb9bdd453fcf75c480e0d05/src/discover/rules.rs), [`src/filters/`](https://github.com/rtk-ai/rtk/tree/5eb0509690a6f0110bb9bdd453fcf75c480e0d05/src/filters), [`src/cmds/`](https://github.com/rtk-ai/rtk/tree/5eb0509690a6f0110bb9bdd453fcf75c480e0d05/src/cmds), release [v1.0.1](https://github.com/rtk-ai/rtk/releases/tag/v1.0.1). The `rtk implementation` column is matched by file name, so `rewrite rule only` means no file of that name, not that rtk has no filter.
+
+Close the gap in order: run `rtok discover` on your own history first. It lists the commands your agents actually ran that have no rtok filter, ranked by the output tokens they read, so the next rule family is picked from your data rather than from this table.
+
 ## Command table
 
 One table per command; each cell is output tokens (saving vs raw).

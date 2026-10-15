@@ -19,6 +19,8 @@ mod bench;
 mod completions;
 mod config;
 mod demon;
+#[cfg(feature = "cmd")]
+mod discover;
 #[cfg(feature = "docs")]
 mod docs;
 mod doctor;
@@ -83,6 +85,11 @@ enum Cmd {
 
     /// Measurements from session logs and the proxy
     Stats(stats::Args),
+
+    // T661
+    /// Shell commands your agents ran that have no rule or formatter, most output first
+    #[cfg(feature = "cmd")]
+    Discover(discover::Args),
 
     /// A/B benchmark of host configurations
     Bench(bench::Args),
@@ -243,6 +250,8 @@ pub fn run() -> Result<()> {
         Cmd::Web(args) => web::serve(&config_file, args),
         Cmd::Tui(args) => web::tui(&config_file, args),
         Cmd::Stats(args) => stats::run(&config_file, args),
+        #[cfg(feature = "cmd")]
+        Cmd::Discover(args) => discover::run(&config_file, args),
         Cmd::Bench(args) => bench::run(&config_file, args),
         Cmd::Doctor(args) => doctor::run(&config_file, args),
         Cmd::Worktree { action } => worktree::run(&config_file, action),

@@ -143,6 +143,16 @@ _arguments "${_arguments_options[@]}" : /
 '--help[Print help]' /
 && ret=0
 ;;
+(discover)
+_arguments "${_arguments_options[@]}" : /
+'--since=[How far back to read recorded shell calls (/`30d/`, /`24h/`)]:SINCE:_default' /
+'--limit=[Rows to print, most output first]:LIMIT:_default' /
+'--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
+'--json[JSON instead of the table]' /
+'-h[Print help]' /
+'--help[Print help]' /
+&& ret=0
+;;
 (bench)
 _arguments "${_arguments_options[@]}" : /
 '--tasks=[Task list TOML]:TASKS:_files' /
@@ -2709,6 +2719,10 @@ _arguments "${_arguments_options[@]}" : /
 _arguments "${_arguments_options[@]}" : /
 && ret=0
 ;;
+(discover)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
 (bench)
 _arguments "${_arguments_options[@]}" : /
 && ret=0
@@ -3379,6 +3393,7 @@ _rtok_commands() {
 'web:Local web UI over the same data as /`rtok tui/` (WebSocket API + React SPA)' /
 'tui:Terminal UI over the same data as /`rtok web/` (one model, two renderings)' /
 'stats:Measurements from session logs and the proxy' /
+'discover:Shell commands your agents ran that have no rule or formatter, most output first' /
 'bench:A/B benchmark of host configurations' /
 'doctor:Inspect hooks, MCP servers and the proxy chain' /
 'worktree:Git worktrees of this repository/: owner, state and disk cost' /
@@ -3976,6 +3991,11 @@ _rtok__subcmd__demon__subcmd__upgrade_commands() {
     local commands; commands=()
     _describe -t commands 'rtok demon upgrade commands' commands "$@"
 }
+(( $+functions[_rtok__subcmd__discover_commands] )) ||
+_rtok__subcmd__discover_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok discover commands' commands "$@"
+}
 (( $+functions[_rtok__subcmd__docs_commands] )) ||
 _rtok__subcmd__docs_commands() {
     local commands; commands=(
@@ -4312,6 +4332,7 @@ _rtok__subcmd__help_commands() {
 'web:Local web UI over the same data as /`rtok tui/` (WebSocket API + React SPA)' /
 'tui:Terminal UI over the same data as /`rtok web/` (one model, two renderings)' /
 'stats:Measurements from session logs and the proxy' /
+'discover:Shell commands your agents ran that have no rule or formatter, most output first' /
 'bench:A/B benchmark of host configurations' /
 'doctor:Inspect hooks, MCP servers and the proxy chain' /
 'worktree:Git worktrees of this repository/: owner, state and disk cost' /
@@ -4591,6 +4612,11 @@ _rtok__subcmd__help__subcmd__demon__subcmd__supervise_commands() {
 _rtok__subcmd__help__subcmd__demon__subcmd__upgrade_commands() {
     local commands; commands=()
     _describe -t commands 'rtok help demon upgrade commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__help__subcmd__discover_commands] )) ||
+_rtok__subcmd__help__subcmd__discover_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok help discover commands' commands "$@"
 }
 (( $+functions[_rtok__subcmd__help__subcmd__docs_commands] )) ||
 _rtok__subcmd__help__subcmd__docs_commands() {
