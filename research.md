@@ -1619,6 +1619,18 @@ Eligible share by tool (sums to 6.54 %): `Bash` 2.12 %, `Read` of code 1.40 %, r
 
 Caveats: `bytes / 4` underestimates code (about 3 chars per token), so the true token shares are somewhat higher; the tool-name classes come from the transcript's own `tool_use` records; transcripts of the last 60 days only, Claude Code only (Codex, Cursor and others are not in the denominator); mtime-selected files may hold older, uncounted requests; eligibility assumes the 4-message boundary of the proxy even though no proxy ran; micro-compaction by the host, if any, is not modelled. Commands: read-only `sqlite3 -readonly "file:<home>/rtok.db?mode=ro"` for the `archive`, `archive_decisions` and config values; `rtok stats --since 30d --json`.
 
+### 16.9 P28 compressor on a local model: attempt, no gate evidence (T385.9.3, 2026-10-15)
+
+Local reference run, **not the Gate P28 bench** (the creator allowed LM Studio with `prism-ml/bonsai-27b`, a 2-bit 27B, for this card; defaults unchanged). Setup: two scratch `rtok proxy` instances (`rtok 0.17.0`, built from `origin/main`, own `RTOK_HOME`), both `mode = "compress"` with `upstream = http://localhost:1234`; arm A `[plugins.compress.llm] enabled = false`, arm B `enabled = true, model = "prism-ml/bonsai-27b"`. Task: `claude -p` (2.1.267, `--setting-sources project`, `--allowedTools Read`) reads six 15 KB log files one per call, then must name the error code on one `ERROR` line of the first file.
+
+| Run | Result |
+| --- | --- |
+| 3 tasks x 2 arms in parallel | all six hit the 1500 s timeout (the local model cannot prefill six ~37 K-token sessions at once); no data |
+| Arm A alone | 6 turns, 576 s, `usage.input_tokens` 252,859 (213,760 cached), 337 output tokens, **empty final answer** |
+| Arm B alone | 8 turns, 12 s, input 98,386 (98,304 cached), 233 output tokens, **empty final answer**; store shows **0** `archive_summaries`, no internal-lane call and no compress `Measurement` row, so the compressor never fired |
+
+Why nothing can be concluded: the model gave an empty answer in both arms (pass rate 0 of 2, control included), the two runs differ in turns and in LM Studio's prompt-cache state (576 s vs 12 s), and arm B did not compress anything (the `Read` results were not eligible within the last `keep_turns = 4` turns, or the queue did not run in 8 turns). No cost per passed task, no compressor tokens. A real bench needs a model that passes the control, tasks with more than `keep_turns` turns after the large results, and an `rtok bench` arm for the compressor (`rtok bench` has none today). Gate P28 stays open and the flag stays off.
+
 ## 17. Sharing context between an agent and its sub-agents (2026-09-21)
 
 Creator request: a freshly spawned sub-agent gets none of the parent's context, reads the same files again and pays for them again. Find what rtok can apply; sub-agents stay cheap (Haiku). Method: two Haiku agents (repo inventory, web scan), one Haiku docs check, an ad-hoc scan of this machine's transcripts; synthesis in the main session. Vendor numbers stay claims.
