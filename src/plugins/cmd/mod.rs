@@ -16,6 +16,7 @@ pub mod hook;
 
 pub mod filter;
 pub mod formatters;
+pub mod gh;
 pub mod grep;
 pub mod mise;
 pub mod python;
