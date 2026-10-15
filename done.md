@@ -8719,6 +8719,16 @@ Result: `visible_argv` peels `mise exec`/`mise x` (after `--` or `-c`) and `just
 Status: done 2026-10-06
 Model: Cursor / grok 4.7
 
+### T662. Match sqz formatter breadth without leaving the lossless path
+
+sqz ships 45+ formatters and a stack-trace safe mode; rtok has fewer families (`docs/comparison/rtok-vs-sqz.md`). Close the coverage gap while keeping archive + `expand`. Reuse T65.1–T65.4 ideas already taken from sqz; extend rule families where sqz still wins. Sourced savings: sqz self-reports 24.7 % over 3,003 compressions (`research.md` §11); rtok on that corpus is **no data** until the harness runs.
+
+Check: a coverage table vs sqz in `docs/comparison/rtok-vs-sqz.md`; at least the top gap families from `rtok discover` (T661) gain rules; `just check`.
+
+Plan: read `docs/comparison/rtok-vs-sqz.md`; build the coverage table sqz-formatter → rtok rule; add rules (in `rules/default.toml` through the existing rule engine, no new engine) for the top missing families, each with a fixture and a no-worse-than-raw test. `rtok discover` (T661) is not on main: pick families by the sqz list and say so in the card.
+
+Outcome: `parse_diag` reads `path:line[:col]: CODE msg` (ruff), `path:line: error: msg  [code]` (mypy), `path:line:col: C: Cop/Name: msg` (rubocop) and `path:line:col: msg (linter)` (golangci-lint), so new `[ruff]`, `[mypy]`, `[rubocop]` and `[golangci-lint]` rules fold them with `group = "diag"`: 96 %, 77 %, 88 % and 91 % on the goldens against 72 %, 55 %, 82 % and 53 % for `Rule::default()`. yarn, bun, rspec, terraform and xcodebuild already win on the default rule, so they got goldens only. The sqz coverage table is in `docs/research/competitors-techniques.md`; podman (the `docker ps` formatter matches only `docker`) is left open. `rtok discover` (T661) and the #1076 harness are not on main, so families came from sqz's list and savings from the repo goldens.
+
 ### T388. `doctor` reports the real MCP Tool Search state
 
 From `research.md` §3 and §8: `doctor` infers "MCP tool search likely disabled" from `ANTHROPIC_BASE_URL` alone (`src/doctor.rs`, `mcp_tool_search_disabled: anthropic.is_some()`) and never reads `ENABLE_TOOL_SEARCH`. The `tools_rewrite` advice keys off the same flag, so a false positive advises a rewrite that is not needed.
