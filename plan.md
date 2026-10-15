@@ -72,7 +72,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T665 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T666 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T667 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T668 | in progress | P2 | 3 | 5% | Claude Code / claude-sonnet-5-5 |
 | T669 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T670 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T671 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
@@ -163,16 +162,6 @@ engram has more memory features (HTTP + MCP) (`docs/comparison/rtok-vs-engram.md
 Check: feature list and take/skip in the comparison file; tests for what shipped; `just check`.
 
 **Plan.** From `docs/comparison/rtok-vs-engram.md` (PR #1071): engram has relation judging, pinned-first recall and project identity from the origin remote that rtok lacks. Relation judging spends model output on bookkeeping: **skip**. (1) Check which of pinned-first recall and origin-remote project identity already exist (`mem_update pinned`, `project_name`); fail-first tests on `tests/fixtures/p29_memory.toml`-style fixtures for the missing ones. (2) Implement only what raises recall on rtok's own memory bench with no new MCP tool and no daemon. (3) Write the take/skip list into the comparison file (or `research.md` while #1071 is open); `just check`.
-
-### T668. Opt-in semantic memory path (mem0 idea)
-
-mem0 is ahead for semantic/vector memory (`docs/comparison/rtok-vs-mem0.md`). Keep rtok's cheap note path default; optional embedding search behind a flag, no Docker/Qdrant required for the default build. Savings both sides: **no data** (harness skips; needs API/models).
-
-Check: default build has no vector dependency; opt-in path documented; `just check`.
-
-**Decision (creator).** Remote HTTP embedder: `provider = "http"` calls an OpenAI-compatible `/v1/embeddings` endpoint through the existing `reqwest`, with user-supplied `url`, `model` and the name of an env var that holds the API key. Cost cap is a hard per-request `max_chars`, no DB counters. Defaults stay `provider = "local"` (hash) and `enabled = false`: nothing is downloaded or paid by default. Fail open: any HTTP or parse error, or oversized input, falls back to the hash vector (and FTS) with a warning.
-
-**Plan.** (1) `research.md`: cite the OpenAI embeddings reference and the Ollama OpenAI-compat docs. (2) `rtok-config`: `[plugins.memory.embed]` gains `url`, `api_key_env`, `max_chars`; schema from types, validation of the provider. (3) `rtok-store/src/embed.rs`: an `Embedder` seam (hash or http); `provider = "http"` posts the text, checks the vector length against `dimensions`, and falls back to `hash_embed` on any failure; the model key records the provider so vectors from different embedders never mix. (4) Tests with a local fake HTTP server (no real network): flag off is byte-identical, http ranking works, failure and oversized input fall back, the default build has no new dependency. (5) Docs `docs/config.md` + ru/uk, CHANGELOG, `toolchain.md`/`rust.md` only if a crate is added. (6) `just check`.
 
 ### T669. Hybrid memory ranking and forgetting (graymatter)
 

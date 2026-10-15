@@ -53,7 +53,6 @@
 - T665. Broader graph queries (codebase-memory-mcp)
 - T666. Optional automatic memory extraction (claude-mem idea)
 - T667. Richer memory features from engram
-- T668. Opt-in semantic memory path (mem0 idea)
 - T669. Hybrid memory ranking and forgetting (graymatter)
 - T670. Read modes lean-ctx still has
 - T671. Memory admission gate (MemPalace idea)

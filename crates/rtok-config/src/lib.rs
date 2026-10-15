@@ -1335,6 +1335,13 @@ section! {
         model: String = s("all-MiniLM-L6-v2"),
         dimensions: u32 = 384,
         hybrid: bool = true,
+        /// `provider = "http"` (T668): base URL of an OpenAI-compatible embeddings API; rtok
+        /// posts to `<url>/embeddings`.
+        url: String = String::new(),
+        /// Name of the environment variable that holds the API key; empty sends none.
+        api_key_env: String = String::new(),
+        /// Longest text sent to the endpoint, in characters; a longer one is never sent.
+        max_chars: u32 = 8000,
     }
 }
 
