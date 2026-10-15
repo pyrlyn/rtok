@@ -208,7 +208,7 @@ Creator-approved (moved from `roadmap.md`, from T178). Cut another ~10 ms off th
 
 **Plan.** (1) Re-measure first with the §19.2 harness on an idle machine (load average low; if it is high, say so and record no number). (2) Profile the hook path (process start, config parse, store open, plugin dispatch) and remove the largest avoidable cost with a fail-first latency test. (3) Record a dated `research.md` row. The fail-open and byte-stable rules stay.
 
-Done when: p50 as Claude Code sees it is at or under 10 ms for both events on the §19.2 harness, or the measured floor and the reason are written up; `just check`.
+Check: p50 as Claude Code sees it is at or under 10 ms for both events on the §19.2 harness, or the measured floor and the reason are written up; `just check`.
 
 ### T651. Honor ProgressRunner timeouts with inherited output
 
