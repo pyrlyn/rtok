@@ -220,14 +220,10 @@ pub(crate) fn names_the_id(filtered: &str, id: &str) -> bool {
 /// The pointer line appended after a filtered body: names the id, the line count and
 /// how to expand it. The one spelling shared by `rtok run`, `rtok filter --archive`
 /// and `rtok filter --stdin` so the three surfaces stay byte-identical.
-/// T661: the first 12 hex chars name the archive; `rtok expand` resolves a unique prefix.
+/// T661, T672: the first 8 hex chars name the archive; `rtok expand` resolves a unique prefix.
 pub(crate) fn trailer(id: &str, lines: u32) -> String {
-    let short = &id[..id.len().min(SHORT_ID)];
-    format!("[rtok {short} · {lines} lines]")
+    format!("[rtok {} · {lines} lines]", crate::names::short_id(id))
 }
-
-/// Hex chars of the archive id the trailer prints.
-pub(crate) const SHORT_ID: usize = 12;
 
 /// `body` up to the noise a filter may remove without a reader losing anything:
 /// whitespace runs (padding, trailing newline) and ANSI escapes, compared line by line.
@@ -364,6 +360,20 @@ fn emit_filtered_to(
         write_text(out, &msg);
         return;
     }
+    // T674: a file or line range printed again — unchanged is a pointer, changed is a diff
+    // against what this session saw. Main window only: a sub-agent never saw the parent's
+    // copy (T127), and its own read must not become the parent's baseline.
+    if agent.is_none()
+        && exit == 0
+        && let Some((path, key)) = super::catfile::reread_key(&formatters::family_argv(argv))
+    {
+        let host = rtok_plugin_sdk::Ctx::new(&cx);
+        if let Some(msg) = crate::plugins::read::cache::hit(&host, &key, &path, body, false) {
+            write_text(out, &msg);
+            return;
+        }
+        let _ = crate::plugins::read::cache::remember(&host, &key, body);
+    }
     // The id is the body's sha256, so the filter can name it before any store write.
     let id = crate::store::hex_sha256(body);
     let lines = if body.is_empty() {
@@ -393,11 +403,12 @@ fn emit_filtered_to(
     }
     let settings = rules::Settings::from_config(cfg);
     let family = formatters::family_of(&settings, argv, &before);
-    let (filtered, kind) = formatters::compress(&settings, argv, &before, exit, &id);
+    let (filtered, kind) =
+        formatters::compress(&settings, argv, &before, exit, crate::names::short_id(&id));
     // A formatter that trims a 29-line `git log` to 20 leaves the other 9 reachable only
     // through this id. A shortening that took only whitespace/ANSI has nothing to expand
     // (T160) — and then nothing references the id, so the archive row is skipped too.
-    let named = names_the_id(&filtered, &id);
+    let named = names_the_id(&filtered, crate::names::short_id(&id));
     let pointer = cfg.plugins.cmd.trailer
         && needs_pointer(
             lines,
@@ -568,6 +579,17 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
     }
 
+    /// T672: the pointer names the archive by its first 8 hex chars, not 12 or 64.
+    #[test]
+    fn trailer_names_an_eight_char_id() {
+        let id = "0123456789abcdef".repeat(4);
+        assert_eq!(trailer(&id, 5), "[rtok 01234567 · 5 lines]");
+        assert!(names_the_id(
+            "… 4 lines omitted (expand 01234567)",
+            crate::names::short_id(&id)
+        ));
+    }
+
     fn on_cmd(c: &Config) -> bool {
         shell_kind(&shell(c)) == ShellKind::Cmd
     }
@@ -632,6 +654,33 @@ mod tests {
         assert!(
             rows.iter()
                 .any(|r| r.kind == "dedup" && r.before_bytes > r.after_bytes)
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// T674: `cat f` again after `f` changed is a diff against the first read, not the file.
+    #[cfg(unix)]
+    #[test]
+    fn cat_of_a_changed_file_is_a_delta() {
+        let (c, dir) = cfg("cat-delta");
+        let path = dir.join("big.txt");
+        let text = |n: u32| {
+            (0..400)
+                .map(|i| format!("line {}", if i == 200 { n } else { i }))
+                .collect::<Vec<_>>()
+                .join("\n")
+        };
+        let argv = ["cat".to_string(), path.display().to_string()];
+        fs::write(&path, text(200)).unwrap();
+        assert_eq!(run(&c, &argv, None).unwrap(), 0);
+        fs::write(&path, text(9999)).unwrap();
+        assert_eq!(run(&c, &argv, None).unwrap(), 0);
+        let store = crate::store::Store::open(&c.core.db_path).unwrap();
+        let rows = store.list_measurements("read").unwrap();
+        assert!(
+            rows.iter()
+                .any(|r| r.kind == "delta" && r.before_bytes > 3 * r.after_bytes),
+            "{rows:?}"
         );
         let _ = fs::remove_dir_all(&dir);
     }

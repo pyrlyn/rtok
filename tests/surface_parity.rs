@@ -910,6 +910,10 @@ const EXEMPT: &[(&str, &str)] = &[
         "memory retire",
         "tombstones a note row; the Memory page renders the notes, not the verdict (T69.1)",
     ),
+    (
+        "memory forget",
+        "tombstones notes nobody read; dry run unless --apply (T669)",
+    ),
     ("memory pin", "flags a note row to lead recall (T69.1)"),
     ("memory unpin", "drops the recall lead flag (T69.1)"),
     (
@@ -1066,6 +1070,10 @@ const EXEMPT: &[(&str, &str)] = &[
         "report",
         "renders model::report_ledgers into a document (P22); no snapshot page",
     ),
+    (
+        "discover",
+        "reads the recorded Bash hook bodies on demand through model::discover (T661); no snapshot page",
+    ),
     ("graph impact", "need a target; CLI/MCP only"),
     ("graph affected", "need a target; CLI/MCP only"),
     ("graph review", "need a diff; CLI only"),
@@ -1175,6 +1183,7 @@ fn every_command_is_exempt_or_renders_a_page_of_the_model() {
 /// Table-printing readers must accept `--json` and serialize the model page (T60.1).
 const JSON_READERS: &[&str] = &[
     "stats",
+    "discover",
     "info",
     "config show",
     "config get",

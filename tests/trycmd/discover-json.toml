@@ -1,0 +1,16 @@
+bin.name = "rtok"
+args = "--config tests/trycmd/input/json-readers.toml discover --json --top 3"
+stdout = """
+{
+  "scanned": 0,
+  "gaps": []
+}
+"""
+
+# Hermetic by construction: an empty store in an isolated RTOK_HOME, inherit = false.
+[env]
+inherit = false
+
+[env.add]
+HOME = "target/tmp/t661-discover-json"
+RTOK_HOME = "target/tmp/t661-discover-json"

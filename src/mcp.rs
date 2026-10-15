@@ -874,8 +874,16 @@ fn mem_save(cx: &Runtime, args: &Value) -> Result<String> {
     let title = args["title"].as_str().unwrap_or("");
     let body = args["body"].as_str().unwrap_or("");
     let project = args["project"].as_str();
-    let (id, updated) = crate::plugins::memory::mem_save(cx, kind, title, body, project)?;
-    Ok(json!({"id": id, "updated": updated}).to_string())
+    use crate::plugins::memory::Saved;
+    Ok(
+        match crate::plugins::memory::mem_save_gated(cx, kind, title, body, project)? {
+            Saved::Stored { id, updated } => json!({"id": id, "updated": updated}),
+            Saved::Refused { reason, existing } => {
+                json!({"id": existing, "updated": false, "refused": reason})
+            }
+        }
+        .to_string(),
+    )
 }
 
 #[cfg(feature = "docs")]
@@ -1302,9 +1310,13 @@ mod tests {
         let v_quoted: Value = serde_json::from_str(&server.handle_line(quoted).unwrap()).unwrap();
         assert_eq!(v_bare["result"]["isError"], false, "{v_bare}");
         assert_eq!(v_quoted["result"]["isError"], false, "{v_quoted}");
-        assert_eq!(
-            v_bare["result"]["content"][0]["text"],
-            v_quoted["result"]["content"][0]["text"]
+        // T672: the 8-char pointer is now shorter than this one-line body, so the second,
+        // identical read may come back as the dedup pointer instead of the text.
+        let bare_text = v_bare["result"]["content"][0]["text"].as_str().unwrap();
+        let quoted_text = v_quoted["result"]["content"][0]["text"].as_str().unwrap();
+        assert!(
+            quoted_text == bare_text || quoted_text.contains("identical to a result"),
+            "{quoted_text}"
         );
         let _ = fs::remove_dir_all(dir);
     }
