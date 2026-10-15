@@ -225,7 +225,9 @@ mod tests {
             ("PostToolUse", "Read", i64::MAX),
             ("Stop", "Read", 0),
         ] {
-            let none = s.hook_inputs_for_tool_since(event, tool, since, 10).unwrap();
+            let none = s
+                .hook_inputs_for_tool_since(event, tool, since, 10)
+                .unwrap();
             assert!(none.is_empty(), "{event} {tool} {since}: {none:?}");
         }
     }
