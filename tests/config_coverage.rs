@@ -98,6 +98,10 @@ const ALLOW_KEYS: &[&str] = &[
     // `memory status` (T69.4): one-shot filters, not settings.
     "memory.status.project",
     "memory.status.since",
+    // `memory forget` (T669): one-shot scope and the dry-run switch; `forget_after_days` is the setting.
+    "memory.forget.project",
+    "memory.forget.apply",
+    "memory.forget.days",
     // `otel flush --coalesce` (T143): hidden, hook-spawned-only mode switch for one call,
     // not a stored setting — a manual `rtok otel flush` never passes it.
     "otel.flush.coalesce",

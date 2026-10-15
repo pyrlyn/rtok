@@ -1357,6 +1357,9 @@ section! {
         spawn_brief: bool = true,
         /// Token budget for the spawn brief (T130).
         spawn_brief_tokens: u32 = 300,
+        /// `rtok memory forget` retires an unpinned note nobody read for this many days
+        /// (T669; 0 = the command needs `--days`). Never runs by itself.
+        forget_after_days: u32 = 90,
         embed: MemoryEmbed = MemoryEmbed::default(),
     }
 }

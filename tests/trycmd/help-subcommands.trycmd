@@ -746,6 +746,7 @@ Commands:
   import   Import `{kind,title,body}` JSONL; dedupe by body sha256
   export   Print every note but session checkpoints as the JSONL `import` reads
   retire   Retire a note: a tombstone — never recalled or searched, body kept
+  forget   Retire notes nobody read for a long time (a dry run unless `--apply`)
   pin      Pin a note so it leads SessionStart recall
   unpin    Drop a note back to newest-first recall order
   history  Print the earlier title and body kept when an upsert changed this note

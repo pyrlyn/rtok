@@ -910,6 +910,10 @@ const EXEMPT: &[(&str, &str)] = &[
         "memory retire",
         "tombstones a note row; the Memory page renders the notes, not the verdict (T69.1)",
     ),
+    (
+        "memory forget",
+        "tombstones notes nobody read; dry run unless --apply (T669)",
+    ),
     ("memory pin", "flags a note row to lead recall (T69.1)"),
     ("memory unpin", "drops the recall lead flag (T69.1)"),
     (

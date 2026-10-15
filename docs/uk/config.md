@@ -578,6 +578,7 @@ startup_recall = true                 # SessionStart(startup) відновлює
 handoff        = true                 # MCP-інструмент T59.6 для зведення субагента
 spawn_brief        = true             # T130: зведення-вказівник для SubagentStart
 spawn_brief_tokens = 300              # T130: бюджет токенів для брифу під час запуску
+forget_after_days = 90                # T669: «memory forget» вилучає нотатки, які не читали так довго; 0 — потрібен --days
 
 [plugins.memory.embed]
 enabled    = false                    # P29: якщо false — лише FTS5; векторний пошук вмикається явно
