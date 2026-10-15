@@ -85,7 +85,7 @@ Token savings per command, re-run 2026-10-14 (total over its cases, tiktoken o20
 | `tree` | 367 | 444 (-21.0%) | 367 (0.0%) | 360 (1.9%) | 353 (3.8%) |
 | `wc` | 33 | 33 (0.0%) | 33 (0.0%) | 33 (0.0%) | 24 (27.3%) |
 
-Latency is flat (about 31–35 ms for every tool): it is dominated by the ~30 ms Python replay shim, so it says nothing about filter speed.
+Latency is flat (re-run 2026-10-14, about 31–35 ms for every tool): it is dominated by the ~30 ms Python replay shim, so it says nothing about filter speed.
 
 ## Command table
 
@@ -191,7 +191,7 @@ One table per command; each cell is output tokens (saving vs raw).
 |---|---:|---:|---:|---:|---:|
 | `wc_l` | 33 | 33 (0.0%) | 33 (0.0%) | 33 (0.0%) | 24 (27.3%) |
 | **total** | 33 | 33 (0.0%) | 33 (0.0%) | 33 (0.0%) | 24 (27.3%) |
-## Where rtok wins / loses
+## Where rtok wins / loses (re-run 2026-10-14)
 
 **Wins (rtok-pr vs rtk, default output):**
 
@@ -240,7 +240,7 @@ Measured in the same harness family on 2026-10-14 (draft #1076, commit `a449e6a3
 | cat source file | 86.2 % | lean-ctx 91.4 % |
 | MCP tool catalogs | 0 % | caveman 10–29 % |
 
-In that run rtok led on `git log` (after #1079, which keeps 89 % of commit hashes), `find`, `ls -laR` and `cat app.log`. Targets for the open gaps are tasks T672–T686 in `plan.md`; they are targets, not measurements.
+In that run (2026-10-14) rtok led on `git log` (after #1079, which keeps 89 % of commit hashes), `find`, `ls -laR` and `cat app.log`. Targets for the open gaps are tasks T672–T686 in `plan.md`; they are targets, not measurements.
 
 Sources studied: sqz (MIT OR Apache-2.0, code read), lean-ctx (Apache-2.0 for `rust/**`, code read), caveman (Apache-2.0, code read), token-optimizer (PolyForm Noncommercial, code **not** read; behaviour and documentation only).
 
