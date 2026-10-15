@@ -38,8 +38,8 @@ fn view(output: &str) -> Option<String> {
     let mut out: Vec<&str> = Vec::new();
     let mut in_body = false;
     let mut blank = false;
-    for line in output.lines() {
-        let line = line.trim_end();
+    for raw in output.lines() {
+        let line = raw.trim_end();
         if in_body {
             if line.is_empty() {
                 blank = true;
@@ -53,8 +53,13 @@ fn view(output: &str) -> Option<String> {
         } else if line == "--" {
             in_body = true;
             out.push(line);
-        } else if field.is_match(line) && line.split_once('\t').is_some_and(|(_, v)| v.is_empty()) {
-            // An unset field (`labels:\t`) says nothing.
+        } else if field.is_match(raw)
+            && raw
+                .split_once('\t')
+                .is_some_and(|(_, v)| v.trim().is_empty())
+        {
+            // An unset field (`labels:\t`) says nothing; `raw` still has the tab that
+            // `trim_end` took off `line`.
         } else {
             out.push(line);
         }
@@ -266,7 +271,7 @@ mod tests {
     #[test]
     fn warnings_in_a_quiet_looking_step_are_kept_not_counted_away() {
         let raw = "b\tbuild\t2026-10-15T10:00:00.0Z warning: unused import\nb\tbuild\t2026-10-15T10:00:01.0Z ok\n";
-        let got = run_log(&raw).unwrap();
+        let got = run_log(raw).unwrap();
         assert!(got.contains("warning: unused import"), "{got}");
     }
 

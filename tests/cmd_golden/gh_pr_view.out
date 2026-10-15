@@ -1,11 +1,7 @@
 title:	Add retry to the uploader
 state:	OPEN
 author:	ada
-labels:
-assignees:
 reviewers:	bob (Approved)
-projects:
-milestone:
 number:	42
 url:	https://github.com/o/r/pull/42
 additions:	120

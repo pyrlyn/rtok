@@ -159,8 +159,8 @@ pub(crate) use crate::names::cmd_stem;
 
 /// Stems with a Rust formatter (any subcommand). `rtok stats` labels the whole stem.
 const FORMATTER_STEMS: &[&str] = &[
-    "cargo", "git", "gh", "pytest", "python", "python3", "py", "jest", "vitest", "tree", "go", "docker",
-    "kubectl", "ps", "df", "sqlite3", "wc", "mise",
+    "cargo", "git", "gh", "pytest", "python", "python3", "py", "jest", "vitest", "tree", "go",
+    "docker", "kubectl", "ps", "df", "sqlite3", "wc", "mise",
 ];
 
 /// T50.1: how `rtok stats` labels a Bash family — `formatter`, named `rule`, or `default`.

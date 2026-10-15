@@ -1,6 +1,6 @@
 argv: gh pr view 42
 exit: 0
-min_saving: 3
+min_saving: 12
 ---
 title:	Add retry to the uploader
 state:	OPEN
