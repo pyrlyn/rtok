@@ -179,7 +179,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T684 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T685 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T686 | todo | P2 | 3 | 0% | |
-| T902 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
 
 
 
@@ -1278,10 +1277,3 @@ Plan: locate the `rtok mcp` proxy tool-description rewrite (`[proxy.tools_rewrit
 
 Blocked, needs a creator decision: the `tools_rewrite` invariant says `input_schema` is never touched (`src/plugins/proxy/AGENTS.md`, `src/proxy/tools_rewrite.rs`), but `default`, `examples` and `enum` live inside `input_schema` properties, so this task cannot be done without relaxing that rule. It also overlaps T124 (the feature is off by default and its 3 % gate is not measured yet). Decide: allow rewriting `description`/`default`/`examples` strings inside `input_schema`, or keep the rule and cut this task to top-level descriptions only (already T59.5).
 
-### T902. Windows CI: run `cargo clippy --workspace` in the `windows` job
-
-`cfg(windows)` lint debt (the T273/T274 class) is only found by the first local Windows gate. Done = the `windows` CI job runs `cargo clippy --workspace` and is green, so such debt fails CI.
-
-Check: the `windows` job of this PR runs the clippy step and is green.
-
-Plan: add `cargo clippy --workspace` to the `windows` job in the CI workflow (reusing the lint flags the Linux job uses); fix any `cfg(windows)` lint it surfaces in this PR if small; proof is the green CI run of the PR.
