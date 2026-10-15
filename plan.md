@@ -135,7 +135,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T385.9.3 | todo | P3 | 2 | 0% | |
 | T394 | todo | P2 | 2 | 20% | |
 | T395 | todo | P3 | 2 | 20% | |
-| T396 | todo | P3 | 2 | 85% | |
+| T396 | todo | P3 | 2 | 90% | |
 | T398 | todo | P3 | 1 | 30% | |
 | T413 | todo | P2 | 3 | 0% | |
 | T413.13 | todo | P3 | 2 | 0% | |
@@ -909,7 +909,7 @@ Check: a fixture per confirmed shape; §30 updated with dates; `just check`.
 
 Execution plan (2026-10-12): 1. run the Kilo, Gemini CLI, Copilot CLI and pi readers read-only on this machine's own files and record the observed shapes (no content); 2. a synthetic fixture per confirmed shape; 3. check whether a resumed Copilot session writes cumulative or run-only shutdown totals and stop double counting if needed (test first); 4. date each §30 tag; Grok `signals.json` stays unverified until the creator decides.
 
-Progress (2026-10-12, `research.md` §30): Copilot CLI 1.0.80 — `tokenDetails` is authoritative (it equals `usage` plus the compaction requests), the reader now takes it (`token_details_carry_the_compaction_requests_that_usage_leaves_out`, fail-first), and `inputTokens` including the cache legs is confirmed. pi 0.85.1 — reader sums match an independent sum over 953 entries; fixture for the `reasoning`/`cacheWrite1h` shape; fork id copying confirmed from source, not observed. Copilot resume: the reader keeps the last shutdown per session, cumulative per the SDK source (`github/copilot-sdk` 6be623b, `nodejs/src/generated/session-events.ts`; fail-first `a_resumed_session_counts_its_last_shutdown_not_the_sum_of_all`), not yet seen in a real resumed log. Left: a Kilo message row (this machine's db has none), Gemini CLI (not installed here), Grok `signals.json` (observed keys accepted by the creator 2026-10-13, but grok 1.0.34 wrote no `signals.json` in this machine's 3 sessions, `research.md` §30.7). Rechecked 2026-10-13: still 0 Kilo `message` rows and no Gemini chat files. Needs the creator to run one Kilo, one Gemini CLI and one Grok session, then a reader and fixture per shape.
+Progress (2026-10-12, `research.md` §30): Copilot CLI 1.0.80 — `tokenDetails` is authoritative (it equals `usage` plus the compaction requests), the reader now takes it (`token_details_carry_the_compaction_requests_that_usage_leaves_out`, fail-first), and `inputTokens` including the cache legs is confirmed. pi 0.85.1 — reader sums match an independent sum over 953 entries; fixture for the `reasoning`/`cacheWrite1h` shape; fork id copying confirmed from source, not observed. Copilot resume: the reader keeps the last shutdown per session, cumulative per the SDK source (`github/copilot-sdk` 6be623b, `nodejs/src/generated/session-events.ts`; fail-first `a_resumed_session_counts_its_last_shutdown_not_the_sum_of_all`), not yet seen in a real resumed log. Left: a Kilo message row (this machine's db has none), Gemini CLI (not installed here), Grok `signals.json` (observed keys accepted by the creator 2026-10-13, but grok 1.0.34 wrote no `signals.json` in this machine's 3 sessions, `research.md` §30.7). Rechecked 2026-10-13: still 0 Kilo `message` rows and no Gemini chat files. Kilo done 2026-10-15 (`research.md` §30.1: a real `message` row read through LM Studio, fixture added). Still needs the creator to run one Gemini CLI (not installed here) and one Grok session (xAI-only, not runnable on a local model), then a reader and fixture per shape.
 
 ### T398. Probe editors on a `worktree.useRelativePaths` worktree
 
