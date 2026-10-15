@@ -15010,3 +15010,13 @@ Audited project boundaries and the evidence baseline `eb7d980af235f0ccb3d8ff5847
 Evidence: T651 used the real `rtok-sys` path dependency; T652 used actual MCP config and SDK writer functions on a temporary JSON file; T653 used actual `rtok-store` in-memory APIs; T654 used a chmod/stat fixture with the graph gate source-traced; T655 used a deterministic extracted thread schedule; T656 and T657 are source-derived. No product code/tests, live host/provider, or real worktree/cache deletion. `CHECK_BASE=eb7d980af235f0ccb3d8ff58471d24b8267af35d mise exec -- just check` passed as scoped and reported no code changes, so no Cargo tests ran. `mise exec -- just docs-check` passed all selected documentation integration tests; `git diff --check` passed. Full `just check`, browser/host integration and Windows/Linux matrix were not run.
 
 Status: done 2026-10-13 · Model: OpenAI / GPT-6
+
+### T900. Update vulnerable dependencies
+
+The creator authorized dependency updates across the audit. Update only vulnerable dependencies and the resolver-required graph without weakening existing guards or advisory policy.
+
+Execution plan: reproduce the advisory audit; apply compatible package-manager updates; review the lockfile diff; run advisory regression checks and the project test/lint/format gates; publish a PR and merge only after required checks pass. No custom dependency implementation is needed. Rollback is a revert of the dependency-update commit.
+
+Check: RustSec audit has no vulnerabilities; full workspace nextest, clippy, format, minimum-feature build, duplication, JavaScript and Python gates pass with diagnostic environment variables unset.
+
+Validation: rustls 0.23.46 and quinn-proto 0.11.19 leave no RustSec vulnerabilities. All 3857 workspace tests passed across the complete run and focused retries (8 configured skips): the complete run passed 3853; two load-related timeouts and the claim-lock test passed at one test thread, and the plan-card check passed after adding its required Check line. CLI snapshots require the ambient RUST_LOG variable unset. Clippy (default and all features), formatting, duplication, JS checks and 43 Python tests passed. Minimum-feature build passed with existing unused-import warnings. Hakari generate --diff is clean. Existing dependencies are reused; no new source implementation was added.
