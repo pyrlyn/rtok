@@ -204,6 +204,10 @@ Every effective key with its origin — the `config show --sources` page.
 | plugins.memory.embed.model | all-MiniLM-L6-v2 | default |
 | plugins.memory.embed.provider | local | default |
 | plugins.memory.enabled | true | default |
+| plugins.memory.extract.command | [] | default |
+| plugins.memory.extract.enabled | false | default |
+| plugins.memory.extract.max_input_bytes | 60000 | default |
+| plugins.memory.extract.max_notes | 5 | default |
 | plugins.memory.handoff | true | default |
 | plugins.memory.prompt_recall | 5 | default |
 | plugins.memory.recall_titles | 5 | default |

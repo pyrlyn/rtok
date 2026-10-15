@@ -5,6 +5,7 @@
 //! Notes API: `mem_save` / `mem_search` / `mem_get` (plan T6.1).
 
 pub mod export;
+pub mod extract;
 mod files;
 pub mod handoff;
 pub mod import;

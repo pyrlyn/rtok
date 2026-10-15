@@ -26,6 +26,12 @@ pub(super) enum MemoryCmd {
         #[arg(long)]
         project: Option<String>,
     },
+    // T666.1
+    /// Save notes an external program extracts from a transcript (off by default)
+    Extract {
+        /// Claude Code transcript (`.jsonl`)
+        transcript: std::path::PathBuf,
+    },
     // T69.1
     /// Retire a note: a tombstone — never recalled or searched, body kept
     Retire {
@@ -104,6 +110,13 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: MemoryCmd) -> Result<()
         MemoryCmd::Export { project } => {
             let mut out = io::stdout().lock();
             crate::plugins::memory::export::run(&cfg, project.as_deref(), &mut out)?;
+        }
+        MemoryCmd::Extract { transcript } => {
+            let cx = crate::plugin::Runtime::open(cfg, "memory")?;
+            println!(
+                "{}",
+                crate::plugins::memory::extract::run_configured(&cx, &transcript)?
+            );
         }
         MemoryCmd::Retire { id, superseded_by } => {
             let cx = crate::plugin::Runtime::open(cfg, "memory")?;
