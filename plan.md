@@ -87,7 +87,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T681 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T682 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T683 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T684 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T685 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T686 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T901 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
@@ -1167,14 +1166,6 @@ Best competitor: lean-ctx 87.4 % (rtok 94.5 %). Design: caveman-style field summ
 Check: #1076 harness (`bench/c14`) shows keep lead, +2 pp on this category with full anchor retention.
 
 Plan: extend the existing log run-collapser in `src/plugins/cmd` so collapsed logfmt runs print constant `key=value` pairs once and list only varying keys; keep error/WARN lines verbatim; fixture test asserting anchors retained and tokens ≤ raw, `expand <id>` returns raw; measure on `bench/fixtures` logs.
-
-### T684. wc 102, cargo test/build/clippy
-
-Best competitor: rtk / sqz. Design: wc: drop padding, keep `total`; cargo: #1077 + group warnings by lint code `unused_imports ×12 (files…)`.
-
-Check: #1076 harness (`bench/c14`) shows ≥ rtk on this category with full anchor retention.
-
-Plan: wc formatter drops padding and keeps `total`; cargo clippy/build warnings (on top of #1077) group by lint code `lint ×N (files…)`, keeping every distinct path and all errors; fixture tests per formatter; never worse than raw.
 
 ### T685. find 33
 
