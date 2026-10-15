@@ -76,16 +76,16 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T669 | todo | P2 | 3 | 0% | |
 | T670 | todo | P2 | 3 | 0% | |
 | T671 | todo | P2 | 3 | 0% | |
-| T672 | todo | P2 | 3 | 0% | |
-| T673 | todo | P2 | 3 | 0% | |
-| T674 | todo | P2 | 3 | 0% | |
-| T675 | todo | P2 | 3 | 0% | |
-| T676 | todo | P2 | 3 | 0% | |
-| T677 | todo | P2 | 3 | 0% | |
-| T678 | todo | P2 | 3 | 0% | |
-| T679 | todo | P2 | 3 | 0% | |
-| T680 | todo | P2 | 3 | 0% | |
-| T681 | todo | P2 | 3 | 0% | |
+| T672 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T673 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T674 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T675 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T676 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T677 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T678 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T679 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T680 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T681 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T682 | todo | P2 | 3 | 0% | |
 | T683 | todo | P2 | 3 | 0% | |
 | T684 | todo | P2 | 3 | 0% | |
@@ -1078,11 +1078,15 @@ Best competitor: sqz `§ref§` ~13 tok. Design: one short id `[rtok 1a2b3c4d · 
 
 Check: #1076 harness (`bench/c14`) shows −75 tok/call on this category with full anchor retention.
 
+Plan: #1077 already prints a 12-char id with prefix expand; shorten the trailer to the 8-char minimum prefix (`SHORT_ID` in `src/plugins/cmd/run.rs`), widening per call only when the archive store already holds another id with that prefix. Test: trailer length and a collision case in `run.rs`/`expand.rs` tests. Measure: tokens of the trailer line before/after (bench/c14 is not on main; counted on the existing fixtures).
+
 ### T673. grep 2260, git grep 452, rg
 
 Best competitor: t-o 89.7 %, lean-ctx 89.6 %. Design: path printed once; matches as `line:text`; collapse common indentation; trim match text around the hit to ±60 chars keeping the match itself; per-file cap by match budget with `+N more (expand)`; files sorted by path (stable) not count; keep 100 % paths.
 
 Check: #1076 harness (`bench/c14`) shows ≥ 91 %, 100 % paths on this category with full anchor retention.
+
+Plan: new `grep_group` formatter in `src/plugins/cmd/compact.rs` wired in `formatters::format` for `grep`/`rg`/`git grep`: path once, `line:text` under it, common indent stripped, text trimmed to the match ±60 chars, per-file budget with `+N more (expand)`, files path-sorted; fall back to the rule when the shape is unknown. Tests: golden `grep_group*.in/out` with `min_saving:` plus a path-retention unit test. Measure on the existing grep fixtures (bench/c14 unmerged).
 
 ### T674. sed 2119 (`sed -n a,bp f`), cat 950, head 35, tail 155, awk
 
@@ -1090,11 +1094,15 @@ Best competitor: lean-ctx 91.4 % (`read` rewrite). Design: detect range-print of
 
 Check: #1076 harness (`bench/c14`) shows ≥ 93 % on `cat` source; re-read ≥ 95 % on this category with full anchor retention.
 
+Plan: for `cat <source>` without a range, emit signatures with elided bodies and line spans (reuse the tree-sitter outline already used by `rtok read`); for `sed -n a,bp f` keep the numbered range and, on a repeat in one session, print `unchanged since <id>` or a unified diff of the range (content hash kept in the archive store, no new table unless Diesel schema needs it). Tests: golden for cat source, session re-read unit tests. Stay under the bounded-passthrough rules in `bounded.rs`.
+
 ### T675. python3 1545
 
 Best competitor: none specialised. Design: detect pytest/unittest/traceback output: keep the full last traceback, collapse repeated frames, summary line; JSON stdout → TOON (#1078).
 
 Check: #1076 harness (`bench/c14`) shows ≥ t-o pytest (564→115) on this category with full anchor retention.
+
+Plan: add a `python` formatter in `compact.rs`: pytest/unittest output keeps the summary and the full last traceback, collapses repeated frames and repeated failing-test headers; JSON stdout is printed as a TOON table through the existing #1078 path if merged, otherwise left to a follow-up (written in this card). Tests: golden `python_pytest.in/out`, `python_traceback.in/out`.
 
 ### T676. gh 744
 
@@ -1102,11 +1110,15 @@ Best competitor: lean-ctx gh.rs. Design: `gh pr/issue view`: drop empty fields, 
 
 Check: #1076 harness (`bench/c14`) shows +20 pp vs current head/tail on this category with full anchor retention.
 
+Plan: `gh` formatter in `compact.rs`: `pr/issue view` drops empty fields and collapses markdown whitespace; `pr checks` keeps non-pass rows plus counts; `run view --log` keeps per-step error blocks; `--json` goes through the TOON helper if present. Tests: golden files per subcommand with `min_saving:`; failing check rows and URLs kept.
+
 ### T677. mise 660
 
 Best competitor: lean-ctx mise.rs. Design: drop install/progress lines, keep task header + failing task output; `mise run` = inner command formatter.
 
 Check: #1076 harness (`bench/c14`) shows ≥ lean-ctx on this category with full anchor retention.
+
+Plan: `mise` formatter: drop install/progress lines, keep the task header and a failing task's output, delegate `mise run <task>` output to the inner command formatter via the existing echoed-line peel in `formatters.rs`. Tests: golden `mise_*` fixtures, error lines and exit line kept.
 
 ### T678. for 570, until 231, while
 
@@ -1114,11 +1126,15 @@ Best competitor: caveman repetition. Design: loop output: normalise numbers/ids 
 
 Check: #1076 harness (`bench/c14`) shows ≥ 80 % on polling loops on this category with full anchor retention.
 
+Plan: new loop-output collapser in `compact.rs` used for `for`/`while`/`until` scripts: normalise digits/ids per line, collapse runs of same-shape lines into `shape ×N (vals: a..b)`, never collapse a line with an error word. Tests: golden polling-loop fixture with `min_saving: 80`, unit test that error lines stay verbatim.
+
 ### T679. ls 386
 
 Best competitor: lean-ctx 66.6 %. Design: ls -l → `name size` with dirs first, drop perms unless non-default (`x` bit, symlink target kept as `a -> b`); group by extension when > 30 entries.
 
 Check: #1076 harness (`bench/c14`) shows ≥ 72 % (= rtk) on this category with full anchor retention.
+
+Plan: #1077 already ships `ls -l` (dirs on one line, human sizes, exec marker, symlink target). Remaining: dirs first, group by extension above 30 entries, `ls -la` dotfiles. Extend `ls_l` in `compact.rs`; measure against the current golden `ls*` fixtures and raise their `min_saving:` floors to the new numbers.
 
 ### T680. git status 297
 
@@ -1126,11 +1142,15 @@ Best competitor: lean-ctx 40.5 %. Design: one line per section with paths groupe
 
 Check: #1076 harness (`bench/c14`) shows ≥ 60 % (rtk 62.5 %) on this category with full anchor retention.
 
+Plan: #1077 prints `git status` as porcelain XY codes. Remaining: group paths by directory (`src/plugins/cmd/{a,b}.rs`), one line per section, branch + ahead/behind, drop hints. Extend `git_status` in `compact.rs`; keep every path (test counts paths in/out); update golden `git_status*` floors.
+
 ### T681. git diff 272, git show 262
 
 Best competitor: t-o 97.9 % / sqz 44.4 %. Design: two tiers: ≤ budget → drop `index`, context 1, fold unchanged runs, strip common indent; > budget → per-file `path +A -D` table and hunk headers with function names, full hunks only for the N smallest files; 100 % paths always.
 
 Check: #1076 harness (`bench/c14`) shows ≥ 80 % big diff with 100 % paths (t-o keeps 51 %) on this category with full anchor retention.
+
+Plan: #1077 already drops `index`/`diff --git` lines. Remaining: two tiers in `compact::git_diff`: within budget context 1, folded unchanged runs, stripped common indent; above budget a per-file `path +A -D` table plus hunk headers with function names and full hunks only for the N smallest files; `git show` routed to the same code. Tests: big-diff golden with 100% paths, small-diff golden, `git show`.
 
 ### T682. git log 174
 
