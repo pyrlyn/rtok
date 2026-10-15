@@ -160,7 +160,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T663 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T664 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T665 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T666 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T666.2 | todo | P2 | 3 | 0% | |
 | T667 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T669 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T670 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
@@ -217,13 +217,11 @@ Check: query shapes documented and tested; comparison file updated; `just check`
 
 **Plan.** (1) List the query shapes agents used in our logs (`rtok stats`, `graph_events`) that `symbol`/`callers`/`impact`/`explore` do not answer in one call; compare with the Cypher shapes in `docs/comparison/rtok-vs-codebase-memory-mcp.md`. (2) Add at most two shapes as parameters of existing operations (no seventh/eighth tool): e.g. `callers` with `depth` and a `kind`/`path` filter, `outline` with `kind`. (3) Fail-first tests in `src/plugins/graph` + `tests/graph_contract.rs` for each shape, on the SQLite store only. (4) Document the shapes in `src/plugins/graph/README.md` and the comparison file; description tokens stay under the surface gate; `just check`.
 
-### T666. Optional automatic memory extraction (claude-mem idea)
+### T666.2. Provider-backed memory extractor (blocked on the creator)
 
-claude-mem is ahead if you want automatic LLM-extracted memory (`docs/comparison/rtok-vs-claude-mem.md`). Not a default path (cost). Design an opt-in extractor that writes ordinary rtok memory notes, measured. Savings both sides: **no data** without paid API keys (harness skips).
+T666.1 ships `rtok memory extract` with a user-configured program as the extractor. A built-in extractor needs creator decisions first: which provider and model, how the key is stored and read, and a per-run cost cap. Once decided: a provider extractor behind the same `Extractor` trait, a docs warning about cost, a measured row in `research.md` (needs a paid key, so the harness skips without one). Not claimed.
 
-Check: opt-in config off by default; fixture test with a fake LLM; docs warn about cost; `just check`.
-
-**Plan.** Split because a real model call needs a provider decision (creator) and the whole feature exceeds 500 lines. **T666.1 (this slice):** an `Extractor` trait in `src/plugins/memory/extract.rs`, the config block `plugins.memory.extract` (`enabled = false`, `max_notes`, `max_input_bytes`) in the one config module, and `rtok memory extract <transcript.jsonl>` that scrubs the input (`scrub.rs`, `<private>`), asks the extractor for candidate notes and saves them through the normal `mem_save` path (so the T671 admission gate and dedup apply). Only a fake extractor ships in tests; with `enabled = false` the command refuses and nothing runs. No hook calls it. **T666.2 (todo, blocked on the creator):** a real provider-backed extractor (which provider/model, key handling, cost cap) and a docs warning about cost. Tests: fake LLM fixture, off-by-default, scrub applied, duplicate rejected, input cap; `just check`.
+Check: a fake-server test of the provider call; the cost cap stops a run; off by default; `just check`.
 
 ### T667. Richer memory features from engram
 

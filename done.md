@@ -2790,6 +2790,16 @@ Check: a fixture with three notes asserts the injected text has ids, titles and 
 
 **Result (2026-10-04).** The recall index carries a body token estimate and names `mem_get` (`INDEX_GUIDE` in `src/plugins/memory/mod.rs`); `mem_get` records one `mem_get` measurement row and returns the full body (tests in the same file).
 
+### T666.1. Opt-in memory extraction through a user-configured program
+
+claude-mem is ahead if you want automatic LLM-extracted memory (`docs/comparison/rtok-vs-claude-mem.md`). Not a default path (cost). Design an opt-in extractor that writes ordinary rtok memory notes, measured. Savings both sides: **no data** without paid API keys (harness skips).
+
+Check: opt-in config off by default; fixture test with a fake LLM; docs warn about cost; `just check`.
+
+**Plan.** Split because a real model call needs a provider decision (creator) and the whole feature exceeds 500 lines. **T666.1 (this slice):** an `Extractor` trait in `src/plugins/memory/extract.rs`, the config block `plugins.memory.extract` (`enabled = false`, `max_notes`, `max_input_bytes`) in the one config module, and `rtok memory extract <transcript.jsonl>` that scrubs the input (`scrub.rs`, `<private>`), asks the extractor for candidate notes and saves them through the normal `mem_save` path (so the T671 admission gate and dedup apply). Only a fake extractor ships in tests; with `enabled = false` the command refuses and nothing runs. No hook calls it. **T666.2 (todo, blocked on the creator):** a real provider-backed extractor (which provider/model, key handling, cost cap) and a docs warning about cost. Tests: fake LLM fixture, off-by-default, scrub applied, duplicate rejected, input cap; `just check`.
+
+**Result (2026-10-16), T666.1.** PR #1120. `rtok memory extract <transcript.jsonl>` (`src/plugins/memory/extract.rs`), off unless `[plugins.memory.extract] enabled = true`: the user/assistant text of a Claude Code transcript is scrubbed (`<private>`, keys, tokens), cut to its last `max_input_bytes` (60000), written to a scratch file and given on stdin to the program named in `command` (run through `ProgressRunner`, 10-minute limit); each `{"title","body"}` stdout line (at most `max_notes`, 5) is saved as a plain `note` through the T671 admission gate, so a repeat is skipped. rtok ships no model client, key or provider; model output is untrusted (kind forced to `note`, title 120 / body 2000 chars). No hook calls it. Tests: fake extractor fixture, off by default, scrub, input and note caps, gate skip, parser, command round trip; trycmd case. The cost warning for a shipped provider belongs to T666.2.
+
 ### T294. Export rows that can carry a tombstone
 
 A later sync lives in a private repo. That repo was not in the local tree or in `gh repo list` / `gh search` on 2026-09-27 (the only cloud-sync hit was Fern in `listepo/budget-app`, a different product). This repo does not grow a protocol (D8). `export.rs` writes `{kind, title, body, project}` and drops `id`, timestamps, `retired`, `superseded_by` and `pinned`, so a replicator cannot apply a tombstone.
