@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
-//! `rtok discover` (T661): the shell commands agents ran that no `cmd` rule or formatter
+//! `rtok discover` (T688): the shell commands agents ran that no `cmd` rule or formatter
 //! covers, ranked by the output tokens the agent read. Input is the `PostToolUse` bodies the
 //! hook already stores; nothing is re-run and nothing is claimed saved: a `Measurement` row
 //! is the only saving rtok reports, and an unfiltered command has none.

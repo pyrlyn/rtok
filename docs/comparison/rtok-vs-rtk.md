@@ -31,7 +31,7 @@ Competitor: [rtk](https://github.com/rtk-ai/rtk) · category: Command-output fil
 
 **rtok is better overall for agent work; rtk is better at filter coverage.** rtk shrinks more command families out of the box, but it is lossy and its only independent bill measurement is neutral-to-negative. rtok keeps the raw output, measures every cut, and fits the cache-aware stack. Pick rtk if you only want the biggest shell-output filter set and accept lossy cuts (`docs/comparison.md` §7 says the same). Head-to-head token numbers are in the sections below.
 
-**Gap to close:** competitor ahead on filter coverage (~100+ filters vs rtok's 28 rule families). Tracked as [T661](../../plan.md) — make rtok beat this.
+**Gap to close:** competitor ahead on filter coverage (~100+ filters vs rtok's 28 rule families). Tracked as [T688](../../done.md) — make rtok beat this.
 
 ## Savings (both sides)
 

@@ -8723,7 +8723,7 @@ Plan: comment assignment lines in `config/default.toml` (and map-table headers w
 
 Result: `config/default.toml` comments every assignment and the map headers `[bench.configs]` and `[stats.prices."…"]` (an empty map would wipe a non-empty default; an empty struct table would not, so those headers stay). `init_maybe` still writes that file. `config set` uncomments the documented assignment along the path, including an intermediate scalar, so `set proxy.port.foo` still reports "not a table" and a real set keeps padding and the trailing comment. Notes name key, value, default and line on `rtok doctor` text and on `rtok config validate` stdout; they are not errors and nothing is rewritten. Equal values and unknown open-map keys are silent. Doctor JSON skips the notes (`serde`/`schemars` skip). `docs/config.md` prose matches; its embedded sample stays the readable uncommented form. `src/plugins/toon/AGENTS.md` and `research.md` §16.1 now say toon is on by default since T127. Checked: `default_toml_is_the_defaults`, `toon_pinned_off_is_a_config_note`, trycmd `config-init` / `report-md`, scratch `config init --dry-run` (only commented values); `just check` green (2479 passed, 6 skipped).
 
-### T661. rtk filter parity and `rtok discover`
+### T688. rtk filter parity and `rtok discover`
 
 Compare [rtk](https://github.com/rtk-ai/rtk) filters against rtok's rule families: list the filters/commands rtk covers that rtok lacks, and where rtk is broader. Prefer `docs/comparison/rtok-vs-rtk.md` from draft PR #1071 when useful.
 
@@ -8743,8 +8743,6 @@ Plan (execution):
 2. `rtok discover`: `Store::hook_inputs_since` (Diesel, PostToolUse hook bodies across sessions) -> `measure::discover` (pure ranking: `bash_family` + `filter_kind == "default"` over `Settings::from_config`, ranked by estimated tokens of output the agent read) -> `crate::model::discover` -> `cli/discover.rs`. The `rtok run` wrap strip moves from `guard` to `names.rs` so both reuse it.
 3. Tests: fixture-store unit tests (ranking, no-filter detection, wrapped commands), trycmd fence, `surface_parity`, `man.stdout` `v[..]`; CHANGELOG, docs/commands.md, docs ru/uk.
 4. Verify: `just check`.
-Note: `done.md` already holds an older, different T661 (graph overview stories); this card keeps the id as assigned and the collision is for the creator to renumber.
-
 Done when: a dated coverage table (rtk command/filter vs rtok rule family) is in the comparison doc; `rtok discover` prints the ranked gap list from a fixture store and from the live local DB.
 
 Check: unit tests for ranking and "no filter" detection on a fixture DB; trycmd fence for `discover`; coverage table committed; `just check`.

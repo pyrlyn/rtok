@@ -1115,7 +1115,7 @@ const EXEMPT: &[(&str, &str)] = &[
     ),
     (
         "discover",
-        "an on-demand query of the recorded shell history (`model::discover`), not a snapshot page; the ranking is one function the CLI renders (T661)",
+        "an on-demand query of the recorded shell history (`model::discover`), not a snapshot page; the ranking is one function the CLI renders (T688)",
     ),
 ];
 

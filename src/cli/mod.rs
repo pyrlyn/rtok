@@ -86,7 +86,7 @@ enum Cmd {
     /// Measurements from session logs and the proxy
     Stats(stats::Args),
 
-    // T661
+    // T688
     /// Shell commands your agents ran that have no rule or formatter, most output first
     #[cfg(feature = "cmd")]
     Discover(discover::Args),

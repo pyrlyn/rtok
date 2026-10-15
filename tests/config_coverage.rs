@@ -47,7 +47,7 @@ const ALLOW: &[&str] = &[
 /// `--dry-run` has a key wherever the command owns a config table (`setup`, `proxy`, `bench`);
 /// on `config init` / `config set` it sits beside `--force` and means "print, do not write".
 const ALLOW_KEYS: &[&str] = &[
-    // `discover --since/--limit` (T661): the window and row count of one call, not stored settings.
+    // `discover --since/--limit` (T688): the window and row count of one call, not stored settings.
     "discover.since",
     "discover.limit",
     // `man --dir` (T316): where one call writes the pages, not a stored setting.

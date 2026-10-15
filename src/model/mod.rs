@@ -516,7 +516,7 @@ pub fn plugin_stats(cfg: &Config, plugin: &str) -> Result<Value> {
     Ok(out)
 }
 
-/// The `rtok discover` page (T661): shell commands with no rule or formatter, ranked by the
+/// The `rtok discover` page (T688): shell commands with no rule or formatter, ranked by the
 /// output the agent read. The store is required, like `plugin_stats`: an unreadable store is
 /// an error, not an empty ranking. At most 50 000 of the newest `PostToolUse` rows
 /// are read, so a long history costs a bounded scan.
