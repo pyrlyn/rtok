@@ -71,3 +71,5 @@
 - T684. wc 102, cargo test/build/clippy: ≥ rtk (vs rtk / sqz)
 - T685. find 33: 100 % paths, ≥ 69 % (vs rtok leads)
 - T686. MCP tool catalogs: ≥ 30 % (vs caveman 12–29 %)
+- T901. Windows: `graph_lsp_gate::lsp_backend_outlines_dart_main` fails on dart 3.9
+- T902. Windows CI: run `cargo clippy --workspace` in the `windows` job
