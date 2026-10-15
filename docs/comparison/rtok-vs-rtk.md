@@ -226,6 +226,44 @@ Shared clean harness, `bench/harness` (its README lists the fairness rules). Rep
 * Results: `bench/harness/results/rtk/20261014-231100/` (`results.json`, `summary.md`, `negatives.txt`, `samples/`).
 * Fixture test: `cargo test --test bench_fixtures` (29 stored outputs, no Docker or network needed), also run inside a container.
 
+## Filter coverage (rtk vs rtok rule families)
+
+Checked 2026-10-15. rtk side: tag [v1.0.1](https://github.com/rtk-ai/rtk/releases/tag/v1.0.1) (published 2026-10-14), `src/filters/*.toml` (62 declarative filters) and `src/cmds/**` (58 command modules), read through the GitHub tree API. rtok side: `FORMATTER_STEMS` in `src/plugins/cmd/formatters.rs` and the tables in `rules/default.toml` at `1932bc928`. "Rule" means a named `[family]` table, "formatter" a Rust formatter; a family without either falls to the default head/tail cut. This lists what exists, not how well it filters: sizes are in the harness results above.
+
+| Area | rtk (filter or module) | rtok | Gap |
+|---|---|---|---|
+| Version control | `git`, `diff`, `gh`, `glab`, `gt`, `jj`, `yadm` | `git` formatter, `gh` rule | `glab`, `gt`, `jj`, `yadm` |
+| Rust | `cargo` (+ runner) | `cargo` formatter and rule | none |
+| Go | `go`, `golangci-lint` | `go` formatter and rule | `golangci-lint` |
+| JavaScript | `npm`, `pnpm`, `bun`, `deno`, `next`, `nx`, `turbo`, `playwright`, `prettier`, `prisma`, `tsc`, `vitest`, lint, `biome`, `oxlint` | `npm`, `pnpm`, `node`, `tsc`, `eslint` rules; `jest`, `vitest` formatters | `bun`, `deno`, `next`, `nx`, `turbo`, `playwright`, `prettier`, `prisma`, `biome`, `oxlint` |
+| Python | `pytest`, `pip`, `uv`, `mypy`, `ruff`, `sqlfluff`, `poetry-install`, `basedpyright`, `ty`, `uv-sync` | `pytest` formatter; `pip`, `uv`, `python`, `python3` rules | `mypy`, `ruff`, `sqlfluff`, `poetry`, `basedpyright`, `ty` |
+| JVM and .NET | `mvn`, `gradlew`, `sbt`, `dotnet` (build, format, trx), `spring-boot` | `mvn`, `gradle`, `dotnet` rules | `sbt`, `spring-boot`, `dotnet` format/trx |
+| PHP and Ruby | `artisan`, `ecs`, `paratest`, `pest`, `phpstan`, `phpunit`, `pint`, `rake`, `rspec`, `rubocop`, `bundle-install`, `composer-install`, `mix` | none | all |
+| C, C++ and Apple | `gcc`, `ctest`, `xcodebuild`, `swift-build`, `pio-run`, `make` | `make`, `cmake` rules | `gcc`, `ctest`, `xcodebuild`, `swift-build`, `pio-run` |
+| Containers and cloud | `docker`/`container`, `kubectl`, `helm`, `aws`, `gcloud`, `skopeo`, `hadolint`, `terraform`, `tofu`, `pulumi`, `ansible-playbook`, `sops` | `docker`, `kubectl` formatters; `aws` rule | `helm`, `gcloud`, `skopeo`, `hadolint`, `terraform`/`tofu`, `pulumi`, `ansible-playbook`, `sops` |
+| System | `ls`, `find`, `tree`, `df`, `du`, `ps`, `stat`, `wc`, `env`, `ping`, `ssh`, `rsync`, `systemctl-status`, `iptables`, `fail2ban-client`, `curl`, `wget`, `psql`, `jq` | `ls`, `find`, `curl` rules; `tree`, `df`, `ps` formatters | `du`, `stat`, `wc`, `env`, `ping`, `ssh`, `rsync`, `systemctl`, `iptables`, `fail2ban-client`, `wget`, `psql`, `jq` |
+| Search and files | `search`, `read`, `log` | `grep`, `rg`, `sed`, `cat`, `awk` rules | none (`log` is covered by the shared head/tail/dedupe pass) |
+| Lint and CI | `shellcheck`, `yamllint`, `markdownlint`, `pre-commit`, `trunk-build`, `liquibase` | none | all |
+| Task runners | `just`, `mise`, `task` | wrapper peel (`just -c`, `mise exec`, echoed recipe line) | `task` |
+| Misc | `jira`, `ollama`, `shopify-theme`, `quarto-render`, `brew-install` | `brew`, `apt` rules, `sqlite3` formatter | `jira`, `ollama`, `shopify-theme`, `quarto-render` |
+
+Where rtok is broader: `sqlite3`, `awk` and `apt` have no rtk counterpart in the tree; every rtok filter writes a `Measurement` row, archives the raw output for `rtok expand`, and runs from hooks, MCP and the proxy, which rtk's filters do not. Where rtk is broader: the whole PHP/Ruby/lint/IaC block and most JavaScript and Python tooling above. The gap list is not a to-do list: a family is worth a rule only if agents run it. `rtok discover` ranks exactly that from the local store:
+
+```
+rtok discover --since 30d --top 15
+```
+
+It reads the recorded `PostToolUse` Bash bodies, takes each command's family (`cd`, `FOO=1`, `mise exec`, `uv run` and an `rtok run --` wrapper peeled), drops the families that already have a formatter or a named rule, and lists the rest by the output tokens that reached the model. Bodies over `core.call_io_inline_bytes` are not stored inline, so the biggest outputs can be missing and the numbers are a floor.
+
+### Savings, sourced only
+
+| Case | rtok saved | rtk saved | Source |
+|---|---|---|---|
+| bash bytes cut (author corpus, 5,725 cmds) | no data | 40.4 % (1.1 M of 2.8 M bytes) | `research.md` §2 A/B (T9.2) |
+| claimed bash cut | no data | 60–90 % (claim) | `research.md` §2 |
+| agentic bill (JetBrains) | no data | +7.6 % to 0 % (worse/neutral) | `research.md` §1, §7 |
+| head-to-head harness (`bench/competitors/rtk`) | see "Results" above | see "Results" above | `bench/harness/results/rtk/20261014-231100/summary.md` |
+
 ## Competitor landscape
 
 Measured in the same harness family on 2026-10-14 (draft #1076, commit `a449e6a3`; rtok = main at that time). Savings are token savings vs raw. Techniques and licences: `docs/research/competitors-techniques.md`.

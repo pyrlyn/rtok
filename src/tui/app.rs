@@ -612,6 +612,7 @@ impl App {
     }
 
     #[cfg(test)]
+    #[cfg_attr(windows, allow(dead_code))] // only unix tests call it (T902)
     pub(in crate::tui) fn set_doctor_engine(&mut self, engine: Engine) {
         self.doctor_fix = DoctorFix::new(engine);
     }

@@ -226,4 +226,35 @@ mod tests {
         assert!(slices("kilo", &[d.join("missing")], 0).0.is_empty());
         std::fs::remove_dir_all(&d).ok();
     }
+
+    #[test]
+    fn a_real_kilo_7_8_1_assistant_row_is_read_with_its_extra_fields() {
+        // Observed 2026-10-15 in `kilo.db` after `kilo run -m lmstudio/prism-ml/bonsai-27b`;
+        // only the working directory is scrubbed. It carries fields the reader ignores
+        // (`parentID`, `mode`, `agent`, `path`, `cost`, `finish`, `tokens.total`).
+        let d = dir("kilo-real");
+        let row = json!({
+            "parentID": "msg_140be6e7e001Ob6pv5dn7AvLSN", "role": "assistant", "mode": "code",
+            "agent": "code", "path": {"cwd": "/work", "root": "/"}, "cost": 0,
+            "tokens": {"total": 17074, "input": 17049, "output": 4, "reasoning": 21,
+                "cache": {"write": 0, "read": 0}},
+            "modelID": "prism-ml/bonsai-27b", "providerID": "lmstudio",
+            "time": {"created": 1_792_087_585_129_i64, "completed": 1_792_087_671_578_i64},
+            "finish": "stop"
+        });
+        fixture(&d.join("kilo.db"), &[("ses_1", 1_792_087_585_129, row)]);
+        let (rows, bad) = slices("kilo", std::slice::from_ref(&d), 0);
+        assert!(bad.is_none());
+        let r = &rows[0];
+        assert_eq!(
+            (r.model.as_deref(), r.api.as_str(), r.ts),
+            (Some("prism-ml/bonsai-27b"), "lmstudio", 1_792_087_585)
+        );
+        // `tokens.total` equals input + output + reasoning here, so the legs add up to it.
+        assert_eq!(
+            (r.input, r.cache_create, r.cache_read, r.output),
+            (17_049, 0, 0, 25)
+        );
+        std::fs::remove_dir_all(&d).ok();
+    }
 }

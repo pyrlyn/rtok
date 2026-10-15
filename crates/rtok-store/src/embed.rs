@@ -8,6 +8,7 @@
 //! cannot load the extension without cmake/a second process; vectors live in `note_embeddings`.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use crate::Result;
 use diesel::prelude::*;
@@ -20,6 +21,25 @@ use rtok_plugin_sdk::NoteHit;
 
 use super::{Store, hex_sha256};
 
+/// A vector source the store cannot build itself, e.g. an embeddings endpoint (T668). The host
+/// owns the transport; the store only asks for a vector.
+pub trait TextEmbedder: Send + Sync + std::fmt::Debug {
+    /// The vector for `text` in the `dimensions` space, or `None` when the backend is down,
+    /// refuses the text or answers with something else. The backend logs why; the store then
+    /// serves the note search it had before.
+    fn embed(&self, text: &str) -> Option<Vec<f32>>;
+}
+
+/// Handle compared by identity, so [`EmbedSettings`] keeps its `PartialEq`.
+#[derive(Debug, Clone)]
+pub struct Remote(pub Arc<dyn TextEmbedder>);
+
+impl PartialEq for Remote {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
+}
+
 /// `[plugins.memory.embed]` as plain values. The host config converts into this; the store
 /// does not read the config crate.
 #[derive(Debug, Clone, PartialEq)]
@@ -29,6 +49,8 @@ pub struct EmbedSettings {
     pub model: String,
     pub dimensions: u32,
     pub hybrid: bool,
+    /// Set for `provider = "http"`. `None` keeps the deterministic hash embedder.
+    pub remote: Option<Remote>,
 }
 
 impl Default for EmbedSettings {
@@ -39,6 +61,7 @@ impl Default for EmbedSettings {
             model: "all-MiniLM-L6-v2".into(),
             dimensions: 384,
             hybrid: true,
+            remote: None,
         }
     }
 }
@@ -53,8 +76,31 @@ pub(crate) fn note_embed_text(title: &str, body: &str) -> String {
 /// changes: every older vector then reads as stale and [`Store::embed_stale`] redoes it.
 const SCHEME: &str = "hash2";
 
+/// Remote vectors live in another space than hash vectors, so they get their own key: neither
+/// leg ever scores the other's rows, and switching providers re-embeds through `embed_stale`.
+const REMOTE_SCHEME: &str = "remote1";
+
 fn model_key(cfg: &EmbedSettings) -> String {
-    format!("{}+{SCHEME}", cfg.model)
+    let scheme = if cfg.remote.is_some() {
+        REMOTE_SCHEME
+    } else {
+        SCHEME
+    };
+    format!("{}+{scheme}", cfg.model)
+}
+
+/// The vector of `text` under `cfg`: hash, or the remote backend's unit-length answer. `None`
+/// only for a remote that failed or answered in the wrong `dimensions`.
+fn embed_text(text: &str, cfg: &EmbedSettings) -> Option<Vec<f32>> {
+    let Some(Remote(remote)) = &cfg.remote else {
+        return Some(hash_embed(text, cfg.dimensions));
+    };
+    let mut v = remote.embed(text)?;
+    if v.len() != cfg.dimensions as usize {
+        return None;
+    }
+    l2_normalize(&mut v);
+    Some(v)
 }
 
 fn dims(cfg: &EmbedSettings) -> i32 {
@@ -120,15 +166,29 @@ impl Store {
         body: &str,
         cfg: &EmbedSettings,
     ) -> Result<()> {
+        self.put_embedding(note_id, title, body, cfg).map(|_| ())
+    }
+
+    /// `false` when a remote backend gave no vector; the note then has none under this key and
+    /// `embed_stale` tries again on a later search. Never a hash vector under the remote key.
+    fn put_embedding(
+        &self,
+        note_id: i32,
+        title: &str,
+        body: &str,
+        cfg: &EmbedSettings,
+    ) -> Result<bool> {
         if !cfg.enabled {
-            return Ok(());
+            return Ok(true);
         }
         let text = note_embed_text(title, body);
         let hash = hex_sha256(text.as_bytes());
         // The note's own text and nothing else. Index time used to append hook/database words
         // to any body mentioning "hook", tuned to the P29 fixture, so such notes outranked
         // better matches on every hook-flavoured query.
-        let vector = hash_embed(&text, cfg.dimensions);
+        let Some(vector) = embed_text(&text, cfg) else {
+            return Ok(false);
+        };
         let blob = embed_to_blob(&vector);
         let mut conn = self.lock()?;
         let model = model_key(cfg);
@@ -141,7 +201,7 @@ impl Store {
             vector: blob,
         }
         .execute(&mut *conn)?;
-        Ok(())
+        Ok(true)
     }
 
     /// Embed every note whose vector is missing or was made under another model, [`SCHEME`]
@@ -164,7 +224,11 @@ impl Store {
             .select((notes::id, notes::title, notes::body))
             .load(&mut *self.lock()?)?;
         for (id, title, body) in stale {
-            self.upsert_note_embedding(id, &title, &body, cfg)?;
+            // A remote that fails once is down for this search: do not wait out a timeout
+            // per note.
+            if !self.put_embedding(id, &title, &body, cfg)? {
+                break;
+            }
         }
         Ok(())
     }
@@ -175,18 +239,22 @@ impl Store {
         limit: u32,
         cfg: &EmbedSettings,
     ) -> Result<Vec<NoteHit>> {
+        // The query first: a remote that is down must cost one failed call, not one per stale
+        // note, and the search then stays the plain note search it was without `[embed]`.
+        let Some(qv) = embed_text(query, cfg) else {
+            return self.search_notes(query, limit);
+        };
         self.embed_stale(cfg)?;
-        self.search_notes_knn(query, limit, cfg)
+        self.search_notes_knn(&qv, limit, cfg)
     }
 
     /// Cosine KNN over vectors already in `note_embeddings`. Does not call [`Store::embed_stale`].
     fn search_notes_knn(
         &self,
-        query: &str,
+        qv: &[f32],
         limit: u32,
         cfg: &EmbedSettings,
     ) -> Result<Vec<NoteHit>> {
-        let qv = hash_embed(query, cfg.dimensions);
         let mut conn = self.lock()?;
         // Only vectors of the query's own model, scheme and `dimensions` are scored: `cosine`
         // zips to the shorter vector, so a stale 384-dim row against an 8-dim query ranked on
@@ -209,7 +277,7 @@ impl Store {
             .into_iter()
             .filter_map(|(id, title, snippet, vector, dims)| {
                 let v = blob_to_embed(&vector, dims as u32)?;
-                Some((cosine(&qv, &v), NoteHit { id, title, snippet }))
+                Some((cosine(qv, &v), NoteHit { id, title, snippet }))
             })
             .collect();
         scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
@@ -250,12 +318,13 @@ impl Store {
         limit: u32,
         cfg: &EmbedSettings,
     ) -> Result<Vec<NoteHit>> {
-        if self.note_embedding_count()? == 0 {
+        // The hook never waits on the network (10 ms budget), and a remote query vector needs it.
+        if cfg.remote.is_some() || self.note_embedding_count()? == 0 {
             return self.search_notes(query, limit);
         }
         let pool = limit.saturating_mul(2).max(limit);
         let fts = self.search_notes(query, pool)?;
-        let knn = self.search_notes_knn(query, pool, cfg)?;
+        let knn = self.search_notes_knn(&hash_embed(query, cfg.dimensions), pool, cfg)?;
         Ok(rrf_merge(&fts, &knn, limit))
     }
 }
@@ -515,5 +584,160 @@ mod tests {
         let again = s.search_notes_hybrid_stored(query, 10, &cfg).unwrap();
         assert_eq!(hit_ids(&hybrid), hit_ids(&again));
         assert_eq!(embedding_rows(&s), before);
+    }
+}
+
+/// T668: a stub backend stands in for the HTTP embedder; the wire has its own tests in the host.
+#[cfg(test)]
+mod remote_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+
+    /// Concept axes: "car" and "automobile" share one, which FTS cannot see.
+    #[derive(Debug, Default)]
+    struct Stub {
+        down: AtomicBool,
+        /// Fails notes (their text has a title line) but answers queries.
+        notes_down: AtomicBool,
+        calls: AtomicUsize,
+    }
+
+    impl TextEmbedder for Stub {
+        fn embed(&self, text: &str) -> Option<Vec<f32>> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            let note = text.contains('\n');
+            if self.down.load(Ordering::SeqCst) || (note && self.notes_down.load(Ordering::SeqCst))
+            {
+                return None;
+            }
+            let t = text.to_lowercase();
+            let axis = |words: &[&str]| f32::from(u8::from(words.iter().any(|w| t.contains(w))));
+            Some(vec![
+                axis(&["car", "automobile"]),
+                axis(&["banana", "fruit"]),
+                0.1,
+            ])
+        }
+    }
+
+    fn setup(stub: &Arc<Stub>) -> (Store, EmbedSettings) {
+        let s = Store::open_in_memory().unwrap();
+        let cfg = EmbedSettings {
+            enabled: true,
+            dimensions: 3,
+            remote: Some(Remote(stub.clone())),
+            ..EmbedSettings::default()
+        };
+        for (title, body) in [
+            ("fruit bowl", "a ripe banana"),
+            ("garage", "the car is red"),
+        ] {
+            s.insert_note(None, "note", title, body).unwrap();
+        }
+        (s, cfg)
+    }
+
+    #[test]
+    fn remote_vectors_rank_a_synonym_that_fts_misses() {
+        let stub = Arc::new(Stub::default());
+        let (s, cfg) = setup(&stub);
+        assert!(s.search_notes("automobile", 5).unwrap().is_empty());
+        let knn = s.search_notes_embed("automobile", 1, &cfg).unwrap();
+        assert_eq!(hit_titles(&knn), ["garage"]);
+        let hybrid = s.search_notes_hybrid("automobile", 1, &cfg).unwrap();
+        assert_eq!(hit_titles(&hybrid), ["garage"]);
+    }
+
+    #[test]
+    fn a_failing_remote_serves_the_plain_note_search_and_writes_nothing() {
+        let stub = Arc::new(Stub::default());
+        let (s, cfg) = setup(&stub);
+        stub.down.store(true, Ordering::SeqCst);
+        for q in ["car", "automobile"] {
+            let plain = s.search_notes(q, 5).unwrap();
+            assert_eq!(
+                hit_titles(&s.search_notes_embed(q, 5, &cfg).unwrap()),
+                hit_titles(&plain)
+            );
+            assert_eq!(
+                hit_titles(&s.search_notes_hybrid(q, 5, &cfg).unwrap()),
+                hit_titles(&plain)
+            );
+        }
+        assert_eq!(
+            s.note_embedding_count().unwrap(),
+            0,
+            "no hash vector either"
+        );
+        // One failed query vector per search; the stale notes are never tried.
+        assert_eq!(stub.calls.load(Ordering::SeqCst), 4);
+    }
+
+    #[test]
+    fn indexing_stops_at_the_first_failure_and_resumes_later() {
+        let stub = Arc::new(Stub::default());
+        let (s, cfg) = setup(&stub);
+        stub.notes_down.store(true, Ordering::SeqCst);
+        s.search_notes_embed("car", 5, &cfg).unwrap();
+        // The query, then the first stale note; the second note is not attempted.
+        assert_eq!(stub.calls.load(Ordering::SeqCst), 2);
+        assert_eq!(s.note_embedding_count().unwrap(), 0);
+        stub.notes_down.store(false, Ordering::SeqCst);
+        s.search_notes_embed("car", 5, &cfg).unwrap();
+        assert_eq!(s.note_embedding_count().unwrap(), 2);
+    }
+
+    #[test]
+    fn the_hook_leg_never_calls_the_remote() {
+        let stub = Arc::new(Stub::default());
+        let (s, cfg) = setup(&stub);
+        s.search_notes_embed("car", 5, &cfg).unwrap();
+        let calls = stub.calls.load(Ordering::SeqCst);
+        let hits = s.search_notes_hybrid_stored("car", 5, &cfg).unwrap();
+        assert_eq!(
+            hit_titles(&hits),
+            hit_titles(&s.search_notes("car", 5).unwrap())
+        );
+        assert_eq!(stub.calls.load(Ordering::SeqCst), calls);
+    }
+
+    #[test]
+    fn a_vector_of_the_wrong_length_is_dropped() {
+        let stub = Arc::new(Stub::default());
+        let (s, mut cfg) = setup(&stub);
+        cfg.dimensions = 8;
+        s.search_notes_embed("car", 5, &cfg).unwrap();
+        assert_eq!(s.note_embedding_count().unwrap(), 0);
+    }
+
+    #[test]
+    fn remote_and_hash_vectors_never_share_a_key() {
+        let stub = Arc::new(Stub::default());
+        let (_, cfg) = setup(&stub);
+        let hash = EmbedSettings {
+            remote: None,
+            ..cfg.clone()
+        };
+        assert_eq!(
+            model_key(&hash),
+            "all-MiniLM-L6-v2+hash2",
+            "unchanged for hash"
+        );
+        assert_ne!(model_key(&cfg), model_key(&hash));
+    }
+
+    #[test]
+    fn disabled_embeddings_never_reach_the_remote() {
+        let stub = Arc::new(Stub::default());
+        let (s, mut cfg) = setup(&stub);
+        cfg.enabled = false;
+        s.upsert_note_embedding(1, "garage", "the car is red", &cfg)
+            .unwrap();
+        assert_eq!(stub.calls.load(Ordering::SeqCst), 0);
+        assert_eq!(s.note_embedding_count().unwrap(), 0);
+    }
+
+    fn hit_titles(hits: &[NoteHit]) -> Vec<String> {
+        hits.iter().map(|h| h.title.clone()).collect()
     }
 }

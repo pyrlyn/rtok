@@ -197,13 +197,20 @@ Every effective key with its origin — the `config show --sources` page.
 | plugins.inject.modes_dir | ~/.rtok/modes | default |
 | plugins.json_tree.enabled | false | default |
 | plugins.measure.enabled | true | default |
+| plugins.memory.admit | true | default |
+| plugins.memory.admit_min_chars | 5 | default |
+| plugins.memory.admit_similarity | 85 | default |
 | plugins.memory.checkpoint_tokens | 400 | default |
+| plugins.memory.embed.api_key_env |  | default |
 | plugins.memory.embed.dimensions | 384 | default |
 | plugins.memory.embed.enabled | false | default |
 | plugins.memory.embed.hybrid | true | default |
+| plugins.memory.embed.max_chars | 8000 | default |
 | plugins.memory.embed.model | all-MiniLM-L6-v2 | default |
 | plugins.memory.embed.provider | local | default |
+| plugins.memory.embed.url |  | default |
 | plugins.memory.enabled | true | default |
+| plugins.memory.forget_after_days | 90 | default |
 | plugins.memory.handoff | true | default |
 | plugins.memory.prompt_recall | 5 | default |
 | plugins.memory.recall_titles | 5 | default |
@@ -456,7 +463,7 @@ Every effective key with its origin — the `config show --sources` page.
 | worktree.enabled | true | default |
 | worktree.root | .rtok/worktrees | default |
 
-410 keys.
+414 keys.
 
 ## Doctor
 

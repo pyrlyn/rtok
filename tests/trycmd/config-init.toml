@@ -4,7 +4,7 @@ stdout = """
 target/tmp/t60-2-config-init.toml
 --- a/target/tmp/t60-2-config-init.toml
 +++ b/target/tmp/t60-2-config-init.toml
-@@ -0,0 +1,589 @@
+@@ -0,0 +1,593 @@
 +# rtok configuration. Every CLI flag has a key here; flags and RTOK_* env vars override.
 +# Precedence: defaults < this file < <git root>/.rtok.toml < env < flags.
 +# Docs: docs/config.md. Check: `rtok config validate`. Where a value came from: `rtok config show --sources`.
@@ -535,13 +535,20 @@ target/tmp/t60-2-config-init.toml
 +# handoff        = true                 # sub-agent digest MCP tool
 +# spawn_brief        = true             # SubagentStart pointer digest
 +# spawn_brief_tokens = 300              # token budget for the spawn brief
++# admit              = true             # mem_save refuses a too-short or duplicate note
++# admit_min_chars    = 5                # shortest body the gate admits
++# admit_similarity   = 85               # percent trigram overlap that counts as a duplicate
++# forget_after_days = 90                # `memory forget` retires notes unread this long; 0 = needs --days
 +
 +[plugins.memory.embed]
 +# enabled    = false                    # P29: FTS5-only when false; vector search is opt-in
-+# provider   = "local"                  # "local" | "openai"
-+# model      = "all-MiniLM-L6-v2"
-+# dimensions = 384
++# provider   = "local"                  # "local" = offline hash vectors | "http" = an OpenAI-compatible embeddings API
++# model      = "all-MiniLM-L6-v2"       # with "http": the endpoint's model name
++# dimensions = 384                      # with "http": must equal the endpoint's vector length
 +# hybrid     = true                     # when enabled: RRF(fts5, knn) for mem_search and prompt_recall; the hook reads stored vectors only; false = knn only
++# url         = ""                      # "http": base URL, e.g. "http://localhost:11434/v1" (Ollama) or "https://api.openai.com/v1"; note text is sent there
++# api_key_env = ""                      # "http": name of the env var holding the key; empty = no Authorization header
++# max_chars   = 8000                    # "http": a longer text is never sent (the note search runs instead)
 +
 +[plugins.graph]
 +# enabled    = true
@@ -594,7 +601,7 @@ target/tmp/t60-2-config-init.toml
 +[plugins.wasm]
 +# enabled = false
 +# dir = "~/.rtok/plugins"
-1 file changed, 589 insertions(+)
+1 file changed, 593 insertions(+)
 """
 
 # Hermetic by construction: isolated HOME/RTOK_HOME, inherit = false.

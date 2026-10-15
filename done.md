@@ -2059,6 +2059,29 @@ Fix:
 
 Check: `just spa-stories` 257/257 twice; `just spa-test` 300/300; `just js`: oxlint is clean, and oxfmt flags only `web/e2e/rtok.ts`, which is unformatted on `main` and untouched here.
 
+### T661. rtk filter parity and `rtok discover`
+
+Compare [rtk](https://github.com/rtk-ai/rtk) filters against rtok's rule families: list the filters/commands rtk covers that rtok lacks, and where rtk is broader. Prefer `docs/comparison/rtok-vs-rtk.md` from draft PR #1071 when useful.
+
+Savings for both sides (sourced only; never invent):
+
+| Case | rtok saved | rtk saved | Source |
+|---|---|---|---|
+| bash bytes cut (author corpus, 5,725 cmds) | no data | 40.4 % (1.1 M of 2.8 M bytes) | `research.md` §2 A/B (T9.2) |
+| claimed bash cut | no data | 60–90 % (claim) | `research.md` §2 |
+| agentic bill (JetBrains) | no data | +7.6 % to 0 % (worse/neutral) | `research.md` §1, §7 |
+| head-to-head harness (`bench/competitors/rtk`) | pending | pending | PR #1071 |
+
+Add `rtok discover`, analogous to `rtk discover`: analyze recorded agent shell calls from rtok's own history/DB and report frequent commands with no filter, ranked by potential token savings, so we know which filters to add next. CLI only; new-command gates (trycmd fence, `surface_parity`, `config_coverage` if config is touched). Docs: `docs/comparison/rtok-vs-rtk.md` coverage table, `CHANGELOG.md`, command help.
+
+Done when: a dated coverage table (rtk command/filter vs rtok rule family) is in the comparison doc; `rtok discover` prints the ranked gap list from a fixture store and from the live local DB.
+
+Check: unit tests for ranking and "no filter" detection on a fixture DB; trycmd fence for `discover`; coverage table committed; `just check`.
+
+Result: `rtok discover [--since 30d] [--top 15] [--json]` reads the recorded `PostToolUse` Bash hook bodies (`Store::hook_inputs_for_tool_since`, Diesel), unwraps `rtok run -- '…'`, takes the first real program of each command through the `cmd` plugin's own lexer (`bounded::stages`, `formatters::visible_argv`), drops families with a formatter or a named rule (`formatters::filter_kind`) and chains that `rtok run` sends to `[script]`, and ranks the rest by output tokens (`measure::discover`, `model::discover`). The coverage table (62 rtk filters and 58 command modules at v1.0.1 vs rtok's formatters and rules) is in `docs/comparison/rtok-vs-rtk.md`. No saving rate is applied to the ranking. Bodies over `core.call_io_inline_bytes` are not read, so the numbers are a floor. On a copy of the live store (15,625 Bash calls, 30 days) most commands are chains already covered by `[script]`; 19 families remain, the top being `tail` (75 calls, 18k tokens) and `jscpd`.
+
+Check result (2026-10-15): 8 unit tests in `measure::discover` (ranking, covered-family skip, wrapper and syntax peel, `top`, the store query with a fixture DB); trycmd `discover.toml`, `discover-json.toml`, `--help` in `help-subcommands.trycmd`; `surface_parity` and `config_coverage` entries; completions, man and help goldens re-blessed; `just check`.
+
 ### T310.6. Pages: overview, plugins (toggle), calls (expand)
 
 Check: each page matches `design/html/admin/<page>.html` in dark and light at 375 and 1280 px on sample data; toggle and expand round-trip against `rtok web`; stories and Vitest for page logic.
@@ -8264,6 +8287,23 @@ Check result: `research.md` §20 (2026-09-23) holds the sample numbers (§20.1�
 Status: done 2026-09-23
 Model: Claude Code / claude-opus-5-5
 
+### T134. Probe: does a CLI command hook's `PostToolUse` `updatedToolOutput` replace native tool output?
+
+Gate for I-91 (`research.md` §17.2). The Agent SDK hooks page says `updatedToolOutput` "works for any tool"; rtok's standing rule says PostToolUse can only add context. If the CLI honours it, native Read/Bash output could be shrunk in place (pointer + `expand <id>`) instead of wrapped or denied — that changes the design of `cmd`, `read` and `guard`, so it is a creator decision, not a silent change. No product code in this task.
+
+Plan: throwaway hook script (scratch, not committed) returning `hookSpecificOutput.updatedToolOutput` for `Read` and `Bash` on the current Claude Code; run one Read and one Bash; check what the model received in the transcript. Repeat for an MCP tool.
+
+Check: a dated row in `research.md` §3 with the Claude Code version, the payload sent and what the transcript shows, per tool kind. Honoured → the `AGENTS.md` rule line and I-91 are put to the creator with the row; not honoured → I-91 closes with the date.
+
+Progress (2026-09-25, `research.md` §3 "T134"): Claude Code 2.1.267; the CLI hooks page lists no `updatedToolOutput` for `PostToolUse` (only `additionalContext`, `systemMessage`, `terminalSequence`), the Agent SDK page does. The live run is blocked in agent sessions (`claude -p` fails with an expired OAuth session, as in T53.1); left: the creator runs the scratch probe (hook logging the payload and returning `updatedToolOutput`, one Bash / Read / MCP call on `--model haiku`) from a real terminal, and the per-tool verdict goes into the row.
+
+Do (Claude Code / claude-sonnet-5-5, 2026-10-15): the probe ran against LM Studio's local Anthropic endpoint (the hook runs in the CLI, so the model does not matter). `research.md` §3 "T134" holds the table: Bash, Read and MCP output are replaced when `updatedToolOutput` has the tool's own response shape (the `tool_response` the hook receives); a bare string is ignored for Bash and Read. I-91 stays open for the creator's decision on the standing "PostToolUse adds context only" rule; no product code changed.
+
+Check result: dated row with version, payload and per-tool transcript in `research.md` §3; `ideas.md` I-91 gate updated.
+
+Status: done 2026-10-15
+Model: Claude Code / claude-sonnet-5-5
+
 ### T165. Research: general HTTP(S) interception as a new surface
 
 Creator request 2026-09-22. Research only — no product code in this task. Today `rtok proxy` reaches one API through `ANTHROPIC_BASE_URL`; a general interceptor would see every HTTP call an agent makes (docs fetches, package registries, other model APIs). That is a new surface on the level of `proxy` and `mcp`: a local CA whose root the user trusts, TLS termination on loopback only, CONNECT proxying via `HTTPS_PROXY`, and fail open whenever a client bypasses the proxy, pins certificates or rejects the CA. It is the most contested item in the plan — it touches the user's trust store and sees all their traffic — so it is scheduled last.
@@ -8884,6 +8924,14 @@ Result: a linked note ranks above an equally text-matching unlinked note once it
 Status: done 2026-10-08
 
 Model: Claude Code / claude-sonnet-5-5
+
+### T668. Opt-in semantic memory path (mem0 idea)
+
+mem0 is ahead for semantic/vector memory (`docs/comparison/rtok-vs-mem0.md`). Keep rtok's cheap note path default; optional embedding search behind a flag, no Docker/Qdrant required for the default build. Savings both sides: **no data** (harness skips; needs API/models).
+
+Shipped (creator's choice: a remote OpenAI-compatible endpoint, `research.md` §41). `[plugins.memory.embed] provider = "http"` with `url`, `model`, `dimensions`, `api_key_env` and a hard per-request `max_chars` posts to `<url>/embeddings` (OpenAI, Ollama, vLLM, LM Studio) through the existing blocking `reqwest` client: no new crate, no model download, no spend unless the user points it at a paid endpoint. Defaults stay `provider = "local"` (hash vectors) and `enabled = false`. The store takes a `TextEmbedder` seam (`rtok-store`), the HTTP client lives in `src/store/http_embed.rs`. Fail open: any HTTP, parse, length or oversized-input failure logs a warning and `mem_search` serves the plain note search; indexing stops at the first failure and resumes on a later search; the hook (10 ms budget) never calls the endpoint and reads FTS only while a remote is set. Remote vectors use their own model key (`<model>+remote1`) and never mix with hash vectors. A key never travels over plain http to a non-loopback host, and `Debug` never prints it.
+
+Check: `tests/deps.rs` forbids ONNX/vector crates in every member manifest; store tests with a stub embedder (ranking of a synonym FTS misses, failure fallback, hook leg makes no call, key separation, disabled makes no call); host tests against a local `httpmock` server (wire, bearer header, `max_chars`, bad answers, unusable settings, end-to-end ranking); `just check`.
 
 ### T454. Hook recall uses the stored hybrid leg when embeddings are on
 
@@ -14210,6 +14258,18 @@ Best competitor: sqz `§ref§` ~13 tok. Design: one short id `[rtok 1a2b3c4d · 
 Check: #1076 harness (`bench/c14`) shows −75 tok/call on this category with full anchor retention.
 
 Result: trailer, the rules' `… omitted (expand <id>)` marker and the same-session dedup pointer print the 8-hex-char id (`names::short_id`; `expand` already resolved 8+ char prefixes). A prefix shared by two archives now errors with each candidate named by a 12-char prefix instead of 'pass more characters'. Measured with `tests/bench_fixtures.rs` (o200k_base; #1076 `bench/c14` is not on main): the pointer line costs 12–14 tokens per call (default minus `--no-ref`, e.g. cargo_build_error 58 vs 44), in line with sqz's ~13-token `§ref§`; the 64-char ids in the omitted and dedup lines (≈ 35 tokens each) are gone. Tests: `trailer_names_an_eight_char_id`, `short_id_is_the_resolvable_minimum`, `ambiguous_prefix_lists_the_longer_candidates`; trycmd `filter` and the MCP quoted-range test updated.
+
+Status: done 2026-10-15
+
+### T674. sed 2119 (`sed -n a,bp f`), cat 950, head 35, tail 155, awk
+
+Best competitor: lean-ctx 91.4 % (`read` rewrite). Design: detect range-print of a file: emit numbered range only once per session (session dedup by content hash, re-read → `unchanged since <id>`, changed → unified diff of the range); for full source files without range: signatures + elided bodies with line spans.
+
+Check: #1076 harness (`bench/c14`) shows ≥ 93 % on `cat` source; re-read ≥ 95 % on this category with full anchor retention.
+
+Plan: for `cat <source>` without a range, emit signatures with elided bodies and line spans (reuse the tree-sitter outline already used by `rtok read`); for `sed -n a,bp f` keep the numbered range and, on a repeat in one session, print `unchanged since <id>` or a unified diff of the range (content hash kept in the archive store, no new table unless Diesel schema needs it). Tests: golden for cat source, session re-read unit tests. Stay under the bounded-passthrough rules in `bounded.rs`.
+
+Result: Measured with tests/bench_fixtures.rs (the #1076 bench/c14 harness is not on main): cat_rust 72.7% -> 87.1% (floor raised 68 -> 85). `cat` of a source file over 80 lines prints its definitions as start-end spans plus the signature (outline from the tree-sitter tags the read plugin uses); data files (toml/json/yaml/md/...) keep the `cat` rule. `cat`/`sed -n a,bp` of a file seen before in the session goes through the read cache: unchanged is a pointer, changed is a unified diff (src/plugins/cmd/catfile.rs, run.rs). An unchanged identical re-read is already covered by `identical_result`. Follow-up: ids in plugins/read/cache.rs are still full length; shorten after T672 lands. Local gate: nextest 3873/3874, the failure is cli_trycmd report-md (shared target dir, environmental).
 
 Status: done 2026-10-15
 Model: Claude Code / claude-sonnet-5-5

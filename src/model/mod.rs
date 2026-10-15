@@ -523,6 +523,22 @@ pub fn cache_health(cfg: &Config) -> Result<Vec<cache::SessionHealth>> {
     cache::report(&store)
 }
 
+/// The `rtok discover` page: Bash command families no formatter or named rule covers, ranked
+/// by the output tokens that reached the model in the last `since`.
+#[cfg(feature = "cmd")]
+pub fn discover(cfg: &Config, since: Duration) -> Result<crate::measure::discover::Report> {
+    let store = Store::open(&cfg.core.db_path)?;
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs());
+    let from = i64::try_from(now.saturating_sub(since.as_secs())).unwrap_or(0);
+    crate::measure::discover::from_store(
+        &store,
+        &crate::plugins::cmd::rules::Settings::from_config(cfg),
+        from,
+    )
+}
+
 mod report;
 pub use report::*;
 
