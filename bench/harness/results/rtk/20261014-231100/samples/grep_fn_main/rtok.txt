@@ -1,0 +1,22 @@
+./workspace-hack/build.rs:2:fn main() {}
+./crates/rtok-store/src/retention.rs:88:    fn maintenance<T>(&self, f: impl FnOnce(&mut SqliteConnection) -> Result<T>) -> Result<T> {
+./crates/rtok-store/src/agents.rs:179:fn main_agent_id(
+./crates/rtok-store/src/agents.rs:271:    pub fn main_agent(&self, host_id: i32, host_session: &str) -> Result<Option<String>> {
+./crates/rtok-agent-sdk/src/lib.rs:649:    fn main_desc(&self) -> String {
+./crates/rtok-plugin-sdk/examples/shrink.rs:95:fn main() {
+./crates/rtok-config/src/root.rs:179:    fn main_checkout_found_from_deep_inside() {
+./build.rs:19:fn main() {
+./tests/graph_projects.rs:57:    fs::write(a.join("lib.rs"), "fn used() {}\nfn main() { used(); }\n").unwrap();
+./tests/graph_projects.rs:99:        "fn used() {}\nfn main() { used(); used(); }\n",
+… 24 lines omitted (expand 490b072af92d8033f58d65b450c1a9e8b4e05aee84d25a1a7c4f15bf00050991)
+./src/plugins/read/outline.rs:779:            ("a.rs", "fn main() {}\nfn helper() {}\n", "fn main"),
+./src/plugins/read/outline.rs:932:            ("a.rs", "use crate::foo::Bar;\nfn main() {}\n", "Bar"),
+./src/plugins/read/outline.rs:987:        let src = pad("use crate::foo::{Bar, baz::Qux as Alias};\nfn main() {}\n");
+./src/plugins/read/search.rs:184:        let out = search(&Ctx::new(&cx), "fn main", ".", None).unwrap();
+./src/plugins/read/search.rs:526:        vfs.write("src/a.rs", b"fn main() {}\n");
+./src/plugins/read/mod.rs:828:        assert!(out.contains("fn main"), "{out}");
+./src/plugins/archive/mod.rs:813:        let code = "fn main() {\n    println!(\"hi\");\n}\n".repeat(200);
+./src/plugins/cmd/bounded.rs:333:    #[case("sed -n '/fn main/,$p' a.rs")]
+./src/plugins/cmd/hook.rs:510:    fn main_window_dispatch_has_no_agent_flag() {
+./src/plugins/cmd/hook.rs:556:    fn main_session_git_commands_stay_wrapped() {
+[rtok 490b072af92d8033f58d65b450c1a9e8b4e05aee84d25a1a7c4f15bf00050991 · 44 lines · expand: rtok expand 490b072af92d8033f58d65b450c1a9e8b4e05aee84d25a1a7c4f15bf00050991]

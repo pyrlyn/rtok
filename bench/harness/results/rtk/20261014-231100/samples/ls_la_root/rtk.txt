@@ -1,0 +1,52 @@
+755  .agents/
+755  .cargo/
+755  .claude/
+755  .claude-plugin/
+755  .config/
+755  .git/
+755  .github/
+755  assets/
+755  bench/
+755  benches/
+755  brand/
+755  crates/
+755  docs/
+755  examples/
+755  fuzz/
+755  modes/
+755  npm/
+755  plugins/
+755  rules/
+755  skills/
+755  src/
+755  target/
+755  tests/
+755  tools/
+755  web/
+755  workspace-hack/
+644  .editorconfig  2.4K
+644  .gitattributes  204B
+644  .gitignore  852B
+644  .jscpd.json  315B
+644  AGENTS.md  1.3K
+644  CHANGELOG.md  140.4K
+777  CLAUDE.md -> AGENTS.md  9B
+644  CONTRIBUTING.md  7.7K
+644  Cargo.lock  170.9K
+644  Cargo.toml  16.0K
+644  LICENSE  34.3K
+644  LICENSE-ROYALTY-FREE.md  2.3K
+644  PRICING.md  180B
+644  README.md  9.4K
+644  architecture.md  19.2K
+644  audit-coverage.md  15.0K
+644  build.rs  5.4K
+644  cliff.toml  2.0K
+644  clippy.toml  390B
+644  dist-workspace.toml  2.4K
+644  done.md  2.2M
+644  ideas.md  54.8K
+644  justfile  12.6K
+644  ketch.toml  1.4K
+... (13 more)
+[+13 hidden: rtk recall 42e5a9b643dd]

@@ -1,0 +1,22 @@
+total 3732
+drwxr-xr-x 1 root root    4096 Oct 14 23:11 .
+drwxr-xr-x 1 root root    4096 Oct 14 23:11 ..
+drwxr-xr-x 1 root root    4096 Oct 14 23:01 .agents
+drwxr-xr-x 1 root root    4096 Oct 14 23:11 .cargo
+drwxr-xr-x 1 root root    4096 Oct 14 23:01 .claude
+drwxr-xr-x 1 root root    4096 Oct 14 23:11 .claude-plugin
+drwxr-xr-x 1 root root    4096 Oct 14 23:11 .config
+-rw-r--r-- 1 root root    2423 Oct 14 23:11 .editorconfig
+drwxr-xr-x 1 root root    4096 Oct 14 23:11 .git
+… 46 lines omitted (expand 557c3a05b19f0b9b51c3d106442e70109469bc25769fe1b6b6d4bc744915618c)
+-rw-r--r-- 1 root root     413 Oct 14 23:11 sonar-project.properties
+drwxr-xr-x 1 root root    4096 Oct 14 23:11 src
+drwxr-xr-x 1 root root    4096 Oct 14 23:01 target
+drwxr-xr-x 1 root root    4096 Oct 14 23:11 tests
+-rw-r--r-- 1 root root    3556 Oct 14 23:11 todo.md
+-rw-r--r-- 1 root root   20223 Oct 14 23:11 toolchain.md
+drwxr-xr-x 1 root root    4096 Oct 14 23:11 tools
+-rw-r--r-- 1 root root    1186 Oct 14 23:11 vitest.config.mjs
+drwxr-xr-x 1 root root    4096 Oct 14 23:11 web
+drwxr-xr-x 1 root root    4096 Oct 14 23:11 workspace-hack
+[rtok 557c3a05b19f0b9b51c3d106442e70109469bc25769fe1b6b6d4bc744915618c · 66 lines · expand: rtok expand 557c3a05b19f0b9b51c3d106442e70109469bc25769fe1b6b6d4bc744915618c]
