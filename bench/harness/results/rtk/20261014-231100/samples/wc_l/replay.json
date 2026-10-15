@@ -1,0 +1,1 @@
+{"argv": ["wc", "-l", "Cargo.toml", "README.md", "rules/default.toml", "src/main.rs"], "cwd": "/fixture", "exit": 0}

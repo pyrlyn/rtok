@@ -1,0 +1,34 @@
+diff --git a/README.md b/README.md
+index 9206db0e..59fa6c19 100644
+--- a/README.md
++++ b/README.md
+@@ -165,3 +165,6 @@ You can use this project under **any** of the following licenses, at your choice
+ Commercial use not covered by the GPLv3 or the Royalty-free License requires a separate paid
+ license — see [PRICING.md](PRICING.md).
+ <!-- license-sync:end -->
++
++Bench line one.
++Bench line two.
+diff --git a/rules/default.toml b/rules/default.toml
+index 60879e2f..ab5b602d 100644
+--- a/rules/default.toml
++++ b/rules/default.toml
+@@ -1,7 +1,7 @@
+ # Fallback filters when no family formatter matches (plan T3.3). Never redact.
+ 
+ [grep]
+-max_lines = 40
++max_lines = 41
+ head = 10
+ tail = 10
+ drop = ["Binary file"]
+diff --git a/src/plugins/cmd/filter.rs b/src/plugins/cmd/filter.rs
+index 17033de2..28f8a80b 100644
+--- a/src/plugins/cmd/filter.rs
++++ b/src/plugins/cmd/filter.rs
+@@ -151,3 +151,5 @@ Changes not staged for commit:
+         );
+     }
+ }
++
++// bench: edited
