@@ -33,7 +33,7 @@ complete -c rtok -n "__fish_rtok_needs_command" -f -a "proxy" -d 'Local API prox
 complete -c rtok -n "__fish_rtok_needs_command" -f -a "web" -d 'Local web UI over the same data as `rtok tui` (WebSocket API + React SPA)'
 complete -c rtok -n "__fish_rtok_needs_command" -f -a "tui" -d 'Terminal UI over the same data as `rtok web` (one model, two renderings)'
 complete -c rtok -n "__fish_rtok_needs_command" -f -a "stats" -d 'Measurements from session logs and the proxy'
-complete -c rtok -n "__fish_rtok_needs_command" -f -a "discover" -d 'Bash commands no filter covers yet, ranked by the output tokens they sent to the model'
+complete -c rtok -n "__fish_rtok_needs_command" -f -a "discover" -d 'Shell commands your agents ran that have no rule or formatter, most output first'
 complete -c rtok -n "__fish_rtok_needs_command" -f -a "bench" -d 'A/B benchmark of host configurations'
 complete -c rtok -n "__fish_rtok_needs_command" -f -a "doctor" -d 'Inspect hooks, MCP servers and the proxy chain'
 complete -c rtok -n "__fish_rtok_needs_command" -f -a "worktree" -d 'Git worktrees of this repository: owner, state and disk cost'
@@ -105,8 +105,8 @@ complete -c rtok -n "__fish_rtok_using_subcommand stats" -l calibrate -d 'Fit ch
 complete -c rtok -n "__fish_rtok_using_subcommand stats" -l cache -d 'Cache health per session from proxy usage rows: busts and their cause'
 complete -c rtok -n "__fish_rtok_using_subcommand stats" -l price -d 'Show per-model USD costs from `[stats.prices]` (`--price`)'
 complete -c rtok -n "__fish_rtok_using_subcommand stats" -s h -l help -d 'Print help'
-complete -c rtok -n "__fish_rtok_using_subcommand discover" -l since -d 'How far back to read Bash calls (`30d`, `24h`)' -r
-complete -c rtok -n "__fish_rtok_using_subcommand discover" -l top -d 'Families to list' -r
+complete -c rtok -n "__fish_rtok_using_subcommand discover" -l since -d 'How far back to read recorded shell calls (`30d`, `24h`)' -r
+complete -c rtok -n "__fish_rtok_using_subcommand discover" -l limit -d 'Rows to print, most output first' -r
 complete -c rtok -n "__fish_rtok_using_subcommand discover" -l config -d 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)' -r -F
 complete -c rtok -n "__fish_rtok_using_subcommand discover" -l json -d 'JSON instead of the table'
 complete -c rtok -n "__fish_rtok_using_subcommand discover" -s h -l help -d 'Print help'
@@ -914,7 +914,7 @@ complete -c rtok -n "__fish_rtok_using_subcommand help; and not __fish_seen_subc
 complete -c rtok -n "__fish_rtok_using_subcommand help; and not __fish_seen_subcommand_from hook mcp proxy web tui stats discover bench doctor worktree task batch info agents setup run filter expand archive completions man plugins config memory docs graph guard dashboard demon otel logs report help" -f -a "web" -d 'Local web UI over the same data as `rtok tui` (WebSocket API + React SPA)'
 complete -c rtok -n "__fish_rtok_using_subcommand help; and not __fish_seen_subcommand_from hook mcp proxy web tui stats discover bench doctor worktree task batch info agents setup run filter expand archive completions man plugins config memory docs graph guard dashboard demon otel logs report help" -f -a "tui" -d 'Terminal UI over the same data as `rtok web` (one model, two renderings)'
 complete -c rtok -n "__fish_rtok_using_subcommand help; and not __fish_seen_subcommand_from hook mcp proxy web tui stats discover bench doctor worktree task batch info agents setup run filter expand archive completions man plugins config memory docs graph guard dashboard demon otel logs report help" -f -a "stats" -d 'Measurements from session logs and the proxy'
-complete -c rtok -n "__fish_rtok_using_subcommand help; and not __fish_seen_subcommand_from hook mcp proxy web tui stats discover bench doctor worktree task batch info agents setup run filter expand archive completions man plugins config memory docs graph guard dashboard demon otel logs report help" -f -a "discover" -d 'Bash commands no filter covers yet, ranked by the output tokens they sent to the model'
+complete -c rtok -n "__fish_rtok_using_subcommand help; and not __fish_seen_subcommand_from hook mcp proxy web tui stats discover bench doctor worktree task batch info agents setup run filter expand archive completions man plugins config memory docs graph guard dashboard demon otel logs report help" -f -a "discover" -d 'Shell commands your agents ran that have no rule or formatter, most output first'
 complete -c rtok -n "__fish_rtok_using_subcommand help; and not __fish_seen_subcommand_from hook mcp proxy web tui stats discover bench doctor worktree task batch info agents setup run filter expand archive completions man plugins config memory docs graph guard dashboard demon otel logs report help" -f -a "bench" -d 'A/B benchmark of host configurations'
 complete -c rtok -n "__fish_rtok_using_subcommand help; and not __fish_seen_subcommand_from hook mcp proxy web tui stats discover bench doctor worktree task batch info agents setup run filter expand archive completions man plugins config memory docs graph guard dashboard demon otel logs report help" -f -a "doctor" -d 'Inspect hooks, MCP servers and the proxy chain'
 complete -c rtok -n "__fish_rtok_using_subcommand help; and not __fish_seen_subcommand_from hook mcp proxy web tui stats discover bench doctor worktree task batch info agents setup run filter expand archive completions man plugins config memory docs graph guard dashboard demon otel logs report help" -f -a "worktree" -d 'Git worktrees of this repository: owner, state and disk cost'

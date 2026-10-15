@@ -32,7 +32,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('web', 'web', [CompletionResultType]::ParameterValue, 'Local web UI over the same data as `rtok tui` (WebSocket API + React SPA)')
             [CompletionResult]::new('tui', 'tui', [CompletionResultType]::ParameterValue, 'Terminal UI over the same data as `rtok web` (one model, two renderings)')
             [CompletionResult]::new('stats', 'stats', [CompletionResultType]::ParameterValue, 'Measurements from session logs and the proxy')
-            [CompletionResult]::new('discover', 'discover', [CompletionResultType]::ParameterValue, 'Bash commands no filter covers yet, ranked by the output tokens they sent to the model')
+            [CompletionResult]::new('discover', 'discover', [CompletionResultType]::ParameterValue, 'Shell commands your agents ran that have no rule or formatter, most output first')
             [CompletionResult]::new('bench', 'bench', [CompletionResultType]::ParameterValue, 'A/B benchmark of host configurations')
             [CompletionResult]::new('doctor', 'doctor', [CompletionResultType]::ParameterValue, 'Inspect hooks, MCP servers and the proxy chain')
             [CompletionResult]::new('worktree', 'worktree', [CompletionResultType]::ParameterValue, 'Git worktrees of this repository: owner, state and disk cost')
@@ -144,8 +144,8 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             break
         }
         'rtok;discover' {
-            [CompletionResult]::new('--since', '--since', [CompletionResultType]::ParameterName, 'How far back to read Bash calls (`30d`, `24h`)')
-            [CompletionResult]::new('--top', '--top', [CompletionResultType]::ParameterName, 'Families to list')
+            [CompletionResult]::new('--since', '--since', [CompletionResultType]::ParameterName, 'How far back to read recorded shell calls (`30d`, `24h`)')
+            [CompletionResult]::new('--limit', '--limit', [CompletionResultType]::ParameterName, 'Rows to print, most output first')
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
             [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'JSON instead of the table')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
@@ -2064,7 +2064,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('web', 'web', [CompletionResultType]::ParameterValue, 'Local web UI over the same data as `rtok tui` (WebSocket API + React SPA)')
             [CompletionResult]::new('tui', 'tui', [CompletionResultType]::ParameterValue, 'Terminal UI over the same data as `rtok web` (one model, two renderings)')
             [CompletionResult]::new('stats', 'stats', [CompletionResultType]::ParameterValue, 'Measurements from session logs and the proxy')
-            [CompletionResult]::new('discover', 'discover', [CompletionResultType]::ParameterValue, 'Bash commands no filter covers yet, ranked by the output tokens they sent to the model')
+            [CompletionResult]::new('discover', 'discover', [CompletionResultType]::ParameterValue, 'Shell commands your agents ran that have no rule or formatter, most output first')
             [CompletionResult]::new('bench', 'bench', [CompletionResultType]::ParameterValue, 'A/B benchmark of host configurations')
             [CompletionResult]::new('doctor', 'doctor', [CompletionResultType]::ParameterValue, 'Inspect hooks, MCP servers and the proxy chain')
             [CompletionResult]::new('worktree', 'worktree', [CompletionResultType]::ParameterValue, 'Git worktrees of this repository: owner, state and disk cost')

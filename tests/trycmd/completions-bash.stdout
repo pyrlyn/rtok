@@ -2799,7 +2799,7 @@ _rtok() {
             return 0
             ;;
         rtok__subcmd__discover)
-            opts="-h --since --top --json --config --help"
+            opts="-h --since --limit --json --config --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -2809,7 +2809,7 @@ _rtok() {
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
-                --top)
+                --limit)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
