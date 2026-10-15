@@ -162,7 +162,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T665 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T666 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T667 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T670 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T687 | in progress | P2 | 4 | 0% | Claude Code / claude-sonnet-5-5 |
 | T673 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T675 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
@@ -230,14 +229,6 @@ engram has more memory features (HTTP + MCP) (`docs/comparison/rtok-vs-engram.md
 Check: feature list and take/skip in the comparison file; tests for what shipped; `just check`.
 
 **Plan.** From `docs/comparison/rtok-vs-engram.md` (PR #1071): engram has relation judging, pinned-first recall and project identity from the origin remote that rtok lacks. Relation judging spends model output on bookkeeping: **skip**. (1) Check which of pinned-first recall and origin-remote project identity already exist (`mem_update pinned`, `project_name`); fail-first tests on `tests/fixtures/p29_memory.toml`-style fixtures for the missing ones. (2) Implement only what raises recall on rtok's own memory bench with no new MCP tool and no daemon. (3) Write the take/skip list into the comparison file (or `research.md` while #1071 is open); `just check`.
-
-### T670. Read modes lean-ctx still has
-
-lean-ctx is ahead on read-mode count and a learned mode predictor (`docs/comparison/rtok-vs-lean-ctx.md`). Add only modes that beat rtok's per-turn cost on a replay. Sourced: lean-ctx 0 output saved and ~3.0–3.1 K tokens/turn inject; rtok ~800 token budget / ~223 description tokens (`research.md` §4, `docs/comparison.md` §2).
-
-Check: each new mode has a fixture test and a cost row; no banner-style per-turn inject; `just check`.
-
-Plan: list lean-ctx read modes missing in `src/plugins/read` (see `docs/comparison/rtok-vs-lean-ctx.md`); add only modes that beat rtok per-turn cost on a replay over the existing fixtures, reusing existing mode plumbing; one fixture test and one cost row per mode; no per-turn banner inject.
 
 ### T687. Hooks: PreToolUse/PostToolUse p50 to 10 ms
 

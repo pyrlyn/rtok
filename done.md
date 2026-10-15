@@ -8749,6 +8749,16 @@ Result: `visible_argv` peels `mise exec`/`mise x` (after `--` or `-c`) and `just
 Status: done 2026-10-06
 Model: Cursor / grok 4.7
 
+### T670. Read modes lean-ctx still has
+
+lean-ctx is ahead on read-mode count and a learned mode predictor (`docs/comparison/rtok-vs-lean-ctx.md`). Add only modes that beat rtok's per-turn cost on a replay. Sourced: lean-ctx 0 output saved and ~3.0–3.1 K tokens/turn inject; rtok ~800 token budget / ~223 description tokens (`research.md` §4, `docs/comparison.md` §2).
+
+Check: each new mode has a fixture test and a cost row; no banner-style per-turn inject; `just check`.
+
+Plan: list lean-ctx read modes missing in `src/plugins/read` (see `docs/comparison/rtok-vs-lean-ctx.md`); add only modes that beat rtok per-turn cost on a replay over the existing fixtures, reusing existing mode plumbing; one fixture test and one cost row per mode; no per-turn banner inject.
+
+Outcome: one mode added, `density:X` (lean-ctx's README lists `full`, `map`, `signatures`, `diff`, `lines:N-M` and `density:X`; the first five rtok already had). It keeps the lines whose words are rarest in the file until about X of the bytes remain, with line numbers and `… N lines omitted` gaps, and writes a `density` cost row against the raw file. Per-turn cost is the five tokens `|density:X` adds to the `read` description (the 60-token test still passes); no banner inject. Fixture tests: `density.rs` (rare line kept, repeats dropped, line numbers kept, deterministic, bad share rejected) and `density_mode_trims_repeats_and_records_a_row`. Replay savings are not measured: the #1076 harness is not on main, so the unit fixture only shows the mode trims a repetitive file to under a quarter at `density:0.1`.
+
 ### T388. `doctor` reports the real MCP Tool Search state
 
 From `research.md` §3 and §8: `doctor` infers "MCP tool search likely disabled" from `ANTHROPIC_BASE_URL` alone (`src/doctor.rs`, `mcp_tool_search_disabled: anthropic.is_some()`) and never reads `ENABLE_TOOL_SEARCH`. The `tools_rewrite` advice keys off the same flag, so a false positive advises a rewrite that is not needed.
