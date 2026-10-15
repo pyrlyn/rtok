@@ -376,7 +376,11 @@ fn is_keep(low: &str, rule: &Rule) -> bool {
     BUILTIN_KEEP.iter().any(|k| low.contains(k))
         || matches_pat(&rule.keep, low)
         || match rule.group {
-            Group::Dir => low.contains(" files): "),
+            // A grouped line, the shared-prefix header, or a lone file `group_dir` printed
+            // as its own path (it is a result, not filler; cutting it only costs a marker).
+            Group::Dir => {
+                low.contains(" files): ") || low.ends_with(" files)") || path_line(low).is_some()
+            }
             Group::Diag => low.contains(" ×") && low.contains(": "),
             Group::Off => false,
         }
@@ -815,11 +819,55 @@ fn fold(
         .collect()
 }
 
+/// Longest directory prefix (whole path components) shared by every dir in `dirs`.
+fn common_dir_prefix<'a>(dirs: impl Iterator<Item = &'a str>) -> String {
+    let mut prefix: Option<Vec<&str>> = None;
+    for d in dirs {
+        let comps: Vec<&str> = d.split('/').filter(|c| !c.is_empty()).collect();
+        prefix = Some(match prefix {
+            None => comps,
+            Some(p) => {
+                let n = p.iter().zip(&comps).take_while(|(a, b)| a == b).count();
+                p[..n].to_vec()
+            }
+        });
+    }
+    prefix.unwrap_or_default().join("/")
+}
+
 fn group_dir(lines: Vec<String>) -> Vec<String> {
-    fold(
+    // Every line a bare path under one shared directory (`rg -l`, `find crates -name x`):
+    // print that directory once and the rest relative to it. Nothing is dropped, the
+    // path is `prefix/` + the line.
+    let parsed: Vec<Option<(String, String)>> = lines.iter().map(|l| path_line(l)).collect();
+    let all_paths = lines.len() >= 6 && parsed.iter().all(Option::is_some);
+    let prefix = if all_paths {
+        common_dir_prefix(parsed.iter().flatten().map(|(d, _)| d.as_str()))
+    } else {
+        String::new()
+    };
+    let total = lines.len();
+    let strip = |d: &str| -> String {
+        if prefix.is_empty() {
+            return d.to_string();
+        }
+        d.strip_prefix(prefix.as_str())
+            .unwrap_or(d)
+            .trim_start_matches('/')
+            .to_string()
+    };
+    let mut out = fold(
         lines,
-        |l| path_line(l).map(|(d, n)| (d, String::new(), n)),
+        |l| path_line(l).map(|(d, n)| (strip(&d), String::new(), n)),
         |dir, _, names, n| {
+            // One file in the directory: the path itself is shorter than a group line.
+            if n == 1 && names.len() == 1 {
+                return if dir.is_empty() {
+                    names[0].clone()
+                } else {
+                    format!("{dir}/{}", names[0])
+                };
+            }
             let mut list = names.iter().take(3).cloned().collect::<Vec<_>>().join(", ");
             if names.len() > 3 {
                 list.push_str(" …");
@@ -827,7 +875,11 @@ fn group_dir(lines: Vec<String>) -> Vec<String> {
             let head = if dir.is_empty() { "." } else { dir };
             format!("{head}/ ({n} files): {list}").replacen("./ ", ". ", 1)
         },
-    )
+    );
+    if !prefix.is_empty() {
+        out.insert(0, format!("{prefix}/ ({total} files)"));
+    }
+    out
 }
 
 fn is_exc(s: &str) -> bool {
@@ -2056,6 +2108,17 @@ mod tests {
             out.contains("d0/sub/ (10 files): f0.rs, f20000.rs, f40000.rs …"),
             "{out}"
         );
+    }
+
+    #[test]
+    fn group_dir_factors_a_shared_prefix_and_prints_lone_files_whole() {
+        let paths: Vec<String> = (0..6).map(|i| format!("crates/c{i}/Cargo.toml")).collect();
+        let out = group_dir(paths);
+        assert_eq!(out[0], "crates/ (6 files)");
+        assert_eq!(out[1], "c0/Cargo.toml");
+        assert_eq!(out.len(), 7);
+        let mixed = vec!["a/x.rs".to_string(), "b/y.rs".to_string()];
+        assert_eq!(group_dir(mixed), ["a/x.rs", "b/y.rs"]);
     }
 
     #[test]

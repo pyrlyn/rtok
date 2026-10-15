@@ -273,6 +273,9 @@ pub fn git_status(output: &str) -> Option<String> {
             entries += 1;
         } else if line.starts_with(['\t', ' ']) {
             return None;
+        } else if head == "nothing to commit, working tree clean" {
+            // The branch line above already says where; "clean" says the rest.
+            out.push("clean".to_string());
         } else if STATE_LINES.iter().any(|p| head.starts_with(p)) {
             out.push(head.to_string());
         }
@@ -475,9 +478,9 @@ mod tests {
     }
 
     #[test]
-    fn git_status_clean_stays_as_is() {
+    fn git_status_clean_says_clean() {
         let out = "On branch main\nnothing to commit, working tree clean\n";
-        assert_eq!(git_status(out).unwrap(), out.trim_end());
+        assert_eq!(git_status(out).unwrap(), "On branch main\nclean");
     }
 
     #[test]

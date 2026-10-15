@@ -609,7 +609,8 @@ fn format(argv: &[String], output: &str) -> Option<String> {
         )),
         ("jest", _) | ("vitest", _) => Some(keep(output, &["FAIL", "PASS", "Tests:", "● "])),
         ("go", "test") => Some(keep(output, &["FAIL", "PASS", "ok  ", "--- FAIL"])),
-        ("tree", _) => Some(output.lines().take(40).collect::<Vec<_>>().join("\n")),
+        ("tree", _) => Some(tree(output)),
+        ("wc", _) => wc(output),
         ("docker", "ps") => docker_ps(output),
         ("kubectl", "get") => kubectl_get(output),
         ("ps", "aux") => ps_aux(output),
@@ -617,6 +618,75 @@ fn format(argv: &[String], output: &str) -> Option<String> {
         ("sqlite3", _) => sqlite3_table(output),
         _ => None,
     }
+}
+
+/// `tree`: the listing, minus the blank separator and the `N directories, M files` footer
+/// when the whole tree fits (both are derivable by counting the entries). A tree past the
+/// cap keeps the footer: it is then the only place the real size shows.
+fn tree(output: &str) -> String {
+    const CAP: usize = 40;
+    let lines: Vec<&str> = output.lines().collect();
+    if lines.len() <= CAP {
+        let mut keep = lines.as_slice();
+        if let Some((last, rest)) = keep.split_last()
+            && is_tree_footer(last)
+        {
+            keep = rest;
+            if let Some((blank, rest)) = keep.split_last()
+                && blank.trim().is_empty()
+            {
+                keep = rest;
+            }
+        }
+        return keep.join("\n");
+    }
+    lines[..CAP].join("\n")
+}
+
+pub(crate) fn is_tree_footer(line: &str) -> bool {
+    let mut parts = line.split(", ");
+    let counted = |p: Option<&str>, units: [&str; 2]| {
+        p.and_then(|p| p.split_once(' '))
+            .is_some_and(|(n, u)| n.parse::<u64>().is_ok() && units.contains(&u))
+    };
+    counted(parts.next(), ["directory", "directories"])
+        && parts
+            .next()
+            .is_none_or(|p| counted(Some(p), ["file", "files"]))
+        && parts.next().is_none()
+}
+
+/// `wc`: the count columns are right-aligned with padding that carries no information.
+/// Only rewritten when every line is `<count>... <name>`, so an odd shape stands down.
+fn wc(output: &str) -> Option<String> {
+    let mut out = Vec::new();
+    for line in output.lines() {
+        let mut cols = line.split_whitespace();
+        let mut counts = 0;
+        let mut rest = Vec::new();
+        for c in cols.by_ref() {
+            if rest.is_empty() && c.bytes().all(|b| b.is_ascii_digit()) {
+                counts += 1;
+            } else {
+                rest.push(c);
+            }
+        }
+        if counts == 0 {
+            return None;
+        }
+        let nums: Vec<&str> = line.split_whitespace().take(counts).collect();
+        // Names may contain runs of spaces; keep them verbatim from the raw line.
+        let mut tail = line.trim_start();
+        for n in &nums {
+            tail = tail[n.len()..].trim_start();
+        }
+        out.push(if tail.is_empty() {
+            nums.join(" ")
+        } else {
+            format!("{} {tail}", nums.join(" "))
+        });
+    }
+    (!out.is_empty()).then(|| out.join("\n"))
 }
 
 /// `git diff`: the changed lines *are* the answer, so only the blob-hash bookkeeping goes.
@@ -1006,6 +1076,29 @@ fn keep(output: &str, needles: &[&str]) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn tree_drops_the_derivable_footer_but_keeps_a_cut_tree_honest() {
+        let t = "src\n├── a.rs\n└── b.rs\n\n1 directory, 2 files\n";
+        assert_eq!(tree(t), "src\n├── a.rs\n└── b.rs");
+        let big: String = (0..60)
+            .map(|i| format!("├── f{i}.rs\n"))
+            .collect::<String>()
+            + "\n1 directory, 60 files\n";
+        assert_eq!(tree(&big).lines().count(), 40);
+        assert!(!is_tree_footer("3 directories, x files"));
+        assert!(is_tree_footer("3 directories"));
+    }
+
+    #[test]
+    fn wc_unpads_counts_and_keeps_names_verbatim() {
+        assert_eq!(
+            wc("  249 Cargo.toml\n   19 src/main.rs\n  268 total\n").unwrap(),
+            "249 Cargo.toml\n19 src/main.rs\n268 total"
+        );
+        assert_eq!(wc("   4   9  30 a b.txt\n").unwrap(), "4 9 30 a b.txt");
+        assert!(wc("not a count\n").is_none());
+    }
+
     use super::*;
     use std::fs;
     use std::path::PathBuf;

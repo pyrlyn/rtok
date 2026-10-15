@@ -263,7 +263,15 @@ fn canonical(body: &[u8]) -> Vec<u8> {
 }
 
 fn push_canonical_line(line: &[u8], out: &mut Vec<u8>) {
-    let t = line.trim_ascii();
+    let mut t = line.trim_ascii();
+    // Rewrites the formatters make that lose nothing: `tree`'s `N directories, M files`
+    // footer is the entry count, and `clean` restates git's clean-tree sentence.
+    if std::str::from_utf8(t).is_ok_and(super::formatters::is_tree_footer) {
+        return;
+    }
+    if t == b"nothing to commit, working tree clean" {
+        t = b"clean";
+    }
     if t.is_empty() {
         return;
     }
@@ -508,9 +516,7 @@ mod tests {
     #[test]
     fn short_output_a_filter_lengthens_prints_raw() {
         let (c, dir) = cfg("never-worse");
-        let body: String = (0..9)
-            .map(|i| format!("crates/c{i}/Cargo.toml\n"))
-            .collect();
+        let body: String = (0..9).map(|i| format!("c{i}/src/Cargo.toml\n")).collect();
         emit_filtered(
             &c,
             &["find".into(), "crates".into()],
