@@ -143,6 +143,16 @@ _arguments "${_arguments_options[@]}" : /
 '--help[Print help]' /
 && ret=0
 ;;
+(discover)
+_arguments "${_arguments_options[@]}" : /
+'--since=[How far back to read Bash calls (/`30d/`, /`24h/`)]:SINCE:_default' /
+'--top=[Families to list]:TOP:_default' /
+'--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
+'--json[JSON instead of the table]' /
+'-h[Print help]' /
+'--help[Print help]' /
+&& ret=0
+;;
 (bench)
 _arguments "${_arguments_options[@]}" : /
 '--tasks=[Task list TOML]:TASKS:_files' /
@@ -1819,6 +1829,16 @@ _arguments "${_arguments_options[@]}" : /
 ':id:_default' /
 && ret=0
 ;;
+(forget)
+_arguments "${_arguments_options[@]}" : /
+'--project=[Only this project]:PROJECT:_default' /
+'--days=[Idle days; default /`/[plugins.memory/] forget_after_days/`]:DAYS:_default' /
+'--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
+'--apply[Retire the notes; without it nothing is written]' /
+'-h[Print help]' /
+'--help[Print help]' /
+&& ret=0
+;;
 (pin)
 _arguments "${_arguments_options[@]}" : /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
@@ -1897,6 +1917,10 @@ _arguments "${_arguments_options[@]}" : /
 && ret=0
 ;;
 (retire)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(forget)
 _arguments "${_arguments_options[@]}" : /
 && ret=0
 ;;
@@ -2695,6 +2719,10 @@ _arguments "${_arguments_options[@]}" : /
 _arguments "${_arguments_options[@]}" : /
 && ret=0
 ;;
+(discover)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
 (bench)
 _arguments "${_arguments_options[@]}" : /
 && ret=0
@@ -3083,6 +3111,10 @@ _arguments "${_arguments_options[@]}" : /
 _arguments "${_arguments_options[@]}" : /
 && ret=0
 ;;
+(forget)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
 (pin)
 _arguments "${_arguments_options[@]}" : /
 && ret=0
@@ -3361,6 +3393,7 @@ _rtok_commands() {
 'web:Local web UI over the same data as /`rtok tui/` (WebSocket API + React SPA)' /
 'tui:Terminal UI over the same data as /`rtok web/` (one model, two renderings)' /
 'stats:Measurements from session logs and the proxy' /
+'discover:Bash commands no filter covers yet, ranked by the output tokens they sent to the model' /
 'bench:A/B benchmark of host configurations' /
 'doctor:Inspect hooks, MCP servers and the proxy chain' /
 'worktree:Git worktrees of this repository/: owner, state and disk cost' /
@@ -3958,6 +3991,11 @@ _rtok__subcmd__demon__subcmd__upgrade_commands() {
     local commands; commands=()
     _describe -t commands 'rtok demon upgrade commands' commands "$@"
 }
+(( $+functions[_rtok__subcmd__discover_commands] )) ||
+_rtok__subcmd__discover_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok discover commands' commands "$@"
+}
 (( $+functions[_rtok__subcmd__docs_commands] )) ||
 _rtok__subcmd__docs_commands() {
     local commands; commands=(
@@ -4294,6 +4332,7 @@ _rtok__subcmd__help_commands() {
 'web:Local web UI over the same data as /`rtok tui/` (WebSocket API + React SPA)' /
 'tui:Terminal UI over the same data as /`rtok web/` (one model, two renderings)' /
 'stats:Measurements from session logs and the proxy' /
+'discover:Bash commands no filter covers yet, ranked by the output tokens they sent to the model' /
 'bench:A/B benchmark of host configurations' /
 'doctor:Inspect hooks, MCP servers and the proxy chain' /
 'worktree:Git worktrees of this repository/: owner, state and disk cost' /
@@ -4574,6 +4613,11 @@ _rtok__subcmd__help__subcmd__demon__subcmd__upgrade_commands() {
     local commands; commands=()
     _describe -t commands 'rtok help demon upgrade commands' commands "$@"
 }
+(( $+functions[_rtok__subcmd__help__subcmd__discover_commands] )) ||
+_rtok__subcmd__help__subcmd__discover_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok help discover commands' commands "$@"
+}
 (( $+functions[_rtok__subcmd__help__subcmd__docs_commands] )) ||
 _rtok__subcmd__help__subcmd__docs_commands() {
     local commands; commands=(
@@ -4766,6 +4810,7 @@ _rtok__subcmd__help__subcmd__memory_commands() {
 'import:Import /`{kind,title,body}/` JSONL; dedupe by body sha256' /
 'export:Print every note but session checkpoints as the JSONL /`import/` reads' /
 'retire:Retire a note/: a tombstone — never recalled or searched, body kept' /
+'forget:Retire notes nobody read for a long time (a dry run unless /`--apply/`)' /
 'pin:Pin a note so it leads SessionStart recall' /
 'unpin:Drop a note back to newest-first recall order' /
 'history:Print the earlier title and body kept when an upsert changed this note' /
@@ -4779,6 +4824,11 @@ _rtok__subcmd__help__subcmd__memory_commands() {
 _rtok__subcmd__help__subcmd__memory__subcmd__export_commands() {
     local commands; commands=()
     _describe -t commands 'rtok help memory export commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__help__subcmd__memory__subcmd__forget_commands] )) ||
+_rtok__subcmd__help__subcmd__memory__subcmd__forget_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok help memory forget commands' commands "$@"
 }
 (( $+functions[_rtok__subcmd__help__subcmd__memory__subcmd__history_commands] )) ||
 _rtok__subcmd__help__subcmd__memory__subcmd__history_commands() {
@@ -5129,6 +5179,7 @@ _rtok__subcmd__memory_commands() {
 'import:Import /`{kind,title,body}/` JSONL; dedupe by body sha256' /
 'export:Print every note but session checkpoints as the JSONL /`import/` reads' /
 'retire:Retire a note/: a tombstone — never recalled or searched, body kept' /
+'forget:Retire notes nobody read for a long time (a dry run unless /`--apply/`)' /
 'pin:Pin a note so it leads SessionStart recall' /
 'unpin:Drop a note back to newest-first recall order' /
 'history:Print the earlier title and body kept when an upsert changed this note' /
@@ -5144,12 +5195,18 @@ _rtok__subcmd__memory__subcmd__export_commands() {
     local commands; commands=()
     _describe -t commands 'rtok memory export commands' commands "$@"
 }
+(( $+functions[_rtok__subcmd__memory__subcmd__forget_commands] )) ||
+_rtok__subcmd__memory__subcmd__forget_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok memory forget commands' commands "$@"
+}
 (( $+functions[_rtok__subcmd__memory__subcmd__help_commands] )) ||
 _rtok__subcmd__memory__subcmd__help_commands() {
     local commands; commands=(
 'import:Import /`{kind,title,body}/` JSONL; dedupe by body sha256' /
 'export:Print every note but session checkpoints as the JSONL /`import/` reads' /
 'retire:Retire a note/: a tombstone — never recalled or searched, body kept' /
+'forget:Retire notes nobody read for a long time (a dry run unless /`--apply/`)' /
 'pin:Pin a note so it leads SessionStart recall' /
 'unpin:Drop a note back to newest-first recall order' /
 'history:Print the earlier title and body kept when an upsert changed this note' /
@@ -5164,6 +5221,11 @@ _rtok__subcmd__memory__subcmd__help_commands() {
 _rtok__subcmd__memory__subcmd__help__subcmd__export_commands() {
     local commands; commands=()
     _describe -t commands 'rtok memory help export commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__memory__subcmd__help__subcmd__forget_commands] )) ||
+_rtok__subcmd__memory__subcmd__help__subcmd__forget_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok memory help forget commands' commands "$@"
 }
 (( $+functions[_rtok__subcmd__memory__subcmd__help__subcmd__help_commands] )) ||
 _rtok__subcmd__memory__subcmd__help__subcmd__help_commands() {

@@ -1335,6 +1335,13 @@ section! {
         model: String = s("all-MiniLM-L6-v2"),
         dimensions: u32 = 384,
         hybrid: bool = true,
+        /// `provider = "http"` (T668): base URL of an OpenAI-compatible embeddings API; rtok
+        /// posts to `<url>/embeddings`.
+        url: String = String::new(),
+        /// Name of the environment variable that holds the API key; empty sends none.
+        api_key_env: String = String::new(),
+        /// Longest text sent to the endpoint, in characters; a longer one is never sent.
+        max_chars: u32 = 8000,
     }
 }
 
@@ -1357,6 +1364,15 @@ section! {
         spawn_brief: bool = true,
         /// Token budget for the spawn brief (T130).
         spawn_brief_tokens: u32 = 300,
+        /// Admission gate on MCP `mem_save` (T671): a body shorter than `admit_min_chars`, or
+        /// one `admit_similarity` percent or more like a stored note, is refused with the
+        /// stored note's id. Local text only; no network.
+        admit: bool = true,
+        admit_min_chars: u32 = 5,
+        admit_similarity: u32 = 85,
+        /// `rtok memory forget` retires an unpinned note nobody read for this many days
+        /// (T669; 0 = the command needs `--days`). Never runs by itself.
+        forget_after_days: u32 = 90,
         embed: MemoryEmbed = MemoryEmbed::default(),
     }
 }

@@ -8,6 +8,8 @@ pub mod baseline;
 pub mod cache;
 pub mod codex;
 pub mod dictionary;
+#[cfg(feature = "cmd")]
+pub mod discover;
 pub mod image;
 pub mod jsonl;
 pub mod skills_listing;
