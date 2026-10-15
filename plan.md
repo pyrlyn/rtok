@@ -76,7 +76,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T669 | todo | P2 | 3 | 0% | |
 | T670 | todo | P2 | 3 | 0% | |
 | T671 | todo | P2 | 3 | 0% | |
-| T672 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T673 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T674 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T675 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
@@ -1071,14 +1070,6 @@ Check: a test shows a dropped `Runtime::in_memory` leaves no directory behind, a
 ## Beat sqz, lean-ctx, token-optimizer and caveman per category (T672–T686)
 
 Source: `docs/research/competitors-techniques.md` (techniques, licenses, links). Every card: keep 100 % of hashes, paths and WARN/ERROR lines, never more tokens than raw, stderr and exit line kept on failure.
-
-### T672. all (link line)
-
-Best competitor: sqz `§ref§` ~13 tok. Design: one short id `[rtok 1a2b3c4d · 111 lines]`, expand by prefix.
-
-Check: #1076 harness (`bench/c14`) shows −75 tok/call on this category with full anchor retention.
-
-Plan: #1077 already prints a 12-char id with prefix expand; shorten the trailer to the 8-char minimum prefix (`SHORT_ID` in `src/plugins/cmd/run.rs`), widening per call only when the archive store already holds another id with that prefix. Test: trailer length and a collision case in `run.rs`/`expand.rs` tests. Measure: tokens of the trailer line before/after (bench/c14 is not on main; counted on the existing fixtures).
 
 ### T673. grep 2260, git grep 452, rg
 
