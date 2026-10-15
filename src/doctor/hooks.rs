@@ -967,6 +967,8 @@ pub fn render(problems: &[Problem]) -> String {
 }
 
 #[cfg(test)]
+// T902: every `#[test]` below is unix-only (POSIX paths), so on Windows the shared helpers are unused.
+#[cfg_attr(windows, allow(dead_code, unused_imports))]
 mod tests {
     use super::*;
     use std::collections::BTreeMap;

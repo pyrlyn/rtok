@@ -116,6 +116,32 @@ impl Store {
         Ok(rebuild_hook_inputs(rows))
     }
 
+    /// Request bodies of every session's `event` hook calls at or after `since` that name
+    /// `tool`, newest first, at most `limit` (`rtok discover`). `tool` is a plain tool name:
+    /// the `LIKE` is a coarse pre-filter that spares parsing every Read and Edit body, and the
+    /// caller still reads `tool_name` from the JSON. A body split into `hook_sessions` is made
+    /// whole again, like [`Store::recent_hook_inputs`].
+    pub fn hook_inputs_for_tool_since(
+        &self,
+        event: &str,
+        tool: &str,
+        since: i64,
+        limit: i64,
+    ) -> Result<Vec<String>> {
+        let mut conn = self.lock()?;
+        let rows: Vec<HookInputRow> = calls::table
+            .inner_join(call_io::table.left_join(hook_sessions::table))
+            .filter(calls::kind.eq("hook"))
+            .filter(calls::name.eq(event))
+            .filter(calls::ts.ge(since))
+            .filter(call_io::request_json.like(format!("%\"tool_name\":\"{tool}\"%")))
+            .order(calls::id.desc())
+            .limit(limit)
+            .select((call_io::request_json, hook_sessions::fields.nullable()))
+            .load(&mut *conn)?;
+        Ok(rebuild_hook_inputs(rows))
+    }
+
     /// Hook/call rows in this session at or after `ts` (window for `guard`).
     pub fn calls_since(&self, session: &str, ts: i64) -> Result<i64> {
         let mut conn = self.lock()?;

@@ -22,6 +22,7 @@ lang: ru
 | `rtok filter --stdin` | отфильтровать данные, не выполняя команду (OpenCode `tool.execute.after`) |
 | `rtok expand <id>` | напечатать заархивированные данные целиком или по `--lines` / `--grep` |
 | `rtok stats` | измерения из логов сессий и прокси |
+| `rtok discover` | команды Bash, которым не хватает форматтера или именованного правила, по числу токенов вывода, дошедших до модели (`--since`, `--top`, `--json`) |
 | `rtok doctor` | проверить хуки, MCP-серверы, цепочку прокси — включая то, сколько каждый стоит за ход, и сколько места освободит `rtok agents junk clear` |
 | `rtok agents install claude\|cursor\|codex\|opencode\|kilo\|pi\|zcode\|kimi\|copilot\|aider\|windsurf\|zed` | установить в хост с резервными копиями; `--dry-run` |
 | `rtok agents uninstall claude\|cursor\|codex\|opencode\|kilo\|pi\|zcode\|kimi\|copilot\|aider\|windsurf\|zed` | убрать rtok из хоста с резервными копиями; `--dry-run` |

@@ -4,6 +4,7 @@
 
 //! Notes API: `mem_save` / `mem_search` / `mem_get` (plan T6.1).
 
+mod admit;
 pub mod export;
 mod files;
 pub mod handoff;
@@ -420,10 +421,69 @@ pub fn mem_save(
     body: &str,
     project: Option<&str>,
 ) -> anyhow::Result<(i32, bool)> {
-    let proj = project
+    save_scoped(rt, kind, title, body, save_scope(project).as_deref())
+}
+
+fn save_scope(project: Option<&str>) -> Option<String> {
+    project
         .map(str::to_string)
-        .or_else(|| std::env::current_dir().ok().and_then(|d| project_name(&d)));
-    save_scoped(rt, kind, title, body, proj.as_deref())
+        .or_else(|| std::env::current_dir().ok().and_then(|d| project_name(&d)))
+}
+
+/// What the MCP `mem_save` did: stored the note, or refused it at the admission gate (T671).
+#[derive(Debug, PartialEq, Eq)]
+pub enum Saved {
+    Stored {
+        id: i32,
+        updated: bool,
+    },
+    /// `existing` names the stored note a duplicate repeats.
+    Refused {
+        reason: &'static str,
+        existing: Option<i32>,
+    },
+}
+
+/// [`mem_save`] behind the admission gate (`plugins.memory.admit`). A save that names an
+/// existing `(project, kind, title)` is a revision and always passes the duplicate check.
+pub fn mem_save_gated(
+    rt: &crate::plugin::Runtime,
+    kind: &str,
+    title: &str,
+    body: &str,
+    project: Option<&str>,
+) -> anyhow::Result<Saved> {
+    let cfg = &rt.config.plugins.memory;
+    let scope = save_scope(project);
+    let (clean_title, clean_body) = (strip_private(title), strip_private(body));
+    // An empty title or body keeps the rejection `save_scoped` already gives it.
+    if cfg.admit && !clean_title.is_empty() && !clean_body.is_empty() {
+        let stored =
+            rt.store
+                .admit_candidates(scope.as_deref(), kind, &clean_title, admit::WINDOW)?;
+        match admit::judge(
+            cfg.admit_min_chars,
+            cfg.admit_similarity,
+            &clean_body,
+            &stored,
+        ) {
+            admit::Verdict::Admit => {}
+            admit::Verdict::TooShort => {
+                return Ok(Saved::Refused {
+                    reason: "too_short",
+                    existing: None,
+                });
+            }
+            admit::Verdict::Duplicate(id) => {
+                return Ok(Saved::Refused {
+                    reason: "duplicate",
+                    existing: Some(id),
+                });
+            }
+        }
+    }
+    let (id, updated) = save_scoped(rt, kind, title, body, scope.as_deref())?;
+    Ok(Saved::Stored { id, updated })
 }
 
 /// `mem_save` with the scope already decided: `None` is a global note, never an
@@ -452,6 +512,35 @@ fn save_scoped(
     let embed = crate::store::embed_settings(&rt.config.plugins.memory.embed);
     rt.store.upsert_note_embedding(id, &title, &body, &embed)?;
     Ok((id, updated))
+}
+
+/// `rtok memory forget` (T669): retire the notes nobody read for `days` (default
+/// `forget_after_days`). A dry run unless `apply`; a retired note keeps its body.
+pub fn mem_forget(
+    rt: &crate::plugin::Runtime,
+    project: Option<&str>,
+    days: Option<u32>,
+    apply: bool,
+) -> anyhow::Result<String> {
+    let idle = days.unwrap_or(rt.config.plugins.memory.forget_after_days);
+    if idle == 0 {
+        return Ok("forget is off: forget_after_days is 0; pass --days N".to_string());
+    }
+    let rows = rt.store.forget_stale_notes(project, idle, apply)?;
+    let verb = if apply { "retired" } else { "would retire" };
+    let mut out = vec![format!(
+        "{verb} {} notes unread for {idle}+ days",
+        rows.len()
+    )];
+    out.extend(
+        rows.iter()
+            .take(20)
+            .map(|(id, title)| format!("{id} {title}")),
+    );
+    if rows.len() > 20 {
+        out.push(format!("… {} more", rows.len() - 20));
+    }
+    Ok(out.join("\n"))
 }
 
 pub fn mem_pack(
@@ -1627,5 +1716,215 @@ mod tests {
                 <= observe::MAX_PER_SESSION
         );
         assert!(ctx.estimate(&inj.text, Class::Prose) <= 200, "{}", inj.text);
+    }
+
+    fn gated(cx: &crate::plugin::Runtime, title: &str, body: &str) -> Saved {
+        mem_save_gated(cx, "note", title, body, Some("t671")).unwrap()
+    }
+
+    #[test]
+    fn a_repeated_body_under_a_new_title_is_refused_with_the_stored_id() {
+        let cx = crate::plugin::Runtime::in_memory("t671-dup").unwrap();
+        let Saved::Stored { id, .. } =
+            gated(&cx, "cache", "The walrus cache evicts the oldest entry.")
+        else {
+            panic!("first save must be stored");
+        };
+        let again = gated(
+            &cx,
+            "cache again",
+            "the walrus  cache evicts the OLDEST entry.",
+        );
+        assert_eq!(
+            again,
+            Saved::Refused {
+                reason: "duplicate",
+                existing: Some(id)
+            }
+        );
+        assert_eq!(
+            cx.store.list_note_titles(Some("t671"), 10).unwrap().len(),
+            1
+        );
+    }
+
+    #[test]
+    fn a_revision_under_the_same_topic_key_still_updates() {
+        let cx = crate::plugin::Runtime::in_memory("t671-rev").unwrap();
+        gated(&cx, "cache", "The walrus cache evicts the oldest entry.");
+        let again = gated(
+            &cx,
+            "cache",
+            "The walrus cache evicts the oldest entry first.",
+        );
+        assert!(
+            matches!(again, Saved::Stored { updated: true, .. }),
+            "{again:?}"
+        );
+    }
+
+    #[test]
+    fn a_body_under_the_floor_is_refused_and_an_ordinary_note_is_stored() {
+        let cx = crate::plugin::Runtime::in_memory("t671-short").unwrap();
+        assert_eq!(
+            gated(&cx, "tiny", "ok"),
+            Saved::Refused {
+                reason: "too_short",
+                existing: None
+            }
+        );
+        let stored = gated(&cx, "real", "Hooks exit zero within ten milliseconds.");
+        assert!(
+            matches!(stored, Saved::Stored { updated: false, .. }),
+            "{stored:?}"
+        );
+    }
+
+    #[test]
+    fn the_gate_is_per_project_and_can_be_switched_off() {
+        let mut cx = crate::plugin::Runtime::in_memory("t671-off").unwrap();
+        let body = "The walrus cache evicts the oldest entry.";
+        gated(&cx, "cache", body);
+        let other = mem_save_gated(&cx, "note", "cache", body, Some("elsewhere")).unwrap();
+        assert!(matches!(other, Saved::Stored { .. }), "{other:?}");
+        cx.config.plugins.memory.admit = false;
+        let twin = gated(&cx, "cache twin", body);
+        assert!(
+            matches!(twin, Saved::Stored { updated: false, .. }),
+            "{twin:?}"
+        );
+    }
+
+    fn first_title(cx: &crate::plugin::Runtime, query: &str) -> String {
+        cx.store.search_notes(query, 5).unwrap()[0].title.clone()
+    }
+
+    #[test]
+    fn a_read_note_leads_an_equal_text_twin_in_search() {
+        let cx = crate::plugin::Runtime::in_memory("t669-used").unwrap();
+        let old = mem_save(&cx, "note", "rank-aaa", "quokka ledger entry", None)
+            .unwrap()
+            .0;
+        let used = mem_save(&cx, "note", "rank-bbb", "quokka ledger entry", None)
+            .unwrap()
+            .0;
+        assert_ne!(old, used);
+        assert_eq!(
+            first_title(&cx, "quokka"),
+            "rank-aaa",
+            "ties keep bm25 order"
+        );
+        for _ in 0..10 {
+            cx.store.touch_note(used).unwrap();
+        }
+        assert_eq!(first_title(&cx, "quokka"), "rank-bbb");
+    }
+
+    #[test]
+    fn a_pinned_note_leads_an_equal_text_twin_in_search() {
+        let cx = crate::plugin::Runtime::in_memory("t669-pin").unwrap();
+        mem_save(&cx, "note", "rank-aaa", "quokka ledger entry", None).unwrap();
+        let pinned = mem_save(&cx, "note", "rank-bbb", "quokka ledger entry", None)
+            .unwrap()
+            .0;
+        cx.store.set_note_pinned(pinned, true).unwrap();
+        assert_eq!(first_title(&cx, "quokka"), "rank-bbb");
+    }
+
+    const DAY: i64 = 86_400;
+
+    fn aged(cx: &crate::plugin::Runtime, kind: &str, title: &str, days_old: i64) -> i32 {
+        let ts = i64::try_from(
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+        )
+        .unwrap()
+            - days_old * DAY;
+        cx.store
+            .insert_portable_note_if_absent(crate::store::PortableNote {
+                project: None,
+                kind,
+                title,
+                body: "stale body text",
+                id: None,
+                ts: Some(ts),
+                retired: None,
+                superseded_by: None,
+                pinned: None,
+            })
+            .unwrap()
+            .unwrap()
+    }
+
+    #[test]
+    fn forget_retires_only_old_unread_unpinned_notes_and_only_on_apply() {
+        let cx = crate::plugin::Runtime::in_memory("t669-forget").unwrap();
+        let stale = aged(&cx, "note", "stale", 200);
+        let read = aged(&cx, "note", "read", 200);
+        let pinned = aged(&cx, "note", "pinned", 200);
+        let decision = aged(&cx, "decision", "decision", 200);
+        let user = aged(&cx, "user", "user", 200);
+        let fresh = aged(&cx, "note", "fresh", 3);
+        cx.store.touch_note(read).unwrap();
+        cx.store.set_note_pinned(pinned, true).unwrap();
+
+        let dry = mem_forget(&cx, None, Some(90), false).unwrap();
+        assert!(dry.starts_with("would retire 1 notes"), "{dry}");
+        assert!(dry.contains(&format!("{stale} stale")), "{dry}");
+        assert!(
+            cx.store.note_row(stale).unwrap().unwrap().retired.is_none(),
+            "dry run wrote"
+        );
+
+        let done = mem_forget(&cx, None, Some(90), true).unwrap();
+        assert!(done.starts_with("retired 1 notes"), "{done}");
+        assert!(cx.store.note_row(stale).unwrap().unwrap().retired.is_some());
+        for id in [read, pinned, decision, user, fresh] {
+            assert!(
+                cx.store.note_row(id).unwrap().unwrap().retired.is_none(),
+                "{id} was retired"
+            );
+        }
+        // Lossless: a retired note keeps its body.
+        assert_eq!(
+            cx.store.get_note_body(stale).unwrap().unwrap(),
+            "stale body text"
+        );
+    }
+
+    #[test]
+    fn forget_is_off_without_days_when_the_config_says_zero() {
+        let mut cx = crate::plugin::Runtime::in_memory("t669-off").unwrap();
+        cx.config.plugins.memory.forget_after_days = 0;
+        let out = mem_forget(&cx, None, None, true).unwrap();
+        assert!(out.starts_with("forget is off"), "{out}");
+    }
+
+    #[test]
+    fn a_pinned_weak_match_does_not_beat_a_clearly_better_one() {
+        let cx = crate::plugin::Runtime::in_memory("t669-strong").unwrap();
+        let filler = "unrelated words about caches and hooks ".repeat(8);
+        let weak = mem_save(&cx, "note", "rank-weak", &format!("{filler} quokka"), None)
+            .unwrap()
+            .0;
+        for (title, hits) in [
+            ("rank-mid", "quokka quokka"),
+            ("rank-mid2", "quokka quokka quokka"),
+            ("rank-mid3", "quokka quokka quokka quokka"),
+        ] {
+            mem_save(&cx, "note", title, &format!("{filler} {hits}"), None).unwrap();
+        }
+        mem_save(
+            &cx,
+            "note",
+            "rank-best",
+            "quokka quokka quokka quokka",
+            None,
+        )
+        .unwrap();
+        cx.store.set_note_pinned(weak, true).unwrap();
+        assert_eq!(first_title(&cx, "quokka"), "rank-best");
     }
 }

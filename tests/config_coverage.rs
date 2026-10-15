@@ -47,6 +47,9 @@ const ALLOW: &[&str] = &[
 /// `--dry-run` has a key wherever the command owns a config table (`setup`, `proxy`, `bench`);
 /// on `config init` / `config set` it sits beside `--force` and means "print, do not write".
 const ALLOW_KEYS: &[&str] = &[
+    // `discover` (T661): the window and length of one report, defaulting to `[stats] since`.
+    "discover.since",
+    "discover.top",
     // `man --dir` (T316): where one call writes the pages, not a stored setting.
     "man.dir",
     // `completions --install/--uninstall` (T318): one-shot actions, not settings.
@@ -98,6 +101,10 @@ const ALLOW_KEYS: &[&str] = &[
     // `memory status` (T69.4): one-shot filters, not settings.
     "memory.status.project",
     "memory.status.since",
+    // `memory forget` (T669): one-shot scope and the dry-run switch; `forget_after_days` is the setting.
+    "memory.forget.project",
+    "memory.forget.apply",
+    "memory.forget.days",
     // `otel flush --coalesce` (T143): hidden, hook-spawned-only mode switch for one call,
     // not a stored setting — a manual `rtok otel flush` never passes it.
     "otel.flush.coalesce",

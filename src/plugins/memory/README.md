@@ -12,6 +12,9 @@ progressive disclosure.
 ## Tools
 
 - `mem_save(kind, title, body, project?)` — project defaults to the git root name of cwd.
+  Admission gate (T671, `plugins.memory.admit`): a body under `admit_min_chars`, or `admit_similarity` percent
+  trigram-alike to a stored note of the project, is refused with `{"refused": "too_short"|"duplicate", "id": <stored>}`.
+  Same project+kind+title is a revision and always passes. Local text only; the `remember:` prompt path is not gated.
   The title is the topic key: a second save with the same project, kind and title updates
   that row (`{"id", "updated": true}`) instead of adding a stale twin to recall (T66.1).
   An explicit re-save of a retired topic revives it (clears the tombstone).
@@ -40,6 +43,12 @@ progressive disclosure.
 Retire, supersede, pin — never delete (D4). A retired note is skipped by recall and search
 but keeps its body readable through `mem_get`; pinned notes lead the SessionStart recall
 ahead of newest-first order; both orders are byte-stable for an unchanged store.
+
+`search` takes the best bm25 hits and re-ranks them by use, age and pin (`rank_blend`): a
+pinned or well-read note overtakes a neighbour with equal text, a clearly better match stays
+ahead, and a store with no use signal ranks as before. `rtok memory forget` (a dry run unless
+`--apply`) retires unpinned, never-read notes older than `forget_after_days`; `user` and
+`decision` notes, checkpoints and sessions are never forgotten, and a retired body stays readable.
 
 ## Hooks
 
