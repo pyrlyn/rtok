@@ -20,7 +20,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | # | Status | Priority | Complexity | Readiness | Agent |
 | --- | --- | --- | --- | --- | --- |
 | T124 | todo | P3 | 2 | 0% | |
-| T131 | in progress | P2 | 3 | 70% | Claude Code / claude-sonnet-5-5 |
+| T131 | todo | P2 | 3 | 70% | |
 | T134 | todo | P1 | 2 | 40% | |
 | T156 | in progress | P3 | 3 | 50% | Claude Code / claude-opus-5-5 |
 | T261 | in progress | P2 | 3 | 95% | Cursor / grok 4.7 |
@@ -85,11 +85,11 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T679 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T680 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T681 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T682 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T683 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T682 | todo | P2 | 3 | 0% | |
+| T683 | todo | P2 | 3 | 0% | |
 | T684 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T685 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T686 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T686 | todo | P2 | 3 | 0% | |
 | T901 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
 | T902 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
 
@@ -273,6 +273,8 @@ Check: fixture with one briefed and one plain sub-agent asserts the split; after
 Progress (2026-09-25): the cost row was already recorded by T130.1 (`memory`/`brief`, before 0, after = brief tokens); `tests/hook_spawn_brief.rs` now asserts one row per fired brief and none otherwise. `rtok stats` splits the `subagents` re-read share and input tokens into `brief` / `no brief`, detected by `measure::subagents::SPAWN_BRIEF_MARKER` in a sub-agent's first user message (a `handoff.rs` test pins it inside the brief's `INSTRUCTIONS`); fixture test `briefed_and_plain_subagents_split_the_reread_share`. Left: the dated window with the flag on, the net in `research.md` §17, and the default decision.
 
 Plan: finish only the agent-doable part: confirm the fixture/cost-row tests still pass and add whatever small piece the Progress line lacks. The dated flag-on window, the `research.md` §17 net and the default decision need the creator's paid live run: leave them in the card and set the row back to `todo` at 70 %.
+
+Remaining work needs the creator: the fixture and cost-row tests (`tests/hook_spawn_brief.rs`, `briefed_and_plain_subagents_split_the_reread_share`) are in place and pass; the dated flag-on window, the `research.md` §17 net and the default decision need a paid live run.
 
 ### T134. Probe: does a CLI command hook's `PostToolUse` `updatedToolOutput` replace native tool output?
 Gate for I-91 (`research.md` §17.2). The Agent SDK hooks page says `updatedToolOutput` "works for any tool"; rtok's standing rule says PostToolUse can only add context. If the CLI honours it, native Read/Bash output could be shrunk in place (pointer + `expand <id>`) instead of wrapped or denied — that changes the design of `cmd`, `read` and `guard`, so it is a creator decision, not a silent change. No product code in this task.
@@ -1160,6 +1162,8 @@ Check: #1076 harness (`bench/c14`) shows keep lead on this category with full an
 
 Plan: first confirm #1079 (git log one line) is merged; if not, branch on top of main without touching its hunks and keep this task `todo`. Then add a `[N commits, +A/-D]` header and drop the Author column when every author is equal in `src/plugins/cmd` git-log formatter; fixture test for both, fail-first; measure with `bench/fixtures` (the #1076 harness is not on main).
 
+Blocked: stacks on #1079 (git log one line per commit), which is still open; a second change to the same formatter would conflict. Take it again once #1079 is on main. The #1076 harness (`bench/c14`) the Check cites is also not on main yet.
+
 ### T683. tail 155, cat *.log
 
 Best competitor: lean-ctx 87.4 % (rtok 94.5 %). Design: caveman-style field summary on collapsed runs: constant logfmt keys printed once.
@@ -1167,6 +1171,8 @@ Best competitor: lean-ctx 87.4 % (rtok 94.5 %). Design: caveman-style field summ
 Check: #1076 harness (`bench/c14`) shows keep lead, +2 pp on this category with full anchor retention.
 
 Plan: extend the existing log run-collapser in `src/plugins/cmd` so collapsed logfmt runs print constant `key=value` pairs once and list only varying keys; keep error/WARN lines verbatim; fixture test asserting anchors retained and tokens ≤ raw, `expand <id>` returns raw; measure on `bench/fixtures` logs.
+
+Blocked: (1) `cmd` has no logfmt run-collapser to extend today, only `dedupe = "normalized"` (`rules.rs`, no default rule uses it), so this is a new collapse mode, not a tweak; (2) the Check (+2 pp, rtok already 94.5 % vs lean-ctx 87.4 %) is measurable only with the #1076 harness (`bench/c14`, PR open, not on main). Take it again after #1076 merges.
 
 ### T684. wc 102, cargo test/build/clippy
 
@@ -1191,6 +1197,8 @@ Best competitor: caveman 12–29 %. Design: `rtok mcp` proxy: first sentence of 
 Check: #1076 harness (`bench/c14`) shows ≥ 30 % on this category with full anchor retention.
 
 Plan: locate the `rtok mcp` proxy tool-description rewrite (`[proxy.tools_rewrite]`, T59.5); add first-sentence descriptions, drop default/examples duplicating the schema type, compact enums, full text recoverable via the archive; fixture catalog test with token cut ≥ 30 % and unchanged tool names/required args. Decide at start whether it overlaps T124's off-by-default gate; if it needs a creator decision, write it here and set back to `todo`.
+
+Blocked, needs a creator decision: the `tools_rewrite` invariant says `input_schema` is never touched (`src/plugins/proxy/AGENTS.md`, `src/proxy/tools_rewrite.rs`), but `default`, `examples` and `enum` live inside `input_schema` properties, so this task cannot be done without relaxing that rule. It also overlaps T124 (the feature is off by default and its 3 % gate is not measured yet). Decide: allow rewriting `description`/`default`/`examples` strings inside `input_schema`, or keep the rule and cut this task to top-level descriptions only (already T59.5).
 
 ### T901. Windows: `graph_lsp_gate::lsp_backend_outlines_dart_main` fails on dart 3.9
 
