@@ -16,6 +16,7 @@ pub mod calls_view;
 pub mod live;
 pub mod protocol;
 pub mod spa;
+pub mod token;
 
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, PoisonError};
@@ -26,7 +27,7 @@ use axum::Json;
 use axum::Router;
 use axum::extract::State;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
-use axum::http::{HeaderMap, StatusCode};
+use axum::http::{HeaderMap, StatusCode, Uri};
 use axum::response::IntoResponse;
 use axum::routing::get;
 use serde::Deserialize;
@@ -56,6 +57,9 @@ pub struct DashState {
     build_fn: BuildFn,
     /// The graph call events every subscribed socket shares (T329.15).
     live: Arc<live::LiveCalls>,
+    /// S2: the token `/ws` requires. `None` only for in-process tests that skip auth; `serve`
+    /// always sets one.
+    token: Option<Arc<str>>,
 }
 
 impl DashState {
@@ -72,7 +76,15 @@ impl DashState {
             build: Mutex::new(BuildSlot::Idle),
             build_fn,
             live,
+            token: None,
         }
+    }
+
+    /// Require `token` on `/ws` (S2).
+    #[must_use]
+    pub fn with_token(mut self, token: &str) -> Self {
+        self.token = Some(Arc::from(token));
+        self
     }
 
     /// One inbound `/ws` text frame (T60.5 / T60.4). `None` means ignore, or an
@@ -157,9 +169,9 @@ impl DashState {
 /// Opt-in for a dashboard bound beyond loopback: `RTOK_WEB_ALLOW_REMOTE=1`.
 pub const ALLOW_REMOTE_ENV: &str = "RTOK_WEB_ALLOW_REMOTE";
 
-/// The dashboard socket has no login: it can change config, apply `doctor --fix` and clear junk.
-/// A non-loopback `web.host` would hand that to every host on the network, so it needs the
-/// explicit opt-in. `localhost` and loopback IPs always pass.
+/// The dashboard socket can change config, apply `doctor --fix` and clear junk. `/ws` needs the
+/// local token file (S2), but a non-loopback `web.host` would still expose the page and the
+/// socket to every host on the network, so it needs the explicit opt-in. `localhost` and loopback IPs always pass.
 fn remote_bind_allowed(host: &str, opted_in: bool) -> Result<()> {
     let loopback = host.eq_ignore_ascii_case("localhost")
         || host
@@ -201,7 +213,14 @@ pub async fn serve(mut cfg: Config) -> Result<()> {
     // (the e2e helpers) where to connect, so the startup line and `/health` name that one.
     let addr = listener.local_addr().context("bound address")?;
     cfg.web.port = addr.port();
+    // S2: a fresh token per start; the old one stops working. Written before the startup line,
+    // so a client that waits for the line finds the file.
+    let token = token::issue(&cfg.home)?;
     eprintln!("rtok web http://{addr}  (ws://{addr}/ws)");
+    eprintln!(
+        "rtok web: /ws needs the token in {}",
+        token::token_path(&cfg.home).display()
+    );
     crate::log::append(
         &cfg,
         "info",
@@ -218,7 +237,7 @@ pub async fn serve(mut cfg: Config) -> Result<()> {
     let health = health_check(&cfg);
     let served = axum::serve(
         listener,
-        app_with_assets(Arc::new(DashState::new(cfg)), assets),
+        app_with_assets(Arc::new(DashState::new(cfg).with_token(&token)), assets),
     )
     .await
     .context("dashboard server");
@@ -268,9 +287,17 @@ async fn health(State(state): State<Arc<DashState>>) -> Json<Value> {
 
 async fn ws_upgrade(
     headers: HeaderMap,
+    uri: Uri,
     ws: WebSocketUpgrade,
     State(state): State<Arc<DashState>>,
 ) -> impl IntoResponse {
+    if let Some(expected) = &state.token {
+        let ok = token::presented(&headers, uri.query())
+            .is_some_and(|got| token::matches(expected, &got));
+        if !ok {
+            return StatusCode::UNAUTHORIZED.into_response();
+        }
+    }
     if !origin_allowed(&headers) {
         return StatusCode::FORBIDDEN.into_response();
     }

@@ -3,7 +3,7 @@
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
 import { type ChildProcess, type SpawnSyncReturns, spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
@@ -76,6 +76,11 @@ export class Rtok {
   get port() {
     if (this.bound === undefined) throw new Error("rtok web has not started yet");
     return this.bound;
+  }
+
+  /** The `/ws` access token of the running server, read from the file it wrote (S2). */
+  get token() {
+    return readFileSync(join(this.home, "web-token"), "utf8").trim();
   }
 
   get url() {

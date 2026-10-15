@@ -269,6 +269,8 @@ test("offline takes the whole screen when the server stops; Reconnect brings it 
   await expect(reconnect).toBeEnabled();
 
   await rtok.start();
+  // A restart issues a new token (S2); the open tab is handed it as a reload with it would be.
+  await page.evaluate((t) => globalThis.sessionStorage.setItem("rtok.web.token", t), rtok.token);
   // Reconnect skips the client's backoff (capped at 10 s, web/src/api/ws.ts). An automatic retry
   // that lands first hides the button, so the click may never happen; both paths end live.
   void reconnect.click().catch(() => {});
