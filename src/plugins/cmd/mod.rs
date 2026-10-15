@@ -16,6 +16,7 @@ pub mod hook;
 
 pub mod filter;
 pub mod formatters;
+pub mod grep;
 pub mod rules;
 pub mod run;
 
