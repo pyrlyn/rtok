@@ -91,7 +91,7 @@ Latency is flat (about 31–35 ms for every tool): it is dominated by the ~30 ms
 
 One table per command; each cell is output tokens (saving vs raw).
 
-### `cargo test`
+### `cargo test` (re-run 2026-10-14)
 
 | case | raw | rtok | rtok-pr | rtok-pr `--no-ref` | rtk |
 |---|---:|---:|---:|---:|---:|
@@ -99,7 +99,7 @@ One table per command; each cell is output tokens (saving vs raw).
 | `cargo_test_fail` | 1751 | 164 (90.6%) | 95 (94.6%) | 78 (95.5%) | 135 (92.3%) (nondet!) |
 | **total** | 3507 | 322 (90.8%) | 119 (96.6%) | 88 (97.5%) | 151 (95.7%) |
 
-### `cargo build`
+### `cargo build` (re-run 2026-10-14)
 
 | case | raw | rtok | rtok-pr | rtok-pr `--no-ref` | rtk |
 |---|---:|---:|---:|---:|---:|
@@ -109,7 +109,7 @@ One table per command; each cell is output tokens (saving vs raw).
 | `cargo_build_error` | 133 | 132 (0.8%) | 60 (54.9%) | 44 (66.9%) | 88 (33.8%) |
 | **total** | 390 | 388 (0.5%) | 138 (64.6%) | 76 (80.5%) | 251 (35.6%) |
 
-### `find`
+### `find` (re-run 2026-10-14)
 
 | case | raw | rtok | rtok-pr | rtok-pr `--no-ref` | rtk |
 |---|---:|---:|---:|---:|---:|
@@ -119,7 +119,7 @@ One table per command; each cell is output tokens (saving vs raw).
 | `find_dirs` | 389 | 161 (58.6%) | 94 (75.8%) | 79 (79.7%) | 106 (72.8%) |
 | **total** | 5864 | 1482 (74.7%) | 1148 (80.4%) | 1100 (81.2%) | 589 (90.0%) |
 
-### `ls -la`
+### `ls -la` (re-run 2026-10-14)
 
 | case | raw | rtok | rtok-pr | rtok-pr `--no-ref` | rtk |
 |---|---:|---:|---:|---:|---:|
@@ -128,7 +128,7 @@ One table per command; each cell is output tokens (saving vs raw).
 | `ls_la_crates` | 270 | 270 (0.0%) | 59 (78.1%) | 46 (83.0%) | 62 (77.0%) |
 | **total** | 2141 | 1155 (46.1%) | 564 (73.7%) | 518 (75.8%) | 599 (72.0%) |
 
-### `git status`
+### `git status` (re-run 2026-10-14)
 
 | case | raw | rtok | rtok-pr | rtok-pr `--no-ref` | rtk |
 |---|---:|---:|---:|---:|---:|
@@ -136,7 +136,7 @@ One table per command; each cell is output tokens (saving vs raw).
 | `git_status_dirty` | 127 | 146 (-15.0%) | 51 (59.8%) | 37 (70.9%) | 38 (70.1%) |
 | **total** | 144 | 163 (-13.2%) | 68 (52.8%) | 54 (62.5%) | 54 (62.5%) |
 
-### `git diff`
+### `git diff` (re-run 2026-10-14)
 
 | case | raw | rtok | rtok-pr | rtok-pr `--no-ref` | rtk |
 |---|---:|---:|---:|---:|---:|
@@ -144,7 +144,7 @@ One table per command; each cell is output tokens (saving vs raw).
 | `git_diff_stat` | 45 | 45 (0.0%) | 45 (0.0%) | 45 (0.0%) | 45 (0.0%) |
 | **total** | 357 | 392 (-9.8%) | 253 (29.1%) | 237 (33.6%) | 294 (17.6%) |
 
-### `git log`
+### `git log` (re-run 2026-10-14)
 
 | case | raw | rtok | rtok-pr | rtok-pr `--no-ref` | rtk |
 |---|---:|---:|---:|---:|---:|
@@ -153,7 +153,7 @@ One table per command; each cell is output tokens (saving vs raw).
 | `git_log_stat_5` | 1275 | 398 (68.8%) | 323 (74.7%) | 306 (76.0%) | 1275 (0.0%) |
 | **total** | 6502 | 1398 (78.5%) | 1182 (81.8%) | 1132 (82.6%) | 3830 (41.1%) |
 
-### `grep`
+### `grep` (re-run 2026-10-14)
 
 | case | raw | rtok | rtok-pr | rtok-pr `--no-ref` | rtk |
 |---|---:|---:|---:|---:|---:|
@@ -161,7 +161,7 @@ One table per command; each cell is output tokens (saving vs raw).
 | `grep_settings_src` | 1420 | 577 (59.4%) | 501 (64.7%) | 485 (65.8%) | 1420 (0.0%) |
 | **total** | 2578 | 1266 (50.9%) | 1107 (57.1%) | 1076 (58.3%) | 2578 (0.0%) |
 
-### `rg`
+### `rg` (re-run 2026-10-14)
 
 | case | raw | rtok | rtok-pr | rtok-pr `--no-ref` | rtk |
 |---|---:|---:|---:|---:|---:|
@@ -169,7 +169,7 @@ One table per command; each cell is output tokens (saving vs raw).
 | `rg_files_with` | 150 | 287 (-91.3%) | 150 (0.0%) | 150 (0.0%) | 127 (15.3%) |
 | **total** | 671 | 808 (-20.4%) | 671 (0.0%) | 671 (0.0%) | 648 (3.4%) |
 
-### `cat`
+### `cat` (re-run 2026-10-14)
 
 | case | raw | rtok | rtok-pr | rtok-pr `--no-ref` | rtk |
 |---|---:|---:|---:|---:|---:|
@@ -177,7 +177,7 @@ One table per command; each cell is output tokens (saving vs raw).
 | `cat_toml` | 4945 | 995 (79.9%) | 920 (81.4%) | 903 (81.7%) | 4945 (0.0%) |
 | **total** | 6414 | 1512 (76.4%) | 1359 (78.8%) | 1326 (79.3%) | 6414 (0.0%) |
 
-### `tree`
+### `tree` (re-run 2026-10-14)
 
 | case | raw | rtok | rtok-pr | rtok-pr `--no-ref` | rtk |
 |---|---:|---:|---:|---:|---:|
@@ -185,7 +185,7 @@ One table per command; each cell is output tokens (saving vs raw).
 | `tree_crates_l2` | 302 | 379 (-25.5%) | 302 (0.0%) | 295 (2.3%) | 295 (2.3%) |
 | **total** | 367 | 444 (-21.0%) | 367 (0.0%) | 360 (1.9%) | 353 (3.8%) |
 
-### `wc`
+### `wc` (re-run 2026-10-14)
 
 | case | raw | rtok | rtok-pr | rtok-pr `--no-ref` | rtk |
 |---|---:|---:|---:|---:|---:|
