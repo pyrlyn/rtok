@@ -77,7 +77,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T670 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T671 | todo | P2 | 3 | 0% | |
 | T673 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T674 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T675 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T676 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T677 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
@@ -1087,14 +1086,6 @@ Best competitor: t-o 89.7 %, lean-ctx 89.6 %. Design: path printed once; matches
 Check: #1076 harness (`bench/c14`) shows ≥ 91 %, 100 % paths on this category with full anchor retention.
 
 Plan: new `grep_group` formatter in `src/plugins/cmd/compact.rs` wired in `formatters::format` for `grep`/`rg`/`git grep`: path once, `line:text` under it, common indent stripped, text trimmed to the match ±60 chars, per-file budget with `+N more (expand)`, files path-sorted; fall back to the rule when the shape is unknown. Tests: golden `grep_group*.in/out` with `min_saving:` plus a path-retention unit test. Measure on the existing grep fixtures (bench/c14 unmerged).
-
-### T674. sed 2119 (`sed -n a,bp f`), cat 950, head 35, tail 155, awk
-
-Best competitor: lean-ctx 91.4 % (`read` rewrite). Design: detect range-print of a file: emit numbered range only once per session (session dedup by content hash, re-read → `unchanged since <id>`, changed → unified diff of the range); for full source files without range: signatures + elided bodies with line spans.
-
-Check: #1076 harness (`bench/c14`) shows ≥ 93 % on `cat` source; re-read ≥ 95 % on this category with full anchor retention.
-
-Plan: for `cat <source>` without a range, emit signatures with elided bodies and line spans (reuse the tree-sitter outline already used by `rtok read`); for `sed -n a,bp f` keep the numbered range and, on a repeat in one session, print `unchanged since <id>` or a unified diff of the range (content hash kept in the archive store, no new table unless Diesel schema needs it). Tests: golden for cat source, session re-read unit tests. Stay under the bounded-passthrough rules in `bounded.rs`.
 
 ### T675. python3 1545
 
