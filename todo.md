@@ -48,6 +48,5 @@
 - T666.2. Provider-backed memory extractor (blocked on the creator)
 - T687. Hooks: PreToolUse/PostToolUse p50 to 10 ms
 - T680. git status 297: ≥ 60 % (rtk 62.5 %) (vs lean-ctx 40.5 %)
-- T682. git log 174: keep lead (vs — (rtok wins after #1079))
 - T683. tail 155, cat *.log: keep lead, +2 pp (vs lean-ctx 87.4 % (rtok 94.5 %))
 - T686. MCP tool catalogs: ≥ 30 % (vs caveman 12–29 %)

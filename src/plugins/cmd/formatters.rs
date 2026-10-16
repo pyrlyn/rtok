@@ -688,8 +688,24 @@ struct Commit<'a> {
     stat: Vec<&'a str>,
 }
 
+/// `(insertions, deletions)` of a `--stat` summary line (`3 files changed, 5 insertions(+),
+/// 1 deletion(-)`); `None` for a per-file line, whose `|` a summary never has.
+fn stat_totals(line: &str) -> Option<(usize, usize)> {
+    if line.contains(" | ") || !line.contains(" changed") {
+        return None;
+    }
+    let count = |word: &str| {
+        line.split(',')
+            .find(|part| part.contains(word))
+            .and_then(|part| part.split_whitespace().next()?.parse().ok())
+            .unwrap_or(0)
+    };
+    Some((count("insertion"), count("deletion")))
+}
+
 /// `git log` in its default (medium) format, one line per commit: short hash, date,
-/// subject; the most frequent author is named once in a header line, the others per line. `--stat` file lines
+/// subject. A first line gives `[N commits, +A/-D]` (totals only when `--stat` printed them)
+/// and names the most frequent author once (alone, when all are equal); the others are named per line. `--stat` file lines
 /// and the `N files changed` summary are kept under their commit. Every commit up to
 /// [`GIT_LOG_MAX_COMMITS`] is listed, where a head cut kept only the first four.
 /// `None` for any other shape (`--oneline`, `--format=…`, `-p`), which keeps the old cut.
@@ -764,9 +780,30 @@ fn git_log(output: &str) -> Option<String> {
     if one_year {
         head.push(commits[0].year.to_string());
     }
-    if !head.is_empty() {
-        out.push(head.join(" · "));
+    // T682: the count and the `--stat` totals lead, so "how big is this range" needs no
+    // counting of lines; the totals are claimed only when `--stat` printed them.
+    let (added, removed, has_totals) =
+        commits
+            .iter()
+            .flat_map(|c| &c.stat)
+            .fold(
+                (0usize, 0usize, false),
+                |(a, d, seen), line| match stat_totals(line) {
+                    Some((ins, del)) => (a + ins, d + del, true),
+                    None => (a, d, seen),
+                },
+            );
+    let n = commits.len();
+    let mut counts_line = format!("[{n} commit{}", if n == 1 { "" } else { "s" });
+    if has_totals {
+        counts_line.push_str(&format!(", +{added}/-{removed}"));
     }
+    counts_line.push(']');
+    if !head.is_empty() {
+        counts_line.push(' ');
+        counts_line.push_str(&head.join(" · "));
+    }
+    out.push(counts_line);
     for c in commits.iter().take(GIT_LOG_MAX_COMMITS) {
         let date = if one_year {
             c.date.clone()
@@ -1728,7 +1765,7 @@ mod tests {
         let out = git_log(raw).unwrap();
         assert_eq!(
             out,
-            "Ann unless named\n1111111 Oct 14 2026 first\n2222222 Oct 13 2025 second — Bob"
+            "[2 commits] Ann unless named\n1111111 Oct 14 2026 first\n2222222 Oct 13 2025 second — Bob"
         );
     }
 
@@ -1739,6 +1776,44 @@ mod tests {
         assert!(out.contains("1111111 Oct 14 first"), "{out}");
         assert!(out.contains("  src/a.rs | 2 +-"), "{out}");
         assert!(out.contains("  1 file changed"), "{out}");
+    }
+
+    /// T682: the first line counts the commits and, when `--stat` printed totals, sums them.
+    #[test]
+    fn git_log_header_counts_commits_and_stat_totals() {
+        let c = |sha: char, stat: &str| {
+            format!(
+                "commit {}\nAuthor: Ann <a@x>\nDate:   Wed Oct 14 10:00:00 2026 +0300\n\n    s{sha}\n\n src/a.rs | 3 ++-\n{stat}\n\n",
+                sha.to_string().repeat(40)
+            )
+        };
+        let raw = format!(
+            "{}{}",
+            c('1', " 1 file changed, 2 insertions(+), 1 deletion(-)"),
+            c('2', " 1 file changed, 3 insertions(+)")
+        );
+        let out = git_log(&raw).unwrap();
+        assert_eq!(out.lines().next(), Some("[2 commits, +5/-1] Ann · 2026"));
+        // Without stat totals there is nothing to sum, so only the count is claimed.
+        let plain = "commit 1111111111111111111111111111111111111111\nAuthor: Ann <a@x>\nDate:   Wed Oct 14 10:00:00 2026 +0300\n\n    one\n";
+        assert_eq!(
+            git_log(plain).unwrap().lines().next(),
+            Some("[1 commit] Ann · 2026")
+        );
+    }
+
+    /// T682: one author is named once in the header, never on a commit line.
+    #[test]
+    fn git_log_drops_the_author_when_all_are_equal() {
+        let one = |sha: char| {
+            format!(
+                "commit {}\nAuthor: Ann <a@x>\nDate:   Wed Oct 14 10:00:00 2026 +0300\n\n    s{sha}\n\n",
+                sha.to_string().repeat(40)
+            )
+        };
+        let out = git_log(&format!("{}{}", one('1'), one('2'))).unwrap();
+        assert_eq!(out.matches("Ann").count(), 1, "{out}");
+        assert!(!out.contains(" — "), "{out}");
     }
 
     #[test]

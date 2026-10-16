@@ -159,7 +159,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T666.2 | todo | P2 | 3 | 0% | |
 | T687 | todo | P2 | 4 | 0% | |
 | T680 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T682 | todo | P2 | 3 | 0% | |
 | T683 | todo | P2 | 3 | 0% | |
 | T686 | todo | P2 | 3 | 0% | |
 
@@ -1089,16 +1088,6 @@ Best competitor: lean-ctx 40.5 %. Design: one line per section with paths groupe
 Check: #1076 harness (`bench/c14`) shows ≥ 60 % (rtk 62.5 %) on this category with full anchor retention.
 
 Plan: #1077 prints `git status` as porcelain XY codes. Remaining: group paths by directory (`src/plugins/cmd/{a,b}.rs`), one line per section, branch + ahead/behind, drop hints. Extend `git_status` in `compact.rs`; keep every path (test counts paths in/out); update golden `git_status*` floors.
-
-### T682. git log 174
-
-Best competitor: — (rtok wins after #1079). Design: keep #1079; add `[N commits, +A/-D]`; drop Author when all equal.
-
-Check: #1076 harness (`bench/c14`) shows keep lead on this category with full anchor retention.
-
-Plan: first confirm #1079 (git log one line) is merged; if not, branch on top of main without touching its hunks and keep this task `todo`. Then add a `[N commits, +A/-D]` header and drop the Author column when every author is equal in `src/plugins/cmd` git-log formatter; fixture test for both, fail-first; measure with `bench/fixtures` (the #1076 harness is not on main).
-
-Blocked: stacks on #1079 (git log one line per commit), which is still open; a second change to the same formatter would conflict. Take it again once #1079 is on main. The #1076 harness (`bench/c14`) the Check cites is also not on main yet.
 
 ### T683. tail 155, cat *.log
 
