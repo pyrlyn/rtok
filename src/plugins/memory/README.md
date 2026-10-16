@@ -20,7 +20,7 @@ progressive disclosure.
   An explicit re-save of a retired topic revives it (clears the tombstone).
   `<private>`…`</private>` is stored as `[REDACTED]`. A body change keeps the previous
   text for `rtok memory history <id>`; SessionStart recall still shows the current title only.
-- `mem_search(query, limit=5)` — ids, titles, 120-char snippets ranked by FTS5 `bm25`.
+- `mem_search(query, limit=5)` — ids, titles, 120-char snippets ranked by FTS5 `bm25`, re-ranked by use, age, pin and current project.
   Retired notes never appear.
 - `mem_pack(query, limit=8, max_tokens=400)` — the same ranking, packed into one
   answer. Each hit starts at its abstract (title and snippet). Leftover budget

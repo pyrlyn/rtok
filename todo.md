@@ -47,7 +47,6 @@
 - T651. Honor ProgressRunner timeouts with inherited output
 - T663. Push graph reference precision toward LSP-grade (serena)
 - T666.2. Provider-backed memory extractor (blocked on the creator)
-- T667. Richer memory features from engram
 - T670. Read modes lean-ctx still has
 - T687. Hooks: PreToolUse/PostToolUse p50 to 10 ms
 - T675. python3 1545: ≥ t-o pytest (564→115) (vs none specialised)

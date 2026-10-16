@@ -590,6 +590,17 @@ impl Store {
     /// token is quoted into a phrase, so the words are searched for literally; a query with
     /// nothing quotable left returns no hits instead of an error.
     pub fn search_notes(&self, query: &str, limit: u32) -> Result<Vec<NoteHit>> {
+        self.search_notes_in(query, limit, None)
+    }
+
+    /// [`Self::search_notes`] that also lifts the notes of `project` (T667): other projects'
+    /// notes stay searchable, a same-project note just wins a near tie.
+    pub fn search_notes_in(
+        &self,
+        query: &str,
+        limit: u32,
+        project: Option<&str>,
+    ) -> Result<Vec<NoteHit>> {
         let Some(q) = fts_phrase_query(query) else {
             return Ok(Vec::new());
         };
@@ -600,20 +611,31 @@ impl Store {
             query: q,
             limit: i32::try_from(window).unwrap_or(i32::MAX),
         }
-        .load::<(i32, String, String, i32, i32, i64, Option<i64>)>(&mut *conn)?;
+        .load::<(
+            i32,
+            String,
+            String,
+            i32,
+            i32,
+            i64,
+            Option<i64>,
+            Option<String>,
+        )>(&mut *conn)?;
         let now = i64::try_from(unix_now()).unwrap_or(0);
         let mut scored: Vec<(f64, usize, NoteHit)> = rows
             .into_iter()
             .enumerate()
             .map(
-                |(rank, (id, title, snippet, pinned, uses, ts, last_used))| {
+                |(rank, (id, title, snippet, pinned, uses, ts, last_used, note_project))| {
                     let kept = retention_score(
                         pinned != 0,
                         uses,
                         age_days(now, ts),
                         days_since(now, last_used),
                     );
-                    (rank_blend(rank, kept), rank, NoteHit { id, title, snippet })
+                    let home = project.is_some() && note_project.as_deref() == project;
+                    let score = rank_blend(rank, kept) * if home { PROJECT_BOOST } else { 1.0 };
+                    (score, rank, NoteHit { id, title, snippet })
                 },
             )
             .collect();

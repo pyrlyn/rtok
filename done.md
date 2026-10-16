@@ -2807,6 +2807,16 @@ Check: ranking/forget tests on a fixture store; comparison file updated; `just c
 
 **Result (2026-10-15).** PR #1096. `search_notes` takes the best `3 × limit` bm25 hits and re-ranks them with `rank_blend(rank, retention_score(...))` (reciprocal rank offset 8, scaled by `0.4 + 0.6 × retention`), so a pinned or well-read note overtakes a neighbour of equal text while a match several places better stays ahead; a store with no use signal ranks as before. New `rtok memory forget [--project P] [--days N] [--apply]` retires unpinned, never-read notes older than `plugins.memory.forget_after_days` (default 90, 0 = needs `--days`); a dry run unless `--apply`; `user` and `decision` kinds, checkpoints and sessions are never forgotten, and a retired body stays readable. Tests: three ranking tests, two forget tests, a trycmd case, config coverage. The memory-bench row was not recorded and the comparison docs were not updated.
 
+### T667. Richer memory features from engram
+
+engram has more memory features (HTTP + MCP) (`docs/comparison/rtok-vs-engram.md`). Adopt only features that improve recall on rtok's own memory bench without a second daemon. Savings both sides: **no data** pending harness.
+
+Check: feature list and take/skip in the comparison file; tests for what shipped; `just check`.
+
+**Plan.** From `docs/comparison/rtok-vs-engram.md` (PR #1071): engram has relation judging, pinned-first recall and project identity from the origin remote that rtok lacks. Relation judging spends model output on bookkeeping: **skip**. (1) Check which of pinned-first recall and origin-remote project identity already exist (`mem_update pinned`, `project_name`); fail-first tests on `tests/fixtures/p29_memory.toml`-style fixtures for the missing ones. (2) Implement only what raises recall on rtok's own memory bench with no new MCP tool and no daemon. (3) Write the take/skip list into the comparison file (or `research.md` while #1071 is open); `just check`.
+
+**Result (2026-10-16).** `mem_search` is now project-aware like engram's reads: a note of the searcher's own project (the cwd project, as `mem_save` names it) gets a 1.3 score factor in the T669 re-rank (`Store::search_notes_in`, `mem_search_in`), so it wins a near tie against another project's note while a match three places better still leads; other projects stay searchable and a search with no project ranks as before. The vector and hybrid paths (opt-in) do not take the boost. Pinned-first recall, topic keys and session summaries already existed; relation judging, consolidation, prompt saving, Git Sync/Cloud and the 18-tool surface are skipped. The take/skip table is `research.md` §42 (the comparison file `docs/comparison/rtok-vs-engram.md` is still on open PR #1071). Tests: same-project twin leads, no project keeps bm25 order, a far-down project note does not beat the best match. No memory-bench number was measured.
+
 ### T665. Broader graph queries (codebase-memory-mcp)
 
 codebase-memory-mcp is broader (Cypher-style queries) (`docs/comparison/rtok-vs-codebase-memory-mcp.md`). Add the small query shapes agents actually used in our logs, without a heavy MCP surface. Savings both sides: **no data** for a shared corpus.
