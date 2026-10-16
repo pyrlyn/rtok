@@ -164,6 +164,7 @@ dry_run         = false               # --dry-run: print effective [proxy] setti
 
 [proxy.tools_rewrite]                 # T59.5; off: request bytes stay identical
 enabled = false
+compact_schema = false                # T686: also first-sentence property descriptions + redundant default/examples inside input_schema; originals archived (Measurement.ref_id)
 max_description_tokens = 60           # 0 = no truncate; sentence boundary; estimator Class::Prose
 allow = []                            # empty = keep all names not in deny
 deny = []                             # drop these names from tools[]; later calls still forward
@@ -474,7 +475,7 @@ cmd = ""                              # command family hint when the caller know
 
 [worktree]                            # rtok worktree add | claim | remove | list | gc
 enabled = true                        # false: every `rtok worktree` command (list too) says worktrees are not enabled, MCP lists no worktree_* tool, and Claude's WorktreeCreate/WorktreeRemove hooks do what Claude does without rtok
-root = "~/.rtok/worktrees"            # where `rtok worktree add` creates worktrees, as <root>/<repo>-<task>; `~` expands
+root = ".rtok/worktrees"              # where `rtok worktree add` creates worktrees, as <root>/<repo>-<task>; relative: under the main checkout; `~` expands
 
 [tasks]                               # task adapters (T441); usually set per project in .rtok.toml
 adapter = "disk"                      # disk | github | gitlab
@@ -516,7 +517,8 @@ rewrite  = true                       # PreToolUse(Bash) → `rtok run -- …`
 shell    = ""                         # "" = $SHELL
 rules    = "~/.rtok/rules.toml"       # extra filter rules; missing → built-in rules/default.toml
 rules_dir = "~/.rtok/rules.d"         # drop-ins: every *.toml merges after rules in name order (T50.2)
-trailer_min_lines = 40                # add `[rtok <id> · N lines · expand …]` above this
+trailer  = true                       # print `[rtok <id12> · N lines]` after a cut; false = `--no-ref`
+trailer_min_lines = 40                # add `[rtok <id12> · N lines]` above this
 fail_tail_lines   = 80                # non-zero exit → last N lines verbatim
 never_wrap = ["rtok", "sudo"]         # first-word deny list; heredocs, `&`, -i are always skipped
 
@@ -576,13 +578,26 @@ startup_recall = true                 # SessionStart(startup) restores newest se
 handoff        = true                 # T59.6 sub-agent digest MCP tool
 spawn_brief        = true             # T130: SubagentStart pointer digest
 spawn_brief_tokens = 300              # T130: token budget for the spawn brief
+admit              = true             # T671: mem_save refuses a too-short or duplicate note
+admit_min_chars    = 5                # T671: shortest body the gate admits
+admit_similarity   = 85               # T671: percent trigram overlap that counts as a duplicate
+forget_after_days = 90                # T669: `memory forget` retires notes unread this long; 0 = needs --days
 
 [plugins.memory.embed]
 enabled    = false                    # P29: FTS5-only when false; vector search is opt-in
-provider   = "local"                  # "local" | "openai"
-model      = "all-MiniLM-L6-v2"
-dimensions = 384
+provider   = "local"                  # "local" = offline hash vectors | "http" = an OpenAI-compatible embeddings API
+model      = "all-MiniLM-L6-v2"       # "http": the endpoint's model name
+dimensions = 384                      # "http": must equal the endpoint's vector length
 hybrid     = true                     # when enabled: RRF(fts5, knn) for mem_search and prompt_recall; the hook reads stored vectors only; false = knn only
+url         = ""                      # "http": base URL, e.g. "http://localhost:11434/v1" (Ollama) or "https://api.openai.com/v1"; note text is sent there
+api_key_env = ""                      # "http": name of the env var holding the key; empty = no Authorization header
+max_chars   = 8000                    # "http": a longer text is never sent (the note search runs instead)
+
+[plugins.memory.extract]
+enabled         = false                 # rtok memory extract: off by default, a model call can cost money
+command         = []                    # program reading the transcript on stdin, one {"title","body"} JSON line out per note
+max_notes       = 5                     # notes kept per run
+max_input_bytes = 60000                 # transcript bytes sent to the program; the end of the session is kept
 
 [plugins.graph]
 enabled    = true

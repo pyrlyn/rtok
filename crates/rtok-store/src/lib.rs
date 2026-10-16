@@ -40,7 +40,7 @@ pub use graph_events::{EventPhase, GraphEvent, MeasurementSample};
 mod messages;
 pub use messages::{Message, short_agent_id};
 pub mod embed;
-pub use embed::EmbedSettings;
+pub use embed::{EmbedSettings, Remote, TextEmbedder};
 // T433: hook session fields saved once, spliced back into the stdin on read.
 mod hook_fields;
 mod host_usage;
@@ -351,6 +351,25 @@ pub fn retention_score(
         _ => 0.0,
     };
     (salience * temporal + boost).min(1.0)
+}
+
+/// Kinds a forget pass never retires: what the user asked to remember and decisions (T669).
+const FORGET_KEEPS: [&str; 2] = ["user", "decision"];
+
+/// How many bm25-ranked rows each requested hit is re-ranked from (T669).
+const RANK_WINDOW: u32 = 3;
+
+/// Score factor for a note of the searcher's own project (T667). Past one reciprocal-rank step
+/// (9/8) so it wins a near tie, short of three steps (11/8) so a clearly better match from
+/// another project stays ahead.
+const PROJECT_BOOST: f64 = 1.3;
+
+/// Re-rank score for the note at 0-based bm25 position `rank` (T669). Reciprocal rank with a
+/// shallow offset, scaled by `0.4 + 0.6 * retention`: a pinned note gains about 43% and a
+/// well-read one about 17%, so they overtake a neighbour or two while a match several places
+/// better stays ahead.
+pub fn rank_blend(rank: usize, retention: f64) -> f64 {
+    (0.4 + 0.6 * retention) / (8.0 + rank as f64)
 }
 
 mod archive_rows;

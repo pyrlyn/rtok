@@ -51,11 +51,15 @@ fn configure(cfg: &mut Config, agent: &str, compressor: Option<&str>) {
 }
 
 async fn send(addr: &str, n: usize) -> Duration {
+    send_with(addr, n, "x-api-key", "test-key").await
+}
+
+async fn send_with(addr: &str, n: usize, header: &str, value: &str) -> Duration {
     let start = Instant::now();
     let status = reqwest::Client::new()
         .post(format!("http://{addr}/v1/messages"))
         .header("content-type", "application/json")
-        .header("x-api-key", "test-key")
+        .header(header, value)
         .body(request(n))
         .send()
         .await
@@ -215,4 +219,84 @@ async fn a_slow_compressor_never_delays_a_request() {
     assert!(after < Duration::from_secs(2), "turn 3 took {after:?}");
     // Still waiting on the model: the view is the extractive one.
     assert!(first_result(&sent(&agent, 3)).contains("narrative:"));
+}
+
+/// The same conversation on the OpenAI Chat Completions wire.
+fn openai_request(n: usize) -> Vec<u8> {
+    let mut messages = vec![json!({"role":"user","content":"start the task"})];
+    for t in 1..=n {
+        messages.push(json!({"role":"assistant","content":null,"tool_calls":[
+            {"id":format!("tc-{t}"),"type":"function","function":{"name":"Bash","arguments":"{}"}}]}));
+        messages.push(json!({"role":"tool","tool_call_id":format!("tc-{t}"),"content":log()}));
+        // A turn is one user message, so each result needs one after it to age out.
+        messages.push(json!({"role":"user","content":"continue"}));
+    }
+    serde_json::to_vec(&json!({
+        "model": "gpt-test", "messages": messages, "user": SESSION
+    }))
+    .expect("request json")
+}
+
+async fn send_openai(addr: &str, n: usize) {
+    let status = reqwest::Client::new()
+        .post(format!("http://{addr}/v1/chat/completions"))
+        .header("content-type", "application/json")
+        .header("authorization", "Bearer sk-openai-test")
+        .body(openai_request(n))
+        .send()
+        .await
+        .expect("request through the proxy")
+        .status();
+    assert!(status.is_success(), "turn {n}: {status}");
+}
+
+/// T657: the compressor speaks the Anthropic Messages wire, so a credential from another
+/// provider's agent turn must not be sent there.
+#[tokio::test]
+async fn an_openai_credential_is_never_sent_to_the_anthropic_compressor() {
+    let (agent, compressor) = (Sink::new(), MockServer::start());
+    let leaked = compressor.mock(|when, then| {
+        when.any_request()
+            .header("authorization", "Bearer sk-openai-test");
+        then.status(200).json_body(reply("x"));
+    });
+    let any = compressor.mock(|when, then| {
+        when.any_request();
+        then.status(200).json_body(reply("x"));
+    });
+    let (addr, _state, task) = proxy_server("compress-live-openai-cred", |cfg| {
+        configure(cfg, &agent.base(), Some(&compressor.base_url()));
+    })
+    .await;
+    for n in 1..=3 {
+        send_openai(&addr, n).await;
+        tokio::time::sleep(Duration::from_millis(150)).await;
+    }
+    task.abort();
+    assert_eq!(agent.all().len(), 3, "the agent requests still go through");
+    leaked.assert_calls(0);
+    any.assert_calls(0);
+}
+
+/// Control for the test above: an Anthropic OAuth bearer still reaches the compressor.
+#[tokio::test]
+async fn an_anthropic_bearer_credential_still_reaches_the_compressor() {
+    let (agent, compressor) = (Sink::new(), MockServer::start());
+    let summary = summary_with(&log(), None);
+    let calls = compressor.mock(|when, then| {
+        when.method(POST)
+            .path("/v1/messages")
+            .header("authorization", "Bearer oauth-test");
+        then.status(200).json_body(reply(&summary));
+    });
+    let (addr, state, task) = proxy_server("compress-live-anthropic-bearer", |cfg| {
+        configure(cfg, &agent.base(), Some(&compressor.base_url()));
+    })
+    .await;
+    send_with(&addr, 1, "authorization", "Bearer oauth-test").await;
+    send_with(&addr, 2, "authorization", "Bearer oauth-test").await;
+    let id = archive_id(&first_result(&sent(&agent, 2)));
+    assert!(stored(&state, &model(), &id).await.is_some(), "no summary");
+    task.abort();
+    calls.assert_calls(1);
 }

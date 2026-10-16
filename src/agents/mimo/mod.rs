@@ -126,17 +126,7 @@ pub fn plugin_dest(cfg: &Config) -> PathBuf {
 }
 
 impl Agent for Mimo {
-    fn id(&self) -> &'static str {
-        "mimo"
-    }
-
-    fn variants(&self) -> &'static [Variant] {
-        &VARIANTS
-    }
-
-    fn readme(&self) -> &'static str {
-        include_str!("README.md")
-    }
+    super::agent_identity!("mimo");
 
     /// Both variants read `~/.config/mimocode/`, so one apply covers them.
     fn shared(&self) -> bool {

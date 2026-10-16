@@ -137,17 +137,7 @@ fn plugin(cfg: &Config, remove: bool) -> Result<String> {
 }
 
 impl Agent for Qwen {
-    fn id(&self) -> &'static str {
-        HOST
-    }
-
-    fn variants(&self) -> &'static [Variant] {
-        &VARIANTS
-    }
-
-    fn readme(&self) -> &'static str {
-        include_str!("README.md")
-    }
+    super::agent_identity!(HOST);
 
     fn support(&self, _kind: Kind, module: &str) -> Support {
         match module {

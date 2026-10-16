@@ -59,17 +59,7 @@ static VARIANTS: [Variant; 2] = [
 ];
 
 impl Agent for Devin {
-    fn id(&self) -> &'static str {
-        "devin"
-    }
-
-    fn variants(&self) -> &'static [Variant] {
-        &VARIANTS
-    }
-
-    fn readme(&self) -> &'static str {
-        include_str!("README.md")
-    }
+    super::agent_identity!("devin");
 
     fn support(&self, _kind: Kind, module: &str) -> Support {
         match module {

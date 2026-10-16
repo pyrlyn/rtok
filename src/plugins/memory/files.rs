@@ -13,6 +13,7 @@
 
 use std::path::{Component, Path, PathBuf};
 
+use rtok_config::root::{ProjectRoot, contain};
 use rtok_plugin_sdk::{Ctx, NoteHit};
 
 use crate::store::embed::rrf_merge_lists;
@@ -22,12 +23,14 @@ const MAX_CANDIDATES: usize = 32;
 /// Files in play per recall; bounds the `IN (…)` list the store queries.
 const MAX_FILES: usize = 256;
 
-/// The project root `cwd` lies in: the nearest `.git` ancestor, else `cwd` itself.
+/// The checkout `cwd` lies in, else `cwd` itself. `checkout`, not `main`: the files a note
+/// names are read from the tree the session works in; notes store root-relative paths, so they
+/// still match in every worktree.
 fn project_root(cwd: Option<&str>) -> Option<PathBuf> {
     let cwd = cwd
         .map(PathBuf::from)
         .or_else(|| std::env::current_dir().ok())?;
-    Some(crate::config::layers::git_root(&cwd).unwrap_or(cwd))
+    Some(ProjectRoot::find(&cwd).map_or(cwd, |r| r.checkout))
 }
 
 /// `raw` as a root-relative `/`-separated path, or `None` when it is outside `root` or climbs.
@@ -48,7 +51,13 @@ fn relative(root: &Path, canon: &Path, raw: &str) -> Option<String> {
             _ => return None,
         }
     }
-    (!parts.is_empty()).then(|| parts.join("/"))
+    if parts.is_empty() {
+        return None;
+    }
+    let rel = parts.join("/");
+    // The component check is lexical; a symlink inside the project can still point out of it.
+    contain(root, Path::new(&rel)).ok()?;
+    Some(rel)
 }
 
 /// Strip the `:12`, `:12-30` and `#L12` position suffixes and the sentence punctuation a path
@@ -272,6 +281,45 @@ mod tests {
         );
         assert_eq!(relative(r, r, "./a.rs").as_deref(), Some("a.rs"));
         assert_eq!(relative(r, r, &abs(r)), None);
+    }
+
+    /// T660.2: notes link files of the worktree the session is in, and fall back to `cwd`.
+    #[test]
+    fn project_root_is_the_linked_worktree_checkout() {
+        let dir = crate::testutil::tmp_dir("t660-memory-root");
+        let (main, wt) = crate::testutil::worktree_layout(&dir);
+        std::fs::create_dir_all(wt.join("src")).unwrap();
+        let at = |p: &Path| project_root(p.to_str());
+        assert_eq!(at(&wt.join("src")), Some(wt.clone()));
+        assert_eq!(at(&main), Some(main.clone()));
+        assert_eq!(at(&dir), Some(dir.clone()));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// T660.2: a symlink inside the project that points out of it is not a project file.
+    #[cfg(unix)]
+    #[test]
+    fn a_symlink_out_of_the_root_is_refused() {
+        let r = root("symlink");
+        let outside = r.with_file_name(format!(
+            "{}-outside",
+            r.file_name().unwrap().to_string_lossy()
+        ));
+        std::fs::create_dir_all(&outside).unwrap();
+        std::fs::write(outside.join("secret.txt"), "x").unwrap();
+        std::os::unix::fs::symlink(&outside, r.join("escape")).unwrap();
+        std::os::unix::fs::symlink(r.join("src"), r.join("inside")).unwrap();
+        assert_eq!(relative(&r, &r, "escape/secret.txt"), None);
+        let abs = r.join("escape/secret.txt");
+        assert_eq!(relative(&r, &r, &abs.to_string_lossy()), None);
+        assert!(mentioned(&r, &r, "see escape/secret.txt").is_empty());
+        // A link that stays inside the project is still one of its files.
+        assert_eq!(
+            relative(&r, &r, "inside/proxy/semantic_cache.rs").as_deref(),
+            Some("inside/proxy/semantic_cache.rs")
+        );
+        let _ = std::fs::remove_dir_all(&r);
+        let _ = std::fs::remove_dir_all(&outside);
     }
 
     #[test]

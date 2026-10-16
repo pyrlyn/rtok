@@ -13,6 +13,7 @@ pub mod gc;
 pub mod git;
 pub mod host;
 pub mod list;
+pub mod migrate;
 pub mod ops;
 pub mod origin;
 pub mod remove;
@@ -38,6 +39,24 @@ pub(crate) fn noted_table<'a>(
 }
 
 use std::path::{Path, PathBuf};
+
+/// The item whose directory holds `here` (canonical), the deepest when several do: worktrees
+/// nest (`<main>/.rtok/worktrees/x` is inside main), and the outer one is not where a command
+/// runs from. `dir` need not be canonical.
+pub(crate) fn deepest<T>(
+    here: &Path,
+    items: impl IntoIterator<Item = T>,
+    dir: impl Fn(&T) -> PathBuf,
+) -> Option<T> {
+    items
+        .into_iter()
+        .filter_map(|item| {
+            let dir = crate::fs::canon(&dir(&item));
+            crate::fs::path_starts_with(here, &dir).then(|| (dir.components().count(), item))
+        })
+        .max_by_key(|(depth, _)| *depth)
+        .map(|(_, item)| item)
+}
 
 /// One record of `git worktree list --porcelain -z`.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

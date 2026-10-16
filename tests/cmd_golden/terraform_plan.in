@@ -1,0 +1,86 @@
+argv: terraform plan
+exit: 0
+min_saving: 70
+---
+Acquiring state lock. This may take a few moments...
+random_id.suffix: Refreshing state... [id=abc]
+aws_instance.web[0]: Refreshing state... [id=i-0abc0000]
+aws_instance.web[1]: Refreshing state... [id=i-0abc0001]
+aws_instance.web[2]: Refreshing state... [id=i-0abc0002]
+aws_instance.web[3]: Refreshing state... [id=i-0abc0003]
+aws_instance.web[4]: Refreshing state... [id=i-0abc0004]
+aws_instance.web[5]: Refreshing state... [id=i-0abc0005]
+aws_instance.web[6]: Refreshing state... [id=i-0abc0006]
+aws_instance.web[7]: Refreshing state... [id=i-0abc0007]
+aws_instance.web[8]: Refreshing state... [id=i-0abc0008]
+aws_instance.web[9]: Refreshing state... [id=i-0abc0009]
+aws_instance.web[10]: Refreshing state... [id=i-0abc0010]
+aws_instance.web[11]: Refreshing state... [id=i-0abc0011]
+aws_instance.web[12]: Refreshing state... [id=i-0abc0012]
+aws_instance.web[13]: Refreshing state... [id=i-0abc0013]
+aws_instance.web[14]: Refreshing state... [id=i-0abc0014]
+aws_instance.web[15]: Refreshing state... [id=i-0abc0015]
+aws_instance.web[16]: Refreshing state... [id=i-0abc0016]
+aws_instance.web[17]: Refreshing state... [id=i-0abc0017]
+aws_instance.web[18]: Refreshing state... [id=i-0abc0018]
+aws_instance.web[19]: Refreshing state... [id=i-0abc0019]
+aws_instance.web[20]: Refreshing state... [id=i-0abc0020]
+aws_instance.web[21]: Refreshing state... [id=i-0abc0021]
+aws_instance.web[22]: Refreshing state... [id=i-0abc0022]
+aws_instance.web[23]: Refreshing state... [id=i-0abc0023]
+aws_instance.web[24]: Refreshing state... [id=i-0abc0024]
+aws_instance.web[25]: Refreshing state... [id=i-0abc0025]
+aws_instance.web[26]: Refreshing state... [id=i-0abc0026]
+aws_instance.web[27]: Refreshing state... [id=i-0abc0027]
+aws_instance.web[28]: Refreshing state... [id=i-0abc0028]
+aws_instance.web[29]: Refreshing state... [id=i-0abc0029]
+
+Terraform used the selected providers to generate the following execution plan.
+Resource actions are indicated with the following symbols:
+  ~ update in-place
+
+Terraform will perform the following actions:
+
+  # aws_instance.web[0] will be updated in-place
+  ~ resource "aws_instance" "web" {
+        id = "i-0abc0000"
+      ~ instance_type = "t3.micro" -> "t3.small"
+        tags = {}
+    }
+
+  # aws_instance.web[1] will be updated in-place
+  ~ resource "aws_instance" "web" {
+        id = "i-0abc0001"
+      ~ instance_type = "t3.micro" -> "t3.small"
+        tags = {}
+    }
+
+  # aws_instance.web[2] will be updated in-place
+  ~ resource "aws_instance" "web" {
+        id = "i-0abc0002"
+      ~ instance_type = "t3.micro" -> "t3.small"
+        tags = {}
+    }
+
+  # aws_instance.web[3] will be updated in-place
+  ~ resource "aws_instance" "web" {
+        id = "i-0abc0003"
+      ~ instance_type = "t3.micro" -> "t3.small"
+        tags = {}
+    }
+
+  # aws_instance.web[4] will be updated in-place
+  ~ resource "aws_instance" "web" {
+        id = "i-0abc0004"
+      ~ instance_type = "t3.micro" -> "t3.small"
+        tags = {}
+    }
+
+  # aws_instance.web[5] will be updated in-place
+  ~ resource "aws_instance" "web" {
+        id = "i-0abc0005"
+      ~ instance_type = "t3.micro" -> "t3.small"
+        tags = {}
+    }
+
+Plan: 0 to add, 6 to change, 0 to destroy.

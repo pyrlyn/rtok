@@ -2,7 +2,8 @@
 # Tools are pinned in mise.toml; override CARGO/CLIFF if mise is already activated.
 
 cargo := env("CARGO", "mise exec -- cargo")
-cache := env("CARGO_CACHE", "mise exec -- cargo-cache")
+# ptools (pyrlyn/tools) is pinned in mise.toml; PTOOLS overrides it if mise is already activated.
+ptools := env("PTOOLS", "mise exec -- ptools")
 cliff := env("CLIFF", "mise exec -- git-cliff")
 # cargo-dist is not in mise.toml (compiling it on every `mise install` is slow); mise fetches it on demand.
 dist := env("DIST", "mise x cargo:cargo-dist@0.32.0 -- dist")
@@ -46,8 +47,11 @@ fmt-check:
 
 # rtok-wasm-demo-guest is no_std cdylib for wasm32; host `--all-targets` cannot
 # compile its lib (unwind without std). Lint it as `(lib test)` instead.
+# T276.6: the `Command::new` ban in `clippy.toml` binds libraries and binaries only; test
+# fixtures spawn their own children.
 lint:
-    {{cargo}} clippy --workspace --all-targets --all-features --exclude rtok-wasm-demo-guest -- -D warnings
+    {{cargo}} clippy --workspace --all-targets --all-features --exclude rtok-wasm-demo-guest -- -D warnings -A clippy::disallowed_methods
+    {{cargo}} clippy --workspace --lib --bins --all-features --exclude rtok-wasm-demo-guest -- -D warnings
     {{cargo}} clippy -p rtok-wasm-demo-guest --tests -- -D warnings
 
 # T26.0: copy-paste detector. Config, paths and threshold live in `.jscpd.json`; jscpd exits
@@ -141,10 +145,7 @@ test-changed rev="HEAD": && swarfr
 # T236: lossless cleanup of ./target after tests (compress + dedupe); never deletes.
 # A no-op without swarfr (`ketch install swarfr`) or before the first build.
 swarfr:
-    #!/usr/bin/env sh
-    command -v swarfr >/dev/null || { echo "swarfr not found; install it with: ketch install swarfr"; exit 0; }
-    [ -d target ] || exit 0
-    swarfr run target || test $? -eq 2
+    {{ptools}} swarfr
 
 # T0.4: one plugin feature must build alone
 build-min:
@@ -241,12 +242,11 @@ fuzz target="" secs="60":
 
 # $CARGO_HOME sizes (no deletes) and ./target
 cache:
-    {{cache}}
-    du -sh target 2>/dev/null || echo "target: (missing)"
+    {{ptools}} cache
 
 # drop extracted crate/git checkouts; keep archives
 cache-autoclean:
-    {{cache}} --autoclean
+    {{ptools}} cache --autoclean
 
 # T53.4: Jaeger + Grafana on shifted ports; skips when Docker is unavailable.
 otel-check:

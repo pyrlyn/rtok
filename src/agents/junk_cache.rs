@@ -96,6 +96,7 @@ fn idle_keep(path: &Path, current: bool, cx: &Ctx, limit: Duration) -> Option<St
         path: path.to_path_buf(),
         bytes: 0,
         modified: u.modified,
+        incomplete: u.incomplete,
     };
     kept_because(&cache, current, false, &cx.policy)
 }

@@ -1,0 +1,6 @@
+# T276.6: rtok runs every external program through `rtok_sys::proc::ProgressRunner`, which draws
+# the wait on a terminal and keeps a pipe byte-clean. `just lint` enforces this on libraries and
+# binaries; tests still spawn their fixtures directly.
+disallowed-methods = [
+    { path = "std::process::Command::new", reason = "run programs through rtok_sys::proc::ProgressRunner (T276)" },
+]

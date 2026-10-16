@@ -72,15 +72,7 @@ macro_rules! hook {
 pub static HOOKS: [HostPlugin; 5] = [hook!(0), hook!(1), hook!(2), hook!(3), hook!(4)];
 
 impl Agent for Cline {
-    fn id(&self) -> &'static str {
-        "cline"
-    }
-    fn variants(&self) -> &'static [Variant] {
-        &VARIANTS
-    }
-    fn readme(&self) -> &'static str {
-        include_str!("README.md")
-    }
+    super::agent_identity!("cline");
     fn shared(&self) -> bool {
         true
     }

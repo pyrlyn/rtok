@@ -7,13 +7,13 @@
 //! limits (`research.md` §35.4).
 
 use std::cell::Cell;
-use std::process::Command;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, bail};
 use reqwest::Method;
 use reqwest::blocking::{Client, RequestBuilder, Response};
 use reqwest::header::{CONTENT_TYPE, HeaderMap};
+use rtok_sys::proc::ProgressRunner;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 
@@ -102,7 +102,7 @@ fn token_with(env: impl Fn(&str) -> Option<String>, vars: &[&str], cli: &[&str])
     let Some((program, args)) = cli.split_first() else {
         bail!("no token in the environment");
     };
-    let out = Command::new(program).args(args).output()?;
+    let out = ProgressRunner::quiet(program, args).run()?;
     let t = String::from_utf8_lossy(&out.stdout).trim().to_string();
     if !out.status.success() || t.is_empty() {
         bail!("`{}` printed no token", cli.join(" "));

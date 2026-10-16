@@ -1,7 +1,6 @@
 - T124. Realized `tools_rewrite` saving as a dated `research.md` row
 
 - T131. Measure the spawn brief: cost row and on/off re-read share
-- T134. Probe: does a CLI command hook's `PostToolUse` `updatedToolOutput` replace native tool output?
 
 - T156. Probe: `WorktreeCreate`/`WorktreeRemove` hooks and reflink-seeded `target/`
 - T261. CI takes ~9.5 min on macOS; the webui check recompiles 183 crates every run
@@ -46,7 +45,7 @@
 - T656. Keep worktrees and caches when their age cannot be established
 - T657. Match compressor credentials to the internal provider
 - T651. Honor ProgressRunner timeouts with inherited output
-- T660.2. Every project-root caller goes through the T660.1 method
-- T660.3. Worktrees nested in the project do not leak into walks, gc or clean
-- T660.4. Default worktree root `<project>/.rtok/worktrees`, `.rtok/` ignored
-- T660.5. `rtok worktree migrate` moves worktrees into the configured root
+- T666.2. Provider-backed memory extractor (blocked on the creator)
+- T687. Hooks: PreToolUse/PostToolUse p50 to 10 ms
+- T682. git log 174: keep lead (vs — (rtok wins after #1079))
+- T683. tail 155, cat *.log: keep lead, +2 pp (vs lean-ctx 87.4 % (rtok 94.5 %))

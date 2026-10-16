@@ -877,17 +877,7 @@ static VARIANTS: [Variant; 2] = [
 ];
 
 impl Agent for Claude {
-    fn id(&self) -> &'static str {
-        "claude"
-    }
-
-    fn variants(&self) -> &'static [Variant] {
-        &VARIANTS
-    }
-
-    fn readme(&self) -> &'static str {
-        include_str!("README.md")
-    }
+    super::agent_identity!("claude");
 
     fn support(&self, kind: Kind, module: &str) -> Support {
         match (kind, module) {

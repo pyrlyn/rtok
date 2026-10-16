@@ -110,7 +110,7 @@ Project programs and direct packages from the manifests.
 | httpmock | local | https://crates.io/crates/httpmock | Rust dependency |
 | humantime | local | https://crates.io/crates/humantime | T282: `[agents] idle` duration parsing; already in the lock as a transitive dep |
 | ignore | local | https://crates.io/crates/ignore | Rust dependency |
-| indicatif | local | https://crates.io/crates/indicatif | Spinner and progress bar: `graph index` and the loaders in the root crate, `proc::ProgressRunner` in `crates/rtok-sys` (T276) |
+| indicatif | local | https://crates.io/crates/indicatif | Spinner and progress bar behind `proc::ProgressRunner` in `crates/rtok-sys`; the root crate draws only through it (T276.6) |
 | inquire | local | https://crates.io/crates/inquire | `rtok completions` shell picker (multi-select, crossterm backend only) |
 | insta | local | https://crates.io/crates/insta | Snapshot tests for stable text output |
 | jiff | local | https://crates.io/crates/jiff | T358: IANA time zones with DST for `rtok agents usage` day and month buckets (`--tz`); already in the lock as a transitive dep of env_logger |
@@ -148,6 +148,7 @@ Project programs and direct packages from the manifests.
 | sha2 | local | https://crates.io/crates/sha2 | Rust dependency |
 | subtle | local | https://github.com/dalek-cryptography/subtle | Constant-time bearer-token compare for `rtok mcp --http` (T401) |
 | thiserror | local | https://crates.io/crates/thiserror | public error enums for `rtok-store` and `rtok-config` |
+| tiktoken-rs | local | https://crates.io/crates/tiktoken-rs | dev-dependency: o200k_base token counts in tests/bench_fixtures.rs |
 | tokio | local | https://crates.io/crates/tokio | Async runtime |
 | toml_edit | local | https://crates.io/crates/toml_edit | Rust dependency |
 | trash | local | https://crates.io/crates/trash | T330.4: `agents junk clear --trash` to the macOS Trash, freedesktop trash and Recycle Bin |

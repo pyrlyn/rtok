@@ -5,9 +5,9 @@
 use super::util::print_json;
 use crate::config::Config;
 use crate::model;
-use crate::render::with_loader;
 use anyhow::{Result, bail};
 use clap::Subcommand;
+use rtok_sys::proc::ProgressRunner;
 use std::io::{self, IsTerminal};
 use std::path::PathBuf;
 
@@ -299,10 +299,10 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: AgentCmd) -> Result<()>
         AgentCmd::List { json } => {
             let cfg = Config::load_with(config_file.as_deref(), None)?;
             if json {
-                let rows = with_loader("listing hosts", || model::agents_list(&cfg));
+                let rows = ProgressRunner::wait("listing hosts…", || model::agents_list(&cfg));
                 print_json(&rows)?;
             } else {
-                let text = with_loader("listing hosts", || crate::agents::list(&cfg));
+                let text = ProgressRunner::wait("listing hosts…", || crate::agents::list(&cfg));
                 print!("{text}");
             }
         }
@@ -312,10 +312,12 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: AgentCmd) -> Result<()>
             if json {
                 let agents = crate::agents::resolve(&hosts)?;
                 let ids: Vec<&str> = agents.iter().map(|a| a.id()).collect();
-                let rows = with_loader("reading host", || model::agents_listed(&cfg, &ids));
+                let rows =
+                    ProgressRunner::wait("reading host…", || model::agents_listed(&cfg, &ids));
                 print_json(&rows)?;
             } else {
-                let text = with_loader("reading host", || crate::agents::info(&cfg, &hosts))?;
+                let text =
+                    ProgressRunner::wait("reading host…", || crate::agents::info(&cfg, &hosts))?;
                 print!("{text}");
             }
         }

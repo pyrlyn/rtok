@@ -54,8 +54,7 @@ pub fn install(
     // Comma-separated hosts: `rtok agents install opencode,cursor` installs both.
     let hosts = parse_hosts(&args.host)?;
     if args.project {
-        let root = crate::config::layers::git_root(&std::env::current_dir()?)
-            .context("--project: run it inside the project's git repository")?;
+        let root = project_checkout(&std::env::current_dir()?)?;
         crate::log::stdout(&super::post_create::run(&cfg, &hosts, args.remove, &root)?);
         return Ok(());
     }
@@ -74,6 +73,14 @@ pub fn install(
         all: args.all,
     };
     apply_hosts(&mut cfg, &req, args.no_restart)
+}
+
+/// Where `--project` writes: the post-create entries are checked-in files, so a linked
+/// worktree gets its own, not the main checkout's.
+fn project_checkout(cwd: &Path) -> Result<PathBuf> {
+    rtok_config::root::ProjectRoot::find(cwd)
+        .map(|r| r.checkout)
+        .context("--project: run it inside the project's git repository")
 }
 
 /// `rtok agents outdated`.
@@ -149,7 +156,7 @@ pub fn update(
 fn apply_hosts(cfg: &mut Config, req: &Request, no_restart: bool) -> Result<()> {
     // T141: closes a running desktop app before the write if it would change that host's
     // config, and reopens it after; CLI-only hosts just get a "restart your session" note.
-    // The per-host bar lives in `agents::run`, which knows when a question may be asked (T81).
+    // The per-host bar lives in `agents::run` (T436.4).
     let out = super::restart::run(cfg, req, no_restart)?;
     crate::log::stdout(&out);
     // T279 step 3/6 "Failure": a Claude reinstall that removed the old plugin and then failed
@@ -303,4 +310,20 @@ pub fn inbox(
         crate::log::stdout(&crate::render::agent_message_frame(m));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn project_files_go_to_the_linked_worktree_not_the_main_checkout() {
+        let dir = crate::testutil::tmp_dir("t660-project-flag");
+        let (main, wt) = crate::testutil::worktree_layout(&dir);
+        std::fs::create_dir_all(wt.join("src")).unwrap();
+        assert_eq!(project_checkout(&wt.join("src")).unwrap(), wt);
+        assert_eq!(project_checkout(&main).unwrap(), main);
+        assert!(project_checkout(&dir).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

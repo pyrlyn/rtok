@@ -391,3 +391,55 @@ fn long_body_expands_and_symbol_id_selects_one_row() {
     );
     let _ = std::fs::remove_dir_all(&home);
 }
+
+/// T665: `callers` with no name lists the unreferenced definitions, narrowed by `path` and
+/// `kind`; `outline` takes `kind`. Both are parameters of existing tools, not new ones.
+#[test]
+fn nameless_callers_lists_dead_definitions_and_outline_takes_a_kind() {
+    let home = tmp("shapes");
+    let a = repo(&home, "a");
+    assert_eq!(
+        call(&home, &a, "callers", serde_json::json!({})),
+        "chain.rs:1 function a\nother.rs:1 function d\n"
+    );
+    assert_eq!(
+        call(&home, &a, "callers", serde_json::json!({"path": "other"})),
+        "other.rs:1 function d\n"
+    );
+    assert_eq!(
+        call(
+            &home,
+            &a,
+            "callers",
+            serde_json::json!({"path": "chain", "kind": "struct"})
+        ),
+        "no dead code in chain of kind struct"
+    );
+    std::fs::write(
+        a.join("mix.rs"),
+        "struct S;\nfn x() {}\nenum E {\n    A,\n}\n",
+    )
+    .unwrap();
+    assert_eq!(
+        call(
+            &home,
+            &a,
+            "outline",
+            serde_json::json!({"path": "mix.rs", "kind": "struct"})
+        ),
+        "struct S 1"
+    );
+    assert_eq!(
+        call(
+            &home,
+            &a,
+            "outline",
+            serde_json::json!({"path": "mix.rs", "kind": "trait"})
+        ),
+        "no trait in mix.rs"
+    );
+    assert_eq!(
+        call(&home, &a, "outline", serde_json::json!({"path": "mix.rs"})),
+        "struct S 1\nfn x 2\nenum E 3"
+    );
+}

@@ -13,6 +13,7 @@ use anyhow::Result;
 use crate::plugins::read::outline;
 use crate::store;
 use rtok_plugin_sdk::{Ctx, SymbolRow};
+use rtok_sys::proc::{Batch, Unit};
 
 #[derive(Debug, Default)]
 pub struct Report {
@@ -77,18 +78,18 @@ pub use crate::store::canon_root as canon;
 /// `dry_run` walks and parses exactly as a real run does but writes no rows, so the report
 /// says what the index would gain without touching the store.
 pub fn run(cx: &Ctx, root: &Path, dry_run: bool) -> Result<Report> {
-    run_with(cx, root, dry_run, &indicatif::ProgressBar::hidden())
+    run_with(cx, root, dry_run, |n| Batch::hidden(n, Unit::Items))
 }
 
 /// Index only `changed` event paths (T35.4). Vanished or unsupported paths drop their rows;
 /// never calls `delete_symbols_missing`.
 pub fn run_changed(cx: &Ctx, root: &Path, changed: &HashSet<PathBuf>) -> Result<Report> {
-    run_changed_with(cx, root, changed, false, &indicatif::ProgressBar::hidden())
+    run_changed_with(cx, root, changed, false)
 }
 
-/// [`run`] reporting each source file it reaches to `pb`. Only `rtok graph index` passes a real
-/// bar; the MCP tool and the background watcher pass `ProgressBar::hidden()`, because neither
-/// owns the terminal it would be drawing on.
+/// [`run`] stepping a bar over the files that pass the stat gate: `bar` gets their count once the
+/// walk is done. Only `rtok graph index` draws one; the MCP tool and the background watcher pass
+/// [`Batch::hidden`], because neither owns the terminal it would be drawing on.
 ///
 /// The walk and the stat gate run here. The files that pass the gate are read, hashed and parsed
 /// on one worker per core (T35.2); every write stays on this thread (D18), in walk order.
@@ -102,7 +103,7 @@ pub fn run_with(
     cx: &Ctx,
     root: &Path,
     dry_run: bool,
-    pb: &indicatif::ProgressBar,
+    bar: impl FnOnce(u64) -> Batch,
 ) -> Result<Report> {
     // T356: the one choke point for the CLI, the MCP tools, the watcher and `ensure`.
     crate::plugins::read::walk_root_ok(root)?;
@@ -161,7 +162,6 @@ pub fn run_with(
         // Same mtime and size: git's rule for "unchanged". Nothing is opened.
         if known.as_ref().is_some_and(|(_, m, s)| (*m, *s) == stat) && stat != (0, 0) {
             report.skipped += 1;
-            pb.inc(1);
             continue;
         }
         jobs.push(Job {
@@ -174,8 +174,9 @@ pub fn run_with(
     }
     let mut pending = Vec::new();
     let mut touches = Vec::new();
+    let mut bar = bar(jobs.len() as u64);
     each_parsed(&jobs, |job, parsed| {
-        pb.inc(1);
+        bar.step(&job.rel);
         stage_parsed(job, parsed, &mut report, &mut pending, &mut touches);
         if !dry_run && pending.len() >= SYMBOL_BATCH_FILES {
             report.inserted += cx.replace_symbol_files(&rk, &pending)?;
@@ -214,7 +215,7 @@ pub fn run_with(
             let _ = super::rank::refresh(cx, &rk);
         }
     }
-    pb.finish_and_clear();
+    bar.finish();
     Ok(report)
 }
 
@@ -223,7 +224,6 @@ fn run_changed_with(
     root: &Path,
     changed: &HashSet<PathBuf>,
     dry_run: bool,
-    pb: &indicatif::ProgressBar,
 ) -> Result<Report> {
     crate::plugins::read::walk_root_ok(root)?;
     let root = fs_kit::path::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
@@ -268,7 +268,6 @@ fn run_changed_with(
         };
         if known.as_ref().is_some_and(|(_, m, s)| (*m, *s) == stat) && stat != (0, 0) {
             report.skipped += 1;
-            pb.inc(1);
             continue;
         }
         jobs.push(Job {
@@ -280,9 +279,8 @@ fn run_changed_with(
         });
     }
     each_parsed(&jobs, |job, parsed| {
-        pb.inc(1);
         match parsed {
-            Parsed::Unreadable => {}
+            Parsed::Unreadable | Parsed::NotText => {}
             Parsed::Unparsed => report.read += 1,
             Parsed::Same => {
                 report.read += 1;
@@ -311,7 +309,6 @@ fn run_changed_with(
     if !dry_run && (report.inserted > 0 || dropped) {
         let _ = super::rank::refresh(cx, &rk);
     }
-    pb.finish_and_clear();
     Ok(report)
 }
 
@@ -326,7 +323,10 @@ struct Job {
 
 /// What a worker made of a [`Job`]; the calling thread turns it into store writes.
 enum Parsed {
+    /// The read itself failed (permissions, I/O); the bytes may be fine next time.
     Unreadable,
+    /// Read, but not UTF-8; stays so until the bytes change.
+    NotText,
     /// Read, but the grammar returned an error.
     Unparsed,
     /// Same bytes as the stored sha.
@@ -344,7 +344,12 @@ fn stage_parsed(
     touches: &mut Vec<(String, (i64, i64))>,
 ) {
     match parsed {
+        // T654: the unknown stat (0, 0) never matches the stat gate, so the file is read again
+        // once it is readable, even when restoring access left its mtime and size unchanged.
         Parsed::Unreadable => {
+            pending.push((job.rel.clone(), EMPTY_SHA.to_string(), (0, 0), Vec::new()))
+        }
+        Parsed::NotText => {
             pending.push((job.rel.clone(), EMPTY_SHA.to_string(), job.stat, Vec::new()))
         }
         Parsed::Unparsed => {
@@ -365,8 +370,11 @@ fn stage_parsed(
 }
 
 fn parse(job: &Job) -> Parsed {
-    let Ok(src) = std::fs::read_to_string(&job.path) else {
+    let Ok(bytes) = std::fs::read(&job.path) else {
         return Parsed::Unreadable;
+    };
+    let Ok(src) = String::from_utf8(bytes) else {
+        return Parsed::NotText;
     };
     let sha = store::hex_sha256(src.as_bytes());
     if job.known.as_deref() == Some(sha.as_str()) {
@@ -662,7 +670,10 @@ pub(crate) mod tests {
         fs::write(b.join("lib.rs"), src).unwrap();
         let ctx = Ctx::new(&cx);
         assert!(run(&ctx, &a, false).unwrap().indexed >= 1);
-        let n = cx.store.copy_symbol_rows(&canon(&a), &canon(&b)).unwrap();
+        let n = cx
+            .store
+            .copy_symbol_rows(&canon(&a), &canon(&b), &[])
+            .unwrap();
         assert!(n >= 1, "copied {n} rows");
         let later = std::time::SystemTime::now() + std::time::Duration::from_secs(5);
         fs::File::options()
@@ -963,19 +974,68 @@ pub(crate) mod tests {
         let _ = fs::remove_dir_all(dir);
     }
 
-    /// T21.2: the bar counts the source files the walk reached — one tick per indexed or
-    /// skipped file, and none for the noise the walker filtered out.
+    /// T654: restoring read access changes neither bytes, size nor mtime, so a file indexed
+    /// while unreadable must not leave a stat the gate trusts.
+    #[cfg(unix)]
     #[test]
-    fn the_progress_bar_counts_the_files_the_walk_reached() {
+    fn a_file_unreadable_at_index_time_is_read_once_access_returns() {
+        use std::os::unix::fs::PermissionsExt;
+        let (cx, dir) = cx("t654-unreadable");
+        let file = dir.join("locked.rs");
+        fs::write(&file, "fn hidden_until_readable() {}\n").unwrap();
+        fs::set_permissions(&file, fs::Permissions::from_mode(0o000)).unwrap();
+        let unreadable = fs::read(&file).is_err(); // root ignores the mode bits
+        let ctx = Ctx::new(&cx);
+        run(&ctx, &dir, false).unwrap();
+        let before = fs::metadata(&file).unwrap();
+        fs::set_permissions(&file, fs::Permissions::from_mode(0o644)).unwrap();
+        let after = fs::metadata(&file).unwrap();
+        assert_eq!(
+            stat_key(&before),
+            stat_key(&after),
+            "chmod moved mtime or size"
+        );
+        if unreadable {
+            assert!(
+                !cx.store
+                    .has_symbol_def(&canon(&dir), "hidden_until_readable")
+                    .unwrap()
+            );
+        }
+        let again = run(&ctx, &dir, false).unwrap();
+        assert_eq!(again.indexed, 1, "{again:?}");
+        assert!(
+            cx.store
+                .has_symbol_def(&canon(&dir), "hidden_until_readable")
+                .unwrap()
+        );
+        // Control: once read, the unchanged file is skipped again.
+        let warm = run(&ctx, &dir, false).unwrap();
+        assert_eq!((warm.read, warm.skipped), (0, 1), "{warm:?}");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T276.6: the bar spans the source files that pass the stat gate — the ones the run reads —
+    /// and none of the noise the walker filtered out or the files a warm run skips.
+    #[test]
+    fn the_progress_bar_spans_the_files_the_run_reads() {
         let (cx, dir) = cx("progress");
         for i in 0..7 {
             fs::write(dir.join(format!("f{i}.rs")), format!("fn f{i}() {{}}\n")).unwrap();
         }
         fs::write(dir.join("notes.md"), "not a source file\n").unwrap();
-        let pb = indicatif::ProgressBar::hidden();
-        let r = run_with(&Ctx::new(&cx), &dir, false, &pb).unwrap();
-        assert_eq!(r.indexed, 7);
-        assert_eq!(pb.position(), 7, "the bar and the report must agree");
+        let mut spans = Vec::new();
+        let mut index = || {
+            run_with(&Ctx::new(&cx), &dir, false, |n| {
+                spans.push(n);
+                Batch::hidden(n, Unit::Items)
+            })
+            .unwrap()
+        };
+        assert_eq!(index().indexed, 7);
+        fs::write(dir.join("f0.rs"), "fn changed() {}\n").unwrap();
+        assert_eq!(index().indexed, 1);
+        assert_eq!(spans, [7, 1], "the bar and the report must agree");
         let _ = fs::remove_dir_all(dir);
     }
 

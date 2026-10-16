@@ -114,7 +114,7 @@ impl Store {
             apply(&mut conn)
         } else {
             match LONG_MIGRATE.get().copied() {
-                Some(hook) => hook("migrating the store", &mut || apply(&mut conn)),
+                Some(hook) => hook("migrating the store…", &mut || apply(&mut conn)),
                 None => apply(&mut conn),
             }
         };

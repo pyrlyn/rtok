@@ -33,9 +33,17 @@ pub fn kept_because(cache: &Cache, current: bool, explicit: bool, p: &Policy) ->
         return Some("the worktree this command runs from; name its path to clean it".into());
     }
     let age = |m: SystemTime| p.now.duration_since(m).unwrap_or_default();
-    let active = cache.modified.is_some_and(|m| age(m) < p.idle);
-    active.then(|| "modified within the idle window".into())
+    match cache.modified {
+        Some(m) if age(m) < p.idle => Some("modified within the idle window".into()),
+        // T656: deletion cannot be undone, so missing evidence of age keeps the cache.
+        None => Some(AGE_UNKNOWN.into()),
+        Some(_) if cache.incomplete => Some(AGE_UNKNOWN.into()),
+        Some(_) => None,
+    }
 }
+
+/// Why a cache or worktree stays when its newest mtime could not be established.
+pub const AGE_UNKNOWN: &str = "age unknown: a file or its mtime could not be read";
 
 #[derive(Debug, Serialize)]
 pub struct Outcome {
@@ -83,8 +91,10 @@ pub fn run(cwd: &Path, paths: &[PathBuf], policy: &Policy, yes: bool) -> Result<
     let explicit = !paths.is_empty();
     let unix = |t: SystemTime| t.duration_since(UNIX_EPOCH).ok().map(|d| d.as_secs());
     let mut judged = Vec::new();
-    for dir in targets(cwd, paths)? {
-        let current = here.starts_with(real(&dir));
+    let dirs = targets(cwd, paths)?;
+    let current_at = super::deepest(&here, 0..dirs.len(), |i| dirs[*i].clone());
+    for (i, dir) in dirs.into_iter().enumerate() {
+        let current = current_at == Some(i);
         for cache in usage(&dir).caches {
             let kept = kept_because(&cache, current, explicit, policy);
             judged.push((dir.clone(), cache, kept));
@@ -202,7 +212,7 @@ mod tests {
     #[rstest]
     #[case::idle(0, false, false, None)]
     #[case::idle_and_named(0, true, true, None)]
-    #[case::never_written(u64::MAX, false, false, None)]
+    #[case::no_mtime(u64::MAX, false, false, Some(AGE_UNKNOWN))]
     #[case::active(950, false, false, Some("modified within the idle window"))]
     #[case::active_and_named(950, true, true, Some("modified within the idle window"))]
     #[case::current(
@@ -221,6 +231,7 @@ mod tests {
             path: "/w/x/target".into(),
             bytes: 1,
             modified: (modified != u64::MAX).then(|| at(modified)),
+            incomplete: false,
         };
         let policy = Policy {
             idle: Duration::from_secs(100),
@@ -228,6 +239,25 @@ mod tests {
         };
         let got = kept_because(&cache, current, explicit, &policy);
         assert_eq!(got.as_deref(), want);
+    }
+
+    /// T656: an old mtime from a walk that could not read everything is a lower bound; the
+    /// unread part may be in use. A recent file found anyway still answers "active".
+    #[rstest]
+    #[case::old(0, Some(AGE_UNKNOWN))]
+    #[case::recent(950, Some("modified within the idle window"))]
+    fn an_incomplete_walk_never_reads_as_idle(#[case] modified: u64, #[case] want: Option<&str>) {
+        let cache = Cache {
+            path: "/w/x/target".into(),
+            bytes: 1,
+            modified: Some(at(modified)),
+            incomplete: true,
+        };
+        let policy = Policy {
+            idle: Duration::from_secs(100),
+            now: at(1_000),
+        };
+        assert_eq!(kept_because(&cache, false, false, &policy).as_deref(), want);
     }
 
     #[test]

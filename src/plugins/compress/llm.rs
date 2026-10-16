@@ -41,6 +41,8 @@ static PROMPT: LazyLock<Prompt> = LazyLock::new(|| {
 });
 
 const VERSION_HASH_CHARS: usize = 12;
+/// The wire provider the compressor request is shaped for (`Wire::provider`).
+const PROVIDER: &str = "anthropic";
 const DEFAULT_ANTHROPIC_VERSION: &str = "2023-06-01";
 
 /// Credentials of the agent turn that archived the result, forwarded to the compressor call so
@@ -57,7 +59,15 @@ impl Auth {
 
     /// The credential and version headers of an agent request. Everything else (session ids,
     /// tracing, the lane header) stays behind so the compressor call is its own request.
-    pub fn from_headers(headers: &reqwest::header::HeaderMap) -> Option<Self> {
+    /// `None` unless the request came in on the Anthropic wire: the compressor speaks that wire
+    /// only, so another provider's key would cross to the wrong destination.
+    pub fn from_headers(
+        headers: &reqwest::header::HeaderMap,
+        provider: Option<&str>,
+    ) -> Option<Self> {
+        if provider != Some(PROVIDER) {
+            return None;
+        }
         let copied = Self::HEADERS
             .iter()
             .filter_map(|name| {
@@ -300,6 +310,19 @@ mod tests {
         assert_eq!(PROMPT.user.matches("{{must_keep}}").count(), 1);
         assert_eq!(PROMPT.user.matches("{{text}}").count(), 1);
         assert!(!PROMPT.system.is_empty());
+    }
+
+    #[test]
+    fn only_anthropic_credentials_become_compressor_auth() {
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert("authorization", "Bearer sk-test".parse().unwrap());
+        assert!(Auth::from_headers(&headers, Some("anthropic")).is_some());
+        for provider in [Some("openai"), Some("gemini"), None] {
+            assert!(
+                Auth::from_headers(&headers, provider).is_none(),
+                "{provider:?}"
+            );
+        }
     }
 
     #[test]

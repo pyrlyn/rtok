@@ -240,11 +240,15 @@ export class Rtok {
     // Port 0 on the first start: the kernel picks a free port as `rtok web` binds, and the
     // startup line names it. A port probed here and handed over could be taken by a parallel
     // worker in between. A restart asks for the same port, so the open page reconnects.
-    const child = spawnGroup(BIN, ["web", "--host", "127.0.0.1", "--port", String(this.bound ?? 0)], {
-      cwd: this.home,
-      env: this.env(),
-      stdio: ["ignore", "ignore", "pipe"],
-    });
+    const child = spawnGroup(
+      BIN,
+      ["web", "--host", "127.0.0.1", "--port", String(this.bound ?? 0)],
+      {
+        cwd: this.home,
+        env: this.env(),
+        stdio: ["ignore", "ignore", "pipe"],
+      },
+    );
     this.child = child;
     const tail: string[] = [];
     const listening = new Promise<number>((done) => {

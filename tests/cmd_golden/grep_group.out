@@ -1,0 +1,22 @@
+src/plugins/cmd/filter.rs
+15:        .map(|c| rules::Settings::from_config(&c))
+16:        .unwrap_or_else(|_| rules::Settings::builtin());
+23:    let settings = rules::Settings::from_config(cfg);
+74:fn compress_only(settings: &rules::Settings, cmd: &str, input: &str) -> String {
+src/plugins/cmd/formatters.rs
+13:    settings: &rules::Settings,
+110:pub fn family_of(settings: &rules::Settings, argv: &[String], output: &str) -> String {
+141:pub fn filter_kind(settings: &rules::Settings, stem: &str) -> &'static str {
+172:fn resolve(settings: &rules::Settings, argv: &[String], output: &str) -> Resolved {
+482:fn echoed(settings: &rules::Settings, wrapper: &str, output: &str) -> Option<Resolved> {
+522:fn echo_command(settings: &rules::Settings, wrapper: &str, line: &str) -> Option<String> {
+1044:        let settings = rules::Settings::builtin();
+1134:        let settings = rules::Settings::builtin();
+1189:        let settings = rules::Settings::builtin();
+1218:        let settings = rules::Settings::builtin();
+1241:        let settings = rules::Settings::builtin();
+1259:        let settings = rules::Settings::builtin();
+… +1 more
+src/plugins/cmd/rules.rs:76,81,1010,1028,1227
+src/plugins/cmd/run.rs:389,818,819,820
+grep: src/gone.rs: No such file or directory

@@ -21,8 +21,8 @@ use super::{
     ClaimConflict, ClaimOutcome, NewTask, PRIORITY_MAX, ReadyItem, Status, Task, TaskId,
     check_prefix, resolve_prefix,
 };
-use crate::config::layers::git_root;
 use crate::store::Store;
+use rtok_config::root::ProjectRoot;
 
 /// The adapters `[tasks] adapter` accepts; the config validator checks the same set.
 pub use crate::config::TASK_ADAPTERS as ADAPTERS;
@@ -49,10 +49,18 @@ pub struct Shown {
     pub subtasks: Vec<TaskId>,
 }
 
+/// `checkout`, not `main`: `.rtok.toml` and the disk adapter's directory are checked-in files,
+/// so each linked worktree has its own; the store identity is [`project_key`](crate::project::project_key).
+fn checkout_of(cwd: &Path, what: &str) -> Result<PathBuf> {
+    ProjectRoot::find(cwd)
+        .map(|r| r.checkout)
+        .with_context(|| format!("{what}: not inside a git checkout"))
+}
+
 impl Project {
     /// The project `cwd` belongs to, with the adapter `[tasks]` names.
     pub fn open(cfg: &crate::config::Tasks, cwd: &Path) -> Result<Self> {
-        let root = git_root(cwd).context("rtok task: not inside a git checkout")?;
+        let root = checkout_of(cwd, "rtok task")?;
         let key = crate::project::project_key(cwd)
             .context("rtok task: cannot tell which project this checkout is")?;
         let name = crate::project::project_name(cwd);
@@ -461,7 +469,7 @@ pub fn init(cwd: &Path, adapter: Option<&str>, prefix: Option<&str>) -> Result<P
     if let Some(p) = prefix {
         check_prefix(p)?;
     }
-    let root = git_root(cwd).context("rtok task init: not inside a git checkout")?;
+    let root = checkout_of(cwd, "rtok task init")?;
     let path = root.join(".rtok.toml");
     let text = match std::fs::read_to_string(&path) {
         Ok(text) => text,
@@ -666,6 +674,24 @@ mod tests {
             table(&listed),
             "A7      open         Pulled\n  A7.1  open         Leaf\nA8      open         First\n"
         );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// T660.2: files stay per checkout, the counter key is the one project's.
+    #[test]
+    fn a_linked_worktree_keeps_its_own_files_and_shares_the_project_key() {
+        let dir = crate::testutil::tmp_dir("t660-tasks");
+        let (main, wt) = crate::testutil::worktree_layout(&dir);
+        let cfg = crate::config::Tasks::default();
+        let (from_main, from_wt) = (
+            Project::open(&cfg, &main).unwrap(),
+            Project::open(&cfg, &wt).unwrap(),
+        );
+        assert_eq!(from_wt.root, wt);
+        assert_eq!(from_main.root, main);
+        assert_eq!(from_wt.key, from_main.key);
+        assert_eq!(init(&wt, None, None).unwrap(), wt.join(".rtok.toml"));
+        assert!(!main.join(".rtok.toml").exists());
         let _ = std::fs::remove_dir_all(&dir);
     }
 

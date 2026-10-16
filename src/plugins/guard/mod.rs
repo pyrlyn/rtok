@@ -10,6 +10,8 @@ use rtok_plugin_sdk::{
 };
 use serde_json::Value;
 
+use crate::names::strip_wrap;
+
 #[cfg(feature = "graph")]
 mod grep_symbol;
 mod sed;
@@ -517,53 +519,6 @@ fn after_cd_prefix(mut s: &str) -> &str {
         s = rest.trim_start();
     }
     s
-}
-
-/// PreToolUse sees the user's command; PostToolUse often sees `rtok run -- '…'`,
-/// or `rtok run --agent <id> -- '…'` when the dispatch carried a sub-agent id (T457).
-fn strip_wrap(s: &str) -> String {
-    let s = strip_run_wrap(s);
-    if s.len() >= 2 && s.starts_with('\'') && s.ends_with('\'') {
-        let inner = &s[1..s.len() - 1];
-        // POSIX sh_quote embedding, or PowerShell doubled single-quotes (T55.4).
-        if inner.contains("'\"'\"'") {
-            inner.replace("'\"'\"'", "'")
-        } else {
-            inner.replace("''", "'")
-        }
-    } else {
-        s.to_string()
-    }
-}
-
-/// Drops one `rtok run` wrapper. `<id>` is the token `cmd` embeds: 1–64 bytes of ASCII
-/// alnum, `_` or `-`. A lookalike stays intact, so it is not keyed as the inner command.
-fn strip_run_wrap(s: &str) -> &str {
-    if let Some(rest) = s.strip_prefix("rtok run -- ") {
-        return rest;
-    }
-    let Some(after) = s.strip_prefix("rtok run --agent ") else {
-        return s;
-    };
-    let Some((id, rest)) = after.split_once(' ') else {
-        return s;
-    };
-    if wrap_agent_id(id)
-        && let Some(cmd) = rest.strip_prefix("-- ")
-    {
-        cmd
-    } else {
-        s
-    }
-}
-
-/// Same shape as `cmd::hook::is_valid_agent_id`. Kept here so the hook path does not
-/// call back into `cmd` (that module already calls `guard::strip_cd_hop`).
-fn wrap_agent_id(id: &str) -> bool {
-    (1..=64).contains(&id.len())
-        && id
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
 }
 
 /// Collapses whitespace runs to one space and turns each unquoted newline into a `;` (T322:

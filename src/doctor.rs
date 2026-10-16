@@ -12,6 +12,7 @@ use crate::agents::skill::SKILL_DESC_MAX;
 use crate::config::Config;
 use crate::tokens::{self, Class};
 use anyhow::Result;
+use rtok_sys::proc::{ProgressRunner, Unit};
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -19,7 +20,7 @@ use std::ffi::OsStr;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpStream, ToSocketAddrs};
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::sync::mpsc;
 use std::time::Duration;
 
@@ -203,18 +204,33 @@ impl SkillsAudit {
     }
 }
 
+/// How [`Report::render`] prints the per-host module rows.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Agents {
+    Plain,
+    Console,
+    Compact,
+}
+
 impl Report {
     /// The doctor text the reports and the TUI embed: plain, no marks or colour.
     pub fn to_text(&self) -> String {
-        self.render(false)
+        self.render(Agents::Plain)
     }
 
     /// `rtok doctor` on a console: [`Self::to_text`] with the module marks and colours.
     pub fn to_console(&self) -> String {
-        self.render(true)
+        self.render(Agents::Console)
     }
 
-    fn render(&self, console: bool) -> String {
+    /// The doctor text `rtok report --ai` embeds: [`Self::to_text`] with one line per host
+    /// variant. Four module lines per T413 host, each with its reason, pushed the section
+    /// past the default `[report] budget_tokens` (T664); `rtok doctor` keeps them.
+    pub fn to_compact_text(&self) -> String {
+        self.render(Agents::Compact)
+    }
+
+    fn render(&self, agents: Agents) -> String {
         let mut out = format!("hooks {}\n", self.hooks_total);
         for (ev, n) in &self.hooks_by_event {
             out.push_str(&format!("  {ev} {n}\n"));
@@ -263,10 +279,19 @@ impl Report {
                 out.push_str(&format!("  {line}\n"));
             }
         }
-        out.push_str("agents\n");
-        for a in &self.agents {
-            out.push_str(&format!("  {} ({})\n", a.host, a.kind));
-            out.push_str(&crate::agents::module_lines(&a.modules, "    ", console));
+        if agents == Agents::Compact {
+            out.push_str("agents (yes installed, no not installed, n/a not supported; reasons: rtok doctor)\n");
+            for a in &self.agents {
+                let summary = crate::agents::module_summary(&a.modules);
+                out.push_str(&format!("  {} ({}) {summary}\n", a.host, a.kind));
+            }
+        } else {
+            out.push_str("agents\n");
+            for a in &self.agents {
+                out.push_str(&format!("  {} ({})\n", a.host, a.kind));
+                let console = agents == Agents::Console;
+                out.push_str(&crate::agents::module_lines(&a.modules, "    ", console));
+            }
         }
         if let Some(audit) = &self.instructions {
             out.push_str("instructions\n");
@@ -535,9 +560,12 @@ pub fn page(cfg: &Config) -> Result<Report> {
         });
     }
     let mcp_timeout = Duration::from_millis(cfg.doctor.mcp_timeout_ms.max(500));
+    // Each start is often a cold `npx`/`uvx`, seconds with nothing on screen (T276.3).
+    let mut bar = ProgressRunner::batch("probing MCP servers…", servers.len() as u64, Unit::Items);
     let mcp: Vec<ServerInfo> = servers
         .iter()
         .map(|s| {
+            bar.step(&s.name);
             let (tools, desc_tokens) = list_tools(s, mcp_timeout, &cfg.estimator);
             ServerInfo {
                 name: s.name.clone(),
@@ -547,6 +575,7 @@ pub fn page(cfg: &Config) -> Result<Report> {
             }
         })
         .collect();
+    bar.finish();
     let timeout = Duration::from_millis(cfg.doctor.probe_timeout_ms.max(300));
     let anthropic = anthropic_base(settings.as_ref(), std::env::var("ANTHROPIC_BASE_URL").ok());
     let tool_search = resolve_tool_search(
@@ -1130,9 +1159,8 @@ fn instruction_audit(
     if let Some(dir) = cfg.doctor.settings_path.parent() {
         push_file(&mut srcs, "claude-user", &dir.join("CLAUDE.md"));
     }
-    if let Some(root) = git_root() {
-        push_file(&mut srcs, "claude-project", &root.join("CLAUDE.md"));
-        push_file(&mut srcs, "agents-project", &root.join("AGENTS.md"));
+    if let Ok(cwd) = std::env::current_dir() {
+        push_project_files(&mut srcs, &cwd);
     }
     let blob = format!(
         "{}{}",
@@ -1190,15 +1218,12 @@ fn push_file(srcs: &mut Vec<Source>, name: &str, path: &Path) {
     });
 }
 
-fn git_root() -> Option<std::path::PathBuf> {
-    let mut p = std::env::current_dir().ok()?;
-    loop {
-        if p.join(".git").exists() {
-            return Some(p);
-        }
-        if !p.pop() {
-            return None;
-        }
+/// `checkout`, not `main`: the instructions an agent in a linked worktree loads are the ones
+/// checked out there.
+fn push_project_files(srcs: &mut Vec<Source>, cwd: &Path) {
+    if let Some(root) = rtok_config::root::ProjectRoot::find(cwd) {
+        push_file(srcs, "claude-project", &root.checkout.join("CLAUDE.md"));
+        push_file(srcs, "agents-project", &root.checkout.join("AGENTS.md"));
     }
 }
 
@@ -1384,21 +1409,6 @@ fn mcp_servers(claude: Option<&Value>, mcp_json: &Path) -> Vec<Server> {
     out
 }
 
-/// On Windows, bare names like `npx` / `uvx` (and explicit `.cmd` / `.bat`
-/// paths) must go through `cmd.exe /D /C`: CreateProcess will not run those
-/// shims, so a probe used to report 0 tools for every npx-launched server.
-fn mcp_command(command: &str, args: &[String]) -> Command {
-    if cfg!(windows) && rtok_sys::proc::needs_cmd_host(command) {
-        let mut c = Command::new("cmd.exe");
-        c.arg("/D").arg("/C").arg(command).args(args);
-        c
-    } else {
-        let mut c = Command::new(command);
-        c.args(args);
-        c
-    }
-}
-
 /// `initialize`, `notifications/initialized`, `tools/list`, then `call` when set.
 /// One JSON-RPC response value per answered request. Used by doctor's tool count and
 /// by `rtok mcp ping` (T275.1) so both speak the same client.
@@ -1424,12 +1434,15 @@ pub(crate) fn mcp_roundtrip(
         payload.push_str(line);
         payload.push('\n');
     }
-    let mut cmd = mcp_command(command, args);
-    cmd.envs(env)
+    // The shim matters: without `cmd.exe`, every npx-launched server probed as 0 tools on
+    // Windows. The caller draws the wait; a spawned child gets no indicator of its own.
+    let run = env.iter().fold(
+        ProgressRunner::quiet(command, args).windows_shim(),
+        |run, (key, val)| run.env(key, val),
+    );
+    let mut child = run
         .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null());
-    let mut child = cmd
+        .stderr(Stdio::null())
         .spawn()
         .map_err(|e| format!("server failed to start: {e}"))?;
     let mut stdin = child.stdin.take();
@@ -2427,6 +2440,21 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         assert_eq!(srcs.len(), 1);
         assert!(duplicates(&srcs).is_empty());
+    }
+
+    /// T660.2: from a linked worktree's subdirectory the audit reads the worktree's own files.
+    #[test]
+    fn project_instructions_come_from_the_linked_worktree() {
+        let dir = crate::testutil::tmp_dir("t660-doctor");
+        let (main, wt) = crate::testutil::worktree_layout(&dir);
+        std::fs::create_dir_all(wt.join("src")).unwrap();
+        std::fs::write(main.join("CLAUDE.md"), "main rules").unwrap();
+        std::fs::write(wt.join("CLAUDE.md"), "worktree rules").unwrap();
+        let mut srcs = Vec::new();
+        push_project_files(&mut srcs, &wt.join("src"));
+        assert_eq!(srcs.len(), 1);
+        assert_eq!(srcs[0].text, "worktree rules");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

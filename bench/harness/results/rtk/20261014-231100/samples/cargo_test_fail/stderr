@@ -1,0 +1,4 @@
+   Compiling rtok-config v0.0.1 (/fixture/crates/rtok-config)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.00s
+     Running unittests src/lib.rs (target/debug/deps/rtok_config-7186ad6a54f36d44)
+error: test failed, to rerun pass `-p rtok-config --lib`

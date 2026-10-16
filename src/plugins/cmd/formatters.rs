@@ -16,6 +16,48 @@ pub fn compress(
     exit: i32,
     archive_id: &str,
 ) -> (String, &'static str) {
+    // T677: mise's install chatter sits in front of whatever the task prints, so it goes
+    // before the inner command's formatter or rule looks at the text. Dropping it is the
+    // mise formatter's work, even if nothing further shrinks.
+    if bin(&family_argv(argv)) == "mise"
+        && let Some(clean) = super::mise::tidy(output)
+    {
+        let (s, kind) = compress_text(settings, argv, &clean, exit, archive_id);
+        return (
+            s,
+            if matches!(kind, "raw" | "unmatched") {
+                "formatter"
+            } else {
+                kind
+            },
+        );
+    }
+    // T678: a polling loop is mostly one line repeated. A loop over two programs is a mixed
+    // chain that `[script]` would otherwise take, so the collapse runs before the route is chosen
+    // and the rule or formatter then sees the short text.
+    if matches!(bin(&family_argv(argv)), "for" | "while" | "until")
+        && let Some(clean) = super::loops::collapse(output)
+    {
+        let (s, kind) = compress_text(settings, argv, &clean, exit, archive_id);
+        return (
+            s,
+            if matches!(kind, "raw" | "unmatched") {
+                "formatter"
+            } else {
+                kind
+            },
+        );
+    }
+    compress_text(settings, argv, output, exit, archive_id)
+}
+
+fn compress_text(
+    settings: &rules::Settings,
+    argv: &[String],
+    output: &str,
+    exit: i32,
+    archive_id: &str,
+) -> (String, &'static str) {
     // T176: `sed -n 1,620p`, `| tail -300`, `grep -A3` already printed what was asked
     // for; a second cut here only sent the agent to `expand` for the same bytes. This
     // stays ahead of the mix check: `cargo test | tail -300` is bounded even though it
@@ -133,8 +175,8 @@ pub(crate) use crate::names::cmd_stem;
 
 /// Stems with a Rust formatter (any subcommand). `rtok stats` labels the whole stem.
 const FORMATTER_STEMS: &[&str] = &[
-    "cargo", "git", "pytest", "jest", "vitest", "tree", "go", "docker", "kubectl", "ps", "df",
-    "sqlite3",
+    "cargo", "git", "gh", "pytest", "python", "python3", "py", "jest", "vitest", "tree", "go",
+    "docker", "kubectl", "ps", "df", "sqlite3", "wc", "mise", "for", "while", "until",
 ];
 
 /// T50.1: how `rtok stats` labels a Bash family — `formatter`, named `rule`, or `default`.
@@ -568,7 +610,7 @@ fn looks_like_invocation(words: &[String]) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
 
-fn strip_ansi(s: &str) -> String {
+pub(super) fn strip_ansi(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     let mut chars = s.chars().peekable();
     while let Some(c) = chars.next() {
@@ -588,31 +630,170 @@ fn strip_ansi(s: &str) -> String {
 
 fn format(argv: &[String], output: &str) -> Option<String> {
     match (bin(argv), sub(argv)) {
-        ("cargo", "test") => Some(keep(
-            output,
-            &["FAILED", "test result:", "error[", "panicked"],
-        )),
-        ("cargo", "build") | ("cargo", "clippy") => Some(keep(
-            output,
-            &["error[", "error:", "-->", "Finished", "warning:"],
-        )),
-        ("git", "status") => Some(git_status(output)),
-        ("git", "diff") => Some(git_diff(output)),
-        ("git", "log") => Some(output.lines().take(20).collect::<Vec<_>>().join("\n")),
-        ("pytest", _) => Some(keep(
-            output,
-            &["FAILED", "ERROR", "passed", "failed", "error"],
-        )),
+        ("cargo", "test") => Some(
+            super::compact::cargo_test(output)
+                .unwrap_or_else(|| keep(output, &["FAILED", "test result:", "error[", "panicked"])),
+        ),
+        ("cargo", "build") | ("cargo", "clippy") => {
+            Some(super::compact::cargo_build(output).unwrap_or_else(|| {
+                keep(output, &["error[", "error:", "-->", "Finished", "warning:"])
+            }))
+        }
+        ("git", "status") => {
+            Some(super::compact::git_status(output).unwrap_or_else(|| git_status(output)))
+        }
+        ("git", "diff") => Some(
+            super::diffs::tiered(output)
+                .unwrap_or_else(|| super::compact::git_diff(&git_diff(output))),
+        ),
+        // `git show <rev>:<file>` prints a file, not a diff: only a diff stream is touched.
+        ("git", "show") => super::diffs::tiered(output),
+        ("ls", _) if super::compact::ls_long(argv) => super::compact::ls_l(output),
+        ("cat", _) => super::catfile::outline_of(argv, output),
+        ("grep", _) | ("rg", _) | ("git", "grep") => super::grep::group(argv, output),
+        ("git", "log") => Some(
+            git_log(output)
+                .unwrap_or_else(|| output.lines().take(20).collect::<Vec<_>>().join("\n")),
+        ),
+        ("gh", _) => super::gh::format(argv, output),
+        ("pytest", _) => Some(
+            super::python::pytest(output)
+                .unwrap_or_else(|| keep(output, &["FAILED", "ERROR", "passed", "failed", "error"])),
+        ),
+        ("python" | "python3" | "py", _) => super::python::script(output),
         ("jest", _) | ("vitest", _) => Some(keep(output, &["FAIL", "PASS", "Tests:", "● "])),
         ("go", "test") => Some(keep(output, &["FAIL", "PASS", "ok  ", "--- FAIL"])),
+        ("wc", _) => Some(wc_table(output)),
+        ("for" | "while" | "until", _) => super::loops::collapse(output),
         ("tree", _) => Some(output.lines().take(40).collect::<Vec<_>>().join("\n")),
         ("docker", "ps") => docker_ps(output),
         ("kubectl", "get") => kubectl_get(output),
         ("ps", "aux") => ps_aux(output),
         ("df", _) => df_table(output),
         ("sqlite3", _) => sqlite3_table(output),
+        ("mise", _) => super::mise::tidy(output),
         _ => None,
     }
+}
+
+/// Commits shown by [`git_log`] before the rest is counted as `… +K more`.
+const GIT_LOG_MAX_COMMITS: usize = 100;
+
+struct Commit<'a> {
+    sha: &'a str,
+    author: &'a str,
+    date: String,
+    year: &'a str,
+    subject: &'a str,
+    stat: Vec<&'a str>,
+}
+
+/// `git log` in its default (medium) format, one line per commit: short hash, date,
+/// subject; the most frequent author is named once in a header line, the others per line. `--stat` file lines
+/// and the `N files changed` summary are kept under their commit. Every commit up to
+/// [`GIT_LOG_MAX_COMMITS`] is listed, where a head cut kept only the first four.
+/// `None` for any other shape (`--oneline`, `--format=…`, `-p`), which keeps the old cut.
+fn git_log(output: &str) -> Option<String> {
+    let mut commits: Vec<Commit> = Vec::new();
+    for line in output.lines() {
+        if let Some(rest) = line.strip_prefix("commit ") {
+            let sha = rest.split_whitespace().next()?;
+            if sha.len() < 7 || !sha.bytes().all(|b| b.is_ascii_hexdigit()) {
+                return None;
+            }
+            commits.push(Commit {
+                sha: &sha[..7],
+                author: "",
+                date: String::new(),
+                year: "",
+                subject: "",
+                stat: Vec::new(),
+            });
+            continue;
+        }
+        let c = commits.last_mut()?;
+        if let Some(a) = line.strip_prefix("Author:") {
+            let a = a.trim();
+            c.author = a.split(" <").next().unwrap_or(a);
+        } else if let Some(d) = line.strip_prefix("Date:") {
+            // `Wed Oct 14 23:25:53 2026 +0300` → `Oct 14`, year kept aside.
+            let parts: Vec<&str> = d.split_whitespace().collect();
+            if parts.len() >= 5 {
+                c.date = format!("{} {}", parts[1], parts[2]);
+                c.year = parts[4];
+            }
+        } else if line.starts_with("Merge:") || line.trim().is_empty() {
+        } else if let Some(body) = line.strip_prefix("    ") {
+            if c.subject.is_empty() {
+                c.subject = body.trim();
+            }
+        } else if line.starts_with(' ') && (line.contains(" | ") || line.contains(" changed")) {
+            c.stat.push(line.trim());
+        } else if line.starts_with("diff --git") || line.starts_with("@@") {
+            return None;
+        }
+    }
+    if commits.is_empty() || commits.iter().any(|c| c.date.is_empty()) {
+        return None;
+    }
+    // The most frequent author goes in the header once; only the others are named per line.
+    let mut counts: Vec<(&str, usize)> = Vec::new();
+    for c in &commits {
+        match counts.iter_mut().find(|(a, _)| *a == c.author) {
+            Some((_, n)) => *n += 1,
+            None => counts.push((c.author, 1)),
+        }
+    }
+    let main_author = counts
+        .iter()
+        .fold(
+            ("", 0),
+            |best, &(a, n)| if n > best.1 { (a, n) } else { best },
+        )
+        .0;
+    let one_year = commits.iter().all(|c| c.year == commits[0].year);
+    let mut out = Vec::new();
+    let mut head: Vec<String> = Vec::new();
+    if !main_author.is_empty() {
+        head.push(if counts.len() == 1 {
+            main_author.to_string()
+        } else {
+            format!("{main_author} unless named")
+        });
+    }
+    if one_year {
+        head.push(commits[0].year.to_string());
+    }
+    if !head.is_empty() {
+        out.push(head.join(" · "));
+    }
+    for c in commits.iter().take(GIT_LOG_MAX_COMMITS) {
+        let date = if one_year {
+            c.date.clone()
+        } else {
+            format!("{} {}", c.date, c.year)
+        };
+        let mut l = format!("{} {date} {}", c.sha, c.subject);
+        if c.author != main_author {
+            l.push_str(&format!(" — {}", c.author));
+        }
+        out.push(l);
+        out.extend(c.stat.iter().map(|s| format!("  {s}")));
+    }
+    if commits.len() > GIT_LOG_MAX_COMMITS {
+        out.push(format!("… +{} more", commits.len() - GIT_LOG_MAX_COMMITS));
+    }
+    Some(out.join("\n"))
+}
+
+/// T684: `wc` right-aligns its counts in padded columns; the numbers, names and the
+/// `total` row stay, only the padding goes (leading too, which the default rule keeps).
+fn wc_table(output: &str) -> String {
+    output
+        .lines()
+        .map(|l| rules::collapse_columns(l.trim()))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// `git diff`: the changed lines *are* the answer, so only the blob-hash bookkeeping goes.
@@ -1509,6 +1690,10 @@ mod tests {
             "eslint_dup.in",
             "cargo_check.in",
             "dotnet_dup.in",
+            "ruff_check.in",
+            "mypy_run.in",
+            "rubocop_run.in",
+            "golangci_lint_run.in",
         ] {
             let raw = fs::read_to_string(dir.join(file)).unwrap();
             let (argv, exit, _, output) = parse_in(&raw);
@@ -1537,6 +1722,40 @@ mod tests {
         assert!(!got.contains("PID"), "{got}");
     }
 
+    #[test]
+    fn git_log_lists_every_commit_with_authors_when_mixed() {
+        let raw = "commit 1111111111111111111111111111111111111111\nAuthor: Ann <a@x>\nDate:   Wed Oct 14 10:00:00 2026 +0300\n\n    first\n\n    body line\n\ncommit 2222222222222222222222222222222222222222\nAuthor: Bob <b@x>\nDate:   Tue Oct 13 10:00:00 2025 +0300\n\n    second\n";
+        let out = git_log(raw).unwrap();
+        assert_eq!(
+            out,
+            "Ann unless named\n1111111 Oct 14 2026 first\n2222222 Oct 13 2025 second — Bob"
+        );
+    }
+
+    #[test]
+    fn git_log_keeps_stat_lines_under_their_commit() {
+        let raw = "commit 1111111111111111111111111111111111111111\nAuthor: Ann <a@x>\nDate:   Wed Oct 14 10:00:00 2026 +0300\n\n    first\n\n src/a.rs | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n";
+        let out = git_log(raw).unwrap();
+        assert!(out.contains("1111111 Oct 14 first"), "{out}");
+        assert!(out.contains("  src/a.rs | 2 +-"), "{out}");
+        assert!(out.contains("  1 file changed"), "{out}");
+    }
+
+    #[test]
+    fn git_log_other_shapes_keep_the_head_cut() {
+        assert!(git_log("1111111 first\n2222222 second\n").is_none());
+        let patch = "commit 1111111111111111111111111111111111111111\nAuthor: Ann <a@x>\nDate:   Wed Oct 14 10:00:00 2026 +0300\n\n    first\n\ndiff --git a/x b/x\n";
+        assert!(git_log(patch).is_none());
+    }
+
+    #[test]
+    fn git_log_caps_the_listing() {
+        let one = "commit 1111111111111111111111111111111111111111\nAuthor: Ann <a@x>\nDate:   Wed Oct 14 10:00:00 2026 +0300\n\n    c\n\n";
+        let out = git_log(&one.repeat(GIT_LOG_MAX_COMMITS + 5)).unwrap();
+        assert!(out.ends_with("… +5 more"), "{out}");
+        assert_eq!(out.lines().count(), GIT_LOG_MAX_COMMITS + 2);
+    }
+
     /// T296: every `(bin, sub)` arm dispatched by `format()` above must have a golden `.in`
     /// whose argv reaches that arm and for which `format(...)` actually returns `Some`. This
     /// list must mirror the match arms in `format()` — add a row here whenever a new arm is
@@ -1549,8 +1768,13 @@ mod tests {
             ("cargo", "clippy"),
             ("git", "status"),
             ("git", "diff"),
+            ("git", "show"),
             ("git", "log"),
+            ("gh", ""),
             ("pytest", ""),
+            ("python", ""),
+            ("python3", ""),
+            ("py", ""),
             ("jest", ""),
             ("vitest", ""),
             ("go", "test"),
@@ -1560,6 +1784,11 @@ mod tests {
             ("ps", "aux"),
             ("df", ""),
             ("sqlite3", ""),
+            ("wc", ""),
+            ("mise", ""),
+            ("for", ""),
+            ("while", ""),
+            ("until", ""),
         ];
         // A stem added to `FORMATTER_STEMS` without a row here fails too.
         for stem in FORMATTER_STEMS {

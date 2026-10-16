@@ -37,6 +37,7 @@ impl Engine {
     }
 
     #[cfg(test)]
+    #[cfg_attr(windows, allow(dead_code))] // only unix tests call it (T902)
     pub(super) fn new(
         plan: impl Fn(&Config, &Selection) -> Plan + 'static,
         apply: impl Fn(&Config, &Selection, &str) -> Fixed + 'static,
@@ -259,6 +260,8 @@ fn diff_line(l: &str) -> Line<'static> {
 }
 
 #[cfg(test)]
+// T902: every `#[test]` below is unix-only (POSIX paths), so on Windows the shared helpers are unused.
+#[cfg_attr(windows, allow(dead_code, unused_imports))]
 pub(super) mod tests {
     use std::rc::Rc;
 

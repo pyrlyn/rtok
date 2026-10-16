@@ -3,8 +3,8 @@
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
 use crate::config::Config;
-use crate::render::with_loader;
 use anyhow::Result;
+use rtok_sys::proc::ProgressRunner;
 use std::path::PathBuf;
 
 fn bench_flags(
@@ -78,7 +78,7 @@ pub(super) fn run(config_file: &Option<PathBuf>, args: Args) -> Result<()> {
     )?;
     print!(
         "{}",
-        with_loader("running bench", || crate::bench::run(&cfg))?
+        ProgressRunner::wait("running bench…", || crate::bench::run(&cfg))?
     );
 
     Ok(())

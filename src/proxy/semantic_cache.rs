@@ -275,7 +275,7 @@ pub fn measurement(hit: &CacheHit, call_id: Option<i32>, nbytes: usize) -> Measu
     let est = (nbytes / 4).max(1) as u32;
     Measurement {
         plugin: "proxy",
-        kind: "semantic_cache_hit",
+        kind: rtok_store::otel::SEMANTIC_CACHE_HIT_KIND,
         before_bytes: nbytes as u64,
         after_bytes: nbytes as u64,
         est_before: est,

@@ -33,17 +33,7 @@ static VARIANTS: [Variant; 1] = [Variant {
 }];
 
 impl Agent for Grok {
-    fn id(&self) -> &'static str {
-        "grok"
-    }
-
-    fn variants(&self) -> &'static [Variant] {
-        &VARIANTS
-    }
-
-    fn readme(&self) -> &'static str {
-        include_str!("README.md")
-    }
+    super::agent_identity!("grok");
 
     fn shared(&self) -> bool {
         true

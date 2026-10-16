@@ -696,7 +696,10 @@ fn shape_request(
             let offered = crate::plugins::compress::take_offered();
             if let Some(queue) = state.summaries.as_ref().filter(|_| !offered.is_empty()) {
                 queue.submit(
-                    crate::plugins::compress::llm::Auth::from_headers(headers),
+                    crate::plugins::compress::llm::Auth::from_headers(
+                        headers,
+                        wire.map(Wire::provider),
+                    ),
                     offered,
                 );
             }
@@ -869,6 +872,26 @@ fn rewrite_tools(state: &ProxyState, original: Bytes) -> (Bytes, Option<tools_re
 }
 
 fn record_tools_rewrite(state: &ProxyState, r: &Recorded, delta: tools_rewrite::Delta) {
+    // The archive is content-addressed, so the same catalog keeps one id and one file. A failed
+    // write leaves the saving unrecoverable, so it is logged and the request still goes out.
+    let ref_id = match (delta.original.as_deref(), state.archive_dir.as_deref()) {
+        (Some(tools), Some(dir)) => {
+            match state.store.put_archive(&r.session, tools.as_bytes(), dir) {
+                Ok(id) => Some(id),
+                Err(e) => {
+                    log(
+                        state,
+                        &r.session,
+                        Some(r.call_id),
+                        "error",
+                        &format!("tools rewrite archive: {e:#}"),
+                    );
+                    None
+                }
+            }
+        }
+        _ => None,
+    };
     let m = Measurement {
         plugin: "proxy",
         kind: "tools_rewrite",
@@ -876,7 +899,7 @@ fn record_tools_rewrite(state: &ProxyState, r: &Recorded, delta: tools_rewrite::
         after_bytes: delta.after_bytes,
         est_before: delta.est_before,
         est_after: delta.est_after,
-        ref_id: None,
+        ref_id,
         call_id: Some(r.call_id),
     };
     if let Err(e) = state.store.insert_measurement(&r.session, &m) {

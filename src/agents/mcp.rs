@@ -414,6 +414,13 @@ impl Fs for Writer<'_> {
     fn read(&self, path: &Path) -> Option<Vec<u8>> {
         Disk.read(path)
     }
+    fn try_read(&self, path: &Path) -> anyhow::Result<Option<Vec<u8>>> {
+        match std::fs::read(path) {
+            Ok(bytes) => Ok(Some(bytes)),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(anyhow::Error::new(e).context(format!("{}: unreadable", path.display()))),
+        }
+    }
     fn write(&mut self, path: &Path, bytes: Vec<u8>) -> anyhow::Result<()> {
         let body = String::from_utf8(bytes)?;
         rtok_agent_sdk::write(self.0, path, &body, "mcp entry")
@@ -979,5 +986,73 @@ mod tests {
             toml_item_to_json(doc.as_item()),
             serde_json::json!({"hooks": [{"event": "Stop"}, {"event": "Start"}]})
         );
+    }
+
+    fn disk_spec(path: &Path) -> McpSpec {
+        McpSpec {
+            host: "test",
+            client: Client::Cli,
+            config_path: path.to_path_buf(),
+            format: Format::Json,
+            key_path: McpSpec::key_path("mcp_servers"),
+            server: RTOK,
+            launch: Launch::default(),
+            entry_shape: EntryShape::TypedCommand,
+            duplicate_name: DuplicateName::ShowsBoth,
+            plugin_serves: None,
+        }
+    }
+
+    fn install_on_disk(path: &Path) -> anyhow::Result<String> {
+        let ctx = rtok_agent_sdk::Apply::default();
+        let report = ops::apply(
+            &disk_spec(path),
+            McpMode::Install,
+            &ctx,
+            &mut Writer(&ctx),
+            |s| s == "rtok",
+        )?;
+        Ok(report.line())
+    }
+
+    /// T652: a config that exists but cannot be read must not be treated as absent, or the
+    /// install replaces it and drops every other server (backup is off, so no copy survives).
+    #[cfg(unix)]
+    #[test]
+    fn unreadable_host_config_is_never_replaced() {
+        use std::os::unix::fs::PermissionsExt;
+        let original = r#"{"mcp_servers":{"other":{"command":"keep"}}}"#;
+        let path = tmp_file("unreadable", original);
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o000)).unwrap();
+        let unreadable = fs::read(&path).is_err(); // root ignores the mode bits
+        let result = install_on_disk(&path);
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
+        let kept = fs::read_to_string(&path).unwrap();
+        fs::remove_dir_all(path.parent().unwrap()).unwrap();
+        if !unreadable {
+            return;
+        }
+        assert!(
+            result.is_err(),
+            "installed over an unreadable file: {result:?}"
+        );
+        assert_eq!(kept, original);
+    }
+
+    #[test]
+    fn absent_host_config_is_created_and_readable_foreign_entries_survive() {
+        let dir = std::env::temp_dir().join(format!("rtok-t652-controls-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let fresh = dir.join("fresh.json");
+        install_on_disk(&fresh).unwrap();
+        assert!(has_entry(&fresh, "mcp_servers", "rtok"));
+
+        let shared = dir.join("shared.json");
+        fs::write(&shared, r#"{"mcp_servers":{"other":{"command":"keep"}}}"#).unwrap();
+        install_on_disk(&shared).unwrap();
+        assert!(has_entry(&shared, "mcp_servers", "rtok"));
+        assert!(has_entry(&shared, "mcp_servers", "other"));
+        fs::remove_dir_all(&dir).unwrap();
     }
 }

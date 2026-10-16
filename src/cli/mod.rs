@@ -19,6 +19,8 @@ mod bench;
 mod completions;
 mod config;
 mod demon;
+#[cfg(feature = "cmd")]
+mod discover;
 #[cfg(feature = "docs")]
 mod docs;
 mod doctor;
@@ -83,6 +85,11 @@ enum Cmd {
 
     /// Measurements from session logs and the proxy
     Stats(stats::Args),
+
+    // T688
+    /// Shell commands your agents ran that have no rule or formatter, most output first
+    #[cfg(feature = "cmd")]
+    Discover(discover::Args),
 
     /// A/B benchmark of host configurations
     Bench(bench::Args),
@@ -219,6 +226,8 @@ pub fn run() -> Result<()> {
     crate::log::on_stdout(|text| print!("{text}"));
     crate::log::on_stderr(|text| eprint!("{text}"));
     crate::store::install_migrate_spinner();
+    // T276.3: an installer's question hides every live bar instead of turning bars off.
+    rtok_agent_sdk::set_prompt_pause(|prompt| rtok_sys::proc::suspend(prompt));
     // T225: `RUST_LOG` debug log on stderr, before clap so a parse failure is logged too.
     crate::log::init_stderr();
     // `[ui]` takes effect for every command. Config load calls this hook instead of
@@ -241,6 +250,8 @@ pub fn run() -> Result<()> {
         Cmd::Web(args) => web::serve(&config_file, args),
         Cmd::Tui(args) => web::tui(&config_file, args),
         Cmd::Stats(args) => stats::run(&config_file, args),
+        #[cfg(feature = "cmd")]
+        Cmd::Discover(args) => discover::run(&config_file, args),
         Cmd::Bench(args) => bench::run(&config_file, args),
         Cmd::Doctor(args) => doctor::run(&config_file, args),
         Cmd::Worktree { action } => worktree::run(&config_file, action),

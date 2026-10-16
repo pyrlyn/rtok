@@ -230,17 +230,7 @@ fn ops<const D: bool>() -> super::D21Plugin {
 }
 
 impl Agent for Codebuddy {
-    fn id(&self) -> &'static str {
-        HOST
-    }
-
-    fn variants(&self) -> &'static [Variant] {
-        &VARIANTS
-    }
-
-    fn readme(&self) -> &'static str {
-        include_str!("README.md")
-    }
+    super::agent_identity!(HOST);
 
     fn support(&self, _kind: Kind, module: &str) -> Support {
         match module {

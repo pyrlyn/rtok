@@ -72,6 +72,18 @@ const noWebgl: Decorator = (Story) => (
 /** The lazy scene chunks and the layout worker outlast the default 1 s wait on a busy host; a scene that never renders still fails. */
 const READY = { timeout: 10_000 };
 
+/** The 3D canvas once the stage has drawn the scene on it. */
+async function drawn3d(canvasElement: HTMLElement): Promise<HTMLCanvasElement> {
+    const host = await within(canvasElement).findByTestId("graph-3d", undefined, READY);
+    const gl = await waitFor(() => {
+        const c = host.querySelector("canvas");
+        if (!c) throw new Error("no canvas yet");
+        return c;
+    }, READY);
+    await waitFor(() => expect(drawn(gl)).toBeGreaterThan(200), READY);
+    return gl;
+}
+
 export const List: Story = { args: { rows: registry }, decorators: [viewing("list")] };
 export const TwoD: Story = { args: { rows: registry }, decorators: [viewing("2d")] };
 export const Light: Story = {
@@ -82,6 +94,23 @@ export const Light: Story = {
 export const Single: Story = {
     args: { rows: [project(1, "solo", { selected: true })] },
     decorators: [viewing("2d")],
+};
+/**
+ * No remembered view, right after a 2D story: every story starts from empty storage, so a page
+ * story that never picks a view (`Projects.stories.tsx` renders the whole graph page) does not
+ * draw whichever view the story files before it left behind.
+ */
+export const FirstVisitOpens3D: Story = {
+    name: "First Visit Opens 3D",
+    args: { rows: registry },
+    play: async ({ canvasElement }) => {
+        // The choice, not the drawing: the 3D chunk and WebGL are the WebGL stories' cost.
+        const views = within(within(canvasElement).getByRole("group", { name: "view" }));
+        await expect(views.getByRole("button", { name: "3D" })).toHaveAttribute(
+            "aria-pressed",
+            "true",
+        );
+    },
 };
 
 const alerted: ProjectRow[] = [
@@ -152,13 +181,7 @@ export const WebglDrawsAndClickSelects: StoryObj = {
     decorators: [withData(connectSample), viewing("3d")],
     play: async ({ canvasElement }) => {
         const canvas = within(canvasElement);
-        const host = await canvas.findByTestId("graph-3d", undefined, READY);
-        const gl = await waitFor(() => {
-            const c = host.querySelector("canvas");
-            if (!c) throw new Error("no canvas yet");
-            return c;
-        }, READY);
-        await waitFor(() => expect(drawn(gl)).toBeGreaterThan(200), READY);
+        const gl = await drawn3d(canvasElement);
 
         const probe = (globalThis as { __probe?: { current: ViewApi | null } }).__probe!;
         // ketch is not selected in the sample registry; a click on its sphere selects it.
@@ -174,6 +197,18 @@ export const WebglDrawsAndClickSelects: StoryObj = {
         ]);
         const header = within(await canvas.findByLabelText("current project", undefined, READY));
         await expect(await header.findByText("ketch", undefined, READY)).toBeVisible();
+    },
+};
+
+/**
+ * No project links another: three.js leaves `instanceColor` null until the first edge colour, and
+ * the stage once wrote through it, so the scene threw and the router rebuilt the whole page.
+ */
+export const WebglWithoutLinks: Story = {
+    args: { rows: [project(1, "rtok", { selected: true }), project(2, "ketch")] },
+    decorators: [viewing("3d")],
+    play: async ({ canvasElement }) => {
+        await drawn3d(canvasElement);
     },
 };
 

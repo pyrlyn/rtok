@@ -166,7 +166,6 @@ same-file = "1.0" # T589: `logs watch` tells a rotated log file from the one it 
 globset = { workspace = true } # workspace member globs of project references (T329.7)
 serde-saphyr = "1.3.0" # `pnpm-workspace.yaml` of project references (T329.7); maintained, serde_yaml is deprecated
 notify = "9.0.0-rc.5" # recursive file watching for the graph background indexer (T8.16); 9 drops windows-sys 0.60 (T223)
-indicatif = "0.18" # progress for `graph index` (T21.2); `ProgressBar::hidden()` keeps it off the MCP path
 owo-colors = { version = "4", features = ["supports-colors"] } # ANSI + the tty/NO_COLOR/CLICOLOR/TERM=dumb question in one call (T20.2)
 printpdf = "0.12.8" # paged-PDF renderer for `rtok report --format pdf` (T22.0 survey choice, T22.3)
 regex = { workspace = true } # search pattern (T4.5)
@@ -224,6 +223,7 @@ rstest = { workspace = true } # parameterized unit tests; #[rstest] instead of #
 trycmd = "1.2.1" # full CLI command-output fixtures in tests/trycmd/
 pulldown-cmark = { version = "0.13", default-features = false } # CommonMark parse of README/docs in tests/docs_structure.rs (T359): unclosed fences, skipped heading levels
 tokio-tungstenite = "0.30" # real WebSocket client for the `rtok web` e2e (tests/web_e2e.rs); already in the tree via axum "ws"
+tiktoken-rs = "0.12.1" # o200k_base token counts in tests/bench_fixtures.rs (rtok#1071 harness tokenizer)
 # T17.1. No profile may set `panic = "abort"`: `hooks::dispatch` fails open through five
 # `catch_unwind` sites, and aborting would break the rule that a hook exits 0 on error.
 [profile.dev]

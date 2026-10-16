@@ -19,6 +19,11 @@ use super::schema::{
     sessions, tokens, usage,
 };
 
+/// The `measurements.kind` the proxy writes when the semantic cache answers a request.
+/// Such a call keeps its `usage` row (the cached body's counters) but no provider was
+/// billed for it, so the provider-token totals skip it.
+pub const SEMANTIC_CACHE_HIT_KIND: &str = "semantic_cache_hit";
+
 /// Everything a span needs beside its `calls` row.
 #[derive(Debug, Default)]
 pub struct CallDetail {
@@ -125,9 +130,15 @@ impl Store {
             .optional()?)
     }
 
+    /// Provider-billed totals: a call the semantic cache answered kept its `usage` row
+    /// but no provider request happened, so counting it would double the bill.
     pub fn otel_token_totals(&self) -> Result<Vec<TokenTotal>> {
         let mut conn = self.lock()?;
+        let cache_hit = measurements::table
+            .filter(measurements::call_id.eq(usage::call_id))
+            .filter(measurements::kind.eq(SEMANTIC_CACHE_HIT_KIND));
         let rows = usage::table
+            .filter(diesel::dsl::not(diesel::dsl::exists(cache_hit)))
             .group_by((usage::model, usage::api))
             .select((
                 usage::model,
@@ -536,5 +547,55 @@ mod tests {
         assert_eq!(d.provider.as_deref(), Some("anthropic"));
         assert_eq!(d.model.as_deref(), Some("claude-x"));
         assert_eq!(d.host, None);
+    }
+
+    fn proxied_call(s: &Store, kind: &str) -> i32 {
+        s.insert_call(
+            "s1",
+            "proxy",
+            kind,
+            None,
+            None,
+            None,
+            None,
+            Some("/v1/messages"),
+        )
+        .unwrap()
+    }
+
+    // The proxy writes a cache hit's usage row like a live one, so the marker that tells
+    // them apart is the hit's `semantic_cache_hit` measurement on the same call.
+    #[test]
+    fn token_totals_count_the_upstream_request_not_the_cache_hit_served_after_it() {
+        let s = Store::open_in_memory().unwrap();
+        s.upsert_session("s1", None, None, None, None).unwrap();
+        let live = proxied_call(&s, "api_request");
+        let hit = proxied_call(&s, "api_request");
+        for id in [live, hit] {
+            s.insert_usage("s1", Some("claude-x"), "anthropic", 100, 0, 0, 25, id)
+                .unwrap();
+        }
+        s.insert_measurement(
+            "s1",
+            &Measurement {
+                plugin: "proxy",
+                kind: SEMANTIC_CACHE_HIT_KIND,
+                before_bytes: 40,
+                after_bytes: 40,
+                est_before: 10,
+                est_after: 10,
+                ref_id: None,
+                call_id: Some(hit),
+            },
+        )
+        .unwrap();
+
+        let totals = s.otel_token_totals().unwrap();
+        assert_eq!(totals.len(), 1);
+        assert_eq!((totals[0].input, totals[0].output), (100, 25));
+        // The hit's own usage stays visible for per-call analytics.
+        let hit_call = s.calls_after(live as i64, 1).unwrap().remove(0);
+        let usage = s.call_detail(&hit_call).unwrap().usage.unwrap();
+        assert_eq!((usage.input, usage.output), (100, 25));
     }
 }

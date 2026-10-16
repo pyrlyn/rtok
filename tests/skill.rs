@@ -129,7 +129,9 @@ fn tasks_skill_names_only_commands_rtok_task_has() {
         }
         seen.push(sub);
     }
-    for sub in ["create", "list", "show", "status", "next", "init", "sync", "export"] {
+    for sub in [
+        "create", "list", "show", "status", "next", "init", "sync", "export",
+    ] {
         assert!(seen.contains(&sub), "the skill must show `rtok task {sub}`");
     }
 }

@@ -61,6 +61,31 @@ pub(crate) use rtok_store::{
     canon, is_unwalkable_root, path_ends_with, path_starts_with, same_path, strip_prefix,
 };
 
+/// Whether `dir` is a linked git worktree: its `.git` is a file whose admin dir names a main
+/// checkout. Walks of a project skip such a directory below their root, since
+/// `.rtok/worktrees/*` lives inside the main checkout and ignore rules may not name it.
+/// Submodules (a `.git` file with no `commondir`) and nested clones (a `.git` directory) are
+/// part of the project's files and stay walked. The `.git` stat comes first so an ordinary
+/// directory costs one syscall.
+pub fn is_linked_worktree(dir: &Path) -> bool {
+    std::fs::symlink_metadata(dir.join(".git")).is_ok_and(|m| m.is_file())
+        && rtok_config::root::ProjectRoot::find(dir)
+            .is_some_and(|p| p.checkout == dir && p.main != dir)
+}
+
+/// Whether `path` lies in, or is, a linked worktree nested below `root` (see
+/// [`is_linked_worktree`]). `root` itself never counts, though it may be a worktree.
+pub fn under_linked_worktree(root: &Path, path: &Path) -> bool {
+    let Ok(rel) = path.strip_prefix(root) else {
+        return false;
+    };
+    let mut dir = root.to_path_buf();
+    rel.components().any(|c| {
+        dir.push(c);
+        is_linked_worktree(&dir)
+    })
+}
+
 /// Two spellings of one tool-call path: equal, or one is the other's trailing components
 /// (`src/main.rs` vs `/repo/src/main.rs`, whole components only), with Windows case folding
 /// from the shared helpers. Blank paths match nothing.

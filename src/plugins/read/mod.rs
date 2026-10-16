@@ -25,6 +25,7 @@ use crate::fs::normalize;
 use crate::fs::normalize_following;
 
 pub mod cache;
+pub(crate) mod density;
 pub mod hook;
 pub(crate) mod outline;
 pub mod roots;
@@ -64,7 +65,7 @@ impl Plugin for Read {
         vec![
             ToolDef {
                 name: "read",
-                description: "Read a file; mode full|lines|map|signatures|diff|stripped; range a-b for full|lines|stripped.",
+                description: "Read a file; mode full|lines|map|signatures|diff|stripped|density:X; range a-b for full|lines|stripped.",
                 input_schema: json!({"type":"object","properties":{"path":{"type":"string"},"mode":{"type":"string"},"range":{"type":"string"}},"required":["path"]}),
             },
             ToolDef {
@@ -126,7 +127,10 @@ pub(crate) fn read_with(
     } else {
         None
     };
-    let body = if mode == "map" || mode == "signatures" {
+    let density = density::parse(mode).transpose()?;
+    let body = if let Some(share) = density {
+        density::render(&raw, share)
+    } else if mode == "map" || mode == "signatures" {
         outline::render(&abs, &raw, mode)?
     } else {
         // Same grammar as `expand --lines` (`a`, `a-b`, `a-`, `-b`); a malformed range is an
@@ -146,12 +150,16 @@ pub(crate) fn read_with(
     };
     let key = cache::key(abs.to_string_lossy().as_ref(), mode, range);
     // T122: a ranged read is keyed on the bytes it returns, never the whole file.
-    let payload =
-        if mode == "map" || mode == "signatures" || stripped_src.is_some() || range.is_some() {
-            body.as_bytes()
-        } else {
-            raw.as_bytes()
-        };
+    let payload = if mode == "map"
+        || mode == "signatures"
+        || density.is_some()
+        || stripped_src.is_some()
+        || range.is_some()
+    {
+        body.as_bytes()
+    } else {
+        raw.as_bytes()
+    };
     if let Some(hit) = cache::hit(
         cx,
         &key,
@@ -177,6 +185,7 @@ pub(crate) fn read_with(
     let render_kind = match mode {
         "map" => Some("map"),
         "signatures" => Some("signatures"),
+        _ if density.is_some() => Some("density"),
         _ if stripped_src.is_some() => Some("stripped"),
         _ => None,
     };
@@ -849,6 +858,35 @@ pub(crate) mod tests {
         let out = read(&Ctx::new(&cx), txt.to_str().unwrap(), "stripped", None).unwrap();
         assert!(out.contains("gone"), "{out}");
         assert!(out.contains("keep"), "{out}");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T670: `density:X` returns the informative lines with their numbers, writes one
+    /// `density` cost row against the raw file, and refuses a share outside (0, 1].
+    #[test]
+    fn density_mode_trims_repeats_and_records_a_row() {
+        let (cx, dir) = cx("density");
+        let file = dir.join("d.rs");
+        let mut body = String::new();
+        for i in 0..80 {
+            body.push_str("    let value = self.cache.get(&key).cloned();\n");
+            if i == 40 {
+                body.push_str("    let quota = billing::remaining_quota(account_id)?;\n");
+            }
+        }
+        fs::write(&file, &body).unwrap();
+        let path = file.to_str().unwrap();
+        let out = read(&Ctx::new(&cx), path, "density:0.1", None).unwrap();
+        assert!(out.contains("billing::remaining_quota"), "{out}");
+        assert!(
+            out.len() < body.len() / 4,
+            "{} of {} B",
+            out.len(),
+            body.len()
+        );
+        assert_eq!(cx.store.measurement_count("read").unwrap(), 1);
+        let bad = read(&Ctx::new(&cx), path, "density:2", None).unwrap_err();
+        assert!(bad.to_string().contains("density"), "{bad}");
         let _ = fs::remove_dir_all(dir);
     }
 

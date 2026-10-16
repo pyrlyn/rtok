@@ -1,0 +1,43 @@
+// Copyright (c) 2026 Ivan Tugay
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
+
+//! `rtok filter --stdin`: compress stdin without executing (plan T10.2, T70.1).
+
+use crate::config::Config;
+use rtok_plugin_sdk::{Archive, Class, Measurement};
+
+use super::{formatters, rules};
+
+/// Filter `input` as if it were the stdout of `cmd`. Fail-open: never error.
+pub fn run(cmd: &str, input: &str) -> String {
+    let settings = Config::load_with(None, None)
+        .map(|c| rules::Settings::from_config(&c))
+        .unwrap_or_else(|_| rules::Settings::builtin());
+    compress_only(&settings, cmd, input)
+}
+
+/// Archive (when the shortening dropped something), compress, trailer, measure.
+/// A store error falls back to [`run`].
+… 112 lines omitted (expand f4f2736123c39512d3f3aad6cd37b30887eadd47c8ddb8a2e9ca70df8818b3f3)
+        let families: Vec<&str> = rows
+            .iter()
+            .map(|r| {
+                r.ref_id
+                    .as_deref()
+                    .unwrap_or("")
+                    .split(':')
+                    .next()
+                    .unwrap_or("")
+            })
+            .collect();
+        assert_eq!(families, ["grep", "find", "ls"]);
+        // All three are rule-engine families: `format()` has no `ls`/`find` arm, they
+        // compact through `[ls]` / `[find]` (`group = "dir"`) in `rules/default.toml`.
+        assert_eq!(
+            rows.iter().map(|r| r.kind.as_str()).collect::<Vec<_>>(),
+            ["rule"; 3]
+        );
+    }
+}
+[rtok f4f2736123c3 · 153 lines]
