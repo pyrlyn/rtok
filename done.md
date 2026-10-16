@@ -14509,6 +14509,19 @@ Result: `ls_l` in `compact.rs` now renders through `render_files`: above 30 regu
 Status: done 2026-10-16
 Model: Claude Code / claude-sonnet-5-5
 
+### T680. git status 297
+
+Best competitor: lean-ctx 40.5 %. Design: one line per section with paths grouped by dir (`src/plugins/cmd/{a,b}.rs`), sigils, drop git hints; branch + ahead/behind.
+
+Check: #1076 harness (`bench/c14`) shows ≥ 60 % (rtk 62.5 %) on this category with full anchor retention.
+
+Plan: #1077 prints `git status` as porcelain XY codes. Remaining: group paths by directory (`src/plugins/cmd/{a,b}.rs`), one line per section, branch + ahead/behind, drop hints. Extend `git_status` in `compact.rs`; keep every path (test counts paths in/out); update golden `git_status*` floors.
+
+Result: `git_status` in `compact.rs` now renders through `render_status`: the entries of a run share one line per XY code (`M  src/plugins/cmd/{compact.rs,formatters.rs}`, other directories as further space-separated items on the same line), a path with a space, comma or brace (a rename `a -> b`, an odd name) keeps its own line so the brace form never becomes ambiguous, and the `Your branch is ahead of / behind / have diverged` sentences fold into the `On branch x` line as `ahead N (origin/x)`, `behind N (origin/x)` or `diverged +A -B (origin/x)` (`up to date` is dropped; detached HEAD, rebase and merge states stay verbatim). The first line stays `On branch …` so the existing contracts hold. A unit test checks that every path survives (including renames, spaced and comma names). Measured by golden bytes and tokens (the #1076 bench/c14 harness is not on main, so no rtk / lean-ctx comparison was run): `git_status_staged` 572 -> 113 B (floor 63 -> 78), `git_status` 202 -> 39 B (floor 57 -> 70), new `git_status_many` (3 sections, ahead of origin, 16 paths) 1015 -> 360 B, 278 -> 103 tokens (62 %, floor 60); the one `tests/filter.rs` assertion that expected one line per path now expects the grouped form. Local gate: clippy clean, full rtok nextest 3550/3552; the two failures (`watcher_reindexes_new_file_while_calls_read_nothing`, `cli_trycmd cli`) are the known load / shared-target-dir ones and hit a 30 s timeout.
+
+Status: done 2026-10-16
+Model: Claude Code / claude-sonnet-5-5
+
 ### T581. Filter actionable report sinks before applying the top-ten limit
 
 Confirmed through actual aggregation and recommendation functions: [report_sinks](src/model/report.rs#L284) groups all catalogue plugins, sorts by before_bytes and truncates to ten. Only afterwards [top_sinks](src/report/advice.rs#L253) skips classes other than read/cmd/mcp. Ten larger archive rows with distinct references therefore displace a smaller Read sink, yielding no top-sinks recommendation; the Read-only control yields one. The archive rows are valid measurements, but deliberately have no actionable switch in this rule. T59.8 and docs/report.md promise the ten largest file/command/MCP sinks; T302 changed ranking units, not filtering before truncation.

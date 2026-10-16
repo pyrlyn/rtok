@@ -1,6 +1,6 @@
 argv: git status
 exit: 0
-min_saving: 63
+min_saving: 78
 ---
 On branch feat/x
 Your branch is up to date with 'origin/feat/x'.
