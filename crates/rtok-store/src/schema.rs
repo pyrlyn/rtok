@@ -125,7 +125,7 @@ diesel::table! {
 }
 
 // 0036 (T454): mechanical tool-call observations. `observations_fts` is virtual.
-// 0043 (T501): `call_key`, the hook call it came from.
+// 0044 (T501): `call_key`, the hook call it came from.
 diesel::table! {
     observations (id) {
         id -> Integer,

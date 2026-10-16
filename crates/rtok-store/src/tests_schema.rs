@@ -218,3 +218,16 @@ fn housekeeping_converts_a_pre_t352_store() {
     assert_eq!(auto_vacuum_mode(&Store::open(&db).unwrap()), 2);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn no_two_migrations_share_a_version() {
+    // Two open branches can each add the next `NNNN_*` and merge clean; Diesel then applies
+    // only one of them, and the other's columns never exist (T501.1).
+    let mut seen = std::collections::BTreeSet::new();
+    let versions = migrations::versions().unwrap();
+    let twice: Vec<_> = versions
+        .iter()
+        .filter(|v| !seen.insert(v.split('_').next().unwrap_or(v)))
+        .collect();
+    assert!(twice.is_empty(), "migration versions used twice: {twice:?}");
+}
