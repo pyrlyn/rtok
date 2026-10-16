@@ -3045,6 +3045,22 @@ serena's LSP-grade references (rtok-vs-serena comparison, PR #1071; **unverified
 
 Change: one tree-sitter pattern in `RUST_EXTRA_REF` (`src/plugins/read/outline.rs`) captures an identifier directly followed by a parenthesised `token_tree`. No tool and no description token added (graph surface unchanged). The labels are hand-picked from this repo, so 1.000 is a floor guard on that set, not a general recall; reference *precision* of the new pattern was not measured (a call-shaped identifier inside `macro_rules!`/`quote!` bodies counts as a reference).
 
+## 42. engram features: take or skip (T667, checked 2026-10-16)
+
+Source: engram README at tag v3.4.0 (<https://github.com/Gentleman-Programming/engram>, read through the GitHub API on 2026-10-16). No memory-bench number exists for engram, so nothing here is a saving claim.
+
+| engram feature | Decision | Why |
+| --- | --- | --- |
+| Project-aware reads: a read uses the current project when none is named (README, "Project-aware") | **Take** (T667) | rtok's `mem_search` ranked every project's notes alike. Now a note of the searcher's project wins a near tie (`search_notes_in`, boost 1.3), another project's clearly better match still leads, and no new tool or flag is needed. |
+| Topic keys (`mem_suggest_topic_key`) | Already have | `(project, kind, title)` upsert since T66.1; the model need not ask a tool for a key. |
+| Pinned-first recall | Already have | `memory pin` leads SessionStart recall (T69.1) and, since T669, lifts a search hit. |
+| Session summary and session start/end tools | Already have | `session:*` checkpoint notes and `startup_recall` (T71.2). |
+| `mem_judge`, `mem_compare`, `mem_judge_many` (relation judging) | Skip | Spends model output on bookkeeping; the admission gate (T671) and topic keys cover duplicates without a model. |
+| `mem_consolidate` after preview and confirmation | Skip | Model-driven merging of observations; retire/supersede/forget (T69.1, T669) are reversible without it. |
+| `mem_save_prompt` | Skip | The `remember:` prompt prefix already preserves a user request. |
+| Git Sync chunks, Engram Cloud, HTTP core | Skip | A second daemon or network path; `memory export` / `import` JSONL (T294) moves notes through git already. |
+| 18 tools | Skip | About 1 865 description tokens every turn (`research.md` §13); rtok keeps 3 memory tools. |
+
 ## 43. Cypher-style query shapes without a query tool (T665, checked 2026-10-16)
 
 codebase-memory-mcp is described as Cypher-style (rtok-vs-codebase-memory-mcp comparison, PR #1071; **unverified** here: the upstream README was not re-read). rtok keeps seven graph tools (description gate: 170 tokens, now 169) and takes shapes as parameters of existing tools. The choice is grounded in the competitor's published shapes and in what `symbol`/`callers`/`impact`/`explore` already answer; no rtok log count backs it, and no shared-corpus saving was measured.

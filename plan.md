@@ -157,7 +157,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T526 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T527 | in progress | P2 | 3 | 0% | MiMo / mimo |
 | T666.2 | todo | P2 | 3 | 0% | |
-| T667 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T670 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T687 | todo | P2 | 4 | 0% | |
 | T675 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
@@ -181,14 +180,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 T666.1 ships `rtok memory extract` with a user-configured program as the extractor. A built-in extractor needs creator decisions first: which provider and model, how the key is stored and read, and a per-run cost cap. Once decided: a provider extractor behind the same `Extractor` trait, a docs warning about cost, a measured row in `research.md` (needs a paid key, so the harness skips without one). Not claimed.
 
 Check: a fake-server test of the provider call; the cost cap stops a run; off by default; `just check`.
-
-### T667. Richer memory features from engram
-
-engram has more memory features (HTTP + MCP) (`docs/comparison/rtok-vs-engram.md`). Adopt only features that improve recall on rtok's own memory bench without a second daemon. Savings both sides: **no data** pending harness.
-
-Check: feature list and take/skip in the comparison file; tests for what shipped; `just check`.
-
-**Plan.** From `docs/comparison/rtok-vs-engram.md` (PR #1071): engram has relation judging, pinned-first recall and project identity from the origin remote that rtok lacks. Relation judging spends model output on bookkeeping: **skip**. (1) Check which of pinned-first recall and origin-remote project identity already exist (`mem_update pinned`, `project_name`); fail-first tests on `tests/fixtures/p29_memory.toml`-style fixtures for the missing ones. (2) Implement only what raises recall on rtok's own memory bench with no new MCP tool and no daemon. (3) Write the take/skip list into the comparison file (or `research.md` while #1071 is open); `just check`.
 
 ### T670. Read modes lean-ctx still has
 
