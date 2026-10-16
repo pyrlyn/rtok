@@ -587,6 +587,11 @@ pub(crate) const CSHARP_TAGS: &str = "
 /// record a `Self` row; one junk name, accepted). The final call name is already
 /// claimed by an earlier pattern and one tag per node wins, so nothing counts
 /// twice (verified on the `truth-constructs` fixture).
+///
+/// T663: macro arguments parse as an opaque `token_tree`, so `assert!(f())` and
+/// `assert_eq!(r.m(), 1)` showed no call. Inside a `token_tree`, an identifier directly
+/// followed by a parenthesised group is a call or tuple-struct use at any depth; the
+/// identifier alone is captured (not the group), so two calls in one macro both count.
 #[cfg(feature = "lang-rust")]
 pub(crate) const RUST_EXTRA_REF: &str = "
 (type_identifier) @name @reference.type
@@ -596,6 +601,10 @@ pub(crate) const RUST_EXTRA_REF: &str = "
     name: (identifier) @name) @reference.call
 (scoped_identifier
     path: (identifier) @name) @reference.call
+(token_tree
+    (identifier) @name @reference.call
+    .
+    (token_tree))
 ";
 
 /// T52.5: the upstream TypeScript tags query sees no calls at all — only

@@ -115,8 +115,7 @@ fn tags_backend_callers_bytes_match_contract() {
 }
 
 /// T52.5: type-position `OnlyTyped` is a tags hit (`RUST_EXTRA_REF`); before it,
-/// this was the P30 "tags miss, LSP hit" fixture (T8.8). The remaining tags miss
-/// below keeps a discriminating fixture for the gate.
+/// this was the P30 "tags miss, LSP hit" fixture (T8.8).
 #[test]
 fn tags_backend_hits_onlytyped_type_position() {
     let (cx, dir) = open("p30-tags-hit", "tags");
@@ -126,12 +125,11 @@ fn tags_backend_hits_onlytyped_type_position() {
     let _ = fs::remove_dir_all(&dir);
 }
 
-/// Macro bodies parse as an opaque `token_tree`, so no tags query reaches into
-/// them: `macro_callee` is only invoked inside `assert!(..)`. rust-analyzer
-/// resolves through the expansion, so this is the fixture a P30-style
-/// tags-vs-LSP comparison discriminates on now.
+/// Macro arguments parse as an opaque `token_tree`; since T663 rtok's own pattern reads an
+/// identifier followed by a parenthesised group inside it, so `macro_callee`, only invoked inside
+/// `assert!(..)`, is a tags hit. It was the P30 "tags miss, LSP hit" fixture before.
 #[test]
-fn tags_backend_misses_macro_body() {
+fn tags_backend_hits_macro_body() {
     let (cx, dir) = open("p30-tags-miss", "tags");
     let root = dir.join("crate");
     fs::create_dir_all(root.join("src")).unwrap();
@@ -146,7 +144,7 @@ fn tags_backend_misses_macro_body() {
     )
     .unwrap();
     let out = callers(&Ctx::new(&cx), &root, "macro_callee").unwrap();
-    assert_eq!(out, "no references to macro_callee", "{out}");
+    assert!(out.contains("user"), "tags callers should hit user: {out}");
     let _ = fs::remove_dir_all(&dir);
 }
 
