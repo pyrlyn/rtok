@@ -2767,6 +2767,16 @@ Check: a fixture with three notes asserts the injected text has ids, titles and 
 
 **Result (2026-10-04).** The recall index carries a body token estimate and names `mem_get` (`INDEX_GUIDE` in `src/plugins/memory/mod.rs`); `mem_get` records one `mem_get` measurement row and returns the full body (tests in the same file).
 
+### T666.1. Opt-in memory extraction through a user-configured program
+
+claude-mem is ahead if you want automatic LLM-extracted memory (`docs/comparison/rtok-vs-claude-mem.md`). Not a default path (cost). Design an opt-in extractor that writes ordinary rtok memory notes, measured. Savings both sides: **no data** without paid API keys (harness skips).
+
+Check: opt-in config off by default; fixture test with a fake LLM; docs warn about cost; `just check`.
+
+**Plan.** Split because a real model call needs a provider decision (creator) and the whole feature exceeds 500 lines. **T666.1 (this slice):** an `Extractor` trait in `src/plugins/memory/extract.rs`, the config block `plugins.memory.extract` (`enabled = false`, `max_notes`, `max_input_bytes`) in the one config module, and `rtok memory extract <transcript.jsonl>` that scrubs the input (`scrub.rs`, `<private>`), asks the extractor for candidate notes and saves them through the normal `mem_save` path (so the T671 admission gate and dedup apply). Only a fake extractor ships in tests; with `enabled = false` the command refuses and nothing runs. No hook calls it. **T666.2 (todo, blocked on the creator):** a real provider-backed extractor (which provider/model, key handling, cost cap) and a docs warning about cost. Tests: fake LLM fixture, off-by-default, scrub applied, duplicate rejected, input cap; `just check`.
+
+**Result (2026-10-16), T666.1.** PR #1120. `rtok memory extract <transcript.jsonl>` (`src/plugins/memory/extract.rs`), off unless `[plugins.memory.extract] enabled = true`: the user/assistant text of a Claude Code transcript is scrubbed (`<private>`, keys, tokens), cut to its last `max_input_bytes` (60000), written to a scratch file and given on stdin to the program named in `command` (run through `ProgressRunner`, 10-minute limit); each `{"title","body"}` stdout line (at most `max_notes`, 5) is saved as a plain `note` through the T671 admission gate, so a repeat is skipped. rtok ships no model client, key or provider; model output is untrusted (kind forced to `note`, title 120 / body 2000 chars). No hook calls it. Tests: fake extractor fixture, off by default, scrub, input and note caps, gate skip, parser, command round trip; trycmd case. The cost warning for a shipped provider belongs to T666.2.
+
 ### T671. Memory admission gate (MemPalace idea)
 
 MemPalace is ahead on admission/dedup by embeddings (`docs/comparison/rtok-vs-mempalace.md`). Add an admission gate before notes are stored (cheap hash/trigram first; embeddings opt-in). Savings both sides: **no data** (harness skips).
@@ -2806,6 +2816,16 @@ Check: query shapes documented and tested; comparison file updated; `just check`
 **Plan.** (1) List the query shapes agents used in our logs (`rtok stats`, `graph_events`) that `symbol`/`callers`/`impact`/`explore` do not answer in one call; compare with the Cypher shapes in `docs/comparison/rtok-vs-codebase-memory-mcp.md`. (2) Add at most two shapes as parameters of existing operations (no seventh/eighth tool): e.g. `callers` with `depth` and a `kind`/`path` filter, `outline` with `kind`. (3) Fail-first tests in `src/plugins/graph` + `tests/graph_contract.rs` for each shape, on the SQLite store only. (4) Document the shapes in `src/plugins/graph/README.md` and the comparison file; description tokens stay under the surface gate; `just check`.
 
 **Result (2026-10-16).** Two query shapes added as parameters of existing tools, so the surface stays seven tools (description tokens 169 of 170): `callers` with no `name` lists the unreferenced definitions that only the CLI `graph dead` showed, narrowed by `path` and `kind`; `outline(path, kind)` keeps the lines of one kind (`fn`, `struct`, …). Callers, callees, call paths and depth already existed (`callers`, `symbol`, `impact`, `explore`). Contract test `nameless_callers_lists_dead_definitions_and_outline_takes_a_kind` was written first and failed on the missing-`name` schema check. The take/skip table is `research.md` §43 (the comparison file `docs/comparison/rtok-vs-codebase-memory-mcp.md` is still on open PR #1071); the shape choice rests on the competitor's published shapes, not on an rtok log count, and no shared-corpus saving was measured.
+
+### T664. Review/blast-radius features from code-review-graph
+
+code-review-graph is ahead on review features (~30 MCP tools) while rtok wins on cost (`docs/comparison/rtok-vs-code-review-graph.md`). Port only the features that save tokens or answer "what does this edit touch?" without the full tool bill. Savings both sides: **no data** in rtok docs for a shared corpus.
+
+Check: one or more graph ops (or docs) covering the chosen features; MCP description-token budget documented; `just check`.
+
+**Plan.** Already shipped: `impact`, `graph_diff` (T329.18), `rtok graph review` (T454, CLI only), blast grouping. (1) Read the feature list in `docs/comparison/rtok-vs-code-review-graph.md` (PR #1071) and the code-review-graph README; mark each feature take / skip / already have. (2) Take at most the features that answer "what does this edit touch?" with no new MCP tool (the surface gate is 170 tokens): candidates are a test-gap list (changed defs with no test caller) and a risk summary line on `graph_diff`. (3) Fail-first tests on a fixture repo in `src/plugins/graph/review.rs` / `diff.rs`; keep `tests/graph_contract.rs` strings unchanged unless the commit says why. (4) Take/skip table in the comparison file (or `research.md` while #1071 is open); `just check`.
+
+**Result (2026-10-16).** Already shipped: `impact`, `graph_diff`, blast grouping, `graph review` (CLI). The one feature that answers "is what I changed covered" without a new tool is taken: `graph_diff` ends each project's changed list with one `untested: a, b` line for changed functions, methods and classes no test reaches within the two caller levels it already gathers (no extra walk; description tokens unchanged). A risk number, flows and communities, and extra review tools are skipped; reasons in `research.md` §44 (the comparison file is still on open PR #1071). Test `changed_definitions_without_a_test_caller_are_listed_as_untested` was written first and failed. No shared-corpus saving was measured.
 
 ### T294. Export rows that can carry a tombstone
 
@@ -8736,6 +8756,26 @@ Result: `visible_argv` peels `mise exec`/`mise x` (after `--` or `-c`) and `just
 Status: done 2026-10-06
 Model: Cursor / grok 4.7
 
+### T685. find 33
+
+Best competitor: rtok leads. Design: keep dir grouping but print full paths for ≤ 50 hits so the anchor check passes.
+
+Check: #1076 harness (`bench/c14`) shows 100 % paths, ≥ 69 % on this category with full anchor retention.
+
+Plan: in the find formatter print full paths for ≤ 50 hits (grouping only above that); fixture test asserting 100 % paths and fewer tokens than raw; measure on `bench/fixtures`.
+
+Outcome: `group_dir` keeps lists of up to 50 `dir/name` hits verbatim, so a small `find` keeps 100 % of its paths; above 50 it folds as before. Pinned by `group_dir_keeps_full_paths_up_to_fifty_hits` and the regenerated find/rg/awk goldens (docs in en/ru/uk). Measured on the repo fixtures: the #1076 `bench/c14` harness is not on main.
+
+### T684. wc 102, cargo test/build/clippy
+
+Best competitor: rtk / sqz. Design: wc: drop padding, keep `total`; cargo: #1077 + group warnings by lint code `unused_imports ×12 (files…)`.
+
+Check: #1076 harness (`bench/c14`) shows ≥ rtk on this category with full anchor retention.
+
+Plan: wc formatter drops padding and keeps `total`; cargo clippy/build warnings (on top of #1077) group by lint code `lint ×N (files…)`, keeping every distinct path and all errors; fixture tests per formatter; never worse than raw.
+
+Outcome: `wc` gets its own formatter (padding dropped, `total` kept; golden `wc`), and `cargo build`/`clippy` warnings are grouped by lint code (`unused_imports ×3: … (locations)`) keeping every distinct message, all errors and the exit line. Tests: two `compact.rs` unit tests plus the `wc` golden. Measured on the repo fixtures: the #1076 `bench/c14` harness is not on main.
+
 ### T388. `doctor` reports the real MCP Tool Search state
 
 From `research.md` §3 and §8: `doctor` infers "MCP tool search likely disabled" from `ANTHROPIC_BASE_URL` alone (`src/doctor.rs`, `mcp_tool_search_disabled: anthropic.is_some()`) and never reads `ENABLE_TOOL_SEARCH`. The `tools_rewrite` advice keys off the same flag, so a false positive advises a rewrite that is not needed.
@@ -14317,6 +14357,19 @@ Result: Measured with tests/bench_fixtures.rs (the #1076 bench/c14 harness is no
 Status: done 2026-10-15
 Model: Claude Code / claude-sonnet-5-5
 
+### T673. grep 2260, git grep 452, rg
+
+Best competitor: t-o 89.7 %, lean-ctx 89.6 %. Design: path printed once; matches as `line:text`; collapse common indentation; trim match text around the hit to ±60 chars keeping the match itself; per-file cap by match budget with `+N more (expand)`; files sorted by path (stable) not count; keep 100 % paths.
+
+Check: #1076 harness (`bench/c14`) shows ≥ 91 %, 100 % paths on this category with full anchor retention.
+
+Plan: new `grep_group` formatter in `src/plugins/cmd/compact.rs` wired in `formatters::format` for `grep`/`rg`/`git grep`: path once, `line:text` under it, common indent stripped, text trimmed to the match ±60 chars, per-file budget with `+N more (expand)`, files path-sorted; fall back to the rule when the shape is unknown. Tests: golden `grep_group*.in/out` with `min_saving:` plus a path-retention unit test. Measure on the existing grep fixtures (bench/c14 unmerged).
+
+Result: new `src/plugins/cmd/grep.rs` formatter for `grep`/`rg`/`git grep` `path:line:text` lists: path once, `line:text` beneath, shared indent dropped, long lines cut to ±60 chars around the match (pattern read from argv; no cut when it cannot be read the same way), 12 matches per file, a 16-line text budget after which files stay as `path:l1,l2,…` anchors so 100 % of paths and line numbers survive, files path-sorted, stderr/Binary lines kept, never longer than raw; counts, `-l`, context and `-f` fall back to the rule. Measured with `tests/bench_fixtures.rs` (o200k_base, default mode; #1076 `bench/c14` is not on main): grep_settings_src 67.5 % → 73.2 %, grep_fn_main 51.0 % → 56.0 % (44 files, every path and line kept; the old head/tail rule hid 24 of them), rg_pub_fn 0 % → 32.4 %; floors raised to 70 / 54 / 30. The ≥ 91 % target of the card is not reachable with 100 % paths on these fixtures: bare paths+line numbers are already ~45 % of the raw tokens, so the remaining gain is in match text, which a larger fixture on the harness has to confirm. Tests: 10 unit tests in `grep.rs`, golden `grep_group`.
+
+Status: done 2026-10-15
+Model: Claude Code / claude-sonnet-5-5
+
 ### T581. Filter actionable report sinks before applying the top-ten limit
 
 Confirmed through actual aggregation and recommendation functions: [report_sinks](src/model/report.rs#L284) groups all catalogue plugins, sorts by before_bytes and truncates to ten. Only afterwards [top_sinks](src/report/advice.rs#L253) skips classes other than read/cmd/mcp. Ten larger archive rows with distinct references therefore displace a smaller Read sink, yielding no top-sinks recommendation; the Read-only control yields one. The archive rows are valid measurements, but deliberately have no actionable switch in this rule. T59.8 and docs/report.md promise the ten largest file/command/MCP sinks; T302 changed ranking units, not filtering before truncation.
@@ -15059,6 +15112,16 @@ Check: `cargo clippy --workspace --all-targets --all-features --exclude rtok-was
 
 Status: done 2026-09-26
 Model: ZCode / glm-5.3
+
+### T901. Windows: `graph_lsp_gate::lsp_backend_outlines_dart_main` fails on dart 3.9
+
+The test fails on Windows dart 3.9 with `File is not being analyzed` (surfaced by the first full local `just check` on Windows, T272–T274, `docs/windows.md`); CI never runs it because the runners have no dart. Done = the test no longer fails on Windows dart 3.9 (project gets a `dart pub get` / readiness wait, or skips on that error with the reason in a comment) and a test pins the skip/ready predicate.
+
+Check: `lsp_backend_outlines_dart_main` passes or skips with a stated reason on Windows dart 3.9; the predicate test passes on every OS; `just check`.
+
+Plan: make `lsp_backend_outlines_dart_main` robust on Windows dart 3.9: write a minimal `pubspec.yaml` in the temp project and run `dart pub get`, or skip when the server answers `File is not being analyzed`, with the reason in a comment. CI has no dart, so the proof is a unit test of the skip/ready predicate that runs everywhere.
+
+Outcome: `lsp_backend_outlines_dart_main` skips on Windows when the dart server answers `File is not being analyzed` (reason in a comment); the predicate `dart_not_analyzing` is pinned by `dart_skip_is_windows_only_and_names_the_exact_answer`, which runs on every OS. CI has no dart, so the skip itself is unexercised there.
 
 ### T902. Windows CI: run `cargo clippy --workspace` in the `windows` job
 

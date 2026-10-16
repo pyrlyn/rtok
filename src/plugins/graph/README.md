@@ -58,7 +58,7 @@ its recall clause was amended after T8.8 measured the index (`plan.md` §6). T68
 `explore` 2026-09-18 and T329.18 added `graph_diff` 2026-10-10 and T329.16 added `graph_export` 2026-10-10; the surface is seven tools / 165
 description tokens (measured, `cargo nextest run -p rtok graph_surface`), still ≤ 170. T68.5 added `rtok graph affected`
 and `impact(path)` with no `name` (same walk, no Measurement on print). T454 added
-`rtok graph review`: a risk-ranked reading list for a git diff, CLI only, same five MCP tools.
+`rtok graph review`: a risk-ranked reading list for a git diff, CLI only, same five MCP tools. `graph_diff` ends a project's changed list with `untested: a, b` for changed functions, methods and classes that no test reaches within two callers (T664).
 T329.18 added `rtok graph diff` and the sixth tool `graph_diff` (what a change did to the graph, the old
 side read from git's object database); the surface is then 155 description tokens, gate 160.
 T329.16 added `rtok graph export` and the seventh tool `graph_export` (the graph as redacted `rtok.graph.v1`

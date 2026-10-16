@@ -44,7 +44,7 @@ lands as a `cmd` / `wrap` measurement with `ref_id = <server>/<tool>:<id>`.
 | `drop` | array of strings | `[]` | case-insensitive substrings to remove (`\|` separates alternatives) |
 | `keep` | array of strings | `[]` | substrings that are never dropped and never cut by the cap; built-in keeps are `error`, `warning`, `panic`, `fail`, `traceback` |
 | `dedupe` | bool or `"normalized"` | true | `true` folds adjacent identical lines into `line (×N)`; `"normalized"` keys lines with timestamps, ids, pids and durations replaced by placeholders and folds non-adjacent matches into `line (×N, also lines k, l, …)` |
-| `group` | `"dir"` \| `"diag"` | off | `dir` rewrites path-per-line output as `dir/ (N files): a, b, c …`; `diag` rewrites coded diagnostics as `E0308 ×N: first message (file:line, …)`; runs before the head/tail cut (T64.1) |
+| `group` | `"dir"` \| `"diag"` | off | `dir` rewrites path-per-line output as `dir/ (N files): a, b, c …` once it has more than 50 `dir/name` lines (T685; shorter lists stay verbatim); `diag` rewrites coded diagnostics as `E0308 ×N: first message (file:line, …)`; runs before the head/tail cut (T64.1) |
 | `json_items` | integer ≥ 0 | 20 | JSON arrays keep this many elements; the rest is one `… +K more` (T65.2) |
 | `json_string` | integer ≥ 0 | 200 | JSON strings longer than this are cut with their character length (T65.2) |
 

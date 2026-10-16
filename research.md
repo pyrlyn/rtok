@@ -3049,3 +3049,19 @@ codebase-memory-mcp is described as Cypher-style (rtok-vs-codebase-memory-mcp co
 | labels, properties, cross-repo traversal | project scope exists | skip |
 
 Cost: the two parameters add 4 description tokens to the MCP surface (report `~1037` → `~1041`). Backends: both shapes read the tags index; a text-mode project says dead-code analysis is unavailable, as `graph dead` does.
+
+## 44. Review and blast-radius features without a bigger tool surface (T664, checked 2026-10-16)
+
+code-review-graph is described as ahead on review features with ~30 MCP tools (rtok-vs-code-review-graph comparison, PR #1071; **unverified** here: the upstream README was not re-read). The take/skip below is by what an agent asks after an edit, "what does this touch and is it covered", judged against what rtok already answers. The graph surface is at its 170-token gate, so a feature must arrive as output of an existing tool.
+
+| Question | rtok today | Decision |
+| --- | --- | --- |
+| Who calls what I changed | `graph_diff` callers per changed definition, `impact` | already have |
+| Blast radius grouped by file, budgeted | `impact` (T377 blast grouping) | already have |
+| Reading list ranked by risk | `rtok graph review` (T454), CLI only | already have; stays CLI to keep the MCP bill flat |
+| Changed definitions no test reaches | only inside `graph review` | **take**: `graph_diff` ends each project's changed list with one `untested: a, b` line |
+| One risk number on `graph_diff` | `graph review` scores | skip: a second scorer would duplicate `review.rs`; the untested line is the actionable part |
+| Execution flows, communities | no such index | skip: needs a new index, no saving evidence |
+| Dedicated review/blast tools | n/a | skip: tool descriptions are the cost rtok competes on |
+
+The line uses the caller rows `graph_diff` already gathers (depth 2), so it costs no extra walk; `graph review` looks 3 callers deep, so the two can differ on a definition reached only at depth 3. Description tokens do not change. No shared-corpus saving was measured.

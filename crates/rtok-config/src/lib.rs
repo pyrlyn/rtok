@@ -1346,6 +1346,20 @@ section! {
 }
 
 section! {
+    /// `[plugins.memory.extract]` — `rtok memory extract` turns a transcript into notes through a
+    /// program of the user's choosing (T666.1; off by default because a model call can cost money).
+    MemoryExtract {
+        enabled: bool = false,
+        /// Program and arguments: the transcript arrives on stdin, one `{"title","body"}` JSON
+        /// object per stdout line goes back.
+        command: Vec<String> = Vec::new(),
+        max_notes: u32 = 5,
+        /// Bytes of transcript text sent to the program; the end of the session is kept.
+        max_input_bytes: u32 = 60000,
+    }
+}
+
+section! {
     /// `[plugins.memory]`
     Memory {
         enabled: bool = true,
@@ -1374,6 +1388,7 @@ section! {
         /// (T669; 0 = the command needs `--days`). Never runs by itself.
         forget_after_days: u32 = 90,
         embed: MemoryEmbed = MemoryEmbed::default(),
+        extract: MemoryExtract = MemoryExtract::default(),
     }
 }
 
