@@ -3049,6 +3049,23 @@ Source: engram README at tag v3.4.0 (<https://github.com/Gentleman-Programming/e
 | Git Sync chunks, Engram Cloud, HTTP core | Skip | A second daemon or network path; `memory export` / `import` JSONL (T294) moves notes through git already. |
 | 18 tools | Skip | About 1 865 description tokens every turn (`research.md` §13); rtok keeps 3 memory tools. |
 
+## 43. Cypher-style query shapes without a query tool (T665, checked 2026-10-16)
+
+codebase-memory-mcp is described as Cypher-style (rtok-vs-codebase-memory-mcp comparison, PR #1071; **unverified** here: the upstream README was not re-read). rtok keeps seven graph tools (description gate: 170 tokens, now 169) and takes shapes as parameters of existing tools. The choice is grounded in the competitor's published shapes and in what `symbol`/`callers`/`impact`/`explore` already answer; no rtok log count backs it, and no shared-corpus saving was measured.
+
+| Cypher shape | rtok today | Decision |
+| --- | --- | --- |
+| callers of X (depth 1..n) | `callers`, `impact(depth)` | already have |
+| callees of X | `symbol` prints `calls:` | already have |
+| path A → B | `impact(to)`, `explore` | already have |
+| definitions in file F | `outline` | already have |
+| definitions in file F of kind K | `outline` printed every kind | **take**: `outline(path, kind)` keeps the lines of one kind |
+| definitions nobody references (dead code), under a path | CLI `graph dead` only | **take**: `callers` with no `name` lists them, `path`/`kind` narrow |
+| arbitrary pattern match / aggregation | none | skip: needs a query language and its description cost |
+| labels, properties, cross-repo traversal | project scope exists | skip |
+
+Cost: the two parameters add 4 description tokens to the MCP surface (report `~1037` → `~1041`). Backends: both shapes read the tags index; a text-mode project says dead-code analysis is unavailable, as `graph dead` does.
+
 ## 44. Review and blast-radius features without a bigger tool surface (T664, checked 2026-10-16)
 
 code-review-graph is described as ahead on review features with ~30 MCP tools (rtok-vs-code-review-graph comparison, PR #1071; **unverified** here: the upstream README was not re-read). The take/skip below is by what an agent asks after an edit, "what does this touch and is it covered", judged against what rtok already answers. The graph surface is at its 170-token gate, so a feature must arrive as output of an existing tool.

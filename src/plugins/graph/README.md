@@ -5,7 +5,7 @@ four servers with 130+ tool descriptions in every request.
 
 | | |
 |---|---|
-| Surfaces | MCP `symbol(name, path?, kind?)`, `callers(name, path?)`, `impact(name?, depth?, path?)`, `outline(path)`, `explore(query, path?)` (T68.1); CLI `rtok graph affected [--since|--staged] [--json]` (T68.5); CLI `rtok graph review [--since|--staged] [--json]` (T454) |
+| Surfaces | MCP `symbol(name, path?, kind?)`, `callers(name?, path?, kind?)`, `impact(name?, depth?, path?)`, `outline(path, kind?)`, `explore(query, path?)` (T68.1); CLI `rtok graph affected [--since|--staged] [--json]` (T68.5); CLI `rtok graph review [--since|--staged] [--json]` (T454) |
 | Spec | the `spec (replaces)` column of the catalogue in `plan.md` §1 |
 | Default | on |
 
@@ -19,7 +19,7 @@ unchanged is never opened; a file whose stat moved but whose sha256 did not is n
 same file, which is the call edge `callers` groups by and `impact` walks (T8.5).
 
 `symbol` returns each definition and its source, at most `body_lines` lines each (T8.6).
-`callers` returns one line per calling definition. `impact` walks those edges breadth-first
+`callers` returns one line per calling definition. With no `name` it lists the unreferenced definitions (`graph dead`), narrowed by `path` and `kind` (T665). `outline` takes `kind` (`fn`, `struct`, …) to keep one kind of line. `impact` walks those edges breadth-first
 to `depth`, then adds `changes with: a.rs (7), b.rs (4)` when git history pairs the defining file with others (T371). With `path` and no `name`, the same walk starts from that file's
 definitions and lists reachable test files (`rtok graph affected` does this for
 `git diff --name-only`). `outline` is the `read` plugin's `map` mode. `explore` answers a free-text code

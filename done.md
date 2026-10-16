@@ -2817,6 +2817,16 @@ Check: feature list and take/skip in the comparison file; tests for what shipped
 
 **Result (2026-10-16).** `mem_search` is now project-aware like engram's reads: a note of the searcher's own project (the cwd project, as `mem_save` names it) gets a 1.3 score factor in the T669 re-rank (`Store::search_notes_in`, `mem_search_in`), so it wins a near tie against another project's note while a match three places better still leads; other projects stay searchable and a search with no project ranks as before. The vector and hybrid paths (opt-in) do not take the boost. Pinned-first recall, topic keys and session summaries already existed; relation judging, consolidation, prompt saving, Git Sync/Cloud and the 18-tool surface are skipped. The take/skip table is `research.md` §42 (the comparison file `docs/comparison/rtok-vs-engram.md` is still on open PR #1071). Tests: same-project twin leads, no project keeps bm25 order, a far-down project note does not beat the best match. No memory-bench number was measured.
 
+### T665. Broader graph queries (codebase-memory-mcp)
+
+codebase-memory-mcp is broader (Cypher-style queries) (`docs/comparison/rtok-vs-codebase-memory-mcp.md`). Add the small query shapes agents actually used in our logs, without a heavy MCP surface. Savings both sides: **no data** for a shared corpus.
+
+Check: query shapes documented and tested; comparison file updated; `just check`.
+
+**Plan.** (1) List the query shapes agents used in our logs (`rtok stats`, `graph_events`) that `symbol`/`callers`/`impact`/`explore` do not answer in one call; compare with the Cypher shapes in `docs/comparison/rtok-vs-codebase-memory-mcp.md`. (2) Add at most two shapes as parameters of existing operations (no seventh/eighth tool): e.g. `callers` with `depth` and a `kind`/`path` filter, `outline` with `kind`. (3) Fail-first tests in `src/plugins/graph` + `tests/graph_contract.rs` for each shape, on the SQLite store only. (4) Document the shapes in `src/plugins/graph/README.md` and the comparison file; description tokens stay under the surface gate; `just check`.
+
+**Result (2026-10-16).** Two query shapes added as parameters of existing tools, so the surface stays seven tools (description tokens 169 of 170): `callers` with no `name` lists the unreferenced definitions that only the CLI `graph dead` showed, narrowed by `path` and `kind`; `outline(path, kind)` keeps the lines of one kind (`fn`, `struct`, …). Callers, callees, call paths and depth already existed (`callers`, `symbol`, `impact`, `explore`). Contract test `nameless_callers_lists_dead_definitions_and_outline_takes_a_kind` was written first and failed on the missing-`name` schema check. The take/skip table is `research.md` §43 (the comparison file `docs/comparison/rtok-vs-codebase-memory-mcp.md` is still on open PR #1071); the shape choice rests on the competitor's published shapes, not on an rtok log count, and no shared-corpus saving was measured.
+
 ### T664. Review/blast-radius features from code-review-graph
 
 code-review-graph is ahead on review features (~30 MCP tools) while rtok wins on cost (`docs/comparison/rtok-vs-code-review-graph.md`). Port only the features that save tokens or answer "what does this edit touch?" without the full tool bill. Savings both sides: **no data** in rtok docs for a shared corpus.
