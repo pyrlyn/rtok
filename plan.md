@@ -160,7 +160,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T687 | todo | P2 | 4 | 0% | |
 | T680 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T682 | todo | P2 | 3 | 0% | |
-| T683 | todo | P2 | 3 | 0% | |
 | T686 | todo | P2 | 3 | 0% | |
 
 
@@ -1099,17 +1098,6 @@ Check: #1076 harness (`bench/c14`) shows keep lead on this category with full an
 Plan: first confirm #1079 (git log one line) is merged; if not, branch on top of main without touching its hunks and keep this task `todo`. Then add a `[N commits, +A/-D]` header and drop the Author column when every author is equal in `src/plugins/cmd` git-log formatter; fixture test for both, fail-first; measure with `bench/fixtures` (the #1076 harness is not on main).
 
 Blocked: stacks on #1079 (git log one line per commit), which is still open; a second change to the same formatter would conflict. Take it again once #1079 is on main. The #1076 harness (`bench/c14`) the Check cites is also not on main yet.
-
-### T683. tail 155, cat *.log
-
-Best competitor: lean-ctx 87.4 % (rtok 94.5 %). Design: caveman-style field summary on collapsed runs: constant logfmt keys printed once.
-
-Check: #1076 harness (`bench/c14`) shows keep lead, +2 pp on this category with full anchor retention.
-
-Plan: extend the existing log run-collapser in `src/plugins/cmd` so collapsed logfmt runs print constant `key=value` pairs once and list only varying keys; keep error/WARN lines verbatim; fixture test asserting anchors retained and tokens ≤ raw, `expand <id>` returns raw; measure on `bench/fixtures` logs.
-
-Blocked: (1) `cmd` has no logfmt run-collapser to extend today, only `dedupe = "normalized"` (`rules.rs`, no default rule uses it), so this is a new collapse mode, not a tweak; (2) the Check (+2 pp, rtok already 94.5 % vs lean-ctx 87.4 %) is measurable only with the #1076 harness (`bench/c14`, PR open, not on main). Take it again after #1076 merges.
-
 
 ### T686. MCP tool catalogs
 
