@@ -13,6 +13,16 @@ just example
 just readme-check
 ```
 
+jactionlint and hk are pinned in `mise.toml`. `.github/jactionlint.yaml` applies the default
+profile and the baseline `.github/jactionlint-baseline.json` and skips the dist-generated
+`release.yml`. `hk.pkl` runs jactionlint as a pre-push hook:
+
+```bash
+mise x -- jactionlint                  # lint workflows, composite actions, dependabot.yml
+mise x -- jactionlint --baseline-write # refresh the baseline after fixing findings
+mise x -- hk install --mise            # install the pre-push hook once per clone
+```
+
 SonarCloud OSS (main-branch analysis): [`docs/sonarcloud-setup.md`](docs/sonarcloud-setup.md).
 
 Do not invent metrics or A/B wins in docs. Numbers in the README and
