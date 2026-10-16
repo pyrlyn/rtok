@@ -651,7 +651,10 @@ fn format(argv: &[String], output: &str) -> Option<String> {
         ("ls", _) if super::compact::ls_long(argv) => super::compact::ls_l(output),
         ("cat", _) => super::catfile::outline_of(argv, output),
         ("grep", _) | ("rg", _) | ("git", "grep") => super::grep::group(argv, output),
-        ("git", "log") => Some(output.lines().take(20).collect::<Vec<_>>().join("\n")),
+        ("git", "log") => Some(
+            git_log(output)
+                .unwrap_or_else(|| output.lines().take(20).collect::<Vec<_>>().join("\n")),
+        ),
         ("gh", _) => super::gh::format(argv, output),
         ("pytest", _) => Some(
             super::python::pytest(output)
@@ -671,6 +674,116 @@ fn format(argv: &[String], output: &str) -> Option<String> {
         ("mise", _) => super::mise::tidy(output),
         _ => None,
     }
+}
+
+/// Commits shown by [`git_log`] before the rest is counted as `… +K more`.
+const GIT_LOG_MAX_COMMITS: usize = 100;
+
+struct Commit<'a> {
+    sha: &'a str,
+    author: &'a str,
+    date: String,
+    year: &'a str,
+    subject: &'a str,
+    stat: Vec<&'a str>,
+}
+
+/// `git log` in its default (medium) format, one line per commit: short hash, date,
+/// subject; the most frequent author is named once in a header line, the others per line. `--stat` file lines
+/// and the `N files changed` summary are kept under their commit. Every commit up to
+/// [`GIT_LOG_MAX_COMMITS`] is listed, where a head cut kept only the first four.
+/// `None` for any other shape (`--oneline`, `--format=…`, `-p`), which keeps the old cut.
+fn git_log(output: &str) -> Option<String> {
+    let mut commits: Vec<Commit> = Vec::new();
+    for line in output.lines() {
+        if let Some(rest) = line.strip_prefix("commit ") {
+            let sha = rest.split_whitespace().next()?;
+            if sha.len() < 7 || !sha.bytes().all(|b| b.is_ascii_hexdigit()) {
+                return None;
+            }
+            commits.push(Commit {
+                sha: &sha[..7],
+                author: "",
+                date: String::new(),
+                year: "",
+                subject: "",
+                stat: Vec::new(),
+            });
+            continue;
+        }
+        let c = commits.last_mut()?;
+        if let Some(a) = line.strip_prefix("Author:") {
+            let a = a.trim();
+            c.author = a.split(" <").next().unwrap_or(a);
+        } else if let Some(d) = line.strip_prefix("Date:") {
+            // `Wed Oct 14 23:25:53 2026 +0300` → `Oct 14`, year kept aside.
+            let parts: Vec<&str> = d.split_whitespace().collect();
+            if parts.len() >= 5 {
+                c.date = format!("{} {}", parts[1], parts[2]);
+                c.year = parts[4];
+            }
+        } else if line.starts_with("Merge:") || line.trim().is_empty() {
+        } else if let Some(body) = line.strip_prefix("    ") {
+            if c.subject.is_empty() {
+                c.subject = body.trim();
+            }
+        } else if line.starts_with(' ') && (line.contains(" | ") || line.contains(" changed")) {
+            c.stat.push(line.trim());
+        } else if line.starts_with("diff --git") || line.starts_with("@@") {
+            return None;
+        }
+    }
+    if commits.is_empty() || commits.iter().any(|c| c.date.is_empty()) {
+        return None;
+    }
+    // The most frequent author goes in the header once; only the others are named per line.
+    let mut counts: Vec<(&str, usize)> = Vec::new();
+    for c in &commits {
+        match counts.iter_mut().find(|(a, _)| *a == c.author) {
+            Some((_, n)) => *n += 1,
+            None => counts.push((c.author, 1)),
+        }
+    }
+    let main_author = counts
+        .iter()
+        .fold(
+            ("", 0),
+            |best, &(a, n)| if n > best.1 { (a, n) } else { best },
+        )
+        .0;
+    let one_year = commits.iter().all(|c| c.year == commits[0].year);
+    let mut out = Vec::new();
+    let mut head: Vec<String> = Vec::new();
+    if !main_author.is_empty() {
+        head.push(if counts.len() == 1 {
+            main_author.to_string()
+        } else {
+            format!("{main_author} unless named")
+        });
+    }
+    if one_year {
+        head.push(commits[0].year.to_string());
+    }
+    if !head.is_empty() {
+        out.push(head.join(" · "));
+    }
+    for c in commits.iter().take(GIT_LOG_MAX_COMMITS) {
+        let date = if one_year {
+            c.date.clone()
+        } else {
+            format!("{} {}", c.date, c.year)
+        };
+        let mut l = format!("{} {date} {}", c.sha, c.subject);
+        if c.author != main_author {
+            l.push_str(&format!(" — {}", c.author));
+        }
+        out.push(l);
+        out.extend(c.stat.iter().map(|s| format!("  {s}")));
+    }
+    if commits.len() > GIT_LOG_MAX_COMMITS {
+        out.push(format!("… +{} more", commits.len() - GIT_LOG_MAX_COMMITS));
+    }
+    Some(out.join("\n"))
 }
 
 /// T684: `wc` right-aligns its counts in padded columns; the numbers, names and the
@@ -1607,6 +1720,40 @@ mod tests {
         assert!(got.contains("1 init"), "{got}");
         assert!(got.contains("42 worker-7"), "{got}");
         assert!(!got.contains("PID"), "{got}");
+    }
+
+    #[test]
+    fn git_log_lists_every_commit_with_authors_when_mixed() {
+        let raw = "commit 1111111111111111111111111111111111111111\nAuthor: Ann <a@x>\nDate:   Wed Oct 14 10:00:00 2026 +0300\n\n    first\n\n    body line\n\ncommit 2222222222222222222222222222222222222222\nAuthor: Bob <b@x>\nDate:   Tue Oct 13 10:00:00 2025 +0300\n\n    second\n";
+        let out = git_log(raw).unwrap();
+        assert_eq!(
+            out,
+            "Ann unless named\n1111111 Oct 14 2026 first\n2222222 Oct 13 2025 second — Bob"
+        );
+    }
+
+    #[test]
+    fn git_log_keeps_stat_lines_under_their_commit() {
+        let raw = "commit 1111111111111111111111111111111111111111\nAuthor: Ann <a@x>\nDate:   Wed Oct 14 10:00:00 2026 +0300\n\n    first\n\n src/a.rs | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n";
+        let out = git_log(raw).unwrap();
+        assert!(out.contains("1111111 Oct 14 first"), "{out}");
+        assert!(out.contains("  src/a.rs | 2 +-"), "{out}");
+        assert!(out.contains("  1 file changed"), "{out}");
+    }
+
+    #[test]
+    fn git_log_other_shapes_keep_the_head_cut() {
+        assert!(git_log("1111111 first\n2222222 second\n").is_none());
+        let patch = "commit 1111111111111111111111111111111111111111\nAuthor: Ann <a@x>\nDate:   Wed Oct 14 10:00:00 2026 +0300\n\n    first\n\ndiff --git a/x b/x\n";
+        assert!(git_log(patch).is_none());
+    }
+
+    #[test]
+    fn git_log_caps_the_listing() {
+        let one = "commit 1111111111111111111111111111111111111111\nAuthor: Ann <a@x>\nDate:   Wed Oct 14 10:00:00 2026 +0300\n\n    c\n\n";
+        let out = git_log(&one.repeat(GIT_LOG_MAX_COMMITS + 5)).unwrap();
+        assert!(out.ends_with("… +5 more"), "{out}");
+        assert_eq!(out.lines().count(), GIT_LOG_MAX_COMMITS + 2);
     }
 
     /// T296: every `(bin, sub)` arm dispatched by `format()` above must have a golden `.in`
