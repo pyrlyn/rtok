@@ -161,7 +161,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T680 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T682 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T683 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T686 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T686 | todo | P2 | 3 | 0% | |
 
 
 
