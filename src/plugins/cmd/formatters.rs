@@ -16,6 +16,32 @@ pub fn compress(
     exit: i32,
     archive_id: &str,
 ) -> (String, &'static str) {
+    // T677: mise's install chatter sits in front of whatever the task prints, so it goes
+    // before the inner command's formatter or rule looks at the text. Dropping it is the
+    // mise formatter's work, even if nothing further shrinks.
+    if bin(&family_argv(argv)) == "mise"
+        && let Some(clean) = super::mise::tidy(output)
+    {
+        let (s, kind) = compress_text(settings, argv, &clean, exit, archive_id);
+        return (
+            s,
+            if matches!(kind, "raw" | "unmatched") {
+                "formatter"
+            } else {
+                kind
+            },
+        );
+    }
+    compress_text(settings, argv, output, exit, archive_id)
+}
+
+fn compress_text(
+    settings: &rules::Settings,
+    argv: &[String],
+    output: &str,
+    exit: i32,
+    archive_id: &str,
+) -> (String, &'static str) {
     // T176: `sed -n 1,620p`, `| tail -300`, `grep -A3` already printed what was asked
     // for; a second cut here only sent the agent to `expand` for the same bytes. This
     // stays ahead of the mix check: `cargo test | tail -300` is bounded even though it
@@ -134,7 +160,7 @@ pub(crate) use crate::names::cmd_stem;
 /// Stems with a Rust formatter (any subcommand). `rtok stats` labels the whole stem.
 const FORMATTER_STEMS: &[&str] = &[
     "cargo", "git", "pytest", "jest", "vitest", "tree", "go", "docker", "kubectl", "ps", "df",
-    "sqlite3", "wc",
+    "sqlite3", "wc", "mise",
 ];
 
 /// T50.1: how `rtok stats` labels a Bash family — `formatter`, named `rule`, or `default`.
@@ -568,7 +594,7 @@ fn looks_like_invocation(words: &[String]) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
 
-fn strip_ansi(s: &str) -> String {
+pub(super) fn strip_ansi(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     let mut chars = s.chars().peekable();
     while let Some(c) = chars.next() {
@@ -618,6 +644,7 @@ fn format(argv: &[String], output: &str) -> Option<String> {
         ("ps", "aux") => ps_aux(output),
         ("df", _) => df_table(output),
         ("sqlite3", _) => sqlite3_table(output),
+        ("mise", _) => super::mise::tidy(output),
         _ => None,
     }
 }
@@ -1578,6 +1605,7 @@ mod tests {
             ("df", ""),
             ("sqlite3", ""),
             ("wc", ""),
+            ("mise", ""),
         ];
         // A stem added to `FORMATTER_STEMS` without a row here fails too.
         for stem in FORMATTER_STEMS {
