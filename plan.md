@@ -44,7 +44,7 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T310.12 | todo | P2 | 3 | 0% | |
 | T314 | in progress | P2 | 3 | 60% | Grok Bot |
 | T315 | in progress | P2 | 3 | 60% | Grok Bot |
-| T317 | todo | P2 | 4 | 0% | |
+| T321 | todo | P2 | 4 | 0% | |
 
 
 
@@ -667,7 +667,7 @@ Dependencies: `owo-colors` 4 (`supports-colors`) is already a dependency (T20.2)
 
 Check: `tests/ui_style.rs` covers each line kind with emoji and colour on and off; `rtok hook`, MCP and `--json` output contain no ANSI escapes or emoji with both keys on and `CLICOLOR_FORCE=1`; piped output and `NO_COLOR=1` output have no colour; `just check`.
 
-### T317. `rtok agents junk list` and `clear`: per-agent junk with folders, sizes and space freed
+### T321. `rtok agents junk list` and `clear`: per-agent junk with folders, sizes and space freed
 
 Ivan, 2026-10-01: one command group to see and clean junk for every agent: `rtok agents junk list` to view and `rtok agents junk clear` to remove. For each agent, show its folders (as links), the size of each folder in KB/MB/GB, and how much space a clear would free. `clear` stays a dry run by default and deletes only with `--yes`, as T182's `rtok agents junk clear` does today.
 
@@ -707,7 +707,7 @@ Cache is junk for rtok itself and for every agent, listed with its size and clea
 **rtok's cache (row `rtok`):**
 
 - The per-project LSP state rtok confines language servers to (`<root>/.rtok-lsp-xdg/{cache,data,state,pub-cache}`, `src/plugins/graph/lsp.rs`): `cache` and `pub-cache` are `cache` kind (safe); `data` and `state` are `index` kind (review).
-- Graph/tags index rows and files for projects no longer in the registry (T316) or whose root is gone: `index` kind (review).
+- Graph/tags index rows and files for projects no longer in the registry (T320) or whose root is gone: `index` kind (review).
 - Any other directory under rtok's home or `$XDG_CACHE_HOME/rtok` (`~/Library/Caches/rtok` on macOS, `%LOCALAPPDATA%\rtok\cache` on Windows) that rtok writes as a cache, and every directory under rtok-owned paths carrying a valid `CACHEDIR.TAG` (the same test `worktree::list::is_cache_dir` uses).
 - Plugin download/staging caches (version-numbered plugin copies a host no longer points to, T279): `cache` kind (safe) once no host config references them.
 
@@ -745,7 +745,7 @@ Extra edge cases for these kinds:
 
 #### Old sessions: time only
 
-- **The only criterion is time.** A session is old (junk) when it has not been touched for longer than the threshold. Nothing else classifies a session as old for now: not its status (finished, errored, abandoned), size, number of messages, project, whether it is the newest session of its project, or whether it was ever resumed. Those criteria are out of scope for T317 and may come later as separate options.
+- **The only criterion is time.** A session is old (junk) when it has not been touched for longer than the threshold. Nothing else classifies a session as old for now: not its status (finished, errored, abandoned), size, number of messages, project, whether it is the newest session of its project, or whether it was ever resumed. Those criteria are out of scope for T321 and may come later as separate options.
 - **Setting:** `stale_session_days` in the `[agents.junk]` table of rtok's config. Default `3`. It lives in `config/default.toml` (shipped default), can be overridden in the user config (`~/.config/rtok/config.toml`), per project in `<git root>/.rtok.toml`, and per run through the environment (`RTOK_AGENTS_JUNK_STALE_SESSION_DAYS=7`), with the usual precedence (flags over env over project over user over default). `rtok config get agents.junk.stale_session_days` prints the effective value and `rtok config show --sources` shows where it came from. Documented in `docs/config.md` (and ru/uk).
 - **Value rules:** a whole number of days, `0` to `3650`. `0` means every session not currently open counts as old (useful for a full wipe, and `list` warns "threshold 0: every closed session is junk"). Fractions, negatives and non-numbers are rejected by `rtok config validate` and at load with an error naming the key; rtok then falls back to the default for that run and says so, rather than deleting with a wrong threshold.
 - **One-off override:** `rtok agents junk list|clear --session-days N` overrides the setting for that run only, and the output header shows the threshold in use ("old sessions: not touched for more than 3 days").
