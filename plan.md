@@ -159,8 +159,8 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T666.2 | todo | P2 | 3 | 0% | |
 | T687 | todo | P2 | 4 | 0% | |
 | T680 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T682 | todo | P2 | 3 | 0% | |
-| T683 | todo | P2 | 3 | 0% | |
+| T682 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T683 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T686 | todo | P2 | 3 | 0% | |
 
 
