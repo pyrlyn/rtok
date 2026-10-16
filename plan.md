@@ -158,7 +158,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T527 | in progress | P2 | 3 | 0% | MiMo / mimo |
 | T666.2 | todo | P2 | 3 | 0% | |
 | T687 | todo | P2 | 4 | 0% | |
-| T680 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T682 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T686 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 
@@ -1081,13 +1080,6 @@ Source: `docs/research/competitors-techniques.md` (techniques, licenses, links).
 
 
 
-### T680. git status 297
-
-Best competitor: lean-ctx 40.5 %. Design: one line per section with paths grouped by dir (`src/plugins/cmd/{a,b}.rs`), sigils, drop git hints; branch + ahead/behind.
-
-Check: #1076 harness (`bench/c14`) shows ≥ 60 % (rtk 62.5 %) on this category with full anchor retention.
-
-Plan: #1077 prints `git status` as porcelain XY codes. Remaining: group paths by directory (`src/plugins/cmd/{a,b}.rs`), one line per section, branch + ahead/behind, drop hints. Extend `git_status` in `compact.rs`; keep every path (test counts paths in/out); update golden `git_status*` floors.
 
 ### T682. git log 174
 
