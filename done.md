@@ -2807,6 +2807,16 @@ Check: ranking/forget tests on a fixture store; comparison file updated; `just c
 
 **Result (2026-10-15).** PR #1096. `search_notes` takes the best `3 × limit` bm25 hits and re-ranks them with `rank_blend(rank, retention_score(...))` (reciprocal rank offset 8, scaled by `0.4 + 0.6 × retention`), so a pinned or well-read note overtakes a neighbour of equal text while a match several places better stays ahead; a store with no use signal ranks as before. New `rtok memory forget [--project P] [--days N] [--apply]` retires unpinned, never-read notes older than `plugins.memory.forget_after_days` (default 90, 0 = needs `--days`); a dry run unless `--apply`; `user` and `decision` kinds, checkpoints and sessions are never forgotten, and a retired body stays readable. Tests: three ranking tests, two forget tests, a trycmd case, config coverage. The memory-bench row was not recorded and the comparison docs were not updated.
 
+### T665. Broader graph queries (codebase-memory-mcp)
+
+codebase-memory-mcp is broader (Cypher-style queries) (`docs/comparison/rtok-vs-codebase-memory-mcp.md`). Add the small query shapes agents actually used in our logs, without a heavy MCP surface. Savings both sides: **no data** for a shared corpus.
+
+Check: query shapes documented and tested; comparison file updated; `just check`.
+
+**Plan.** (1) List the query shapes agents used in our logs (`rtok stats`, `graph_events`) that `symbol`/`callers`/`impact`/`explore` do not answer in one call; compare with the Cypher shapes in `docs/comparison/rtok-vs-codebase-memory-mcp.md`. (2) Add at most two shapes as parameters of existing operations (no seventh/eighth tool): e.g. `callers` with `depth` and a `kind`/`path` filter, `outline` with `kind`. (3) Fail-first tests in `src/plugins/graph` + `tests/graph_contract.rs` for each shape, on the SQLite store only. (4) Document the shapes in `src/plugins/graph/README.md` and the comparison file; description tokens stay under the surface gate; `just check`.
+
+**Result (2026-10-16).** Two query shapes added as parameters of existing tools, so the surface stays seven tools (description tokens 169 of 170): `callers` with no `name` lists the unreferenced definitions that only the CLI `graph dead` showed, narrowed by `path` and `kind`; `outline(path, kind)` keeps the lines of one kind (`fn`, `struct`, …). Callers, callees, call paths and depth already existed (`callers`, `symbol`, `impact`, `explore`). Contract test `nameless_callers_lists_dead_definitions_and_outline_takes_a_kind` was written first and failed on the missing-`name` schema check. The take/skip table is `research.md` §43 (the comparison file `docs/comparison/rtok-vs-codebase-memory-mcp.md` is still on open PR #1071); the shape choice rests on the competitor's published shapes, not on an rtok log count, and no shared-corpus saving was measured.
+
 ### T664. Review/blast-radius features from code-review-graph
 
 code-review-graph is ahead on review features (~30 MCP tools) while rtok wins on cost (`docs/comparison/rtok-vs-code-review-graph.md`). Port only the features that save tokens or answer "what does this edit touch?" without the full tool bill. Savings both sides: **no data** in rtok docs for a shared corpus.
