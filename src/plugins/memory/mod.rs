@@ -4,7 +4,9 @@
 
 //! Notes API: `mem_save` / `mem_search` / `mem_get` (plan T6.1).
 
+mod admit;
 pub mod export;
+pub mod extract;
 mod files;
 pub mod handoff;
 pub mod import;
@@ -420,10 +422,69 @@ pub fn mem_save(
     body: &str,
     project: Option<&str>,
 ) -> anyhow::Result<(i32, bool)> {
-    let proj = project
+    save_scoped(rt, kind, title, body, save_scope(project).as_deref())
+}
+
+fn save_scope(project: Option<&str>) -> Option<String> {
+    project
         .map(str::to_string)
-        .or_else(|| std::env::current_dir().ok().and_then(|d| project_name(&d)));
-    save_scoped(rt, kind, title, body, proj.as_deref())
+        .or_else(|| std::env::current_dir().ok().and_then(|d| project_name(&d)))
+}
+
+/// What the MCP `mem_save` did: stored the note, or refused it at the admission gate (T671).
+#[derive(Debug, PartialEq, Eq)]
+pub enum Saved {
+    Stored {
+        id: i32,
+        updated: bool,
+    },
+    /// `existing` names the stored note a duplicate repeats.
+    Refused {
+        reason: &'static str,
+        existing: Option<i32>,
+    },
+}
+
+/// [`mem_save`] behind the admission gate (`plugins.memory.admit`). A save that names an
+/// existing `(project, kind, title)` is a revision and always passes the duplicate check.
+pub fn mem_save_gated(
+    rt: &crate::plugin::Runtime,
+    kind: &str,
+    title: &str,
+    body: &str,
+    project: Option<&str>,
+) -> anyhow::Result<Saved> {
+    let cfg = &rt.config.plugins.memory;
+    let scope = save_scope(project);
+    let (clean_title, clean_body) = (strip_private(title), strip_private(body));
+    // An empty title or body keeps the rejection `save_scoped` already gives it.
+    if cfg.admit && !clean_title.is_empty() && !clean_body.is_empty() {
+        let stored =
+            rt.store
+                .admit_candidates(scope.as_deref(), kind, &clean_title, admit::WINDOW)?;
+        match admit::judge(
+            cfg.admit_min_chars,
+            cfg.admit_similarity,
+            &clean_body,
+            &stored,
+        ) {
+            admit::Verdict::Admit => {}
+            admit::Verdict::TooShort => {
+                return Ok(Saved::Refused {
+                    reason: "too_short",
+                    existing: None,
+                });
+            }
+            admit::Verdict::Duplicate(id) => {
+                return Ok(Saved::Refused {
+                    reason: "duplicate",
+                    existing: Some(id),
+                });
+            }
+        }
+    }
+    let (id, updated) = save_scoped(rt, kind, title, body, scope.as_deref())?;
+    Ok(Saved::Stored { id, updated })
 }
 
 /// `mem_save` with the scope already decided: `None` is a global note, never an
@@ -529,10 +590,24 @@ pub fn mem_search(
     query: &str,
     limit: u32,
 ) -> anyhow::Result<Vec<crate::store::NoteHit>> {
+    mem_search_in(rt, query, limit, save_scope(None).as_deref())
+}
+
+/// [`mem_search`] for an explicit `project` (T667): its notes win a near tie against other
+/// projects' notes. The vector and hybrid paths (opt-in) do not take the boost.
+pub fn mem_search_in(
+    rt: &crate::plugin::Runtime,
+    query: &str,
+    limit: u32,
+    project: Option<&str>,
+) -> anyhow::Result<Vec<crate::store::NoteHit>> {
     let lim = limit.max(1);
     let cfg = &rt.config.plugins.memory.embed;
     if !cfg.enabled {
-        return rt.store.search_notes(query, lim).map_err(Into::into);
+        return rt
+            .store
+            .search_notes_in(query, lim, project)
+            .map_err(Into::into);
     }
     let embed = crate::store::embed_settings(cfg);
     if cfg.hybrid {
@@ -1658,6 +1733,83 @@ mod tests {
         assert!(ctx.estimate(&inj.text, Class::Prose) <= 200, "{}", inj.text);
     }
 
+    fn gated(cx: &crate::plugin::Runtime, title: &str, body: &str) -> Saved {
+        mem_save_gated(cx, "note", title, body, Some("t671")).unwrap()
+    }
+
+    #[test]
+    fn a_repeated_body_under_a_new_title_is_refused_with_the_stored_id() {
+        let cx = crate::plugin::Runtime::in_memory("t671-dup").unwrap();
+        let Saved::Stored { id, .. } =
+            gated(&cx, "cache", "The walrus cache evicts the oldest entry.")
+        else {
+            panic!("first save must be stored");
+        };
+        let again = gated(
+            &cx,
+            "cache again",
+            "the walrus  cache evicts the OLDEST entry.",
+        );
+        assert_eq!(
+            again,
+            Saved::Refused {
+                reason: "duplicate",
+                existing: Some(id)
+            }
+        );
+        assert_eq!(
+            cx.store.list_note_titles(Some("t671"), 10).unwrap().len(),
+            1
+        );
+    }
+
+    #[test]
+    fn a_revision_under_the_same_topic_key_still_updates() {
+        let cx = crate::plugin::Runtime::in_memory("t671-rev").unwrap();
+        gated(&cx, "cache", "The walrus cache evicts the oldest entry.");
+        let again = gated(
+            &cx,
+            "cache",
+            "The walrus cache evicts the oldest entry first.",
+        );
+        assert!(
+            matches!(again, Saved::Stored { updated: true, .. }),
+            "{again:?}"
+        );
+    }
+
+    #[test]
+    fn a_body_under_the_floor_is_refused_and_an_ordinary_note_is_stored() {
+        let cx = crate::plugin::Runtime::in_memory("t671-short").unwrap();
+        assert_eq!(
+            gated(&cx, "tiny", "ok"),
+            Saved::Refused {
+                reason: "too_short",
+                existing: None
+            }
+        );
+        let stored = gated(&cx, "real", "Hooks exit zero within ten milliseconds.");
+        assert!(
+            matches!(stored, Saved::Stored { updated: false, .. }),
+            "{stored:?}"
+        );
+    }
+
+    #[test]
+    fn the_gate_is_per_project_and_can_be_switched_off() {
+        let mut cx = crate::plugin::Runtime::in_memory("t671-off").unwrap();
+        let body = "The walrus cache evicts the oldest entry.";
+        gated(&cx, "cache", body);
+        let other = mem_save_gated(&cx, "note", "cache", body, Some("elsewhere")).unwrap();
+        assert!(matches!(other, Saved::Stored { .. }), "{other:?}");
+        cx.config.plugins.memory.admit = false;
+        let twin = gated(&cx, "cache twin", body);
+        assert!(
+            matches!(twin, Saved::Stored { updated: false, .. }),
+            "{twin:?}"
+        );
+    }
+
     fn first_title(cx: &crate::plugin::Runtime, query: &str) -> String {
         cx.store.search_notes(query, 5).unwrap()[0].title.clone()
     }
@@ -1763,6 +1915,73 @@ mod tests {
         cx.config.plugins.memory.forget_after_days = 0;
         let out = mem_forget(&cx, None, None, true).unwrap();
         assert!(out.starts_with("forget is off"), "{out}");
+    }
+
+    fn first_in(cx: &crate::plugin::Runtime, query: &str, project: Option<&str>) -> String {
+        mem_search_in(cx, query, 5, project).unwrap()[0]
+            .title
+            .clone()
+    }
+
+    #[test]
+    fn the_current_project_leads_an_equal_text_twin_from_another() {
+        let cx = crate::plugin::Runtime::in_memory("t667-project").unwrap();
+        mem_save(
+            &cx,
+            "note",
+            "twin-beta",
+            "quokka ledger entry",
+            Some("beta"),
+        )
+        .unwrap();
+        mem_save(
+            &cx,
+            "note",
+            "twin-alpha",
+            "quokka ledger entry",
+            Some("alpha"),
+        )
+        .unwrap();
+        assert_eq!(
+            first_in(&cx, "quokka", None),
+            "twin-beta",
+            "no project keeps bm25 order"
+        );
+        assert_eq!(first_in(&cx, "quokka", Some("alpha")), "twin-alpha");
+        assert_eq!(first_in(&cx, "quokka", Some("beta")), "twin-beta");
+    }
+
+    #[test]
+    fn a_project_note_far_down_the_text_ranking_does_not_beat_the_best_match() {
+        let cx = crate::plugin::Runtime::in_memory("t667-far").unwrap();
+        let filler = "unrelated words about caches and hooks ".repeat(8);
+        mem_save(
+            &cx,
+            "note",
+            "best",
+            "quokka quokka quokka quokka",
+            Some("beta"),
+        )
+        .unwrap();
+        for (title, hits) in [("mid1", "quokka quokka quokka"), ("mid2", "quokka quokka")] {
+            mem_save(
+                &cx,
+                "note",
+                title,
+                &format!("{filler} {hits}"),
+                Some("beta"),
+            )
+            .unwrap();
+        }
+        mem_save(
+            &cx,
+            "note",
+            "weak",
+            &format!("{filler} quokka"),
+            Some("alpha"),
+        )
+        .unwrap();
+        assert_eq!(first_in(&cx, "quokka", Some("alpha")), "best");
     }
 
     #[test]

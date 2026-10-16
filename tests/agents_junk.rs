@@ -8,6 +8,9 @@
 //! backdating a call's `ts` needs `Store::set_call_ts`, `#[cfg(test)]`-only and so reachable
 //! only from inside the crate, never from this external test binary.
 
+// T902: the `git`/`age_all`/`names` helpers are used by unix-only tests, so Windows clippy sees them as dead.
+#![cfg_attr(windows, allow(dead_code))]
+
 mod common;
 
 use std::fs;

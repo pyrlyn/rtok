@@ -578,6 +578,9 @@ startup_recall = true                 # SessionStart(startup) відновлює
 handoff        = true                 # MCP-інструмент T59.6 для зведення субагента
 spawn_brief        = true             # T130: зведення-вказівник для SubagentStart
 spawn_brief_tokens = 300              # T130: бюджет токенів для брифу під час запуску
+admit              = true             # T671: mem_save відхиляє надто коротку або дубльовану нотатку
+admit_min_chars    = 5                # T671: найкоротше тіло, яке пропускає шлюз
+admit_similarity   = 85               # T671: відсоток збігу триграм, що вважається дублем
 forget_after_days = 90                # T669: «memory forget» вилучає нотатки, які не читали так довго; 0 — потрібен --days
 
 [plugins.memory.embed]
@@ -589,6 +592,12 @@ hybrid     = true                     # коли ввімкнено: RRF(fts5, k
 url         = ""                      # "http": базовий URL, напр. "http://localhost:11434/v1" (Ollama) або "https://api.openai.com/v1"; текст нотаток надсилається туди
 api_key_env = ""                      # "http": назва змінної середовища з ключем; порожньо = без заголовка Authorization
 max_chars   = 8000                    # "http": довший текст не надсилається (працює звичайний пошук по нотатках)
+
+[plugins.memory.extract]
+enabled         = false                 # rtok memory extract: off by default, a model call can cost money
+command         = []                    # program reading the transcript on stdin, one {"title","body"} JSON line out per note
+max_notes       = 5                     # notes kept per run
+max_input_bytes = 60000                 # transcript bytes sent to the program; the end of the session is kept
 
 [plugins.graph]
 enabled    = true

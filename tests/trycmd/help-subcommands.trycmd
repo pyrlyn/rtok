@@ -92,14 +92,14 @@ Options:
   -h, --help                  Print help
 
 $ rtok discover --help
-Bash commands no filter covers yet, ranked by the output tokens they sent to the model
+Shell commands your agents ran that have no rule or formatter, most output first
 
 Usage: rtok discover [OPTIONS]
 
 Options:
       --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
-      --since <SINCE>  How far back to read Bash calls (`30d`, `24h`)
-      --top <TOP>      Families to list [default: 15]
+      --since <SINCE>  How far back to read recorded shell calls (`30d`, `24h`) [default: 30d]
+      --limit <LIMIT>  Rows to print, most output first [default: 20]
       --json           JSON instead of the table
   -h, --help           Print help
 
@@ -757,6 +757,7 @@ Usage: rtok memory [OPTIONS] <COMMAND>
 Commands:
   import   Import `{kind,title,body}` JSONL; dedupe by body sha256
   export   Print every note but session checkpoints as the JSONL `import` reads
+  extract  Save notes an external program extracts from a transcript (off by default)
   retire   Retire a note: a tombstone — never recalled or searched, body kept
   forget   Retire notes nobody read for a long time (a dry run unless `--apply`)
   pin      Pin a note so it leads SessionStart recall

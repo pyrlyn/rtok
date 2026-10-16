@@ -1,0 +1,3 @@
+F401 ×70: `os.path0` imported but unused (src/app/mod0.py:10:1, src/app/mod1.py:11:2, src/app/mod2.py:12:3, …)
+Found 70 errors.
+[*] 70 fixable with the `--fix` option.

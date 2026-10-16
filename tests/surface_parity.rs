@@ -903,6 +903,10 @@ const EXEMPT: &[(&str, &str)] = &[
     ("bench", "runs the A/B schedule and writes Measurement rows"),
     ("memory import", "inserts note rows"),
     (
+        "memory extract",
+        "runs the user's configured program, then inserts note rows (T666.1)",
+    ),
+    (
         "docs fetch",
         "downloads rustdoc JSON into the local cache; not a dashboard page",
     ),
@@ -1070,10 +1074,6 @@ const EXEMPT: &[(&str, &str)] = &[
         "report",
         "renders model::report_ledgers into a document (P22); no snapshot page",
     ),
-    (
-        "discover",
-        "reads the recorded Bash hook bodies on demand through model::discover (T661); no snapshot page",
-    ),
     ("graph impact", "need a target; CLI/MCP only"),
     ("graph affected", "need a target; CLI/MCP only"),
     ("graph review", "need a diff; CLI only"),
@@ -1116,6 +1116,10 @@ const EXEMPT: &[(&str, &str)] = &[
     (
         "logs export",
         "the same Logs selection, unnumbered and uncoloured",
+    ),
+    (
+        "discover",
+        "an on-demand query of the recorded shell history (`model::discover`), not a snapshot page; the ranking is one function the CLI renders (T688)",
     ),
 ];
 

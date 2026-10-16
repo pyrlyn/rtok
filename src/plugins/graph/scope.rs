@@ -693,6 +693,33 @@ pub fn dead(cx: &Ctx, scope: &[Member]) -> Result<String> {
     capped(cx, &notes, body)
 }
 
+/// `callers` with no name (T665): the unreferenced definitions `graph dead` lists, narrowed by the
+/// `path` and `kind` filters — "functions nobody calls under src/x" in one call, no new tool.
+pub fn dead_filtered(cx: &Ctx, scope: &[Member], filter: &Filter) -> Result<String> {
+    let (done, notes) = dead_by_project(cx, scope, super::dead_rows)?;
+    let tagged = scope.len() > 1;
+    let mut body = String::new();
+    for (m, rows) in &done {
+        let tag = if tagged { label(m) } else { String::new() };
+        for r in rows
+            .iter()
+            .filter(|r| filter.path_ok(&r.path) && filter.kind_ok(&r.kind))
+        {
+            body.push_str(&format!(
+                "{tag}{}:{} {} {}\n",
+                r.path, r.line, r.kind, r.name
+            ));
+        }
+    }
+    if body.is_empty() {
+        if done.iter().all(|(m, _)| text::applies(cx, &m.root)) {
+            return Ok(notes);
+        }
+        return Ok(format!("{notes}no dead code{}", filter.scope_note()));
+    }
+    capped(cx, &notes, body)
+}
+
 /// Tests that reach the changes: `changed[i]` are the changed paths of `scope[i]`. Each
 /// project's changes start a walk over the whole scope, so a change in B finds the tests of A
 /// that call it; every test is listed under the project that holds it, with its command to run

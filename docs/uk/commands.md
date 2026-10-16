@@ -22,7 +22,7 @@ lang: uk
 | `rtok filter --stdin` | фільтрує дані, не виконуючи їх (OpenCode `tool.execute.after`) |
 | `rtok expand <id>` | друкує заархівовані дані — цілком або за `--lines` / `--grep` |
 | `rtok stats` | вимірювання з логів сесій і з проксі |
-| `rtok discover` | команди Bash, яким бракує форматера або іменованого правила, за кількістю токенів виводу, що дійшли до моделі (`--since`, `--top`, `--json`) |
+| `rtok discover` | shell-команди ваших агентів без правила й форматера, спершу з найбільшим виводом |
 | `rtok doctor` | перевіряє хуки, MCP-сервери, ланцюжок проксі — зокрема скільки кожен коштує за хід, і скільки місця звільнить `rtok agents junk clear` |
 | `rtok agents install claude\|cursor\|codex\|opencode\|kilo\|pi\|zcode\|kimi\|copilot\|aider\|windsurf\|zed` | встановлює в хост із резервними копіями; `--dry-run` |
 | `rtok agents uninstall claude\|cursor\|codex\|opencode\|kilo\|pi\|zcode\|kimi\|copilot\|aider\|windsurf\|zed` | прибирає rtok із хоста з резервними копіями; `--dry-run` |
@@ -166,6 +166,13 @@ lang: uk
 з `Measurement`, і від проксі, який фіксує реальне `usage` з відповідей API.
 `rtok stats --calibrate` заново підганяє оцінювач «символів на токен» під ці реальні
 лічильники.
+
+`rtok discover [--since 30d] [--limit 20] [--json]` читає виклики shell (`PostToolUse`), які хук
+вже зберіг у базі, і перелічує сімейства команд без правила й без форматера (обрізання за
+замовчуванням усе одно діє), відсортовані за токенами виводу, прочитаними агентом. Нічого не
+запускає наново й не заявляє заощадження: заощадження — це лише рядок `Measurement`. Виклики, чиє
+тіло перевищило `core.call_io_inline_bytes`, не зберігалися й видимі як `unreadable rows`. Наступне
+сімейство правил обирайте за верхніми рядками.
 
 `rtok bench` запускає дві конфігурації хоста на фіксованому наборі задач у `bench/tasks.toml` і
 порівнює їх.

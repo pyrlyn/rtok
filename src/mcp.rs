@@ -874,8 +874,16 @@ fn mem_save(cx: &Runtime, args: &Value) -> Result<String> {
     let title = args["title"].as_str().unwrap_or("");
     let body = args["body"].as_str().unwrap_or("");
     let project = args["project"].as_str();
-    let (id, updated) = crate::plugins::memory::mem_save(cx, kind, title, body, project)?;
-    Ok(json!({"id": id, "updated": updated}).to_string())
+    use crate::plugins::memory::Saved;
+    Ok(
+        match crate::plugins::memory::mem_save_gated(cx, kind, title, body, project)? {
+            Saved::Stored { id, updated } => json!({"id": id, "updated": updated}),
+            Saved::Refused { reason, existing } => {
+                json!({"id": existing, "updated": false, "refused": reason})
+            }
+        }
+        .to_string(),
+    )
 }
 
 #[cfg(feature = "docs")]
@@ -919,12 +927,30 @@ fn mem_search(cx: &Runtime, args: &Value) -> Result<String> {
     let max = u64::from(cx.config.plugins.memory.search_limit);
     let limit = args["limit"].as_u64().map_or(max, |n| n.min(max)) as u32;
     let hits = crate::plugins::memory::mem_search(cx, query, limit)?;
-    Ok(json!(
-        hits.iter()
-            .map(|h| json!({"id": h.id, "title": h.title, "snippet": h.snippet}))
-            .collect::<Vec<_>>()
-    )
-    .to_string())
+    if hits.is_empty() {
+        return Ok("no notes match".into());
+    }
+    Ok(hits
+        .iter()
+        .map(|h| mem_hit_line(h.id, &h.title, &h.snippet))
+        .collect::<Vec<_>>()
+        .join("\n"))
+}
+
+/// One `mem_search` hit per line: `id title: snippet`. The title is dropped when the
+/// snippet already contains it. A JSON object per hit repeated three keys and the quoting
+/// on every line (bench/c14 batch 3: 22-26 % of the reply).
+#[cfg(feature = "memory")]
+fn mem_hit_line(id: i32, title: &str, snippet: &str) -> String {
+    let snippet = snippet.split_whitespace().collect::<Vec<_>>().join(" ");
+    let title = title.trim();
+    if snippet.is_empty() || snippet == title {
+        format!("{id} {title}")
+    } else if title.is_empty() || snippet.contains(title) {
+        format!("{id} {snippet}")
+    } else {
+        format!("{id} {title}: {snippet}")
+    }
 }
 
 /// A JSON unsigned integer as `u32`, saturating: `as u32` would wrap `2^32 + 1` to `1`.
@@ -1033,6 +1059,21 @@ fn handoff(cx: &Runtime, args: &Value) -> Result<String> {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "memory")]
+    #[test]
+    fn mem_hit_line_drops_a_title_the_snippet_repeats() {
+        assert_eq!(
+            super::mem_hit_line(3, "jwt", "use jwt\n  for sessions"),
+            "3 use jwt for sessions"
+        );
+        assert_eq!(
+            super::mem_hit_line(4, "auth", "tokens expire"),
+            "4 auth: tokens expire"
+        );
+        assert_eq!(super::mem_hit_line(5, "auth", ""), "5 auth");
+        assert_eq!(super::mem_hit_line(6, "", "body only"), "6 body only");
+    }
+
     use super::*;
     use crate::store::Store;
     use crate::testutil::config as tmp;
@@ -1591,6 +1632,104 @@ mod tests {
             "notes table must stay empty"
         );
         let _ = fs::remove_dir_all(dir);
+    }
+
+    /// `tools/call` through the server; `(isError, text)`.
+    #[cfg(feature = "memory")]
+    fn call_text(server: &Server, name: &str, args: Value) -> (bool, String) {
+        let line = json!({"jsonrpc":"2.0","id":1,"method":"tools/call",
+            "params":{"name":name,"arguments":args}})
+        .to_string();
+        let v: Value = serde_json::from_str(&server.handle_line(&line).unwrap()).unwrap();
+        (
+            v["result"]["isError"] == true,
+            v["result"]["content"][0]["text"]
+                .as_str()
+                .unwrap_or_default()
+                .to_string(),
+        )
+    }
+
+    /// `mem_search` answers plain text, one `id title: snippet` line per note — not the
+    /// JSON array it used to — and `no notes match` (not `[]`) when nothing matches.
+    #[cfg(feature = "memory")]
+    #[test]
+    fn mem_search_answers_one_text_line_per_note() {
+        let (cfg, dir) = tmp("mcp-mem-search-lines");
+        let server = Server::new(&cfg).unwrap();
+        let (_, empty) = call_text(&server, "mem_search", json!({"query": "quokka"}));
+        assert_eq!(empty, "no notes match");
+        for (title, body) in [
+            ("alpha", "quokka first\nsecond line"),
+            ("beta: gamma", "quokka other"),
+        ] {
+            let (err, saved) =
+                call_text(&server, "mem_save", json!({"title": title, "body": body}));
+            assert!(!err, "{saved}");
+        }
+        let (err, text) = call_text(&server, "mem_search", json!({"query": "quokka"}));
+        assert!(!err, "{text}");
+        assert!(
+            serde_json::from_str::<Value>(&text).is_err(),
+            "reply must not be JSON: {text}"
+        );
+        assert!(
+            !text.contains("\"snippet\"") && !text.contains("\"title\""),
+            "{text}"
+        );
+        let lines: Vec<&str> = text.lines().collect();
+        assert_eq!(lines.len(), 2, "one line per note: {text}");
+        for l in &lines {
+            let (id, rest) = l.split_once(' ').expect("`id rest`");
+            assert!(id.parse::<i32>().is_ok(), "{l}");
+            assert!(rest.contains("quokka"), "{l}");
+        }
+        assert!(lines.iter().any(|l| l.contains("alpha: ")), "{text}");
+        assert!(lines.iter().any(|l| l.contains("beta: gamma: ")), "{text}");
+        // `limit` still caps the number of lines.
+        let (_, one) = call_text(
+            &server,
+            "mem_search",
+            json!({"query": "quokka", "limit": 1}),
+        );
+        assert_eq!(one.lines().count(), 1, "{one}");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// The schema still advertises `query` (required) and `limit` (integer) and the tool
+    /// stays read-only; only the reply shape changed.
+    #[cfg(feature = "memory")]
+    #[test]
+    fn mem_search_schema_is_unchanged_by_the_text_reply() {
+        let (cfg, dir) = tmp("mcp-mem-search-schema");
+        let server = Server::new(&cfg).unwrap();
+        let line = r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#;
+        let v: Value = serde_json::from_str(&server.handle_line(line).unwrap()).unwrap();
+        let tool = v["result"]["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|t| t["name"] == "mem_search")
+            .unwrap_or_else(|| panic!("mem_search not listed: {v}"));
+        assert_eq!(tool["inputSchema"]["required"], json!(["query"]), "{tool}");
+        assert_eq!(
+            tool["inputSchema"]["properties"]["limit"]["type"], "integer",
+            "{tool}"
+        );
+        assert_eq!(tool["annotations"]["readOnlyHint"], true, "{tool}");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// A hit is always one line: newlines and runs of blanks in the snippet collapse, and a
+    /// colon in the title or snippet does not change the `id` prefix.
+    #[cfg(feature = "memory")]
+    #[test]
+    fn mem_hit_line_is_one_line_and_keeps_colons() {
+        let l = super::mem_hit_line(7, "a: b", "x:\n\ty\r\n  z");
+        assert_eq!(l, "7 a: b: x: y z");
+        assert!(!l.contains('\n') && !l.contains('\r'), "{l}");
+        assert_eq!(super::mem_hit_line(8, " t ", "t"), "8 t");
+        assert_eq!(super::mem_hit_line(9, "t", " "), "9 t");
     }
 
     /// T283.1: `initialize` then `whoami` through the server's own JSON-RPC path, as a host

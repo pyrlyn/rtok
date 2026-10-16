@@ -197,6 +197,9 @@ Every effective key with its origin — the `config show --sources` page.
 | plugins.inject.modes_dir | ~/.rtok/modes | default |
 | plugins.json_tree.enabled | false | default |
 | plugins.measure.enabled | true | default |
+| plugins.memory.admit | true | default |
+| plugins.memory.admit_min_chars | 5 | default |
+| plugins.memory.admit_similarity | 85 | default |
 | plugins.memory.checkpoint_tokens | 400 | default |
 | plugins.memory.embed.api_key_env |  | default |
 | plugins.memory.embed.dimensions | 384 | default |
@@ -207,6 +210,10 @@ Every effective key with its origin — the `config show --sources` page.
 | plugins.memory.embed.provider | local | default |
 | plugins.memory.embed.url |  | default |
 | plugins.memory.enabled | true | default |
+| plugins.memory.extract.command | [] | default |
+| plugins.memory.extract.enabled | false | default |
+| plugins.memory.extract.max_input_bytes | 60000 | default |
+| plugins.memory.extract.max_notes | 5 | default |
 | plugins.memory.forget_after_days | 90 | default |
 | plugins.memory.handoff | true | default |
 | plugins.memory.prompt_recall | 5 | default |
@@ -460,7 +467,7 @@ Every effective key with its origin — the `config show --sources` page.
 | worktree.enabled | true | default |
 | worktree.root | .rtok/worktrees | default |
 
-414 keys.
+421 keys.
 
 ## Doctor
 
@@ -472,7 +479,7 @@ hooks check none found
 duplicate hooks none found
 duplicate mcp servers none found
 mcp
-  rtok (40 tools, ~1037 desc tokens) [CWD]/target/[..]
+  rtok (40 tools, ~1043 desc tokens) [CWD]/target/[..]
 proxy 
 proxy openai 
 BASH_MAX_OUTPUT_LENGTH (unset)

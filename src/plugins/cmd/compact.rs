@@ -48,25 +48,121 @@ fn is_generated_count(line: &str) -> bool {
     line.starts_with("warning: `") && line.contains(" generated ") && line.contains("warning")
 }
 
+/// One `warning:` block: its headline, every `-->` location and the lint name when the
+/// block (or an earlier one with the same headline shape) says it.
+struct Warn {
+    head: String,
+    locs: Vec<String>,
+    code: Option<String>,
+}
+
+enum Piece {
+    Line(String),
+    Warn(usize),
+}
+
+/// `#[warn(unused_imports)]` or a clippy `…/index.html#redundant_clone` link → the lint name.
+fn lint_code(line: &str) -> Option<String> {
+    if let Some(r) = line.split("#[warn(").nth(1) {
+        return Some(r.split(')').next()?.to_string());
+    }
+    let r = line
+        .split("rust-clippy/")
+        .nth(1)?
+        .split("index.html#")
+        .nth(1)?;
+    Some(format!("clippy::{}", r.split_whitespace().next()?))
+}
+
+/// The headline with its backticked names removed: `unused import: `a`` and `…: `b``
+/// share one shape, so a warning without a lint note still joins its group.
+fn head_shape(head: &str) -> String {
+    head.split('`').step_by(2).collect()
+}
+
 /// `cargo build` / `check` / `clippy`: the diagnostic headline and its `-->` location, the
-/// `could not compile` verdict, and a one-word `Finished <profile>` on success.
+/// `could not compile` verdict, and a one-word `Finished <profile>` on success. Two or more
+/// warnings of one lint fold into `lint ×N: first headline (loc, loc, …)` (T684): every
+/// location stays, the repeated headlines are in the archive.
 pub fn cargo_build(output: &str) -> Option<String> {
-    let mut kept: Vec<String> = Vec::new();
+    let mut pieces: Vec<Piece> = Vec::new();
+    let mut warns: Vec<Warn> = Vec::new();
+    let mut open = false;
     for line in output.lines() {
         if is_progress(line) || is_generated_count(line) {
             continue;
         }
         if let Some(f) = short_finished(line) {
-            kept.push(f);
+            open = false;
+            pieces.push(Piece::Line(f));
+        } else if line.starts_with("warning:") {
+            open = true;
+            warns.push(Warn {
+                head: line.to_string(),
+                locs: Vec::new(),
+                code: None,
+            });
+            pieces.push(Piece::Warn(warns.len() - 1));
+        } else if open && line.trim_start().starts_with("-->") {
+            warns.last_mut()?.locs.push(line.to_string());
+        } else if open && let Some(c) = lint_code(line) {
+            warns.last_mut()?.code.get_or_insert(c);
         } else if ["error[", "error:", "-->", "warning:"]
             .iter()
             .any(|n| line.contains(n))
         {
-            kept.push(line.to_string());
+            open = false;
+            pieces.push(Piece::Line(line.to_string()));
         }
     }
-    if kept.is_empty() {
+    if pieces.is_empty() {
         return None;
+    }
+    let mut by_shape: std::collections::HashMap<String, String> = Default::default();
+    for w in &warns {
+        if let Some(c) = &w.code {
+            by_shape
+                .entry(head_shape(&w.head))
+                .or_insert_with(|| c.clone());
+        }
+    }
+    let lint = |w: &Warn| {
+        w.code
+            .clone()
+            .or_else(|| by_shape.get(&head_shape(&w.head)).cloned())
+    };
+    let key = |w: &Warn| lint(w).unwrap_or_else(|| head_shape(&w.head));
+    let mut groups: std::collections::HashMap<String, Vec<usize>> = Default::default();
+    for (i, w) in warns.iter().enumerate() {
+        groups.entry(key(w)).or_default().push(i);
+    }
+    let mut kept: Vec<String> = Vec::new();
+    for piece in &pieces {
+        let Piece::Warn(i) = piece else {
+            if let Piece::Line(l) = piece {
+                kept.push(l.clone());
+            }
+            continue;
+        };
+        let k = key(&warns[*i]);
+        let members = &groups[&k];
+        if members.len() < 2 {
+            kept.push(warns[*i].head.clone());
+            kept.extend(warns[*i].locs.iter().cloned());
+        } else if members[0] == *i {
+            let locs: Vec<&str> = members
+                .iter()
+                .flat_map(|&m| warns[m].locs.iter())
+                .filter_map(|l| l.trim_start().strip_prefix("-->"))
+                .map(str::trim)
+                .collect();
+            let head = warns[*i].head.trim_start_matches("warning: ");
+            let label = match lint(&warns[*i]) {
+                Some(c) => format!("{c} ×{}: {head}", members.len()),
+                None => format!("{head} ×{}", members.len()),
+            };
+            kept.push(format!("{label} ({})", locs.join(", ")));
+        }
     }
     Some(kept.join("\n"))
 }
@@ -351,14 +447,14 @@ pub fn ls_long(argv: &[String]) -> bool {
 /// Any line that is not the GNU/BSD long shape returns `None`.
 pub fn ls_l(output: &str) -> Option<String> {
     let mut dirs: Vec<String> = Vec::new();
-    let mut files: Vec<String> = Vec::new();
+    let mut files: Vec<Entry> = Vec::new();
     let mut groups: Vec<String> = Vec::new();
-    let flush = |dirs: &mut Vec<String>, files: &mut Vec<String>, groups: &mut Vec<String>| {
+    let flush = |dirs: &mut Vec<String>, files: &mut Vec<Entry>, groups: &mut Vec<String>| {
         let mut g = Vec::new();
         if !dirs.is_empty() {
             g.push(format!("dirs: {}", dirs.join(" ")));
         }
-        g.append(files);
+        g.extend(render_files(std::mem::take(files)));
         dirs.clear();
         groups.push(g.join("\n"));
     };
@@ -397,11 +493,12 @@ pub fn ls_l(output: &str) -> Option<String> {
         }
         match kind {
             'd' => dirs.push(format!("{name}/")),
-            'l' => files.push(name.to_string()),
-            _ => {
-                let exec = if perms[1..].contains('x') { "*" } else { "" };
-                files.push(format!("{name}{exec} {}", human(size)));
-            }
+            'l' => files.push(Entry::Link(name.to_string())),
+            _ => files.push(Entry::File {
+                name: name.to_string(),
+                exec: perms[1..].contains('x'),
+                size,
+            }),
         }
     }
     if !dirs.is_empty() || !files.is_empty() {
@@ -411,6 +508,83 @@ pub fn ls_l(output: &str) -> Option<String> {
         return None;
     }
     Some(groups.join("\n"))
+}
+
+/// One listing line of `ls -l`, before it is written out.
+enum Entry {
+    Link(String),
+    File { name: String, exec: bool, size: u64 },
+}
+
+/// More regular files than this in one listing are grouped by extension (T679).
+const GROUP_ABOVE: usize = 30;
+
+/// A listing's files as lines: `name size` each; above [`GROUP_ABOVE`] files, one line per extension
+/// (`*.rs (3): a 1.2K, b 300B, c 9K`; the name is stem + the header's extension, a lone file of
+/// its extension stays a plain line); three or more dotfiles share a `dotfiles:` line. Symlinks
+/// keep their own `a -> b` line.
+fn render_files(entries: Vec<Entry>) -> Vec<String> {
+    let text = |name: &str, exec: bool, size: u64| {
+        format!("{name}{} {}", if exec { "*" } else { "" }, human(size))
+    };
+    let count = entries
+        .iter()
+        .filter(|e| matches!(e, Entry::File { .. }))
+        .count();
+    let dots = entries
+        .iter()
+        .filter(|e| matches!(e, Entry::File { name, .. } if name.starts_with('.')))
+        .count();
+    let (mut loose, mut dotted): (Vec<String>, Vec<String>) = (Vec::new(), Vec::new());
+    let mut by_ext: Vec<(&str, Vec<String>)> = Vec::new();
+    let mut pending: Vec<(usize, String)> = Vec::new();
+    for e in &entries {
+        match e {
+            Entry::Link(name) => loose.push(name.clone()),
+            Entry::File { name, exec, size } if dots >= 3 && name.starts_with('.') => {
+                dotted.push(text(name, *exec, *size));
+            }
+            Entry::File { name, exec, size } => {
+                let split = name.rfind('.').filter(|&i| i > 0 && i + 1 < name.len());
+                match split {
+                    Some(i) if count > GROUP_ABOVE => {
+                        let (stem, ext) = name.split_at(i);
+                        let at = match by_ext.iter().position(|(x, _)| *x == ext) {
+                            Some(at) => at,
+                            None => {
+                                by_ext.push((ext, Vec::new()));
+                                by_ext.len() - 1
+                            }
+                        };
+                        by_ext[at].1.push(text(stem, *exec, *size));
+                        pending.push((at, text(name, *exec, *size)));
+                    }
+                    _ => loose.push(text(name, *exec, *size)),
+                }
+            }
+        }
+    }
+    let mut lines = loose;
+    if !dotted.is_empty() {
+        lines.push(format!("dotfiles: {}", dotted.join(", ")));
+    }
+    for (at, (ext, members)) in by_ext.iter().enumerate() {
+        if members.len() < 2 {
+            lines.extend(
+                pending
+                    .iter()
+                    .filter(|(i, _)| *i == at)
+                    .map(|(_, t)| t.clone()),
+            );
+        } else {
+            lines.push(format!(
+                "*{ext} ({}): {}",
+                members.len(),
+                members.join(", ")
+            ));
+        }
+    }
+    lines
 }
 
 /// The rest of `line` after `n` whitespace-separated fields.
@@ -510,5 +684,96 @@ mod tests {
         assert!(ls_long(&["ls".into(), "-la".into()]));
         assert!(!ls_long(&["ls".into(), "-a".into()]));
         assert!(!ls_long(&["ls".into(), "--color".into()]));
+    }
+
+    fn long_line(name: &str, size: u64, perms: &str) -> String {
+        format!("{perms}  1 u g {size} Oct 14 23:50 {name}\n")
+    }
+
+    #[test]
+    fn ls_l_groups_by_extension_above_thirty_files_and_keeps_every_name() {
+        let rw = "-rw-r--r--";
+        let mut out = String::from("total 99\n");
+        for i in 0..20 {
+            out.push_str(&long_line(&format!("m{i}.rs"), 1200 + i, rw));
+        }
+        for i in 0..8 {
+            out.push_str(&long_line(&format!("t{i}.toml"), 300, rw));
+        }
+        out.push_str(&long_line("README.md", 2048, rw));
+        out.push_str(&long_line("Makefile", 900, rw));
+        out.push_str(&long_line("run.sh", 120, "-rwxr-xr-x"));
+        out.push_str(&long_line("x.sh", 10, "-rwxr-xr-x"));
+        let got = ls_l(&out).unwrap();
+        let lines: Vec<&str> = got.lines().collect();
+        assert_eq!(lines.len(), 5, "{got}");
+        assert_eq!(lines[0], "Makefile 900B");
+        assert!(lines[1].starts_with("*.rs (20): m0 1.2K, m1 1.2K"), "{got}");
+        assert!(lines[1].ends_with("m19 1.2K"), "{got}");
+        assert!(
+            lines[2].starts_with("*.toml (8): t0 300B, t1 300B"),
+            "{got}"
+        );
+        assert_eq!(lines[3], "README.md 2.0K");
+        assert_eq!(lines[4], "*.sh (2): run* 120B, x* 10B");
+    }
+
+    #[test]
+    fn ls_l_leaves_thirty_files_or_fewer_ungrouped() {
+        let mut out = String::new();
+        for i in 0..30 {
+            out.push_str(&long_line(&format!("f{i}.rs"), 10, "-rw-r--r--"));
+        }
+        let got = ls_l(&out).unwrap();
+        assert_eq!(got.lines().count(), 30, "{got}");
+        assert!(got.starts_with("f0.rs 10B\nf1.rs 10B"), "{got}");
+    }
+
+    #[test]
+    fn ls_la_dotfiles_share_one_line() {
+        let rw = "-rw-r--r--";
+        let out = format!(
+            "{}{}{}{}{}",
+            long_line(".gitignore", 40, rw),
+            long_line(".env", 12, rw),
+            long_line(".editorconfig", 300, rw),
+            long_line("main.rs", 5000, rw),
+            long_line(".npmrc", 7, rw),
+        );
+        assert_eq!(
+            ls_l(&out).unwrap(),
+            "main.rs 4.9K\ndotfiles: .gitignore 40B, .env 12B, .editorconfig 300B, .npmrc 7B"
+        );
+        let two = format!(
+            "{}{}",
+            long_line(".env", 12, rw),
+            long_line(".npmrc", 7, rw)
+        );
+        assert_eq!(ls_l(&two).unwrap(), ".env 12B\n.npmrc 7B");
+    }
+
+    /// T684: rustc prints the `#[warn(lint)]` note only on the first block of a lint, so the
+    /// later ones join it through their headline shape; every location survives.
+    #[test]
+    fn cargo_build_groups_warnings_by_lint_and_keeps_every_location() {
+        let out = "   Compiling c v0.1.0\n\
+warning: unused import: `a`\n --> src/a.rs:1:5\n  |\n  = note: `#[warn(unused_imports)]` on by default\n\n\
+warning: unused import: `b`\n --> src/b.rs:2:5\n  |\n\n\
+warning: unused import: `c`\n --> src/c.rs:3:5\n  |\n\n\
+warning: redundant clone\n --> src/d.rs:4:1\n  |\n  = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#redundant_clone\n\n\
+warning: `c` (lib) generated 4 warnings\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.20s\n";
+        assert_eq!(
+            cargo_build(out).unwrap(),
+            "unused_imports ×3: unused import: `a` (src/a.rs:1:5, src/b.rs:2:5, src/c.rs:3:5)\nwarning: redundant clone\n --> src/d.rs:4:1\nFinished dev"
+        );
+    }
+
+    #[test]
+    fn cargo_build_groups_shape_twins_without_any_lint_note() {
+        let out = "warning: unused variable: `x`\n --> src/a.rs:1:1\nwarning: unused variable: `y`\n --> src/b.rs:2:2\nerror[E0308]: mismatched types\n --> src/c.rs:3:3\n";
+        assert_eq!(
+            cargo_build(out).unwrap(),
+            "unused variable: `x` ×2 (src/a.rs:1:1, src/b.rs:2:2)\nerror[E0308]: mismatched types\n --> src/c.rs:3:3"
+        );
     }
 }

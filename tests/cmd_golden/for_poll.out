@@ -1,0 +1,6 @@
+{"status":"starting","uptime_ms":#,"ready":false} ×24 (vals: 2000..48000)
+
+curl: (7) Failed to connect to localhost port 8080 after 0 ms: Connection refused
+{"status":"starting","uptime_ms":#,"ready":false} ×15 (vals: 50000..78000)
+
+{"status":"up","uptime_ms":80000,"ready":true}

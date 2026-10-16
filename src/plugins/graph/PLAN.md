@@ -136,6 +136,17 @@ same labels), definitions 43/44, sites 140/149, 0.940. Every remaining reference
 macro-body argument (`assert_eq!(.. measurement_count ..)`, `println!(.. calibrate_or_skip ..)`).
 `tests/graph_truth.rs` floor: 0.92.
 
+### T663 — calls inside macro arguments (2026-10-16)
+
+The last reference misses were calls in macro arguments (`assert!(f())`, `assert_eq!(r.m(), 1)`). The
+argument list is an opaque `token_tree`, but an identifier directly followed by a parenthesised
+`token_tree` is a call at any depth, so one more pattern in `RUST_EXTRA_REF` captures it. On the
+39-label set references went 119/126 (0.944) to 126/126 (1.000), definitions unchanged (91/92),
+`tests/graph_truth.rs` floor 0.92 to 0.98. Cost: a name used like a call inside `macro_rules!` or
+`quote!` bodies is also a reference (benign over-report, no definition row is touched).
+`tags_backend_misses_macro_body` became `tags_backend_hits_macro_body`; the tags-vs-LSP
+discriminating fixture is now precision (same-name methods on different types), not recall.
+
 ### Rejected in this round
 
 - A separate `explore` tool (codegraph) — the same result is `symbol` with a body; a fifth tool is description tokens for nothing.

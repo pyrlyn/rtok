@@ -1,0 +1,51 @@
+argv: ls -la src/plugins
+exit: 0
+min_saving: 73
+---
+total 1024
+drwxr-xr-x  30 dev  staff    960 Oct 14 23:12 .
+drwxr-xr-x  18 dev  staff    576 Oct 13 10:02 ..
+-rw-r--r--   1 dev  staff     412 Oct 10 09:15 .gitignore
+-rw-r--r--   1 dev  staff      61 Oct 10 09:15 .env.example
+-rw-r--r--   1 dev  staff     230 Oct 10 09:15 .editorconfig
+drwxr-xr-x   6 dev  staff     192 Oct 10 09:15 cmd
+drwxr-xr-x   6 dev  staff     192 Oct 10 09:15 read
+-rw-r--r--   1 dev  staff    1137 Oct 14 20:41 plugin_01.rs
+-rw-r--r--   1 dev  staff    1274 Oct 14 20:41 plugin_02.rs
+-rw-r--r--   1 dev  staff    1411 Oct 14 20:41 plugin_03.rs
+-rw-r--r--   1 dev  staff    1548 Oct 14 20:41 plugin_04.rs
+-rw-r--r--   1 dev  staff    1685 Oct 14 20:41 plugin_05.rs
+-rw-r--r--   1 dev  staff    1822 Oct 14 20:41 plugin_06.rs
+-rw-r--r--   1 dev  staff    1959 Oct 14 20:41 plugin_07.rs
+-rw-r--r--   1 dev  staff    2096 Oct 14 20:41 plugin_08.rs
+-rw-r--r--   1 dev  staff    2233 Oct 14 20:41 plugin_09.rs
+-rw-r--r--   1 dev  staff    2370 Oct 14 20:41 plugin_10.rs
+-rw-r--r--   1 dev  staff    2507 Oct 14 20:41 plugin_11.rs
+-rw-r--r--   1 dev  staff    2644 Oct 14 20:41 plugin_12.rs
+-rw-r--r--   1 dev  staff    2781 Oct 14 20:41 plugin_13.rs
+-rw-r--r--   1 dev  staff    2918 Oct 14 20:41 plugin_14.rs
+-rw-r--r--   1 dev  staff    3055 Oct 14 20:41 plugin_15.rs
+-rw-r--r--   1 dev  staff    3192 Oct 14 20:41 plugin_16.rs
+-rw-r--r--   1 dev  staff    3329 Oct 14 20:41 plugin_17.rs
+-rw-r--r--   1 dev  staff    3466 Oct 14 20:41 plugin_18.rs
+-rw-r--r--   1 dev  staff    3603 Oct 14 20:41 plugin_19.rs
+-rw-r--r--   1 dev  staff    3740 Oct 14 20:41 plugin_20.rs
+-rw-r--r--   1 dev  staff    3877 Oct 14 20:41 plugin_21.rs
+-rw-r--r--   1 dev  staff    4014 Oct 14 20:41 plugin_22.rs
+-rw-r--r--   1 dev  staff    4151 Oct 14 20:41 plugin_23.rs
+-rw-r--r--   1 dev  staff    4288 Oct 14 20:41 plugin_24.rs
+-rw-r--r--   1 dev  staff    4425 Oct 14 20:41 plugin_25.rs
+-rw-r--r--   1 dev  staff    4562 Oct 14 20:41 plugin_26.rs
+-rw-r--r--   1 dev  staff    4699 Oct 14 20:41 plugin_27.rs
+-rw-r--r--   1 dev  staff    4836 Oct 14 20:41 plugin_28.rs
+-rw-r--r--   1 dev  staff     231 Oct 14 20:41 notes_1.md
+-rw-r--r--   1 dev  staff     262 Oct 14 20:41 notes_2.md
+-rw-r--r--   1 dev  staff     293 Oct 14 20:41 notes_3.md
+-rw-r--r--   1 dev  staff     324 Oct 14 20:41 notes_4.md
+-rw-r--r--   1 dev  staff     355 Oct 14 20:41 notes_5.md
+-rw-r--r--   1 dev  staff     386 Oct 14 20:41 notes_6.md
+-rw-r--r--   1 dev  staff    3364 Oct 14 20:41 Cargo.toml
+-rw-r--r--   1 dev  staff    2210 Oct 14 20:41 mod.toml
+-rwxr-xr-x   1 dev  staff    1785 Oct 10 09:15 build.sh
+-rw-r--r--   1 dev  staff    8800 Oct 10 09:15 Makefile
+lrwxr-xr-x   1 dev  staff       9 Oct 10 09:15 latest -> cmd/v0.1

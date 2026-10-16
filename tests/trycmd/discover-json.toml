@@ -1,16 +1,10 @@
 bin.name = "rtok"
-args = "--config tests/trycmd/input/json-readers.toml discover --json --top 3"
-stdout = """
-{
-  "scanned": 0,
-  "gaps": []
-}
-"""
+args = "--config tests/trycmd/input/json-readers.toml discover --json"
 
-# Hermetic by construction: an empty store in an isolated RTOK_HOME, inherit = false.
+# Hermetic by construction: an empty store under target/ via RTOK_HOME, and a cleared env
+# keeps ambient RTOK_* / HOME out. The ranking itself is covered by fixture-store unit tests.
 [env]
 inherit = false
 
 [env.add]
-HOME = "target/tmp/t661-discover-json"
-RTOK_HOME = "target/tmp/t661-discover-json"
+RTOK_HOME = "target/tmp/t688-discover-json"

@@ -2,222 +2,153 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
-//! `rtok discover` (plan T661): the Bash commands an agent ran that no filter names, ranked
-//! by the output tokens that reached the model, so the next rule family is picked from data.
-//!
-//! The source is rtok's own store: every `PostToolUse` hook body keeps the command and the
-//! tool response. A body over `core.call_io_inline_bytes` lives in the archive instead and is
-//! not read, so the biggest outputs can be missing; the numbers are a floor. No saving rate is
-//! applied — a family with no `Measurement` row has no saving claim (`AGENTS.md`).
+//! `rtok discover` (T688): the shell commands agents ran that no `cmd` rule or formatter
+//! covers, ranked by the output tokens the agent read. Input is the `PostToolUse` bodies the
+//! hook already stores; nothing is re-run and nothing is claimed saved: a `Measurement` row
+//! is the only saving rtok reports, and an unfiltered command has none.
 
-use crate::plugins::cmd::{bounded, formatters, rules};
-use crate::render::{self, Col};
-use crate::store::Store;
-use anyhow::Result;
+use super::stats::{bash_family, est_tokens};
+use crate::plugins::cmd::{formatters::filter_kind, rules::Settings};
+use crate::render::{Col, table};
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::BTreeMap;
 
-/// Newest hook rows read per run; bounds memory on a store that holds months of calls.
-pub const MAX_ROWS: i64 = 50_000;
-
-/// One command family with no filter of its own.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+/// One command family with no rule and no formatter.
+#[derive(Debug, Serialize, PartialEq, Eq)]
 pub struct Gap {
     pub family: String,
     pub calls: u64,
+    /// Output bytes the agent read across all calls (after any default cut, if `rtok run` ran).
     pub bytes: u64,
-    /// `bytes` at the 4 chars/token heuristic `rtok stats` uses.
-    pub tokens: u64,
-    /// The newest command of the family, first line only.
+    pub est_tokens: u64,
+    /// The command behind the largest single output, first line, capped.
     pub example: String,
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize)]
-pub struct Report {
+#[derive(Debug, Default, Serialize, PartialEq, Eq)]
+pub struct Discovery {
     /// Bash calls read.
     pub scanned: u64,
-    /// Families without a formatter or a named rule, biggest first.
+    /// Bash calls whose family has a rule or a formatter.
+    pub covered: u64,
+    /// Hook rows with no readable body (over `core.call_io_inline_bytes`, or not JSON).
+    pub unreadable: u64,
     pub gaps: Vec<Gap>,
 }
 
-/// Read the store's `PostToolUse` Bash bodies at or after `since` (unix seconds).
-pub fn from_store(store: &Store, settings: &rules::Settings, since: i64) -> Result<Report> {
-    let bodies = store.hook_inputs_for_tool_since("PostToolUse", "Bash", since, MAX_ROWS)?;
-    Ok(collect(&bodies, settings))
+/// Longest `example` kept, in chars.
+const EXAMPLE_CHARS: usize = 80;
+
+/// Bytes the agent was shown: a plain string, `stdout` + `stderr`, or the serialized value.
+fn output_bytes(response: &Value) -> u64 {
+    if let Some(s) = response.as_str() {
+        return s.len() as u64;
+    }
+    let part = |k: &str| response.get(k).and_then(Value::as_str).map(str::len);
+    match (part("stdout"), part("stderr")) {
+        (None, None) => response.to_string().len() as u64,
+        (out, err) => (out.unwrap_or(0) + err.unwrap_or(0)) as u64,
+    }
 }
 
-/// Rank the unfiltered families in `bodies` (newest first, as the store returns them).
-pub fn collect(bodies: &[String], settings: &rules::Settings) -> Report {
-    struct Acc {
-        calls: u64,
-        bytes: u64,
-        example: String,
-    }
-    let mut by: BTreeMap<String, Acc> = BTreeMap::new();
-    let mut scanned = 0;
+/// Rank the uncovered families in `bodies` (`PostToolUse` hook JSON). `rtok`'s own commands
+/// are skipped: their output is already shaped and no rule could improve it.
+pub fn rank(bodies: &[String], settings: &Settings, limit: usize) -> Discovery {
+    let mut out = Discovery::default();
+    // family -> (calls, bytes, largest output, its command)
+    let mut by_family: BTreeMap<String, (u64, u64, u64, String)> = BTreeMap::new();
     for body in bodies {
         let Ok(v) = serde_json::from_str::<Value>(body) else {
+            out.unreadable += 1;
             continue;
         };
-        if v.get("tool_name").and_then(Value::as_str) != Some("Bash") {
+        let tool = v.get("tool_name").and_then(Value::as_str).unwrap_or("");
+        let command = v.pointer("/tool_input/command").and_then(Value::as_str);
+        let Some(command) = command.filter(|_| crate::names::canonical_tool_name(tool) == "Bash")
+        else {
+            continue;
+        };
+        let command = crate::names::strip_wrap(command);
+        let family = bash_family(&command);
+        if family == "rtok" {
             continue;
         }
-        let Some(cmd) = v.pointer("/tool_input/command").and_then(Value::as_str) else {
-            continue;
-        };
-        scanned += 1;
-        // The hook rewrites most commands to `rtok run -- '<cmd>'`; the family is the inner one.
-        let inner = unwrap_run(cmd);
-        let cmd = inner.as_deref().unwrap_or(cmd);
-        let Some(family) = program_of(cmd) else {
-            continue;
-        };
-        if formatters::filter_kind(settings, &family) != "default" {
+        out.scanned += 1;
+        if filter_kind(settings, &family) != "default" {
+            out.covered += 1;
             continue;
         }
-        let acc = by.entry(family).or_insert_with(|| Acc {
-            calls: 0,
-            bytes: 0,
-            example: first_line(cmd),
-        });
-        acc.calls += 1;
-        acc.bytes += response_bytes(v.get("tool_response"));
+        let bytes = v.get("tool_response").map_or(0, output_bytes);
+        let row = by_family.entry(family).or_default();
+        row.0 += 1;
+        row.1 += bytes;
+        if bytes > row.2 {
+            row.2 = bytes;
+            row.3 = command;
+        }
     }
-    let mut gaps: Vec<Gap> = by
+    out.gaps = by_family
         .into_iter()
-        .map(|(family, a)| Gap {
+        .map(|(family, (calls, bytes, _, command))| Gap {
             family,
-            calls: a.calls,
-            bytes: a.bytes,
-            tokens: crate::measure::stats::est_tokens(a.bytes),
-            example: a.example,
+            calls,
+            bytes,
+            est_tokens: est_tokens(bytes),
+            example: command
+                .lines()
+                .next()
+                .unwrap_or("")
+                .chars()
+                .take(EXAMPLE_CHARS)
+                .collect(),
         })
         .collect();
-    gaps.sort_by(|a, b| {
-        b.tokens
-            .cmp(&a.tokens)
-            .then(b.calls.cmp(&a.calls))
+    out.gaps.sort_by(|a, b| {
+        (b.est_tokens, b.calls)
+            .cmp(&(a.est_tokens, a.calls))
             .then_with(|| a.family.cmp(&b.family))
     });
-    Report { scanned, gaps }
-}
-
-/// The table `rtok discover` prints, at most `top` families.
-pub fn table(report: &Report, top: usize) -> String {
-    let mut s = format!(
-        "{} Bash calls read, {} command families with no filter\n",
-        report.scanned,
-        report.gaps.len()
-    );
-    if report.gaps.is_empty() {
-        s.push_str("nothing to add: every Bash family read has a formatter or a named rule\n");
-        return s;
-    }
-    let cols = [
-        Col::left(8),
-        Col::right(5),
-        Col::right(8),
-        Col::right(6),
-        Col::left(0),
-    ];
-    let mut rows = vec![vec![
-        "family".into(),
-        "calls".into(),
-        "tokens".into(),
-        "mean".into(),
-        "example".into(),
-    ]];
-    for g in report.gaps.iter().take(top) {
-        rows.push(vec![
-            g.family.clone(),
-            g.calls.to_string(),
-            g.tokens.to_string(),
-            (g.tokens / g.calls.max(1)).to_string(),
-            g.example.clone(),
-        ]);
-    }
-    s.push_str(&render::table(&cols, &rows));
-    s
-}
-
-/// The program a filter would be written for: the first stage of `cmd` that runs one, after
-/// `FOO=1`, `mise exec --`, `uv run` and the like are peeled. `None` for a chain of two or more
-/// distinct programs, which `rtok run` already routes to the `[script]` rule.
-fn program_of(cmd: &str) -> Option<String> {
-    if bounded::mixed_chain(cmd) {
-        return None;
-    }
-    bounded::stages(cmd).iter().find_map(|stage| {
-        let visible = formatters::visible_argv(stage);
-        let stem = formatters::cmd_stem(visible.first()?);
-        is_program(stem).then(|| stem.to_string())
-    })
-}
-
-/// A name a filter could be written for: not rtok itself, not a shell keyword or builtin that
-/// only glues commands together, and shaped like a binary (`-d`, `&&`, `$(x)` are lexer scraps).
-fn is_program(family: &str) -> bool {
-    const SYNTAX: &[&str] = &[
-        "rtok", "other", "for", "while", "until", "if", "case", "do", "then", "function", "select",
-        "export", "cd", "set", "unset", "source", "eval", "exec", "wait", "true", "false",
-        "command", "time", "echo", "pwd", "printf", "test",
-    ];
-    family.starts_with(|c: char| c.is_ascii_alphanumeric())
-        && family
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | '+'))
-        && !SYNTAX.contains(&family)
-}
-
-/// stdout + stderr of a Bash `tool_response`, or the string itself on hosts that send one.
-fn response_bytes(resp: Option<&Value>) -> u64 {
-    let len = |v: Option<&Value>| v.and_then(Value::as_str).map_or(0, str::len) as u64;
-    match resp {
-        Some(Value::String(s)) => s.len() as u64,
-        Some(v) => len(v.get("stdout")) + len(v.get("stderr")),
-        None => 0,
-    }
-}
-
-fn first_line(cmd: &str) -> String {
-    const MAX: usize = 60;
-    let line = cmd.lines().next().unwrap_or("").trim();
-    match line.char_indices().nth(MAX) {
-        Some((at, _)) => format!("{}…", &line[..at]),
-        None => line.to_string(),
-    }
-}
-
-/// The command inside `rtok run [--agent ID] -- '<cmd>'`, however many `cd x &&` precede it.
-fn unwrap_run(cmd: &str) -> Option<String> {
-    let rest = &cmd[cmd.find("rtok run ")? + "rtok run ".len()..];
-    let (_, quoted) = rest.split_once("-- ")?;
-    Some(dequote(quoted.trim_start()))
-}
-
-/// One POSIX shell word, quotes and escapes removed (the form `wrap_quote` writes).
-fn dequote(word: &str) -> String {
-    let mut out = String::new();
-    let mut chars = word.chars();
-    while let Some(c) = chars.next() {
-        match c {
-            '\'' => out.extend(chars.by_ref().take_while(|&q| q != '\'')),
-            '"' => {
-                while let Some(q) = chars.next() {
-                    match q {
-                        '"' => break,
-                        '\\' => out.extend(chars.next()),
-                        _ => out.push(q),
-                    }
-                }
-            }
-            '\\' => out.extend(chars.next()),
-            c if c.is_whitespace() => break,
-            c => out.push(c),
-        }
-    }
+    out.gaps.truncate(limit);
     out
+}
+
+impl Discovery {
+    pub fn to_table(&self) -> String {
+        let mut text = format!(
+            "bash calls {}  covered {}  unreadable rows {}\n",
+            self.scanned, self.covered, self.unreadable
+        );
+        if self.gaps.is_empty() {
+            text.push_str("no uncovered command family\n");
+            return text;
+        }
+        let cols = [
+            Col::left(16),
+            Col::right(7),
+            Col::right(12),
+            Col::right(12),
+            Col::left(8),
+        ];
+        let mut rows = vec![vec![
+            "family".to_string(),
+            "calls".into(),
+            "bytes".into(),
+            "est_tokens".into(),
+            "largest output".into(),
+        ]];
+        rows.extend(self.gaps.iter().map(|g| {
+            vec![
+                g.family.clone(),
+                g.calls.to_string(),
+                g.bytes.to_string(),
+                g.est_tokens.to_string(),
+                g.example.clone(),
+            ]
+        }));
+        text.push_str(&table(&cols, &rows));
+        text
+    }
 }
 
 #[cfg(test)]
@@ -225,141 +156,162 @@ mod tests {
     use super::*;
     use serde_json::json;
 
-    fn bash(cmd: &str, stdout: &str) -> String {
-        json!({"tool_name": "Bash", "tool_input": {"command": cmd},
-               "tool_response": {"stdout": stdout, "stderr": ""}})
+    fn post(command: &str, out: &str) -> String {
+        json!({"hook_event_name": "PostToolUse", "tool_name": "Bash",
+            "tool_input": {"command": command}, "tool_response": {"stdout": out}})
         .to_string()
     }
 
-    #[test]
-    fn dequote_reads_what_wrap_quote_writes() {
-        assert_eq!(dequote("'git status'"), "git status");
-        assert_eq!(dequote(r#"'echo it'\''s'"#), "echo it's");
-        assert_eq!(dequote(r#"'echo it'"'"'s' tail"#), "echo it's");
-        assert_eq!(dequote(r#""a \"b\"""#), r#"a "b""#);
+    fn settings() -> Settings {
+        Settings::builtin()
     }
 
     #[test]
-    fn program_of_reads_past_shell_syntax_and_wrappers() {
-        assert_eq!(
-            program_of("cd /x; terraform plan").as_deref(),
-            Some("terraform")
-        );
-        assert_eq!(
-            program_of("export A=1\nhelm lint .").as_deref(),
-            Some("helm")
-        );
-        assert_eq!(program_of("FOO=1 helm lint .").as_deref(), Some("helm"));
-        assert_eq!(
-            program_of("mise exec -- helm lint").as_deref(),
-            Some("helm")
-        );
-        assert_eq!(program_of("ls -d x").as_deref(), Some("ls"));
-        // Syntax alone names no program; a two-program chain belongs to the `[script]` rule.
-        assert_eq!(program_of("export A=1"), None);
-        assert_eq!(program_of("helm lint . && terraform plan"), None);
-    }
-
-    #[test]
-    fn unwrap_run_skips_cd_and_flags() {
-        assert_eq!(
-            unwrap_run("cd x && rtok run --agent a1 -- 'terraform plan'").as_deref(),
-            Some("terraform plan")
-        );
-        assert_eq!(unwrap_run("git status"), None);
-        assert_eq!(unwrap_run("rtok run"), None);
-    }
-
-    #[test]
-    fn ranks_unfiltered_families_by_tokens_and_skips_covered_ones() {
-        let settings = rules::Settings::builtin();
-        let big = "x".repeat(4000);
-        let bodies = vec![
-            bash("terraform plan", &big),
-            bash("rtok run -- 'terraform apply'", &big),
-            bash("cd infra && FOO=1 helm template .", &"y".repeat(8000)),
-            bash("git status", &big),
-            bash("cargo test", &big),
-            bash("rtok search foo", &big),
-            // Not Bash, and not JSON: neither counts as a scanned call.
-            json!({"tool_name": "Read", "tool_input": {"command": "helm x"}}).to_string(),
-            "not json".into(),
+    fn ranks_uncovered_families_by_output_tokens() {
+        let bodies = [
+            post("terraform plan", &"x".repeat(4000)),
+            post("terraform plan -out p", &"x".repeat(2000)),
+            post("ping -c 3 host", &"y".repeat(8000)),
+            post("du -sh .", "z"),
         ];
-        let r = collect(&bodies, &settings);
-        assert_eq!(r.scanned, 6);
-        let seen: Vec<(&str, u64, u64)> = r
-            .gaps
-            .iter()
-            .map(|g| (g.family.as_str(), g.calls, g.tokens))
-            .collect();
-        // Equal tokens: the family with more calls ranks first.
-        assert_eq!(seen, [("terraform", 2, 2000), ("helm", 1, 2000)]);
+        let d = rank(&bodies, &settings(), 10);
+        let names: Vec<_> = d.gaps.iter().map(|g| g.family.as_str()).collect();
+        // terraform (6000 B in 2 calls) and ping (8000 B in 1 call): ping reads more.
+        assert_eq!(names, ["ping", "terraform", "du"]);
+        assert_eq!((d.gaps[1].calls, d.gaps[1].bytes), (2, 6000));
+        assert_eq!(d.gaps[1].est_tokens, 1500);
+        assert_eq!(d.gaps[1].example, "terraform plan");
     }
 
     #[test]
-    fn example_is_the_newest_first_line_cut_to_a_width() {
-        let settings = rules::Settings::builtin();
-        let long = format!("terraform plan {}", "a".repeat(100));
-        let r = collect(&[bash(&long, "x"), bash("terraform apply", "x")], &settings);
-        let g = &r.gaps[0];
-        assert!(g.example.starts_with("terraform plan aaa"), "{}", g.example);
-        assert_eq!(g.example.chars().count(), 61);
-        assert_eq!(first_line("one\ntwo"), "one");
+    fn a_rule_or_a_formatter_means_covered() {
+        let bodies = [
+            post("git status", &"a".repeat(500)),
+            post("cargo build", &"b".repeat(500)),
+            post("cd /r && grep -rn x .", &"c".repeat(500)),
+            post("mise exec -- cargo test", &"d".repeat(500)),
+        ];
+        let d = rank(&bodies, &settings(), 10);
+        assert_eq!((d.scanned, d.covered), (4, 4));
+        assert!(d.gaps.is_empty());
+        assert!(d.to_table().contains("no uncovered command family"));
     }
 
     #[test]
-    fn empty_store_says_so() {
-        let r = collect(&[], &rules::Settings::builtin());
-        assert!(
-            table(&r, 10).contains("nothing to add"),
-            "{}",
-            table(&r, 10)
+    fn a_user_rule_covers_its_family() {
+        let rules = "[ping]\nmax_lines = 5\n";
+        let mut vfs = crate::testutil::Vfs::new();
+        vfs.write("rules.toml", rules);
+        let with = Settings::from_vfs(&vfs, "rules.toml", None, 80);
+        let bodies = [post("ping -c 3 host", &"y".repeat(800))];
+        assert_eq!(rank(&bodies, &settings(), 10).gaps.len(), 1);
+        assert!(rank(&bodies, &with, 10).gaps.is_empty());
+    }
+
+    #[test]
+    fn rtok_run_wrapped_and_foreign_rows_are_read_correctly() {
+        let bodies = [
+            post("rtok run -- 'ping -c 1 h'", &"y".repeat(400)),
+            post("rtok expand abc123", &"e".repeat(400)),
+            // Not Bash, no command, not JSON, no kept body.
+            json!({"tool_name": "Read", "tool_input": {"file_path": "/x"}}).to_string(),
+            json!({"tool_name": "Bash", "tool_input": {}}).to_string(),
+            "not json".to_string(),
+            String::new(),
+        ];
+        let d = rank(&bodies, &settings(), 10);
+        assert_eq!((d.scanned, d.unreadable), (1, 2));
+        assert_eq!(d.gaps[0].family, "ping");
+    }
+
+    #[test]
+    fn output_is_read_from_string_stdout_stderr_or_whole_value() {
+        assert_eq!(output_bytes(&json!("abc")), 3);
+        assert_eq!(output_bytes(&json!({"stdout": "ab", "stderr": "c"})), 3);
+        assert_eq!(output_bytes(&json!({"stderr": "cc"})), 2);
+        assert_eq!(
+            output_bytes(&json!({"n": 1})),
+            json!({"n": 1}).to_string().len() as u64
         );
     }
 
     #[test]
-    fn table_lists_at_most_top_rows() {
-        let settings = rules::Settings::builtin();
-        let bodies: Vec<String> = ["aaa", "bbb", "ccc"]
-            .iter()
-            .map(|c| bash(c, &"z".repeat(400)))
-            .collect();
-        let t = table(&collect(&bodies, &settings), 2);
-        assert!(
-            t.starts_with("3 Bash calls read, 3 command families"),
-            "{t}"
-        );
-        assert_eq!(t.lines().count(), 1 + 1 + 2, "{t}");
+    fn limit_keeps_the_top_rows_and_ties_break_by_name() {
+        let bodies = [
+            post("b-tool x", "1234"),
+            post("a-tool x", "1234"),
+            post("c-tool", "1"),
+        ];
+        let d = rank(&bodies, &settings(), 2);
+        let names: Vec<_> = d.gaps.iter().map(|g| g.family.as_str()).collect();
+        assert_eq!(names, ["a-tool", "b-tool"]);
     }
 
-    /// The store path: only `PostToolUse` Bash bodies at or after `since` are read.
+    /// The whole path on a fixture store: hook rows of two sessions, one past the window, one
+    /// `PreToolUse`, one body over the inline cap, and a split session block (T433).
     #[test]
-    fn from_store_reads_post_tool_use_bash_bodies_since_the_cutoff() {
-        let store = Store::open_in_memory().unwrap();
-        store
-            .upsert_session("s", None, None, None, Some("hook"))
-            .unwrap();
-        let add = |event: &str, body: &str| {
+    fn fixture_store_feeds_the_ranking() {
+        let store = crate::store::Store::open_in_memory().unwrap();
+        for s in ["s1", "s2"] {
+            store
+                .upsert_session(s, None, None, None, Some("hook"))
+                .unwrap();
+        }
+        let hook = |session: &str, event: &str, stdin: &str, cap: usize| {
             let id = store
-                .insert_call("s", "hook", "hook", None, None, None, None, Some(event))
+                .insert_call(session, "hook", "hook", None, None, None, None, Some(event))
                 .unwrap();
             store
-                .insert_call_io(id, Some(body.as_bytes()), None, 1 << 20, None)
+                .insert_hook_call_io(id, stdin.as_bytes(), None, cap)
                 .unwrap();
+            id
         };
-        let out = "o".repeat(400);
-        add("PostToolUse", &bash("terraform plan", &out));
-        add("PreToolUse", &bash("kustomize build", &out));
-        add("PostToolUse", &json!({"tool_name": "Read"}).to_string());
-        let settings = rules::Settings::builtin();
-        let r = from_store(&store, &settings, 0).unwrap();
-        assert_eq!(r.scanned, 1);
-        assert_eq!(r.gaps.len(), 1);
-        assert_eq!(
-            (r.gaps[0].family.as_str(), r.gaps[0].tokens),
-            ("terraform", 100)
+        let with_session = |s: &str, cmd: &str, out: &str| {
+            let mut v: Value = serde_json::from_str(&post(cmd, out)).unwrap();
+            v["session_id"] = json!(s);
+            v["cwd"] = json!("/r");
+            v.to_string()
+        };
+        hook(
+            "s1",
+            "PostToolUse",
+            &with_session("s1", "ping -c 1 h", &"p".repeat(900)),
+            65536,
         );
-        let later = from_store(&store, &settings, i64::MAX).unwrap();
-        assert_eq!(later.scanned, 0);
+        hook(
+            "s2",
+            "PostToolUse",
+            &with_session("s2", "ping -c 1 h", &"p".repeat(900)),
+            65536,
+        );
+        hook(
+            "s2",
+            "PostToolUse",
+            &with_session("s2", "git log", &"g".repeat(900)),
+            65536,
+        );
+        hook(
+            "s2",
+            "PreToolUse",
+            &with_session("s2", "du -sh .", "-"),
+            65536,
+        );
+        let old = hook(
+            "s2",
+            "PostToolUse",
+            &with_session("s2", "ps aux", &"o".repeat(900)),
+            65536,
+        );
+        store.set_call_ts(old, 10).unwrap();
+        let huge = with_session("s2", "ls", &"h".repeat(300));
+        hook("s2", "PostToolUse", &huge, 100);
+
+        let bodies = store.hook_inputs_since("PostToolUse", 1000, 100).unwrap();
+        assert_eq!(bodies.len(), 4, "old row and PreToolUse row are not read");
+        let d = rank(&bodies, &settings(), 10);
+        assert_eq!((d.scanned, d.covered, d.unreadable), (3, 1, 1));
+        assert_eq!(d.gaps.len(), 1);
+        assert_eq!((d.gaps[0].family.as_str(), d.gaps[0].calls), ("ping", 2));
+        assert!(d.to_table().contains("ping"), "{}", d.to_table());
     }
 }

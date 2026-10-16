@@ -577,6 +577,9 @@ startup_recall = true                 # SessionStart(startup) restores newest se
 handoff        = true                 # T59.6 sub-agent digest MCP tool
 spawn_brief        = true             # T130: SubagentStart pointer digest
 spawn_brief_tokens = 300              # T130: token budget for the spawn brief
+admit              = true             # T671: mem_save refuses a too-short or duplicate note
+admit_min_chars    = 5                # T671: shortest body the gate admits
+admit_similarity   = 85               # T671: percent trigram overlap that counts as a duplicate
 forget_after_days = 90                # T669: `memory forget` retires notes unread this long; 0 = needs --days
 
 [plugins.memory.embed]
@@ -588,6 +591,12 @@ hybrid     = true                     # when enabled: RRF(fts5, knn) for mem_sea
 url         = ""                      # "http": base URL, e.g. "http://localhost:11434/v1" (Ollama) or "https://api.openai.com/v1"; note text is sent there
 api_key_env = ""                      # "http": name of the env var holding the key; empty = no Authorization header
 max_chars   = 8000                    # "http": a longer text is never sent (the note search runs instead)
+
+[plugins.memory.extract]
+enabled         = false                 # rtok memory extract: off by default, a model call can cost money
+command         = []                    # program reading the transcript on stdin, one {"title","body"} JSON line out per note
+max_notes       = 5                     # notes kept per run
+max_input_bytes = 60000                 # transcript bytes sent to the program; the end of the session is kept
 
 [plugins.graph]
 enabled    = true
