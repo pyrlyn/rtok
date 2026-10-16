@@ -158,9 +158,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T527 | in progress | P2 | 3 | 0% | MiMo / mimo |
 | T666.2 | todo | P2 | 3 | 0% | |
 | T687 | todo | P2 | 4 | 0% | |
-| T680 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T683 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T686 | todo | P2 | 3 | 0% | |
 
 
 
@@ -1081,13 +1079,6 @@ Source: `docs/research/competitors-techniques.md` (techniques, licenses, links).
 
 
 
-### T680. git status 297
-
-Best competitor: lean-ctx 40.5 %. Design: one line per section with paths grouped by dir (`src/plugins/cmd/{a,b}.rs`), sigils, drop git hints; branch + ahead/behind.
-
-Check: #1076 harness (`bench/c14`) shows ≥ 60 % (rtk 62.5 %) on this category with full anchor retention.
-
-Plan: #1077 prints `git status` as porcelain XY codes. Remaining: group paths by directory (`src/plugins/cmd/{a,b}.rs`), one line per section, branch + ahead/behind, drop hints. Extend `git_status` in `compact.rs`; keep every path (test counts paths in/out); update golden `git_status*` floors.
 
 ### T683. tail 155, cat *.log
 
@@ -1098,15 +1089,4 @@ Check: #1076 harness (`bench/c14`) shows keep lead, +2 pp on this category with 
 Plan: extend the existing log run-collapser in `src/plugins/cmd` so collapsed logfmt runs print constant `key=value` pairs once and list only varying keys; keep error/WARN lines verbatim; fixture test asserting anchors retained and tokens ≤ raw, `expand <id>` returns raw; measure on `bench/fixtures` logs.
 
 Blocked: (1) `cmd` has no logfmt run-collapser to extend today, only `dedupe = "normalized"` (`rules.rs`, no default rule uses it), so this is a new collapse mode, not a tweak; (2) the Check (+2 pp, rtok already 94.5 % vs lean-ctx 87.4 %) is measurable only with the #1076 harness (`bench/c14`, PR open, not on main). Take it again after #1076 merges.
-
-
-### T686. MCP tool catalogs
-
-Best competitor: caveman 12–29 %. Design: `rtok mcp` proxy: first sentence of descriptions, drop default/examples that duplicate type, enum compaction; recovery via archive.
-
-Check: #1076 harness (`bench/c14`) shows ≥ 30 % on this category with full anchor retention.
-
-Plan: locate the `rtok mcp` proxy tool-description rewrite (`[proxy.tools_rewrite]`, T59.5); add first-sentence descriptions, drop default/examples duplicating the schema type, compact enums, full text recoverable via the archive; fixture catalog test with token cut ≥ 30 % and unchanged tool names/required args. Decide at start whether it overlaps T124's off-by-default gate; if it needs a creator decision, write it here and set back to `todo`.
-
-Blocked, needs a creator decision: the `tools_rewrite` invariant says `input_schema` is never touched (`src/plugins/proxy/AGENTS.md`, `src/proxy/tools_rewrite.rs`), but `default`, `examples` and `enum` live inside `input_schema` properties, so this task cannot be done without relaxing that rule. It also overlaps T124 (the feature is off by default and its 3 % gate is not measured yet). Decide: allow rewriting `description`/`default`/`examples` strings inside `input_schema`, or keep the rule and cut this task to top-level descriptions only (already T59.5).
 

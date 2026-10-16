@@ -320,7 +320,7 @@ pub fn git_status(output: &str) -> Option<String> {
         "No commits yet",
         "and have ",
     ];
-    let mut out: Vec<String> = Vec::new();
+    let mut out: Vec<Line> = Vec::new();
     let mut section = Section::None;
     let mut entries = 0usize;
     for line in output.lines() {
@@ -365,12 +365,12 @@ pub fn git_status(output: &str) -> Option<String> {
                 Some((_, p)) if section != Section::Untracked => p.trim(),
                 _ => head,
             };
-            out.push(format!("{code} {path}"));
+            out.push(Line::Entry(code, path.to_string()));
             entries += 1;
         } else if line.starts_with(['\t', ' ']) {
             return None;
         } else if STATE_LINES.iter().any(|p| head.starts_with(p)) {
-            out.push(head.to_string());
+            out.push(Line::Text(head.to_string()));
         }
         // Any other top-level line (an echoed command, a wrapper banner) is dropped, as
         // the long-format filter this replaces did.
@@ -378,7 +378,118 @@ pub fn git_status(output: &str) -> Option<String> {
     if out.is_empty() || (entries == 0 && section != Section::None) {
         return None;
     }
-    Some(out.join("\n"))
+    Some(render_status(out))
+}
+
+/// A `git status` line before it is written out: a kept sentence, or one path with its XY code.
+enum Line {
+    Text(String),
+    Entry(String, String),
+}
+
+/// The branch sentences join the `On branch name` line as `ahead N (origin/x)`; the entries of a section
+/// share a line per XY code, with paths of one directory as `dir/{a,b}` (T680).
+fn render_status(lines: Vec<Line>) -> String {
+    let mut out: Vec<String> = Vec::new();
+    let mut run: Vec<(String, String)> = Vec::new();
+    let mut branch: Option<usize> = None;
+    for line in lines {
+        let text = match line {
+            Line::Entry(code, path) => {
+                run.push((code, path));
+                continue;
+            }
+            Line::Text(text) => text,
+        };
+        out.extend(group_entries(std::mem::take(&mut run)));
+        if let Some(name) = text.strip_prefix("On branch ") {
+            branch = Some(out.len());
+            out.push(format!("On branch {name}"));
+        } else if let Some(at) = branch
+            && let Some(note) = upstream_note(&text, &out[at])
+        {
+            out[at] = note;
+        } else {
+            out.push(text);
+        }
+    }
+    out.extend(group_entries(run));
+    out.join("\n")
+}
+
+/// The branch line with `text` (a `Your branch …` sentence) folded in, or `None` for any other line.
+fn upstream_note(text: &str, branch: &str) -> Option<String> {
+    let remote = |rest: &str| {
+        rest.split_once("'")
+            .map(|(r, after)| (r.to_string(), after.to_string()))
+    };
+    if text.starts_with("Your branch is up to date with '") {
+        return Some(branch.to_string());
+    }
+    let count = |after: &str| {
+        after
+            .split_once(" by ")
+            .and_then(|(_, n)| n.split_whitespace().next().map(str::to_string))
+    };
+    if let Some(rest) = text.strip_prefix("Your branch is ahead of '") {
+        let (r, after) = remote(rest)?;
+        return Some(format!("{branch} ahead {} ({r})", count(&after)?));
+    }
+    if let Some(rest) = text.strip_prefix("Your branch is behind '") {
+        let (r, after) = remote(rest)?;
+        return Some(format!("{branch} behind {} ({r})", count(&after)?));
+    }
+    if let Some(rest) = text.strip_prefix("Your branch and '") {
+        let (r, _) = remote(rest)?;
+        return Some(format!("{branch} diverged ({r})"));
+    }
+    let counts = text.strip_prefix("and have ")?;
+    let (ahead, rest) = counts.split_once(" and ")?;
+    let behind = rest.split_whitespace().next()?;
+    branch
+        .contains(" diverged (")
+        .then(|| branch.replacen(" diverged", &format!(" diverged +{ahead} -{behind}"), 1))
+}
+
+/// One line per XY code: its paths, a directory's paths together as `dir/{a,b}`. A path with a
+/// space, comma or brace (a rename, an odd name) keeps its own line so the grouping stays readable.
+fn group_entries(run: Vec<(String, String)>) -> Vec<String> {
+    let mut codes: Vec<&str> = Vec::new();
+    for (code, _) in &run {
+        if !codes.contains(&code.as_str()) {
+            codes.push(code);
+        }
+    }
+    let mut lines = Vec::new();
+    for code in codes {
+        let (loose, plain): (Vec<&str>, Vec<&str>) = run
+            .iter()
+            .filter(|(c, _)| c == code)
+            .map(|(_, p)| p.as_str())
+            .partition(|p| p.contains([' ', ',', '{', '}']));
+        let mut dirs: Vec<(&str, Vec<&str>)> = Vec::new();
+        for path in plain {
+            let cut = path.trim_end_matches('/').rfind('/').map_or(0, |i| i + 1);
+            let (dir, leaf) = path.split_at(cut);
+            match dirs.iter_mut().find(|(d, _)| *d == dir) {
+                Some((_, leaves)) => leaves.push(leaf),
+                None => dirs.push((dir, vec![leaf])),
+            }
+        }
+        let items: Vec<String> = dirs
+            .iter()
+            .map(|(dir, leaves)| match leaves.as_slice() {
+                [one] => format!("{dir}{one}"),
+                many if dir.is_empty() => many.join(" "),
+                many => format!("{dir}{{{}}}", many.join(",")),
+            })
+            .collect();
+        if !items.is_empty() {
+            lines.push(format!("{code} {}", items.join(" ")));
+        }
+        lines.extend(loose.iter().map(|p| format!("{code} {p}")));
+    }
+    lines
 }
 
 /// `git diff`: hunks verbatim; per file only the `+++ b/path` header. `index` lines,
@@ -644,7 +755,7 @@ mod tests {
         let out = "On branch main\nChanges to be committed:\n  (use \"git restore --staged <file>...\" to unstage)\n\tnew file:   a.rs\n\nChanges not staged for commit:\n  (use \"git add <file>...\" to update what will be committed)\n\tmodified:   b.rs\n\trenamed:    c.rs -> d.rs\n\nUntracked files:\n  (use \"git add <file>...\" to include in what will be committed)\n\te.txt\n\tdir/\n\nno changes added to commit (use \"git add\" and/or \"git commit -a\")\n";
         assert_eq!(
             git_status(out).unwrap(),
-            "On branch main\nA  a.rs\n M b.rs\n R c.rs -> d.rs\n?? e.txt\n?? dir/"
+            "On branch main\nA  a.rs\n M b.rs\n R c.rs -> d.rs\n?? e.txt dir/"
         );
     }
 
@@ -667,6 +778,64 @@ mod tests {
             git_diff(out),
             "+++ b/x\n@@ -1 +1 @@\n-a\n+b\nnew file mode 100644\n--- /dev/null\n+++ b/n\n@@ -0,0 +1 @@\n+c\ndiff --git a/bin b/bin\nBinary files a/bin and b/bin differ"
         );
+    }
+
+    fn long_status(branch: &str, rest: &str) -> String {
+        format!(
+            "On branch main\n{branch}\n\nChanges not staged for commit:\n  (use \"git add <file>...\" to update what will be committed)\n{rest}\n"
+        )
+    }
+
+    #[test]
+    fn git_status_groups_paths_by_directory_and_folds_the_branch_line() {
+        let out = long_status(
+            "Your branch is ahead of 'origin/main' by 3 commits.\n  (use \"git push\" to publish your local commits)",
+            "\tmodified:   src/a.rs\n\tmodified:   src/b.rs\n\tmodified:   docs/c.md\n\tdeleted:    src/gone.rs\n\tmodified:   top.toml\n",
+        );
+        assert_eq!(
+            git_status(&out).unwrap(),
+            "On branch main ahead 3 (origin/main)\n M src/{a.rs,b.rs} docs/c.md top.toml\n D src/gone.rs"
+        );
+    }
+
+    #[test]
+    fn git_status_branch_line_for_up_to_date_behind_and_diverged() {
+        let rest = "\tmodified:   a.rs\n";
+        assert_eq!(
+            git_status(&long_status(
+                "Your branch is up to date with 'origin/main'.",
+                rest
+            ))
+            .unwrap(),
+            "On branch main\n M a.rs"
+        );
+        assert_eq!(
+            git_status(&long_status("Your branch is behind 'origin/main' by 2 commits, and can be fast-forwarded.\n  (use \"git pull\" to update your local branch)", rest)).unwrap(),
+            "On branch main behind 2 (origin/main)\n M a.rs"
+        );
+        assert_eq!(
+            git_status(&long_status("Your branch and 'origin/main' have diverged,\nand have 2 and 5 different commits each, respectively.\n  (use \"git pull\" if you want to integrate the remote branch with yours)", rest)).unwrap(),
+            "On branch main diverged +2 -5 (origin/main)\n M a.rs"
+        );
+    }
+
+    #[test]
+    fn git_status_keeps_every_path_and_isolates_odd_names() {
+        let out = "On branch main\nChanges to be committed:\n\trenamed:    src/old.rs -> src/new.rs\n\tnew file:   src/a b.rs\n\tnew file:   src/c,d.rs\n\tnew file:   src/e.rs\n\nUntracked files:\n\tbuild/\n\tx.log\n\ty.log\n";
+        let got = git_status(out).unwrap();
+        for path in [
+            "src/old.rs -> src/new.rs",
+            "src/a b.rs",
+            "src/c,d.rs",
+            "src/e.rs",
+            "build/",
+            "x.log",
+            "y.log",
+        ] {
+            assert!(got.contains(path), "{path} lost: {got}");
+        }
+        assert!(got.contains("?? build/ x.log y.log"), "{got}");
+        assert!(got.contains("A  src/e.rs"), "{got}");
     }
 
     #[test]

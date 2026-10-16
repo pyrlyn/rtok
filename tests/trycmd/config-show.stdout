@@ -269,6 +269,7 @@ proxy.routing.internal.provider =
 proxy.routing.internal.to = 
 proxy.timeout_s = 600
 proxy.tools_rewrite.allow = []
+proxy.tools_rewrite.compact_schema = false
 proxy.tools_rewrite.deny = []
 proxy.tools_rewrite.enabled = false
 proxy.tools_rewrite.max_description_tokens = 60
