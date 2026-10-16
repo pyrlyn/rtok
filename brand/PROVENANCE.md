@@ -46,27 +46,13 @@ are identical across the web admin, docs site, landing and the v3 pack wherever 
 
 ## Adopting in each surface
 
-Nothing was rewired in this change. The rtok repo still carries its own runtime copies; these are
-the steps to switch each surface to this folder.
-
-**Web admin** (`rtok/web/` on `design/web-admin`, currently Tailwind v3 standalone CLI)
-1. Move the web admin to Tailwind v4: delete `web/tailwind.config.js` (its colors, type scale,
-   radii, shadows, screens and durations all come from `dist/legacy/tailwind-v4.css`) and build with
-   `@tailwindcss/cli` instead of the v3 CLI.
-2. `web/src/input.css`: replace `@tailwind base/components/utilities` with `@import "tailwindcss";`
-   and `@import "<brand>/dist/legacy/tailwind-v4.css";`, add `@source "../index.html"; @source "../app.js";`,
-   replace the `@font-face` lines 7-9 with `@import "@pyrlyn/brand/base/fonts.css";` (keep fonts at
-   `web/assets/fonts/` or next to the output) and delete the `:root` / `.dark` variable blocks
-   (lines 13-35); set `data-theme="dark"` (or keep `.dark`, which `tokens.css` also honors) on `<html>`.
-3. Rename utilities: `canvas`/`navy` → `bg`, `line` → `border`, `ink` → `fg`, `text-accent-on` stays,
-   `delta`/`success`/`warn` stay; `rounded-*`, `shadow-e*`, `shadow-ring`, `duration-fast` stay;
-   `duration-base` becomes the token's 180ms (same as today). Either keep the `@layer components`
-   classes (in v4 write them as `@utility` or plain CSS) or use `dist/legacy/components.css`.
-4. `web/assets/fonts/*.woff2` and `web/assets/icons|logo.svg` are identical to `@pyrlyn/brand/base/fonts/`,
-   `@pyrlyn/brand/base/icons/ui/`, `logo/rtok-mark.svg`.
-5. Rebuild `web/tailwind.css` with
-   `npx @tailwindcss/cli -i src/input.css -o tailwind.css --minify` (update `web/README.md`) and
-   re-shoot `web/screenshots/`.
+**Web admin** (`rtok/web/`) — **adopted** (T414). The SPA imports this pack at build time
+(`web/src/styles/app.css` → `@brand/dist/tokens.css` and `@brand/node_modules/@pyrlyn/brand/...`;
+the Vite alias is `@brand`). Fonts, icons, logos and illustrations are resolved from the pack and its
+pinned base; `web/` keeps no byte-identical copy (`web/src/brandSources.test.ts`). The Tailwind v3
+standalone CLI, `web/tailwind.config.js`, `web/src/input.css`, `web/assets/` and
+`web/src/styles/tokens.css` are gone. What is left of the old checklist is only the docs site and the
+landing below.
 
 **rtok docs site** (`rtok/site/`, Hugo + Hextra)
 1. Load `brand/dist/legacy/tokens.css` through Hugo Pipes from
