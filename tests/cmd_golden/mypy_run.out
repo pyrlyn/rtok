@@ -1,0 +1,22 @@
+arg-type ×60: Argument 1 to "f0" has incompatible type "str"; expected "int" (src/app/mod0.py:20, src/app/mod1.py:21, src/app/mod2.py:22, …)
+src/app/mod0.py:20: note: Possible overload variant: def f0(x: int) -> None
+src/app/mod3.py:23: note: Possible overload variant: def f3(x: int) -> None
+src/app/mod6.py:26: note: Possible overload variant: def f6(x: int) -> None
+src/app/mod2.py:29: note: Possible overload variant: def f9(x: int) -> None
+src/app/mod5.py:32: note: Possible overload variant: def f12(x: int) -> None
+src/app/mod1.py:35: note: Possible overload variant: def f15(x: int) -> None
+src/app/mod4.py:38: note: Possible overload variant: def f18(x: int) -> None
+src/app/mod0.py:41: note: Possible overload variant: def f21(x: int) -> None
+src/app/mod3.py:44: note: Possible overload variant: def f24(x: int) -> None
+src/app/mod6.py:47: note: Possible overload variant: def f27(x: int) -> None
+src/app/mod2.py:50: note: Possible overload variant: def f30(x: int) -> None
+src/app/mod5.py:53: note: Possible overload variant: def f33(x: int) -> None
+src/app/mod1.py:56: note: Possible overload variant: def f36(x: int) -> None
+src/app/mod4.py:59: note: Possible overload variant: def f39(x: int) -> None
+src/app/mod0.py:62: note: Possible overload variant: def f42(x: int) -> None
+src/app/mod3.py:65: note: Possible overload variant: def f45(x: int) -> None
+src/app/mod6.py:68: note: Possible overload variant: def f48(x: int) -> None
+src/app/mod2.py:71: note: Possible overload variant: def f51(x: int) -> None
+src/app/mod5.py:74: note: Possible overload variant: def f54(x: int) -> None
+src/app/mod1.py:77: note: Possible overload variant: def f57(x: int) -> None
+Found 60 errors in 7 files (checked 112 source files)

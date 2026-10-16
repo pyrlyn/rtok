@@ -1,0 +1,62 @@
+argv: rspec
+exit: 0
+min_saving: 65
+---
+Randomized with seed 4242
+
+.........................................F.........
+.....................*.............................
+
+Pending: (Failures listed here are expected and do not affect your suite's status)
+
+  1) Order#total pending 0
+     # Temporarily skipped with xit
+     # ./spec/models/order_spec.rb:10
+  2) Order#total pending 1
+     # Temporarily skipped with xit
+     # ./spec/models/order_spec.rb:11
+  3) Order#total pending 2
+     # Temporarily skipped with xit
+     # ./spec/models/order_spec.rb:12
+
+Failures:
+
+  1) User#name returns the full name
+     Failure/Error: expect(user.name).to eq('Ada Lovelace')
+
+       expected: "Ada Lovelace"
+            got: "Ada"
+
+     # ./spec/models/user_spec.rb:14:in `block (3 levels) in <top (required)>'
+     # /usr/local/bundle/gems/rspec-core-3.13.0/lib/rspec/core/example.rb:200:in `block in run'
+     # /usr/local/bundle/gems/rspec-core-3.13.0/lib/rspec/core/example.rb:201:in `block in run'
+     # /usr/local/bundle/gems/rspec-core-3.13.0/lib/rspec/core/example.rb:202:in `block in run'
+     # /usr/local/bundle/gems/rspec-core-3.13.0/lib/rspec/core/example.rb:203:in `block in run'
+     # /usr/local/bundle/gems/rspec-core-3.13.0/lib/rspec/core/example.rb:204:in `block in run'
+     # /usr/local/bundle/gems/rspec-core-3.13.0/lib/rspec/core/example.rb:205:in `block in run'
+     # /usr/local/bundle/gems/rspec-core-3.13.0/lib/rspec/core/example.rb:206:in `block in run'
+     # /usr/local/bundle/gems/rspec-core-3.13.0/lib/rspec/core/example.rb:207:in `block in run'
+     # /usr/local/bundle/gems/rspec-core-3.13.0/lib/rspec/core/example.rb:208:in `block in run'
+     # /usr/local/bundle/gems/rspec-core-3.13.0/lib/rspec/core/example.rb:209:in `block in run'
+     # /usr/local/bundle/gems/rspec-core-3.13.0/lib/rspec/core/example.rb:210:in `block in run'
+     # /usr/local/bundle/gems/rspec-core-3.13.0/lib/rspec/core/example.rb:211:in `block in run'
+     # /usr/local/bundle/gems/rspec-core-3.13.0/lib/rspec/core/example.rb:212:in `block in run'
+     # /usr/local/bundle/gems/rspec-core-3.13.0/lib/rspec/core/example.rb:213:in `block in run'
+     # /usr/local/bundle/gems/rspec-core-3.13.0/lib/rspec/core/example.rb:214:in `block in run'
+     # /usr/local/bundle/gems/rspec-core-3.13.0/lib/rspec/core/example.rb:215:in `block in run'
+     # /usr/local/bundle/gems/rspec-core-3.13.0/lib/rspec/core/example.rb:216:in `block in run'
+     # /usr/local/bundle/gems/rspec-core-3.13.0/lib/rspec/core/example.rb:217:in `block in run'
+     # /usr/local/bundle/gems/rspec-core-3.13.0/lib/rspec/core/example.rb:218:in `block in run'
+     # /usr/local/bundle/gems/rspec-core-3.13.0/lib/rspec/core/example.rb:219:in `block in run'
+     # /usr/local/bundle/gems/rspec-core-3.13.0/lib/rspec/core/example.rb:220:in `block in run'
+     # /usr/local/bundle/gems/rspec-core-3.13.0/lib/rspec/core/example.rb:221:in `block in run'
+     # /usr/local/bundle/gems/rspec-core-3.13.0/lib/rspec/core/example.rb:222:in `block in run'
+     # /usr/local/bundle/gems/rspec-core-3.13.0/lib/rspec/core/example.rb:223:in `block in run'
+     # /usr/local/bundle/gems/rspec-core-3.13.0/lib/rspec/core/example.rb:224:in `block in run'
+
+Finished in 3.21 seconds (files took 1.4 seconds to load)
+95 examples, 1 failure, 3 pending
+
+Failed examples:
+
+rspec ./spec/models/user_spec.rb:12 # User#name returns the full name
