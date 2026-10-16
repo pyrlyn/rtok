@@ -16,17 +16,18 @@ pub mod calls_view;
 pub mod live;
 pub mod protocol;
 pub mod spa;
+pub mod token;
 
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use axum::Json;
 use axum::Router;
 use axum::extract::State;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
-use axum::http::{HeaderMap, StatusCode};
+use axum::http::{HeaderMap, StatusCode, Uri};
 use axum::response::IntoResponse;
 use axum::routing::get;
 use serde::Deserialize;
@@ -56,6 +57,9 @@ pub struct DashState {
     build_fn: BuildFn,
     /// The graph call events every subscribed socket shares (T329.15).
     live: Arc<live::LiveCalls>,
+    /// S2: the token `/ws` requires. `None` only for in-process tests that skip auth; `serve`
+    /// always sets one.
+    token: Option<Arc<str>>,
 }
 
 impl DashState {
@@ -72,7 +76,15 @@ impl DashState {
             build: Mutex::new(BuildSlot::Idle),
             build_fn,
             live,
+            token: None,
         }
+    }
+
+    /// Require `token` on `/ws` (S2).
+    #[must_use]
+    pub fn with_token(mut self, token: &str) -> Self {
+        self.token = Some(Arc::from(token));
+        self
     }
 
     /// One inbound `/ws` text frame (T60.5 / T60.4). `None` means ignore, or an
@@ -154,6 +166,29 @@ impl DashState {
     }
 }
 
+/// Opt-in for a dashboard bound beyond loopback: `RTOK_WEB_ALLOW_REMOTE=1`.
+pub const ALLOW_REMOTE_ENV: &str = "RTOK_WEB_ALLOW_REMOTE";
+
+/// The dashboard socket can change config, apply `doctor --fix` and clear junk. `/ws` needs the
+/// local token file (S2), but a non-loopback `web.host` would still expose the page and the
+/// socket to every host on the network, so it needs the explicit opt-in. `localhost` and loopback IPs always pass.
+fn remote_bind_allowed(host: &str, opted_in: bool) -> Result<()> {
+    let loopback = host.eq_ignore_ascii_case("localhost")
+        || host
+            .trim_start_matches('[')
+            .trim_end_matches(']')
+            .parse::<std::net::IpAddr>()
+            .is_ok_and(|ip| ip.is_loopback());
+    if loopback || opted_in {
+        return Ok(());
+    }
+    bail!(
+        "rtok web: refusing to bind {host}: the dashboard has no authentication and would let \
+         anyone on the network change config and delete files. Bind 127.0.0.1, or set \
+         {ALLOW_REMOTE_ENV}=1 if the network is trusted"
+    )
+}
+
 /// `rtok web`: bind `host:port` and serve until killed.
 pub fn serve_blocking(cfg: Config) -> Result<()> {
     let rt = tokio::runtime::Builder::new_multi_thread()
@@ -164,6 +199,10 @@ pub fn serve_blocking(cfg: Config) -> Result<()> {
 }
 
 pub async fn serve(mut cfg: Config) -> Result<()> {
+    remote_bind_allowed(
+        &cfg.web.host,
+        std::env::var_os(ALLOW_REMOTE_ENV).is_some_and(|v| v == "1"),
+    )?;
     let addr: SocketAddr = format!("{}:{}", cfg.web.host, cfg.web.port)
         .parse()
         .with_context(|| format!("dashboard bind {}:{}", cfg.web.host, cfg.web.port))?;
@@ -174,7 +213,14 @@ pub async fn serve(mut cfg: Config) -> Result<()> {
     // (the e2e helpers) where to connect, so the startup line and `/health` name that one.
     let addr = listener.local_addr().context("bound address")?;
     cfg.web.port = addr.port();
+    // S2: a fresh token per start; the old one stops working. Written before the startup line,
+    // so a client that waits for the line finds the file.
+    let token = token::issue(&cfg.home)?;
     eprintln!("rtok web http://{addr}  (ws://{addr}/ws)");
+    eprintln!(
+        "rtok web: /ws needs the token in {}",
+        token::token_path(&cfg.home).display()
+    );
     crate::log::append(
         &cfg,
         "info",
@@ -191,7 +237,7 @@ pub async fn serve(mut cfg: Config) -> Result<()> {
     let health = health_check(&cfg);
     let served = axum::serve(
         listener,
-        app_with_assets(Arc::new(DashState::new(cfg)), assets),
+        app_with_assets(Arc::new(DashState::new(cfg).with_token(&token)), assets),
     )
     .await
     .context("dashboard server");
@@ -241,9 +287,17 @@ async fn health(State(state): State<Arc<DashState>>) -> Json<Value> {
 
 async fn ws_upgrade(
     headers: HeaderMap,
+    uri: Uri,
     ws: WebSocketUpgrade,
     State(state): State<Arc<DashState>>,
 ) -> impl IntoResponse {
+    if let Some(expected) = &state.token {
+        let ok = token::presented(&headers, uri.query())
+            .is_some_and(|got| token::matches(expected, &got));
+        if !ok {
+            return StatusCode::UNAUTHORIZED.into_response();
+        }
+    }
     if !origin_allowed(&headers) {
         return StatusCode::FORBIDDEN.into_response();
     }
@@ -299,8 +353,10 @@ fn origin_authority(origin: &str) -> Option<&str> {
 }
 
 fn host_authority(host: &str) -> Option<&str> {
-    let host = host.split(',').next_back()?.trim();
-    if host.is_empty() {
+    // A comma means several `Host` values joined; picking one could pass the equality with a
+    // crafted `Origin`, so the request is refused instead.
+    let host = host.trim();
+    if host.is_empty() || host.contains(',') {
         return None;
     }
     host.split('@').next_back()
@@ -752,6 +808,29 @@ mod tests {
                 "{origin} {host}"
             );
         }
+    }
+
+    /// S2: a dashboard bound beyond loopback needs the explicit opt-in.
+    #[test]
+    fn remote_bind_needs_opt_in() {
+        for host in ["127.0.0.1", "localhost", "::1", "[::1]"] {
+            assert!(remote_bind_allowed(host, false).is_ok(), "{host}");
+        }
+        for host in ["0.0.0.0", "::", "192.168.1.5", "example.com"] {
+            assert!(remote_bind_allowed(host, false).is_err(), "{host}");
+            assert!(remote_bind_allowed(host, true).is_ok(), "{host}");
+        }
+    }
+
+    /// S6: several `Host` values joined by a comma are refused, not resolved to one.
+    #[test]
+    fn comma_joined_host_is_refused() {
+        assert_eq!(host_authority("127.0.0.1:4444"), Some("127.0.0.1:4444"));
+        assert_eq!(host_authority("evil.example, 127.0.0.1:4444"), None);
+        assert!(!origin_allowed(&headers(
+            Some("http://127.0.0.1:4444"),
+            "evil.example,127.0.0.1:4444"
+        )));
     }
 
     /// The port is part of the origin: a page served by another local app

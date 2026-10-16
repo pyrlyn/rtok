@@ -18,6 +18,31 @@ use futures_util::{SinkExt, StreamExt};
 use serde_json::Value;
 use tokio_tungstenite::tungstenite::Message;
 
+/// A `/ws` handshake carrying the token `rtok web` wrote under `rtok_home` (S2).
+async fn connect_ws(
+    addr: &str,
+    rtok_home: &Path,
+) -> Result<
+    (
+        tokio_tungstenite::WebSocketStream<
+            tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+        >,
+        tokio_tungstenite::tungstenite::handshake::client::Response,
+    ),
+    tokio_tungstenite::tungstenite::Error,
+> {
+    use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+    let token = rtok::web::token::read(rtok_home).expect("web token file");
+    let mut req = format!("ws://{addr}/ws")
+        .into_client_request()
+        .expect("ws request");
+    req.headers_mut().insert(
+        "authorization",
+        format!("Bearer {token}").parse().expect("header"),
+    );
+    tokio_tungstenite::connect_async(req).await
+}
+
 struct Web {
     child: Child,
     addr: String,
@@ -225,9 +250,7 @@ async fn rtok_web_dist_overrides_the_embedded_spa() {
         "RTOK_WEB_DIST was ignored"
     );
     // The API is not the override's business.
-    let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://{}/ws", web.addr))
-        .await
-        .expect("ws connect");
+    let (mut ws, _) = connect_ws(&web.addr, &web.home).await.expect("ws connect");
     assert_eq!(next_json(&mut ws).await["type"], "snapshot");
     let _ = std::fs::remove_dir_all(&dist);
 }
@@ -273,9 +296,7 @@ fn plugin_enabled(snap: &Value, id: &str) -> bool {
 #[tokio::test]
 async fn websocket_streams_snapshots_and_answers_commands() {
     let web = start("ws").await;
-    let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://{}/ws", web.addr))
-        .await
-        .expect("ws connect");
+    let (mut ws, _) = connect_ws(&web.addr, &web.home).await.expect("ws connect");
 
     let first = next_json(&mut ws).await;
     assert_eq!(first["type"], "snapshot", "{first}");
@@ -329,9 +350,7 @@ async fn websocket_streams_snapshots_and_answers_commands() {
 #[tokio::test]
 async fn answers_echo_the_request_id_and_only_that_one() {
     let web = start("req").await;
-    let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://{}/ws", web.addr))
-        .await
-        .expect("ws connect");
+    let (mut ws, _) = connect_ws(&web.addr, &web.home).await.expect("ws connect");
     let sent = [
         (r#"{"req":11,"junk":{"action":"plan"}}"#, "junkplan"),
         (r#"{"req":12,"junk":{"action":"burn"}}"#, "message"),
@@ -366,9 +385,7 @@ async fn doctor_plans_without_writing_and_applies_on_confirm() {
     std::fs::create_dir_all(settings.parent().unwrap()).expect("claude dir");
     let broken = r#"{"hooks": {"Stop": [{"hooks": [{"type": "command", "command": "/nonexistent/old.sh"}]}]}}"#;
     std::fs::write(&settings, broken).expect("settings");
-    let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://{}/ws", web.addr))
-        .await
-        .expect("ws connect");
+    let (mut ws, _) = connect_ws(&web.addr, &web.home).await.expect("ws connect");
     let none = r#""selection":{"keep":[],"toggled":[]}"#;
 
     ws.send(Message::text(format!(
@@ -444,9 +461,7 @@ async fn junk_plans_without_removing_and_applies_only_confirmed_paths() {
             .and_then(|f| f.set_modified(old))
             .expect("age the log past the settle window");
     }
-    let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://{}/ws", web.addr))
-        .await
-        .expect("ws connect");
+    let (mut ws, _) = connect_ws(&web.addr, &web.home).await.expect("ws connect");
 
     ws.send(Message::text(r#"{"junk":{"action":"plan"}}"#))
         .await

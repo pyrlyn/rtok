@@ -158,7 +158,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T527 | in progress | P2 | 3 | 0% | MiMo / mimo |
 | T666.2 | todo | P2 | 3 | 0% | |
 | T687 | todo | P2 | 4 | 0% | |
-| T683 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 
 
 
@@ -1074,19 +1073,3 @@ Check: a test shows a dropped `Runtime::in_memory` leaves no directory behind, a
 ## Beat sqz, lean-ctx, token-optimizer and caveman per category (T672–T686)
 
 Source: `docs/research/competitors-techniques.md` (techniques, licenses, links). Every card: keep 100 % of hashes, paths and WARN/ERROR lines, never more tokens than raw, stderr and exit line kept on failure.
-
-
-
-
-
-
-### T683. tail 155, cat *.log
-
-Best competitor: lean-ctx 87.4 % (rtok 94.5 %). Design: caveman-style field summary on collapsed runs: constant logfmt keys printed once.
-
-Check: #1076 harness (`bench/c14`) shows keep lead, +2 pp on this category with full anchor retention.
-
-Plan: extend the existing log run-collapser in `src/plugins/cmd` so collapsed logfmt runs print constant `key=value` pairs once and list only varying keys; keep error/WARN lines verbatim; fixture test asserting anchors retained and tokens ≤ raw, `expand <id>` returns raw; measure on `bench/fixtures` logs.
-
-Blocked: (1) `cmd` has no logfmt run-collapser to extend today, only `dedupe = "normalized"` (`rules.rs`, no default rule uses it), so this is a new collapse mode, not a tweak; (2) the Check (+2 pp, rtok already 94.5 % vs lean-ctx 87.4 %) is measurable only with the #1076 harness (`bench/c14`, PR open, not on main). Take it again after #1076 merges.
-

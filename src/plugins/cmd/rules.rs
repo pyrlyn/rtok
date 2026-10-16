@@ -372,8 +372,17 @@ fn matches_pat(pats: &[String], low: &str) -> bool {
     })
 }
 
+/// T683: a logfmt/bracketed WARN level. `warning` is already kept; the short level names
+/// of structured logs are not, and a hidden WARN is as costly as a hidden error.
+fn is_warn_level(low: &str) -> bool {
+    ["level=warn", "lvl=warn", "[warn]", "\"level\":\"warn\""]
+        .iter()
+        .any(|k| low.contains(k))
+}
+
 fn is_keep(low: &str, rule: &Rule) -> bool {
     BUILTIN_KEEP.iter().any(|k| low.contains(k))
+        || is_warn_level(low)
         || matches_pat(&rule.keep, low)
         || match rule.group {
             Group::Dir => low.contains(" files): "),
@@ -1170,6 +1179,9 @@ pub(crate) fn apply_parsed(
     if lines.len() <= max {
         return lines.join("\n");
     }
+    // T683: the cut is certain, so state the pairs every record shares once and drop
+    // them from the lines that still print; errors and warnings stay verbatim.
+    let shared = super::logfmt::factor(&mut lines, |l| is_keep(&l.to_ascii_lowercase(), rule));
     let mut trace_kept = trace_blocks(&lines);
     cap_trace_lines(&mut trace_kept);
     let head = rule.head.min(rule.max_lines) as usize;
@@ -1194,6 +1206,10 @@ pub(crate) fn apply_parsed(
     let total = lines.len();
     let mut picked: Vec<String> = Vec::new();
     let mut omitted = 0usize;
+    // T683: the lines behind the pending marker, for its logfmt field summary. Only a
+    // logfmt output (one with a shared-pairs header) is summarised; on any other log the
+    // summary would cost tokens the visible lines already answer.
+    let mut run: Vec<String> = Vec::new();
     let mut last_pushed_trace = false;
     // Suffix count of trace lines still ahead, so the fold-into-trailer count stays
     // true when trace blocks keep printing past a spent budget (T65.4).
@@ -1206,8 +1222,9 @@ pub(crate) fn apply_parsed(
         // behind a trailer — only the block's own length counts against `max_lines`.
         if trace_kept[i] {
             if omitted > 0 {
-                picked.push(omitted_marker(omitted, archive_id));
+                picked.push(omitted_marker(omitted, archive_id, &run));
                 omitted = 0;
+                run.clear();
             }
             picked.push(line);
             last_pushed_trace = true;
@@ -1223,8 +1240,11 @@ pub(crate) fn apply_parsed(
                     // come, so folding them here would count them twice.
                     let fold = picked.len() + 1 >= max && trace_rest_from[i + 1] == 0;
                     let count = omitted + if fold { total - i } else { 0 };
-                    picked.push(omitted_marker(count, archive_id));
+                    // A fold also counts lines never collected, so no summary then.
+                    let seen: &[String] = if fold { &[] } else { &run };
+                    picked.push(omitted_marker(count, archive_id, seen));
                     omitted = 0;
+                    run.clear();
                     last_pushed_trace = false;
                     if fold {
                         break;
@@ -1234,31 +1254,54 @@ pub(crate) fn apply_parsed(
                 last_pushed_trace = false;
             } else {
                 omitted += 1;
+                if shared.is_some() {
+                    run.push(line);
+                }
             }
         } else {
             omitted += 1;
+            if shared.is_some() {
+                run.push(line);
+            }
         }
     }
     if omitted > 0 {
         // Fold the trailer into a full budget only when the last pushed line is not
         // a trace line; a trace frame is never popped for it.
         if picked.len() >= max && !last_pushed_trace {
-            picked.pop();
+            let popped = picked.pop();
+            if shared.is_some() {
+                run.extend(popped);
+            }
             omitted += 1;
         }
-        picked.push(omitted_marker(omitted, archive_id));
+        picked.push(omitted_marker(omitted, archive_id, &run));
+    }
+    if let Some(h) = shared {
+        picked.insert(0, h);
     }
     picked.join("\n")
 }
 
 /// `… N lines omitted (expand <id>)`; with no archive (the store was unavailable) there is
 /// nothing to expand, so the marker names no id.
-fn omitted_marker(n: usize, archive_id: &str) -> String {
-    if archive_id.is_empty() {
+///
+/// T683: `run` is the omitted lines when they are all known; a logfmt run appends what its
+/// lines shared and what varied ([`super::logfmt::summary`]).
+fn omitted_marker(n: usize, archive_id: &str, run: &[String]) -> String {
+    let mut m = if archive_id.is_empty() {
         format!("… {n} lines omitted")
     } else {
         format!("… {n} lines omitted (expand {archive_id})")
+    };
+    if run.len() == n
+        && let Some(s) = super::logfmt::summary(run)
+    {
+        m.push_str(" [");
+        m.push_str(&s);
+        m.push(']');
     }
+    m
 }
 
 /// Built-in [`rules/default.toml`](../../../rules/default.toml).
@@ -2297,5 +2340,85 @@ mod tests {
         let s = settings(80);
         let out = apply(&s, &body, 0, &rule, "id");
         assert!(out.contains("… +10 more"), "{out}");
+    }
+
+    /// T683: 300 logfmt lines (one ERROR, one WARN) cut to head/tail.
+    fn logfmt_body() -> String {
+        (0..300)
+            .map(|i| {
+                let level = match i {
+                    150 => "error",
+                    200 => "warn",
+                    _ => "info",
+                };
+                format!(
+                    "ts=2026-10-16T10:{:02}:{:02}Z level={level} svc=api msg=\"request done\" \
+                     method=GET status=200 dur_ms={} req=r{i}",
+                    i / 60,
+                    i % 60,
+                    10 + i % 7
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    #[test]
+    fn collapsed_logfmt_run_lists_constants_once_and_varying_keys() {
+        let body = logfmt_body();
+        let out = apply(&settings(80), &body, 0, &Rule::default(), "deadbeef");
+        let first = out.lines().next().unwrap();
+        for want in [
+            "svc=api",
+            "status=200",
+            "method=GET",
+            "msg=\"request done\"",
+        ] {
+            assert!(
+                first.starts_with("[every record:") && first.contains(want),
+                "{first}"
+            );
+        }
+        // The shared pairs are stated once, not on every printed line.
+        assert_eq!(
+            out.matches("svc=api").count(),
+            3,
+            "header + error + warn: {out}"
+        );
+        let marker = out
+            .lines()
+            .find(|l| l.contains("lines omitted"))
+            .unwrap_or_else(|| panic!("{out}"));
+        assert!(marker.contains("(expand deadbeef)"), "{marker}");
+        for want in ["varying:", "ts=", "dur_ms=", "req=r10..r149"] {
+            assert!(marker.contains(want), "{want} missing: {marker}");
+        }
+        // Anchors: the error and the WARN line survive verbatim, with the head and tail.
+        let error = body.lines().nth(150).unwrap();
+        let warn = body.lines().nth(200).unwrap();
+        assert!(
+            out.lines().any(|l| l == error) && out.lines().any(|l| l == warn),
+            "{out}"
+        );
+        for anchor in [0, 299] {
+            assert!(out.contains(&format!("req=r{anchor}")), "r{anchor}: {out}");
+        }
+        let t =
+            |s: &str| crate::tokens::estimate(s, rtok_plugin_sdk::Class::Code, &Default::default());
+        assert!(t(&out) <= t(&body), "{} > {}", t(&out), t(&body));
+    }
+
+    #[test]
+    fn short_or_unstructured_omitted_runs_get_no_field_summary() {
+        let plain = (0..200)
+            .map(|i| format!("line {i}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let out = apply(&settings(80), &plain, 0, &Rule::default(), "id");
+        assert!(out.contains("… 180 lines omitted (expand id)"), "{out}");
+        assert!(
+            !out.contains("every record") && !out.contains("varying:"),
+            "{out}"
+        );
     }
 }

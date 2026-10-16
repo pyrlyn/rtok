@@ -47,4 +47,3 @@
 - T651. Honor ProgressRunner timeouts with inherited output
 - T666.2. Provider-backed memory extractor (blocked on the creator)
 - T687. Hooks: PreToolUse/PostToolUse p50 to 10 ms
-- T683. tail 155, cat *.log: keep lead, +2 pp (vs lean-ctx 87.4 % (rtok 94.5 %))

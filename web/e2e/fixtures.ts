@@ -21,6 +21,11 @@ export const test = base.extend<{ rtok: Rtok }>({
       await rtok.dispose();
     }
   },
+  // The page presents the token the way a user's browser does: once, from sessionStorage.
+  page: async ({ page, rtok }, use) => {
+    await page.addInitScript((token) => globalThis.sessionStorage.setItem("rtok.web.token", token), rtok.token);
+    await use(page);
+  },
   baseURL: async ({ rtok }, use) => {
     await use(rtok.url);
   },

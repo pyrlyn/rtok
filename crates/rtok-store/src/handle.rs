@@ -15,7 +15,7 @@ impl Store {
     /// [`Store::open`] with its own bound on waiting for other processes' locks.
     pub fn open_with(path: &Path, wait: LockWait) -> Result<Self> {
         if let Some(dir) = path.parent() {
-            std::fs::create_dir_all(dir)?;
+            create_private_dir(dir)?;
         }
         let url = path.to_str().context("db path is not UTF-8")?;
         // A first run races: hooks, the MCP server, the proxy and `otel flush` all open
@@ -26,7 +26,10 @@ impl Store {
         let attempts = wait.attempts.max(1);
         for attempt in 0..attempts {
             match Self::connect(url, wait) {
-                Ok(store) => return Ok(store),
+                Ok(store) => {
+                    restrict_db_files(path);
+                    return Ok(store);
+                }
                 Err(e) if is_locked(&e) && attempt + 1 < attempts => {
                     std::thread::sleep(OPEN_RETRY_DELAY);
                 }
@@ -117,5 +120,78 @@ impl Store {
         };
         set_busy(&mut conn, self.wait.busy)?;
         applied
+    }
+}
+
+/// Create `dir` (and missing parents) owner-only on Unix: the store holds prompt and tool bodies.
+/// An existing directory keeps its mode; the files in it are restricted one by one.
+pub(crate) fn create_private_dir(dir: &std::path::Path) -> std::io::Result<()> {
+    if dir.as_os_str().is_empty() || dir.is_dir() {
+        return Ok(());
+    }
+    let mut b = std::fs::DirBuilder::new();
+    b.recursive(true);
+    #[cfg(unix)]
+    std::os::unix::fs::DirBuilderExt::mode(&mut b, 0o700);
+    b.create(dir)
+}
+
+/// Owner-only read/write for the database file and its WAL/SHM siblings. Best effort: a file
+/// owned by someone else (a shared path the operator chose) keeps its mode.
+fn restrict_db_files(path: &std::path::Path) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut names = vec![path.as_os_str().to_owned()];
+        for ext in ["-wal", "-shm"] {
+            let mut n = path.as_os_str().to_owned();
+            n.push(ext);
+            names.push(n);
+        }
+        for n in names {
+            let p = std::path::Path::new(&n);
+            if let Ok(m) = std::fs::metadata(p)
+                && m.permissions().mode() & 0o077 != 0
+            {
+                let _ = std::fs::set_permissions(p, std::fs::Permissions::from_mode(0o600));
+            }
+        }
+    }
+    #[cfg(not(unix))]
+    let _ = path;
+}
+
+#[cfg(all(test, unix))]
+mod private_mode_tests {
+    use super::*;
+    use std::os::unix::fs::PermissionsExt;
+
+    fn mode(p: &std::path::Path) -> u32 {
+        std::fs::metadata(p).unwrap().permissions().mode() & 0o777
+    }
+
+    /// S3: a fresh store directory is 0700 and the database file 0600.
+    #[test]
+    fn fresh_store_is_owner_only() {
+        let base = crate::support::tmp_dir("private-store");
+        let db = base.join("home").join("rtok.db");
+        let store = Store::open(&db).unwrap();
+        drop(store);
+        let (d, f) = (mode(&base.join("home")), mode(&db));
+        let _ = std::fs::remove_dir_all(&base);
+        assert_eq!((d, f), (0o700, 0o600));
+    }
+
+    /// S3: an existing world-readable database is tightened on open.
+    #[test]
+    fn existing_readable_db_is_tightened() {
+        let base = crate::support::tmp_dir("private-existing");
+        let db = base.join("rtok.db");
+        drop(Store::open(&db).unwrap());
+        std::fs::set_permissions(&db, std::fs::Permissions::from_mode(0o644)).unwrap();
+        drop(Store::open(&db).unwrap());
+        let f = mode(&db);
+        let _ = std::fs::remove_dir_all(&base);
+        assert_eq!(f, 0o600);
     }
 }

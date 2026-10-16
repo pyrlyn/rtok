@@ -235,6 +235,33 @@ fn run_long_output_then_expand_round_trips() {
     let _ = fs::remove_dir_all(&home);
 }
 
+/// T683: a logfmt log is cut with its shared pairs stated once, and `expand` still returns
+/// every raw line, shared pairs included.
+#[test]
+fn run_logfmt_output_states_shared_pairs_once_and_expands_raw() {
+    let home = tmp("logfmt");
+    let script = "BEGIN{for(i=1;i<=120;i++)print \"level=info svc=api msg=ok n=\" i}";
+    let out = ok(&["run", "awk", script], &home);
+    assert!(
+        out.contains("[every record: level=info svc=api msg=ok]"),
+        "{out}"
+    );
+    assert!(
+        out.contains("varying: n=") && out.contains("n=120"),
+        "{out}"
+    );
+    assert!(!out.contains("level=info svc=api msg=ok n=120"), "{out}");
+    let id = out
+        .lines()
+        .find(|l| l.starts_with("[rtok "))
+        .and_then(|t| t.split_whitespace().nth(1))
+        .expect("{out}");
+    let full = ok(&["expand", id], &home);
+    assert_eq!(full.lines().count(), 120, "{full}");
+    assert!(full.contains("level=info svc=api msg=ok n=57"), "{full}");
+    let _ = fs::remove_dir_all(&home);
+}
+
 #[test]
 fn plugins_lists_the_catalogue() {
     let home = tmp("plugins");
