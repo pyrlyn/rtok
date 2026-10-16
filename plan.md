@@ -158,7 +158,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T527 | in progress | P2 | 3 | 0% | MiMo / mimo |
 | T662 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T663 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T665 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T666.2 | todo | P2 | 3 | 0% | |
 | T667 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T670 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
@@ -193,14 +192,6 @@ serena is ahead on symbol/reference precision (`docs/comparison/rtok-vs-serena.m
 Check: updated recall/precision row in `docs/comparison/rtok-vs-serena.md` and the graph bench; description-token budget still far below serena; `just check`.
 
 **Plan.** (1) Read `tests/graph_truth.rs` and `tests/fixtures/graph_truth.toml`; list the reference sites still missed (ref recall 0.924) and group them by cause (qualified paths, method calls through `self`, re-exports, macros, same-name definitions across files). (2) Fail-first fixture rows for the top cause, then fix it in the tags resolver (`src/plugins/graph/resolve.rs`, `scope.rs`) with no new MCP tool and no description growth. (3) Raise the `graph_truth` floors to the new numbers; record before/after in `research.md` and the serena row of `docs/comparison/rtok-vs-serena.md` once PR #1071 is on `main` (until then, only `research.md`). (4) `tests/graph_contract.rs` and the surface description-token gate stay green; `just check`.
-
-### T665. Broader graph queries (codebase-memory-mcp)
-
-codebase-memory-mcp is broader (Cypher-style queries) (`docs/comparison/rtok-vs-codebase-memory-mcp.md`). Add the small query shapes agents actually used in our logs, without a heavy MCP surface. Savings both sides: **no data** for a shared corpus.
-
-Check: query shapes documented and tested; comparison file updated; `just check`.
-
-**Plan.** (1) List the query shapes agents used in our logs (`rtok stats`, `graph_events`) that `symbol`/`callers`/`impact`/`explore` do not answer in one call; compare with the Cypher shapes in `docs/comparison/rtok-vs-codebase-memory-mcp.md`. (2) Add at most two shapes as parameters of existing operations (no seventh/eighth tool): e.g. `callers` with `depth` and a `kind`/`path` filter, `outline` with `kind`. (3) Fail-first tests in `src/plugins/graph` + `tests/graph_contract.rs` for each shape, on the SQLite store only. (4) Document the shapes in `src/plugins/graph/README.md` and the comparison file; description tokens stay under the surface gate; `just check`.
 
 ### T666.2. Provider-backed memory extractor (blocked on the creator)
 

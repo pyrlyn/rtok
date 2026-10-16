@@ -47,7 +47,6 @@
 - T651. Honor ProgressRunner timeouts with inherited output
 - T662. Match sqz formatter breadth without leaving the lossless path
 - T663. Push graph reference precision toward LSP-grade (serena)
-- T665. Broader graph queries (codebase-memory-mcp)
 - T666.2. Provider-backed memory extractor (blocked on the creator)
 - T667. Richer memory features from engram
 - T670. Read modes lean-ctx still has
