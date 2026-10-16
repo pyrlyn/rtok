@@ -17,9 +17,7 @@ no changes added to commit (use "git add" and/or "git commit -a")
 """
 stdout = """
 On branch main
- M src/lib.rs
- M src/main.rs
- M src/plugins/cmd/run.rs
+ M src/{lib.rs,main.rs} src/plugins/cmd/run.rs
 ?? notes.txt
 [rtok 59cc4b71 · 13 lines]
 """
