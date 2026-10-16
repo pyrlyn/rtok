@@ -18,7 +18,7 @@ build never blocks the host.
 | `rtok filter --stdin` | filter a payload without executing it (OpenCode `tool.execute.after`) |
 | `rtok expand <id>` | print an archived payload, whole or by `--lines` / `--grep` |
 | `rtok stats` | measurements from session logs and the proxy |
-| `rtok discover` | Bash commands no formatter or named rule covers, ranked by the output tokens they sent to the model (`--since`, `--top`, `--json`) |
+| `rtok discover` | shell commands your agents ran that have no rule or formatter, most output first |
 | `rtok doctor` | inspect hooks, MCP servers, proxy chain — including what each costs per turn, and how much space `rtok agents junk clear` would free |
 | `rtok agents install claude\|cursor\|codex\|opencode\|kilo\|pi\|zcode\|kimi\|copilot\|aider\|windsurf\|zed` | install into a host, with backups; `--dry-run` |
 | `rtok agents uninstall claude\|cursor\|codex\|opencode\|kilo\|pi\|zcode\|kimi\|copilot\|aider\|windsurf\|zed` | take rtok back out of a host, with backups; `--dry-run` |
@@ -159,6 +159,13 @@ is the whole lossless contract — nothing rtok shortens is unrecoverable.
 with a `Measurement`, and from the proxy capturing real `usage` from API responses.
 `rtok stats --calibrate` refits the characters-per-token estimator against those real
 counts.
+
+`rtok discover [--since 30d] [--limit 20] [--json]` reads the `PostToolUse` shell calls the hook
+already stored in the database and lists the command families that have no rule and no
+formatter (the default cut still applies), ranked by the output tokens the agent read. It
+reruns nothing and claims no saving: only a `Measurement` row is a saving. Calls whose body
+exceeded `core.call_io_inline_bytes` were never stored and show up as `unreadable rows`.
+Pick the next rule family from the top rows.
 
 `rtok bench` runs two host configurations over the fixed task set in `bench/tasks.toml` and
 compares them.
