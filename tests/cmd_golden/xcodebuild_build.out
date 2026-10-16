@@ -1,0 +1,21 @@
+Command line invocation:
+    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild -scheme App build
+
+Build settings from command line:
+    SDKROOT = iphonesimulator17.5
+
+=== BUILD TARGET App OF PROJECT App WITH CONFIGURATION Debug ===
+
+CompileSwift normal arm64 /Users/dev/App/Sources/File0.swift (in target 'App' from project 'App')
+    cd /Users/dev/App
+… 87 lines omitted (expand deadbeef)
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift-frontend -frontend -c File29.swift
+/Users/dev/App/Sources/File7.swift:42:13: error: cannot find 'foo' in scope
+        foo()
+        ^~~
+
+** BUILD FAILED **
+
+The following build commands failed:
+	CompileSwift normal arm64 /Users/dev/App/Sources/File7.swift (in target 'App' from project 'App')
+(1 failure)

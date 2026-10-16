@@ -45,7 +45,6 @@
 - T656. Keep worktrees and caches when their age cannot be established
 - T657. Match compressor credentials to the internal provider
 - T651. Honor ProgressRunner timeouts with inherited output
-- T662. Match sqz formatter breadth without leaving the lossless path
 - T666.2. Provider-backed memory extractor (blocked on the creator)
 - T667. Richer memory features from engram
 - T670. Read modes lean-ctx still has

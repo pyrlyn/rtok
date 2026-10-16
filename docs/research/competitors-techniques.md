@@ -115,6 +115,34 @@ that alone is 70+ tokens on every compressed call and dominates small outputs.
 | T685 | find 33 | rtok leads | keep dir grouping but print full paths for ≤ 50 hits so the anchor check passes | 100 % paths, ≥ 69 % |
 | T686 | MCP tool catalogs | caveman 12–29 % | `rtok mcp` proxy: first sentence of descriptions, drop default/examples that duplicate type, enum compaction; recovery via archive | ≥ 30 % |
 
+## sqz formatter coverage (T662)
+
+Source: [sqz `cmd_formatters/mod.rs`](https://github.com/ojuschugh1/sqz/blob/cf2b03c8072729f366e48a8a4933a421bd2a1e79/sqz_engine/src/cmd_formatters/mod.rs#L120-L180),
+checked 2026-10-15. `rtok discover` (T661) is not on main, so families are taken from sqz's list, not from real traffic.
+"Saving" is est tokens on the new `tests/cmd_golden/*` fixtures (synthetic, shaped like each tool's output); "default" means
+`Rule::default()` already wins and a dedicated rule would not beat it.
+
+| sqz arm | rtok route | Saving on the golden |
+| --- | --- | --- |
+| git, cargo, pytest, go, docker, kubectl, tree | formatter (existing) | see `docs/cmd-rules.md` |
+| npm/npx, pnpm, pip, gradle, mvn, dotnet, tsc, eslint, grep/rg, curl | `[rule]` (existing) | see `docs/cmd-rules.md` |
+| ruff | **new** `[ruff]`, `group = "diag"` | 96 % (default 72 %) |
+| mypy | **new** `[mypy]`, `group = "diag"` | 77 % (default 55 %) |
+| rubocop | **new** `[rubocop]`, `group = "diag"` | 88 % (default 82 %) |
+| golangci-lint | **new** `[golangci-lint]`, `group = "diag"` | 91 % (default 53 %) |
+| yarn | default | 16 % (a rule gave the same bytes) |
+| bun | default | 65 % |
+| rspec | default | 71 % |
+| terraform / tf | default | 74 % |
+| xcodebuild | default | 90 % |
+| biome, rake/rails, bundle, wget, logcat | default, no golden | not measured |
+| podman | gap: the `docker ps` formatter matches only `docker` | open |
+
+What made the four new rows win is not a rule but a parser: `parse_diag` now reads `path:line[:col]: CODE msg`
+(ruff, flake8), `path:line: error: msg  [code]` (mypy), `path:line:col: C: Cop/Name: msg` (rubocop) and
+`path:line:col: msg (linter)` (golangci-lint), so the existing diagnostic grouping folds them to `CODE ×N: msg (first locations…)`.
+The full list stays behind `expand <id>`.
+
 ## Correctness checks for every task
 - Anchor check from #1076 (`bench/c14`): 100 % of hashes (7-char prefix), paths and WARN/ERROR lines.
 - Exit status and stderr unchanged on failure.
