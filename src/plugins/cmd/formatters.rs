@@ -159,8 +159,8 @@ pub(crate) use crate::names::cmd_stem;
 
 /// Stems with a Rust formatter (any subcommand). `rtok stats` labels the whole stem.
 const FORMATTER_STEMS: &[&str] = &[
-    "cargo", "git", "pytest", "jest", "vitest", "tree", "go", "docker", "kubectl", "ps", "df",
-    "sqlite3", "wc", "mise",
+    "cargo", "git", "pytest", "python", "python3", "py", "jest", "vitest", "tree", "go", "docker",
+    "kubectl", "ps", "df", "sqlite3", "wc", "mise",
 ];
 
 /// T50.1: how `rtok stats` labels a Bash family — `formatter`, named `rule`, or `default`.
@@ -631,10 +631,11 @@ fn format(argv: &[String], output: &str) -> Option<String> {
         ("cat", _) => super::catfile::outline_of(argv, output),
         ("grep", _) | ("rg", _) | ("git", "grep") => super::grep::group(argv, output),
         ("git", "log") => Some(output.lines().take(20).collect::<Vec<_>>().join("\n")),
-        ("pytest", _) => Some(keep(
-            output,
-            &["FAILED", "ERROR", "passed", "failed", "error"],
-        )),
+        ("pytest", _) => Some(
+            super::python::pytest(output)
+                .unwrap_or_else(|| keep(output, &["FAILED", "ERROR", "passed", "failed", "error"])),
+        ),
+        ("python" | "python3" | "py", _) => super::python::script(output),
         ("jest", _) | ("vitest", _) => Some(keep(output, &["FAIL", "PASS", "Tests:", "● "])),
         ("go", "test") => Some(keep(output, &["FAIL", "PASS", "ok  ", "--- FAIL"])),
         ("wc", _) => Some(wc_table(output)),
@@ -1599,6 +1600,9 @@ mod tests {
             ("git", "diff"),
             ("git", "log"),
             ("pytest", ""),
+            ("python", ""),
+            ("python3", ""),
+            ("py", ""),
             ("jest", ""),
             ("vitest", ""),
             ("go", "test"),

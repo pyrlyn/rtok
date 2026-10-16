@@ -158,7 +158,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T527 | in progress | P2 | 3 | 0% | MiMo / mimo |
 | T666.2 | todo | P2 | 3 | 0% | |
 | T687 | todo | P2 | 4 | 0% | |
-| T675 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T676 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T678 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T679 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
@@ -1084,13 +1083,6 @@ Check: a test shows a dropped `Runtime::in_memory` leaves no directory behind, a
 Source: `docs/research/competitors-techniques.md` (techniques, licenses, links). Every card: keep 100 % of hashes, paths and WARN/ERROR lines, never more tokens than raw, stderr and exit line kept on failure.
 
 
-### T675. python3 1545
-
-Best competitor: none specialised. Design: detect pytest/unittest/traceback output: keep the full last traceback, collapse repeated frames, summary line; JSON stdout → TOON (#1078).
-
-Check: #1076 harness (`bench/c14`) shows ≥ t-o pytest (564→115) on this category with full anchor retention.
-
-Plan: add a `python` formatter in `compact.rs`: pytest/unittest output keeps the summary and the full last traceback, collapses repeated frames and repeated failing-test headers; JSON stdout is printed as a TOON table through the existing #1078 path if merged, otherwise left to a follow-up (written in this card). Tests: golden `python_pytest.in/out`, `python_traceback.in/out`.
 
 ### T676. gh 744
 
