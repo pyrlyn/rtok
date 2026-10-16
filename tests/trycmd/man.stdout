@@ -38,7 +38,7 @@ rtok/-stats(1)
 Measurements from session logs and the proxy
 .TP
 rtok/-discover(1)
-Bash commands no filter covers yet, ranked by the output tokens they sent to the model
+Shell commands your agents ran that have no rule or formatter, most output first
 .TP
 rtok/-bench(1)
 A/B benchmark of host configurations
