@@ -8726,6 +8726,16 @@ Result: `visible_argv` peels `mise exec`/`mise x` (after `--` or `-c`) and `just
 Status: done 2026-10-06
 Model: Cursor / grok 4.7
 
+### T684. wc 102, cargo test/build/clippy
+
+Best competitor: rtk / sqz. Design: wc: drop padding, keep `total`; cargo: #1077 + group warnings by lint code `unused_imports ×12 (files…)`.
+
+Check: #1076 harness (`bench/c14`) shows ≥ rtk on this category with full anchor retention.
+
+Plan: wc formatter drops padding and keeps `total`; cargo clippy/build warnings (on top of #1077) group by lint code `lint ×N (files…)`, keeping every distinct path and all errors; fixture tests per formatter; never worse than raw.
+
+Outcome: `wc` gets its own formatter (padding dropped, `total` kept; golden `wc`), and `cargo build`/`clippy` warnings are grouped by lint code (`unused_imports ×3: … (locations)`) keeping every distinct message, all errors and the exit line. Tests: two `compact.rs` unit tests plus the `wc` golden. Measured on the repo fixtures: the #1076 `bench/c14` harness is not on main.
+
 ### T388. `doctor` reports the real MCP Tool Search state
 
 From `research.md` §3 and §8: `doctor` infers "MCP tool search likely disabled" from `ANTHROPIC_BASE_URL` alone (`src/doctor.rs`, `mcp_tool_search_disabled: anthropic.is_some()`) and never reads `ENABLE_TOOL_SEARCH`. The `tools_rewrite` advice keys off the same flag, so a false positive advises a rewrite that is not needed.

@@ -1,0 +1,13 @@
+argv: wc src/plugins/cmd/*.rs
+exit: 0
+min_saving: 20
+---
+     395    1786   15534 src/plugins/cmd/bounded.rs
+     629    2734   24365 src/plugins/cmd/compact.rs
+     164     583    6106 src/plugins/cmd/filter.rs
+    1712    6707   62278 src/plugins/cmd/formatters.rs
+     560    2416   21593 src/plugins/cmd/hook.rs
+      43     145    1161 src/plugins/cmd/mod.rs
+    2149    7424   76204 src/plugins/cmd/rules.rs
+    1129    4571   43592 src/plugins/cmd/run.rs
+    6781   26366  250833 total

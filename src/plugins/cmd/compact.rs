@@ -48,25 +48,121 @@ fn is_generated_count(line: &str) -> bool {
     line.starts_with("warning: `") && line.contains(" generated ") && line.contains("warning")
 }
 
+/// One `warning:` block: its headline, every `-->` location and the lint name when the
+/// block (or an earlier one with the same headline shape) says it.
+struct Warn {
+    head: String,
+    locs: Vec<String>,
+    code: Option<String>,
+}
+
+enum Piece {
+    Line(String),
+    Warn(usize),
+}
+
+/// `#[warn(unused_imports)]` or a clippy `…/index.html#redundant_clone` link → the lint name.
+fn lint_code(line: &str) -> Option<String> {
+    if let Some(r) = line.split("#[warn(").nth(1) {
+        return Some(r.split(')').next()?.to_string());
+    }
+    let r = line
+        .split("rust-clippy/")
+        .nth(1)?
+        .split("index.html#")
+        .nth(1)?;
+    Some(format!("clippy::{}", r.split_whitespace().next()?))
+}
+
+/// The headline with its backticked names removed: `unused import: `a`` and `…: `b``
+/// share one shape, so a warning without a lint note still joins its group.
+fn head_shape(head: &str) -> String {
+    head.split('`').step_by(2).collect()
+}
+
 /// `cargo build` / `check` / `clippy`: the diagnostic headline and its `-->` location, the
-/// `could not compile` verdict, and a one-word `Finished <profile>` on success.
+/// `could not compile` verdict, and a one-word `Finished <profile>` on success. Two or more
+/// warnings of one lint fold into `lint ×N: first headline (loc, loc, …)` (T684): every
+/// location stays, the repeated headlines are in the archive.
 pub fn cargo_build(output: &str) -> Option<String> {
-    let mut kept: Vec<String> = Vec::new();
+    let mut pieces: Vec<Piece> = Vec::new();
+    let mut warns: Vec<Warn> = Vec::new();
+    let mut open = false;
     for line in output.lines() {
         if is_progress(line) || is_generated_count(line) {
             continue;
         }
         if let Some(f) = short_finished(line) {
-            kept.push(f);
+            open = false;
+            pieces.push(Piece::Line(f));
+        } else if line.starts_with("warning:") {
+            open = true;
+            warns.push(Warn {
+                head: line.to_string(),
+                locs: Vec::new(),
+                code: None,
+            });
+            pieces.push(Piece::Warn(warns.len() - 1));
+        } else if open && line.trim_start().starts_with("-->") {
+            warns.last_mut()?.locs.push(line.to_string());
+        } else if open && let Some(c) = lint_code(line) {
+            warns.last_mut()?.code.get_or_insert(c);
         } else if ["error[", "error:", "-->", "warning:"]
             .iter()
             .any(|n| line.contains(n))
         {
-            kept.push(line.to_string());
+            open = false;
+            pieces.push(Piece::Line(line.to_string()));
         }
     }
-    if kept.is_empty() {
+    if pieces.is_empty() {
         return None;
+    }
+    let mut by_shape: std::collections::HashMap<String, String> = Default::default();
+    for w in &warns {
+        if let Some(c) = &w.code {
+            by_shape
+                .entry(head_shape(&w.head))
+                .or_insert_with(|| c.clone());
+        }
+    }
+    let lint = |w: &Warn| {
+        w.code
+            .clone()
+            .or_else(|| by_shape.get(&head_shape(&w.head)).cloned())
+    };
+    let key = |w: &Warn| lint(w).unwrap_or_else(|| head_shape(&w.head));
+    let mut groups: std::collections::HashMap<String, Vec<usize>> = Default::default();
+    for (i, w) in warns.iter().enumerate() {
+        groups.entry(key(w)).or_default().push(i);
+    }
+    let mut kept: Vec<String> = Vec::new();
+    for piece in &pieces {
+        let Piece::Warn(i) = piece else {
+            if let Piece::Line(l) = piece {
+                kept.push(l.clone());
+            }
+            continue;
+        };
+        let k = key(&warns[*i]);
+        let members = &groups[&k];
+        if members.len() < 2 {
+            kept.push(warns[*i].head.clone());
+            kept.extend(warns[*i].locs.iter().cloned());
+        } else if members[0] == *i {
+            let locs: Vec<&str> = members
+                .iter()
+                .flat_map(|&m| warns[m].locs.iter())
+                .filter_map(|l| l.trim_start().strip_prefix("-->"))
+                .map(str::trim)
+                .collect();
+            let head = warns[*i].head.trim_start_matches("warning: ");
+            let label = match lint(&warns[*i]) {
+                Some(c) => format!("{c} ×{}: {head}", members.len()),
+                None => format!("{head} ×{}", members.len()),
+            };
+            kept.push(format!("{label} ({})", locs.join(", ")));
+        }
     }
     Some(kept.join("\n"))
 }
@@ -510,5 +606,30 @@ mod tests {
         assert!(ls_long(&["ls".into(), "-la".into()]));
         assert!(!ls_long(&["ls".into(), "-a".into()]));
         assert!(!ls_long(&["ls".into(), "--color".into()]));
+    }
+
+    /// T684: rustc prints the `#[warn(lint)]` note only on the first block of a lint, so the
+    /// later ones join it through their headline shape; every location survives.
+    #[test]
+    fn cargo_build_groups_warnings_by_lint_and_keeps_every_location() {
+        let out = "   Compiling c v0.1.0\n\
+warning: unused import: `a`\n --> src/a.rs:1:5\n  |\n  = note: `#[warn(unused_imports)]` on by default\n\n\
+warning: unused import: `b`\n --> src/b.rs:2:5\n  |\n\n\
+warning: unused import: `c`\n --> src/c.rs:3:5\n  |\n\n\
+warning: redundant clone\n --> src/d.rs:4:1\n  |\n  = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#redundant_clone\n\n\
+warning: `c` (lib) generated 4 warnings\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.20s\n";
+        assert_eq!(
+            cargo_build(out).unwrap(),
+            "unused_imports ×3: unused import: `a` (src/a.rs:1:5, src/b.rs:2:5, src/c.rs:3:5)\nwarning: redundant clone\n --> src/d.rs:4:1\nFinished dev"
+        );
+    }
+
+    #[test]
+    fn cargo_build_groups_shape_twins_without_any_lint_note() {
+        let out = "warning: unused variable: `x`\n --> src/a.rs:1:1\nwarning: unused variable: `y`\n --> src/b.rs:2:2\nerror[E0308]: mismatched types\n --> src/c.rs:3:3\n";
+        assert_eq!(
+            cargo_build(out).unwrap(),
+            "unused variable: `x` ×2 (src/a.rs:1:1, src/b.rs:2:2)\nerror[E0308]: mismatched types\n --> src/c.rs:3:3"
+        );
     }
 }
