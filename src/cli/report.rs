@@ -28,19 +28,20 @@ impl ReportFormat {
     }
 }
 
-/// The `[report]` flag layer (D12): `--format md` is the default, so it sets nothing.
+/// The `[report]` flag layer (D12): an omitted `--format` sets nothing, but an explicit
+/// `md` must still beat a lower layer that says `html` or `pdf`.
 fn report_flags(
-    format: ReportFormat,
+    format: Option<ReportFormat>,
     out: Option<PathBuf>,
     since: Option<String>,
     ai: bool,
 ) -> Option<figment::value::Dict> {
-    if format == ReportFormat::Md && out.is_none() && since.is_none() && !ai {
+    if format.is_none() && out.is_none() && since.is_none() && !ai {
         return None;
     }
     use figment::value::{Dict, Value};
     let mut report = Dict::new();
-    if format != ReportFormat::Md {
+    if let Some(format) = format {
         report.insert("format".into(), Value::from(format.as_str()));
     }
     if let Some(o) = out {
@@ -60,8 +61,8 @@ fn report_flags(
 #[derive(clap::Args)]
 pub(super) struct Args {
     /// Output format
-    #[arg(long, value_enum, default_value = "md")]
-    pub(super) format: ReportFormat,
+    #[arg(long, value_enum)]
+    pub(super) format: Option<ReportFormat>,
     /// Write to this path instead of stdout
     #[arg(long, value_name = "PATH")]
     pub(super) out: Option<PathBuf>,
@@ -114,4 +115,46 @@ pub(super) fn run(config_file: &Option<PathBuf>, args: Args) -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+
+    #[derive(Parser)]
+    struct Cli {
+        #[command(flatten)]
+        args: Args,
+    }
+
+    fn effective_format(configured: &str, argv: &[&str]) -> String {
+        let dir = crate::testutil::tmp_dir("report-format");
+        let file = dir.join("config.toml");
+        std::fs::write(&file, format!("[report]\nformat = \"{configured}\"\n")).unwrap();
+        let args = Cli::try_parse_from(std::iter::once("report").chain(argv.iter().copied()))
+            .unwrap()
+            .args;
+        let flags = report_flags(args.format, args.out, args.since, args.ai);
+        Config::load_with(Some(&file), flags).unwrap().report.format
+    }
+
+    #[test]
+    fn explicit_md_overrides_a_configured_format() {
+        for configured in ["html", "pdf"] {
+            assert_eq!(effective_format(configured, &["--format", "md"]), "md");
+            assert_eq!(
+                effective_format(configured, &["--format", "md", "--since", "7d"]),
+                "md"
+            );
+        }
+    }
+
+    #[test]
+    fn omitted_format_keeps_the_configured_one_and_other_formats_win() {
+        assert_eq!(effective_format("html", &[]), "html");
+        assert_eq!(effective_format("html", &["--since", "7d"]), "html");
+        assert_eq!(effective_format("html", &["--format", "pdf"]), "pdf");
+        assert_eq!(effective_format("pdf", &["--format", "html"]), "html");
+    }
 }
