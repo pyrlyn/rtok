@@ -3044,3 +3044,36 @@ serena's LSP-grade references (rtok-vs-serena comparison, PR #1071; **unverified
 | sites | 210/218, 0.963 | 217/218, 0.995 |
 
 Change: one tree-sitter pattern in `RUST_EXTRA_REF` (`src/plugins/read/outline.rs`) captures an identifier directly followed by a parenthesised `token_tree`. No tool and no description token added (graph surface unchanged). The labels are hand-picked from this repo, so 1.000 is a floor guard on that set, not a general recall; reference *precision* of the new pattern was not measured (a call-shaped identifier inside `macro_rules!`/`quote!` bodies counts as a reference).
+
+## 43. Cypher-style query shapes without a query tool (T665, checked 2026-10-16)
+
+codebase-memory-mcp is described as Cypher-style (rtok-vs-codebase-memory-mcp comparison, PR #1071; **unverified** here: the upstream README was not re-read). rtok keeps seven graph tools (description gate: 170 tokens, now 169) and takes shapes as parameters of existing tools. The choice is grounded in the competitor's published shapes and in what `symbol`/`callers`/`impact`/`explore` already answer; no rtok log count backs it, and no shared-corpus saving was measured.
+
+| Cypher shape | rtok today | Decision |
+| --- | --- | --- |
+| callers of X (depth 1..n) | `callers`, `impact(depth)` | already have |
+| callees of X | `symbol` prints `calls:` | already have |
+| path A → B | `impact(to)`, `explore` | already have |
+| definitions in file F | `outline` | already have |
+| definitions in file F of kind K | `outline` printed every kind | **take**: `outline(path, kind)` keeps the lines of one kind |
+| definitions nobody references (dead code), under a path | CLI `graph dead` only | **take**: `callers` with no `name` lists them, `path`/`kind` narrow |
+| arbitrary pattern match / aggregation | none | skip: needs a query language and its description cost |
+| labels, properties, cross-repo traversal | project scope exists | skip |
+
+Cost: the two parameters add 4 description tokens to the MCP surface (report `~1037` → `~1041`). Backends: both shapes read the tags index; a text-mode project says dead-code analysis is unavailable, as `graph dead` does.
+
+## 44. Review and blast-radius features without a bigger tool surface (T664, checked 2026-10-16)
+
+code-review-graph is described as ahead on review features with ~30 MCP tools (rtok-vs-code-review-graph comparison, PR #1071; **unverified** here: the upstream README was not re-read). The take/skip below is by what an agent asks after an edit, "what does this touch and is it covered", judged against what rtok already answers. The graph surface is at its 170-token gate, so a feature must arrive as output of an existing tool.
+
+| Question | rtok today | Decision |
+| --- | --- | --- |
+| Who calls what I changed | `graph_diff` callers per changed definition, `impact` | already have |
+| Blast radius grouped by file, budgeted | `impact` (T377 blast grouping) | already have |
+| Reading list ranked by risk | `rtok graph review` (T454), CLI only | already have; stays CLI to keep the MCP bill flat |
+| Changed definitions no test reaches | only inside `graph review` | **take**: `graph_diff` ends each project's changed list with one `untested: a, b` line |
+| One risk number on `graph_diff` | `graph review` scores | skip: a second scorer would duplicate `review.rs`; the untested line is the actionable part |
+| Execution flows, communities | no such index | skip: needs a new index, no saving evidence |
+| Dedicated review/blast tools | n/a | skip: tool descriptions are the cost rtok competes on |
+
+The line uses the caller rows `graph_diff` already gathers (depth 2), so it costs no extra walk; `graph review` looks 3 callers deep, so the two can differ on a definition reached only at depth 3. Description tokens do not change. No shared-corpus saving was measured.

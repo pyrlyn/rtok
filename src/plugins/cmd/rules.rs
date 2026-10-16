@@ -389,7 +389,7 @@ fn is_drop(low: &str, rule: &Rule) -> bool {
 /// T65.3: fold runs of two or more spaces inside a line to one; leading
 /// indentation is kept (tracebacks, YAML and diffs are not columnar) and a
 /// trailing run folds to nothing — no signal, pure bytes.
-fn collapse_columns(line: &str) -> String {
+pub(super) fn collapse_columns(line: &str) -> String {
     let trimmed = line.trim_start();
     let leading = &line[..line.len() - trimmed.len()];
     let mut out = String::with_capacity(line.len());
@@ -815,7 +815,19 @@ fn fold(
         .collect()
 }
 
+/// T685: up to this many path lines are small enough to keep verbatim; folding them
+/// drops the `dir/name` strings an agent greps for and saves little.
+const FULL_PATH_HITS: usize = 50;
+
 fn group_dir(lines: Vec<String>) -> Vec<String> {
+    // Bare names (`ls`) have no directory to lose, so only `dir/name` hits count.
+    let hits = lines
+        .iter()
+        .filter(|l| path_line(l).is_some_and(|(d, _)| !d.is_empty()))
+        .count();
+    if (1..=FULL_PATH_HITS).contains(&hits) {
+        return lines;
+    }
     fold(
         lines,
         |l| path_line(l).map(|(d, n)| (d, String::new(), n)),
@@ -2016,7 +2028,7 @@ mod tests {
 
     #[test]
     fn group_dir_beats_the_same_rule_without_group() {
-        let body: String = (0..20)
+        let body: String = (0..30)
             .flat_map(|i| [format!("src/a{i}.rs"), format!("tests/t{i}.rs")])
             .collect::<Vec<_>>()
             .join("\n");
@@ -2025,14 +2037,31 @@ mod tests {
         let on = apply(&s, &body, 0, &uncut(Group::Dir), "id");
         assert!(on.len() < off.len(), "{} vs {}\n{on}", on.len(), off.len());
         assert!(
-            on.contains("src/ (20 files): a0.rs, a1.rs, a2.rs …"),
+            on.contains("src/ (30 files): a0.rs, a1.rs, a2.rs …"),
             "{on}"
         );
         assert!(
-            on.contains("tests/ (20 files): t0.rs, t1.rs, t2.rs …"),
+            on.contains("tests/ (30 files): t0.rs, t1.rs, t2.rs …"),
             "{on}"
         );
         assert!(!on.contains("lines omitted"), "{on}");
+    }
+
+    /// T685: a short `find` keeps every `dir/name` — the string an agent greps for —
+    /// and only a longer list folds by directory.
+    #[test]
+    fn group_dir_keeps_full_paths_up_to_fifty_hits() {
+        let paths = |n: usize| -> Vec<String> {
+            (0..n).map(|i| format!("./src/deep/dir/a{i}.rs")).collect()
+        };
+        assert_eq!(group_dir(paths(50)), paths(50));
+        let mut mixed = paths(49);
+        mixed.push("find: ./x: Permission denied".into());
+        mixed.push("find: ./y: Permission denied".into());
+        assert_eq!(group_dir(mixed.clone()), mixed);
+        let folded = group_dir(paths(51));
+        assert_eq!(folded.len(), 1, "{folded:?}");
+        assert!(folded[0].contains("(51 files)"), "{folded:?}");
     }
 
     /// `find .` over a big tree: grouping used to rescan every group per line, which
