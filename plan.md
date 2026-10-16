@@ -44,7 +44,7 @@ Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured
 | T310.12 | todo | P2 | 3 | 0% | |
 | T314 | in progress | P2 | 3 | 60% | Grok Bot |
 | T315 | in progress | P2 | 3 | 60% | Grok Bot |
-| T318 | todo | P1 | 4 | 0% | |
+| T322 | todo | P1 | 4 | 0% | |
 
 
 
@@ -667,7 +667,7 @@ Dependencies: `owo-colors` 4 (`supports-colors`) is already a dependency (T20.2)
 
 Check: `tests/ui_style.rs` covers each line kind with emoji and colour on and off; `rtok hook`, MCP and `--json` output contain no ANSI escapes or emoji with both keys on and `CLICOLOR_FORCE=1`; piped output and `NO_COLOR=1` output have no colour; `just check`.
 
-### T318. `rtok doctor`: broken hooks, duplicate hooks and duplicate MCP entries, with a selective fix
+### T322. `rtok doctor`: broken hooks, duplicate hooks and duplicate MCP entries, with a selective fix
 
 Ivan, 2026-10-01: `rtok doctor` finds hooks in agent configs that point to files that no longer exist (broken hooks), hooks that are loaded twice for the same agent (duplicate hooks), and MCP servers that are loaded twice (duplicate MCP entries). It lists them, explains why each is a problem, and lets the user choose to clean them up: broken hooks are removed, and for duplicates one copy is kept and the extra ones removed. Nothing else in any config changes. Covered by many tests.
 
