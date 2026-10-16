@@ -161,7 +161,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T680 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T682 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T683 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T686 | todo | P2 | 3 | 0% | |
+| T686 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 
 
 
@@ -1119,5 +1119,5 @@ Check: #1076 harness (`bench/c14`) shows ≥ 30 % on this category with full anc
 
 Plan: locate the `rtok mcp` proxy tool-description rewrite (`[proxy.tools_rewrite]`, T59.5); add first-sentence descriptions, drop default/examples duplicating the schema type, compact enums, full text recoverable via the archive; fixture catalog test with token cut ≥ 30 % and unchanged tool names/required args. Decide at start whether it overlaps T124's off-by-default gate; if it needs a creator decision, write it here and set back to `todo`.
 
-Blocked, needs a creator decision: the `tools_rewrite` invariant says `input_schema` is never touched (`src/plugins/proxy/AGENTS.md`, `src/proxy/tools_rewrite.rs`), but `default`, `examples` and `enum` live inside `input_schema` properties, so this task cannot be done without relaxing that rule. It also overlaps T124 (the feature is off by default and its 3 % gate is not measured yet). Decide: allow rewriting `description`/`default`/`examples` strings inside `input_schema`, or keep the rule and cut this task to top-level descriptions only (already T59.5).
+Creator decision (2026-10-16): option (a) — rewriting `description`, `default` and `examples` strings inside `input_schema` is allowed; property names, types, `required` and `enum` values stay byte-identical. The `src/plugins/proxy/AGENTS.md` invariant is updated with the implementation. Was blocked: the `tools_rewrite` invariant says `input_schema` is never touched (`src/plugins/proxy/AGENTS.md`, `src/proxy/tools_rewrite.rs`), but `default`, `examples` and `enum` live inside `input_schema` properties, so this task cannot be done without relaxing that rule. It also overlaps T124 (the feature is off by default and its 3 % gate is not measured yet). Decide: allow rewriting `description`/`default`/`examples` strings inside `input_schema`, or keep the rule and cut this task to top-level descriptions only (already T59.5).
 
