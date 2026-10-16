@@ -159,8 +159,8 @@ pub(crate) use crate::names::cmd_stem;
 
 /// Stems with a Rust formatter (any subcommand). `rtok stats` labels the whole stem.
 const FORMATTER_STEMS: &[&str] = &[
-    "cargo", "git", "pytest", "python", "python3", "py", "jest", "vitest", "tree", "go", "docker",
-    "kubectl", "ps", "df", "sqlite3", "wc", "mise",
+    "cargo", "git", "gh", "pytest", "python", "python3", "py", "jest", "vitest", "tree", "go",
+    "docker", "kubectl", "ps", "df", "sqlite3", "wc", "mise",
 ];
 
 /// T50.1: how `rtok stats` labels a Bash family — `formatter`, named `rule`, or `default`.
@@ -631,6 +631,7 @@ fn format(argv: &[String], output: &str) -> Option<String> {
         ("cat", _) => super::catfile::outline_of(argv, output),
         ("grep", _) | ("rg", _) | ("git", "grep") => super::grep::group(argv, output),
         ("git", "log") => Some(output.lines().take(20).collect::<Vec<_>>().join("\n")),
+        ("gh", _) => super::gh::format(argv, output),
         ("pytest", _) => Some(
             super::python::pytest(output)
                 .unwrap_or_else(|| keep(output, &["FAILED", "ERROR", "passed", "failed", "error"])),
@@ -1599,6 +1600,7 @@ mod tests {
             ("git", "status"),
             ("git", "diff"),
             ("git", "log"),
+            ("gh", ""),
             ("pytest", ""),
             ("python", ""),
             ("python3", ""),

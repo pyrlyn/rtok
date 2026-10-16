@@ -158,7 +158,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T527 | in progress | P2 | 3 | 0% | MiMo / mimo |
 | T666.2 | todo | P2 | 3 | 0% | |
 | T687 | todo | P2 | 4 | 0% | |
-| T676 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T678 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T679 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T680 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
@@ -1084,13 +1083,6 @@ Source: `docs/research/competitors-techniques.md` (techniques, licenses, links).
 
 
 
-### T676. gh 744
-
-Best competitor: lean-ctx gh.rs. Design: `gh pr/issue view`: drop empty fields, body markdown whitespace collapse; `gh run view --log`: per-step errors only; `gh pr checks`: only non-pass rows + counts; `--json` → TOON.
-
-Check: #1076 harness (`bench/c14`) shows +20 pp vs current head/tail on this category with full anchor retention.
-
-Plan: `gh` formatter in `compact.rs`: `pr/issue view` drops empty fields and collapses markdown whitespace; `pr checks` keeps non-pass rows plus counts; `run view --log` keeps per-step error blocks; `--json` goes through the TOON helper if present. Tests: golden files per subcommand with `min_saving:`; failing check rows and URLs kept.
 
 ### T678. for 570, until 231, while
 
