@@ -42,7 +42,10 @@ fn printf_git_status_returns_filtered_text() {
     );
     let s = String::from_utf8_lossy(&out.stdout);
     assert!(s.contains("On branch main"), "{s}");
-    assert!(s.contains(" M src/lib.rs"), "{s}");
+    assert!(
+        s.contains(" M src/{lib.rs,main.rs} src/plugins/cmd/run.rs"),
+        "{s}"
+    );
     assert!(!s.contains("Changes not staged"), "{s}");
     let _ = std::fs::remove_dir_all(&home);
 }
