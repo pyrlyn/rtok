@@ -8736,6 +8736,16 @@ Plan: in the find formatter print full paths for ≤ 50 hits (grouping only abov
 
 Outcome: `group_dir` keeps lists of up to 50 `dir/name` hits verbatim, so a small `find` keeps 100 % of its paths; above 50 it folds as before. Pinned by `group_dir_keeps_full_paths_up_to_fifty_hits` and the regenerated find/rg/awk goldens (docs in en/ru/uk). Measured on the repo fixtures: the #1076 `bench/c14` harness is not on main.
 
+### T684. wc 102, cargo test/build/clippy
+
+Best competitor: rtk / sqz. Design: wc: drop padding, keep `total`; cargo: #1077 + group warnings by lint code `unused_imports ×12 (files…)`.
+
+Check: #1076 harness (`bench/c14`) shows ≥ rtk on this category with full anchor retention.
+
+Plan: wc formatter drops padding and keeps `total`; cargo clippy/build warnings (on top of #1077) group by lint code `lint ×N (files…)`, keeping every distinct path and all errors; fixture tests per formatter; never worse than raw.
+
+Outcome: `wc` gets its own formatter (padding dropped, `total` kept; golden `wc`), and `cargo build`/`clippy` warnings are grouped by lint code (`unused_imports ×3: … (locations)`) keeping every distinct message, all errors and the exit line. Tests: two `compact.rs` unit tests plus the `wc` golden. Measured on the repo fixtures: the #1076 `bench/c14` harness is not on main.
+
 ### T388. `doctor` reports the real MCP Tool Search state
 
 From `research.md` §3 and §8: `doctor` infers "MCP tool search likely disabled" from `ANTHROPIC_BASE_URL` alone (`src/doctor.rs`, `mcp_tool_search_disabled: anthropic.is_some()`) and never reads `ENABLE_TOOL_SEARCH`. The `tools_rewrite` advice keys off the same flag, so a false positive advises a rewrite that is not needed.
@@ -15059,6 +15069,16 @@ Check: `cargo clippy --workspace --all-targets --all-features --exclude rtok-was
 
 Status: done 2026-09-26
 Model: ZCode / glm-5.3
+
+### T901. Windows: `graph_lsp_gate::lsp_backend_outlines_dart_main` fails on dart 3.9
+
+The test fails on Windows dart 3.9 with `File is not being analyzed` (surfaced by the first full local `just check` on Windows, T272–T274, `docs/windows.md`); CI never runs it because the runners have no dart. Done = the test no longer fails on Windows dart 3.9 (project gets a `dart pub get` / readiness wait, or skips on that error with the reason in a comment) and a test pins the skip/ready predicate.
+
+Check: `lsp_backend_outlines_dart_main` passes or skips with a stated reason on Windows dart 3.9; the predicate test passes on every OS; `just check`.
+
+Plan: make `lsp_backend_outlines_dart_main` robust on Windows dart 3.9: write a minimal `pubspec.yaml` in the temp project and run `dart pub get`, or skip when the server answers `File is not being analyzed`, with the reason in a comment. CI has no dart, so the proof is a unit test of the skip/ready predicate that runs everywhere.
+
+Outcome: `lsp_backend_outlines_dart_main` skips on Windows when the dart server answers `File is not being analyzed` (reason in a comment); the predicate `dart_not_analyzing` is pinned by `dart_skip_is_windows_only_and_names_the_exact_answer`, which runs on every OS. CI has no dart, so the skip itself is unexercised there.
 
 ### T902. Windows CI: run `cargo clippy --workspace` in the `windows` job
 

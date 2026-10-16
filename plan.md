@@ -174,9 +174,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T681 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T682 | todo | P2 | 3 | 0% | |
 | T683 | todo | P2 | 3 | 0% | |
-| T684 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T686 | todo | P2 | 3 | 0% | |
-| T901 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
 
 
 
@@ -1223,13 +1221,6 @@ Plan: extend the existing log run-collapser in `src/plugins/cmd` so collapsed lo
 
 Blocked: (1) `cmd` has no logfmt run-collapser to extend today, only `dedupe = "normalized"` (`rules.rs`, no default rule uses it), so this is a new collapse mode, not a tweak; (2) the Check (+2 pp, rtok already 94.5 % vs lean-ctx 87.4 %) is measurable only with the #1076 harness (`bench/c14`, PR open, not on main). Take it again after #1076 merges.
 
-### T684. wc 102, cargo test/build/clippy
-
-Best competitor: rtk / sqz. Design: wc: drop padding, keep `total`; cargo: #1077 + group warnings by lint code `unused_imports ×12 (files…)`.
-
-Check: #1076 harness (`bench/c14`) shows ≥ rtk on this category with full anchor retention.
-
-Plan: wc formatter drops padding and keeps `total`; cargo clippy/build warnings (on top of #1077) group by lint code `lint ×N (files…)`, keeping every distinct path and all errors; fixture tests per formatter; never worse than raw.
 
 ### T686. MCP tool catalogs
 
@@ -1241,10 +1232,3 @@ Plan: locate the `rtok mcp` proxy tool-description rewrite (`[proxy.tools_rewrit
 
 Blocked, needs a creator decision: the `tools_rewrite` invariant says `input_schema` is never touched (`src/plugins/proxy/AGENTS.md`, `src/proxy/tools_rewrite.rs`), but `default`, `examples` and `enum` live inside `input_schema` properties, so this task cannot be done without relaxing that rule. It also overlaps T124 (the feature is off by default and its 3 % gate is not measured yet). Decide: allow rewriting `description`/`default`/`examples` strings inside `input_schema`, or keep the rule and cut this task to top-level descriptions only (already T59.5).
 
-### T901. Windows: `graph_lsp_gate::lsp_backend_outlines_dart_main` fails on dart 3.9
-
-The test fails on Windows dart 3.9 with `File is not being analyzed` (surfaced by the first full local `just check` on Windows, T272–T274, `docs/windows.md`); CI never runs it because the runners have no dart. Done = the test no longer fails on Windows dart 3.9 (project gets a `dart pub get` / readiness wait, or skips on that error with the reason in a comment) and a test pins the skip/ready predicate.
-
-Check: `lsp_backend_outlines_dart_main` passes or skips with a stated reason on Windows dart 3.9; the predicate test passes on every OS; `just check`.
-
-Plan: make `lsp_backend_outlines_dart_main` robust on Windows dart 3.9: write a minimal `pubspec.yaml` in the temp project and run `dart pub get`, or skip when the server answers `File is not being analyzed`, with the reason in a comment. CI has no dart, so the proof is a unit test of the skip/ready predicate that runs everywhere.
