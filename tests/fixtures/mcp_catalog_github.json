@@ -1,0 +1,194 @@
+{
+  "tools": [
+    {
+      "name": "get_file_contents",
+      "description": "Get the contents of a file or directory from a GitHub repository. Returns the decoded text for files and a listing of entries for directories. Large files are truncated by the server, so use the line range when you only need a part of a file. Binary files are returned base64 encoded and are rarely useful.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "owner": {"type": "string", "description": "Repository owner. This is the username or the organization that owns the repository. It is case-insensitive."},
+          "repo": {"type": "string", "description": "Repository name. Do not include the owner or the .git suffix. It is case-insensitive."},
+          "path": {"type": "string", "description": "Path to the file or directory inside the repository. Use an empty string for the repository root. Paths never start with a slash.", "default": ""},
+          "ref": {"type": "string", "description": "Branch, tag or commit SHA to read from. Defaults to the default branch of the repository when omitted. Short SHAs are accepted when they are unambiguous."}
+        },
+        "required": ["owner", "repo"]
+      }
+    },
+    {
+      "name": "search_repositories",
+      "description": "Search for GitHub repositories. Supports the full GitHub search syntax, including qualifiers such as language:, stars:, topic: and org:. Results are ranked by best match unless a sort order is given. Only the first 1000 results of any search are reachable through pagination.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "query": {"type": "string", "description": "Repository search query. Examples: 'machine learning language:python stars:>1000' or 'org:github topic:cli'. Quote phrases that contain spaces.", "examples": ["org:github topic:cli"]},
+          "sort": {"type": "string", "enum": ["stars", "forks", "help-wanted-issues", "updated"], "description": "Sort field for the results. Leave it unset to rank by best match. Sorting by stars is the most common choice."},
+          "order": {"type": "string", "enum": ["asc", "desc"], "description": "Sort order, ignored when no sort field is given. The default is descending.", "default": "desc", "examples": ["desc"]},
+          "page": {"type": "integer", "description": "Page number for pagination, starting at 1. Combine it with perPage to walk a long result list.", "default": 0, "minimum": 0},
+          "perPage": {"type": "integer", "description": "Results per page. The maximum allowed by the API is 100. Smaller pages keep the response short.", "default": 30, "minimum": 1, "maximum": 100}
+        },
+        "required": ["query"]
+      }
+    },
+    {
+      "name": "search_code",
+      "description": "Search for code across GitHub repositories. Matches file contents and returns the file path, the repository and a text fragment around each match. The query supports qualifiers such as repo:, path:, language: and extension:. Searches are rate limited more strictly than other endpoints, so batch your questions.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "q": {"type": "string", "description": "Search query using GitHub code search syntax. Example: 'addClass in:file language:js repo:jquery/jquery'. Regular expressions are not supported."},
+          "sort": {"type": "string", "enum": ["indexed"], "description": "Sort field. Only indexed is supported by the API. Leave it unset for best match."},
+          "order": {"type": "string", "enum": ["asc", "desc"], "description": "Sort order. It only has an effect when sort is set. Descending is the default.", "default": "desc"},
+          "page": {"type": "integer", "description": "Page number, starting at 1. Pages beyond the first 1000 results are empty.", "default": 0},
+          "perPage": {"type": "integer", "description": "Results per page, at most 100. Keep it small when you only need the top hits.", "default": 30}
+        },
+        "required": ["q"]
+      }
+    },
+    {
+      "name": "list_issues",
+      "description": "List issues in a GitHub repository. Pull requests are also issues on GitHub, so they appear here too unless you filter them out on the client side. Results can be filtered by state, labels and the date of the last update, and are paginated.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "owner": {"type": "string", "description": "Repository owner. Either a user or an organization login."},
+          "repo": {"type": "string", "description": "Repository name without the owner. The name is case-insensitive."},
+          "state": {"type": "string", "enum": ["open", "closed", "all"], "description": "Filter by issue state. Use all to include both open and closed issues. The default is open.", "default": "open", "examples": ["open", "closed"]},
+          "labels": {"type": "array", "items": {"type": "string", "description": "A label name. Matching is case-insensitive. Labels with spaces need no quoting."}, "description": "Only issues carrying all of these labels are returned. An empty list means no label filter.", "default": []},
+          "sort": {"type": "string", "enum": ["created", "updated", "comments"], "description": "What to sort by. Sorting by updated surfaces recent activity first.", "default": "created"},
+          "direction": {"type": "string", "enum": ["asc", "desc"], "description": "Sort direction. Newest first is the default for created and updated.", "default": "desc"},
+          "since": {"type": "string", "description": "Only issues updated at or after this ISO 8601 timestamp are returned. Example: 2024-01-31T00:00:00Z. Time zones other than Z are accepted."},
+          "page": {"type": "integer", "description": "Page number, starting at 1. Use it together with perPage.", "default": 0},
+          "perPage": {"type": "integer", "description": "Results per page, at most 100. The default is 30.", "default": 30}
+        },
+        "required": ["owner", "repo"]
+      }
+    },
+    {
+      "name": "get_issue",
+      "description": "Get the details of a single issue in a GitHub repository. The result contains the title, the body, the labels, the assignees and the current state. Comments are not included, use the comments tool for them. Works for pull requests as well because they are issues.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "owner": {"type": "string", "description": "Repository owner. The login of a user or an organization."},
+          "repo": {"type": "string", "description": "Repository name. Without the owner and without the .git suffix."},
+          "issue_number": {"type": "integer", "description": "The number of the issue, as shown in the URL. It is not the internal id. Numbers are unique per repository."}
+        },
+        "required": ["owner", "repo", "issue_number"]
+      }
+    },
+    {
+      "name": "create_issue",
+      "description": "Create a new issue in a GitHub repository. The authenticated user needs write access, or the repository must allow issues from everyone. Labels and assignees that the user cannot set are silently dropped by GitHub. Returns the created issue including its number and URL.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "owner": {"type": "string", "description": "Repository owner. User or organization login."},
+          "repo": {"type": "string", "description": "Repository name. Do not include the owner."},
+          "title": {"type": "string", "description": "Issue title. Keep it short and specific. It is shown in lists and notifications."},
+          "body": {"type": "string", "description": "Issue body in GitHub flavored markdown. Include steps to reproduce for bugs. Mentions notify the people they name.", "default": ""},
+          "assignees": {"type": "array", "items": {"type": "string"}, "description": "Logins of the users to assign. Only users with access to the repository can be assigned. At most 10 assignees are allowed.", "default": []},
+          "labels": {"type": "array", "items": {"type": "string"}, "description": "Label names to apply. Labels that do not exist are created only if the user may manage labels. Otherwise they are ignored.", "default": []},
+          "milestone": {"type": "integer", "description": "Number of the milestone to attach. The milestone must already exist in the repository. Use the milestone tools to look the number up."}
+        },
+        "required": ["owner", "repo", "title"]
+      }
+    },
+    {
+      "name": "add_issue_comment",
+      "description": "Add a comment to an existing issue or pull request. The comment is posted as the authenticated user and cannot be edited by this tool afterwards. Mentions in the body notify the mentioned users. Returns the created comment including its URL.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "owner": {"type": "string", "description": "Repository owner. User or organization login."},
+          "repo": {"type": "string", "description": "Repository name. Without the owner."},
+          "issue_number": {"type": "integer", "description": "Issue or pull request number. Both share one numbering per repository."},
+          "body": {"type": "string", "description": "Comment text in GitHub flavored markdown. Long comments are fine, the limit is 65536 characters. Code fences are rendered with syntax highlighting."}
+        },
+        "required": ["owner", "repo", "issue_number", "body"]
+      }
+    },
+    {
+      "name": "list_pull_requests",
+      "description": "List pull requests in a GitHub repository. Supports filtering by state, head branch and base branch, and sorting by creation or update time. The response contains a summary of each pull request, not the diff. Use the get tool to read a single pull request in full.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "owner": {"type": "string", "description": "Repository owner. The login of a user or an organization."},
+          "repo": {"type": "string", "description": "Repository name. Case-insensitive, no owner prefix."},
+          "state": {"type": "string", "enum": ["open", "closed", "all"], "description": "Filter by state. Merged pull requests are reported as closed. Open is the default.", "default": "open"},
+          "head": {"type": "string", "description": "Filter by head user and branch in the form user:ref-name. The user part is required by the API. Example: octocat:fix-typo."},
+          "base": {"type": "string", "description": "Filter by the name of the branch the pull request targets. Example: main. Leave it unset to include every base."},
+          "sort": {"type": "string", "enum": ["created", "updated", "popularity", "long-running"], "description": "What to sort results by. Popularity counts comments. Long-running orders by age of the pull request.", "default": "created"},
+          "direction": {"type": "string", "enum": ["asc", "desc"], "description": "Sort direction. Descending is the default when sorting by created.", "default": "desc"},
+          "page": {"type": "integer", "description": "Page number, starting at 1. Pair it with perPage.", "default": 0},
+          "perPage": {"type": "integer", "description": "Results per page, at most 100. The default is 30.", "default": 30}
+        },
+        "required": ["owner", "repo"]
+      }
+    },
+    {
+      "name": "get_pull_request",
+      "description": "Get the details of a specific pull request. Returns the title, the description, the author, the review state, the mergeability and the branch names. The file diff is not part of the result. Use the files tool to list the changed files.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "owner": {"type": "string", "description": "Repository owner. User or organization login."},
+          "repo": {"type": "string", "description": "Repository name. No owner prefix."},
+          "pull_number": {"type": "integer", "description": "The number of the pull request, as shown in its URL. Pull requests and issues share one counter."}
+        },
+        "required": ["owner", "repo", "pull_number"]
+      }
+    },
+    {
+      "name": "create_pull_request",
+      "description": "Create a new pull request in a GitHub repository. The head branch must already exist and contain commits that the base branch does not have. Fails if an open pull request for the same branches exists. Returns the created pull request including its number and URL.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "owner": {"type": "string", "description": "Repository owner. User or organization login of the base repository."},
+          "repo": {"type": "string", "description": "Repository name of the base repository. No owner prefix."},
+          "title": {"type": "string", "description": "Pull request title. Use an imperative sentence. It becomes the squash commit title on merge."},
+          "head": {"type": "string", "description": "The branch that contains your changes. For cross-repository pull requests use the form user:branch. The branch must be pushed first."},
+          "base": {"type": "string", "description": "The branch you want the changes pulled into. It must exist in the base repository. Usually this is main."},
+          "body": {"type": "string", "description": "Pull request description in markdown. Link related issues with Closes #123. Keep the summary at the top.", "default": ""},
+          "draft": {"type": "boolean", "description": "Open the pull request as a draft. Draft pull requests cannot be merged until they are marked ready. Reviewers are not requested automatically.", "default": false},
+          "maintainer_can_modify": {"type": "boolean", "description": "Allow maintainers of the base repository to push to the head branch. This only matters for pull requests from forks. Enabled by default on the website.", "default": false}
+        },
+        "required": ["owner", "repo", "title", "head", "base"]
+      }
+    },
+    {
+      "name": "list_commits",
+      "description": "Get the list of commits of a branch in a GitHub repository. Each entry has the SHA, the message, the author and the date. Merge commits are included. Use the commit tool to read the diff of a single commit.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "owner": {"type": "string", "description": "Repository owner. User or organization login."},
+          "repo": {"type": "string", "description": "Repository name. No owner prefix."},
+          "sha": {"type": "string", "description": "Branch name, tag or commit SHA to start listing from. Defaults to the default branch. A tag is resolved to the commit it points to."},
+          "page": {"type": "integer", "description": "Page number, starting at 1. Use with perPage.", "default": 0},
+          "perPage": {"type": "integer", "description": "Results per page, at most 100. The default is 30.", "default": 30}
+        },
+        "required": ["owner", "repo"]
+      }
+    },
+    {
+      "name": "create_or_update_file",
+      "description": "Create or update a single file in a GitHub repository. The change is committed directly to the given branch. When updating an existing file the SHA of the file blob is required, otherwise GitHub rejects the request. For several files at once use the push tool instead.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "owner": {"type": "string", "description": "Repository owner. User or organization login."},
+          "repo": {"type": "string", "description": "Repository name. No owner prefix."},
+          "path": {"type": "string", "description": "Path where the file is created or updated. Missing directories are created. The path never starts with a slash."},
+          "content": {"type": "string", "description": "The new content of the file as plain text. The server encodes it for you. Do not send base64 here."},
+          "message": {"type": "string", "description": "Commit message. The first line becomes the commit title. Keep it under 72 characters."},
+          "branch": {"type": "string", "description": "Branch to commit to. The branch must exist. Commits to a protected branch are rejected."},
+          "sha": {"type": "string", "description": "Blob SHA of the file being replaced. Required when updating an existing file. Obtain it from the file contents tool."}
+        },
+        "required": ["owner", "repo", "path", "content", "message", "branch"]
+      }
+    }
+  ],
+  "messages": [{"role": "user", "content": "hi"}]
+}

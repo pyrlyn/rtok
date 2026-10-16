@@ -165,6 +165,7 @@ dry_run         = false               # --dry-run: вивести фактичн
 
 [proxy.tools_rewrite]                 # T59.5; вимкнено: байти запиту лишаються ідентичними
 enabled = false
+compact_schema = false                # T686; також перше речення в описах властивостей і зайві default/examples у input_schema; оригінал в архіві (Measurement.ref_id)
 max_description_tokens = 60           # 0 = без обрізання; за межею речення; оцінювач Class::Prose
 allow = []                            # порожньо = зберігати всі назви, яких немає в deny
 deny = []                             # прибрати ці назви з tools[]; подальші виклики все одно пересилаються
