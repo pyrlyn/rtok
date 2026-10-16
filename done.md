@@ -14317,6 +14317,19 @@ Result: Measured with tests/bench_fixtures.rs (the #1076 bench/c14 harness is no
 Status: done 2026-10-15
 Model: Claude Code / claude-sonnet-5-5
 
+### T673. grep 2260, git grep 452, rg
+
+Best competitor: t-o 89.7 %, lean-ctx 89.6 %. Design: path printed once; matches as `line:text`; collapse common indentation; trim match text around the hit to ±60 chars keeping the match itself; per-file cap by match budget with `+N more (expand)`; files sorted by path (stable) not count; keep 100 % paths.
+
+Check: #1076 harness (`bench/c14`) shows ≥ 91 %, 100 % paths on this category with full anchor retention.
+
+Plan: new `grep_group` formatter in `src/plugins/cmd/compact.rs` wired in `formatters::format` for `grep`/`rg`/`git grep`: path once, `line:text` under it, common indent stripped, text trimmed to the match ±60 chars, per-file budget with `+N more (expand)`, files path-sorted; fall back to the rule when the shape is unknown. Tests: golden `grep_group*.in/out` with `min_saving:` plus a path-retention unit test. Measure on the existing grep fixtures (bench/c14 unmerged).
+
+Result: new `src/plugins/cmd/grep.rs` formatter for `grep`/`rg`/`git grep` `path:line:text` lists: path once, `line:text` beneath, shared indent dropped, long lines cut to ±60 chars around the match (pattern read from argv; no cut when it cannot be read the same way), 12 matches per file, a 16-line text budget after which files stay as `path:l1,l2,…` anchors so 100 % of paths and line numbers survive, files path-sorted, stderr/Binary lines kept, never longer than raw; counts, `-l`, context and `-f` fall back to the rule. Measured with `tests/bench_fixtures.rs` (o200k_base, default mode; #1076 `bench/c14` is not on main): grep_settings_src 67.5 % → 73.2 %, grep_fn_main 51.0 % → 56.0 % (44 files, every path and line kept; the old head/tail rule hid 24 of them), rg_pub_fn 0 % → 32.4 %; floors raised to 70 / 54 / 30. The ≥ 91 % target of the card is not reachable with 100 % paths on these fixtures: bare paths+line numbers are already ~45 % of the raw tokens, so the remaining gain is in match text, which a larger fixture on the harness has to confirm. Tests: 10 unit tests in `grep.rs`, golden `grep_group`.
+
+Status: done 2026-10-15
+Model: Claude Code / claude-sonnet-5-5
+
 ### T581. Filter actionable report sinks before applying the top-ten limit
 
 Confirmed through actual aggregation and recommendation functions: [report_sinks](src/model/report.rs#L284) groups all catalogue plugins, sorts by before_bytes and truncates to ten. Only afterwards [top_sinks](src/report/advice.rs#L253) skips classes other than read/cmd/mcp. Ten larger archive rows with distinct references therefore displace a smaller Read sink, yielding no top-sinks recommendation; the Read-only control yields one. The archive rows are valid measurements, but deliberately have no actionable switch in this rule. T59.8 and docs/report.md promise the ten largest file/command/MCP sinks; T302 changed ranking units, not filtering before truncation.
