@@ -14,6 +14,7 @@ pub mod catfile;
 pub mod compact;
 pub mod diffs;
 pub mod hook;
+pub mod logfmt;
 
 pub mod filter;
 pub mod formatters;

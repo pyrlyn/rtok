@@ -8825,6 +8825,20 @@ Plan: in the find formatter print full paths for ≤ 50 hits (grouping only abov
 
 Outcome: `group_dir` keeps lists of up to 50 `dir/name` hits verbatim, so a small `find` keeps 100 % of its paths; above 50 it folds as before. Pinned by `group_dir_keeps_full_paths_up_to_fifty_hits` and the regenerated find/rg/awk goldens (docs in en/ru/uk). Measured on the repo fixtures: the #1076 `bench/c14` harness is not on main.
 
+### T683. tail 155, cat *.log
+
+Best competitor: lean-ctx 87.4 % (rtok 94.5 %). Design: caveman-style field summary on collapsed runs: constant logfmt keys printed once.
+
+Check: #1076 harness (`bench/c14`) shows keep lead, +2 pp on this category with full anchor retention.
+
+Plan: extend the existing log run-collapser in `src/plugins/cmd` so collapsed logfmt runs print constant `key=value` pairs once and list only varying keys; keep error/WARN lines verbatim; fixture test asserting anchors retained and tokens ≤ raw, `expand <id>` returns raw; measure on `bench/fixtures` logs.
+
+Outcome: no collapser existed to extend (`dedupe = "normalized"` folds identical lines only), so `src/plugins/cmd/logfmt.rs` is a new step in `rules::apply`. When the head/tail cut is certain, the `key=value` pairs that every non-error record shares print once in a first line `[every record: level=info svc=api …]` and leave the printed records; on such an output each `… N lines omitted (expand <id>)` marker appends `[fields: …; varying: key=first..last …]` for the dropped run. Error and warning lines are `anchor` lines: they do not vote and stay verbatim (`level=warn`, `lvl=warn`, `[warn]` and JSON `"level":"warn"` now count as warnings next to the built-in `warning`/`error` keep list; a bare ` WARN ` word is not matched because `npm warn` noise would then stop being cut). Output stays a view over the raw bytes: the archive is untouched and `rtok expand <id>` returns every raw line. Nothing changes below 8 records, under three pairs per record, with fewer than three quarters of the lines logfmt, or when no pair is shared.
+
+Measured (golden `tests/cmd_golden/cat_logfmt`, 240 logfmt lines with one WARN and one error, `cat app.log`): raw 8911 tokens; head/tail cut alone about 1591 tokens (82.2 %, from the character ratio of the golden); with the first version of this task (summary only, constants left in the printed lines) 1748 tokens (80 %, worse than before); with shared pairs factored out 712 tokens (92 %), +9.8 points, error and WARN lines verbatim. The existing `cat_long` golden (two pairs per line, nothing shared) is unchanged: the marker summary appears only when a shared-pairs header does. The #1076 harness (`bench/c14`) and `bench/fixtures` are not on main, so the lean-ctx comparison (87.4 %) is not re-run; the figures above come from the repo golden estimator (`min_saving: 90`).
+
+Tests: `collapsed_logfmt_run_lists_constants_once_and_varying_keys` (anchors retained, tokens at most raw; failed before the change with the shared pairs missing from the output, passes after), `short_or_unstructured_omitted_runs_get_no_field_summary`, `logfmt::tests::*` (parser, summary, factor), golden `cat_logfmt`, and `run_logfmt_output_states_shared_pairs_once_and_expands_raw` (`expand <id>` returns all raw lines).
+
 ### T684. wc 102, cargo test/build/clippy
 
 Best competitor: rtk / sqz. Design: wc: drop padding, keep `total`; cargo: #1077 + group warnings by lint code `unused_imports ×12 (files…)`.
