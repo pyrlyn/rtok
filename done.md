@@ -8766,6 +8766,16 @@ Plan: list lean-ctx read modes missing in `src/plugins/read` (see `docs/comparis
 
 Outcome: one mode added, `density:X` (lean-ctx's README lists `full`, `map`, `signatures`, `diff`, `lines:N-M` and `density:X`; the first five rtok already had). It keeps the lines whose words are rarest in the file until about X of the bytes remain, with line numbers and `… N lines omitted` gaps, and writes a `density` cost row against the raw file. Per-turn cost is the five tokens `|density:X` adds to the `read` description (the 60-token test still passes); no banner inject. Fixture tests: `density.rs` (rare line kept, repeats dropped, line numbers kept, deterministic, bad share rejected) and `density_mode_trims_repeats_and_records_a_row`. Replay savings are not measured: the #1076 harness is not on main, so the unit fixture only shows the mode trims a repetitive file to under a quarter at `density:0.1`.
 
+### T662. Match sqz formatter breadth without leaving the lossless path
+
+sqz ships 45+ formatters and a stack-trace safe mode; rtok has fewer families (`docs/comparison/rtok-vs-sqz.md`). Close the coverage gap while keeping archive + `expand`. Reuse T65.1–T65.4 ideas already taken from sqz; extend rule families where sqz still wins. Sourced savings: sqz self-reports 24.7 % over 3,003 compressions (`research.md` §11); rtok on that corpus is **no data** until the harness runs.
+
+Check: a coverage table vs sqz in `docs/comparison/rtok-vs-sqz.md`; at least the top gap families from `rtok discover` (T661) gain rules; `just check`.
+
+Plan: read `docs/comparison/rtok-vs-sqz.md`; build the coverage table sqz-formatter → rtok rule; add rules (in `rules/default.toml` through the existing rule engine, no new engine) for the top missing families, each with a fixture and a no-worse-than-raw test. `rtok discover` (T661) is not on main: pick families by the sqz list and say so in the card.
+
+Outcome: `parse_diag` reads `path:line[:col]: CODE msg` (ruff), `path:line: error: msg  [code]` (mypy), `path:line:col: C: Cop/Name: msg` (rubocop) and `path:line:col: msg (linter)` (golangci-lint), so new `[ruff]`, `[mypy]`, `[rubocop]` and `[golangci-lint]` rules fold them with `group = "diag"`: 96 %, 77 %, 88 % and 91 % on the goldens against 72 %, 55 %, 82 % and 53 % for `Rule::default()`. yarn, bun, rspec, terraform and xcodebuild already win on the default rule, so they got goldens only. The sqz coverage table is in `docs/research/competitors-techniques.md`; podman (the `docker ps` formatter matches only `docker`) is left open. `rtok discover` (T661) and the #1076 harness are not on main, so families came from sqz's list and savings from the repo goldens.
+
 ### T685. find 33
 
 Best competitor: rtok leads. Design: keep dir grouping but print full paths for ≤ 50 hits so the anchor check passes.

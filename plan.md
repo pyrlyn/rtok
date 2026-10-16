@@ -156,11 +156,10 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T525 | in progress | P2 | 3 | 0% | MiMo / mimo |
 | T526 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T527 | in progress | P2 | 3 | 0% | MiMo / mimo |
-| T662 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T663 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T666.2 | todo | P2 | 3 | 0% | |
 | T667 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T687 | in progress | P2 | 4 | 0% | Claude Code / claude-sonnet-5-5 |
+| T687 | todo | P2 | 4 | 0% | |
 | T675 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T676 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T677 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
@@ -175,14 +174,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 
 
 
-
-### T662. Match sqz formatter breadth without leaving the lossless path
-
-sqz ships 45+ formatters and a stack-trace safe mode; rtok has fewer families (`docs/comparison/rtok-vs-sqz.md`). Close the coverage gap while keeping archive + `expand`. Reuse T65.1–T65.4 ideas already taken from sqz; extend rule families where sqz still wins. Sourced savings: sqz self-reports 24.7 % over 3,003 compressions (`research.md` §11); rtok on that corpus is **no data** until the harness runs.
-
-Check: a coverage table vs sqz in `docs/comparison/rtok-vs-sqz.md`; at least the top gap families from `rtok discover` (T688) gain rules; `just check`.
-
-Plan: read `docs/comparison/rtok-vs-sqz.md`; build the coverage table sqz-formatter → rtok rule; add rules (in `rules/default.toml` through the existing rule engine, no new engine) for the top missing families, each with a fixture and a no-worse-than-raw test. `rtok discover` (T688) ranks the families your own history runs; read it with the sqz list.
 
 ### T663. Push graph reference precision toward LSP-grade (serena)
 
@@ -211,6 +202,8 @@ Check: feature list and take/skip in the comparison file; tests for what shipped
 Creator-approved (moved from `roadmap.md`, from T178). Cut another ~10 ms off the §19.2 harness p50 so PreToolUse and PostToolUse reach 10 ms as Claude Code sees them (today `research.md` §19.7: 12.3 / 12.5 ms on `rtok-hook`).
 
 **Plan.** (1) Re-measure first with the §19.2 harness on an idle machine (load average low; if it is high, say so and record no number). (2) Profile the hook path (process start, config parse, store open, plugin dispatch) and remove the largest avoidable cost with a fail-first latency test. (3) Record a dated `research.md` row. The fail-open and byte-stable rules stay.
+
+**Status (2026-10-16).** Not started on code: no idle machine to measure on. The rerun script and the reasoning for the first step are `research.md` §46. Needs a quiet machine (load average near zero), not a creator decision.
 
 Check: p50 as Claude Code sees it is at or under 10 ms for both events on the §19.2 harness, or the measured floor and the reason are written up; `just check`.
 

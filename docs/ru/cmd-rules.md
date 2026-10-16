@@ -142,6 +142,10 @@ rtok config validate   # называет файлы rules.d/*.toml, котор�
 | `eslint` | `diag` | 749 | 48 | 175 |
 | `cargo` (`check`) | `diag` | 749 | 34 | 178 |
 | `dotnet` | `diag` | 849 | 71 | 194 |
+| `ruff` | `diag` | 1473 | 170 | 373 |
+| `mypy` | `diag` | 3471 | 1733 | 492 |
+| `rubocop` | `diag` | 903 | 523 | 110 |
+| `golangci-lint` | `diag` | 2191 | 409 | 501 |
 
 ## JSON (T65.2)
 

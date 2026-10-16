@@ -906,6 +906,9 @@ fn parse_diag(line: &str) -> Option<(String, String, String)> {
             ));
         }
     }
+    if let Some(v) = parse_located(t) {
+        return Some(v);
+    }
     if let Some(rest) = t.strip_prefix("FAILED ")
         && let Some((loc, err)) = rest.split_once(" - ")
         && let Some((cls, msg)) = err.split_once(": ")
@@ -917,6 +920,83 @@ fn parse_diag(line: &str) -> Option<(String, String, String)> {
         let cls = cls.trim().trim_start_matches("E ").trim();
         if is_exc(cls) {
             return Some((cls.to_string(), msg.to_string(), String::new()));
+        }
+    }
+    None
+}
+
+/// `ruff`/`flake8` (`f.py:3:8: F401 [*] msg`), `mypy` (`f.py:3: error: msg  [arg-type]`),
+/// `rubocop` (`f.rb:3:5: C: Style/Foo: msg`) and `golangci-lint` (`f.go:3:2: msg (errcheck)`).
+/// The rule name is the group key and `path:line[:col]` stays as the location (T662).
+fn parse_located(t: &str) -> Option<(String, String, String)> {
+    let (loc, rest) = t.split_once(": ")?;
+    // `path:line` or `path:line:col`; a bare word or a `key: value` line is not a diagnostic.
+    let (path, last) = loc.rsplit_once(':')?;
+    if path.is_empty()
+        || loc.contains(char::is_whitespace)
+        || last.is_empty()
+        || !last.bytes().all(|b| b.is_ascii_digit())
+    {
+        return None;
+    }
+    let rest = rest.trim();
+    let code = rest.split_whitespace().next()?;
+    let is_code = (2..=7).contains(&code.len())
+        && code.starts_with(|c: char| c.is_ascii_uppercase())
+        && code
+            .bytes()
+            .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit())
+        && code.bytes().any(|b| b.is_ascii_digit());
+    if is_code {
+        let msg = rest[code.len()..]
+            .trim_start()
+            .trim_start_matches("[*]")
+            .trim();
+        return Some((code.to_string(), msg.to_string(), loc.to_string()));
+    }
+    // `rubocop`: `C: Style/Foo: msg`, `W: [Correctable] Lint/Bar: msg`.
+    if let Some((sev, body)) = rest.split_once(": ")
+        && sev.len() == 1
+        && sev.starts_with(|c: char| c.is_ascii_uppercase())
+    {
+        let body = body.strip_prefix("[Correctable] ").unwrap_or(body);
+        if let Some((cop, msg)) = body.split_once(": ")
+            && cop.contains('/')
+            && cop.starts_with(|c: char| c.is_ascii_uppercase())
+            && !cop.contains(char::is_whitespace)
+        {
+            return Some((cop.to_string(), msg.trim().to_string(), loc.to_string()));
+        }
+    }
+    if let Some(msg) = rest
+        .strip_prefix("error: ")
+        .or_else(|| rest.strip_prefix("warning: "))
+        && msg.ends_with(']')
+        && let Some(open) = msg.rfind("  [")
+    {
+        let key = &msg[open + 3..msg.len() - 1];
+        if !key.is_empty() && !key.contains(char::is_whitespace) {
+            return Some((
+                key.to_string(),
+                msg[..open].trim().to_string(),
+                loc.to_string(),
+            ));
+        }
+    }
+    if rest.ends_with(')')
+        && let Some(open) = rest.rfind(" (")
+    {
+        let key = &rest[open + 2..rest.len() - 1];
+        if !key.is_empty()
+            && key
+                .bytes()
+                .all(|b| b.is_ascii_lowercase() || b == b'-' || b.is_ascii_digit())
+        {
+            return Some((
+                key.to_string(),
+                rest[..open].trim().to_string(),
+                loc.to_string(),
+            ));
         }
     }
     None
@@ -2110,6 +2190,49 @@ mod tests {
             on.contains("no-var ×20: Unexpected var (0:1, 1:1, 2:1, …)"),
             "{on}"
         );
+    }
+
+    #[test]
+    fn group_diag_reads_ruff_mypy_and_golangci_lines() {
+        let mut lines = Vec::new();
+        for i in 0..20 {
+            lines.push(format!(
+                "src/f{i}.py:{i}:8: F401 [*] `os` imported but unused"
+            ));
+            lines.push(format!(
+                "src/g{i}.py:{i}: error: Argument 1 has incompatible type  [arg-type]"
+            ));
+            lines.push(format!(
+                "pkg/h{i}.go:{i}:2: Error return value is not checked (errcheck)"
+            ));
+            lines.push(format!(
+                "app/m{i}.rb:{i}:4: C: [Correctable] Style/StringLiterals: Prefer single quotes."
+            ));
+        }
+        let body = lines.join("\n");
+        let s = settings(80);
+        let off = apply(&s, &body, 0, &uncut(Group::Off), "id");
+        let on = apply(&s, &body, 0, &uncut(Group::Diag), "id");
+        assert!(on.len() < off.len(), "{} vs {}\n{on}", on.len(), off.len());
+        assert!(
+            on.contains("F401 ×20: `os` imported but unused (src/f0.py:0:8"),
+            "{on}"
+        );
+        assert!(
+            on.contains("arg-type ×20: Argument 1 has incompatible type (src/g0.py:0"),
+            "{on}"
+        );
+        assert!(
+            on.contains("errcheck ×20: Error return value is not checked (pkg/h0.go:0:2"),
+            "{on}"
+        );
+        assert!(
+            on.contains("Style/StringLiterals ×20: Prefer single quotes. (app/m0.rb:0:4"),
+            "{on}"
+        );
+        // A `key: value` line and a bare path:line are not diagnostics.
+        assert_eq!(parse_located("note: see above"), None);
+        assert_eq!(parse_located("src/a.py:3: just text"), None);
     }
 
     /// `apply` groups once. The pass it dropped re-grouped already grouped lines, so
