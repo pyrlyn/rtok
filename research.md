@@ -3032,3 +3032,19 @@ Question: what real embedding source can sit behind `[plugins.memory.embed]` wit
 Not verified: OpenAI's base URL `https://api.openai.com/v1` (the fetched reference page shows the relative path only; it is the SDK default), and the price per token (not needed: the cap is `max_chars`, not money).
 
 Decision: `provider = "http"` posts `{"model", "input"}` to `<url>/embeddings` and reads `data[0].embedding`. It sends no `dimensions` field, so a server that lacks it cannot refuse the request; the length of the answer must equal `[embed] dimensions` or the vector is dropped. Cost control is a hard `max_chars` per request, no counters in the database. Any failure falls back to the plain note search with a warning; the hook (10 ms budget) never calls the endpoint and reads only the FTS leg while a remote is configured. Remote vectors are stored under their own model key (`<model>+remote1`), so they never mix with hash vectors.
+
+## 44. Review and blast-radius features without a bigger tool surface (T664, checked 2026-10-16)
+
+code-review-graph is described as ahead on review features with ~30 MCP tools (rtok-vs-code-review-graph comparison, PR #1071; **unverified** here: the upstream README was not re-read). The take/skip below is by what an agent asks after an edit, "what does this touch and is it covered", judged against what rtok already answers. The graph surface is at its 170-token gate, so a feature must arrive as output of an existing tool.
+
+| Question | rtok today | Decision |
+| --- | --- | --- |
+| Who calls what I changed | `graph_diff` callers per changed definition, `impact` | already have |
+| Blast radius grouped by file, budgeted | `impact` (T377 blast grouping) | already have |
+| Reading list ranked by risk | `rtok graph review` (T454), CLI only | already have; stays CLI to keep the MCP bill flat |
+| Changed definitions no test reaches | only inside `graph review` | **take**: `graph_diff` ends each project's changed list with one `untested: a, b` line |
+| One risk number on `graph_diff` | `graph review` scores | skip: a second scorer would duplicate `review.rs`; the untested line is the actionable part |
+| Execution flows, communities | no such index | skip: needs a new index, no saving evidence |
+| Dedicated review/blast tools | n/a | skip: tool descriptions are the cost rtok competes on |
+
+The line uses the caller rows `graph_diff` already gathers (depth 2), so it costs no extra walk; `graph review` looks 3 callers deep, so the two can differ on a definition reached only at depth 3. Description tokens do not change. No shared-corpus saving was measured.

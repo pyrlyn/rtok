@@ -158,7 +158,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T527 | in progress | P2 | 3 | 0% | MiMo / mimo |
 | T662 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T663 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T664 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T665 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T666 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T667 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
@@ -198,14 +197,6 @@ serena is ahead on symbol/reference precision (`docs/comparison/rtok-vs-serena.m
 Check: updated recall/precision row in `docs/comparison/rtok-vs-serena.md` and the graph bench; description-token budget still far below serena; `just check`.
 
 **Plan.** (1) Read `tests/graph_truth.rs` and `tests/fixtures/graph_truth.toml`; list the reference sites still missed (ref recall 0.924) and group them by cause (qualified paths, method calls through `self`, re-exports, macros, same-name definitions across files). (2) Fail-first fixture rows for the top cause, then fix it in the tags resolver (`src/plugins/graph/resolve.rs`, `scope.rs`) with no new MCP tool and no description growth. (3) Raise the `graph_truth` floors to the new numbers; record before/after in `research.md` and the serena row of `docs/comparison/rtok-vs-serena.md` once PR #1071 is on `main` (until then, only `research.md`). (4) `tests/graph_contract.rs` and the surface description-token gate stay green; `just check`.
-
-### T664. Review/blast-radius features from code-review-graph
-
-code-review-graph is ahead on review features (~30 MCP tools) while rtok wins on cost (`docs/comparison/rtok-vs-code-review-graph.md`). Port only the features that save tokens or answer "what does this edit touch?" without the full tool bill. Savings both sides: **no data** in rtok docs for a shared corpus.
-
-Check: one or more graph ops (or docs) covering the chosen features; MCP description-token budget documented; `just check`.
-
-**Plan.** Already shipped: `impact`, `graph_diff` (T329.18), `rtok graph review` (T454, CLI only), blast grouping. (1) Read the feature list in `docs/comparison/rtok-vs-code-review-graph.md` (PR #1071) and the code-review-graph README; mark each feature take / skip / already have. (2) Take at most the features that answer "what does this edit touch?" with no new MCP tool (the surface gate is 170 tokens): candidates are a test-gap list (changed defs with no test caller) and a risk summary line on `graph_diff`. (3) Fail-first tests on a fixture repo in `src/plugins/graph/review.rs` / `diff.rs`; keep `tests/graph_contract.rs` strings unchanged unless the commit says why. (4) Take/skip table in the comparison file (or `research.md` while #1071 is open); `just check`.
 
 ### T665. Broader graph queries (codebase-memory-mcp)
 
