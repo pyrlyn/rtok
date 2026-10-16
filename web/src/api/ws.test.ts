@@ -54,6 +54,11 @@ describe("wsUrl", () => {
     expect([plain.protocol, plain.host, plain.pathname]).toEqual(["ws:", "h:1", "/ws"]);
     expect(wsUrl({ protocol: "https:", host: "h" })).toBe("wss://h/ws");
   });
+
+  test("carries the access token as a query parameter, encoded", () => {
+    expect(wsUrl({ protocol: "https:", host: "h" }, "a b")).toBe("wss://h/ws?token=a%20b");
+    expect(wsUrl({ protocol: "https:", host: "h" }, null)).toBe("wss://h/ws");
+  });
 });
 
 describe("parseFrame", () => {

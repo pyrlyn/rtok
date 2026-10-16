@@ -27,6 +27,31 @@ fn home(name: &str) -> PathBuf {
     dir
 }
 
+/// A `/ws` handshake carrying the token `rtok web` wrote under `rtok_home` (S2).
+async fn connect_ws(
+    addr: &str,
+    rtok_home: &Path,
+) -> Result<
+    (
+        tokio_tungstenite::WebSocketStream<
+            tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+        >,
+        tokio_tungstenite::tungstenite::handshake::client::Response,
+    ),
+    tokio_tungstenite::tungstenite::Error,
+> {
+    use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+    let token = rtok::web::token::read(rtok_home).expect("web token file");
+    let mut req = format!("ws://{addr}/ws")
+        .into_client_request()
+        .expect("ws request");
+    req.headers_mut().insert(
+        "authorization",
+        format!("Bearer {token}").parse().expect("header"),
+    );
+    tokio_tungstenite::connect_async(req).await
+}
+
 struct Web {
     child: Child,
     addr: String,
@@ -113,7 +138,7 @@ async fn hosts_page_matches_agents_list_json_on_the_fixture_matrix() {
     );
 
     let web = start(&cfg, &h, &path).await;
-    let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://{}/ws", web.addr))
+    let (mut ws, _) = connect_ws(&web.addr, &h.join(".rtok"))
         .await
         .expect("ws connect");
 

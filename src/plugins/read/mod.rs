@@ -238,6 +238,12 @@ pub(crate) fn resolve_with(
     };
     // Lexical allow, then (when the path exists) reject symlink escapes past the root.
     let check = fs.canonicalize(&abs).unwrap_or_else(|| abs.clone());
+    if roots::secrets_denied() && (roots::is_secret(&abs) || roots::is_secret(&check)) {
+        bail!(
+            "refused: {} looks like a credential file and this server is reachable over HTTP",
+            path.display()
+        );
+    }
     if roots.iter().any(|r| under(&check, r)) {
         return Ok(abs);
     }

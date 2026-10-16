@@ -460,7 +460,7 @@ pub fn hex_sha256(bytes: &[u8]) -> String {
 /// The bool says whether this call created the file (`false` when it already held this exact
 /// content) — only a file this call created is safe to remove if the caller's insert fails.
 fn write_archive_file(dir: &Path, sha: &str, body: &[u8]) -> Result<(PathBuf, bool)> {
-    std::fs::create_dir_all(dir)?;
+    handle::create_private_dir(dir)?;
     let path = dir.join(sha);
     let created = !path.exists();
     // T324: `expand` reads this file lock-free, and another hook process may write the same
@@ -469,11 +469,34 @@ fn write_archive_file(dir: &Path, sha: &str, body: &[u8]) -> Result<(PathBuf, bo
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let tmp = dir.join(format!(".{sha}.tmp-{}-{n}", std::process::id()));
-    if let Err(e) = std::fs::write(&tmp, body).and_then(|()| std::fs::rename(&tmp, &path)) {
+    if let Err(e) = write_private(&tmp, body).and_then(|()| std::fs::rename(&tmp, &path)) {
         let _ = std::fs::remove_file(&tmp);
         return Err(e.into());
     }
     Ok((path, created))
+}
+
+/// `fs::write` with an owner-only mode on Unix: archived bodies are prompts and tool output.
+fn write_private(path: &Path, body: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    let mut o = std::fs::OpenOptions::new();
+    o.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut o, 0o600);
+    o.open(path)?.write_all(body)
+}
+
+#[cfg(all(test, unix))]
+#[test]
+fn archive_files_are_owner_only() {
+    use std::os::unix::fs::PermissionsExt;
+    let base = support::tmp_dir("private-archive");
+    let dir = base.join("archive");
+    let (path, _) = write_archive_file(&dir, "abc", b"secret prompt").unwrap();
+    let mode = |p: &Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
+    let (d, f) = (mode(&dir), mode(&path));
+    let _ = std::fs::remove_dir_all(&base);
+    assert_eq!((d, f), (0o700, 0o600));
 }
 
 /// The `archive` row behind a file [`write_archive_file`] already wrote. `on_conflict …

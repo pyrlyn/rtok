@@ -60,11 +60,36 @@ export interface WsOptions {
   location?: Pick<Location, "protocol" | "host">;
   baseDelayMs?: number;
   maxDelayMs?: number;
+  /** The `/ws` access token (S2); read again on every (re)connect. Defaults to {@link pageToken}. */
+  token?: () => string | null;
 }
 
-export function wsUrl(location: Pick<Location, "protocol" | "host">): string {
+const TOKEN_KEY = "rtok.web.token";
+
+/**
+ * The token `rtok web` wrote to `<RTOK_HOME>/web-token`. A browser cannot set headers on a
+ * WebSocket, so it is passed as `?token=` on the page URL once, kept in `sessionStorage` for the
+ * tab, and removed from the address bar so it does not linger in history or screenshots.
+ */
+export function pageToken(): string | null {
+  try {
+    const url = new URL(globalThis.location.href);
+    const fromUrl = url.searchParams.get("token");
+    if (fromUrl) {
+      globalThis.sessionStorage.setItem(TOKEN_KEY, fromUrl);
+      url.searchParams.delete("token");
+      globalThis.history.replaceState(null, "", url);
+    }
+    return globalThis.sessionStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function wsUrl(location: Pick<Location, "protocol" | "host">, token?: string | null): string {
   const scheme = location.protocol === "https:" ? "wss:" : "ws:";
-  return `${scheme}//${location.host}/ws`;
+  const query = token ? `?token=${encodeURIComponent(token)}` : "";
+  return `${scheme}//${location.host}/ws${query}`;
 }
 
 export function parseFrame(raw: unknown): Frame | null {
@@ -165,6 +190,7 @@ export function connectWs(
     location: loc = globalThis.location,
     baseDelayMs = 500,
     maxDelayMs = 10_000,
+    token = pageToken,
   }: WsOptions = {},
 ): Connection {
   let socket: Socket | null = null;
@@ -184,7 +210,7 @@ export function connectWs(
     handlers.onState("connecting");
     let current: Socket;
     try {
-      current = new SocketCtor(wsUrl(loc));
+      current = new SocketCtor(wsUrl(loc, token()));
     } catch {
       // A constructor that throws (blocked scheme, bad host) is a failed attempt, not a crash.
       scheduleRetry();
