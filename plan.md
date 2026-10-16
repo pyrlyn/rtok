@@ -162,7 +162,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T687 | todo | P2 | 4 | 0% | |
 | T675 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T676 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T677 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T678 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T679 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T680 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
@@ -1116,14 +1115,6 @@ Best competitor: lean-ctx gh.rs. Design: `gh pr/issue view`: drop empty fields, 
 Check: #1076 harness (`bench/c14`) shows +20 pp vs current head/tail on this category with full anchor retention.
 
 Plan: `gh` formatter in `compact.rs`: `pr/issue view` drops empty fields and collapses markdown whitespace; `pr checks` keeps non-pass rows plus counts; `run view --log` keeps per-step error blocks; `--json` goes through the TOON helper if present. Tests: golden files per subcommand with `min_saving:`; failing check rows and URLs kept.
-
-### T677. mise 660
-
-Best competitor: lean-ctx mise.rs. Design: drop install/progress lines, keep task header + failing task output; `mise run` = inner command formatter.
-
-Check: #1076 harness (`bench/c14`) shows ≥ lean-ctx on this category with full anchor retention.
-
-Plan: `mise` formatter: drop install/progress lines, keep the task header and a failing task's output, delegate `mise run <task>` output to the inner command formatter via the existing echoed-line peel in `formatters.rs`. Tests: golden `mise_*` fixtures, error lines and exit line kept.
 
 ### T678. for 570, until 231, while
 
