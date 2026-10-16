@@ -8,7 +8,12 @@
 //! module's [`CallsStore`], which the page's `calls` frame is built from, so the pane and the page show the same
 //! totals for the same calls. A freeze holds the picture only: the latest store keeps taking
 //! batches, so nothing is lost when it lifts.
+//!
+//! T500 (D27, counterpart of T329.32) adds what fits a terminal: sparklines of the store buckets
+//! for the selected window, the `outside scope` mark on a feed row that crosses out of the scope,
+//! and the folded-target counter of the one-project view.
 
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::mpsc;
 
@@ -19,11 +24,13 @@ use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Row, Table};
 
+use super::projects::Entry;
 use super::theme::{self, ACCENT, ERR, WARN};
 use super::view::time_of;
 use crate::config::{Config, Graph};
 use crate::web::calls_store::{
-    CallsStore, FeedFilter, Finished, Totals, WINDOWS, clock_ms, distinct, filter_feed,
+    CallsStore, FeedFilter, Finished, Running, Spark, Totals, WINDOWS, clock_ms, distinct,
+    filter_feed,
 };
 use crate::web::live::{self, CallBatch, Reader};
 
@@ -36,10 +43,139 @@ struct Held {
     now: i64,
 }
 
+/// A node the one-project picture draws (T500): the label the pane names and the path a folded
+/// target may sit under.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct Drawn {
+    pub label: String,
+    pub path: String,
+}
+
+/// The one-project view's drawn nodes and how many the cap left out. Folded counters need both
+/// this and `more` > 0; outside that view nothing is folded.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct OneProject {
+    pub id: i32,
+    pub drawn: Vec<Drawn>,
+    pub more: usize,
+}
+
+/// The names the scope holds (T329 §8b / T500): the selected project plus everything its links
+/// reach. `None` with no selection, so nothing is outside a scope that was never chosen.
+fn scope_names(rows: &[Entry]) -> Option<HashSet<String>> {
+    let from = rows.iter().find(|p| p.selected)?;
+    let by_id: std::collections::HashMap<i32, &Entry> = rows.iter().map(|p| (p.id, p)).collect();
+    let mut seen = HashSet::new();
+    let mut todo = vec![from.id];
+    while let Some(id) = todo.pop() {
+        if !seen.insert(id) {
+            continue;
+        }
+        if let Some(p) = by_id.get(&id) {
+            for (to, _) in &p.links {
+                if by_id.contains_key(to) && !seen.contains(to) {
+                    todo.push(*to);
+                }
+            }
+        }
+    }
+    Some(
+        rows.iter()
+            .filter(|p| seen.contains(&p.id))
+            .map(|p| p.name.clone())
+            .collect(),
+    )
+}
+
+/// A call names its project; one the scope lacks is marked but never folded away (T500).
+fn outside_scope(scope: &Option<HashSet<String>>, project: Option<&str>) -> bool {
+    match (scope, project) {
+        (Some(s), Some(p)) => !s.contains(p),
+        _ => false,
+    }
+}
+
+/// `▁▂▃▄▅▆▇█` scaled to the series' own max, so an all-zero series is a flat baseline.
+fn spark_blocks(values: &[i64]) -> String {
+    const BARS: [char; 8] = ['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
+    let top = values.iter().copied().max().unwrap_or(0);
+    if top <= 0 {
+        return BARS[0].to_string().repeat(values.len());
+    }
+    values
+        .iter()
+        .map(|&v| {
+            let scaled = (v.max(0) as u64 * 7).div_ceil(top as u64).min(7) as usize;
+            BARS[scaled]
+        })
+        .collect()
+}
+
+/// The page's `minutes`: the sparkline's own span, which "since start" caps at 15 minutes.
+fn spark_minutes(span_ms: i64) -> i64 {
+    (span_ms / 60_000).max(1)
+}
+
+/// Folded-call counters (T500, the web's `foldedCounters`): a call of the last 5 minutes whose
+/// target matches no drawn node counts on the drawn node whose path equals or is a directory
+/// prefix of the target (longest first), else on the "+N more" group. Sorted busiest first.
+fn folded_counters(
+    drawn: &[Drawn],
+    more: usize,
+    feed: &[Finished],
+    running: &[Running],
+    scope: &Option<HashSet<String>>,
+    now: i64,
+) -> Vec<(String, u64)> {
+    if more == 0 {
+        return Vec::new();
+    }
+    const FOLD_MS: i64 = 300_000;
+    let labels: HashSet<&str> = drawn.iter().map(|d| d.label.as_str()).collect();
+    let mut holders: Vec<&Drawn> = drawn.iter().collect();
+    holders.sort_by(|a, b| b.path.len().cmp(&a.path.len()));
+    let mut counts: std::collections::BTreeMap<String, u64> = Default::default();
+    let mut group = 0u64;
+    let mut fold = |target: Option<&str>| {
+        let Some(target) = target else { return };
+        if labels.contains(target) {
+            return;
+        }
+        if let Some(h) = holders
+            .iter()
+            .find(|d| target == d.path || target.starts_with(&format!("{}/", d.path)))
+        {
+            *counts.entry(h.label.clone()).or_default() += 1;
+        } else {
+            group += 1;
+        }
+    };
+    for r in feed {
+        if r.interrupted || now - r.at > FOLD_MS || outside_scope(scope, r.project.as_deref()) {
+            continue;
+        }
+        fold(r.target.as_deref());
+    }
+    for r in running {
+        if now - r.at > FOLD_MS || outside_scope(scope, r.project.as_deref()) {
+            continue;
+        }
+        fold(r.target.as_deref());
+    }
+    let mut out: Vec<(String, u64)> = counts.into_iter().collect();
+    if group > 0 {
+        out.push((format!("+{more} more"), group));
+    }
+    out.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+    out
+}
+
 /// The pane's state. The clock arrives through [`Self::poll`], like the rest of the TUI state.
 pub(super) struct LiveCalls {
     db_path: PathBuf,
     graph: Graph,
+    /// Kept for the one-project view's drill read (T500); the feed reader needs only the path.
+    cfg: Config,
     /// The newest event id when the TUI started: the totals count the events above it, read from
     /// the store when the reader starts, so they do not depend on when the Graph tab was first
     /// opened.
@@ -52,6 +188,10 @@ pub(super) struct LiveCalls {
     window: usize,
     filter: FeedFilter,
     now: i64,
+    /// The drilled picture of the selected project (T500); folded counters ride on it.
+    one_project: Option<OneProject>,
+    /// In-flight drill read for a project that just became selected.
+    one_project_rx: Option<mpsc::Receiver<OneProject>>,
 }
 
 /// One thread on the web's reader; it ends when the TUI drops the receiver. Batches come with
@@ -91,11 +231,49 @@ fn spawn_reader(
     Some(rx)
 }
 
+/// The selected project's drawn nodes and `more`, as the web's `useDrill` gets them (T500).
+/// Off the UI thread; a failure answers nothing, so the pane keeps the picture it had.
+fn load_one_project(cfg: &Config, id: i32) -> Option<OneProject> {
+    #[cfg(not(feature = "graph"))]
+    {
+        let _ = (cfg, id);
+        None
+    }
+    #[cfg(feature = "graph")]
+    {
+        use crate::plugins::graph::drill::{DEFAULT_LIMIT, DrillRequest};
+        use crate::plugin::Runtime;
+        let rt = Runtime::open(cfg.clone(), "tui-live-calls").ok()?;
+        let req = DrillRequest {
+            project: id.to_string(),
+            limit: Some(DEFAULT_LIMIT),
+            ..DrillRequest::default()
+        };
+        let g = crate::plugins::graph::drill::run(&rt, &req).ok()?;
+        if g.state != "ok" {
+            return None;
+        }
+        Some(OneProject {
+            id: g.project,
+            drawn: g
+                .nodes
+                .iter()
+                .map(|n| Drawn {
+                    label: n.label.clone(),
+                    path: n.path.clone(),
+                })
+                .collect(),
+            more: g.more,
+        })
+    }
+}
+
 impl LiveCalls {
     pub(super) fn new(cfg: &Config) -> Self {
         Self {
             db_path: cfg.core.db_path.clone(),
             graph: cfg.plugins.graph.clone(),
+            cfg: cfg.clone(),
             started: live::head_of(&cfg.core.db_path),
             feed: None,
             latest: CallsStore::with(&cfg.plugins.graph),
@@ -103,12 +281,15 @@ impl LiveCalls {
             window: 1,
             filter: FeedFilter::default(),
             now: clock_ms(),
+            one_project: None,
+            one_project_rx: None,
         }
     }
 
     /// Takes what the reader found and drops calls whose process is gone. `active` is whether the
-    /// Graph tab is up; the reader is not started before that.
-    pub(super) fn poll(&mut self, active: bool) {
+    /// Graph tab is up; the reader is not started before that. `selected` is the registry id the
+    /// scope starts at; a change reloads the one-project picture (T500).
+    pub(super) fn poll(&mut self, active: bool, selected: Option<i32>) {
         if active && self.feed.is_none() {
             self.feed = spawn_reader(self.db_path.clone(), self.graph.clone(), self.started);
         }
@@ -119,6 +300,57 @@ impl LiveCalls {
             self.latest.fold(batch, *at);
         }
         self.latest.sweep(self.now);
+        self.poll_one_project(selected);
+    }
+
+    /// Keeps the one-project picture on the selected project, loading it off the UI thread when
+    /// the selection changes. A project that cannot answer leaves the old picture standing until
+    /// the next selection: the pane must not blank because a drill read failed (fail open).
+    fn poll_one_project(&mut self, selected: Option<i32>) {
+        while let Some(rx) = &self.one_project_rx {
+            match rx.try_recv() {
+                Ok(one) => {
+                    self.one_project = Some(one);
+                    self.one_project_rx = None;
+                }
+                Err(mpsc::TryRecvError::Empty) => break,
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    self.one_project_rx = None;
+                }
+            }
+        }
+        let want = selected.unwrap_or(0);
+        let have = self.one_project.as_ref().map_or(i32::MIN, |o| o.id);
+        if want == have || self.one_project_rx.is_some() {
+            return;
+        }
+        let Some(id) = selected else {
+            self.one_project = None;
+            return;
+        };
+        self.spawn_one_project(id);
+    }
+
+    fn spawn_one_project(&mut self, id: i32) {
+        let (tx, rx) = mpsc::channel();
+        self.one_project_rx = Some(rx);
+        let cfg = self.cfg.clone();
+        std::thread::Builder::new()
+            .name("rtok-tui-one-project".into())
+            .spawn(move || {
+                if let Some(one) = load_one_project(&cfg, id)
+                    && tx.send(one).is_ok()
+                {
+                    return;
+                }
+            })
+            .ok();
+    }
+
+    /// The one-project picture, set directly by tests and by [`Self::poll_one_project`].
+    #[cfg(test)]
+    pub(super) fn set_one_project(&mut self, one: Option<OneProject>) {
+        self.one_project = one;
     }
 
     #[cfg(test)]
@@ -365,11 +597,69 @@ impl LiveCalls {
         lines
     }
 
-    pub(super) fn render(&self, frame: &mut Frame, area: Rect) {
+    /// T500: the page's "calls over the last N min" / "tokens saved over the last N min" on the
+    /// store's own buckets (`CallsStore::spark`), so the series matches the web cards.
+    fn spark_lines(&self) -> Vec<Line<'static>> {
+        let spark: Spark = self.shown().spark(self.window, self.shown_now());
+        let mins = spark_minutes(spark.span_ms);
+        let row = |what: &str, values: Vec<i64>| {
+            Line::from(vec![
+                Span::styled(
+                    format!("{what} over the last {mins} min  "),
+                    theme::muted(),
+                ),
+                Span::styled(spark_blocks(&values), Style::new().fg(ACCENT)),
+            ])
+        };
+        vec![
+            row("calls", spark.calls.iter().map(|&c| c as i64).collect()),
+            row("tokens saved", spark.saved.clone()),
+        ]
+    }
+
+    /// T500: `{label} · {n} folded` under "folded calls", only in the one-project view when the
+    /// cap left nodes out. One line, busiest first, as the page lists them.
+    fn folded_line(&self, scope: &Option<HashSet<String>>) -> Option<Line<'static>> {
+        let one = self.one_project.as_ref()?;
+        if one.more == 0 {
+            return None;
+        }
+        let now = self.shown_now();
+        let store = self.shown();
+        let counters = folded_counters(
+            &one.drawn,
+            one.more,
+            &store.feed,
+            &store.running,
+            scope,
+            now,
+        );
+        if counters.is_empty() {
+            return None;
+        }
+        let listed = counters
+            .iter()
+            .map(|(label, n)| format!("{label} · {n} folded"))
+            .collect::<Vec<_>>()
+            .join("  ");
+        Some(Line::from(vec![
+            Span::styled("folded calls  ", theme::muted()),
+            Span::raw(listed),
+        ]))
+    }
+
+    pub(super) fn render(&self, frame: &mut Frame, area: Rect, rows: &[Entry]) {
         let t = self.shown().window_totals(self.window, self.shown_now());
-        // The Graph page gives the pane 13 rows at 24; the bars yield so the feed keeps its rows.
-        let bars = MAX_BARS.min(usize::from(area.height).saturating_sub(11));
+        let scope = scope_names(rows);
+        let spark = self.spark_lines();
+        let folded = self.folded_line(&scope);
+        // Four metric rows, the sparklines, the optional folded line and the filter row; the bars
+        // yield so the feed keeps its rows.
+        let extra = spark.len() + usize::from(folded.is_some());
+        let bars = MAX_BARS.min(usize::from(area.height).saturating_sub(9 + extra));
         let mut lines = self.metric_lines(&t, bars);
+        lines.extend(spark);
+        lines.extend(folded);
         let mut filters = Vec::new();
         for (name, value) in [
             ("caller [a]", &self.filter.caller),
@@ -393,12 +683,17 @@ impl LiveCalls {
             self.shown().feed.len()
         );
         let table_rows = rows.iter().map(|r| {
+            let project = match &r.project {
+                Some(p) if outside_scope(&scope, Some(p)) => format!("{p} · outside scope"),
+                Some(p) => p.clone(),
+                None => "-".into(),
+            };
             let row = Row::new([
                 time_of(r.at / 1000),
                 r.tool.clone(),
                 r.target.clone().unwrap_or_else(|| "-".into()),
                 r.caller.clone(),
-                r.project.clone().unwrap_or_else(|| "-".into()),
+                project,
                 result_cell(r),
             ]);
             if r.ok {
@@ -637,7 +932,7 @@ mod tests {
         let mut cfg = config();
         cfg.tui.tab = "graph".into();
         let mut live = LiveCalls::new(&cfg);
-        live.poll(true);
+        live.poll(true, None);
         // The reader arms itself at the newest event and says nothing when it has, so calls are
         // written until one is seen: whichever lands after the arming reaches the pane.
         let store = crate::store::Store::open(&cfg.core.db_path).unwrap();
@@ -649,7 +944,7 @@ mod tests {
                 store.insert_graph_event(&e).unwrap();
             }
             std::thread::sleep(Duration::from_millis(100));
-            live.poll(true);
+            live.poll(true, None);
         }
         let all = &live.latest.all;
         assert!(all.calls >= 1, "no call reached the pane");
@@ -685,13 +980,192 @@ mod tests {
         for e in [event("early"), end("early", 100, 30)] {
             store.insert_graph_event(&e).unwrap();
         }
-        live.poll(true);
+        live.poll(true, None);
         let deadline = std::time::Instant::now() + Duration::from_secs(30);
         while live.latest.all.calls == 0 && std::time::Instant::now() < deadline {
             std::thread::sleep(Duration::from_millis(100));
-            live.poll(true);
+            live.poll(true, None);
         }
         assert_eq!(live.latest.all.calls, 1);
         assert_eq!(live.latest.feed[0].target.as_deref(), Some("open_index"));
+    }
+
+    fn entry(id: i32, name: &str, selected: bool, links: &[(i32, &str)]) -> Entry {
+        use crate::plugins::graph::health::score::{Components, Level, Score};
+        Entry {
+            id,
+            name: name.into(),
+            selected,
+            missing: false,
+            state: "indexed",
+            links: links.iter().map(|(to, n)| (*to, (*n).to_string())).collect(),
+            health: Score {
+                score: Some(100),
+                level: Level::Good,
+                components: Components {
+                    freshness: 1.0,
+                    backend: 1.0,
+                    links: 1.0,
+                },
+                reasons: vec![],
+            },
+            scope_health: Some(100),
+        }
+    }
+
+    fn drawn(label: &str, path: &str) -> Drawn {
+        Drawn {
+            label: label.into(),
+            path: path.into(),
+        }
+    }
+
+    /// T500: the scope is the selected project plus everything its links reach; with no
+    /// selection nothing is outside.
+    #[test]
+    fn the_scope_follows_the_selected_projects_links() {
+        let rows = vec![
+            entry(1, "rtok", true, &[(2, "ketch")]),
+            entry(2, "ketch", false, &[]),
+            entry(3, "other", false, &[]),
+        ];
+        let scope = scope_names(&rows).unwrap();
+        assert_eq!(
+            scope.iter().map(String::as_str).collect::<HashSet<_>>(),
+            HashSet::from(["rtok", "ketch"])
+        );
+        assert!(outside_scope(&scope_names(&rows), Some("other")));
+        assert!(!outside_scope(&scope_names(&rows), Some("ketch")));
+        // No project on a call is never outside; no selection means no scope at all.
+        assert!(!outside_scope(&scope_names(&rows), None));
+        let none = vec![entry(1, "rtok", false, &[])];
+        assert!(scope_names(&none).is_none());
+        assert!(!outside_scope(&scope_names(&none), Some("other")));
+    }
+
+    /// T500: the pane names the series "calls over the last N min" and "tokens saved over the
+    /// last N min", drawing the store's own buckets.
+    #[test]
+    fn the_sparklines_match_the_store_buckets() {
+        let mut app = graph_app();
+        app.live_mut().feed_batch(&batch(vec![end("a", 100, 30), end("b", 40, 10)], 0), T);
+        let s = screen(&app);
+        assert!(s.contains("calls over the last 5 min"), "{s}");
+        assert!(s.contains("tokens saved over the last 5 min"), "{s}");
+        let store = app.live().shown();
+        let spark = store.spark(1, T);
+        assert_eq!(spark.calls.iter().sum::<u64>(), 2);
+        assert_eq!(spark.saved.iter().sum::<i64>(), 100);
+        assert_eq!((spark.span_ms, spark.calls.len()), (300_000, 30));
+    }
+
+    /// T500: `▁▂▃▄▅▆▇█` scaled to the series' own max, and a flat baseline when nothing happened.
+    #[test]
+    fn spark_blocks_scale_to_the_series_max() {
+        assert_eq!(spark_blocks(&[]), "");
+        assert_eq!(spark_blocks(&[0, 0]), "▁▁");
+        assert_eq!(spark_blocks(&[0, 1, 2]), "▁▄█");
+        assert_eq!(spark_blocks(&[5, 10]), "▄█");
+    }
+
+    /// T500: a feed row whose project is not in the scope carries the mark beside the project.
+    #[test]
+    fn an_outside_scope_call_is_marked_beside_the_project() {
+        let mut cfg = config();
+        cfg.tui.tab = "graph".into();
+        let mut app = App::new(&cfg);
+        use crate::model::Snapshot;
+        use crate::plugins::graph::health::score::{Components, Level, Score};
+        use crate::plugins::graph::projects::ProjectRow;
+        let score = Score {
+            score: Some(100),
+            level: Level::Good,
+            components: Components {
+                freshness: 1.0,
+                backend: 1.0,
+                links: 1.0,
+            },
+            reasons: vec![],
+        };
+        let mut sel = ProjectRow::fixture(1, "rtok", score.clone(), Some(100));
+        sel.selected = true;
+        let other = ProjectRow::fixture(2, "ketch", score.clone(), Some(100));
+        let outside = ProjectRow::fixture(3, "elsewhere", score, Some(100));
+        app.refresh(Snapshot {
+            projects: Some(vec![sel, other, outside]),
+            ..Snapshot::default()
+        });
+        app.live_mut().feed_batch(&first_batch(), T);
+        let s = screen(&app);
+        // The fixtures name their project `rtok`, which the selected scope holds: no mark.
+        assert!(!s.contains("outside scope"), "{s}");
+        let mut far = end("far", 8, 4);
+        far.project = Some("elsewhere".into());
+        app.live_mut().feed_batch(&batch(vec![far], 0), T + 1);
+        let s = screen(&app);
+        assert!(s.contains("elsewhere · outside scope"), "{s}");
+    }
+
+    /// T500: a folded target counts on the drawn node whose path holds it, longest first, else
+    /// on the "+N more" group.
+    #[test]
+    fn folded_targets_count_on_their_nearest_visible_ancestor() {
+        let scope = Some(HashSet::from(["rtok".to_string()]));
+        let nodes = vec![
+            drawn("main.rs", "src/main.rs"),
+            drawn("store.rs", "src/store.rs"),
+        ];
+        let mut hidden = end("hidden_fn", 1, 1);
+        hidden.target = Some("hidden_fn".into());
+        let mut inside = end("inside", 1, 1);
+        inside.target = Some("src/store.rs/open".into());
+        let mut on_file = end("on_file", 1, 1);
+        on_file.target = Some("src/main.rs".into());
+        let mut store = CallsStore::with(&Graph::default());
+        store.fold(&batch(vec![hidden, inside, on_file], 0), T);
+        let counters = folded_counters(&nodes, 7, &store.feed, &store.running, &scope, T);
+        // `src/main.rs` matches its node's label and is not folded; the other two are.
+        assert_eq!(
+            counters,
+            vec![("+7 more".to_string(), 1), ("store.rs".to_string(), 1)]
+        );
+        // Without folded nodes nothing is counted; an outside-scope call is not folded.
+        assert!(folded_counters(&nodes, 0, &store.feed, &store.running, &scope, T).is_empty());
+        let mut far = end("far", 1, 1);
+        far.project = Some("elsewhere".into());
+        far.target = Some("hidden_fn".into());
+        let mut outside = CallsStore::with(&Graph::default());
+        outside.fold(&batch(vec![far], 0), T);
+        assert_eq!(
+            folded_counters(&nodes, 7, &outside.feed, &outside.running, &scope, T),
+            Vec::<(String, u64)>::new()
+        );
+    }
+
+    /// T500: the pane lists `{label} · {n} folded` under "folded calls" in the one-project view.
+    #[test]
+    fn the_pane_lists_folded_calls_in_the_one_project_view() {
+        let mut app = graph_app();
+        let mut hidden = end("hidden_fn", 1, 1);
+        hidden.target = Some("hidden_fn".into());
+        let mut inside = end("inside", 1, 1);
+        inside.target = Some("src/store.rs/open".into());
+        app.live_mut().feed_batch(&batch(vec![hidden, inside], 0), T);
+        app.live_mut().set_one_project(Some(OneProject {
+            id: 1,
+            drawn: vec![drawn("main.rs", "src/main.rs"), drawn("store.rs", "src/store.rs")],
+            more: 7,
+        }));
+        let s = screen(&app);
+        assert!(s.contains("folded calls"), "{s}");
+        assert!(s.contains("store.rs · 1 folded"), "{s}");
+        assert!(s.contains("+7 more · 1 folded"), "{s}");
+        // The cap left nothing out: no folded line at all.
+        app.live_mut().set_one_project(Some(OneProject {
+            id: 1,
+            drawn: vec![drawn("main.rs", "src/main.rs")],
+            more: 0,
+        }));
+        assert!(!screen(&app).contains("folded calls"));
     }
 }

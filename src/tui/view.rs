@@ -470,8 +470,8 @@ fn render_graph(frame: &mut Frame, app: &App, area: Rect) {
     let live = (area.height / 2).min(18);
     let [area, calls] =
         Layout::vertical([Constraint::Min(0), Constraint::Length(live)]).areas(area);
-    app.live().render(frame, calls);
     let (rows, state) = app.projects();
+    app.live().render(frame, calls, &rows);
     if rows.is_empty() {
         return frame.render_widget(graph_page(app), area);
     }

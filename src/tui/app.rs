@@ -353,7 +353,11 @@ impl App {
 
     /// Take the worker's newest finished read, if any. Called by the loop between keys.
     pub fn poll(&mut self) {
-        self.live.poll(self.page() == "graph");
+        let selected = projects::entries(&self.snapshot)
+            .iter()
+            .find(|p| p.selected)
+            .map(|p| p.id);
+        self.live.poll(self.page() == "graph", selected);
         self.compare.poll();
         self.exporter.poll();
         let Some(latest) = self.worker.as_ref().and_then(|w| w.rx.try_iter().last()) else {

@@ -40,7 +40,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T329.51 | todo | P3 | 2 | 0% | |
 | T329.52 | todo | P3 | 2 | 0% | |
 | T329.53 | todo | P3 | 2 | 0% | |
-| T500 | todo | P3 | 3 | 0% | |
+| T500 | in progress | P3 | 3 | 0% | MiMo / mimo |
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
 | T369.1 | todo | P3 | 1 | 0% | |
 | T370 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
