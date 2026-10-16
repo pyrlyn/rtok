@@ -1,4 +1,4 @@
-argv: grep -n hit src
+argv: grep -n -f pats src
 exit: 0
 min_saving: 53
 ---

@@ -592,6 +592,12 @@ url         = ""                      # "http": base URL, e.g. "http://localhost
 api_key_env = ""                      # "http": name of the env var holding the key; empty = no Authorization header
 max_chars   = 8000                    # "http": a longer text is never sent (the note search runs instead)
 
+[plugins.memory.extract]
+enabled         = false                 # rtok memory extract: off by default, a model call can cost money
+command         = []                    # program reading the transcript on stdin, one {"title","body"} JSON line out per note
+max_notes       = 5                     # notes kept per run
+max_input_bytes = 60000                 # transcript bytes sent to the program; the end of the session is kept
+
 [plugins.graph]
 enabled    = true
 max_tokens = 2000                     # per response; beyond it: head + "N more, expand <id>"
