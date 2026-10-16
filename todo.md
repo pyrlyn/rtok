@@ -46,7 +46,6 @@
 - T657. Match compressor credentials to the internal provider
 - T651. Honor ProgressRunner timeouts with inherited output
 - T663. Push graph reference precision toward LSP-grade (serena)
-- T665. Broader graph queries (codebase-memory-mcp)
 - T666.2. Provider-backed memory extractor (blocked on the creator)
 - T667. Richer memory features from engram
 - T670. Read modes lean-ctx still has
