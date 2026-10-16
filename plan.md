@@ -172,7 +172,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T681 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T682 | todo | P2 | 3 | 0% | |
 | T683 | todo | P2 | 3 | 0% | |
-| T685 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T686 | todo | P2 | 3 | 0% | |
 
 
@@ -1203,13 +1202,6 @@ Plan: extend the existing log run-collapser in `src/plugins/cmd` so collapsed lo
 
 Blocked: (1) `cmd` has no logfmt run-collapser to extend today, only `dedupe = "normalized"` (`rules.rs`, no default rule uses it), so this is a new collapse mode, not a tweak; (2) the Check (+2 pp, rtok already 94.5 % vs lean-ctx 87.4 %) is measurable only with the #1076 harness (`bench/c14`, PR open, not on main). Take it again after #1076 merges.
 
-### T685. find 33
-
-Best competitor: rtok leads. Design: keep dir grouping but print full paths for ≤ 50 hits so the anchor check passes.
-
-Check: #1076 harness (`bench/c14`) shows 100 % paths, ≥ 69 % on this category with full anchor retention.
-
-Plan: in the find formatter print full paths for ≤ 50 hits (grouping only above that); fixture test asserting 100 % paths and fewer tokens than raw; measure on `bench/fixtures`.
 
 ### T686. MCP tool catalogs
 
