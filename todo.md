@@ -48,7 +48,6 @@
 - T662. Match sqz formatter breadth without leaving the lossless path
 - T663. Push graph reference precision toward LSP-grade (serena)
 - T664. Review/blast-radius features from code-review-graph
-- T665. Broader graph queries (codebase-memory-mcp)
 - T666. Optional automatic memory extraction (claude-mem idea)
 - T667. Richer memory features from engram
 - T670. Read modes lean-ctx still has

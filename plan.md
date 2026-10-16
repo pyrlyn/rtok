@@ -159,7 +159,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T662 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T663 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T664 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T665 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T666 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T667 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T670 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
@@ -206,14 +205,6 @@ code-review-graph is ahead on review features (~30 MCP tools) while rtok wins on
 Check: one or more graph ops (or docs) covering the chosen features; MCP description-token budget documented; `just check`.
 
 **Plan.** Already shipped: `impact`, `graph_diff` (T329.18), `rtok graph review` (T454, CLI only), blast grouping. (1) Read the feature list in `docs/comparison/rtok-vs-code-review-graph.md` (PR #1071) and the code-review-graph README; mark each feature take / skip / already have. (2) Take at most the features that answer "what does this edit touch?" with no new MCP tool (the surface gate is 170 tokens): candidates are a test-gap list (changed defs with no test caller) and a risk summary line on `graph_diff`. (3) Fail-first tests on a fixture repo in `src/plugins/graph/review.rs` / `diff.rs`; keep `tests/graph_contract.rs` strings unchanged unless the commit says why. (4) Take/skip table in the comparison file (or `research.md` while #1071 is open); `just check`.
-
-### T665. Broader graph queries (codebase-memory-mcp)
-
-codebase-memory-mcp is broader (Cypher-style queries) (`docs/comparison/rtok-vs-codebase-memory-mcp.md`). Add the small query shapes agents actually used in our logs, without a heavy MCP surface. Savings both sides: **no data** for a shared corpus.
-
-Check: query shapes documented and tested; comparison file updated; `just check`.
-
-**Plan.** (1) List the query shapes agents used in our logs (`rtok stats`, `graph_events`) that `symbol`/`callers`/`impact`/`explore` do not answer in one call; compare with the Cypher shapes in `docs/comparison/rtok-vs-codebase-memory-mcp.md`. (2) Add at most two shapes as parameters of existing operations (no seventh/eighth tool): e.g. `callers` with `depth` and a `kind`/`path` filter, `outline` with `kind`. (3) Fail-first tests in `src/plugins/graph` + `tests/graph_contract.rs` for each shape, on the SQLite store only. (4) Document the shapes in `src/plugins/graph/README.md` and the comparison file; description tokens stay under the surface gate; `just check`.
 
 ### T666. Optional automatic memory extraction (claude-mem idea)
 

@@ -3032,3 +3032,20 @@ Question: what real embedding source can sit behind `[plugins.memory.embed]` wit
 Not verified: OpenAI's base URL `https://api.openai.com/v1` (the fetched reference page shows the relative path only; it is the SDK default), and the price per token (not needed: the cap is `max_chars`, not money).
 
 Decision: `provider = "http"` posts `{"model", "input"}` to `<url>/embeddings` and reads `data[0].embedding`. It sends no `dimensions` field, so a server that lacks it cannot refuse the request; the length of the answer must equal `[embed] dimensions` or the vector is dropped. Cost control is a hard `max_chars` per request, no counters in the database. Any failure falls back to the plain note search with a warning; the hook (10 ms budget) never calls the endpoint and reads only the FTS leg while a remote is configured. Remote vectors are stored under their own model key (`<model>+remote1`), so they never mix with hash vectors.
+
+## 43. Cypher-style query shapes without a query tool (T665, checked 2026-10-16)
+
+codebase-memory-mcp is described as Cypher-style (rtok-vs-codebase-memory-mcp comparison, PR #1071; **unverified** here: the upstream README was not re-read). rtok keeps seven graph tools (description gate: 170 tokens, now 169) and takes shapes as parameters of existing tools. The choice is grounded in the competitor's published shapes and in what `symbol`/`callers`/`impact`/`explore` already answer; no rtok log count backs it, and no shared-corpus saving was measured.
+
+| Cypher shape | rtok today | Decision |
+| --- | --- | --- |
+| callers of X (depth 1..n) | `callers`, `impact(depth)` | already have |
+| callees of X | `symbol` prints `calls:` | already have |
+| path A → B | `impact(to)`, `explore` | already have |
+| definitions in file F | `outline` | already have |
+| definitions in file F of kind K | `outline` printed every kind | **take**: `outline(path, kind)` keeps the lines of one kind |
+| definitions nobody references (dead code), under a path | CLI `graph dead` only | **take**: `callers` with no `name` lists them, `path`/`kind` narrow |
+| arbitrary pattern match / aggregation | none | skip: needs a query language and its description cost |
+| labels, properties, cross-repo traversal | project scope exists | skip |
+
+Cost: the two parameters add 4 description tokens to the MCP surface (report `~1037` → `~1041`). Backends: both shapes read the tags index; a text-mode project says dead-code analysis is unavailable, as `graph dead` does.
