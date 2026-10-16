@@ -3065,3 +3065,31 @@ code-review-graph is described as ahead on review features with ~30 MCP tools (r
 | Dedicated review/blast tools | n/a | skip: tool descriptions are the cost rtok competes on |
 
 The line uses the caller rows `graph_diff` already gathers (depth 2), so it costs no extra walk; `graph review` looks 3 callers deep, so the two can differ on a definition reached only at depth 3. Description tokens do not change. No shared-corpus saving was measured.
+
+## 46. Hook p50 harness, rerun script, and why T687 has no number yet (T687, checked 2026-10-16)
+
+The §19.2 harness is not in the repository. This is the script (node, `spawn` with a shell, payload on stdin, clock stops on `close`, commands interleaved round by round so load drift hits all of them). Run it as `node hookbench.js 300 true "<hook.json command>"`:
+
+```js
+// Round-robin node spawn(cmd,{shell:true}), payload on stdin, clock stops on close (research.md 19.2).
+const { spawn } = require('node:child_process');
+const cmds = process.argv.slice(3);
+const rounds = Number(process.argv[2]);
+const payload = JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Read', tool_input: { file_path: '/tmp/x' }, cwd: process.cwd(), session_id: 'bench' });
+const times = cmds.map(() => []);
+const run = (cmd) => new Promise((res) => {
+  const t0 = process.hrtime.bigint();
+  const p = spawn(cmd, { shell: true, stdio: ['pipe', 'ignore', 'ignore'] });
+  p.on('close', () => res(Number(process.hrtime.bigint() - t0) / 1e6));
+  p.stdin.end(payload);
+});
+(async () => {
+  for (let r = 0; r < rounds; r++) for (let i = 0; i < cmds.length; i++) times[i].push(await run(cmds[i]));
+  cmds.forEach((c, i) => {
+    const s = times[i].sort((a, b) => a - b);
+    console.log(`${c.slice(0, 60).padEnd(60)} p50 ${s[Math.floor(s.length / 2)].toFixed(2)} p95 ${s[Math.floor(s.length * 0.95)].toFixed(2)} ms`);
+  });
+})();
+```
+
+No T687 number was taken. The machine was not idle: 16 cores at load average 13 to 20 with other sessions building, and the `true` floor read p50 8.97 ms (100 rounds) against the 5.2 ms of §19.2, so any hook figure would be mostly load. For scale only, the installed `rtok-hook` v0.15.1 (no resident) read p50 26.64 ms in the same run; that is neither the current code nor a result. What §19.2/§19.7 already fix: the floor is 5.2 to 5.6 ms (node plus `/bin/sh`), the hook with a resident is 12.3 to 12.5 ms, so reaching 10 ms means taking at most 4.4 ms above the floor for the shell line, the `rtok-hook` start, the socket round trip and the hook. The next step is a rerun on a quiet machine of `command -v rtok-hook && exec rtok-hook PreToolUse` against `true` and a bare `rtok-hook` start, to see which of those four pieces owns the 6.7 ms, before touching code.
