@@ -389,7 +389,7 @@ fn is_drop(low: &str, rule: &Rule) -> bool {
 /// T65.3: fold runs of two or more spaces inside a line to one; leading
 /// indentation is kept (tracebacks, YAML and diffs are not columnar) and a
 /// trailing run folds to nothing — no signal, pure bytes.
-fn collapse_columns(line: &str) -> String {
+pub(super) fn collapse_columns(line: &str) -> String {
     let trimmed = line.trim_start();
     let leading = &line[..line.len() - trimmed.len()];
     let mut out = String::with_capacity(line.len());

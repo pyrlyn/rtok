@@ -62,7 +62,5 @@
 - T681. git diff 272, git show 262: ≥ 80 % big diff with 100 % paths (t-o keeps 51 %) (vs t-o 97.9 % / sqz 44.4 %)
 - T682. git log 174: keep lead (vs — (rtok wins after #1079))
 - T683. tail 155, cat *.log: keep lead, +2 pp (vs lean-ctx 87.4 % (rtok 94.5 %))
-- T684. wc 102, cargo test/build/clippy: ≥ rtk (vs rtk / sqz)
 - T685. find 33: 100 % paths, ≥ 69 % (vs rtok leads)
 - T686. MCP tool catalogs: ≥ 30 % (vs caveman 12–29 %)
-- T901. Windows: `graph_lsp_gate::lsp_backend_outlines_dart_main` fails on dart 3.9

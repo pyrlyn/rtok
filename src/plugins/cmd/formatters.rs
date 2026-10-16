@@ -134,7 +134,7 @@ pub(crate) use crate::names::cmd_stem;
 /// Stems with a Rust formatter (any subcommand). `rtok stats` labels the whole stem.
 const FORMATTER_STEMS: &[&str] = &[
     "cargo", "git", "pytest", "jest", "vitest", "tree", "go", "docker", "kubectl", "ps", "df",
-    "sqlite3",
+    "sqlite3", "wc",
 ];
 
 /// T50.1: how `rtok stats` labels a Bash family — `formatter`, named `rule`, or `default`.
@@ -610,6 +610,7 @@ fn format(argv: &[String], output: &str) -> Option<String> {
         )),
         ("jest", _) | ("vitest", _) => Some(keep(output, &["FAIL", "PASS", "Tests:", "● "])),
         ("go", "test") => Some(keep(output, &["FAIL", "PASS", "ok  ", "--- FAIL"])),
+        ("wc", _) => Some(wc_table(output)),
         ("tree", _) => Some(output.lines().take(40).collect::<Vec<_>>().join("\n")),
         ("docker", "ps") => docker_ps(output),
         ("kubectl", "get") => kubectl_get(output),
@@ -618,6 +619,16 @@ fn format(argv: &[String], output: &str) -> Option<String> {
         ("sqlite3", _) => sqlite3_table(output),
         _ => None,
     }
+}
+
+/// T684: `wc` right-aligns its counts in padded columns; the numbers, names and the
+/// `total` row stay, only the padding goes (leading too, which the default rule keeps).
+fn wc_table(output: &str) -> String {
+    output
+        .lines()
+        .map(|l| rules::collapse_columns(l.trim()))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// `git diff`: the changed lines *are* the answer, so only the blob-hash bookkeeping goes.
@@ -1569,6 +1580,7 @@ mod tests {
             ("ps", "aux"),
             ("df", ""),
             ("sqlite3", ""),
+            ("wc", ""),
         ];
         // A stem added to `FORMATTER_STEMS` without a row here fails too.
         for stem in FORMATTER_STEMS {
