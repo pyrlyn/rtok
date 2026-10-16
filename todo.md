@@ -47,7 +47,6 @@
 - T651. Honor ProgressRunner timeouts with inherited output
 - T666.2. Provider-backed memory extractor (blocked on the creator)
 - T687. Hooks: PreToolUse/PostToolUse p50 to 10 ms
-- T678. for 570, until 231, while: ≥ 80 % on polling loops (vs caveman repetition)
 - T679. ls 386: ≥ 72 % (= rtk) (vs lean-ctx 66.6 %)
 - T680. git status 297: ≥ 60 % (rtk 62.5 %) (vs lean-ctx 40.5 %)
 - T681. git diff 272, git show 262: ≥ 80 % big diff with 100 % paths (t-o keeps 51 %) (vs t-o 97.9 % / sqz 44.4 %)

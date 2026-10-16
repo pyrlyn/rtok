@@ -32,6 +32,22 @@ pub fn compress(
             },
         );
     }
+    // T678: a polling loop is mostly one line repeated. A loop over two programs is a mixed
+    // chain that `[script]` would otherwise take, so the collapse runs before the route is chosen
+    // and the rule or formatter then sees the short text.
+    if matches!(bin(&family_argv(argv)), "for" | "while" | "until")
+        && let Some(clean) = super::loops::collapse(output)
+    {
+        let (s, kind) = compress_text(settings, argv, &clean, exit, archive_id);
+        return (
+            s,
+            if matches!(kind, "raw" | "unmatched") {
+                "formatter"
+            } else {
+                kind
+            },
+        );
+    }
     compress_text(settings, argv, output, exit, archive_id)
 }
 
@@ -160,7 +176,7 @@ pub(crate) use crate::names::cmd_stem;
 /// Stems with a Rust formatter (any subcommand). `rtok stats` labels the whole stem.
 const FORMATTER_STEMS: &[&str] = &[
     "cargo", "git", "gh", "pytest", "python", "python3", "py", "jest", "vitest", "tree", "go",
-    "docker", "kubectl", "ps", "df", "sqlite3", "wc", "mise",
+    "docker", "kubectl", "ps", "df", "sqlite3", "wc", "mise", "for", "while", "until",
 ];
 
 /// T50.1: how `rtok stats` labels a Bash family — `formatter`, named `rule`, or `default`.
@@ -640,6 +656,7 @@ fn format(argv: &[String], output: &str) -> Option<String> {
         ("jest", _) | ("vitest", _) => Some(keep(output, &["FAIL", "PASS", "Tests:", "● "])),
         ("go", "test") => Some(keep(output, &["FAIL", "PASS", "ok  ", "--- FAIL"])),
         ("wc", _) => Some(wc_table(output)),
+        ("for" | "while" | "until", _) => super::loops::collapse(output),
         ("tree", _) => Some(output.lines().take(40).collect::<Vec<_>>().join("\n")),
         ("docker", "ps") => docker_ps(output),
         ("kubectl", "get") => kubectl_get(output),
@@ -1616,6 +1633,9 @@ mod tests {
             ("sqlite3", ""),
             ("wc", ""),
             ("mise", ""),
+            ("for", ""),
+            ("while", ""),
+            ("until", ""),
         ];
         // A stem added to `FORMATTER_STEMS` without a row here fails too.
         for stem in FORMATTER_STEMS {

@@ -158,7 +158,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T527 | in progress | P2 | 3 | 0% | MiMo / mimo |
 | T666.2 | todo | P2 | 3 | 0% | |
 | T687 | todo | P2 | 4 | 0% | |
-| T678 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T679 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T680 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T681 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
@@ -1084,13 +1083,6 @@ Source: `docs/research/competitors-techniques.md` (techniques, licenses, links).
 
 
 
-### T678. for 570, until 231, while
-
-Best competitor: caveman repetition. Design: loop output: normalise numbers/ids per line, collapse runs of same-shape lines into `shape ×N (vals: a..b)`; never collapse lines with error words.
-
-Check: #1076 harness (`bench/c14`) shows ≥ 80 % on polling loops on this category with full anchor retention.
-
-Plan: new loop-output collapser in `compact.rs` used for `for`/`while`/`until` scripts: normalise digits/ids per line, collapse runs of same-shape lines into `shape ×N (vals: a..b)`, never collapse a line with an error word. Tests: golden polling-loop fixture with `min_saving: 80`, unit test that error lines stay verbatim.
 
 ### T679. ls 386
 

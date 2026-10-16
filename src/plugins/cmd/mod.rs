@@ -18,6 +18,7 @@ pub mod filter;
 pub mod formatters;
 pub mod gh;
 pub mod grep;
+pub mod loops;
 pub mod mise;
 pub mod python;
 pub mod rules;
