@@ -46,7 +46,6 @@
 - T657. Match compressor credentials to the internal provider
 - T651. Honor ProgressRunner timeouts with inherited output
 - T666.2. Provider-backed memory extractor (blocked on the creator)
-- T670. Read modes lean-ctx still has
 - T687. Hooks: PreToolUse/PostToolUse p50 to 10 ms
 - T675. python3 1545: ≥ t-o pytest (564→115) (vs none specialised)
 - T676. gh 744: +20 pp vs current head/tail (vs lean-ctx gh.rs)
