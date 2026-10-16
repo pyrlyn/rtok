@@ -158,8 +158,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T527 | in progress | P2 | 3 | 0% | MiMo / mimo |
 | T666.2 | todo | P2 | 3 | 0% | |
 | T687 | todo | P2 | 4 | 0% | |
-| T682 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T686 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 
 
 
@@ -1075,29 +1073,3 @@ Check: a test shows a dropped `Runtime::in_memory` leaves no directory behind, a
 ## Beat sqz, lean-ctx, token-optimizer and caveman per category (T672–T686)
 
 Source: `docs/research/competitors-techniques.md` (techniques, licenses, links). Every card: keep 100 % of hashes, paths and WARN/ERROR lines, never more tokens than raw, stderr and exit line kept on failure.
-
-
-
-
-
-
-### T682. git log 174
-
-Best competitor: — (rtok wins after #1079). Design: keep #1079; add `[N commits, +A/-D]`; drop Author when all equal.
-
-Check: #1076 harness (`bench/c14`) shows keep lead on this category with full anchor retention.
-
-Plan: first confirm #1079 (git log one line) is merged; if not, branch on top of main without touching its hunks and keep this task `todo`. Then add a `[N commits, +A/-D]` header and drop the Author column when every author is equal in `src/plugins/cmd` git-log formatter; fixture test for both, fail-first; measure with `bench/fixtures` (the #1076 harness is not on main).
-
-Blocked: stacks on #1079 (git log one line per commit), which is still open; a second change to the same formatter would conflict. Take it again once #1079 is on main. The #1076 harness (`bench/c14`) the Check cites is also not on main yet.
-
-### T686. MCP tool catalogs
-
-Best competitor: caveman 12–29 %. Design: `rtok mcp` proxy: first sentence of descriptions, drop default/examples that duplicate type, enum compaction; recovery via archive.
-
-Check: #1076 harness (`bench/c14`) shows ≥ 30 % on this category with full anchor retention.
-
-Plan: locate the `rtok mcp` proxy tool-description rewrite (`[proxy.tools_rewrite]`, T59.5); add first-sentence descriptions, drop default/examples duplicating the schema type, compact enums, full text recoverable via the archive; fixture catalog test with token cut ≥ 30 % and unchanged tool names/required args. Decide at start whether it overlaps T124's off-by-default gate; if it needs a creator decision, write it here and set back to `todo`.
-
-Creator decision (2026-10-16): option (a) — rewriting `description`, `default` and `examples` strings inside `input_schema` is allowed; property names, types, `required` and `enum` values stay byte-identical. The `src/plugins/proxy/AGENTS.md` invariant is updated with the implementation. Was blocked: the `tools_rewrite` invariant says `input_schema` is never touched (`src/plugins/proxy/AGENTS.md`, `src/proxy/tools_rewrite.rs`), but `default`, `examples` and `enum` live inside `input_schema` properties, so this task cannot be done without relaxing that rule. It also overlaps T124 (the feature is off by default and its 3 % gate is not measured yet). Decide: allow rewriting `description`/`default`/`examples` strings inside `input_schema`, or keep the rule and cut this task to top-level descriptions only (already T59.5).
-

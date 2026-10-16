@@ -1,4 +1,4 @@
-Dev · 2026
+[15 commits] Dev · 2026
 0000000 Sep 20 add retry to fetch client
 0100000 Sep 19 fix off-by-one in pagination
 0200000 Sep 18 T240: golden coverage for cargo rules
