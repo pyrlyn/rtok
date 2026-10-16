@@ -14477,6 +14477,19 @@ Result: new `src/plugins/cmd/loops.rs` (`collapse`): each line is cut at its num
 Status: done 2026-10-16
 Model: Claude Code / claude-sonnet-5-5
 
+### T679. ls 386
+
+Best competitor: lean-ctx 66.6 %. Design: ls -l → `name size` with dirs first, drop perms unless non-default (`x` bit, symlink target kept as `a -> b`); group by extension when > 30 entries.
+
+Check: #1076 harness (`bench/c14`) shows ≥ 72 % (= rtk) on this category with full anchor retention.
+
+Plan: #1077 already ships `ls -l` (dirs on one line, human sizes, exec marker, symlink target). Remaining: dirs first, group by extension above 30 entries, `ls -la` dotfiles. Extend `ls_l` in `compact.rs`; measure against the current golden `ls*` fixtures and raise their `min_saving:` floors to the new numbers.
+
+Result: `ls_l` in `compact.rs` now renders through `render_files`: above 30 regular files in one listing, files are grouped by extension (`*.rs (28): plugin_01 1.1K, …`; name = stem + the header's extension, a lone file of its extension stays a plain `name size` line, `*` exec marker kept per member); three or more dotfiles (`ls -la`) share one `dotfiles: .gitignore 412B, …` line; symlinks keep `a -> b`. Dirs-first, human sizes, exec marker and symlink targets were already shipped by #1077. Every name still appears once, so path retention is 100 %. Measured by golden bytes (the #1076 bench/c14 harness is not on main, so no lean-ctx / rtk comparison was run): new golden `ls_many` (`ls -la`, 49 entries) 2762 -> 712 B (74 %, floor 73); the extension grouping alone is worth about 8 % against the previous per-file rendering (about 770 B), because every name and size has to stay. The existing `ls` / `ls_la` goldens are unchanged (they are below the grouping threshold) so their floors stay.
+
+Status: done 2026-10-16
+Model: Claude Code / claude-sonnet-5-5
+
 ### T581. Filter actionable report sinks before applying the top-ten limit
 
 Confirmed through actual aggregation and recommendation functions: [report_sinks](src/model/report.rs#L284) groups all catalogue plugins, sorts by before_bytes and truncates to ten. Only afterwards [top_sinks](src/report/advice.rs#L253) skips classes other than read/cmd/mcp. Ten larger archive rows with distinct references therefore displace a smaller Read sink, yielding no top-sinks recommendation; the Read-only control yields one. The archive rows are valid measurements, but deliberately have no actionable switch in this rule. T59.8 and docs/report.md promise the ten largest file/command/MCP sinks; T302 changed ranking units, not filtering before truncation.
