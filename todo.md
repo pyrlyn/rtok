@@ -51,9 +51,7 @@
 - T665. Broader graph queries (codebase-memory-mcp)
 - T666. Optional automatic memory extraction (claude-mem idea)
 - T667. Richer memory features from engram
-- T669. Hybrid memory ranking and forgetting (graymatter)
 - T670. Read modes lean-ctx still has
-- T671. Memory admission gate (MemPalace idea)
 - T687. Hooks: PreToolUse/PostToolUse p50 to 10 ms
 - T673. grep 2260, git grep 452, rg: ≥ 91 %, 100 % paths (vs t-o 89.7 %, lean-ctx 89.6 %)
 - T675. python3 1545: ≥ t-o pytest (564→115) (vs none specialised)
@@ -68,4 +66,3 @@
 - T684. wc 102, cargo test/build/clippy: ≥ rtk (vs rtk / sqz)
 - T686. MCP tool catalogs: ≥ 30 % (vs caveman 12–29 %)
 - T901. Windows: `graph_lsp_gate::lsp_backend_outlines_dart_main` fails on dart 3.9
-- T902. Windows CI: run `cargo clippy --workspace` in the `windows` job

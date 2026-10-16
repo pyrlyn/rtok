@@ -162,9 +162,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T665 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T666 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T667 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T669 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T670 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T671 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T687 | in progress | P2 | 4 | 0% | Claude Code / claude-sonnet-5-5 |
 | T673 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T675 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
@@ -179,7 +177,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T684 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T686 | todo | P2 | 3 | 0% | |
 | T901 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
-| T902 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
 
 
 
@@ -189,9 +186,9 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 
 sqz ships 45+ formatters and a stack-trace safe mode; rtok has fewer families (`docs/comparison/rtok-vs-sqz.md`). Close the coverage gap while keeping archive + `expand`. Reuse T65.1–T65.4 ideas already taken from sqz; extend rule families where sqz still wins. Sourced savings: sqz self-reports 24.7 % over 3,003 compressions (`research.md` §11); rtok on that corpus is **no data** until the harness runs.
 
-Check: a coverage table vs sqz in `docs/comparison/rtok-vs-sqz.md`; at least the top gap families from `rtok discover` (T661) gain rules; `just check`.
+Check: a coverage table vs sqz in `docs/comparison/rtok-vs-sqz.md`; at least the top gap families from `rtok discover` (T688) gain rules; `just check`.
 
-Plan: read `docs/comparison/rtok-vs-sqz.md`; build the coverage table sqz-formatter → rtok rule; add rules (in `rules/default.toml` through the existing rule engine, no new engine) for the top missing families, each with a fixture and a no-worse-than-raw test. `rtok discover` (T661) is not on main: pick families by the sqz list and say so in the card.
+Plan: read `docs/comparison/rtok-vs-sqz.md`; build the coverage table sqz-formatter → rtok rule; add rules (in `rules/default.toml` through the existing rule engine, no new engine) for the top missing families, each with a fixture and a no-worse-than-raw test. `rtok discover` (T688) ranks the families your own history runs; read it with the sqz list.
 
 ### T663. Push graph reference precision toward LSP-grade (serena)
 
@@ -233,14 +230,6 @@ Check: feature list and take/skip in the comparison file; tests for what shipped
 
 **Plan.** From `docs/comparison/rtok-vs-engram.md` (PR #1071): engram has relation judging, pinned-first recall and project identity from the origin remote that rtok lacks. Relation judging spends model output on bookkeeping: **skip**. (1) Check which of pinned-first recall and origin-remote project identity already exist (`mem_update pinned`, `project_name`); fail-first tests on `tests/fixtures/p29_memory.toml`-style fixtures for the missing ones. (2) Implement only what raises recall on rtok's own memory bench with no new MCP tool and no daemon. (3) Write the take/skip list into the comparison file (or `research.md` while #1071 is open); `just check`.
 
-### T669. Hybrid memory ranking and forgetting (graymatter)
-
-graymatter is ahead on hybrid ranking/forgetting (`docs/comparison/rtok-vs-graymatter.md`). Improve rtok memory ranking using signals we already store; add a forget/decay policy. Savings both sides: **no data** pending harness; rtok already claims stronger measured recall on its own bench in the comparison file.
-
-Check: ranking/forget tests on a fixture store; comparison file updated; `just check`.
-
-**Plan.** Signals already stored: touch count, pin, retire/supersede, timestamps, file links. (1) Fail-first fixture tests (`src/plugins/memory`) for a recency/usage-aware score on top of bm25: a recently touched note outranks an equal-text stale one, a pinned note never decays. (2) A pure `rank` function (no I/O) used by `mem_search`/`mem_pack`/recall, default weights in the one config module (`plugins.memory.rank`), byte-stable output. (3) A forget policy: notes untouched past `forget.after_days`, unpinned and not a decision, are retired (reversible tombstone, never deleted; `mem_update` can revive), default off, run by `rtok memory forget` (dry-run first), never from a hook. (4) Measure on the memory bench fixture, record the row in `research.md` and the comparison file; `just check`.
-
 ### T670. Read modes lean-ctx still has
 
 lean-ctx is ahead on read-mode count and a learned mode predictor (`docs/comparison/rtok-vs-lean-ctx.md`). Add only modes that beat rtok's per-turn cost on a replay. Sourced: lean-ctx 0 output saved and ~3.0–3.1 K tokens/turn inject; rtok ~800 token budget / ~223 description tokens (`research.md` §4, `docs/comparison.md` §2).
@@ -248,24 +237,6 @@ lean-ctx is ahead on read-mode count and a learned mode predictor (`docs/compari
 Check: each new mode has a fixture test and a cost row; no banner-style per-turn inject; `just check`.
 
 Plan: list lean-ctx read modes missing in `src/plugins/read` (see `docs/comparison/rtok-vs-lean-ctx.md`); add only modes that beat rtok per-turn cost on a replay over the existing fixtures, reusing existing mode plumbing; one fixture test and one cost row per mode; no per-turn banner inject.
-
-### T671. Memory admission gate (MemPalace idea)
-
-MemPalace is ahead on admission/dedup by embeddings (`docs/comparison/rtok-vs-mempalace.md`). Add an admission gate before notes are stored (cheap hash/trigram first; embeddings opt-in). Savings both sides: **no data** (harness skips).
-
-Check: duplicate/low-value notes rejected in tests; default path needs no network; `just check`.
-
-**Source audit (T530).**
-
-T531–T539 are confirmed source defects on `0b14b88e`, filed for implementation rather
-than fixed during this audit. Start with the incorrect-response cases T532/T533, then
-the remaining independent P2 fixes. Each card distinguishes executed function probes
-from source-derived reproduction steps and gives its own implementation/check sequence.
-Existing tasks, including uncommitted T522–T527 in the shared checkout, were checked for
-overlap and were not copied or reassigned. This is a bounded review of the core data
-paths, not a claim that every bug or host/platform combination has been exhausted.
-
-**Plan.** (1) New `src/plugins/memory/admit.rs`: normalize (lowercase, collapse whitespace), exact-hash and trigram-Jaccard check against the notes of the same project (newest 200), reject empty/too-short bodies and near-duplicates (>= 0.9) with the existing note id in the reply; a same project+kind+title save still updates in place. (2) Wire into `mem_save` and the `remember:` path only (never a hook, never network); thresholds under `plugins.memory.admit` (`enabled = true`, `min_body_chars`, `dup_similarity`) in the one config module. (3) Embedding similarity stays opt-in: used only when `embed.enabled`. (4) Fail-first tests: exact dup, whitespace/case dup, near-dup, distinct note admitted, short body rejected, gate off; `just check`.
 
 ### T687. Hooks: PreToolUse/PostToolUse p50 to 10 ms
 
@@ -1277,11 +1248,3 @@ The test fails on Windows dart 3.9 with `File is not being analyzed` (surfaced b
 Check: `lsp_backend_outlines_dart_main` passes or skips with a stated reason on Windows dart 3.9; the predicate test passes on every OS; `just check`.
 
 Plan: make `lsp_backend_outlines_dart_main` robust on Windows dart 3.9: write a minimal `pubspec.yaml` in the temp project and run `dart pub get`, or skip when the server answers `File is not being analyzed`, with the reason in a comment. CI has no dart, so the proof is a unit test of the skip/ready predicate that runs everywhere.
-
-### T902. Windows CI: run `cargo clippy --workspace` in the `windows` job
-
-`cfg(windows)` lint debt (the T273/T274 class) is only found by the first local Windows gate. Done = the `windows` CI job runs `cargo clippy --workspace` and is green, so such debt fails CI.
-
-Check: the `windows` job of this PR runs the clippy step and is green.
-
-Plan: add `cargo clippy --workspace` to the `windows` job in the CI workflow (reusing the lint flags the Linux job uses); fix any `cfg(windows)` lint it surfaces in this PR if small; proof is the green CI run of the PR.

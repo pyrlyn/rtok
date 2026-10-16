@@ -145,8 +145,8 @@ _arguments "${_arguments_options[@]}" : /
 ;;
 (discover)
 _arguments "${_arguments_options[@]}" : /
-'--since=[How far back to read Bash calls (/`30d/`, /`24h/`)]:SINCE:_default' /
-'--top=[Families to list]:TOP:_default' /
+'--since=[How far back to read recorded shell calls (/`30d/`, /`24h/`)]:SINCE:_default' /
+'--limit=[Rows to print, most output first]:LIMIT:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '--json[JSON instead of the table]' /
 '-h[Print help]' /
@@ -3393,7 +3393,7 @@ _rtok_commands() {
 'web:Local web UI over the same data as /`rtok tui/` (WebSocket API + React SPA)' /
 'tui:Terminal UI over the same data as /`rtok web/` (one model, two renderings)' /
 'stats:Measurements from session logs and the proxy' /
-'discover:Bash commands no filter covers yet, ranked by the output tokens they sent to the model' /
+'discover:Shell commands your agents ran that have no rule or formatter, most output first' /
 'bench:A/B benchmark of host configurations' /
 'doctor:Inspect hooks, MCP servers and the proxy chain' /
 'worktree:Git worktrees of this repository/: owner, state and disk cost' /
@@ -4332,7 +4332,7 @@ _rtok__subcmd__help_commands() {
 'web:Local web UI over the same data as /`rtok tui/` (WebSocket API + React SPA)' /
 'tui:Terminal UI over the same data as /`rtok web/` (one model, two renderings)' /
 'stats:Measurements from session logs and the proxy' /
-'discover:Bash commands no filter covers yet, ranked by the output tokens they sent to the model' /
+'discover:Shell commands your agents ran that have no rule or formatter, most output first' /
 'bench:A/B benchmark of host configurations' /
 'doctor:Inspect hooks, MCP servers and the proxy chain' /
 'worktree:Git worktrees of this repository/: owner, state and disk cost' /
