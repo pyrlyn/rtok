@@ -593,6 +593,12 @@ url         = ""                      # "http": базовий URL, напр. "h
 api_key_env = ""                      # "http": назва змінної середовища з ключем; порожньо = без заголовка Authorization
 max_chars   = 8000                    # "http": довший текст не надсилається (працює звичайний пошук по нотатках)
 
+[plugins.memory.extract]
+enabled         = false                 # rtok memory extract: off by default, a model call can cost money
+command         = []                    # program reading the transcript on stdin, one {"title","body"} JSON line out per note
+max_notes       = 5                     # notes kept per run
+max_input_bytes = 60000                 # transcript bytes sent to the program; the end of the session is kept
+
 [plugins.graph]
 enabled    = true
 max_tokens = 2000                     # на відповідь; понад це: head + "N more, expand <id>"

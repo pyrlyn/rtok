@@ -592,6 +592,12 @@ url         = ""                      # "http": базовый URL, напр. "h
 api_key_env = ""                      # "http": имя переменной окружения с ключом; пусто = без заголовка Authorization
 max_chars   = 8000                    # "http": более длинный текст не отправляется (работает обычный поиск по заметкам)
 
+[plugins.memory.extract]
+enabled         = false                 # rtok memory extract: off by default, a model call can cost money
+command         = []                    # program reading the transcript on stdin, one {"title","body"} JSON line out per note
+max_notes       = 5                     # notes kept per run
+max_input_bytes = 60000                 # transcript bytes sent to the program; the end of the session is kept
+
 [plugins.graph]
 enabled    = true
 max_tokens = 2000                     # per response; beyond it: head + "N more, expand <id>"

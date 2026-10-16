@@ -1820,6 +1820,14 @@ _arguments "${_arguments_options[@]}" : /
 '--help[Print help]' /
 && ret=0
 ;;
+(extract)
+_arguments "${_arguments_options[@]}" : /
+'--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
+'-h[Print help]' /
+'--help[Print help]' /
+':transcript -- Claude Code transcript (`.jsonl`):_files' /
+&& ret=0
+;;
 (retire)
 _arguments "${_arguments_options[@]}" : /
 '--superseded-by=[The replacement note id this one is superseded by]:SUPERSEDED_BY:_default' /
@@ -1913,6 +1921,10 @@ _arguments "${_arguments_options[@]}" : /
 && ret=0
 ;;
 (export)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(extract)
 _arguments "${_arguments_options[@]}" : /
 && ret=0
 ;;
@@ -3104,6 +3116,10 @@ _arguments "${_arguments_options[@]}" : /
 && ret=0
 ;;
 (export)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(extract)
 _arguments "${_arguments_options[@]}" : /
 && ret=0
 ;;
@@ -4809,6 +4825,7 @@ _rtok__subcmd__help__subcmd__memory_commands() {
     local commands; commands=(
 'import:Import /`{kind,title,body}/` JSONL; dedupe by body sha256' /
 'export:Print every note but session checkpoints as the JSONL /`import/` reads' /
+'extract:Save notes an external program extracts from a transcript (off by default)' /
 'retire:Retire a note/: a tombstone — never recalled or searched, body kept' /
 'forget:Retire notes nobody read for a long time (a dry run unless /`--apply/`)' /
 'pin:Pin a note so it leads SessionStart recall' /
@@ -4824,6 +4841,11 @@ _rtok__subcmd__help__subcmd__memory_commands() {
 _rtok__subcmd__help__subcmd__memory__subcmd__export_commands() {
     local commands; commands=()
     _describe -t commands 'rtok help memory export commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__help__subcmd__memory__subcmd__extract_commands] )) ||
+_rtok__subcmd__help__subcmd__memory__subcmd__extract_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok help memory extract commands' commands "$@"
 }
 (( $+functions[_rtok__subcmd__help__subcmd__memory__subcmd__forget_commands] )) ||
 _rtok__subcmd__help__subcmd__memory__subcmd__forget_commands() {
@@ -5178,6 +5200,7 @@ _rtok__subcmd__memory_commands() {
     local commands; commands=(
 'import:Import /`{kind,title,body}/` JSONL; dedupe by body sha256' /
 'export:Print every note but session checkpoints as the JSONL /`import/` reads' /
+'extract:Save notes an external program extracts from a transcript (off by default)' /
 'retire:Retire a note/: a tombstone — never recalled or searched, body kept' /
 'forget:Retire notes nobody read for a long time (a dry run unless /`--apply/`)' /
 'pin:Pin a note so it leads SessionStart recall' /
@@ -5195,6 +5218,11 @@ _rtok__subcmd__memory__subcmd__export_commands() {
     local commands; commands=()
     _describe -t commands 'rtok memory export commands' commands "$@"
 }
+(( $+functions[_rtok__subcmd__memory__subcmd__extract_commands] )) ||
+_rtok__subcmd__memory__subcmd__extract_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok memory extract commands' commands "$@"
+}
 (( $+functions[_rtok__subcmd__memory__subcmd__forget_commands] )) ||
 _rtok__subcmd__memory__subcmd__forget_commands() {
     local commands; commands=()
@@ -5205,6 +5233,7 @@ _rtok__subcmd__memory__subcmd__help_commands() {
     local commands; commands=(
 'import:Import /`{kind,title,body}/` JSONL; dedupe by body sha256' /
 'export:Print every note but session checkpoints as the JSONL /`import/` reads' /
+'extract:Save notes an external program extracts from a transcript (off by default)' /
 'retire:Retire a note/: a tombstone — never recalled or searched, body kept' /
 'forget:Retire notes nobody read for a long time (a dry run unless /`--apply/`)' /
 'pin:Pin a note so it leads SessionStart recall' /
@@ -5221,6 +5250,11 @@ _rtok__subcmd__memory__subcmd__help_commands() {
 _rtok__subcmd__memory__subcmd__help__subcmd__export_commands() {
     local commands; commands=()
     _describe -t commands 'rtok memory help export commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__memory__subcmd__help__subcmd__extract_commands] )) ||
+_rtok__subcmd__memory__subcmd__help__subcmd__extract_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok memory help extract commands' commands "$@"
 }
 (( $+functions[_rtok__subcmd__memory__subcmd__help__subcmd__forget_commands] )) ||
 _rtok__subcmd__memory__subcmd__help__subcmd__forget_commands() {
