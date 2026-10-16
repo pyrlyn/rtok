@@ -164,6 +164,7 @@ dry_run         = false               # --dry-run: print effective [proxy] setti
 
 [proxy.tools_rewrite]                 # T59.5; off: request bytes stay identical
 enabled = false
+compact_schema = false                # T686: also first-sentence property descriptions + redundant default/examples inside input_schema; originals archived (Measurement.ref_id)
 max_description_tokens = 60           # 0 = no truncate; sentence boundary; estimator Class::Prose
 allow = []                            # empty = keep all names not in deny
 deny = []                             # drop these names from tools[]; later calls still forward

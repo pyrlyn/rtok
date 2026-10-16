@@ -385,9 +385,12 @@ section! {
 
 section! {
     /// `[proxy.tools_rewrite]` — opt-in `tools[]` description rewrite (T59.5). Off: bytes
-    /// identical. Empty `allow` keeps every tool not in `deny`. `input_schema` is never touched.
+    /// identical. Empty `allow` keeps every tool not in `deny`. `input_schema` keeps its names,
+    /// `type`, `required` and `enum` byte for byte; only with `compact_schema` (T686) do its
+    /// `description`, `default` and `examples` strings shrink.
     ToolsRewrite {
         enabled: bool = false,
+        compact_schema: bool = false,
         max_description_tokens: u32 = 60,
         allow: Vec<String> = Vec::new(),
         deny: Vec<String> = Vec::new(),

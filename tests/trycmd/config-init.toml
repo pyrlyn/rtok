@@ -4,7 +4,7 @@ stdout = """
 target/tmp/t60-2-config-init.toml
 --- a/target/tmp/t60-2-config-init.toml
 +++ b/target/tmp/t60-2-config-init.toml
-@@ -0,0 +1,602 @@
+@@ -0,0 +1,603 @@
 +# rtok configuration. Every CLI flag has a key here; flags and RTOK_* env vars override.
 +# Precedence: defaults < this file < <git root>/.rtok.toml < env < flags.
 +# Docs: docs/config.md. Check: `rtok config validate`. Where a value came from: `rtok config show --sources`.
@@ -102,6 +102,7 @@ target/tmp/t60-2-config-init.toml
 +
 +[proxy.tools_rewrite]                 # off: request bytes stay identical
 +# enabled = false
++# compact_schema = false                # also first-sentence property descriptions + redundant default/examples inside input_schema; originals archived (Measurement.ref_id)
 +# max_description_tokens = 60           # 0 = no truncate; sentence boundary; estimator Class::Prose
 +# allow = []                            # empty = keep all names not in deny
 +# deny = []                             # drop these names from tools[]; later calls still forward
@@ -607,7 +608,7 @@ target/tmp/t60-2-config-init.toml
 +[plugins.wasm]
 +# enabled = false
 +# dir = "~/.rtok/plugins"
-1 file changed, 602 insertions(+)
+1 file changed, 603 insertions(+)
 """
 
 # Hermetic by construction: isolated HOME/RTOK_HOME, inherit = false.
