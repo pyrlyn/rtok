@@ -158,7 +158,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T527 | in progress | P2 | 3 | 0% | MiMo / mimo |
 | T666.2 | todo | P2 | 3 | 0% | |
 | T687 | todo | P2 | 4 | 0% | |
-| T679 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T680 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T682 | todo | P2 | 3 | 0% | |
 | T683 | todo | P2 | 3 | 0% | |
@@ -1082,14 +1081,6 @@ Source: `docs/research/competitors-techniques.md` (techniques, licenses, links).
 
 
 
-
-### T679. ls 386
-
-Best competitor: lean-ctx 66.6 %. Design: ls -l → `name size` with dirs first, drop perms unless non-default (`x` bit, symlink target kept as `a -> b`); group by extension when > 30 entries.
-
-Check: #1076 harness (`bench/c14`) shows ≥ 72 % (= rtk) on this category with full anchor retention.
-
-Plan: #1077 already ships `ls -l` (dirs on one line, human sizes, exec marker, symlink target). Remaining: dirs first, group by extension above 30 entries, `ls -la` dotfiles. Extend `ls_l` in `compact.rs`; measure against the current golden `ls*` fixtures and raise their `min_saving:` floors to the new numbers.
 
 ### T680. git status 297
 

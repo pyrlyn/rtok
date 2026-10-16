@@ -447,14 +447,14 @@ pub fn ls_long(argv: &[String]) -> bool {
 /// Any line that is not the GNU/BSD long shape returns `None`.
 pub fn ls_l(output: &str) -> Option<String> {
     let mut dirs: Vec<String> = Vec::new();
-    let mut files: Vec<String> = Vec::new();
+    let mut files: Vec<Entry> = Vec::new();
     let mut groups: Vec<String> = Vec::new();
-    let flush = |dirs: &mut Vec<String>, files: &mut Vec<String>, groups: &mut Vec<String>| {
+    let flush = |dirs: &mut Vec<String>, files: &mut Vec<Entry>, groups: &mut Vec<String>| {
         let mut g = Vec::new();
         if !dirs.is_empty() {
             g.push(format!("dirs: {}", dirs.join(" ")));
         }
-        g.append(files);
+        g.extend(render_files(std::mem::take(files)));
         dirs.clear();
         groups.push(g.join("\n"));
     };
@@ -493,11 +493,12 @@ pub fn ls_l(output: &str) -> Option<String> {
         }
         match kind {
             'd' => dirs.push(format!("{name}/")),
-            'l' => files.push(name.to_string()),
-            _ => {
-                let exec = if perms[1..].contains('x') { "*" } else { "" };
-                files.push(format!("{name}{exec} {}", human(size)));
-            }
+            'l' => files.push(Entry::Link(name.to_string())),
+            _ => files.push(Entry::File {
+                name: name.to_string(),
+                exec: perms[1..].contains('x'),
+                size,
+            }),
         }
     }
     if !dirs.is_empty() || !files.is_empty() {
@@ -507,6 +508,83 @@ pub fn ls_l(output: &str) -> Option<String> {
         return None;
     }
     Some(groups.join("\n"))
+}
+
+/// One listing line of `ls -l`, before it is written out.
+enum Entry {
+    Link(String),
+    File { name: String, exec: bool, size: u64 },
+}
+
+/// More regular files than this in one listing are grouped by extension (T679).
+const GROUP_ABOVE: usize = 30;
+
+/// A listing's files as lines: `name size` each; above [`GROUP_ABOVE`] files, one line per extension
+/// (`*.rs (3): a 1.2K, b 300B, c 9K`; the name is stem + the header's extension, a lone file of
+/// its extension stays a plain line); three or more dotfiles share a `dotfiles:` line. Symlinks
+/// keep their own `a -> b` line.
+fn render_files(entries: Vec<Entry>) -> Vec<String> {
+    let text = |name: &str, exec: bool, size: u64| {
+        format!("{name}{} {}", if exec { "*" } else { "" }, human(size))
+    };
+    let count = entries
+        .iter()
+        .filter(|e| matches!(e, Entry::File { .. }))
+        .count();
+    let dots = entries
+        .iter()
+        .filter(|e| matches!(e, Entry::File { name, .. } if name.starts_with('.')))
+        .count();
+    let (mut loose, mut dotted): (Vec<String>, Vec<String>) = (Vec::new(), Vec::new());
+    let mut by_ext: Vec<(&str, Vec<String>)> = Vec::new();
+    let mut pending: Vec<(usize, String)> = Vec::new();
+    for e in &entries {
+        match e {
+            Entry::Link(name) => loose.push(name.clone()),
+            Entry::File { name, exec, size } if dots >= 3 && name.starts_with('.') => {
+                dotted.push(text(name, *exec, *size));
+            }
+            Entry::File { name, exec, size } => {
+                let split = name.rfind('.').filter(|&i| i > 0 && i + 1 < name.len());
+                match split {
+                    Some(i) if count > GROUP_ABOVE => {
+                        let (stem, ext) = name.split_at(i);
+                        let at = match by_ext.iter().position(|(x, _)| *x == ext) {
+                            Some(at) => at,
+                            None => {
+                                by_ext.push((ext, Vec::new()));
+                                by_ext.len() - 1
+                            }
+                        };
+                        by_ext[at].1.push(text(stem, *exec, *size));
+                        pending.push((at, text(name, *exec, *size)));
+                    }
+                    _ => loose.push(text(name, *exec, *size)),
+                }
+            }
+        }
+    }
+    let mut lines = loose;
+    if !dotted.is_empty() {
+        lines.push(format!("dotfiles: {}", dotted.join(", ")));
+    }
+    for (at, (ext, members)) in by_ext.iter().enumerate() {
+        if members.len() < 2 {
+            lines.extend(
+                pending
+                    .iter()
+                    .filter(|(i, _)| *i == at)
+                    .map(|(_, t)| t.clone()),
+            );
+        } else {
+            lines.push(format!(
+                "*{ext} ({}): {}",
+                members.len(),
+                members.join(", ")
+            ));
+        }
+    }
+    lines
 }
 
 /// The rest of `line` after `n` whitespace-separated fields.
@@ -606,6 +684,72 @@ mod tests {
         assert!(ls_long(&["ls".into(), "-la".into()]));
         assert!(!ls_long(&["ls".into(), "-a".into()]));
         assert!(!ls_long(&["ls".into(), "--color".into()]));
+    }
+
+    fn long_line(name: &str, size: u64, perms: &str) -> String {
+        format!("{perms}  1 u g {size} Oct 14 23:50 {name}\n")
+    }
+
+    #[test]
+    fn ls_l_groups_by_extension_above_thirty_files_and_keeps_every_name() {
+        let rw = "-rw-r--r--";
+        let mut out = String::from("total 99\n");
+        for i in 0..20 {
+            out.push_str(&long_line(&format!("m{i}.rs"), 1200 + i, rw));
+        }
+        for i in 0..8 {
+            out.push_str(&long_line(&format!("t{i}.toml"), 300, rw));
+        }
+        out.push_str(&long_line("README.md", 2048, rw));
+        out.push_str(&long_line("Makefile", 900, rw));
+        out.push_str(&long_line("run.sh", 120, "-rwxr-xr-x"));
+        out.push_str(&long_line("x.sh", 10, "-rwxr-xr-x"));
+        let got = ls_l(&out).unwrap();
+        let lines: Vec<&str> = got.lines().collect();
+        assert_eq!(lines.len(), 5, "{got}");
+        assert_eq!(lines[0], "Makefile 900B");
+        assert!(lines[1].starts_with("*.rs (20): m0 1.2K, m1 1.2K"), "{got}");
+        assert!(lines[1].ends_with("m19 1.2K"), "{got}");
+        assert!(
+            lines[2].starts_with("*.toml (8): t0 300B, t1 300B"),
+            "{got}"
+        );
+        assert_eq!(lines[3], "README.md 2.0K");
+        assert_eq!(lines[4], "*.sh (2): run* 120B, x* 10B");
+    }
+
+    #[test]
+    fn ls_l_leaves_thirty_files_or_fewer_ungrouped() {
+        let mut out = String::new();
+        for i in 0..30 {
+            out.push_str(&long_line(&format!("f{i}.rs"), 10, "-rw-r--r--"));
+        }
+        let got = ls_l(&out).unwrap();
+        assert_eq!(got.lines().count(), 30, "{got}");
+        assert!(got.starts_with("f0.rs 10B\nf1.rs 10B"), "{got}");
+    }
+
+    #[test]
+    fn ls_la_dotfiles_share_one_line() {
+        let rw = "-rw-r--r--";
+        let out = format!(
+            "{}{}{}{}{}",
+            long_line(".gitignore", 40, rw),
+            long_line(".env", 12, rw),
+            long_line(".editorconfig", 300, rw),
+            long_line("main.rs", 5000, rw),
+            long_line(".npmrc", 7, rw),
+        );
+        assert_eq!(
+            ls_l(&out).unwrap(),
+            "main.rs 4.9K\ndotfiles: .gitignore 40B, .env 12B, .editorconfig 300B, .npmrc 7B"
+        );
+        let two = format!(
+            "{}{}",
+            long_line(".env", 12, rw),
+            long_line(".npmrc", 7, rw)
+        );
+        assert_eq!(ls_l(&two).unwrap(), ".env 12B\n.npmrc 7B");
     }
 
     /// T684: rustc prints the `#[warn(lint)]` note only on the first block of a lint, so the
