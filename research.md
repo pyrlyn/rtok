@@ -3032,3 +3032,15 @@ Question: what real embedding source can sit behind `[plugins.memory.embed]` wit
 Not verified: OpenAI's base URL `https://api.openai.com/v1` (the fetched reference page shows the relative path only; it is the SDK default), and the price per token (not needed: the cap is `max_chars`, not money).
 
 Decision: `provider = "http"` posts `{"model", "input"}` to `<url>/embeddings` and reads `data[0].embedding`. It sends no `dimensions` field, so a server that lacks it cannot refuse the request; the length of the answer must equal `[embed] dimensions` or the vector is dropped. Cost control is a hard `max_chars` per request, no counters in the database. Any failure falls back to the plain note search with a warning; the hook (10 ms budget) never calls the endpoint and reads only the FTS leg while a remote is configured. Remote vectors are stored under their own model key (`<model>+remote1`), so they never mix with hash vectors.
+
+## 45. Reference recall inside macro arguments (T663, measured 2026-10-16)
+
+serena's LSP-grade references (rtok-vs-serena comparison, PR #1071; **unverified** here) are out of reach without a language server, but the one construct class that held the tags index below LSP on this repo was calls in macro arguments. Measured with `tests/graph_truth.rs` (39 labels, `cargo test --test graph_truth labelled_symbols -- --nocapture`, debug build, this repo at the T663 commit):
+
+| | before | after |
+| --- | --- | --- |
+| references | 119/126, recall 0.944 | 126/126, recall 1.000 |
+| definitions | 91/92, precision 1.000 | 91/92, precision 1.000 |
+| sites | 210/218, 0.963 | 217/218, 0.995 |
+
+Change: one tree-sitter pattern in `RUST_EXTRA_REF` (`src/plugins/read/outline.rs`) captures an identifier directly followed by a parenthesised `token_tree`. No tool and no description token added (graph surface unchanged). The labels are hand-picked from this repo, so 1.000 is a floor guard on that set, not a general recall; reference *precision* of the new pattern was not measured (a call-shaped identifier inside `macro_rules!`/`quote!` bodies counts as a reference).

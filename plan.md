@@ -157,7 +157,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T526 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T527 | in progress | P2 | 3 | 0% | MiMo / mimo |
 | T662 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T663 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T664 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T665 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T666 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
@@ -190,14 +189,6 @@ sqz ships 45+ formatters and a stack-trace safe mode; rtok has fewer families (`
 Check: a coverage table vs sqz in `docs/comparison/rtok-vs-sqz.md`; at least the top gap families from `rtok discover` (T688) gain rules; `just check`.
 
 Plan: read `docs/comparison/rtok-vs-sqz.md`; build the coverage table sqz-formatter → rtok rule; add rules (in `rules/default.toml` through the existing rule engine, no new engine) for the top missing families, each with a fixture and a no-worse-than-raw test. `rtok discover` (T688) ranks the families your own history runs; read it with the sqz list.
-
-### T663. Push graph reference precision toward LSP-grade (serena)
-
-serena is ahead on symbol/reference precision (`docs/comparison/rtok-vs-serena.md`). Raise rtok reference recall/precision on the existing 30-symbol set without paying serena's ~1 494 description tokens/turn. Sourced: rtok reference recall 0.351 → 0.924 after T387; serena LSP-grade with **no numeric** in rtok docs; description tokens rtok ~165 vs serena ~1 494 (`docs/comparison.md` §2).
-
-Check: updated recall/precision row in `docs/comparison/rtok-vs-serena.md` and the graph bench; description-token budget still far below serena; `just check`.
-
-**Plan.** (1) Read `tests/graph_truth.rs` and `tests/fixtures/graph_truth.toml`; list the reference sites still missed (ref recall 0.924) and group them by cause (qualified paths, method calls through `self`, re-exports, macros, same-name definitions across files). (2) Fail-first fixture rows for the top cause, then fix it in the tags resolver (`src/plugins/graph/resolve.rs`, `scope.rs`) with no new MCP tool and no description growth. (3) Raise the `graph_truth` floors to the new numbers; record before/after in `research.md` and the serena row of `docs/comparison/rtok-vs-serena.md` once PR #1071 is on `main` (until then, only `research.md`). (4) `tests/graph_contract.rs` and the surface description-token gate stay green; `just check`.
 
 ### T664. Review/blast-radius features from code-review-graph
 
