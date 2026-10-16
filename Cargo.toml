@@ -155,7 +155,7 @@ operation-icons = { workspace = true } # verb icons and the icon gutter of statu
 wasmi = { version = "2.0", optional = true } # pure-Rust WASM interpreter for optional out-of-tree plugin host (P32)
 toml_edit = { workspace = true } # `config set` (T12.3) edits in place, preserving comments
 toml = "0.8" # Cargo.lock [[package]] parse for docs_resolve (already in the lock via figment)
-zstd = "0.13" # decode docs.rs crate rustdoc JSON (.json.zst) for `rtok docs fetch`
+zstd = "0.14" # decode docs.rs crate rustdoc JSON (.json.zst) for `rtok docs fetch`
 fs-kit = { workspace = true } # paths without Windows UNC prefixes, atomic writes, tree usage and copy
 pathdiff = "0.2" # relative path of a file under a repo root (graph LSP + index)
 rmcp = { version = "3.2", features = ["transport-streamable-http-server"] } # stdio MCP types + JSON-RPC (T4.1); the SDK's Streamable HTTP server for `rtok mcp --http` (T401)
@@ -196,7 +196,7 @@ tree-sitter-kotlin-ng = { version = "1.1.0", optional = true } # lang-kotlin tag
 tree-sitter-swift = { version = "0.7.3", optional = true } # lang-swift tags (T52.2)
 tree-sitter-c-sharp = { version = "0.23.5", optional = true } # lang-csharp tags (T52.2)
 tree-sitter-ruby = { version = "0.23.1", optional = true } # lang-ruby tags (T52.2)
-tree-sitter-php = { version = "0.24.2", optional = true } # lang-php tags (T52.2)
+tree-sitter-php = { version = "0.25.1", optional = true } # lang-php tags (T52.2)
 jsonc-parser = { workspace = true, features = ["serde"] } # JSONC (comments + trailing commas) parse of Zed settings (T222)
 log = "0.4.34" # T225: logging facade; env_logger drains it, every D26 line is mirrored into it
 env_logger = "0.11.11" # T225: `RUST_LOG` debug log on stderr; the filter defaults to `off`, not `error`
