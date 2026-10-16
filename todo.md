@@ -52,7 +52,6 @@
 - T678. for 570, until 231, while: ≥ 80 % on polling loops (vs caveman repetition)
 - T679. ls 386: ≥ 72 % (= rtk) (vs lean-ctx 66.6 %)
 - T680. git status 297: ≥ 60 % (rtk 62.5 %) (vs lean-ctx 40.5 %)
-- T681. git diff 272, git show 262: ≥ 80 % big diff with 100 % paths (t-o keeps 51 %) (vs t-o 97.9 % / sqz 44.4 %)
 - T682. git log 174: keep lead (vs — (rtok wins after #1079))
 - T683. tail 155, cat *.log: keep lead, +2 pp (vs lean-ctx 87.4 % (rtok 94.5 %))
 - T686. MCP tool catalogs: ≥ 30 % (vs caveman 12–29 %)

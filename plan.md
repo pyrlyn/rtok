@@ -163,7 +163,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T678 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T679 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T680 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T681 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T682 | todo | P2 | 3 | 0% | |
 | T683 | todo | P2 | 3 | 0% | |
 | T686 | todo | P2 | 3 | 0% | |
@@ -1123,14 +1122,6 @@ Best competitor: lean-ctx 40.5 %. Design: one line per section with paths groupe
 Check: #1076 harness (`bench/c14`) shows ≥ 60 % (rtk 62.5 %) on this category with full anchor retention.
 
 Plan: #1077 prints `git status` as porcelain XY codes. Remaining: group paths by directory (`src/plugins/cmd/{a,b}.rs`), one line per section, branch + ahead/behind, drop hints. Extend `git_status` in `compact.rs`; keep every path (test counts paths in/out); update golden `git_status*` floors.
-
-### T681. git diff 272, git show 262
-
-Best competitor: t-o 97.9 % / sqz 44.4 %. Design: two tiers: ≤ budget → drop `index`, context 1, fold unchanged runs, strip common indent; > budget → per-file `path +A -D` table and hunk headers with function names, full hunks only for the N smallest files; 100 % paths always.
-
-Check: #1076 harness (`bench/c14`) shows ≥ 80 % big diff with 100 % paths (t-o keeps 51 %) on this category with full anchor retention.
-
-Plan: #1077 already drops `index`/`diff --git` lines. Remaining: two tiers in `compact::git_diff`: within budget context 1, folded unchanged runs, stripped common indent; above budget a per-file `path +A -D` table plus hunk headers with function names and full hunks only for the N smallest files; `git show` routed to the same code. Tests: big-diff golden with 100% paths, small-diff golden, `git show`.
 
 ### T682. git log 174
 

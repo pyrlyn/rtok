@@ -12,6 +12,7 @@ use rtok_plugin_sdk::{Ctx, DashboardPage, Manifest, Plugin, PreToolDecision, Pre
 pub mod bounded;
 pub mod catfile;
 pub mod compact;
+pub mod diffs;
 pub mod hook;
 
 pub mod filter;
