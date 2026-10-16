@@ -157,13 +157,11 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T526 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T527 | in progress | P2 | 3 | 0% | MiMo / mimo |
 | T663 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T664 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T665 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
-| T666 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
+| T666.2 | todo | P2 | 3 | 0% | |
 | T667 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T670 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T687 | in progress | P2 | 4 | 0% | Claude Code / claude-sonnet-5-5 |
-| T673 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T675 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T676 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T677 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
@@ -173,7 +171,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T681 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T682 | todo | P2 | 3 | 0% | |
 | T683 | todo | P2 | 3 | 0% | |
-| T685 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 | T686 | todo | P2 | 3 | 0% | |
 
 
@@ -188,14 +185,6 @@ Check: updated recall/precision row in `docs/comparison/rtok-vs-serena.md` and t
 
 **Plan.** (1) Read `tests/graph_truth.rs` and `tests/fixtures/graph_truth.toml`; list the reference sites still missed (ref recall 0.924) and group them by cause (qualified paths, method calls through `self`, re-exports, macros, same-name definitions across files). (2) Fail-first fixture rows for the top cause, then fix it in the tags resolver (`src/plugins/graph/resolve.rs`, `scope.rs`) with no new MCP tool and no description growth. (3) Raise the `graph_truth` floors to the new numbers; record before/after in `research.md` and the serena row of `docs/comparison/rtok-vs-serena.md` once PR #1071 is on `main` (until then, only `research.md`). (4) `tests/graph_contract.rs` and the surface description-token gate stay green; `just check`.
 
-### T664. Review/blast-radius features from code-review-graph
-
-code-review-graph is ahead on review features (~30 MCP tools) while rtok wins on cost (`docs/comparison/rtok-vs-code-review-graph.md`). Port only the features that save tokens or answer "what does this edit touch?" without the full tool bill. Savings both sides: **no data** in rtok docs for a shared corpus.
-
-Check: one or more graph ops (or docs) covering the chosen features; MCP description-token budget documented; `just check`.
-
-**Plan.** Already shipped: `impact`, `graph_diff` (T329.18), `rtok graph review` (T454, CLI only), blast grouping. (1) Read the feature list in `docs/comparison/rtok-vs-code-review-graph.md` (PR #1071) and the code-review-graph README; mark each feature take / skip / already have. (2) Take at most the features that answer "what does this edit touch?" with no new MCP tool (the surface gate is 170 tokens): candidates are a test-gap list (changed defs with no test caller) and a risk summary line on `graph_diff`. (3) Fail-first tests on a fixture repo in `src/plugins/graph/review.rs` / `diff.rs`; keep `tests/graph_contract.rs` strings unchanged unless the commit says why. (4) Take/skip table in the comparison file (or `research.md` while #1071 is open); `just check`.
-
 ### T665. Broader graph queries (codebase-memory-mcp)
 
 codebase-memory-mcp is broader (Cypher-style queries) (`docs/comparison/rtok-vs-codebase-memory-mcp.md`). Add the small query shapes agents actually used in our logs, without a heavy MCP surface. Savings both sides: **no data** for a shared corpus.
@@ -204,13 +193,11 @@ Check: query shapes documented and tested; comparison file updated; `just check`
 
 **Plan.** (1) List the query shapes agents used in our logs (`rtok stats`, `graph_events`) that `symbol`/`callers`/`impact`/`explore` do not answer in one call; compare with the Cypher shapes in `docs/comparison/rtok-vs-codebase-memory-mcp.md`. (2) Add at most two shapes as parameters of existing operations (no seventh/eighth tool): e.g. `callers` with `depth` and a `kind`/`path` filter, `outline` with `kind`. (3) Fail-first tests in `src/plugins/graph` + `tests/graph_contract.rs` for each shape, on the SQLite store only. (4) Document the shapes in `src/plugins/graph/README.md` and the comparison file; description tokens stay under the surface gate; `just check`.
 
-### T666. Optional automatic memory extraction (claude-mem idea)
+### T666.2. Provider-backed memory extractor (blocked on the creator)
 
-claude-mem is ahead if you want automatic LLM-extracted memory (`docs/comparison/rtok-vs-claude-mem.md`). Not a default path (cost). Design an opt-in extractor that writes ordinary rtok memory notes, measured. Savings both sides: **no data** without paid API keys (harness skips).
+T666.1 ships `rtok memory extract` with a user-configured program as the extractor. A built-in extractor needs creator decisions first: which provider and model, how the key is stored and read, and a per-run cost cap. Once decided: a provider extractor behind the same `Extractor` trait, a docs warning about cost, a measured row in `research.md` (needs a paid key, so the harness skips without one). Not claimed.
 
-Check: opt-in config off by default; fixture test with a fake LLM; docs warn about cost; `just check`.
-
-**Plan.** Split because a real model call needs a provider decision (creator) and the whole feature exceeds 500 lines. **T666.1 (this slice):** an `Extractor` trait in `src/plugins/memory/extract.rs`, the config block `plugins.memory.extract` (`enabled = false`, `max_notes`, `max_input_bytes`) in the one config module, and `rtok memory extract <transcript.jsonl>` that scrubs the input (`scrub.rs`, `<private>`), asks the extractor for candidate notes and saves them through the normal `mem_save` path (so the T671 admission gate and dedup apply). Only a fake extractor ships in tests; with `enabled = false` the command refuses and nothing runs. No hook calls it. **T666.2 (todo, blocked on the creator):** a real provider-backed extractor (which provider/model, key handling, cost cap) and a docs warning about cost. Tests: fake LLM fixture, off-by-default, scrub applied, duplicate rejected, input cap; `just check`.
+Check: a fake-server test of the provider call; the cost cap stops a run; off by default; `just check`.
 
 ### T667. Richer memory features from engram
 
@@ -1129,13 +1116,6 @@ Check: a test shows a dropped `Runtime::in_memory` leaves no directory behind, a
 
 Source: `docs/research/competitors-techniques.md` (techniques, licenses, links). Every card: keep 100 % of hashes, paths and WARN/ERROR lines, never more tokens than raw, stderr and exit line kept on failure.
 
-### T673. grep 2260, git grep 452, rg
-
-Best competitor: t-o 89.7 %, lean-ctx 89.6 %. Design: path printed once; matches as `line:text`; collapse common indentation; trim match text around the hit to ±60 chars keeping the match itself; per-file cap by match budget with `+N more (expand)`; files sorted by path (stable) not count; keep 100 % paths.
-
-Check: #1076 harness (`bench/c14`) shows ≥ 91 %, 100 % paths on this category with full anchor retention.
-
-Plan: new `grep_group` formatter in `src/plugins/cmd/compact.rs` wired in `formatters::format` for `grep`/`rg`/`git grep`: path once, `line:text` under it, common indent stripped, text trimmed to the match ±60 chars, per-file budget with `+N more (expand)`, files path-sorted; fall back to the rule when the shape is unknown. Tests: golden `grep_group*.in/out` with `min_saving:` plus a path-retention unit test. Measure on the existing grep fixtures (bench/c14 unmerged).
 
 ### T675. python3 1545
 
@@ -1213,13 +1193,6 @@ Plan: extend the existing log run-collapser in `src/plugins/cmd` so collapsed lo
 
 Blocked: (1) `cmd` has no logfmt run-collapser to extend today, only `dedupe = "normalized"` (`rules.rs`, no default rule uses it), so this is a new collapse mode, not a tweak; (2) the Check (+2 pp, rtok already 94.5 % vs lean-ctx 87.4 %) is measurable only with the #1076 harness (`bench/c14`, PR open, not on main). Take it again after #1076 merges.
 
-### T685. find 33
-
-Best competitor: rtok leads. Design: keep dir grouping but print full paths for ≤ 50 hits so the anchor check passes.
-
-Check: #1076 harness (`bench/c14`) shows 100 % paths, ≥ 69 % on this category with full anchor retention.
-
-Plan: in the find formatter print full paths for ≤ 50 hits (grouping only above that); fixture test asserting 100 % paths and fewer tokens than raw; measure on `bench/fixtures`.
 
 ### T686. MCP tool catalogs
 

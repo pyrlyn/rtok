@@ -1,0 +1,31 @@
+argv: grep -rn Settings src
+exit: 0
+min_saving: 30
+---
+src/plugins/cmd/filter.rs:15:        .map(|c| rules::Settings::from_config(&c))
+src/plugins/cmd/filter.rs:16:        .unwrap_or_else(|_| rules::Settings::builtin());
+src/plugins/cmd/filter.rs:23:    let settings = rules::Settings::from_config(cfg);
+src/plugins/cmd/filter.rs:74:fn compress_only(settings: &rules::Settings, cmd: &str, input: &str) -> String {
+src/plugins/cmd/formatters.rs:13:    settings: &rules::Settings,
+src/plugins/cmd/formatters.rs:110:pub fn family_of(settings: &rules::Settings, argv: &[String], output: &str) -> String {
+src/plugins/cmd/formatters.rs:141:pub fn filter_kind(settings: &rules::Settings, stem: &str) -> &'static str {
+src/plugins/cmd/formatters.rs:172:fn resolve(settings: &rules::Settings, argv: &[String], output: &str) -> Resolved {
+src/plugins/cmd/formatters.rs:482:fn echoed(settings: &rules::Settings, wrapper: &str, output: &str) -> Option<Resolved> {
+src/plugins/cmd/formatters.rs:522:fn echo_command(settings: &rules::Settings, wrapper: &str, line: &str) -> Option<String> {
+src/plugins/cmd/formatters.rs:1044:        let settings = rules::Settings::builtin();
+src/plugins/cmd/formatters.rs:1134:        let settings = rules::Settings::builtin();
+src/plugins/cmd/formatters.rs:1189:        let settings = rules::Settings::builtin();
+src/plugins/cmd/formatters.rs:1218:        let settings = rules::Settings::builtin();
+src/plugins/cmd/formatters.rs:1241:        let settings = rules::Settings::builtin();
+src/plugins/cmd/formatters.rs:1259:        let settings = rules::Settings::builtin();
+src/plugins/cmd/formatters.rs:1280:        let settings = rules::Settings::builtin();
+src/plugins/cmd/run.rs:389:let settings = rules::Settings::from_config(cfg);
+src/plugins/cmd/run.rs:818:        &rules::Settings::builtin(),
+src/plugins/cmd/run.rs:819:        &rules::Settings::builtin(),
+src/plugins/cmd/run.rs:820:        &rules::Settings::builtin(),
+src/plugins/cmd/rules.rs:76:pub struct Settings {
+src/plugins/cmd/rules.rs:81:impl Settings {
+src/plugins/cmd/rules.rs:1010:    settings: &Settings,
+src/plugins/cmd/rules.rs:1028:    settings: &Settings,
+src/plugins/cmd/rules.rs:1227:    fn settings(fail_tail_lines: u32) -> Settings {
+grep: src/gone.rs: No such file or directory

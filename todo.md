@@ -46,13 +46,11 @@
 - T657. Match compressor credentials to the internal provider
 - T651. Honor ProgressRunner timeouts with inherited output
 - T663. Push graph reference precision toward LSP-grade (serena)
-- T664. Review/blast-radius features from code-review-graph
 - T665. Broader graph queries (codebase-memory-mcp)
-- T666. Optional automatic memory extraction (claude-mem idea)
+- T666.2. Provider-backed memory extractor (blocked on the creator)
 - T667. Richer memory features from engram
 - T670. Read modes lean-ctx still has
 - T687. Hooks: PreToolUse/PostToolUse p50 to 10 ms
-- T673. grep 2260, git grep 452, rg: ≥ 91 %, 100 % paths (vs t-o 89.7 %, lean-ctx 89.6 %)
 - T675. python3 1545: ≥ t-o pytest (564→115) (vs none specialised)
 - T676. gh 744: +20 pp vs current head/tail (vs lean-ctx gh.rs)
 - T677. mise 660: ≥ lean-ctx (vs lean-ctx mise.rs)
@@ -62,5 +60,4 @@
 - T681. git diff 272, git show 262: ≥ 80 % big diff with 100 % paths (t-o keeps 51 %) (vs t-o 97.9 % / sqz 44.4 %)
 - T682. git log 174: keep lead (vs — (rtok wins after #1079))
 - T683. tail 155, cat *.log: keep lead, +2 pp (vs lean-ctx 87.4 % (rtok 94.5 %))
-- T685. find 33: 100 % paths, ≥ 69 % (vs rtok leads)
 - T686. MCP tool catalogs: ≥ 30 % (vs caveman 12–29 %)

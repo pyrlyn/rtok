@@ -2767,6 +2767,16 @@ Check: a fixture with three notes asserts the injected text has ids, titles and 
 
 **Result (2026-10-04).** The recall index carries a body token estimate and names `mem_get` (`INDEX_GUIDE` in `src/plugins/memory/mod.rs`); `mem_get` records one `mem_get` measurement row and returns the full body (tests in the same file).
 
+### T666.1. Opt-in memory extraction through a user-configured program
+
+claude-mem is ahead if you want automatic LLM-extracted memory (`docs/comparison/rtok-vs-claude-mem.md`). Not a default path (cost). Design an opt-in extractor that writes ordinary rtok memory notes, measured. Savings both sides: **no data** without paid API keys (harness skips).
+
+Check: opt-in config off by default; fixture test with a fake LLM; docs warn about cost; `just check`.
+
+**Plan.** Split because a real model call needs a provider decision (creator) and the whole feature exceeds 500 lines. **T666.1 (this slice):** an `Extractor` trait in `src/plugins/memory/extract.rs`, the config block `plugins.memory.extract` (`enabled = false`, `max_notes`, `max_input_bytes`) in the one config module, and `rtok memory extract <transcript.jsonl>` that scrubs the input (`scrub.rs`, `<private>`), asks the extractor for candidate notes and saves them through the normal `mem_save` path (so the T671 admission gate and dedup apply). Only a fake extractor ships in tests; with `enabled = false` the command refuses and nothing runs. No hook calls it. **T666.2 (todo, blocked on the creator):** a real provider-backed extractor (which provider/model, key handling, cost cap) and a docs warning about cost. Tests: fake LLM fixture, off-by-default, scrub applied, duplicate rejected, input cap; `just check`.
+
+**Result (2026-10-16), T666.1.** PR #1120. `rtok memory extract <transcript.jsonl>` (`src/plugins/memory/extract.rs`), off unless `[plugins.memory.extract] enabled = true`: the user/assistant text of a Claude Code transcript is scrubbed (`<private>`, keys, tokens), cut to its last `max_input_bytes` (60000), written to a scratch file and given on stdin to the program named in `command` (run through `ProgressRunner`, 10-minute limit); each `{"title","body"}` stdout line (at most `max_notes`, 5) is saved as a plain `note` through the T671 admission gate, so a repeat is skipped. rtok ships no model client, key or provider; model output is untrusted (kind forced to `note`, title 120 / body 2000 chars). No hook calls it. Tests: fake extractor fixture, off by default, scrub, input and note caps, gate skip, parser, command round trip; trycmd case. The cost warning for a shipped provider belongs to T666.2.
+
 ### T671. Memory admission gate (MemPalace idea)
 
 MemPalace is ahead on admission/dedup by embeddings (`docs/comparison/rtok-vs-mempalace.md`). Add an admission gate before notes are stored (cheap hash/trigram first; embeddings opt-in). Savings both sides: **no data** (harness skips).
@@ -2796,6 +2806,16 @@ Check: ranking/forget tests on a fixture store; comparison file updated; `just c
 **Plan.** Signals already stored: touch count, pin, retire/supersede, timestamps, file links. (1) Fail-first fixture tests (`src/plugins/memory`) for a recency/usage-aware score on top of bm25: a recently touched note outranks an equal-text stale one, a pinned note never decays. (2) A pure `rank` function (no I/O) used by `mem_search`/`mem_pack`/recall, default weights in the one config module (`plugins.memory.rank`), byte-stable output. (3) A forget policy: notes untouched past `forget.after_days`, unpinned and not a decision, are retired (reversible tombstone, never deleted; `mem_update` can revive), default off, run by `rtok memory forget` (dry-run first), never from a hook. (4) Measure on the memory bench fixture, record the row in `research.md` and the comparison file; `just check`.
 
 **Result (2026-10-15).** PR #1096. `search_notes` takes the best `3 × limit` bm25 hits and re-ranks them with `rank_blend(rank, retention_score(...))` (reciprocal rank offset 8, scaled by `0.4 + 0.6 × retention`), so a pinned or well-read note overtakes a neighbour of equal text while a match several places better stays ahead; a store with no use signal ranks as before. New `rtok memory forget [--project P] [--days N] [--apply]` retires unpinned, never-read notes older than `plugins.memory.forget_after_days` (default 90, 0 = needs `--days`); a dry run unless `--apply`; `user` and `decision` kinds, checkpoints and sessions are never forgotten, and a retired body stays readable. Tests: three ranking tests, two forget tests, a trycmd case, config coverage. The memory-bench row was not recorded and the comparison docs were not updated.
+
+### T664. Review/blast-radius features from code-review-graph
+
+code-review-graph is ahead on review features (~30 MCP tools) while rtok wins on cost (`docs/comparison/rtok-vs-code-review-graph.md`). Port only the features that save tokens or answer "what does this edit touch?" without the full tool bill. Savings both sides: **no data** in rtok docs for a shared corpus.
+
+Check: one or more graph ops (or docs) covering the chosen features; MCP description-token budget documented; `just check`.
+
+**Plan.** Already shipped: `impact`, `graph_diff` (T329.18), `rtok graph review` (T454, CLI only), blast grouping. (1) Read the feature list in `docs/comparison/rtok-vs-code-review-graph.md` (PR #1071) and the code-review-graph README; mark each feature take / skip / already have. (2) Take at most the features that answer "what does this edit touch?" with no new MCP tool (the surface gate is 170 tokens): candidates are a test-gap list (changed defs with no test caller) and a risk summary line on `graph_diff`. (3) Fail-first tests on a fixture repo in `src/plugins/graph/review.rs` / `diff.rs`; keep `tests/graph_contract.rs` strings unchanged unless the commit says why. (4) Take/skip table in the comparison file (or `research.md` while #1071 is open); `just check`.
+
+**Result (2026-10-16).** Already shipped: `impact`, `graph_diff`, blast grouping, `graph review` (CLI). The one feature that answers "is what I changed covered" without a new tool is taken: `graph_diff` ends each project's changed list with one `untested: a, b` line for changed functions, methods and classes no test reaches within the two caller levels it already gathers (no extra walk; description tokens unchanged). A risk number, flows and communities, and extra review tools are skipped; reasons in `research.md` §44 (the comparison file is still on open PR #1071). Test `changed_definitions_without_a_test_caller_are_listed_as_untested` was written first and failed. No shared-corpus saving was measured.
 
 ### T294. Export rows that can carry a tombstone
 
@@ -8736,6 +8756,16 @@ Plan: read `docs/comparison/rtok-vs-sqz.md`; build the coverage table sqz-format
 
 Outcome: `parse_diag` reads `path:line[:col]: CODE msg` (ruff), `path:line: error: msg  [code]` (mypy), `path:line:col: C: Cop/Name: msg` (rubocop) and `path:line:col: msg (linter)` (golangci-lint), so new `[ruff]`, `[mypy]`, `[rubocop]` and `[golangci-lint]` rules fold them with `group = "diag"`: 96 %, 77 %, 88 % and 91 % on the goldens against 72 %, 55 %, 82 % and 53 % for `Rule::default()`. yarn, bun, rspec, terraform and xcodebuild already win on the default rule, so they got goldens only. The sqz coverage table is in `docs/research/competitors-techniques.md`; podman (the `docker ps` formatter matches only `docker`) is left open. `rtok discover` (T661) and the #1076 harness are not on main, so families came from sqz's list and savings from the repo goldens.
 
+### T685. find 33
+
+Best competitor: rtok leads. Design: keep dir grouping but print full paths for ≤ 50 hits so the anchor check passes.
+
+Check: #1076 harness (`bench/c14`) shows 100 % paths, ≥ 69 % on this category with full anchor retention.
+
+Plan: in the find formatter print full paths for ≤ 50 hits (grouping only above that); fixture test asserting 100 % paths and fewer tokens than raw; measure on `bench/fixtures`.
+
+Outcome: `group_dir` keeps lists of up to 50 `dir/name` hits verbatim, so a small `find` keeps 100 % of its paths; above 50 it folds as before. Pinned by `group_dir_keeps_full_paths_up_to_fifty_hits` and the regenerated find/rg/awk goldens (docs in en/ru/uk). Measured on the repo fixtures: the #1076 `bench/c14` harness is not on main.
+
 ### T684. wc 102, cargo test/build/clippy
 
 Best competitor: rtk / sqz. Design: wc: drop padding, keep `total`; cargo: #1077 + group warnings by lint code `unused_imports ×12 (files…)`.
@@ -14323,6 +14353,19 @@ Check: #1076 harness (`bench/c14`) shows ≥ 93 % on `cat` source; re-read ≥ 9
 Plan: for `cat <source>` without a range, emit signatures with elided bodies and line spans (reuse the tree-sitter outline already used by `rtok read`); for `sed -n a,bp f` keep the numbered range and, on a repeat in one session, print `unchanged since <id>` or a unified diff of the range (content hash kept in the archive store, no new table unless Diesel schema needs it). Tests: golden for cat source, session re-read unit tests. Stay under the bounded-passthrough rules in `bounded.rs`.
 
 Result: Measured with tests/bench_fixtures.rs (the #1076 bench/c14 harness is not on main): cat_rust 72.7% -> 87.1% (floor raised 68 -> 85). `cat` of a source file over 80 lines prints its definitions as start-end spans plus the signature (outline from the tree-sitter tags the read plugin uses); data files (toml/json/yaml/md/...) keep the `cat` rule. `cat`/`sed -n a,bp` of a file seen before in the session goes through the read cache: unchanged is a pointer, changed is a unified diff (src/plugins/cmd/catfile.rs, run.rs). An unchanged identical re-read is already covered by `identical_result`. Follow-up: ids in plugins/read/cache.rs are still full length; shorten after T672 lands. Local gate: nextest 3873/3874, the failure is cli_trycmd report-md (shared target dir, environmental).
+
+Status: done 2026-10-15
+Model: Claude Code / claude-sonnet-5-5
+
+### T673. grep 2260, git grep 452, rg
+
+Best competitor: t-o 89.7 %, lean-ctx 89.6 %. Design: path printed once; matches as `line:text`; collapse common indentation; trim match text around the hit to ±60 chars keeping the match itself; per-file cap by match budget with `+N more (expand)`; files sorted by path (stable) not count; keep 100 % paths.
+
+Check: #1076 harness (`bench/c14`) shows ≥ 91 %, 100 % paths on this category with full anchor retention.
+
+Plan: new `grep_group` formatter in `src/plugins/cmd/compact.rs` wired in `formatters::format` for `grep`/`rg`/`git grep`: path once, `line:text` under it, common indent stripped, text trimmed to the match ±60 chars, per-file budget with `+N more (expand)`, files path-sorted; fall back to the rule when the shape is unknown. Tests: golden `grep_group*.in/out` with `min_saving:` plus a path-retention unit test. Measure on the existing grep fixtures (bench/c14 unmerged).
+
+Result: new `src/plugins/cmd/grep.rs` formatter for `grep`/`rg`/`git grep` `path:line:text` lists: path once, `line:text` beneath, shared indent dropped, long lines cut to ±60 chars around the match (pattern read from argv; no cut when it cannot be read the same way), 12 matches per file, a 16-line text budget after which files stay as `path:l1,l2,…` anchors so 100 % of paths and line numbers survive, files path-sorted, stderr/Binary lines kept, never longer than raw; counts, `-l`, context and `-f` fall back to the rule. Measured with `tests/bench_fixtures.rs` (o200k_base, default mode; #1076 `bench/c14` is not on main): grep_settings_src 67.5 % → 73.2 %, grep_fn_main 51.0 % → 56.0 % (44 files, every path and line kept; the old head/tail rule hid 24 of them), rg_pub_fn 0 % → 32.4 %; floors raised to 70 / 54 / 30. The ≥ 91 % target of the card is not reachable with 100 % paths on these fixtures: bare paths+line numbers are already ~45 % of the raw tokens, so the remaining gain is in match text, which a larger fixture on the harness has to confirm. Tests: 10 unit tests in `grep.rs`, golden `grep_group`.
 
 Status: done 2026-10-15
 Model: Claude Code / claude-sonnet-5-5

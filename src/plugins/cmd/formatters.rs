@@ -603,6 +603,7 @@ fn format(argv: &[String], output: &str) -> Option<String> {
         ("git", "diff") => Some(super::compact::git_diff(&git_diff(output))),
         ("ls", _) if super::compact::ls_long(argv) => super::compact::ls_l(output),
         ("cat", _) => super::catfile::outline_of(argv, output),
+        ("grep", _) | ("rg", _) | ("git", "grep") => super::grep::group(argv, output),
         ("git", "log") => Some(output.lines().take(20).collect::<Vec<_>>().join("\n")),
         ("pytest", _) => Some(keep(
             output,
