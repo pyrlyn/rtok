@@ -8831,6 +8831,19 @@ Status: done 2026-10-16
 Model: Claude Code / claude-sonnet-5-5
 
 
+### T681. git diff 272, git show 262
+
+Best competitor: t-o 97.9 % / sqz 44.4 %. Design: two tiers: ≤ budget → drop `index`, context 1, fold unchanged runs, strip common indent; > budget → per-file `path +A -D` table and hunk headers with function names, full hunks only for the N smallest files; 100 % paths always.
+
+Check: #1076 harness (`bench/c14`) shows ≥ 80 % big diff with 100 % paths (t-o keeps 51 %) on this category with full anchor retention.
+
+Plan: #1077 already drops `index`/`diff --git` lines. Remaining: two tiers in `compact::git_diff`: within budget context 1, folded unchanged runs, stripped common indent; above budget a per-file `path +A -D` table plus hunk headers with function names and full hunks only for the N smallest files; `git show` routed to the same code. Tests: big-diff golden with 100% paths, small-diff golden, `git show`.
+
+Result: new `src/plugins/cmd/diffs.rs` (`tiered`), used by the `git diff` arm and a new `git show` arm (a `show` that prints a file, not a diff, is left alone). It parses the stream by the line counts in each `@@` header, so a deleted line that looks like `--- a/x` cannot pass for a file header; anything that is not a plain `diff --git` stream (colored, combined `--cc`, stray text) returns None and the older `compact::git_diff` filter applies. Tier one (raw diff of at most 120 lines): `index`, `diff --git` and a `--- a/x` equal to `+++ b/x` dropped, one line of context around each change, longer unchanged runs folded to `⋯ N unchanged`. Tier two (longer): `N files, +A -D`, then `path +A -D` per file (`new`, `deleted`, `binary`, `mode` noted; renames as `old -> new`) with its hunk headers (git's function text cut at 60 characters), and the folded hunks only for the smallest files while they fit 2500 bytes; every path stays. Measured by golden bytes (the #1076 `bench/c14` harness is not on main): `git_diff_big` (10 files, a real 302-line diff) 44473 -> 2870 B, all 10 paths present, golden floor 85 %; `git_show` (commit header kept, docs-only 64-line diff) 4777 -> 3797 B; the `git_diff` golden is unchanged. Tests: 7 unit tests in `diffs.rs` (context fold, interior fold, file-header-lookalike lines, big diff with 100 % paths, new/deleted/renamed/binary, combined and malformed input stand down) plus the `git_diff_big` and `git_show` goldens and the `git show` ARMS row. Not done: a changed line is never cut, so a single-file diff with one huge hunk shows only its hunk headers in tier two (the whole diff is in `rtok expand <id>`).
+
+Status: done 2026-10-16
+Model: Claude Code / claude-sonnet-5-5
+
 ### T388. `doctor` reports the real MCP Tool Search state
 
 From `research.md` §3 and §8: `doctor` infers "MCP tool search likely disabled" from `ANTHROPIC_BASE_URL` alone (`src/doctor.rs`, `mcp_tool_search_disabled: anthropic.is_some()`) and never reads `ENABLE_TOOL_SEARCH`. The `tools_rewrite` advice keys off the same flag, so a false positive advises a rewrite that is not needed.

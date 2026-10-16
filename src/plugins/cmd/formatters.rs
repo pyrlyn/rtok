@@ -626,7 +626,12 @@ fn format(argv: &[String], output: &str) -> Option<String> {
         ("git", "status") => {
             Some(super::compact::git_status(output).unwrap_or_else(|| git_status(output)))
         }
-        ("git", "diff") => Some(super::compact::git_diff(&git_diff(output))),
+        ("git", "diff") => Some(
+            super::diffs::tiered(output)
+                .unwrap_or_else(|| super::compact::git_diff(&git_diff(output))),
+        ),
+        // `git show <rev>:<file>` prints a file, not a diff: only a diff stream is touched.
+        ("git", "show") => super::diffs::tiered(output),
         ("ls", _) if super::compact::ls_long(argv) => super::compact::ls_l(output),
         ("cat", _) => super::catfile::outline_of(argv, output),
         ("grep", _) | ("rg", _) | ("git", "grep") => super::grep::group(argv, output),
@@ -1599,6 +1604,7 @@ mod tests {
             ("cargo", "clippy"),
             ("git", "status"),
             ("git", "diff"),
+            ("git", "show"),
             ("git", "log"),
             ("gh", ""),
             ("pytest", ""),
