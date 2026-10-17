@@ -1748,15 +1748,30 @@ mod tests {
         assert_eq!(resp.status(), reqwest::StatusCode::OK);
         let _ = resp.bytes().await;
         mock.assert();
+        // The `calls` row and the `warn` line are written off the response path; a fixed sleep
+        // lost that race under coverage on a loaded CI runner, so wait for the expected state
+        // with a generous deadline instead, like the cap test below.
+        let warned = || {
+            state
+                .store
+                .logs_after(0, 10)
+                .unwrap()
+                .iter()
+                .any(|r| r.level == "warn" && r.message.contains("rtok proxy hop"))
+        };
         tokio::time::sleep(Duration::from_millis(100)).await;
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+        loop {
+            let no_calls = state.store.count_calls().unwrap() == 0;
+            if (no_calls == passthrough && warned() == passthrough)
+                || tokio::time::Instant::now() >= deadline
+            {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
         assert_eq!(state.store.count_calls().unwrap() == 0, passthrough);
-        let warned = state
-            .store
-            .logs_after(0, 10)
-            .unwrap()
-            .iter()
-            .any(|r| r.level == "warn" && r.message.contains("rtok proxy hop"));
-        assert_eq!(warned, passthrough);
+        assert_eq!(warned(), passthrough);
         task.abort();
     }
 
