@@ -1052,10 +1052,34 @@ fn fmt_top(v: &serde_json::Value, items: usize, string_max: usize) -> String {
             if arr.len() > items {
                 lines.push(format!("… +{} more", arr.len() - items));
             }
-            lines.join("\n")
+            let rows = lines.join("\n");
+            match toon_rows(v, arr, items) {
+                Some(table) if table.len() < rows.len() => table,
+                _ => rows,
+            }
         }
         other => fmt_val(other, items, string_max).unwrap_or_default(),
     }
+}
+
+/// A top-level array of uniform scalar objects as one TOON table (header row plus a
+/// line per record) instead of one `{k: v, …}` line per element: the keys print once.
+/// The same first `items` rows are shown and the same `… +K more` tail follows, so
+/// nothing an agent saw before is dropped; the caller keeps the shorter rendering.
+#[cfg(feature = "toon")]
+fn toon_rows(v: &serde_json::Value, arr: &[serde_json::Value], items: usize) -> Option<String> {
+    let keys = crate::plugins::toon::tabular_keys(v, 2)?;
+    let shown = &arr[..arr.len().min(items)];
+    let mut out = crate::plugins::toon::encode(shown, &keys);
+    if arr.len() > items {
+        out.push_str(&format!("\n… +{} more", arr.len() - items));
+    }
+    Some(out)
+}
+
+#[cfg(not(feature = "toon"))]
+fn toon_rows(_: &serde_json::Value, _: &[serde_json::Value], _: usize) -> Option<String> {
+    None
 }
 
 fn fmt_val(v: &serde_json::Value, items: usize, string_max: usize) -> Option<String> {
@@ -2121,6 +2145,34 @@ mod tests {
         let cut = apply(&s, &long_body, 0, &Rule::default(), "arc");
         assert!(cut.contains("(250)"), "{cut}");
         assert!(cut.contains('…'), "{cut}");
+    }
+
+    #[cfg(feature = "toon")]
+    #[test]
+    fn json_uniform_array_prints_one_table_with_the_same_rows() {
+        let s = settings(80);
+        let rows: Vec<String> = (0..30)
+            .map(|i| format!(r#"{{"id":{i},"name":"user{i}","role":"dev","active":true}}"#))
+            .collect();
+        let body = format!("[{}]", rows.join(","));
+        let rule = Rule::default();
+        let out = apply(&s, &body, 0, &rule, "arc");
+        assert!(out.contains("{active,id,name,role}:"), "{out}");
+        assert!(out.contains("true,0,user0,dev"), "{out}");
+        let shown = rule.json_items.max(1) as usize;
+        assert!(out.contains(&format!(",user{},", shown - 1)), "{out}");
+        assert!(!out.contains(&format!(",user{shown},")), "{out}");
+        assert!(out.contains(&format!("… +{} more", 30 - shown)), "{out}");
+        assert!(!out.contains("name: "), "{out}");
+    }
+
+    #[test]
+    fn json_mixed_array_keeps_the_per_element_lines() {
+        let s = settings(80);
+        let body = r#"[{"id":1,"a":"x","b":2},3,"s",{"id":2,"a":"y","b":4}]"#;
+        let out = apply(&s, body, 0, &Rule::default(), "arc");
+        assert!(out.contains("a: \"x\""), "{out}");
+        assert!(!out.contains("]{"), "{out}");
     }
 
     #[test]
