@@ -114,6 +114,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T124 | todo | P3 | 2 | 60% | |
 | T131 | todo | P2 | 3 | 70% | |
 | T156 | in progress | P3 | 3 | 50% | Claude Code / claude-opus-5-5 |
+| T262.3 | in progress | P2 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
 | T261 | in progress | P2 | 3 | 95% | Cursor / grok 4.7 |
 | T275 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
 | T275.1 | in progress | P2 | 3 | 80% | Cursor / grok 4.7 |
@@ -138,6 +139,16 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T398 | todo | P3 | 1 | 30% | |
 | T413 | todo | P2 | 3 | 0% | |
 | T413.13 | todo | P3 | 2 | 0% | |
+| T413.5 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
+| T413.6 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
+| T413.7 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
+| T413.8 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
+| T413.9 | in progress | P3 | 3 | 0% | Cursor / grok 4.7 |
+| T413.11 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
+| T413.12 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
+| T413.13 | in progress | P3 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
+| T413.14 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
+| T413.15 | in progress | P3 | 2 | 0% | Cursor / grok 4.7 |
 | T414 | in progress | P1 | 4 | 20% | Claude Code / opus-5.5 |
 | T414.7 | in progress | P3 | 1 | 0% | MiMo / mimo |
 | T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
@@ -158,6 +169,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T527 | in progress | P2 | 3 | 0% | MiMo / mimo |
 | T666.2 | todo | P2 | 3 | 0% | |
 | T687 | todo | P2 | 4 | 0% | |
+| T623.2 | in progress | P2 | 3 | 0% | Claude Code / claude-sonnet-5-5 |
 
 
 
