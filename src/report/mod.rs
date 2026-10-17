@@ -152,6 +152,7 @@ pub(crate) mod fixtures {
                     by_cause: Vec::new(),
                     detail: Vec::new(),
                 },
+                lanes: Default::default(),
                 expand: model::ReportExpand {
                     decisions: 0,
                     expanded: 0,

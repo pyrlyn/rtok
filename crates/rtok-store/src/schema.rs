@@ -125,6 +125,7 @@ diesel::table! {
 }
 
 // 0036 (T454): mechanical tool-call observations. `observations_fts` is virtual.
+// 0044 (T501): `call_key`, the hook call it came from.
 diesel::table! {
     observations (id) {
         id -> Integer,
@@ -135,6 +136,7 @@ diesel::table! {
         title -> Text,
         narrative -> Text,
         dedup -> Text,
+        call_key -> Nullable<Text>,
     }
 }
 
@@ -174,6 +176,7 @@ diesel::table! {
         output -> BigInt,
         call_id -> Nullable<Integer>,
         api -> Text,
+        result_key -> Nullable<Text>,
     }
 }
 
@@ -211,6 +214,7 @@ diesel::table! {
     }
 }
 
+// 0050 (T592): `end_seq`, the place a session took in the order sessions ended; 0 = still open.
 diesel::table! {
     sessions (id) {
         id -> Text,
@@ -220,6 +224,7 @@ diesel::table! {
         source -> Nullable<Text>,
         started_at -> BigInt,
         ended_at -> Nullable<BigInt>,
+        end_seq -> BigInt,
     }
 }
 
@@ -239,6 +244,7 @@ diesel::table! {
         ms -> Nullable<Double>,
         ok -> Integer,
         error -> Nullable<Text>,
+        service_tier -> Nullable<Text>,
     }
 }
 
@@ -388,8 +394,28 @@ diesel::table! {
     }
 }
 
+// 0047 (T385.9.1): the P28 compressor's summary of an archived result, per compressor version.
+diesel::table! {
+    archive_summaries (archive_id, version) {
+        archive_id -> Text,
+        version -> Text,
+        summary -> Text,
+        created_at -> BigInt,
+    }
+}
+
+// 0045 (T289.5): an adopted worktree no single agent could be named for yet.
+diesel::table! {
+    worktree_pending (path) {
+        path -> Text,
+        task -> Text,
+        created_at -> BigInt,
+    }
+}
+
 // 0026 (T287): messages between agents and the user. `from_agent` NULL = the user at a
 // terminal; `body` is capped and cleaned by `Store::send_message`.
+// 0046 (T441.13.1): `task`, the task the message is about.
 diesel::table! {
     messages (id) {
         id -> Integer,
@@ -399,6 +425,7 @@ diesel::table! {
         created_at -> BigInt,
         delivered_at -> Nullable<BigInt>,
         read_at -> Nullable<BigInt>,
+        task -> Nullable<Text>,
     }
 }
 
@@ -437,6 +464,7 @@ diesel::table! {
 }
 
 // 0034 (T442): the claim SessionStart names. The file or the issue stays the source of truth.
+// 0047 (T615): `seq`, the claim's place in the order claims were made.
 diesel::table! {
     task_claims (project, task_id) {
         project -> Text,
@@ -444,6 +472,7 @@ diesel::table! {
         agent_id -> Text,
         title -> Text,
         since -> BigInt,
+        seq -> BigInt,
     }
 }
 
@@ -499,6 +528,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     measurements,
     archive,
     archive_decisions,
+    archive_summaries,
     read_cache,
     notes,
     note_embeddings,
@@ -523,6 +553,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     symbol_stale,
     agents,
     worktree_claims,
+    worktree_pending,
     messages,
     projects,
     project_links,

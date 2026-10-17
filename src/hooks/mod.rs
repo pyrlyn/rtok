@@ -13,6 +13,8 @@ mod push;
 pub mod resident;
 pub mod types;
 
+use rtok_sys::proc::{Output, ProgressRunner};
+
 use crate::config::Config;
 use crate::plugin::{Ctx, Injection, PreToolDecision, Runtime, SessionStart};
 use crate::plugins::Registry;
@@ -285,6 +287,8 @@ fn dispatch_owned_strict(stdin: &[u8], event: &str, cfg: &Config) -> Result<Vec<
     let gemini = !grok && cfg.hook.host == "gemini";
     let codewhale = !grok && cfg.hook.host == "codewhale";
     let cline = !grok && cfg.hook.host == "cline";
+    let codebuddy = !grok && cfg.hook.host == "codebuddy";
+    let codex = !grok && cfg.hook.host == "codex";
     if grok {
         input.adapt_grok(event);
     } else if cursor {
@@ -355,7 +359,51 @@ fn dispatch_owned_strict(stdin: &[u8], event: &str, cfg: &Config) -> Result<Vec<
         let parsed: HookOutput = serde_json::from_slice(&out).unwrap_or_default();
         return Ok(cline_output(&parsed));
     }
+    if codebuddy {
+        let parsed: HookOutput = serde_json::from_slice(&out).unwrap_or_default();
+        return Ok(codebuddy_output(&parsed));
+    }
+    if codex {
+        let parsed: HookOutput = serde_json::from_slice(&out).unwrap_or_default();
+        return Ok(codex_output(&parsed));
+    }
     Ok(out)
+}
+
+/// Codex (https://learn.chatgpt.com/docs/hooks, fetched 2026-10-12; `research.md` section 40)
+/// sends Claude's stdin and reads Claude's envelope, with two differences found live on
+/// codex-cli 0.162.1. A `PreToolUse` rewrite takes effect only next to
+/// `permissionDecision: "allow"` (without it the hook run is marked failed and the original
+/// call runs), and `updatedMcpToolOutput`, a Cursor key, is not read. Context, denials and `{}`
+/// pass through.
+pub fn codex_output(out: &HookOutput) -> Vec<u8> {
+    let mut out = out.clone();
+    out.updated_mcp_tool_output = None;
+    if let Some(h) = out.hook_specific_output.as_mut() {
+        h.updated_mcp_tool_output = None;
+        if h.updated_input.is_some() && h.permission_decision.is_none() {
+            h.permission_decision = Some("allow".into());
+        }
+    }
+    serde_json::to_vec(&out).unwrap_or_else(|_| b"{}".to_vec())
+}
+
+/// CodeBuddy Code (https://www.codebuddy.ai/docs/cli/hooks, checked 2026-10-11) sends Claude's
+/// stdin and reads Claude's output envelope, except that a PreToolUse rewrite travels as
+/// `hookSpecificOutput.modifiedInput` where Claude says `updatedInput`. Decisions, context and
+/// `{}` pass through untouched.
+pub fn codebuddy_output(out: &HookOutput) -> Vec<u8> {
+    let Ok(mut v) = serde_json::to_value(out) else {
+        return b"{}".to_vec();
+    };
+    if let Some(h) = v
+        .get_mut("hookSpecificOutput")
+        .and_then(serde_json::Value::as_object_mut)
+        && let Some(input) = h.remove("updatedInput")
+    {
+        h.insert("modifiedInput".into(), input);
+    }
+    serde_json::to_vec(&v).unwrap_or_else(|_| b"{}".to_vec())
 }
 
 /// Gemini CLI (https://geminicli.com/docs/hooks/reference/, fetched 2026-09-22) reads a
@@ -571,6 +619,15 @@ pub fn dispatch(stdin: &[u8], input: &HookInput, cx: &Runtime) -> Vec<u8> {
                     None,
                 );
             }
+            // T289.5: a worktree a post-create script left without an agent goes to the first
+            // session that starts inside it.
+            if let (Some(id), Some(cwd)) = (agent.as_deref(), cx.cwd.as_deref()) {
+                let _ = crate::worktree::claim::complete_pending(
+                    &cx.store,
+                    std::path::Path::new(cwd),
+                    id,
+                );
+            }
             // T428: memory recall, the handoff and `inject` each record a measurement; one
             // commit for the three instead of one lock wait each.
             cx.defer_measurements();
@@ -669,18 +726,16 @@ fn defer_session_end(cfg: &Config, event: &str, stdin: &[u8]) {
     let Ok(exe) = std::env::current_exe() else {
         return;
     };
-    let mut cmd = std::process::Command::new(exe);
-    cmd.args(["hook", "SessionEnd"])
+    let mut deferred = ProgressRunner::quiet(exe, ["hook", "SessionEnd"])
+        .output(Output::Detached)
         .env(DEFERRED_ENV, "1")
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null());
+        .stdin(std::process::Stdio::piped());
     if !cfg.home.as_os_str().is_empty() {
-        cmd.env("RTOK_HOME", &cfg.home);
+        deferred = deferred.env("RTOK_HOME", &cfg.home);
     }
     // As in `otel::export::spawn_child`: the child must not hold the agent's pipes open.
     rtok_sys::stop_inheriting_own_stdio();
-    if let Ok(mut child) = cmd.spawn()
+    if let Ok(mut child) = deferred.spawn()
         && let Some(mut pipe) = child.stdin.take()
     {
         // A SessionEnd payload is a few hundred bytes, well under a pipe buffer: no block.
@@ -1202,12 +1257,197 @@ mod tests {
         );
     }
 
+    #[test]
+    fn codebuddy_output_renames_updated_input_and_passes_the_rest() {
+        let json = |b: Vec<u8>| serde_json::from_slice::<serde_json::Value>(&b).unwrap();
+        assert_eq!(
+            json(codebuddy_output(&HookOutput::default())),
+            serde_json::json!({})
+        );
+        let rewrite = pre_out(
+            None,
+            None,
+            Some(serde_json::json!({"command": "rtok run -- ls"})),
+        );
+        let v = json(codebuddy_output(&rewrite));
+        assert_eq!(
+            v,
+            serde_json::json!({"hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "modifiedInput": {"command": "rtok run -- ls"}
+            }})
+        );
+        assert!(v["hookSpecificOutput"].get("updatedInput").is_none());
+        let deny = pre_out(Some("deny"), Some("guard"), None);
+        assert_eq!(
+            json(codebuddy_output(&deny)),
+            serde_json::to_value(&deny).unwrap()
+        );
+        let post = post_out("ctx");
+        assert_eq!(
+            json(codebuddy_output(&post)),
+            serde_json::to_value(&post).unwrap()
+        );
+    }
+
     fn cline_cfg(dir: &std::path::Path) -> Config {
         let mut cfg = Config::default();
         cfg.hook.host = "cline".into();
         cfg.core.db_path = dir.join("rtok.db");
         cfg.core.archive_dir = dir.join("archive");
         cfg
+    }
+
+    #[test]
+    fn codebuddy_pre_tool_use_rewrites_into_modified_input() {
+        let dir = unique_dir("rtok-hook-codebuddy");
+        let mut cfg = cline_cfg(&dir);
+        cfg.hook.host = "codebuddy".into();
+        let stdin = serde_json::to_vec(&serde_json::json!({
+            "session_id": "cb-1",
+            "cwd": "/tmp",
+            "hook_event_name": "PreToolUse",
+            "tool_name": "Bash",
+            "tool_input": {"command": "git status"}
+        }))
+        .unwrap();
+        let out = dispatch_owned_strict(&stdin, "PreToolUse", &cfg).unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&out).unwrap();
+        let h = &v["hookSpecificOutput"];
+        assert!(
+            h["modifiedInput"]["command"]
+                .as_str()
+                .unwrap()
+                .starts_with("rtok run"),
+            "{v}"
+        );
+        assert!(h.get("updatedInput").is_none(), "{v}");
+    }
+
+    #[test]
+    fn codex_output_allows_a_rewrite_and_drops_cursor_keys() {
+        let json = |b: Vec<u8>| serde_json::from_slice::<serde_json::Value>(&b).unwrap();
+        assert_eq!(
+            json(codex_output(&HookOutput::default())),
+            serde_json::json!({})
+        );
+        let rewrite = pre_out(
+            None,
+            Some("rtok"),
+            Some(serde_json::json!({"command": "rtok run -- ls"})),
+        );
+        assert_eq!(
+            json(codex_output(&rewrite)),
+            serde_json::json!({"hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "permissionDecision": "allow",
+                "permissionDecisionReason": "rtok",
+                "updatedInput": {"command": "rtok run -- ls"}
+            }})
+        );
+        // A denial and plain context are Claude's shape already.
+        for out in [pre_out(Some("deny"), Some("guard"), None), post_out("ctx")] {
+            assert_eq!(
+                json(codex_output(&out)),
+                serde_json::to_value(&out).unwrap()
+            );
+        }
+        let mut mcp = post_out("ctx");
+        mcp.hook_specific_output
+            .as_mut()
+            .unwrap()
+            .updated_mcp_tool_output = Some(serde_json::json!({"content": []}));
+        assert_eq!(
+            json(codex_output(&mcp)),
+            serde_json::to_value(post_out("ctx")).unwrap()
+        );
+    }
+
+    /// The payloads Codex sent live (`tests/fixtures/hooks/codex/`, `research.md` section 40)
+    /// parse, reach the Bash plugins and come back in the shape Codex reads.
+    #[test]
+    fn codex_live_payloads_dispatch_under_the_codex_host() {
+        let dir = unique_dir("rtok-hook-codex");
+        let mut cfg = cline_cfg(&dir);
+        cfg.hook.host = "codex".into();
+        let fixture = |name: &str| {
+            std::fs::read(format!(
+                "{}/tests/fixtures/hooks/codex/{name}.json",
+                env!("CARGO_MANIFEST_DIR")
+            ))
+            .unwrap()
+        };
+        let mut pre: serde_json::Value = serde_json::from_slice(&fixture("pre_tool_bash")).unwrap();
+        pre["tool_input"]["command"] = "git status".into();
+        let out =
+            dispatch_owned_strict(&serde_json::to_vec(&pre).unwrap(), "PreToolUse", &cfg).unwrap();
+        let h = &serde_json::from_slice::<serde_json::Value>(&out).unwrap()["hookSpecificOutput"];
+        assert_eq!(h["permissionDecision"], "allow", "{h}");
+        assert!(
+            h["updatedInput"]["command"]
+                .as_str()
+                .unwrap()
+                .starts_with("rtok run"),
+            "{h}"
+        );
+        for (event, name) in [
+            ("PreToolUse", "pre_tool_bash"),
+            ("PostToolUse", "post_tool_bash"),
+            ("PreToolUse", "pre_tool_spawn_agent"),
+        ] {
+            let out = dispatch_owned_strict(&fixture(name), event, &cfg).unwrap();
+            assert!(
+                serde_json::from_slice::<serde_json::Value>(&out)
+                    .unwrap()
+                    .is_object(),
+                "{name}"
+            );
+        }
+        let store = crate::store::Store::open(&cfg.core.db_path).unwrap();
+        let session = store
+            .session_row("019ad000-0000-7000-8000-000000000001")
+            .unwrap()
+            .expect("the hook run left a session row");
+        assert_eq!(session.0.as_deref(), Some("codex"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// T262.3: an `apply_patch` call lands in the ledger, and the `SubagentStart` that follows
+    /// answers with a brief naming the file, in the shape Codex reads as developer context.
+    #[test]
+    fn codex_subagent_start_brief_lists_the_files_a_patch_touched() {
+        let dir = unique_dir("rtok-hook-codex-brief");
+        let mut cfg = cline_cfg(&dir);
+        cfg.hook.host = "codex".into();
+        let fixture = |name: &str| -> serde_json::Value {
+            let path = format!(
+                "{}/tests/fixtures/hooks/codex/{name}.json",
+                env!("CARGO_MANIFEST_DIR")
+            );
+            serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap()
+        };
+        let mut pre = fixture("pre_tool_bash");
+        pre["tool_name"] = "apply_patch".into();
+        pre["tool_input"] = serde_json::json!({
+            "command": "*** Begin Patch\n*** Update File: src/lib.rs\n@@\n-a\n+b\n*** End Patch\n"
+        });
+        let out =
+            dispatch_owned_strict(&serde_json::to_vec(&pre).unwrap(), "PreToolUse", &cfg).unwrap();
+        assert_eq!(out, b"{}", "a patch call is never rewritten");
+
+        let start = serde_json::to_vec(&fixture("subagent_start")).unwrap();
+        let out = dispatch_owned_strict(&start, "SubagentStart", &cfg).unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&out).unwrap();
+        let h = &v["hookSpecificOutput"];
+        assert_eq!(h["hookEventName"], "SubagentStart", "{v}");
+        assert!(
+            h["additionalContext"]
+                .as_str()
+                .unwrap()
+                .contains("/home/user/project/src/lib.rs"),
+            "{v}"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -1945,6 +2185,30 @@ mod tests {
         assert_eq!(child_row.host_session_id, "agent-sess-2");
     }
 
+    /// T613: the first event a store sees of a session may be a sub-agent's; the main
+    /// window's event after it must find the sub-agent already nested under it.
+    #[test]
+    fn a_sub_agent_event_before_the_main_one_still_nests_under_the_main_row() {
+        let (v, stdin, input, cx) = agent_fixture("agent-sess-late-main");
+        let mut child = v.clone();
+        child["agent_id"] = serde_json::Value::String("sub-1".into());
+        let child_stdin = serde_json::to_vec(&child).unwrap();
+        let child_input: HookInput = serde_json::from_slice(&child_stdin).unwrap();
+        let _ = dispatch(&child_stdin, &child_input, &cx);
+        let _ = dispatch(&stdin, &input, &cx);
+        let _ = dispatch(&child_stdin, &child_input, &cx);
+
+        let host_id = cx.host_id().unwrap();
+        let main = cx.store.main_agent(host_id, &cx.session).unwrap().unwrap();
+        let kids = cx.store.agent_children(&main).unwrap();
+        assert_eq!(kids.len(), 1, "{kids:?}");
+        let rows = cx
+            .store
+            .agents_of_sessions(std::slice::from_ref(&cx.session))
+            .unwrap();
+        assert_eq!(rows.iter().filter(|r| r.parent_id.is_none()).count(), 1);
+    }
+
     #[test]
     fn session_end_ends_the_agent_row() {
         let (v, stdin, input, cx) = agent_fixture("agent-sess-3");
@@ -2094,10 +2358,19 @@ mod tests {
         assert_eq!(out, out2, "byte-stable across two runs of the same session");
     }
 
-    /// T442: SessionStart names the claim in one line and records no measurement of its own.
-    #[test]
-    fn session_start_names_the_claimed_task() {
-        let dir = std::env::temp_dir().join(format!("rtok-claim-hook-{}", std::process::id()));
+    /// A checkout with an origin, a SessionStart event inside it, and the agent that event
+    /// registers.
+    fn claim_fixture(
+        name: &str,
+    ) -> (
+        std::path::PathBuf,
+        Vec<u8>,
+        HookInput,
+        Runtime,
+        String,
+        String,
+    ) {
+        let dir = std::env::temp_dir().join(format!("rtok-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(dir.join(".git")).unwrap();
         std::fs::write(
@@ -2105,7 +2378,7 @@ mod tests {
             "[remote \"origin\"]\n\turl = https://github.com/me/claim-hook.git\n",
         )
         .unwrap();
-        let (stdin, input, mut cx) = session_start_fixture("t442-claim");
+        let (stdin, input, mut cx) = session_start_fixture(name);
         cx.cwd = Some(dir.display().to_string());
         let host = cx.host_id().unwrap();
         let agent = cx
@@ -2113,6 +2386,13 @@ mod tests {
             .register_agent(host, &cx.session, None, cx.cwd.as_deref(), None)
             .unwrap();
         let key = crate::project::project_key(&dir).unwrap();
+        (dir, stdin, input, cx, agent, key)
+    }
+
+    /// T442: SessionStart names the claim in one line and records no measurement of its own.
+    #[test]
+    fn session_start_names_the_claimed_task() {
+        let (dir, stdin, input, cx, agent, key) = claim_fixture("t442-claim");
         cx.store
             .upsert_task_claim(&key, "R4", &agent, "Ship it\nmore")
             .unwrap();
@@ -2124,6 +2404,24 @@ mod tests {
         );
         assert!(!additional_context(&out).contains("more"));
         assert!(cx.store.list_measurements("task_claim").unwrap().is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// T615: claims made in one second name the one made last, and a re-claim moves it to
+    /// the front with its current title.
+    #[test]
+    fn session_start_names_the_latest_claim_made_within_one_second() {
+        let (dir, stdin, input, cx, agent, key) = claim_fixture("t615-claim");
+        let claim =
+            |id: &str, title: &str| cx.store.upsert_task_claim(&key, id, &agent, title).unwrap();
+        claim("R1", "first");
+        claim("R2", "second");
+        let ctx = additional_context(&dispatch(&stdin, &input, &cx));
+        assert!(ctx.contains("task R2 second"), "{ctx}");
+        claim("R1", "first, retitled\nmore");
+        let ctx = additional_context(&dispatch(&stdin, &input, &cx));
+        assert!(ctx.contains("task R1 first, retitled"), "{ctx}");
+        assert!(!ctx.contains("task R2"), "{ctx}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

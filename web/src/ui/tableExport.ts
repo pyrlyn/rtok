@@ -67,9 +67,9 @@ export function serialize(table: ExportTable, format: ExportFormat): string {
   return format === "csv" ? toCsv(table) : toJson(table);
 }
 
-/** Saves text as a file through a throwaway object URL; nothing leaves the browser. */
-export function download(filename: string, mime: string, text: string): void {
-  const url = URL.createObjectURL(new Blob([text], { type: mime }));
+/** Saves text or bytes as a file through a throwaway object URL; nothing leaves the browser. */
+export function download(filename: string, mime: string, content: BlobPart): void {
+  const url = URL.createObjectURL(new Blob([content], { type: mime }));
   const a = document.createElement("a");
   a.href = url;
   a.download = filename;

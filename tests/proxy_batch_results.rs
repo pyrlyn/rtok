@@ -254,3 +254,57 @@ async fn create_and_poll_calls_are_tagged_but_carry_no_usage() {
     assert!(state.store.usage_rows(SESSION).unwrap().is_empty());
     task.abort();
 }
+
+/// Wait until `n` calls of `kind` are recorded, then let the usage writes behind them finish.
+async fn settle_calls(store: &Store, kind: &str, n: i64) {
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+    while store.count_kind(kind).expect("count") < n {
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "fewer than {n} {kind} rows"
+        );
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    tokio::time::sleep(Duration::from_millis(300)).await;
+}
+
+#[tokio::test]
+async fn downloading_the_same_results_twice_counts_them_once() {
+    let up = MockServer::start();
+    serve(
+        &up,
+        "/v1/messages/batches/msgbatch_1/results",
+        200,
+        ANTHROPIC_JSONL,
+    );
+    serve(
+        &up,
+        "/v1/messages/batches/msgbatch_2/results",
+        200,
+        ANTHROPIC_JSONL,
+    );
+    serve(&up, "/v1/files/file_1/content", 200, OPENAI_JSONL);
+    let (addr, state, task) = proxy_server("batch-results-replay", |cfg| {
+        cfg.proxy.openai_upstream = up.base_url();
+        cfg.proxy.upstream = up.base_url();
+        cfg.proxy.batch.parse_results = true;
+    })
+    .await;
+
+    for path in [
+        "/v1/messages/batches/msgbatch_1/results",
+        "/v1/files/file_1/content",
+    ] {
+        fetch(&addr, path).await;
+        fetch(&addr, path).await;
+    }
+    settle_calls(&state.store, "api_request:batch", 4).await;
+    // Two succeeded Anthropic lines and two usable OpenAI lines, however often they are fetched.
+    assert_eq!(usage_rows(&state.store, 4).await.len(), 4);
+
+    // The same bytes under another batch id are another job's results, not a replay.
+    fetch(&addr, "/v1/messages/batches/msgbatch_2/results").await;
+    settle_calls(&state.store, "api_request:batch", 5).await;
+    assert_eq!(usage_rows(&state.store, 6).await.len(), 6);
+    task.abort();
+}

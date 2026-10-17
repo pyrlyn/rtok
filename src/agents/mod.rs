@@ -13,20 +13,29 @@
 //! `rtok agents list` and `rtok doctor` read the same files back through the same contract.
 
 pub mod aider;
+pub mod amp;
 pub mod antigravity;
+pub mod augment;
 pub mod claude;
 pub mod cline;
+pub mod codebuddy;
 pub mod codewhale;
 pub mod codex;
 pub mod command;
 pub mod commandcode;
+#[path = "continue/mod.rs"]
+pub mod continue_dev;
 pub mod copilot;
+pub mod crush;
 pub mod cursor;
 pub mod devin;
+pub mod droid;
 pub mod gemini;
+pub mod goose;
 pub mod grok;
 pub mod hook_events;
 pub mod jsonc;
+pub mod junie;
 pub mod junk;
 pub mod junk_cache;
 pub mod junk_clear;
@@ -39,24 +48,31 @@ pub mod junk_web;
 pub mod junk_worktrees;
 pub mod kilo;
 pub mod kimi;
+pub mod kiro;
 pub mod link;
 pub(crate) mod mcp;
 pub mod mimo;
 pub mod omp;
 pub mod opencode;
+pub mod openhands;
 mod outdated;
 pub mod pi;
 pub mod plugin;
 pub(crate) mod plugin_install;
 pub(crate) mod plugin_version;
+pub mod post_create;
 pub(crate) mod proxy_env;
 pub mod qwen;
+pub mod reasonix;
 pub mod restart;
 pub mod roo;
 pub mod skill;
+pub mod task_list;
 pub mod usage;
 pub mod vscode;
+pub mod warp;
 pub mod windsurf;
+mod yaml_text;
 pub mod zcode;
 pub mod zed;
 
@@ -65,6 +81,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 use rtok_agent_sdk::NO_CHANGES;
 use rtok_plugin_sdk::Surface;
+use rtok_sys::proc::{Batch, ProgressRunner, Unit};
 use serde_json::json;
 use toml_edit::DocumentMut;
 
@@ -103,7 +120,19 @@ pub fn host(id: &str) -> Option<&'static dyn Agent> {
         "antigravity" => Some(&antigravity::Antigravity),
         "devin" => Some(&devin::Devin),
         "roo" => Some(&roo::Roo),
+        "junie" => Some(&junie::Junie),
+        "crush" => Some(&crush::Crush),
         "qwen" => Some(&qwen::Qwen),
+        "codebuddy" => Some(&codebuddy::Codebuddy),
+        "goose" => Some(&goose::Goose),
+        "droid" => Some(&droid::Droid),
+        "kiro" => Some(&kiro::Kiro),
+        "amp" => Some(&amp::Amp),
+        "warp" => Some(&warp::Warp),
+        "continue" => Some(&continue_dev::Continue),
+        "openhands" => Some(&openhands::OpenHands),
+        "augment" => Some(&augment::Augment),
+        "reasonix" => Some(&reasonix::Reasonix),
         _ => None,
     }
 }
@@ -183,6 +212,59 @@ impl Mode {
         }
     }
 }
+
+/// The `id`/`variants`/`readme` head of a host's `impl Agent`: `$id`, the folder's `VARIANTS`
+/// static and its `README.md`. One body (T663) so a new host does not copy the same nine lines.
+/// `include_str!` resolves against the invoking `mod.rs`, so each host reads its own README.
+macro_rules! agent_identity {
+    ($id:expr) => {
+        fn id(&self) -> &'static str {
+            $id
+        }
+
+        fn variants(&self) -> &'static [$crate::agents::Variant] {
+            &VARIANTS
+        }
+
+        fn readme(&self) -> &'static str {
+            include_str!("README.md")
+        }
+    };
+}
+pub(crate) use agent_identity;
+
+/// The `files`/`installed`/`apply` tail of an MCP-only host whose one file is `$path(cfg)` and
+/// whose entry `$register`/`$unregister` write: [`installed_mcp_only`] and [`apply_mcp_only`]
+/// behind the trait. One body (T663) instead of each such host's copy.
+macro_rules! mcp_only_file {
+    ($path:path, $register:path, $unregister:path) => {
+        fn files(
+            &self,
+            cfg: &$crate::config::Config,
+            _kind: $crate::agents::Kind,
+        ) -> Vec<std::path::PathBuf> {
+            vec![$path(cfg)]
+        }
+
+        fn installed(
+            &self,
+            cfg: &$crate::config::Config,
+            _kind: $crate::agents::Kind,
+        ) -> Vec<&'static str> {
+            $crate::agents::installed_mcp_only(&$path(cfg))
+        }
+
+        fn apply(
+            &self,
+            cfg: &$crate::config::Config,
+            _kind: $crate::agents::Kind,
+            mode: $crate::agents::Mode,
+        ) -> anyhow::Result<Vec<String>> {
+            $crate::agents::apply_mcp_only(cfg, mode, $register, $unregister)
+        }
+    };
+}
+pub(crate) use mcp_only_file;
 
 /// The contract every host folder implements. The generic [`run`] loop, [`list`] and
 /// `rtok doctor` know nothing else about a host.
@@ -379,25 +461,18 @@ fn host_program(bin: &str) -> Option<std::ffi::OsString> {
     find_on_path(bin).map(PathBuf::into_os_string)
 }
 
-/// Spawn a host CLI (`claude`, `codex`, …) by name. Windows CLIs installed through npm ship
-/// as a `.cmd`/`.bat`/`.ps1` shim, not a `.exe` — `Command::new` only ever auto-appends `.exe`
-/// (Win32's `CreateProcess`, never `PATHEXT`), so a bare spawn silently fails to find a real,
-/// on-PATH shim. Routing through `cmd /C` there reuses the shell's own PATH + `PATHEXT`
-/// search, which does try `.cmd`/`.bat` (T139).
-pub(crate) fn spawn_cli(bin: &std::ffi::OsStr) -> std::process::Command {
-    if cfg!(windows) {
-        let mut cmd = std::process::Command::new("cmd");
-        cmd.arg("/C").arg(bin);
-        cmd
-    } else {
-        std::process::Command::new(bin)
-    }
+/// What the spinner says while `<bin> <args>` runs: the CLI and its subcommand, not the
+/// paths and ids after it.
+fn cli_label(bin: &str, args: &[&str]) -> String {
+    let verb: Vec<&str> = args.iter().take(2).copied().collect();
+    format!("running {bin} {}…", verb.join(" "))
 }
 
 /// Run one `<bin> <args>` call with stdin closed, optionally overriding one environment
 /// variable (a config-dir redirect for a non-default settings path). Returns the first
 /// stderr line — or the spawn error itself when the binary is not found — as the failure
-/// text a host's plugin offer folds into "`<bin>` failed: …".
+/// text a host's plugin offer folds into "`<bin>` failed: …". Windows npm shims go through
+/// `cmd.exe` (T139).
 pub(crate) fn run_cli(
     bin: &str,
     args: &[&str],
@@ -406,12 +481,11 @@ pub(crate) fn run_cli(
     let Some(program) = host_program(bin) else {
         return Err(format!("{bin}: not found"));
     };
-    let mut cmd = spawn_cli(&program);
-    cmd.args(args).stdin(std::process::Stdio::null());
+    let mut run = ProgressRunner::new(&cli_label(bin, args), program, args).windows_shim();
     if let Some((key, val)) = env {
-        cmd.env(key, val);
+        run = run.env(key, val);
     }
-    match cmd.output() {
+    match run.run() {
         Ok(o) if o.status.success() => Ok(()),
         Ok(o) => Err(String::from_utf8_lossy(&o.stderr)
             .lines()
@@ -445,9 +519,11 @@ pub fn app_version(v: &Variant) -> String {
         let Some(program) = host_program(bin) else {
             continue;
         };
-        let mut cmd = version_command(&program);
-        cmd.arg("--version");
-        let out = crate::proc::capture(cmd, Some(VERSION_PROBE_LIMIT));
+        // Quiet: `agents list` already draws one loader over every probe.
+        let out = ProgressRunner::quiet(program, ["--version"])
+            .windows_shim()
+            .timeout(VERSION_PROBE_LIMIT)
+            .run();
         let Ok(out) = out else { continue };
         let mut s = String::from_utf8_lossy(&out.stdout).into_owned();
         if s.trim().is_empty() {
@@ -593,6 +669,14 @@ impl ModuleState {
         }
     }
 
+    fn short(self) -> &'static str {
+        match self {
+            ModuleState::Installed => "yes",
+            ModuleState::NotInstalled => "no",
+            ModuleState::NotSupported => "n/a",
+        }
+    }
+
     fn word(self) -> &'static str {
         match self {
             ModuleState::Installed => "installed",
@@ -634,6 +718,15 @@ pub fn module_lines(rows: &[ModuleRow], indent: &str, console: bool) -> String {
             row.state.line(indent, &text, console)
         })
         .collect()
+}
+
+/// `hooks=yes mcp=no proxy=n/a plugin=no`: [`module_lines`] on one line without the notes.
+/// The notes repeat across every host variant and are what outgrew the AI report (T664).
+pub fn module_summary(rows: &[ModuleRow]) -> String {
+    rows.iter()
+        .map(|row| format!("{}={}", row.name, row.state.short()))
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// The modules an install should leave behind: every `Yes` module (`mcp` only with
@@ -852,8 +945,27 @@ pub fn block(agent: &dyn Agent, v: &Variant, cfg: &Config, outcome: Outcome) -> 
             .map(String::as_str)
             .collect();
         if !changed.is_empty() {
-            out.push_str(&crate::render::paint(&changed.join("\n")));
-            out.push('\n');
+            let text = changed.join("\n");
+            let shown = if cfg.setup.dry_run {
+                // The step lines carry no path, so the stat row is the host's one config file,
+                // or the host itself when it writes several.
+                let at = match files.as_slice() {
+                    [one] => one.clone(),
+                    _ => std::path::PathBuf::from(format!("{}: {}", v.kind.label(), v.name)),
+                };
+                let shown = if crate::stat_preview::on() {
+                    String::new()
+                } else {
+                    change_preview::paint(&text)
+                };
+                crate::stat_preview::show(&[(at, text)], &shown)
+            } else {
+                change_preview::paint(&text)
+            };
+            if !shown.is_empty() {
+                out.push_str(&shown);
+                out.push('\n');
+            }
         }
     }
     // T278: the `mcp` row becomes one line per surface wherever the host has an entry.
@@ -937,7 +1049,10 @@ pub fn run(cfg: &mut Config, req: &Request) -> Result<String> {
         }
         cfg.setup.backup = false;
     }
-    let (blocks, changed) = apply_all(cfg, req, &agents, want)?;
+    let mut bar = host_bar(agents.len());
+    let applied = apply_all(cfg, req, &agents, want, Some(&mut bar));
+    bar.finish();
+    let (blocks, changed) = applied?;
     if changed {
         // Pruned only now: a no-change run deletes its copies, which would cost a generation.
         for bak in &taken {
@@ -962,20 +1077,32 @@ pub(crate) fn would_change(cfg: &Config, agent: &'static dyn Agent, req: &Reques
     dry.setup.dry_run = true;
     dry.setup.backup = false;
     let want = |kind: Kind| req.mode == Mode::Remove || wants(kind, req.cli, req.desktop, req.all);
-    let (_, changed) = apply_all(&dry, req, &[agent], want)?;
+    let (_, changed) = apply_all(&dry, req, &[agent], want, None)?;
     Ok(changed)
 }
 
-/// The blocks of every wanted variant, and whether any step changed a file.
+/// The bar over the hosts of one run (T436.4), drawn on a terminal only. A plugin question
+/// hides it while it waits for the answer (`set_prompt_pause`, T276.3), so it no longer has to
+/// stay off for every run that may ask (T81).
+fn host_bar(hosts: usize) -> Batch {
+    ProgressRunner::batch("updating hosts…", hosts as u64, Unit::Items)
+}
+
+/// The blocks of every wanted variant, and whether any step changed a file. `bar` takes one
+/// step per host.
 pub(crate) fn apply_all(
     cfg: &Config,
     req: &Request,
     agents: &[&'static dyn Agent],
     want: impl Fn(Kind) -> bool,
+    mut bar: Option<&mut Batch>,
 ) -> Result<(String, bool)> {
     let mut out = String::new();
     let mut changed = false;
     for &a in agents {
+        if let Some(bar) = bar.as_deref_mut() {
+            bar.step(a.id());
+        }
         let mut done: Option<&'static str> = None;
         let mut any = false;
         for v in a.variants().iter().filter(|v| want(v.kind)) {
@@ -1216,7 +1343,7 @@ pub(crate) fn register_local_mcp(
     )
 }
 
-fn local_mcp_entry(cmd: &str, host: &'static str) -> serde_json::Value {
+pub(crate) fn local_mcp_entry(cmd: &str, host: &'static str) -> serde_json::Value {
     let [sub, flag, id] = mcp_args(host);
     json!({"type": "local", "command": [cmd, sub, flag, id], "enabled": true})
 }
@@ -1251,11 +1378,22 @@ pub(crate) fn register_stdio_mcp(
     path: &std::path::Path,
     host: &'static str,
 ) -> Result<String> {
+    register_stdio_mcp_in(cfg, path, "mcpServers", host)
+}
+
+/// [`register_stdio_mcp`] under another top-level key, for a host that reads the same
+/// `{command, args}` entry from a differently named object (Crush: `mcp`).
+pub(crate) fn register_stdio_mcp_in(
+    cfg: &Config,
+    path: &std::path::Path,
+    key: &str,
+    host: &'static str,
+) -> Result<String> {
     let cmd = rtok_command();
     rtok_agent_sdk::register_server(
         &apply(cfg),
         path,
-        "mcpServers",
+        key,
         "rtok",
         stdio_mcp_entry(&cmd, host),
         &mcp_summary(&cmd, host),
@@ -1272,13 +1410,17 @@ pub(crate) fn unregister_stdio_mcp(
     path: &std::path::Path,
     host: &'static str,
 ) -> Result<String> {
-    unregister_ours(
-        cfg,
-        path,
-        "mcpServers",
-        "rtok",
-        &stdio_mcp_entry("rtok", host),
-    )
+    unregister_stdio_mcp_in(cfg, path, "mcpServers", host)
+}
+
+/// [`register_stdio_mcp_in`]'s remove.
+pub(crate) fn unregister_stdio_mcp_in(
+    cfg: &Config,
+    path: &std::path::Path,
+    key: &str,
+    host: &'static str,
+) -> Result<String> {
+    unregister_ours(cfg, path, key, "rtok", &stdio_mcp_entry("rtok", host))
 }
 
 /// `Agent::installed` for a host whose only module is `mcp`: present iff `path` mentions
@@ -1495,6 +1637,22 @@ pub(crate) fn anthropic_proxy_url(cfg: &crate::config::Config) -> String {
     format!("http://{}:{}", cfg.proxy.bind, cfg.proxy.port)
 }
 
+/// The port of an `http(s)` URL whose *authority* is a loopback host (`localhost`, `127.0.0.0/8`,
+/// `[::1]`); `None` for anything else. Ownership of a proxy URL is read from the parsed
+/// authority, never from loopback-looking text in the path, query or userinfo of a foreign URL.
+pub(crate) fn loopback_port(value: &str) -> Option<u16> {
+    let u = url::Url::parse(value.trim()).ok()?;
+    if !matches!(u.scheme(), "http" | "https") {
+        return None;
+    }
+    let local = match u.host()? {
+        url::Host::Domain(d) => d.eq_ignore_ascii_case("localhost"),
+        url::Host::Ipv4(a) => a.is_loopback(),
+        url::Host::Ipv6(a) => a.is_loopback(),
+    };
+    local.then(|| u.port_or_known_default()).flatten()
+}
+
 pub(crate) fn openai_proxy_url(cfg: &crate::config::Config) -> String {
     format!("http://{}:{}/v1", cfg.proxy.bind, cfg.proxy.port)
 }
@@ -1536,7 +1694,7 @@ pub(crate) fn resolve_rtok_command(
         return "rtok".to_string();
     }
     if let Some(exe) = exe {
-        return dunce::simplified(exe).to_string_lossy().into_owned();
+        return fs_kit::path::simplified(exe).to_string_lossy().into_owned();
     }
     "rtok".to_string()
 }
@@ -1549,28 +1707,6 @@ fn bare_rtok_on_path(path: Option<&std::ffi::OsStr>) -> bool {
 /// No sandbox: the caller passes the `PATH` value, so a test controls it.
 pub(crate) fn bin_on_path(bin: &str, path: Option<&std::ffi::OsStr>) -> bool {
     find_bin(bin, path, None, &pathext_list()).is_some()
-}
-
-/// How to run `program --version`. A bare name or a `.cmd`/`.bat` on Windows goes through
-/// `cmd /C`, because `CreateProcess` only auto-appends `.exe` and cannot execute a batch shim.
-fn version_command(program: &std::ffi::OsStr) -> std::process::Command {
-    if shell_shim(program) {
-        spawn_cli(program)
-    } else {
-        std::process::Command::new(program)
-    }
-}
-
-fn shell_shim(program: &std::ffi::OsStr) -> bool {
-    if !cfg!(windows) {
-        return false;
-    }
-    let path = Path::new(program);
-    let bare = !path.is_absolute() && path.components().nth(1).is_none();
-    let batch = path
-        .extension()
-        .is_some_and(|e| e.eq_ignore_ascii_case("cmd") || e.eq_ignore_ascii_case("bat"));
-    bare || batch
 }
 
 /// What [`ensure_hook_client_link`] did (T357); the caller only needs it for tests and doctor.
@@ -1621,10 +1757,10 @@ fn link_hook_client(path: Option<&std::ffi::OsStr>, exe: &Path) -> LinkOutcome {
     };
     // Only the `rtok` that IS this executable: a dev build or a test binary must never link
     // into the `PATH` of a different install.
-    let Ok(exe) = std::fs::canonicalize(exe) else {
+    let Ok(exe) = fs_kit::path::canonicalize(exe) else {
         return LinkOutcome::Nothing;
     };
-    if std::fs::canonicalize(dir.join("rtok")).ok().as_deref() != Some(exe.as_path()) {
+    if fs_kit::path::canonicalize(dir.join("rtok")).ok().as_deref() != Some(exe.as_path()) {
         return LinkOutcome::Nothing;
     }
     let link = dir.join(NAME);
@@ -1644,7 +1780,7 @@ fn link_hook_client(path: Option<&std::ffi::OsStr>, exe: &Path) -> LinkOutcome {
                 return LinkOutcome::Failed;
             };
             let target = dir.join(target);
-            if std::fs::canonicalize(&target).is_ok_and(|t| t == sibling) {
+            if fs_kit::path::canonicalize(&target).is_ok_and(|t| t == sibling) {
                 return LinkOutcome::Current;
             }
             let dangling = !target.exists();
@@ -1686,7 +1822,8 @@ pub(crate) use crate::names::cmd_stem;
 /// True when `bin` names the rtok binary (bare, `.exe`, an absolute path, or the running
 /// executable itself whatever it is called — `cargo test` names it `rtok-<hash>`).
 pub(crate) fn is_rtok_bin(bin: &str) -> bool {
-    if std::env::current_exe().is_ok_and(|e| dunce::simplified(&e).to_string_lossy() == bin) {
+    if std::env::current_exe().is_ok_and(|e| fs_kit::path::simplified(&e).to_string_lossy() == bin)
+    {
         return true;
     }
     cmd_stem(bin).eq_ignore_ascii_case("rtok")
@@ -1796,7 +1933,7 @@ pub(crate) fn resolve_plugin_src(
         return p.clone();
     }
 
-    let real = exe.and_then(|e| dunce::canonicalize(e).ok());
+    let real = exe.and_then(|e| fs_kit::path::canonicalize(e).ok());
     if let Some(p) = real
         .as_deref()
         .and_then(Path::parent)
@@ -1844,6 +1981,15 @@ fn install_prefix(exe: &Path) -> Option<&Path> {
         .flatten()
 }
 
+/// Sort key that puts a `0.10.0` or `v0.10.0` directory after `0.9.0` (SemVer precedence, not
+/// name order). A name that does not parse sorts before every version and falls back to name
+/// order among its kind, so the choice stays deterministic. The newest is last.
+pub(crate) fn version_dir_key(dir: &std::path::Path) -> (Option<semver::Version>, String) {
+    let name = dir.file_name().unwrap_or_default().to_string_lossy();
+    let ver = semver::Version::parse(name.strip_prefix('v').unwrap_or(&name)).ok();
+    (ver, name.into_owned())
+}
+
 /// ketch installs the full package under `<root>/store/rtok/vX.Y.Z/` and only
 /// copies the binary into `<root>/bin/`. Prefer the version that matches this
 /// build; otherwise take the newest store folder that still has `rel`.
@@ -1863,14 +2009,7 @@ fn ketch_store_plugin(
         .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
         .map(|e| e.path())
         .collect();
-    // Newest last: by semver (`v0.1.10` > `v0.1.9`); a name that does not parse sorts before
-    // every version and falls back to name order among its kind.
-    let key = |p: &std::path::PathBuf| {
-        let name = p.file_name().unwrap_or_default().to_string_lossy();
-        let ver = semver::Version::parse(name.strip_prefix('v').unwrap_or(&name)).ok();
-        (ver, name.into_owned())
-    };
-    entries.sort_by_cached_key(key);
+    entries.sort_by_cached_key(|p| version_dir_key(p));
     for dir in entries.into_iter().rev() {
         let candidate = join_rel(&dir, rel);
         if candidate.exists() {
@@ -1961,6 +2100,24 @@ pub(crate) fn assert_stdio_mcp_roundtrip(
     let root: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
     assert!(root["mcpServers"]["rtok"].is_null(), "{root}");
     assert_eq!(root["mcpServers"]["foreign"]["command"], "x");
+}
+
+/// Shared assertion for an MCP-only host driven through [`Agent::apply`]: install reports
+/// `<key>.rtok`, a second install and a second remove change nothing, the first remove drops
+/// it. One body (T663) instead of every MCP-only host's copy.
+#[cfg(test)]
+pub(crate) fn assert_mcp_only_apply_idempotent(
+    agent: &dyn Agent,
+    cfg: &Config,
+    kind: Kind,
+    key: &str,
+) {
+    let apply = |mode| agent.apply(cfg, kind, mode).unwrap();
+    let lines = apply(Mode::Install);
+    assert!(lines[0].starts_with(&format!("{key}.rtok: ")), "{lines:?}");
+    assert_eq!(apply(Mode::Install), [NO_CHANGES]);
+    assert_eq!(apply(Mode::Remove), [format!("- {key}.rtok")]);
+    assert_eq!(apply(Mode::Remove), [NO_CHANGES]);
 }
 
 #[cfg(test)]
@@ -2101,6 +2258,36 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
+    /// T436.4: the bar over a run takes one step per host, so the person sees which host is
+    /// being written. The bar is hidden here; its position still counts the finished hosts.
+    #[test]
+    fn apply_all_steps_the_bar_once_per_host() {
+        rtok_sys::proc::disable_progress();
+        let dir = std::env::temp_dir().join(format!("rtok-host-bar-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut cfg = Config::default();
+        cfg.setup.dry_run = true;
+        cfg.setup.backup = false;
+        cfg.setup.cursor.hooks_path = dir.join("hooks.json");
+        cfg.setup.codex.config_path = dir.join("config.toml");
+        cfg.setup.opencode.config_path = dir.join("opencode.json");
+        let hosts: Vec<String> = ["cursor", "codex", "opencode"].map(String::from).into();
+        let req = Request {
+            hosts: hosts.clone(),
+            mode: Mode::Install,
+            cli: false,
+            desktop: false,
+            all: true,
+        };
+        let agents = resolve(&hosts).unwrap();
+        let mut bar = ProgressRunner::batch("updating hosts…", 3, Unit::Items);
+        apply_all(&cfg, &req, &agents, |_| true, Some(&mut bar)).unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        // The last host is still running: finished hosts are counted when the next one starts.
+        assert_eq!((bar.position(), bar.total()), (2, 3));
+        bar.finish();
+    }
+
     #[test]
     fn apply_carries_the_setup_flags() {
         let mut cfg = Config::default();
@@ -2177,7 +2364,7 @@ mod tests {
             &root.join("no-such-manifest"),
             "0.1.5",
         );
-        assert_eq!(got, dunce::canonicalize(&plugins).unwrap());
+        assert_eq!(got, fs_kit::path::canonicalize(&plugins).unwrap());
         let _ = fs::remove_dir_all(&root);
     }
 
@@ -2207,8 +2394,8 @@ mod tests {
         std::os::unix::fs::symlink(&exe, &link).unwrap();
         let got = resolve_plugin_src("plugins/cursor", Some(&link), &missing, "0.1.5");
         assert_eq!(
-            dunce::canonicalize(got).unwrap(),
-            dunce::canonicalize(&plugins).unwrap()
+            fs_kit::path::canonicalize(got).unwrap(),
+            fs_kit::path::canonicalize(&plugins).unwrap()
         );
         let _ = fs::remove_dir_all(&root);
     }
@@ -2763,6 +2950,14 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    /// T276.3: the spinner names the CLI and its subcommand, never the paths or ids after it.
+    #[test]
+    fn a_host_cli_call_is_labelled_by_its_subcommand() {
+        let args = ["plugin", "install", "rtok@/some/long/marketplace/path"];
+        assert_eq!(cli_label("claude", &args), "running claude plugin install…");
+        assert_eq!(cli_label("codex", &["--help"]), "running codex --help…");
+    }
+
     /// T280: a `--version` that never answers, with a helper left holding its stdout (what
     /// `cursor` does under a fresh `$HOME`), costs one probe limit and reads as unknown.
     #[cfg(unix)]
@@ -2939,10 +3134,10 @@ mod tests {
     fn hook_client_link_created_then_current() {
         let fx = LinkFx::new("create");
         assert_eq!(fx.run("v1"), LinkOutcome::Linked);
-        let target = std::fs::canonicalize(fx.link()).unwrap();
+        let target = fs_kit::path::canonicalize(fx.link()).unwrap();
         assert_eq!(
             target,
-            std::fs::canonicalize(fx.root.join("pkg/v1/rtok-hook")).unwrap()
+            fs_kit::path::canonicalize(fx.root.join("pkg/v1/rtok-hook")).unwrap()
         );
         assert!(bin_on_path("rtok-hook", Some(&fx.path())));
         assert_eq!(fx.run("v1"), LinkOutcome::Current);
@@ -2971,8 +3166,8 @@ mod tests {
         std::fs::remove_file(fx.bin().join("rtok")).unwrap();
         symlink(fx.exe("v2"), fx.bin().join("rtok")).unwrap();
         assert_eq!(fx.run("v2"), LinkOutcome::Relinked);
-        let want = std::fs::canonicalize(fx.root.join("pkg/v2/rtok-hook")).unwrap();
-        assert_eq!(std::fs::canonicalize(fx.link()).unwrap(), want);
+        let want = fs_kit::path::canonicalize(fx.root.join("pkg/v2/rtok-hook")).unwrap();
+        assert_eq!(fs_kit::path::canonicalize(fx.link()).unwrap(), want);
     }
 
     #[cfg(unix)]

@@ -25,31 +25,75 @@ pub(crate) fn jsonl_paths(dir: &Path, cutoff: SystemTime) -> Vec<PathBuf> {
 }
 
 /// [`jsonl_paths`] for any one extension (`rtok agents usage` reads Gemini's legacy `.json`).
+///
+/// Symlinks are followed (a linked root or project folder is a real layout), but every
+/// directory and file is identified by its canonical path, so an alias never yields the
+/// same physical transcript twice and a cycle ends. Real entries are walked before linked
+/// ones, so the path reported for a file is its real one whatever `read_dir` order is.
 pub(crate) fn paths_with_ext(dir: &Path, cutoff: SystemTime, ext: &str) -> Vec<PathBuf> {
+    use std::collections::HashSet;
+    let Ok(root) = dir.canonicalize() else {
+        return Vec::new();
+    };
+    let mut seen_dirs = HashSet::new();
+    let mut seen_files = HashSet::new();
     let mut out = Vec::new();
-    let mut stack = vec![dir.to_path_buf()];
-    while let Some(d) = stack.pop() {
+    let mut late = Vec::new();
+    // (path as reported, canonical path); `linked` is drained only once `real` is empty.
+    let mut real = vec![(dir.to_path_buf(), root)];
+    let mut linked: Vec<(PathBuf, PathBuf)> = Vec::new();
+    while let Some((d, canon)) = real.pop().or_else(|| linked.pop()) {
+        if !seen_dirs.insert(canon.clone()) {
+            continue;
+        }
         let Ok(rd) = std::fs::read_dir(&d) else {
             continue;
         };
         for e in rd.flatten() {
             let p = e.path();
-            if p.is_dir() {
-                stack.push(p);
+            let is_link = e.file_type().is_ok_and(|t| t.is_symlink());
+            // A dangling or unreadable link is skipped like any inaccessible entry.
+            let meta = if is_link {
+                std::fs::metadata(&p)
+            } else {
+                e.metadata()
+            };
+            let Ok(meta) = meta else {
+                continue;
+            };
+            let canon_child = if is_link {
+                match p.canonicalize() {
+                    Ok(c) => c,
+                    Err(_) => continue,
+                }
+            } else {
+                canon.join(e.file_name())
+            };
+            if meta.is_dir() {
+                let stack = if is_link { &mut linked } else { &mut real };
+                stack.push((p, canon_child));
                 continue;
             }
             if p.extension().and_then(OsStr::to_str) != Some(ext) {
                 continue;
             }
-            let mtime = e
-                .metadata()
-                .and_then(|m| m.modified())
-                .unwrap_or(SystemTime::UNIX_EPOCH);
-            if mtime >= cutoff {
+            let mtime = meta.modified().unwrap_or(SystemTime::UNIX_EPOCH);
+            if mtime < cutoff {
+                continue;
+            }
+            if is_link {
+                late.push((p, canon_child));
+            } else if seen_files.insert(canon_child) {
                 out.push(p);
             }
         }
     }
+    // File links last, so a link never shadows the real path of the same transcript.
+    out.extend(
+        late.into_iter()
+            .filter(|(_, c)| seen_files.insert(c.clone()))
+            .map(|(p, _)| p),
+    );
     out
 }
 
@@ -199,6 +243,41 @@ mod tests {
             .is_none()
         );
         assert!(collect(&dir.join("absent"), SystemTime::UNIX_EPOCH).is_none());
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    /// T579: a directory alias, a file alias and a symlink cycle never make one physical
+    /// transcript count twice, while an unlinked sibling and a linked root still read.
+    #[cfg(unix)]
+    #[test]
+    fn aliases_and_cycles_count_a_transcript_once() {
+        use std::os::unix::fs::symlink;
+        let dir = std::env::temp_dir().join(format!("rtok-codex-alias-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join("real/sub")).unwrap();
+        fs::create_dir_all(dir.join("other")).unwrap();
+        fs::write(dir.join("real/s.jsonl"), line(10, 4, 0, 3)).unwrap();
+        fs::write(dir.join("other/o.jsonl"), line(7, 0, 0, 1)).unwrap();
+        symlink(dir.join("real"), dir.join("alias")).unwrap();
+        symlink(dir.join("real/s.jsonl"), dir.join("other/file-alias.jsonl")).unwrap();
+        symlink(&dir, dir.join("real/sub/loop")).unwrap();
+        symlink(dir.join("missing"), dir.join("dangling")).unwrap();
+
+        let paths = jsonl_paths(&dir, SystemTime::UNIX_EPOCH);
+        assert_eq!(paths.len(), 2, "{paths:?}");
+        assert!(paths.contains(&dir.join("real/s.jsonl")), "{paths:?}");
+        let row = collect(&dir, SystemTime::UNIX_EPOCH).unwrap();
+        assert_eq!((row.input, row.cache_read, row.output), (6 + 7, 4, 4));
+        assert_eq!(requests(&dir, SystemTime::UNIX_EPOCH).0.len(), 2);
+        let parsed = crate::measure::jsonl::parse_dir(&dir).unwrap();
+        assert_eq!(parsed.lines, 2);
+
+        // A symlinked root is still a readable root.
+        let linked = std::env::temp_dir().join(format!("rtok-codex-root-{}", std::process::id()));
+        let _ = fs::remove_file(&linked);
+        symlink(&dir, &linked).unwrap();
+        assert_eq!(jsonl_paths(&linked, SystemTime::UNIX_EPOCH).len(), 2);
+        fs::remove_file(&linked).ok();
         fs::remove_dir_all(&dir).ok();
     }
 }

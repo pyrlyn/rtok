@@ -15,6 +15,7 @@ const POOLS: &[(&str, &str, &str)] = &[
     (".codex", "worktrees", "codex"),
     (".claude", "worktrees", "claude"),
     (".kilo", "worktrees", "kilo"),
+    (".rtok", "worktrees", "rtok"),
     ("conductor", "workspaces", "conductor"),
 ];
 
@@ -23,6 +24,17 @@ const POOLS: &[(&str, &str, &str)] = &[
 /// store only (T289 Execution).
 pub fn evicts(origin: &str) -> bool {
     matches!(origin, "cursor" | "windsurf" | "codex")
+}
+
+/// The rtok hosts whose agents work in a pool's worktrees and whose post-create script
+/// (T289.3) adopts them. Devin and Windsurf share one pool.
+pub fn hosts(origin: &str) -> &'static [&'static str] {
+    match origin {
+        "cursor" => &["cursor"],
+        "windsurf" => &["windsurf", "devin"],
+        "kilo" => &["kilo"],
+        _ => &[],
+    }
 }
 
 pub fn of(path: &Path) -> &'static str {
@@ -69,6 +81,7 @@ mod tests {
             ("/h/.codex/worktrees/1a2b/app", "codex"),
             ("/r/app/.claude/worktrees/x", "claude"),
             ("/r/app/.kilo/worktrees/x", "kilo"),
+            ("/r/app/.rtok/worktrees/app-t1", "rtok"),
             ("/h/conductor/workspaces/app/x", "conductor"),
             ("/h/_worktrees/app-t1", "other"),
             ("/h/.cursor/other/app", "other"),

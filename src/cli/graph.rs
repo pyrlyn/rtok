@@ -6,6 +6,7 @@ use crate::config::Config;
 use crate::ui::style;
 use anyhow::Result;
 use clap::Subcommand;
+use rtok_sys::proc::{ProgressRunner, Unit};
 use std::path::PathBuf;
 
 /// T329.4.2: which project a graph subcommand answers for, instead of a `path` or the cwd.
@@ -124,6 +125,16 @@ pub(super) enum GraphCmd {
         /// Show a saved export instead of the live graph (read-only)
         #[arg(long, conflicts_with_all = ["project", "focus"])]
         from: Option<PathBuf>,
+        /// `json` is the data, `svg` a picture of it (the 200 best connected nodes), `png` that
+        /// picture rasterised (needs `--output`)
+        #[arg(long, value_enum, default_value = "json", requires_if("png", "output"))]
+        format: crate::plugins::graph::export::Format,
+        /// PNG size: 1 to 4 times the SVG size
+        #[arg(long, value_parser = clap::value_parser!(u32).range(1..=4))]
+        scale: Option<u32>,
+        /// SVG and PNG without a background
+        #[arg(long)]
+        transparent: bool,
         /// Write to this file instead of stdout
         #[arg(short, long)]
         output: Option<PathBuf>,
@@ -182,11 +193,22 @@ pub(super) enum ProjectsCmd {
         /// Also remove the link the other way
         #[arg(long)]
         both: bool,
+        /// Show the links that would go; remove nothing
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Re-read a project's files into its index (the page's "Index now")
+    Reindex {
+        /// Project id or directory
+        project: String,
     },
     /// Drop a project and its index rows; its files are never touched
     Remove {
         /// Project id or directory
         project: String,
+        /// Show the index rows and links that would go; remove nothing
+        #[arg(long)]
+        dry_run: bool,
     },
 }
 
@@ -200,12 +222,11 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: GraphCmd) -> Result<()>
             dry_run,
         } => {
             let root = crate::plugins::graph::cli_root_for(&cx.store, path, project.project)?;
-            let pb = crate::render::spinner("indexing");
             let r = crate::plugins::graph::index::run_with(
                 &crate::plugin::Ctx::new(&cx),
                 &root,
                 dry_run,
-                &pb,
+                |n| ProgressRunner::batch("indexing", n, Unit::Items),
             )?;
             let summary = format!(
                 "indexed {} files · {} rows · {} skipped · {} read · exclude {} · include {} · mapped {}",
@@ -250,12 +271,20 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: GraphCmd) -> Result<()>
             crate::plugins::graph::status::run(&cfg, Some(root), json)?;
         }
         GraphCmd::Projects { action, json } => {
-            use crate::plugins::graph::projects::{Action, run};
+            use crate::plugins::graph::projects::{Action, preview, run};
+            let dry_run = matches!(
+                action,
+                Some(
+                    ProjectsCmd::Remove { dry_run: true, .. }
+                        | ProjectsCmd::Unlink { dry_run: true, .. }
+                )
+            );
             let action = match action {
                 None => Action::List,
                 Some(ProjectsCmd::Add { path }) => Action::Add(path),
                 Some(ProjectsCmd::Select { project }) => Action::Select(project),
-                Some(ProjectsCmd::Remove { project }) => Action::Remove(project),
+                Some(ProjectsCmd::Reindex { project }) => Action::Reindex(project),
+                Some(ProjectsCmd::Remove { project, .. }) => Action::Remove(project),
                 Some(ProjectsCmd::Link {
                     project,
                     from,
@@ -271,13 +300,19 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: GraphCmd) -> Result<()>
                     project,
                     from,
                     both,
+                    ..
                 }) => Action::Unlink {
                     to: project,
                     from,
                     both,
                 },
             };
-            print!("{}", run(&cx, action, json)?);
+            let out = if dry_run {
+                preview(&cx, action, json)?
+            } else {
+                run(&cx, action, json)?
+            };
+            print!("{out}");
         }
         GraphCmd::Impact {
             name,
@@ -360,33 +395,44 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: GraphCmd) -> Result<()>
             depth,
             no_redact,
             from,
+            format,
+            scale,
+            transparent,
             output,
             project,
         } => {
+            use crate::plugins::graph::export::{self, Format};
+            if scale.is_some() && format != Format::Png {
+                anyhow::bail!("--scale is for --format png");
+            }
             let root = crate::plugins::graph::cli_root(None)?;
             let scope = if from.is_some() {
                 Vec::new()
             } else {
                 crate::plugins::graph::scope::resolve(&cx.store, project.as_deref(), &root)?
             };
-            let text = crate::plugins::graph::export::run(
-                &cx,
-                &scope,
-                &crate::plugins::graph::export::Query {
-                    level,
-                    focus: focus.as_deref(),
-                    depth,
-                    redact: !no_redact,
-                    pretty: true,
-                    from: from.as_deref(),
-                },
-            )?;
+            let q = export::Query {
+                level,
+                focus: focus.as_deref(),
+                depth,
+                redact: !no_redact,
+                pretty: true,
+                from: from.as_deref(),
+            };
+            let img = export::Image {
+                format,
+                transparent,
+                scale: scale.unwrap_or(1),
+            };
             match output {
                 Some(file) => {
-                    std::fs::write(&file, &text)?;
-                    println!("wrote {} bytes to {}", text.len(), file.display());
+                    let n = export::write(&cx, &scope, &q, &img, &file)?;
+                    println!("wrote {n} bytes to {}", file.display());
                 }
-                None => print!("{text}"),
+                None => print!(
+                    "{}",
+                    String::from_utf8_lossy(&export::render(&cx, &scope, &q, &img)?)
+                ),
             }
         }
         GraphCmd::Affected {

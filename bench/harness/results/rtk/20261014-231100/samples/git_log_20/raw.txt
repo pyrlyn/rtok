@@ -1,0 +1,299 @@
+commit 12ebeb972e2bea88bec939a9ca9b436db884de13
+Author: Ivan Tugay <listepo@gmail.com>
+Date:   Wed Oct 14 23:25:53 2026 +0300
+
+    feat: T660.3 nested worktrees do not leak into walks, gc or clean (#1072)
+    
+    A linked worktree nested in its project (under .rtok/worktrees) is another checkout: search, tree, the graph walk and the watcher skip it, gc and clean take the deepest worktree as current, origin names the rtok pool, and a new worktree's symbol index copies no rows under .rtok/. Submodules and nested clones stay walked.
+
+commit a6fcf2b71c44f8e49955b1eca2dfc9533340f4a5
+Author: Ivan Tugay <listepo@gmail.com>
+Date:   Wed Oct 14 22:58:32 2026 +0300
+
+    feat: T660.2 every project-root caller goes through ProjectRoot (#1070)
+    
+    The .rtok.toml layer, agents --project, checkpoint's legacy lookup, grep_symbol, memory files, rtok task, the doctor's instruction audit and worktree_label call ProjectRoot::find and take checkout; git_root and the doctor's copy are gone. memory/files.rs::relative passes paths through contain, so a symlink out of the project is no longer a project file.
+
+commit de96106a9b5759fc348b81892b10d8bd82274966
+Author: Ivan Tugay <listepo@gmail.com>
+Date:   Wed Oct 14 22:28:06 2026 +0300
+
+    docs: claim T660.3, T660.4 and T660.5 (#1069)
+
+commit 5c52c8f7d5fcd07234b7b5f4eded60e536b793de
+Author: Ivan Tugay <listepo@gmail.com>
+Date:   Wed Oct 14 15:48:20 2026 +0300
+
+    test(web): T661 deterministic graph overview and project link stories (#1047)
+    
+    * docs: T661 claim deterministic graph overview and project link stories
+    
+    * test(web): T661 deterministic graph overview and project link stories
+    
+    Projects > Link And Unlink failed when Stage3D.setScene threw on a scene
+    with no edge (fixed in #710 without a test) and the router rebuilt the
+    page under the play function. Whether the story drew 3D at all depended
+    on the graph view key other story files left in the shared localStorage.
+    
+    - Webgl Without Links: the 3D overview with no link draws; fails 2/2
+      with the #710 guard removed.
+    - preview beforeEach clears localStorage; First Visit Opens 3D fails
+      2/2 without the clear.
+    
+    * docs: T661 close deterministic graph overview and project link stories
+
+commit 15b3f457900bcfa91b0095aa0d66458a2f1f8516
+Author: Ivan Tugay <listepo@gmail.com>
+Date:   Wed Oct 14 15:08:18 2026 +0300
+
+    docs: refresh README and move details into docs/ (#1062)
+
+commit a4357ac0835a810d20b8d08caf6ec6fc5c4bcfcc
+Author: Ivan Tugay <listepo@gmail.com>
+Date:   Wed Oct 14 15:00:07 2026 +0300
+
+    style: rustfmt the rtok task subcommand list in tests/skill.rs (#1041)
+    
+    main fails cargo fmt --check since #1034; formatting only, so no new test.
+
+commit 8511b43b5da7984151d14def934f067383c6ff51
+Author: Ivan Tugay <listepo@gmail.com>
+Date:   Wed Oct 14 12:27:09 2026 +0300
+
+    test: T666 commands_e2e runs rtok outside the checkout (#1067)
+    
+    The cmd() helper isolated HOME/RTOK_HOME but left the cwd at the checkout,
+    so doctor_reports_the_chain ran rtok doctor there and its junk section walked
+    every real worktree of the repository (>180 s on a machine with many large
+    worktrees). The helper now runs in the temp home, like agents_junk, web_e2e
+    and doctor_checklist_pty already do. A time budget for doctor's junk section
+    is filed as I-132.
+
+commit 7067aab339d17d29d569978ae1faf6b6d9647194
+Author: Ivan Tugay <listepo@gmail.com>
+Date:   Wed Oct 14 12:20:01 2026 +0300
+
+    feat: T276.3 T276.6 run every external program through ProgressRunner and ban Command::new (#1057)
+    
+    * feat: T276.3 run host CLIs and the doctor MCP probe through ProgressRunner
+    
+    - `run_cli` runs through `ProgressRunner` with the Windows shim and a
+      `running <bin> <subcommand>…` spinner; `spawn_cli`, `version_command`
+      and `shell_shim` are gone.
+    - `app_version` is a quiet runner with the 3 s limit; `src/proc.rs`
+      (`capture`) is deleted, its behaviour and tests already live in
+      `rtok_sys::proc` (grandchild-held pipe, 128+signal, timeout kill).
+    - `rtok mcp ping` asks the host CLI through the runner (`asking <bin>…`).
+    - `rtok doctor` spawns each MCP server through the runner and draws a bar
+      over the servers (`probing MCP servers… <name>`); `mcp_command` is gone.
+    - The installer prompt (rtok-agent-sdk `ask`) runs inside a registered
+      pause that hides every live bar, so `agents install/update/remove` keeps
+      its host bar on a terminal instead of turning it off for any run that
+      may ask (T81).
+    
+    Tests: the SDK pause wraps the question; the CLI label names only the
+    subcommand; `rtok doctor` with an MCP server writes no bar bytes to a
+    piped stderr.
+    
+    * feat: T276.6 retire the point indicators and ban Command::new outside rtok-sys (#1059)
+    
+    - `with_loader`, `render::loader` and `render::spinner` are gone: in-process waits go
+      behind `ProgressRunner::wait`, and `graph index` steps a `Batch` over the files that
+      pass the stat gate (`Batch::hidden` for the MCP tool and the watcher).
+    - The last production `Command::new` sites (`git describe` for plugin versions, the
+      task adapter's token command) run through `ProgressRunner::quiet`.
+    - `clippy.toml` bans `std::process::Command::new`; `just lint` denies it in libraries
+      and binaries, rtok-sys opts out in its proc module, build.rs keeps its own git calls.
+    - Drop indicatif from the root crate: rtok-sys is now the only place that draws.
+    
+    * fix: T276.3 keep piped stdio when the Windows shim swaps the command
+    
+    `run_piped` and `spawn` set stdout and stderr before `prepare` replaced the
+    command with `cmd.exe /D /C`, and `Command` cannot hand stdio over, so a
+    shimmed `.cmd` host wrote its `--version` straight to rtok's stdout
+    (agents_update, agents_list_content and agents_plugin_version on Windows).
+    Stdio is now set after the shim. The new tests are Windows-only, since the shim is
+    a no-op elsewhere; the failing Windows CI run on #1057 is the fail-first evidence.
+
+commit 628825f7add119cda6ed204b11e8b8d16f32819c
+Author: Ivan Tugay <listepo@gmail.com>
+Date:   Wed Oct 14 11:54:33 2026 +0300
+
+    fix: T655 make compressor in-flight admission atomic (#1056)
+    
+    * fix: T655 make compressor in-flight admission atomic
+    
+    `submit` checked `in_flight` against the cap, marked the id seen, and only
+    then incremented, so concurrent submits could all pass the check and run
+    past `max_in_flight`; an id refused at the cap had also already been
+    marked seen and was never retried. Admission now reserves the slot first
+    in one compare-and-swap, then marks the id seen; a duplicate or a
+    poisoned lock drops the slot, handing the reservation back.
+    
+    Tests: 32 threads racing at cap 1 admit at most one (the old
+    check-then-increment order, with a yield to widen the window, admitted
+    23); an id refused at the cap is admitted once a slot frees; a duplicate
+    returns its reservation.
+    
+    * style: T655 rustfmt the admission race test
+
+commit edc6c621df9187784cf93c32851a886b1476a0d4
+Author: Ivan Tugay <listepo@gmail.com>
+Date:   Wed Oct 14 11:50:30 2026 +0300
+
+    fix: T656 keep worktrees and caches when their age cannot be established (#1055)
+    
+    The newest-mtime walk skipped unreadable directories, entries and mtimes
+    silently, so a partial walk could report an old mtime (or none) and
+    `worktree clean` / `worktree gc` treated the tree as idle and deleted it.
+    The walk now records that it was incomplete; `clean` keeps a cache whose
+    age is unknown or rests on an incomplete walk, and `gc` keeps a merged
+    worktree whose age is unknown. A recent file found anyway still reads as
+    active.
+    
+    Tests: the old `no_mtime` case expected deletion (None) and now expects
+    the "age unknown" keep; new tests cover an unreadable directory marking
+    the walk incomplete, an incomplete walk never reading as idle, and gc
+    keeping a merged worktree of unknown age.
+
+commit 845af7ed403e158b967f161b18cafbde089a6e5e
+Author: Ivan Tugay <listepo@gmail.com>
+Date:   Wed Oct 14 11:48:49 2026 +0300
+
+    fix: T654 re-read graph files after an unreadable index attempt (#1054)
+    
+    An unreadable file was stored with its real mtime and size, so restoring read access (which changes neither) left the stat gate skipping it with no symbols. It now stores the unknown stat (0, 0); a non-UTF-8 file keeps its stat as before (T36.16).
+
+commit 888b0548ad3990462e2df857fed6ffdd201b5334
+Author: Ivan Tugay <listepo@gmail.com>
+Date:   Wed Oct 14 11:48:22 2026 +0300
+
+    fix: T651 honor ProgressRunner timeouts with inherited output (#1053)
+    
+    Output::Inherit used Command::status, which cannot be bounded, so .timeout() was
+    ignored for inherited children. Spawn and reuse the piped path's wait so the
+    direct child is killed and reaped at the deadline.
+
+commit 9b33846e63020263a85b097cd7f2cac6680e7c6d
+Author: Ivan Tugay <listepo@gmail.com>
+Date:   Wed Oct 14 11:43:15 2026 +0300
+
+    fix: T657 match compressor credentials to the internal provider (#1052)
+    
+    The compressor sends an Anthropic Messages body, so only credentials from an Anthropic-wire
+    agent turn may reach it. An OpenAI bearer was forwarded there; Auth::from_headers now takes
+    the wire provider and yields no credential otherwise, so the summary is skipped (fail open).
+    Also applies the rustfmt layout that tests/skill.rs needed for fmt-check.
+
+commit b1c2d7fb8b9ac709803b632cdd88c3b455ccc2a2
+Author: Ivan Tugay <listepo@gmail.com>
+Date:   Wed Oct 14 11:40:33 2026 +0300
+
+    fix: T653 exclude semantic-cache hits from provider-billed OTel usage (#1050)
+    
+    A cache hit keeps its usage row for per-call analytics, but no provider request happened, so rtok.tokens skips calls carrying a semantic_cache_hit measurement. No migration: the marker already exists.
+
+commit 3c5c790d2ad645f156f740af51b263bd19b69a3c
+Author: Ivan Tugay <listepo@gmail.com>
+Date:   Wed Oct 14 11:32:35 2026 +0300
+
+    fix: T652 refuse to replace an unreadable MCP host config (#1048)
+    
+    A host config that exists but cannot be read was treated as absent, so install replaced it and dropped every other server, even with backup off. The disk Fs now errors on any read failure except not-found before editing.
+
+commit 3c1376171a6fc37593709ad401cc02381581004e
+Author: Ivan Tugay <listepo@gmail.com>
+Date:   Wed Oct 14 11:15:29 2026 +0300
+
+    docs: T662 record the oxfmt fix that landed through #1065 (#1049)
+    
+    * docs: claim T662
+    
+    * style: T662 oxfmt web/e2e/rtok.ts
+    
+    oxfmt 0.68.0 wraps the spawnGroup call in Rtok.start; formatting only.
+    just js was red on main and would fail ci / lint once #1041 lands.
+    
+    * style: T662 rustfmt tests/skill.rs
+    
+    Same hunk as #1041. #1041 fails `just js` on web/e2e/rtok.ts and this PR
+    fails `fmt-check` on tests/skill.rs, so each blocks the other in ci / lint.
+    
+    * docs: T662 note that the fix landed through #1065
+
+commit dcd9b326f73377898a54221f2cb418ad4ca282f2
+Author: Ivan Tugay <listepo@gmail.com>
+Date:   Wed Oct 14 07:13:30 2026 +0300
+
+    fix: T663 T664 unblock main (jscpd, report --ai budget, Windows test tmp) (#1065)
+    
+    * docs: claim T663 just dup under the jscpd threshold
+    
+    * refactor: T663 shared agent impl macros and apply assertion bring just dup under 2%
+    
+    jscpd rose to 2.09% (424 clones) with the T413 install hosts, each repeating
+    the impl Agent head (id/variants/readme), the single-file MCP-only tail
+    (files/installed/apply) and the apply-idempotent test body. agent_identity!,
+    mcp_only_file! and assert_mcp_only_apply_idempotent now hold one copy each;
+    just dup reports 1.81% (388 clones). Threshold and ignores unchanged.
+    
+    * docs: claim T664 report --ai keeps #doctor under the default budget
+    
+    * docs: T663 move to done.md
+    
+    * style: T663 rustfmt tests/skill.rs
+    
+    main's fmt-check fails on this file and the fmt-only PRs fail on dup, which
+    only T663 fixes, so neither side could go green alone.
+    
+    * style: T663 oxfmt web/e2e/rtok.ts
+    
+    The same hunk as T662 (#1049): main's js gate fails on this file and #1049
+    fails on dup, so #1058 carries both to break the deadlock.
+    
+    * fix: T664 report --ai keeps #doctor under the default budget
+    
+    The doctor section of the AI report printed four module lines per T413
+    host variant, each with its not-supported reason, and outgrew the default
+    [report] budget_tokens on an empty home, so tests/report_ai.rs failed on
+    main. The AI report now renders one line per host variant; rtok doctor and
+    the other report formats keep the full lines.
+    
+    * docs: close T664
+    
+    * style: rustfmt tests/skill.rs
+    
+    ci / lint fails fmt-check on main and cancels the test jobs of every PR.
+    Same hunk as #1051, so either merge order applies cleanly.
+    
+    * fix(test): keep the Windows nextest temp dir outside the checkout
+    
+    Since #1036 TMP/TEMP on Windows pointed at target\test-home\tmp, inside the
+    repo, so git discovery from a test's scratch dir found the checkout and 7
+    tests that expect a directory without git failed on windows (1/2).
+    
+    * style: cargo fmt tests/skill.rs
+    
+    * test: expect the Windows test tmp outside the checkout
+    
+    #1063 moved TMP/TEMP on Windows from target\test-home\tmp to %TEMP%\rtok-test-<hash>,
+    so nextest_runs_under_the_test_tmp failed there. It now checks the rule on every OS:
+    an rtok-test-* dir outside the checkout, under /tmp on Unix.
+
+commit cd9644881d6c143cedcb4ee8347a2b574a4429f7
+Author: Ivan Tugay <listepo@gmail.com>
+Date:   Wed Oct 14 00:24:24 2026 +0300
+
+    chore: rename crates-packages repo to crates (#1043)
+
+commit 6557b6d1b93c789318fae20f6a8dad685b76348f
+Author: Ivan Tugay <listepo@gmail.com>
+Date:   Tue Oct 13 22:02:20 2026 +0300
+
+    docs: claim T276.3 and T276.6 (#1046)
+
+commit 804a1a758f626869ea33d2e7fba53db6bd3921d0
+Author: Ivan Tugay <listepo@gmail.com>
+Date:   Tue Oct 13 21:59:30 2026 +0300
+
+    docs: claim T651-T657 (#1045)

@@ -22,6 +22,14 @@ pub(super) struct RemoveArgs {
     /// Also remove rtok entries you changed, without asking
     #[arg(long)]
     pub(super) yes: bool,
+    // T289.3
+    /// Take rtok out of the project's post-create script (`cursor`, `kilo`, `windsurf`, `devin`) instead of the host's config
+    #[arg(long)]
+    pub(super) project: bool,
+    // T416.3
+    /// With --dry-run: stat lines and totals instead of the planned edits
+    #[arg(long, requires = "dry_run")]
+    pub(super) stat: bool,
 }
 
 #[derive(clap::Args)]
@@ -55,6 +63,10 @@ pub(super) struct UpdateArgs {
     /// List outdated plugins only (same output as `agents outdated`)
     #[arg(long)]
     pub(super) check: bool,
+    // T416.3
+    /// With --dry-run: stat lines and totals instead of the planned edits
+    #[arg(long, requires = "dry_run")]
+    pub(super) stat: bool,
 }
 
 /// `--source` for `rtok agents update` (T279): mirrors `agents::plugin_version::Source`, kept
@@ -137,6 +149,15 @@ pub(super) struct SetupArgs {
     /// Skip closing/reopening a running desktop app around the write
     #[arg(long)]
     pub(super) no_restart: bool,
+    // T289.3
+    /// Add rtok to the project's post-create script, so a worktree the host makes joins rtok
+    /// (`cursor`, `kilo`, `windsurf`, `devin`); run it inside the repository
+    #[arg(long)]
+    pub(super) project: bool,
+    // T416.3
+    /// With --dry-run: stat lines and totals instead of the planned edits
+    #[arg(long, requires = "dry_run")]
+    pub(super) stat: bool,
 }
 
 impl SetupArgs {
@@ -155,6 +176,8 @@ impl SetupArgs {
             desktop: false,
             all: true,
             no_restart: args.no_restart,
+            project: args.project,
+            stat: args.stat,
         }
     }
 }
@@ -175,7 +198,10 @@ pub(super) fn setup_host(config_file: Option<&std::path::Path>, args: SetupArgs)
         desktop,
         all,
         no_restart,
+        project,
+        stat,
     } = args;
+    crate::stat_preview::set(stat);
     crate::agents::command::install(
         config_file,
         crate::agents::command::Install {
@@ -186,6 +212,7 @@ pub(super) fn setup_host(config_file: Option<&std::path::Path>, args: SetupArgs)
             desktop,
             all,
             no_restart,
+            project,
         },
         setup_flags(dry_run, yes, mcp, proxy, &mode, false, None),
     )
@@ -222,6 +249,7 @@ pub(super) fn outdated_hosts(
 }
 
 pub(super) fn update_hosts(config_file: Option<&std::path::Path>, args: UpdateArgs) -> Result<()> {
+    crate::stat_preview::set(args.stat);
     let flags = setup_flags(
         args.dry_run,
         false,

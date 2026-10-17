@@ -66,10 +66,8 @@ pub fn serve() -> Result<()> {
 
 #[cfg(unix)]
 async fn listen(endpoint: &Path, lock: &Path, state: Arc<State>) -> Result<()> {
-    use std::os::unix::fs::PermissionsExt;
     let _ = tokio::fs::remove_file(endpoint).await;
-    let listener = tokio::net::UnixListener::bind(endpoint)?;
-    tokio::fs::set_permissions(endpoint, std::fs::Permissions::from_mode(SOCKET_MODE)).await?;
+    let listener = bind_private(endpoint)?;
     let mut tick = tokio::time::interval(Duration::from_secs(1));
     loop {
         tokio::select! {
@@ -82,6 +80,36 @@ async fn listen(endpoint: &Path, lock: &Path, state: Arc<State>) -> Result<()> {
     }
     let _ = tokio::fs::remove_file(endpoint).await;
     Ok(())
+}
+
+/// Bind `endpoint` with no window at the umask mode: the socket is made inside a fresh 0700
+/// directory, set to [`SOCKET_MODE`] there, then renamed into place. A path too long for the
+/// private detour falls back to bind-then-chmod.
+#[cfg(unix)]
+fn bind_private(endpoint: &Path) -> std::io::Result<tokio::net::UnixListener> {
+    use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+    let parent = endpoint.parent().unwrap_or(Path::new("."));
+    let dir = parent.join(format!(".hs{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::DirBuilder::new().mode(0o700).create(&dir)?;
+    let tmp = dir.join("s");
+    let bound = std::os::unix::net::UnixListener::bind(&tmp).and_then(|l| {
+        std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(SOCKET_MODE))?;
+        std::fs::rename(&tmp, endpoint)?;
+        Ok(l)
+    });
+    let _ = std::fs::remove_file(&tmp);
+    let _ = std::fs::remove_dir(&dir);
+    let listener = match bound {
+        Ok(l) => l,
+        Err(_) => {
+            let l = std::os::unix::net::UnixListener::bind(endpoint)?;
+            std::fs::set_permissions(endpoint, std::fs::Permissions::from_mode(SOCKET_MODE))?;
+            l
+        }
+    };
+    listener.set_nonblocking(true)?;
+    tokio::net::UnixListener::from_std(listener)
 }
 
 #[cfg(windows)]
@@ -102,6 +130,8 @@ async fn listen(endpoint: &Path, lock: &Path, state: Arc<State>) -> Result<()> {
                 }
             },
             () = state.stale.notified() => break,
+            // Unlike the Unix socket, the pipe has no file to delete, and `first_pipe_instance`
+            // stops a second resident from taking the name, so only the lock can go.
             _ = tick.tick() => if !lock.exists() { break },
         }
     }
@@ -154,5 +184,34 @@ impl State {
         let mut out = Vec::new();
         super::run(&req.event, &req.stdin[..], &mut out, &cfg);
         Some(out)
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    use std::os::unix::fs::PermissionsExt;
+
+    /// S7: the socket is never visible at the umask mode, and the detour leaves no directory.
+    #[test]
+    fn bind_private_lands_at_socket_mode_without_leftovers() {
+        let dir = std::env::temp_dir().join(format!("rtok-hs-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let endpoint = dir.join("hook.sock");
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let _listener = rt.block_on(async { bind_private(&endpoint).unwrap() });
+        let mode = std::fs::metadata(&endpoint).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, SOCKET_MODE);
+        let names: Vec<_> = std::fs::read_dir(&dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name())
+            .collect();
+        drop(_listener);
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(names, ["hook.sock"]);
     }
 }

@@ -11,53 +11,9 @@ use diesel::sql_types::{BigInt, Binary, Double, Integer, Nullable, Text};
 use diesel::sqlite::Sqlite;
 
 use super::schema::{
-    archive, archive_decisions, call_io, calls, extractor, logs, measurements, read_cache,
-    symbol_stale, symbols, tokens, usage,
+    archive, archive_decisions, archive_summaries, call_io, calls, extractor, logs, measurements,
+    read_cache, symbol_stale, symbols, tokens, usage,
 };
-
-/// `ROW_NUMBER() OVER (PARTITION BY ended_at ORDER BY id)` — no window functions in
-/// Diesel 2.3's typed DSL. Resumes a watermark that covers several sessions in one second.
-#[derive(QueryId)]
-pub(crate) struct SessionsPending {
-    pub mark: i64,
-    pub tail: i64,
-    pub limit: i64,
-}
-
-impl QueryFragment<Sqlite> for SessionsPending {
-    fn walk_ast<'b>(&'b self, mut out: AstPass<'_, 'b, Sqlite>) -> QueryResult<()> {
-        out.push_sql(
-            "SELECT id, host_id, project, cwd, source, started_at, ended_at FROM ( \
-                SELECT id, host_id, project, cwd, source, started_at, ended_at, \
-                       ROW_NUMBER() OVER (PARTITION BY ended_at ORDER BY id) AS rn \
-                FROM sessions \
-                WHERE ended_at IS NOT NULL \
-             ) WHERE ended_at > ",
-        );
-        out.push_bind_param::<BigInt, _>(&self.mark)?;
-        out.push_sql(" OR (ended_at = ");
-        out.push_bind_param::<BigInt, _>(&self.mark)?;
-        out.push_sql(" AND rn > ");
-        out.push_bind_param::<BigInt, _>(&self.tail)?;
-        out.push_sql(") ORDER BY ended_at ASC, id ASC LIMIT ");
-        out.push_bind_param::<BigInt, _>(&self.limit)?;
-        Ok(())
-    }
-}
-
-impl Query for SessionsPending {
-    type SqlType = (
-        Text,
-        Nullable<Integer>,
-        Nullable<Text>,
-        Nullable<Text>,
-        Nullable<Text>,
-        BigInt,
-        Nullable<BigInt>,
-    );
-}
-
-impl RunQueryDsl<SqliteConnection> for SessionsPending {}
 
 /// `ON CONFLICT DO UPDATE … WHERE` — Diesel 2.3's `DoUpdate` has no WHERE clause, so an
 /// unchanged embedding would be rewritten and `embedded_at` would move.
@@ -177,6 +133,16 @@ pub(crate) fn pragma_foreign_keys_on(conn: &mut SqliteConnection) -> QueryResult
 /// T352: only effective before the first table exists — the caller sets it on a brand-new file.
 pub(crate) fn pragma_auto_vacuum_incremental(conn: &mut SqliteConnection) -> QueryResult<()> {
     exec_pragma(conn, "PRAGMA auto_vacuum = INCREMENTAL")
+}
+
+/// T646: `sqlite_stat1` rows for `symbols`. With none, the planner served `ORDER BY path` from
+/// `symbols_root_path (root=?)` — every row of the root — instead of seeking
+/// `symbols_root_name`. The sampled form (SQLite's `analysis_limit`) keeps an index pass on a
+/// large store cheap and still tells the planner that `root` alone is not selective.
+/// No DSL form for either statement.
+pub(crate) fn analyze_symbols(conn: &mut SqliteConnection) -> QueryResult<()> {
+    exec_pragma(conn, "PRAGMA analysis_limit = 1000")?;
+    exec_pragma(conn, "ANALYZE symbols")
 }
 
 /// A row of `PRAGMA incremental_vacuum`: one per freed page, no columns.
@@ -500,7 +466,8 @@ pub(crate) struct SearchNotes {
 impl QueryFragment<Sqlite> for SearchNotes {
     fn walk_ast<'b>(&'b self, mut out: AstPass<'_, 'b, Sqlite>) -> QueryResult<()> {
         out.push_sql(
-            "SELECT n.id, n.title, substr(n.body, 1, 120) \
+            "SELECT n.id, n.title, substr(n.body, 1, 120), n.pinned, n.uses, n.ts, n.last_used, \
+             n.project \
              FROM notes_fts f JOIN notes n ON n.id = f.rowid \
              WHERE notes_fts MATCH ",
         );
@@ -512,7 +479,18 @@ impl QueryFragment<Sqlite> for SearchNotes {
 }
 
 impl Query for SearchNotes {
-    type SqlType = (Integer, Text, Text);
+    /// `(id, title, snippet, pinned, uses, ts, last_used, project)`: the columns `rank_blend`
+    /// and the project boost read.
+    type SqlType = (
+        Integer,
+        Text,
+        Text,
+        Integer,
+        Integer,
+        BigInt,
+        Nullable<BigInt>,
+        Nullable<Text>,
+    );
 }
 
 impl RunQueryDsl<SqliteConnection> for SearchNotes {}
@@ -1000,6 +978,8 @@ pub(crate) fn delete_old_calls(conn: &mut SqliteConnection, cutoff: i64) -> Quer
 
 pub(crate) fn purge_archive(conn: &mut SqliteConnection, id: &str) -> QueryResult<()> {
     diesel::delete(archive_decisions::table.filter(archive_decisions::archive_id.eq(id)))
+        .execute(conn)?;
+    diesel::delete(archive_summaries::table.filter(archive_summaries::archive_id.eq(id)))
         .execute(conn)?;
     diesel::update(read_cache::table.filter(read_cache::archive_id.eq(id)))
         .set(read_cache::archive_id.eq(None::<String>))

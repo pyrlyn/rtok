@@ -22,6 +22,7 @@ use std::time::{Duration, Instant};
 const WORKTREE_TTL: Duration = Duration::from_secs(30);
 
 static ENABLED: AtomicBool = AtomicBool::new(false);
+static DENY_SECRETS: AtomicBool = AtomicBool::new(false);
 static CLIENT: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
 /// Per cwd: when the listing was read, and its worktree paths.
 type Listing = (Instant, Vec<PathBuf>);
@@ -35,6 +36,53 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
 /// Called once by `rtok mcp`; turns the extra roots on for this process.
 pub fn enable() {
     ENABLED.store(true, Ordering::Relaxed);
+}
+
+/// Called by `rtok mcp --http`: refuse credential files (see [`is_secret`]) in this process.
+pub fn deny_secrets() {
+    DENY_SECRETS.store(true, Ordering::Relaxed);
+}
+
+/// Whether credential files are refused in this process.
+pub(crate) fn secrets_denied() -> bool {
+    DENY_SECRETS.load(Ordering::Relaxed)
+}
+
+/// A file that usually holds credentials: `.env` and its variants (templates excepted),
+/// private keys, `.git/config`, and the package-manager and netrc credential files.
+pub(crate) fn is_secret(path: &Path) -> bool {
+    let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+        return false;
+    };
+    let name = name.to_ascii_lowercase();
+    if name == ".env" {
+        return true;
+    }
+    if let Some(rest) = name.strip_prefix(".env.") {
+        return !matches!(rest, "example" | "sample" | "template" | "dist");
+    }
+    let ext = Path::new(&name).extension().and_then(|e| e.to_str());
+    if matches!(ext, Some("pem" | "key" | "p12" | "pfx")) {
+        return true;
+    }
+    if matches!(
+        name.as_str(),
+        "id_rsa"
+            | "id_dsa"
+            | "id_ecdsa"
+            | "id_ed25519"
+            | ".netrc"
+            | ".npmrc"
+            | ".pypirc"
+            | "credentials"
+    ) {
+        return true;
+    }
+    name == "config"
+        && path
+            .parent()
+            .and_then(Path::file_name)
+            .is_some_and(|d| d == ".git")
 }
 
 /// The directories of the client's latest `roots/list` answer (replaces the previous one).
@@ -75,6 +123,32 @@ fn worktrees(cwd: &Path) -> Vec<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn secret_names_are_recognised() {
+        for p in [
+            ".env",
+            "a/.env.local",
+            "k/server.pem",
+            "x.key",
+            "h/.ssh/id_ed25519",
+            ".git/config",
+            "r/.npmrc",
+            ".aws/credentials",
+        ] {
+            assert!(is_secret(Path::new(p)), "{p}");
+        }
+        for p in [
+            "src/main.rs",
+            ".env.example",
+            "config",
+            "app/config",
+            "keys.rs",
+            "README.md",
+        ] {
+            assert!(!is_secret(Path::new(p)), "{p}");
+        }
+    }
     use std::process::Command;
 
     fn git(dir: &Path, args: &[&str]) {
@@ -98,7 +172,7 @@ mod tests {
         for d in [&main, &other] {
             std::fs::create_dir_all(d).unwrap();
         }
-        let base = dunce::canonicalize(&base).unwrap();
+        let base = fs_kit::path::canonicalize(&base).unwrap();
         let (main, other) = (base.join("main"), base.join("other"));
         git(&main, &["init", "-q"]);
         std::fs::write(main.join("a.txt"), "a\n").unwrap();
@@ -116,7 +190,7 @@ mod tests {
         let (base, main, wt, other) = repo("list");
         let listed: Vec<PathBuf> = worktrees(&main)
             .iter()
-            .map(|p| dunce::canonicalize(p).unwrap())
+            .map(|p| fs_kit::path::canonicalize(p).unwrap())
             .collect();
         assert!(listed.contains(&wt) && listed.contains(&main), "{listed:?}");
         assert!(!listed.contains(&other));

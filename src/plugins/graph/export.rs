@@ -12,6 +12,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::path::Path;
 
 use anyhow::{Context as _, Result, bail};
+use base64::Engine as _;
 use rtok_plugin_sdk::Ctx;
 use schemars::JsonSchema;
 use schemars::generate::SchemaSettings;
@@ -20,7 +21,7 @@ use serde_json::Value;
 
 use super::capability::Chosen;
 use super::scope::{Member, fan_out, walkable};
-use super::{index, index_for, projects, text};
+use super::{draw, index, index_for, projects, text};
 use crate::plugin::Runtime;
 use crate::store::{DefRow, RefGroup};
 
@@ -113,7 +114,10 @@ pub struct Meta {
     pub notes: Vec<String>,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum, Serialize, Deserialize, JsonSchema,
+)]
+#[serde(rename_all = "lowercase")]
 pub enum Level {
     Overview,
     Symbols,
@@ -341,32 +345,41 @@ pub fn collect(rt: &Runtime, scope: &[Member], q: &Query) -> Result<Export> {
     })
 }
 
-/// Home, the user name and absolute roots out. The user name is the home directory's last
-/// segment: it is what a path under `/Users/<name>` gives away, and a folder of that name inside
-/// the project would read as the person too.
-fn redact(e: &mut Export, home: Option<&Path>) {
-    let user = home.and_then(Path::file_name).and_then(|n| n.to_str());
+/// How one string is redacted: home becomes `~` and the user name `<user>`. Every copy of a name
+/// goes through it, so the payload and a file name made from it cannot disagree.
+fn redactor(home: Option<&Path>) -> impl Fn(&str) -> String {
+    let user = home
+        .and_then(Path::file_name)
+        .and_then(|n| n.to_str())
+        .map(str::to_string);
     // Only a whole path component is home: `/Users/al` must not turn `/Users/alice` into `~ice`.
     let home = home
         .and_then(Path::to_str)
         .filter(|h| h.len() > 1)
         .and_then(|h| regex::Regex::new(&format!(r"{}([/\\\s]|$)", regex::escape(h))).ok());
     // Both separators on every platform: an export made on one system is read on another.
-    let text = |s: &str| {
+    move |s: &str| {
         let s = home
             .as_ref()
             .map_or_else(|| s.to_string(), |h| h.replace_all(s, "~$1").into_owned());
         s.split_inclusive(['/', '\\'])
             .map(|piece| {
                 let seg = piece.trim_end_matches(['/', '\\']);
-                if Some(seg) == user {
+                if Some(seg) == user.as_deref() {
                     format!("<user>{}", &piece[seg.len()..])
                 } else {
                     piece.to_string()
                 }
             })
             .collect::<String>()
-    };
+    }
+}
+
+/// Home, the user name and absolute roots out. The user name is the home directory's last
+/// segment: it is what a path under `/Users/<name>` gives away, and a folder of that name inside
+/// the project would read as the person too.
+fn redact(e: &mut Export, home: Option<&Path>) {
+    let text = redactor(home);
     for p in &mut e.projects {
         let root = text(&p.root);
         p.root = match Path::new(&root)
@@ -401,6 +414,8 @@ fn redact(e: &mut Export, home: Option<&Path>) {
         }
     }
     e.meta.notes = e.meta.notes.iter().map(|n| text(n)).collect();
+    // Scope entries are project names, which `collect` copies from the same registry rows.
+    e.meta.scope = e.meta.scope.iter().map(|n| text(n)).collect();
     e.meta.redacted = true;
 }
 
@@ -449,7 +464,9 @@ pub fn schema_json() -> String {
     out
 }
 
-pub fn run(rt: &Runtime, scope: &[Member], q: &Query) -> Result<String> {
+/// The export every format is a view of: collected from the scope or read from a saved file, then
+/// redacted, so a picture never shows more than the JSON would.
+fn build(rt: &Runtime, scope: &[Member], q: &Query) -> Result<Export> {
     let mut e = match q.from {
         Some(path) => read(path)?,
         None => collect(rt, scope, q)?,
@@ -457,6 +474,47 @@ pub fn run(rt: &Runtime, scope: &[Member], q: &Query) -> Result<String> {
     if q.redact {
         redact(&mut e, std::env::home_dir().as_deref());
     }
+    Ok(e)
+}
+
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum, Serialize, Deserialize, JsonSchema,
+)]
+#[serde(rename_all = "lowercase")]
+pub enum Format {
+    Json,
+    Svg,
+    Png,
+}
+
+/// How `render` turns the export into bytes; the JSON ignores the rest.
+pub struct Image {
+    pub format: Format,
+    pub transparent: bool,
+    pub scale: u32,
+}
+
+pub fn render(rt: &Runtime, scope: &[Member], q: &Query, img: &Image) -> Result<Vec<u8>> {
+    if img.format == Format::Json {
+        return Ok(run(rt, scope, q)?.into_bytes());
+    }
+    let svg = draw::svg(&build(rt, scope, q)?, img.transparent);
+    match img.format {
+        Format::Png => draw::png(&svg, img.scale),
+        _ => Ok(svg.into_bytes()),
+    }
+}
+
+/// Renders and writes `file`. `rtok graph export -o` and the TUI's export key both end here, so
+/// the two cannot write different bytes for the same query.
+pub fn write(rt: &Runtime, scope: &[Member], q: &Query, img: &Image, file: &Path) -> Result<usize> {
+    let bytes = render(rt, scope, q, img)?;
+    std::fs::write(file, &bytes).with_context(|| file.display().to_string())?;
+    Ok(bytes.len())
+}
+
+pub fn run(rt: &Runtime, scope: &[Member], q: &Query) -> Result<String> {
+    let e = build(rt, scope, q)?;
     let mut out = if q.pretty {
         serde_json::to_string_pretty(&e)?
     } else {
@@ -464,6 +522,94 @@ pub fn run(rt: &Runtime, scope: &[Member], q: &Query) -> Result<String> {
     };
     out.push('\n');
     Ok(out)
+}
+
+/// A download from the graph page's Export menu (T329.40): the file `rtok graph export` writes for
+/// the same arguments.
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
+pub struct ExportRequest {
+    /// An id or a root path, as in `rtok graph projects`.
+    pub project: String,
+    pub level: Level,
+    /// A symbol name; it wins over `level`, as `--focus` does.
+    #[serde(default)]
+    pub focus: Option<String>,
+    #[serde(default)]
+    pub depth: Option<u32>,
+    pub format: Format,
+    /// PNG only: 1 to 4 times the SVG size.
+    #[serde(default)]
+    pub scale: Option<u32>,
+    #[serde(default)]
+    pub transparent: bool,
+}
+
+/// A saved JSON export the page read itself, to show read-only. Like Compare mode, it never names
+/// a path: the websocket answers anything on localhost, so the file arrives as its text.
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
+pub struct ImportRequest {
+    /// The file's name, for the banner and the errors.
+    pub name: String,
+    pub text: String,
+}
+
+/// A finished download. The bytes travel as base64 because a PNG is not text and the frame is.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct ExportFile {
+    pub name: String,
+    pub mime: String,
+    pub data: String,
+}
+
+/// The page's download. Redaction is always on, as for MCP: the page has no `--no-redact`, so a
+/// file shared from the browser never carries the home directory or the user name.
+pub fn page_file(rt: &Runtime, r: &ExportRequest) -> Result<ExportFile> {
+    if r.project.is_empty() {
+        bail!("export needs a project");
+    }
+    let scope = super::scope::resolve(&rt.store, Some(&r.project), Path::new("."))?;
+    let bytes = render(
+        rt,
+        &scope,
+        &Query {
+            level: r.level,
+            focus: r.focus.as_deref().filter(|f| !f.is_empty()),
+            depth: r.depth.map_or(2, |d| d.clamp(1, 8)),
+            redact: true,
+            pretty: true,
+            from: None,
+        },
+        &Image {
+            format: r.format,
+            transparent: r.transparent,
+            scale: r.scale.map_or(1, |s| s.clamp(1, 4)),
+        },
+    )?;
+    let (ext, mime) = match r.format {
+        Format::Json => ("json", "application/json"),
+        Format::Svg => ("svg", "image/svg+xml"),
+        Format::Png => ("png", "image/png"),
+    };
+    let level = match (&r.focus, r.level) {
+        (Some(f), _) if !f.is_empty() => "focus",
+        (_, Level::Symbols) => "symbols",
+        _ => "overview",
+    };
+    Ok(ExportFile {
+        name: download_name(&scope[0].name, level, ext, std::env::home_dir().as_deref()),
+        mime: mime.into(),
+        data: base64::engine::general_purpose::STANDARD.encode(bytes),
+    })
+}
+
+/// The name a download is offered under. It is built from the redacted project name, as the file
+/// itself is, so a project named after the user does not put the user name back.
+fn download_name(project: &str, level: &str, ext: &str, home: Option<&Path>) -> String {
+    let slug: String = redactor(home)(project)
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { '-' })
+        .collect();
+    format!("rtok-graph-{slug}-{level}.{ext}")
 }
 
 /// MCP `graph_export`: JSON, always redacted, compact. Past `max_tokens` it archives like any
@@ -676,6 +822,27 @@ mod tests {
         );
     }
 
+    /// T571: a project named after the user is hidden in every copy of its name: the project
+    /// row, the scope list the images title themselves with, and the suggested download name.
+    #[test]
+    fn a_project_named_after_the_user_is_hidden_in_scope_and_download_name() {
+        let home = Path::new("/Users/alice");
+        let mut e = bare("/Users/alice/work/alice");
+        e.projects[0].name = "alice".into();
+        e.meta.scope = vec!["alice".into(), "other".into()];
+        redact(&mut e, Some(home));
+        assert_eq!(e.projects[0].name, "<user>");
+        assert_eq!(e.meta.scope, ["<user>", "other"]);
+        let text = serde_json::to_string(&e).unwrap();
+        assert!(!text.contains("alice"), "{text}");
+        let name = download_name("alice", "overview", "json", Some(home));
+        assert!(!name.contains("alice"), "{name}");
+        assert_eq!(
+            download_name("other", "focus", "png", Some(home)),
+            "rtok-graph-other-focus.png"
+        );
+    }
+
     #[test]
     fn the_default_export_hides_the_real_paths_and_no_redact_keeps_them() {
         let (rt, dir, scope) = linked("t32916-paths");
@@ -745,5 +912,92 @@ mod tests {
         );
         let _ = (fs::remove_dir_all(dir), fs::remove_dir_all(edir));
         drop(rt);
+    }
+
+    fn make(project: &Path, level: Level, format: Format) -> ExportRequest {
+        ExportRequest {
+            project: project.display().to_string(),
+            level,
+            focus: None,
+            depth: None,
+            format,
+            scale: None,
+            transparent: false,
+        }
+    }
+
+    fn decoded(f: &ExportFile) -> Vec<u8> {
+        base64::engine::general_purpose::STANDARD
+            .decode(&f.data)
+            .unwrap()
+    }
+
+    /// Without `exported_at` and `indexed_at` (each call may refresh the index and take a later second).
+    fn stable(bytes: &[u8]) -> Value {
+        let mut v: Value = serde_json::from_slice(bytes).unwrap();
+        v["meta"].as_object_mut().unwrap().remove("exported_at");
+        for p in v["projects"].as_array_mut().unwrap() {
+            p.as_object_mut().unwrap().remove("indexed_at");
+        }
+        v
+    }
+
+    #[test]
+    fn the_page_download_is_the_file_the_cli_writes() {
+        let (rt, dir, scope) = linked("t32940-same");
+        let cli = render(
+            &rt,
+            &scope,
+            &query(Level::Symbols),
+            &Image {
+                format: Format::Json,
+                transparent: false,
+                scale: 1,
+            },
+        )
+        .unwrap();
+        let file = page_file(&rt, &make(&dir.join("a"), Level::Symbols, Format::Json)).unwrap();
+        assert_eq!(
+            (file.mime.as_str(), file.name.as_str()),
+            ("application/json", "rtok-graph-a-symbols.json")
+        );
+        let page = decoded(&file);
+        assert_eq!(stable(&page), stable(&cli));
+        // The same text layout, not only the same data: the file is pretty like the CLI's.
+        assert!(page.starts_with(b"{\n  \"schema\""));
+        assert_eq!(stable(&page)["meta"]["redacted"], true);
+
+        let mut focus = make(&dir.join("a"), Level::Overview, Format::Json);
+        focus.focus = Some("shared".into());
+        focus.depth = Some(1);
+        let f = page_file(&rt, &focus).unwrap();
+        assert_eq!(f.name, "rtok-graph-a-focus.json");
+        assert_eq!(stable(&decoded(&f))["meta"]["level"], "focus");
+
+        let svg = page_file(&rt, &make(&dir.join("a"), Level::Symbols, Format::Svg)).unwrap();
+        assert!(decoded(&svg).starts_with(b"<svg"), "{}", svg.name);
+        assert_eq!(svg.mime, "image/svg+xml");
+        let err = page_file(&rt, &make(Path::new(""), Level::Symbols, Format::Json));
+        assert!(err.unwrap_err().to_string().contains("needs a project"));
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn the_page_reads_a_download_back_without_a_store() {
+        let (rt, dir, _) = linked("t32940-open");
+        let file = page_file(&rt, &make(&dir.join("a"), Level::Symbols, Format::Json)).unwrap();
+        let text = String::from_utf8(decoded(&file)).unwrap();
+        let shown = parse(&text, "saved.json").unwrap();
+        assert_eq!(shown.nodes.len(), 2);
+        assert!(
+            parse("{}", "x.json")
+                .unwrap_err()
+                .to_string()
+                .contains("x.json")
+        );
+        let request: ImportRequest =
+            serde_json::from_str(r#"{"name":"a.json","text":"{}"}"#).unwrap();
+        assert_eq!(request.name, "a.json");
+        let _ = fs::remove_dir_all(dir);
     }
 }

@@ -34,17 +34,7 @@ static VARIANTS: [Variant; 1] = [Variant {
 }];
 
 impl Agent for Windsurf {
-    fn id(&self) -> &'static str {
-        "windsurf"
-    }
-
-    fn variants(&self) -> &'static [Variant] {
-        &VARIANTS
-    }
-
-    fn readme(&self) -> &'static str {
-        include_str!("README.md")
-    }
+    super::agent_identity!("windsurf");
 
     fn support(&self, _kind: Kind, module: &str) -> Support {
         match module {

@@ -15,7 +15,7 @@ Source of intent: `ideas.md` (I-100/I-101 token-saving notes), `docs/prompt-cach
 |-------|------------|------------------|--------------------|
 | **Batch** | Provider async APIs (`/v1/batches`, `/v1/messages/batches`, …) | No — submit, poll, fetch results | **Pass-through** (no sync→Batch conversion) |
 | **Flex** | Same sync endpoints, cheaper/slower tier via `service_tier` | Yes | **Rewrite** in `prepare` (`[proxy.lanes.<lane>] flex`) |
-| **Model routing** | Pick a cheaper model for easy turns (D9) | Yes | **Rewrite** `model` (**planned**) |
+| **Model routing** | Pick a cheaper model for easy turns (D9) | Yes | **Rewrite** `model` on `internal` and opted-in `bulk` calls only (`[proxy.routing]`) |
 
 rtok does **not** transparently convert a live agent `POST /v1/messages` (or
 `/v1/chat/completions`) into a Batch job. Agents need the sync reply on the
@@ -49,7 +49,7 @@ compress / prepare / usage parsing and behave as a plain reverse hop with a
 | Sync chat wires | record + optional compress/prepare + usage | unchanged |
 | Batch endpoints | fallback forward; no `Wire`; no usage row | **planned**: observe batch lifecycle + result usage |
 | Flex (`service_tier`) | client may set it | `prepare` sets it on opted-in lanes only and never overwrites a client value unless `[proxy.flex] force` |
-| Model routing | single upstream URL; model left as client sent | **planned**: policy rewrite under `[proxy.routing]` |
+| Model routing | single upstream URL; model left as client sent | `internal` and opted-in `bulk` calls only, by an operator rule under `[proxy.routing]`; the `agent` lane is never routed |
 
 ## Batch API endpoints
 
@@ -180,13 +180,15 @@ a sync chat call. Both are stripped before forwarding. See `[proxy.lanes]` in
 - ~~when results are fetched, parse per-line usage into `usage` rows~~ — `[proxy.batch]
   parse_results` (T385.4); `rtok stats --price` costs that usage at the `<model>@batch` row of
   `[stats.prices]` (T385.12.1)
-- surface Batch vs sync vs Flex in `rtok report` / stats breakdowns (T385.12.2)
+- ~~surface Batch vs sync vs Flex in `rtok report` / stats breakdowns~~ — the `lane/tier` table
+  of `rtok stats` and the Cache section of `rtok report` (T385.12.2)
 
-**Planned for Flex:**
+**Flex:**
 
-- record the effective `service_tier` on the `calls` row (T385.12.2)
-- price Flex tokens with the `<model>@flex` rows, which ship in `[stats.prices]` (OpenAI
-  lists Flex at the Batch rates); nothing reads them until the tier is recorded
+- ~~record the effective `service_tier` on the `calls` row~~ — `calls.service_tier`, read from
+  the response, not the request (T385.12.2)
+- ~~price Flex tokens with the `<model>@flex` rows~~ — `stats --price` lists tier `flex` usage
+  under `<model>@flex` (OpenAI lists Flex at the Batch rates)
 
 Until those land, treat Batch/Flex savings as provider-console numbers, not
 rtok ledger numbers.
@@ -209,21 +211,18 @@ on_429 = "none"        # none | backoff | default
 retries = 3             # backoff only
 backoff_ms = 1000       # backoff only
 
-[proxy.routing]
-enabled = false         # model / tier routing (D9); off until a policy + Check exists
-sticky = true           # prefer one upstream for prompt-cache affinity (I-84)
-default_model = ""      # empty = leave client model
-# policy table / classifier: not specified yet (**TODO**)
+[proxy.routing]         # live (rules per lane, see config.md), unlike `sticky` below
+enabled = false         # model routing (D9) of internal / bulk calls; off by default
+sticky = true           # planned: prefer one upstream for prompt-cache affinity (I-84)
 ```
 
 
 ## Model routing (separate line)
 
-**Planned / Later** — not part of the Batch/Flex MVP. Decision **D9** /
-`research.md` §16.3 #3: route by job (cheap for mechanical work, mid for
-coding, expensive only after user confirm) by rewriting `model` on sync
-wires under `[proxy.routing]`. Sticky upstream (`sticky`, I-84) is
-prompt-cache affinity, not model pick. Full design: [model-routing.md](model-routing.md).
+**Opt-in, `internal` and `bulk` lanes only** — not part of the Batch/Flex MVP. Decision **D9** /
+`research.md` §16.3 #3: route by job by rewriting `model` under `[proxy.routing]`. The `agent`
+lane is never routed (agent-turn routing stays Later, behind I-101's quality gate). Sticky upstream
+(`sticky`, I-84, still planned) is prompt-cache affinity, not model pick. Full design: [model-routing.md](model-routing.md).
 
 ## Related
 
@@ -231,5 +230,5 @@ prompt-cache affinity, not model pick. Full design: [model-routing.md](model-rou
 - [config.md](config.md) — `[proxy.*]` reference
 - [comparison.md](comparison.md) — vs bifrost / Portkey / LiteLLM gateways
 - `architecture.md` §12 — where Batch/Flex sit in the proxy pipeline
-- [model-routing.md](model-routing.md) — D9 / §16.3 #3 (separate planned line from Batch/Flex)
+- [model-routing.md](model-routing.md) — D9 / §16.3 #3 (separate line from Batch/Flex)
 - `ideas.md` I-100/I-101 — Batch/Flex and model routing on the token-saving backlog

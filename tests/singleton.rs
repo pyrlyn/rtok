@@ -19,7 +19,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 /// The tree under `plugins/` a host links, and whether it ships an MCP server: the OpenCode
-/// plugin (shared by Kilo) filters bash output and carries none; OMP links Pi's extension,
+/// plugin (shared by Kilo and MiMo Code) filters bash output and carries none; OMP links Pi's extension,
 /// which leaves `registerTool` off there (the tools come from `mcp.json`). Cline's plugin
 /// (T95: the per-event hook links) is hooks only, and both `mcpServers.rtok` files (CLI + VS
 /// Code extension, T96.1) are meant to carry it at once, so neither is a duplicate of the
@@ -32,7 +32,7 @@ use std::path::Path;
 /// alongside the always-written `settings.json` entry, so it stays on the default arm below.
 fn plugin_tree(host: &str) -> (&str, bool) {
     match host {
-        "opencode" | "kilo" => ("opencode", false),
+        "opencode" | "kilo" | "mimo" => ("opencode", false),
         "omp" => ("pi", false),
         "cline" => ("cline", false),
         "claude" => ("claude", false),
@@ -43,6 +43,9 @@ fn plugin_tree(host: &str) -> (&str, bool) {
         "zcode" => ("zcode", false),
         "kimi" => ("kimi", false),
         "grok" => ("grok", false),
+        // T275.2: the Command Code tree is files the installer links, never a bundle the host
+        // loads; its `scripts/mcp.sh` is a by-hand command, so it serves no MCP by itself.
+        "commandcode" => ("commandcode", false),
         _ => (host, true),
     }
 }

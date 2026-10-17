@@ -83,9 +83,9 @@ describe("junk card", () => {
         const junk = within(await screen.findByRole("region", { name: "junk" }));
 
         fireEvent.click(junk.getByRole("button", { name: "Clear safe junk" }));
-        expect(junkMessages(w.sent)).toEqual([{ junk: { action: "plan", paths: [] } }]);
+        expect(junkMessages(w.sent)).toMatchObject([{ junk: { action: "plan", paths: [] } }]);
 
-        act(() => w.frame({ type: "junkplan", plan: mockJunk().plan() }));
+        act(() => w.answer({ type: "junkplan", plan: mockJunk().plan() }));
         const plan = within(await junk.findByRole("region", { name: "junk plan" }));
         expect(plan.getByText(/claude temp/).closest("details")?.textContent).toContain(
             "kept: agent running",
@@ -97,7 +97,7 @@ describe("junk card", () => {
         expect(junkMessages(w.sent)).toHaveLength(1);
 
         fireEvent.click(junk.getByRole("button", { name: "Clear safe junk" }));
-        act(() => w.frame({ type: "junkplan", plan: mockJunk().plan() }));
+        act(() => w.answer({ type: "junkplan", plan: mockJunk().plan() }));
         fireEvent.click(await junk.findByRole("button", { name: "Clear 2 items" }));
         expect(junkMessages(w.sent)).toHaveLength(2);
 
@@ -110,7 +110,7 @@ describe("junk card", () => {
             "/home/u/.claude/cache",
         ]);
 
-        act(() => w.frame({ type: "junkcleared", cleared: mockJunk().apply(apply.junk.paths) }));
+        act(() => w.answer({ type: "junkcleared", cleared: mockJunk().apply(apply.junk.paths) }));
         await waitFor(() =>
             expect(junk.getByRole("status").textContent).toBe("Freed 313.0 MB of 313.0 MB planned"),
         );

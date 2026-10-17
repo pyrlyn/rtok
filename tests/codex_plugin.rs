@@ -7,6 +7,7 @@
 
 mod common;
 
+use rtok::agents::hook_events;
 use serde_json::{Value, json};
 use std::fs;
 use std::path::PathBuf;
@@ -61,27 +62,30 @@ fn root_marketplace_points_at_the_plugins_codex_subdirectory() {
     );
 }
 
-/// The installer's event set (`agents::codex::COMPACT`): the plugin fires what the installer does.
+/// The installer's event set is the `codex` rows of `hook_events` (matchers included): the
+/// plugin fires what the installer does, each as `rtok hook <event> --host codex` (T645).
 #[test]
-fn hooks_are_the_installer_compaction_pair() {
+fn hooks_are_the_installer_rows() {
     let hooks = read("hooks/hooks.json")["hooks"].clone();
-    let want = ["PreCompact", "PostCompact"];
-    assert_eq!(hooks.as_object().unwrap().len(), want.len(), "{hooks}");
-    for event in want {
-        assert_eq!(
-            hooks[event],
-            json!([{"hooks": [{
-                "type": "command",
-                "command": format!(
-                    "command -v rtok >/dev/null 2>&1 && exec rtok hook {event}; \
-                     [ -x \"$HOME/.ketch/bin/rtok\" ] && exec \"$HOME/.ketch/bin/rtok\" hook {event}; \
-                     exit 0"
-                ),
-                "commandWindows": format!("rtok hook {event}"),
-                "timeout": 5
-            }]}]),
-            "{event}"
-        );
+    let rows: Vec<_> = hook_events::for_host("codex").collect();
+    assert_eq!(hooks.as_object().unwrap().len(), rows.len(), "{hooks}");
+    for row in rows {
+        let event = row.host_event;
+        assert_eq!(row.rtok_event, event, "Codex events keep their names");
+        let mut entry = json!({"hooks": [{
+            "type": "command",
+            "command": format!(
+                "command -v rtok >/dev/null 2>&1 && exec rtok hook {event} --host codex; \
+                 [ -x \"$HOME/.ketch/bin/rtok\" ] && exec \"$HOME/.ketch/bin/rtok\" hook {event} --host codex; \
+                 exit 0"
+            ),
+            "commandWindows": format!("rtok hook {event} --host codex"),
+            "timeout": 5
+        }]});
+        if !row.matcher.is_empty() {
+            entry["matcher"] = json!(row.matcher);
+        }
+        assert_eq!(hooks[event], json!([entry]), "{event}");
     }
 }
 
@@ -93,7 +97,7 @@ fn hooks_are_the_installer_compaction_pair() {
 fn hook_commands_resolve_path_then_ketch_then_exit_open() {
     let sh = common::HookShell::new("t250.1-codex-hooks");
     let hooks = read("hooks/hooks.json")["hooks"].clone();
-    for event in ["PreCompact", "PostCompact"] {
+    for event in hook_events::for_host("codex").map(|r| r.host_event) {
         let command = hooks[event][0]["hooks"][0]["command"].as_str().unwrap();
         let run = || {
             let (ok, stdout) = sh.run(command);

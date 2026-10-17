@@ -78,6 +78,10 @@ pub struct Report {
     /// lane, so a store of agent turns alone prints exactly what it did before lanes.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub lanes: BTreeMap<String, ApiRow>,
+    /// T385.12.2: the same counters per lane and service tier (`bulk/flex`, `agent/-`). Absent
+    /// with `lanes`, unless some response named a tier other than `standard` or `default`.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub lane_tiers: BTreeMap<String, ApiRow>,
     /// `Some` only for `rtok stats --price`: the default report is byte-identical
     /// with and without the price table (T49.1).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -385,6 +389,19 @@ pub struct CostReport {
     pub unknown: Vec<String>,
     pub total_cost: f64,
     pub total_saved: f64,
+    /// T385.10: USD per proxy lane, each lane costed at the models that served it. Empty — and
+    /// absent from JSON — while every request ran on the agent lane.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub lanes: BTreeMap<String, LaneCost>,
+}
+
+/// One lane's USD (`rtok stats --price`, T385.10).
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+pub struct LaneCost {
+    /// USD over the lane's priced models.
+    pub cost: f64,
+    /// True when some model on the lane has no `[stats.prices]` row, so `cost` is a floor.
+    pub partial: bool,
 }
 
 /// The config knobs the fold needs, so `collect` stays usable without a `Config`: the
@@ -489,6 +506,7 @@ impl Report {
         }
         s.push_str(&api_table("api", &self.api));
         s.push_str(&api_table("lane", &self.lanes));
+        s.push_str(&api_table("lane/tier", &self.lane_tiers));
         if self.ctt_total > 0 {
             let pct =
                 100.0 * (self.ctt_total as f64 - self.ctt_archive as f64) / self.ctt_total as f64;
@@ -899,23 +917,53 @@ pub fn attach_api(report: &mut Report, store: &Store) -> Result<()> {
     Ok(())
 }
 
-/// Per-lane cache-hit rows (T385.6). Left empty while every request ran on the agent lane:
-/// the `api` table already says the same, and the default report stays byte-identical.
-pub fn attach_lanes(report: &mut Report, store: &Store) -> Result<()> {
-    let lanes: BTreeMap<String, ApiRow> = store
-        .usage_by_lane()?
-        .into_iter()
-        .map(|row| {
-            let lane = crate::lane::lane_of_kind(&row.kind).to_string();
-            (
-                lane,
-                api_row(row.input, row.cache_create, row.cache_read, row.output),
-            )
-        })
-        .collect();
-    if lanes.keys().any(|lane| lane != "agent") {
-        report.lanes = lanes;
+/// Counters summed over several store rows, keyed the way the tables print them.
+fn fold_rows(rows: impl Iterator<Item = (String, [i64; 4])>) -> BTreeMap<String, ApiRow> {
+    let mut sums: BTreeMap<String, [i64; 4]> = BTreeMap::new();
+    for (key, legs) in rows {
+        let sum = sums.entry(key).or_default();
+        for (total, leg) in sum.iter_mut().zip(legs) {
+            *total += leg;
+        }
     }
+    sums.into_iter()
+        .map(|(key, [input, create, read, output])| (key, api_row(input, create, read, output)))
+        .collect()
+}
+
+/// The per-lane and per-lane-and-tier counters (T385.6, T385.12.2), `lane/tier` keyed; a call
+/// whose response named no tier prints `-`. Shared by `rtok stats` and `rtok report`.
+pub fn lane_rows(store: &Store) -> Result<(BTreeMap<String, ApiRow>, BTreeMap<String, ApiRow>)> {
+    let rows = store.usage_by_lane_tier()?;
+    let legs = |r: &rtok_store::LaneUsage| [r.input, r.cache_create, r.cache_read, r.output];
+    let lane = |r: &rtok_store::LaneUsage| crate::lane::lane_of_kind(&r.kind).to_string();
+    let lanes = fold_rows(rows.iter().map(|r| (lane(r), legs(r))));
+    let tiers = fold_rows(rows.iter().map(|r| {
+        let tier = r.tier.as_deref().unwrap_or("-");
+        (format!("{}/{tier}", lane(r)), legs(r))
+    }));
+    // Both tables stay empty while every request ran on the agent lane at the ordinary tier:
+    // the `api` table already says the same, and every Anthropic and OpenAI response names
+    // `standard` or `default`, which must not add a table to an untouched setup.
+    let off_agent = lanes.keys().any(|lane| lane != "agent");
+    let tiered = rows.iter().any(|r| {
+        r.tier
+            .as_deref()
+            .is_some_and(|t| !matches!(t, "standard" | "default"))
+    });
+    Ok((
+        if off_agent { lanes } else { BTreeMap::new() },
+        if off_agent || tiered {
+            tiers
+        } else {
+            BTreeMap::new()
+        },
+    ))
+}
+
+/// Per-lane cache-hit rows (T385.6) and the lane/tier breakdown (T385.12.2).
+pub fn attach_lanes(report: &mut Report, store: &Store) -> Result<()> {
+    (report.lanes, report.lane_tiers) = lane_rows(store)?;
     Ok(())
 }
 
@@ -1006,6 +1054,28 @@ pub fn attach_costs(
     costs.unknown.sort();
     costs.unknown.dedup();
     let round = |v: f64| (v * 1e6).round() / 1e6;
+    // Same rule as the lane counters: a store of agent turns alone prints what it always did.
+    let lane_rows = store.usage_by_lane_model_tier()?;
+    let lane_of = |kind: &Option<String>| {
+        kind.as_deref()
+            .map_or("agent", crate::lane::lane_of_kind)
+            .to_string()
+    };
+    if lane_rows.iter().any(|r| lane_of(&r.kind) != "agent") {
+        for row in &lane_rows {
+            let lane = costs.lanes.entry(lane_of(&row.kind)).or_default();
+            let u = &row.usage;
+            match prices.get(&u.model) {
+                Some(price) => {
+                    lane.cost += row_cost(u.input, u.cache_create, u.cache_read, u.output, price).0;
+                }
+                None => lane.partial = true,
+            }
+        }
+        for lane in costs.lanes.values_mut() {
+            lane.cost = round(lane.cost);
+        }
+    }
     costs.total_cost = round(costs.total_cost);
     costs.total_saved = round(costs.total_saved);
     report.cost = Some(costs);
@@ -1056,6 +1126,13 @@ impl CostReport {
             self.total_saved,
             self.unknown.len()
         ));
+        if !self.lanes.is_empty() {
+            s.push_str("cost by lane (USD; `*` = excludes models without a price)\n");
+            for (lane, c) in &self.lanes {
+                let star = if c.partial { "*" } else { "" };
+                s.push_str(&format!("  {lane:<12} {:>10.2}{star}\n", c.cost));
+            }
+        }
         s
     }
 }
@@ -1395,10 +1472,11 @@ fn fold_repeat(row: &mut RepeatRow, parsed: &Parsed) {
 /// `expand` of a shown id is a re-expand — the bytes the cut made the agent fetch again.
 fn fold_expand_after(row: &mut ExpandAfterRow, parsed: &Parsed) {
     static NAMED: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
-        regex::Regex::new(r"expand:? (?:rtok expand )?([0-9a-f]{64})").expect("static regex")
+        regex::Regex::new(r"(?:expand:? (?:rtok expand )?|\[rtok )([0-9a-f]{12,64})\b")
+            .expect("static regex")
     });
     static CALLED: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
-        regex::Regex::new(r"rtok expand ([0-9a-f]{64})").expect("static regex")
+        regex::Regex::new(r"rtok expand ([0-9a-f]{12,64})").expect("static regex")
     });
     let results: BTreeMap<&str, &str> = parsed
         .tool_results
@@ -1420,7 +1498,10 @@ fn fold_expand_after(row: &mut ExpandAfterRow, parsed: &Parsed) {
         } else {
             None
         };
-        if let Some(seen) = asked.and_then(|id| shown.get_mut(id)) {
+        // T661: the trailer names a 12-char prefix; key every id by it so a full-id
+        // expand still matches a prefix-shown result and vice versa.
+        let key = |id: &str| id[..id.len().min(12)].to_string();
+        if let Some(seen) = asked.and_then(|id| shown.get_mut(&key(id))) {
             row.calls += 1;
             row.bytes += content.len() as u64;
             row.shown_bytes += seen.take().unwrap_or(0);
@@ -1428,7 +1509,7 @@ fn fold_expand_after(row: &mut ExpandAfterRow, parsed: &Parsed) {
         }
         for c in NAMED.captures_iter(content) {
             shown
-                .entry(c[1].to_string())
+                .entry(key(&c[1]))
                 .or_insert(Some(content.len() as u64));
         }
     }
@@ -1589,7 +1670,7 @@ fn has_outline(_path: &str) -> bool {
 #[cfg(feature = "read")]
 fn has_rtok_marker(content: &str) -> bool {
     is_read_deny(content)
-        || content.contains("unchanged since ")
+        || content.contains(crate::plugins::read::cache::DEDUP_PREFIX)
         || content.starts_with("[archived ")
         || content.contains("[rtok ")
 }
@@ -1718,15 +1799,7 @@ pub(crate) fn tool_path(input: &Value) -> Option<&str> {
         .filter(|p| !p.is_empty())
 }
 
-/// Exact match, or relative-vs-absolute (`src/a.rs` vs `/repo/src/a.rs`).
-pub(crate) fn same_path(a: &str, b: &str) -> bool {
-    if a == b {
-        return true;
-    }
-    let a = Path::new(a);
-    let b = Path::new(b);
-    a.ends_with(b) || b.ends_with(a)
-}
+pub(crate) use crate::fs::same_spelling as same_path;
 
 pub(crate) fn pct(part: u64, whole: u64) -> f64 {
     if whole == 0 {
@@ -1997,6 +2070,64 @@ mod tests {
         assert_eq!(cost.models["gpt-5@batch"].cost, Some(5.625));
         assert_eq!(cost.unknown, ["mystery-1@batch"]);
         assert_eq!(cost.total_cost, 16.875);
+    }
+
+    /// T385.12.2: usage the provider reported serving on Flex is costed at the `@flex` row, and
+    /// the lane/tier table lists it beside the Batch lane's untiered rows; the ordinary tiers
+    /// alone add no table.
+    #[test]
+    fn flex_usage_is_priced_at_its_flex_row_and_listed_by_tier() {
+        let store = Store::open_in_memory().unwrap();
+        store
+            .upsert_session("s1", None, None, None, Some("proxy"))
+            .unwrap();
+        for (kind, tier) in [
+            ("api_request", Some("default")),
+            ("api_request:bulk", Some("flex")),
+            ("api_request:bulk", Some("default")),
+            ("api_request:batch", None),
+        ] {
+            let call = store
+                .insert_call("s1", "proxy", kind, None, None, None, None, Some("/x"))
+                .unwrap();
+            if let Some(tier) = tier {
+                store.set_call_service_tier(call, tier).unwrap();
+            }
+            store
+                .insert_usage(
+                    "s1",
+                    Some("gpt-5"),
+                    "openai_chat",
+                    1_000_000,
+                    0,
+                    0,
+                    1_000_000,
+                    call,
+                )
+                .unwrap();
+        }
+        let mut report = Report::default();
+        let prices = crate::config::Config::default().stats.prices;
+        attach_costs(&mut report, &store, &prices).unwrap();
+        attach_lanes(&mut report, &store).unwrap();
+        let cost = report.cost.unwrap();
+        assert_eq!(cost.models["gpt-5"].cost, Some(22.5));
+        assert_eq!(cost.models["gpt-5@flex"].cost, Some(5.625));
+        assert_eq!(cost.models["gpt-5@batch"].cost, Some(5.625));
+        let keys: Vec<_> = report.lane_tiers.keys().map(String::as_str).collect();
+        assert_eq!(
+            keys,
+            ["agent/default", "batch/-", "bulk/default", "bulk/flex"]
+        );
+        assert_eq!(report.lanes["bulk"].input, 2_000_000);
+
+        let agent_only = Store::open_in_memory().unwrap();
+        agent_only.insert_proxy_turn("s", 1, 0, 0, 1).unwrap();
+        let call = agent_only.call_ids_of_kind("api_request").unwrap()[0];
+        agent_only.set_call_service_tier(call, "standard").unwrap();
+        let mut plain = Report::default();
+        attach_lanes(&mut plain, &agent_only).unwrap();
+        assert!(plain.lanes.is_empty() && plain.lane_tiers.is_empty());
     }
 
     /// T364: a bad value is blamed on the place it came from, not always on `--since`.

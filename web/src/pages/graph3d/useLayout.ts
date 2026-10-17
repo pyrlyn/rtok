@@ -12,6 +12,8 @@ export type Vec3 = [number, number, number];
 export interface Positions {
   /** Updated in place by the layout; read it, never hold it across frames. */
   map: Map<number, Vec3>;
+  /** The last frame was the layout's resting one; a new topology clears it until the next rest. */
+  readonly settled: boolean;
   /** Calls `fn` after each layout frame; returns the unsubscribe. */
   subscribe(fn: () => void): () => void;
 }
@@ -20,6 +22,7 @@ export interface Positions {
 export function useLayout(scene: Scene): Positions {
   const map = useRef(new Map<number, Vec3>()).current;
   const subs = useRef(new Set<() => void>()).current;
+  const rest = useRef({ settled: false }).current;
   const client = useRef<ReturnType<typeof startLayout>>(undefined);
   const latest = useRef(scene);
   latest.current = scene;
@@ -27,6 +30,7 @@ export function useLayout(scene: Scene): Positions {
   useEffect(() => {
     const c = startLayout((f: Frame) => {
       map.clear();
+      rest.settled = f.settled;
       f.ids.forEach((id, i) => map.set(id, [f.pos[i * 3]!, f.pos[i * 3 + 1]!, f.pos[i * 3 + 2]!]));
       subs.forEach((fn) => fn());
     });
@@ -36,7 +40,7 @@ export function useLayout(scene: Scene): Positions {
       c.stop();
       client.current = undefined;
     };
-  }, [map, subs]);
+  }, [map, subs, rest]);
 
   const key = topology(scene);
   const first = useRef(key);
@@ -44,6 +48,7 @@ export function useLayout(scene: Scene): Positions {
     // The mount effect already pushed the first topology.
     if (first.current === key) return;
     first.current = key;
+    rest.settled = false;
     client.current?.push(layoutInput(latest.current));
   }, [key]);
 
@@ -55,5 +60,14 @@ export function useLayout(scene: Scene): Positions {
     [subs],
   );
   // One object for the layout's life: a consumer that rebuilds on a new `positions` (the 3D stage) must not rebuild on every render.
-  return useMemo(() => ({ map, subscribe }), [map, subscribe]);
+  return useMemo(
+    () => ({
+      map,
+      subscribe,
+      get settled() {
+        return rest.settled;
+      },
+    }),
+    [map, subscribe, rest],
+  );
 }

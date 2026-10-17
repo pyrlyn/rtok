@@ -15,7 +15,6 @@ use rtok::config::Config;
 use rtok::plugin::Runtime;
 use rtok::plugins::graph::events::Call;
 use rtok::testutil::config_file_in;
-use rtok::web::live::MAX_EVENTS;
 use rtok::web::{DashState, app};
 use rtok_plugin_sdk::Measurement;
 use serde_json::{Value, json};
@@ -39,9 +38,15 @@ impl Drop for Server {
 }
 
 async fn serve(label: &str) -> Server {
+    serve_after(label, |_| {}).await
+}
+
+/// `before` runs on the store before the server starts, like calls made before `rtok web`.
+async fn serve_after(label: &str, before: impl FnOnce(&Config)) -> Server {
     let dir = std::env::temp_dir().join(format!("rtok-live-{label}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let cfg = config_file_in(&dir);
+    before(&cfg);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
         .expect("bind");
@@ -69,7 +74,8 @@ async fn frame(ws: &mut Ws, wait: Duration) -> Option<Value> {
     }
 }
 
-/// A socket past its first snapshot and subscribed; the first `calls` frame is the ack.
+/// A socket past its first snapshot and subscribed; the first `calls` frame is the ack, and it
+/// carries the totals so far.
 async fn subscribed(s: &Server) -> (Ws, Value) {
     let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://{}/ws", s.addr))
         .await
@@ -84,7 +90,6 @@ async fn subscribed(s: &Server) -> (Ws, Value) {
     loop {
         let f = frame(&mut ws, Duration::from_secs(30)).await.expect("ack");
         if f["type"] == "calls" {
-            assert_eq!(f["batch"]["events"], json!([]), "the ack lists nothing");
             return (ws, f);
         }
     }
@@ -119,41 +124,37 @@ async fn a_call_from_another_process_reaches_the_socket_and_equals_its_stats_row
 
     let t0 = Instant::now();
     one_call(&other, "main", "(lsp)\na.rs:1 main");
-    let mut seen: Vec<Value> = Vec::new();
-    let end = loop {
+    let view = loop {
         let left = Duration::from_secs(1)
             .checked_sub(t0.elapsed())
-            .expect("the end event within one second");
+            .expect("the end of the call within one second");
         let f = frame(&mut ws, left)
             .await
             .expect("a calls frame within one second");
-        if f["type"] != "calls" {
-            continue;
-        }
-        let events = f["batch"]["events"].as_array().unwrap().clone();
-        seen.extend(events);
-        if let Some(e) = seen.iter().find(|e| e["phase"] == "end") {
-            break e.clone();
+        if f["type"] == "calls" && !f["calls"]["feed"].as_array().unwrap().is_empty() {
+            break f["calls"].clone();
         }
     };
-    assert_eq!(end["tool"], "callers");
-    assert_eq!(end["backend"], "lsp");
-    assert_eq!(end["session"], "mcp-other");
-    assert_eq!(end["ok"], true);
+    let row = &view["feed"][0];
+    assert_eq!(row["tool"], "callers");
+    assert_eq!(row["backend"], "lsp");
+    assert_eq!(row["session"], "mcp-other");
+    assert_eq!(
+        row["caller"], "mcp-othe",
+        "the store knows no agent or host for it"
+    );
+    assert_eq!(row["ok"], true);
 
-    // The event carries the very rows `rtok stats --plugin graph` lists.
+    // The totals are the very rows `rtok stats --plugin graph` lists.
     let stats = rtok::model::plugin_stats(&s.cfg, "graph").unwrap();
     let rows = stats["rows"].as_array().unwrap();
-    let samples = end["samples"].as_array().unwrap();
-    assert_eq!(samples.len(), rows.len());
-    for (sample, row) in samples.iter().zip(rows) {
-        assert_eq!(sample["kind"], row["kind"]);
-        assert_eq!(sample["before_bytes"], row["before"]);
-        assert_eq!(sample["after_bytes"], row["after"]);
-        assert_eq!(sample["est_before"], row["est_before"]);
-        assert_eq!(sample["est_after"], row["est_after"]);
-    }
-    assert_eq!(samples[0]["est_before"], 1000);
+    let want = |key: &str| -> i64 { rows.iter().map(|r| r[key].as_i64().unwrap()).sum() };
+    let total = &view["windows"][3];
+    assert_eq!(total["calls"], 1);
+    assert_eq!(total["before"], want("est_before"));
+    assert_eq!(total["after"], want("est_after"));
+    assert_eq!(row["before"], want("est_before"));
+    assert_eq!(total["before"], 1000);
 }
 
 #[tokio::test]
@@ -173,7 +174,7 @@ async fn a_burst_of_500_calls_arrives_in_bounded_frames_and_the_socket_stays_res
         .await
         .unwrap();
 
-    let (mut frames, mut ends, mut starts, mut est_before) = (0u32, 0u64, 0u64, 0i64);
+    let (mut frames, mut ends, mut est_before) = (0u32, 0u64, 0i64);
     let mut answered = None;
     let deadline = Instant::now() + Duration::from_secs(30);
     while ends < 500 {
@@ -184,17 +185,20 @@ async fn a_burst_of_500_calls_arrives_in_bounded_frames_and_the_socket_stays_res
             "message" if answered.is_none() => answered = Some(t.elapsed()),
             "calls" => {
                 frames += 1;
-                let b = &f["batch"];
-                assert!(b["events"].as_array().unwrap().len() <= MAX_EVENTS);
-                starts += b["summary"]["starts"].as_u64().unwrap();
-                ends += b["summary"]["ends"].as_u64().unwrap();
-                est_before += b["summary"]["est_before"].as_i64().unwrap();
+                let v = &f["calls"];
+                assert!(
+                    v["feed"].as_array().unwrap().len()
+                        <= s.cfg.plugins.graph.live_feed_rows as usize
+                );
+                // Every frame is the whole state: the last window is the total so far.
+                ends = v["windows"][3]["calls"].as_u64().unwrap();
+                est_before = v["windows"][3]["before"].as_i64().unwrap();
             }
             _ => {}
         }
     }
     writer.await.unwrap();
-    assert_eq!((starts, ends), (500, 500), "counters count every call");
+    assert_eq!(ends, 500, "the total counts every call");
     assert_eq!(est_before, 500 * 1000);
     assert!(
         frames <= 60,
@@ -207,50 +211,84 @@ async fn a_burst_of_500_calls_arrives_in_bounded_frames_and_the_socket_stays_res
 }
 
 #[tokio::test]
-async fn nothing_is_replayed_to_a_new_socket_or_a_restarted_server() {
-    let s = serve("replay").await;
-    let other = Runtime::open(s.cfg.clone(), "mcp-old").unwrap();
-    one_call(&other, "before_any_socket", "x");
+async fn the_totals_count_from_the_server_start_and_a_reload_reads_them_from_the_store() {
+    let s = serve_after("replay", |cfg| {
+        let old = Runtime::open(cfg.clone(), "mcp-old").unwrap();
+        one_call(&old, "before_the_server", "x");
+    })
+    .await;
+    let other = Runtime::open(s.cfg.clone(), "mcp-new").unwrap();
+    one_call(&other, "unsubscribed", "x");
 
     // Not subscribed: no calls frame, only snapshots.
     let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://{}/ws", s.addr))
         .await
         .unwrap();
-    one_call(&other, "unsubscribed", "x");
     while let Some(f) = frame(&mut ws, Duration::from_millis(800)).await {
         assert_ne!(f["type"], "calls", "an unsubscribed socket got call events");
     }
     drop(ws);
 
-    // Subscribed: the ack's head covers what is already stored, and only a new call arrives.
+    // The first page counts the call made after the server started, not the one before it.
     let (mut ws, ack) = subscribed(&s).await;
-    assert!(ack["batch"]["head"].as_i64().unwrap() >= 6);
+    assert_eq!(ack["calls"]["windows"][3]["calls"], 1, "{ack}");
+    assert_eq!(ack["calls"]["feed"][0]["target"], "unsubscribed");
     one_call(&other, "after", "x");
-    // The poll may fold the call into its end event; every event still names the call.
-    let mut targets = Vec::new();
-    while !targets.iter().any(|(phase, _)| phase == "end") {
-        let f = frame(&mut ws, Duration::from_secs(1))
+    loop {
+        let f = frame(&mut ws, Duration::from_secs(5))
             .await
             .expect("the new call");
-        if f["type"] == "calls" {
-            for e in f["batch"]["events"].as_array().unwrap() {
-                targets.push((e["phase"].clone(), e["target"].clone()));
-            }
+        if f["type"] == "calls" && f["calls"]["windows"][3]["calls"] == 2 {
+            break;
         }
     }
-    assert!(targets.iter().all(|(_, t)| t == "after"), "{targets:?}");
 
-    // A reconnect after a gap starts from the head again: the call written while no socket
-    // listened is not delivered.
+    // A reload: the poller stops with the last socket, a call lands in the gap, and the new
+    // page's totals are the store's sums since the server started, in the windows too.
     drop(ws);
     tokio::time::sleep(Duration::from_millis(700)).await;
     one_call(&other, "during_the_gap", "x");
-    let (mut ws, _) = subscribed(&s).await;
-    while let Some(f) = frame(&mut ws, Duration::from_millis(800)).await {
-        if f["type"] == "calls" {
-            assert_eq!(f["batch"]["events"], json!([]), "replayed: {f}");
-        }
+    let (_ws, ack) = subscribed(&s).await;
+    let total = &ack["calls"]["windows"][3];
+    assert_eq!(total["calls"], 3, "{ack}");
+    assert_eq!(total["before"], 3 * 1000);
+    assert_eq!(
+        ack["calls"]["windows"][1]["calls"], 3,
+        "the 5 min window too"
+    );
+    assert_eq!(ack["calls"]["feed"][0]["target"], "during_the_gap");
+    assert_eq!(ack["calls"]["feed"].as_array().unwrap().len(), 3);
+}
+
+#[tokio::test]
+async fn the_feed_names_the_agent_and_host_and_falls_back_to_the_session() {
+    let s = serve("callers").await;
+    let store = rtok::store::Store::open(&s.cfg.core.db_path).unwrap();
+    let claude = store.host_id("claude").unwrap().expect("seeded host");
+    let agent = store
+        .register_agent(claude, "host-session-1", None, None, None)
+        .unwrap();
+    // An `rtok mcp` process has a session row with its host and no agent row of its own.
+    store
+        .upsert_session("mcp-4242", Some(claude), None, None, Some("mcp"))
+        .unwrap();
+    for session in ["host-session-1", "mcp-4242", "mcp-unknown"] {
+        one_call(
+            &Runtime::open(s.cfg.clone(), session).unwrap(),
+            session,
+            "x",
+        );
     }
+    let (_ws, ack) = subscribed(&s).await;
+    assert_eq!(ack["calls"]["feed"].as_array().unwrap().len(), 3, "{ack}");
+    let caller = |target: &str| -> String {
+        let feed = ack["calls"]["feed"].as_array().unwrap();
+        let row = feed.iter().find(|r| r["target"] == target).unwrap();
+        row["caller"].as_str().unwrap().to_owned()
+    };
+    assert_eq!(caller("host-session-1"), format!("claude {}", &agent[..8]));
+    assert_eq!(caller("mcp-4242"), "claude mcp-4242");
+    assert_eq!(caller("mcp-unknown"), "mcp-unkn");
 }
 
 #[tokio::test]
@@ -271,4 +309,27 @@ async fn a_malformed_subscription_is_refused_with_a_message() {
             return;
         }
     }
+}
+
+#[tokio::test]
+async fn a_second_page_starts_from_the_totals_so_far_and_an_idle_stream_sends_nothing() {
+    let s = serve("second").await;
+    let (mut first, _) = subscribed(&s).await;
+    // Nothing changed since the ack, so nothing is sent.
+    while let Some(f) = frame(&mut first, Duration::from_millis(800)).await {
+        assert_ne!(f["type"], "calls", "an idle stream sent {f}");
+    }
+    let other = Runtime::open(s.cfg.clone(), "mcp-other").unwrap();
+    one_call(&other, "x", "y");
+    loop {
+        let f = frame(&mut first, Duration::from_secs(5))
+            .await
+            .expect("the call reaches the first page");
+        if f["type"] == "calls" && f["calls"]["windows"][3]["calls"] == 1 {
+            break;
+        }
+    }
+    let (_second, ack) = subscribed(&s).await;
+    assert_eq!(ack["calls"]["windows"][3]["calls"], 1, "{ack}");
+    assert_eq!(ack["calls"]["feed"][0]["target"], "x");
 }

@@ -16,7 +16,7 @@ use std::sync::{Arc, Mutex};
 use anyhow::{Result, bail};
 use rmcp::model::{
     CallToolResult, ContentBlock, Implementation, JsonObject, ListToolsResult, ProtocolVersion,
-    ServerCapabilities, ServerConfig, Tool,
+    ServerCapabilities, ServerConfig, Tool, ToolAnnotations,
 };
 use serde_json::{Value, json};
 
@@ -363,7 +363,7 @@ struct Server {
 impl Server {
     fn new(cfg: &Config) -> Result<Self> {
         // One session per process: `read_cache` rows are keyed by session and never expire, so
-        // the literal "mcp" made every `rtok mcp` process answer `unchanged since <sha>` for a
+        // the literal "mcp" made every `rtok mcp` process answer `unchanged id <sha>` for a
         // file only another conversation had read. The surface stays "mcp" (see `record`).
         let cx = Runtime::open(cfg.clone(), format!("mcp-{}", std::process::id()))?;
         // T351: sibling worktrees and client roots pass the path guard in this process only.
@@ -713,13 +713,53 @@ impl Server {
     }
 }
 
+/// Tools that change nothing a user or another agent would see (T528). They carry MCP
+/// `readOnlyHint`, so Codex's `default_tools_approval_mode = "writes"` runs them without
+/// asking and still asks for every other tool. `agent_inbox` counts: it marks only this
+/// session's own messages read. Only built-in tools are listed, so no plugin can claim a name.
+const READ_ONLY_TOOLS: &[&str] = &[
+    "expand",
+    "ping",
+    "whoami",
+    "worktree_list",
+    "agent_inbox",
+    "agents_list",
+    "agent_show",
+    "task_list",
+    "task_get",
+    "task_next",
+    "task_ready",
+    "read",
+    "search",
+    "tree",
+    "mem_search",
+    "mem_pack",
+    "mem_get",
+    "handoff",
+    "symbol",
+    "callers",
+    "impact",
+    "outline",
+    "explore",
+    "graph_diff",
+    "graph_export",
+    "docs_resolve",
+    "docs_query",
+    "docs_get",
+];
+
 fn to_tool(def: &ToolDef) -> Tool {
     let schema = def
         .input_schema
         .as_object()
         .cloned()
         .unwrap_or_else(JsonObject::new);
-    Tool::new(def.name, def.description, Arc::new(schema))
+    let tool = Tool::new(def.name, def.description, Arc::new(schema));
+    if READ_ONLY_TOOLS.contains(&def.name) {
+        tool.annotate(ToolAnnotations::new().read_only(true))
+    } else {
+        tool
+    }
 }
 
 fn invoke(cx: &Runtime, name: &str, args: &Value) -> Result<String> {
@@ -799,7 +839,7 @@ fn expand_text(cx: &Runtime, args: &Value) -> Result<String> {
     if let Some(spec) = args["lines"].as_str() {
         crate::expand::parse_range(spec, usize::MAX)?;
     }
-    let Some(bytes) = crate::expand::fetch(cx, id)? else {
+    let Some(bytes) = crate::expand::fetch_range(cx, id, args["lines"].as_str())? else {
         bail!(crate::expand::unknown_id_message(id));
     };
     let text = String::from_utf8_lossy(&bytes);
@@ -834,8 +874,16 @@ fn mem_save(cx: &Runtime, args: &Value) -> Result<String> {
     let title = args["title"].as_str().unwrap_or("");
     let body = args["body"].as_str().unwrap_or("");
     let project = args["project"].as_str();
-    let (id, updated) = crate::plugins::memory::mem_save(cx, kind, title, body, project)?;
-    Ok(json!({"id": id, "updated": updated}).to_string())
+    use crate::plugins::memory::Saved;
+    Ok(
+        match crate::plugins::memory::mem_save_gated(cx, kind, title, body, project)? {
+            Saved::Stored { id, updated } => json!({"id": id, "updated": updated}),
+            Saved::Refused { reason, existing } => {
+                json!({"id": existing, "updated": false, "refused": reason})
+            }
+        }
+        .to_string(),
+    )
 }
 
 #[cfg(feature = "docs")]
@@ -879,12 +927,30 @@ fn mem_search(cx: &Runtime, args: &Value) -> Result<String> {
     let max = u64::from(cx.config.plugins.memory.search_limit);
     let limit = args["limit"].as_u64().map_or(max, |n| n.min(max)) as u32;
     let hits = crate::plugins::memory::mem_search(cx, query, limit)?;
-    Ok(json!(
-        hits.iter()
-            .map(|h| json!({"id": h.id, "title": h.title, "snippet": h.snippet}))
-            .collect::<Vec<_>>()
-    )
-    .to_string())
+    if hits.is_empty() {
+        return Ok("no notes match".into());
+    }
+    Ok(hits
+        .iter()
+        .map(|h| mem_hit_line(h.id, &h.title, &h.snippet))
+        .collect::<Vec<_>>()
+        .join("\n"))
+}
+
+/// One `mem_search` hit per line: `id title: snippet`. The title is dropped when the
+/// snippet already contains it. A JSON object per hit repeated three keys and the quoting
+/// on every line (bench/c14 batch 3: 22-26 % of the reply).
+#[cfg(feature = "memory")]
+fn mem_hit_line(id: i32, title: &str, snippet: &str) -> String {
+    let snippet = snippet.split_whitespace().collect::<Vec<_>>().join(" ");
+    let title = title.trim();
+    if snippet.is_empty() || snippet == title {
+        format!("{id} {title}")
+    } else if title.is_empty() || snippet.contains(title) {
+        format!("{id} {snippet}")
+    } else {
+        format!("{id} {title}: {snippet}")
+    }
 }
 
 /// A JSON unsigned integer as `u32`, saturating: `as u32` would wrap `2^32 + 1` to `1`.
@@ -993,6 +1059,21 @@ fn handoff(cx: &Runtime, args: &Value) -> Result<String> {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "memory")]
+    #[test]
+    fn mem_hit_line_drops_a_title_the_snippet_repeats() {
+        assert_eq!(
+            super::mem_hit_line(3, "jwt", "use jwt\n  for sessions"),
+            "3 use jwt for sessions"
+        );
+        assert_eq!(
+            super::mem_hit_line(4, "auth", "tokens expire"),
+            "4 auth: tokens expire"
+        );
+        assert_eq!(super::mem_hit_line(5, "auth", ""), "5 auth");
+        assert_eq!(super::mem_hit_line(6, "", "body only"), "6 body only");
+    }
+
     use super::*;
     use crate::store::Store;
     use crate::testutil::config as tmp;
@@ -1017,6 +1098,54 @@ mod tests {
             next_line(&mut r, &mut buf, 64).unwrap().unwrap(),
             "{\"id\":1}\n"
         );
+    }
+
+    /// T528: tools that change a worktree, a task, a note or another agent's inbox; Codex asks
+    /// before each under `"writes"`.
+    const WRITING_TOOLS: &[&str] = &[
+        "worktree_add",
+        "worktree_remove",
+        "worktree_adopt",
+        "agent_send",
+        "agent_status_set",
+        "task_create",
+        "task_status",
+        "task_claim",
+        "task_release",
+        "task_dep",
+        "task_priority",
+        "task_conflict",
+        "task_parallel",
+        "mem_save",
+        "mem_update",
+    ];
+
+    /// T528: every built-in tool, enabled or not, is sorted into one list on purpose, so a new
+    /// tool can neither skip Codex's approval nor lose it by accident.
+    #[test]
+    fn every_tool_is_read_only_or_writing_and_only_read_only_ones_say_so() {
+        let (cfg, dir) = tmp("mcp-read-only");
+        let server = Server::new(&cfg).unwrap();
+        let defs: Vec<ToolDef> = server
+            .listed
+            .iter()
+            .map(|t| t.def.clone())
+            .chain(crate::plugins::all().iter().flat_map(|p| p.mcp_tools()))
+            .collect();
+        for def in &defs {
+            let read_only = READ_ONLY_TOOLS.contains(&def.name);
+            assert!(
+                read_only != WRITING_TOOLS.contains(&def.name),
+                "{} must be in exactly one list",
+                def.name
+            );
+            let hint = to_tool(def).annotations.and_then(|a| a.read_only_hint);
+            assert_eq!(hint, read_only.then_some(true), "{}", def.name);
+        }
+        for name in READ_ONLY_TOOLS.iter().chain(WRITING_TOOLS) {
+            assert!(defs.iter().any(|d| d.name == *name), "{name} is no tool");
+        }
+        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
@@ -1073,6 +1202,40 @@ mod tests {
         // Without `context` the hits stay bare, as before.
         let args = serde_json::json!({"id": id, "grep": "HIT"});
         assert_eq!(expand_text(&cx, &args).unwrap(), "2:HIT\n7:HIT");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T534: the MCP tool rejects a range past the payload before it freezes the decision or
+    /// records the expansion.
+    #[test]
+    fn expand_text_range_past_the_end_leaves_the_decision_unfrozen() {
+        let (cfg, dir) = tmp("mcp-range");
+        let cx = crate::plugin::Runtime::open(cfg, "mcp-range").unwrap();
+        let id = cx
+            .store
+            .put_archive("mcp", b"one line\n", &cx.config.core.archive_dir)
+            .unwrap();
+        cx.store
+            .put_archive_decision("tu-1", &id, "mcp-range", &format!("[archived {id}]"))
+            .unwrap();
+        let args = serde_json::json!({"id": id, "lines": "2-3"});
+        assert!(expand_text(&cx, &args).is_err());
+        let d = cx
+            .store
+            .archive_decision("mcp-range", "tu-1")
+            .unwrap()
+            .unwrap();
+        assert!(!d.expanded);
+        assert!(cx.store.list_measurements("archive").unwrap().is_empty());
+        let args = serde_json::json!({"id": id, "lines": "1"});
+        assert_eq!(expand_text(&cx, &args).unwrap(), "one line");
+        let d = cx
+            .store
+            .archive_decision("mcp-range", "tu-1")
+            .unwrap()
+            .unwrap();
+        assert!(d.expanded);
+        assert_eq!(cx.store.list_measurements("archive").unwrap().len(), 1);
         let _ = fs::remove_dir_all(dir);
     }
 
@@ -1180,9 +1343,13 @@ mod tests {
         let v_quoted: Value = serde_json::from_str(&server.handle_line(quoted).unwrap()).unwrap();
         assert_eq!(v_bare["result"]["isError"], false, "{v_bare}");
         assert_eq!(v_quoted["result"]["isError"], false, "{v_quoted}");
-        assert_eq!(
-            v_bare["result"]["content"][0]["text"],
-            v_quoted["result"]["content"][0]["text"]
+        // T672: the 8-char pointer is now shorter than this one-line body, so the second,
+        // identical read may come back as the dedup pointer instead of the text.
+        let bare_text = v_bare["result"]["content"][0]["text"].as_str().unwrap();
+        let quoted_text = v_quoted["result"]["content"][0]["text"].as_str().unwrap();
+        assert!(
+            quoted_text == bare_text || quoted_text.contains("identical to a result"),
+            "{quoted_text}"
         );
         let _ = fs::remove_dir_all(dir);
     }
@@ -1465,6 +1632,104 @@ mod tests {
             "notes table must stay empty"
         );
         let _ = fs::remove_dir_all(dir);
+    }
+
+    /// `tools/call` through the server; `(isError, text)`.
+    #[cfg(feature = "memory")]
+    fn call_text(server: &Server, name: &str, args: Value) -> (bool, String) {
+        let line = json!({"jsonrpc":"2.0","id":1,"method":"tools/call",
+            "params":{"name":name,"arguments":args}})
+        .to_string();
+        let v: Value = serde_json::from_str(&server.handle_line(&line).unwrap()).unwrap();
+        (
+            v["result"]["isError"] == true,
+            v["result"]["content"][0]["text"]
+                .as_str()
+                .unwrap_or_default()
+                .to_string(),
+        )
+    }
+
+    /// `mem_search` answers plain text, one `id title: snippet` line per note — not the
+    /// JSON array it used to — and `no notes match` (not `[]`) when nothing matches.
+    #[cfg(feature = "memory")]
+    #[test]
+    fn mem_search_answers_one_text_line_per_note() {
+        let (cfg, dir) = tmp("mcp-mem-search-lines");
+        let server = Server::new(&cfg).unwrap();
+        let (_, empty) = call_text(&server, "mem_search", json!({"query": "quokka"}));
+        assert_eq!(empty, "no notes match");
+        for (title, body) in [
+            ("alpha", "quokka first\nsecond line"),
+            ("beta: gamma", "quokka other"),
+        ] {
+            let (err, saved) =
+                call_text(&server, "mem_save", json!({"title": title, "body": body}));
+            assert!(!err, "{saved}");
+        }
+        let (err, text) = call_text(&server, "mem_search", json!({"query": "quokka"}));
+        assert!(!err, "{text}");
+        assert!(
+            serde_json::from_str::<Value>(&text).is_err(),
+            "reply must not be JSON: {text}"
+        );
+        assert!(
+            !text.contains("\"snippet\"") && !text.contains("\"title\""),
+            "{text}"
+        );
+        let lines: Vec<&str> = text.lines().collect();
+        assert_eq!(lines.len(), 2, "one line per note: {text}");
+        for l in &lines {
+            let (id, rest) = l.split_once(' ').expect("`id rest`");
+            assert!(id.parse::<i32>().is_ok(), "{l}");
+            assert!(rest.contains("quokka"), "{l}");
+        }
+        assert!(lines.iter().any(|l| l.contains("alpha: ")), "{text}");
+        assert!(lines.iter().any(|l| l.contains("beta: gamma: ")), "{text}");
+        // `limit` still caps the number of lines.
+        let (_, one) = call_text(
+            &server,
+            "mem_search",
+            json!({"query": "quokka", "limit": 1}),
+        );
+        assert_eq!(one.lines().count(), 1, "{one}");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// The schema still advertises `query` (required) and `limit` (integer) and the tool
+    /// stays read-only; only the reply shape changed.
+    #[cfg(feature = "memory")]
+    #[test]
+    fn mem_search_schema_is_unchanged_by_the_text_reply() {
+        let (cfg, dir) = tmp("mcp-mem-search-schema");
+        let server = Server::new(&cfg).unwrap();
+        let line = r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#;
+        let v: Value = serde_json::from_str(&server.handle_line(line).unwrap()).unwrap();
+        let tool = v["result"]["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|t| t["name"] == "mem_search")
+            .unwrap_or_else(|| panic!("mem_search not listed: {v}"));
+        assert_eq!(tool["inputSchema"]["required"], json!(["query"]), "{tool}");
+        assert_eq!(
+            tool["inputSchema"]["properties"]["limit"]["type"], "integer",
+            "{tool}"
+        );
+        assert_eq!(tool["annotations"]["readOnlyHint"], true, "{tool}");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// A hit is always one line: newlines and runs of blanks in the snippet collapse, and a
+    /// colon in the title or snippet does not change the `id` prefix.
+    #[cfg(feature = "memory")]
+    #[test]
+    fn mem_hit_line_is_one_line_and_keeps_colons() {
+        let l = super::mem_hit_line(7, "a: b", "x:\n\ty\r\n  z");
+        assert_eq!(l, "7 a: b: x: y z");
+        assert!(!l.contains('\n') && !l.contains('\r'), "{l}");
+        assert_eq!(super::mem_hit_line(8, " t ", "t"), "8 t");
+        assert_eq!(super::mem_hit_line(9, "t", " "), "9 t");
     }
 
     /// T283.1: `initialize` then `whoami` through the server's own JSON-RPC path, as a host

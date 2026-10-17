@@ -10,7 +10,8 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 const ESC: char = '\u{1b}';
-use rtok::ui::style::{Kind, OPERATION_ICONS};
+use operation_icons::OPERATION_ICONS;
+use rtok::ui::style::{Kind, OWN_ICONS};
 
 fn home(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("rtok-ui-{name}-{}", std::process::id()));
@@ -51,7 +52,10 @@ fn stdout(out: &Output) -> String {
 
 fn no_emoji(text: &str) {
     let tones = [Kind::Success, Kind::Info, Kind::Warn, Kind::Error].map(Kind::emoji);
-    let ops = OPERATION_ICONS.iter().map(|(_, icon)| *icon);
+    let ops = OPERATION_ICONS
+        .iter()
+        .chain(OWN_ICONS)
+        .map(|(_, icon)| *icon);
     for e in tones.into_iter().chain(ops) {
         assert!(!text.contains(e), "no emoji off a terminal: {text:?}");
     }
@@ -149,4 +153,18 @@ fn a_wait_draws_nothing_on_a_pipe() {
             }
         }
     }
+}
+
+/// T276.4: `rtok run` shows `running <command>…` while the command works, but only on a
+/// terminal; on a pipe (a host's shell tool) its bytes are the command's output and nothing else.
+#[test]
+fn rtok_run_draws_no_spinner_on_a_pipe() {
+    let home = home("run");
+    let out = rtok(
+        &home,
+        &["run", "--", "sh", "-c", "printf hi; sleep 0.3"],
+        &[],
+    );
+    assert_eq!(stdout(&out), "hi\n");
+    assert!(out.stderr.is_empty(), "{:?}", out.stderr);
 }

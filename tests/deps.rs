@@ -31,6 +31,29 @@ fn only_store_depends_on_diesel() {
     );
 }
 
+/// T668: semantic memory is the opt-in HTTP embedder over the stored hash/vector table. No
+/// vector, ONNX or embedding-model crate may enter any member's manifest (default or feature).
+#[test]
+fn no_member_depends_on_a_vector_or_model_crate() {
+    for dep in [
+        "ort",
+        "candle-core",
+        "fastembed",
+        "sqlite-vec",
+        "usearch",
+        "hnsw_rs",
+        "qdrant-client",
+        "lancedb",
+        "tract-onnx",
+    ] {
+        assert_eq!(
+            owners_of(dep),
+            Vec::<String>::new(),
+            "{dep} is not allowed (T668)"
+        );
+    }
+}
+
 /// T329.10: the graph text backend searches in process (D6, D18). Neither its module nor the walk
 /// it shares with `search` may name a way to start a program, so `rg`, `grep` and `ssh` cannot be
 /// run from it.
@@ -90,6 +113,45 @@ fn only_wasm_plugin_depends_on_wasmi() {
     assert_eq!(
         files_mentioning(&["wasmi::"]),
         vec!["src/plugins/wasm.rs".to_string()]
+    );
+}
+
+/// T276.6: `indicatif` draws only behind `rtok_sys::proc`, so every spinner and bar obeys one
+/// terminal check, `RTOK_NO_PROGRESS` and `disable_progress`.
+#[test]
+fn only_rtok_sys_depends_on_indicatif() {
+    assert_eq!(owners_of("indicatif"), ["rtok-sys"]);
+    assert_eq!(files_mentioning(&["indicatif::"]), Vec::<String>::new());
+}
+
+/// T276.6: `just lint` denies `Command::new` in libraries and binaries; only the all-targets
+/// pass, which lints tests too, allows it, and only `rtok-sys` opts out in code.
+#[test]
+fn the_lint_gate_bans_command_new_outside_rtok_sys() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let clippy = std::fs::read_to_string(root.join("clippy.toml")).unwrap();
+    assert!(
+        clippy.contains(r#"path = "std::process::Command::new""#),
+        "{clippy}"
+    );
+    let just = std::fs::read_to_string(root.join("justfile")).unwrap();
+    let lint: Vec<&str> = just
+        .lines()
+        .skip_while(|l| *l != "lint:")
+        .skip(1)
+        .take_while(|l| l.starts_with("    "))
+        .collect();
+    assert!(
+        lint.iter()
+            .any(|l| l.contains("--lib --bins") && !l.contains("disallowed_methods")),
+        "{lint:?}"
+    );
+    let allow = ["allow(clippy::disallowed_methods)"];
+    assert_eq!(files_mentioning(&allow), Vec::<String>::new());
+    let crates = files_mentioning_under("crates", &allow);
+    assert!(
+        crates.iter().all(|p| p.starts_with("crates/rtok-sys/")),
+        "{crates:?}"
     );
 }
 
@@ -243,10 +305,22 @@ fn package<'a>(meta: &'a serde_json::Value, name: &str) -> &'a serde_json::Value
         .unwrap_or_else(|| panic!("workspace package {name} missing from cargo metadata"))
 }
 
+/// `--filter-platform` the host: offline, an unfiltered resolve needs every platform's crates
+/// in the cache, and a host only downloads its own (resvg's fontconfig-parser is Linux-only).
+/// The checks read declared dependencies of workspace members, which the filter keeps.
 fn metadata() -> serde_json::Value {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let rustc = std::process::Command::new("rustc")
+        .arg("-vV")
+        .output()
+        .expect("rustc -vV");
+    let host = String::from_utf8_lossy(&rustc.stdout)
+        .lines()
+        .find_map(|l| l.strip_prefix("host: ").map(str::to_string))
+        .expect("rustc -vV names the host");
     let out = std::process::Command::new("cargo")
         .args(["metadata", "--format-version", "1", "--offline", "--locked"])
+        .args(["--filter-platform", &host])
         .current_dir(&root)
         .output()
         .expect("cargo metadata");

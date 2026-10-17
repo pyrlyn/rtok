@@ -76,17 +76,7 @@ pub(crate) fn for_kind(cfg: &Config, kind: Kind) -> Config {
 }
 
 impl Agent for OpenCode {
-    fn id(&self) -> &'static str {
-        "opencode"
-    }
-
-    fn variants(&self) -> &'static [Variant] {
-        &VARIANTS
-    }
-
-    fn readme(&self) -> &'static str {
-        include_str!("README.md")
-    }
+    super::agent_identity!("opencode");
 
     fn support(&self, _kind: Kind, module: &str) -> Support {
         match module {
@@ -169,9 +159,14 @@ pub static PLUGIN: HostPlugin = HostPlugin {
 
 /// Plugin dest: `<config dir>/plugins/rtok.ts` — OpenCode loads every `*.ts` there.
 pub fn plugin_dest(cfg: &Config) -> PathBuf {
-    cfg.setup
-        .opencode
-        .config_path
+    plugin_dest_beside(&cfg.setup.opencode.config_path)
+}
+
+/// [`plugin_dest`] for a fork of OpenCode (Kilo, MiMo Code) that loads the same
+/// `{plugin,plugins}/*.ts` from its own config dir, so each fork names its config file and
+/// shares this one path rule.
+pub fn plugin_dest_beside(config_file: &Path) -> PathBuf {
+    config_file
         .parent()
         .unwrap_or_else(|| Path::new("."))
         .join("plugins")

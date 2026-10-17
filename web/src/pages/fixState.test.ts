@@ -21,7 +21,7 @@ const item = (source: string, selected: boolean): Item => ({
   can_keep: false,
 });
 
-const plan = (...items: Item[]): Plan => ({ items, diff: "", refused: [] });
+const plan = (...items: Item[]): Plan => ({ items, diff: "", refused: [], token: "t1" });
 
 const run = (start: FixState, ...actions: FixAction[]) => actions.reduce(fixReducer, start);
 
@@ -65,10 +65,26 @@ describe("doctor fix reducer", () => {
     const applying = run(ready, { type: "ask" }, { type: "applying" });
     expect(applying.phase).toBe("applying");
     expect(fixReducer(applying, { type: "toggle", ref: ref("/u") })).toBe(applying);
-    const done = fixReducer(applying, { type: "applied", fixed: { text: "ok", code: 0 } });
+    const done = fixReducer(applying, {
+      type: "applied",
+      fixed: { text: "ok", code: 0, replan: null },
+    });
     expect(done.phase).toBe("done");
     expect(fixReducer(done, { type: "keep", ref: ref("/u") })).toBe(done);
     expect(fixReducer(done, { type: "again" })).toMatchObject({ phase: "loading", plan: null });
+  });
+
+  test("a confirmation the files no longer match shows the fresh plan and asks again", () => {
+    const ready = run(initialFix, { type: "planned", seq: 0, plan: plan(item("/u", true)) });
+    const applying = run(ready, { type: "ask" }, { type: "applying" });
+    const fresh = { ...plan(item("/u", true), item("/u2", true)), token: "t2" };
+    const s = fixReducer(applying, {
+      type: "applied",
+      fixed: { text: "changed since the preview\n", code: 1, replan: fresh },
+    });
+    expect(s).toMatchObject({ phase: "ready", result: null, error: "changed since the preview" });
+    expect(s.plan).toBe(fresh);
+    expect(fixReducer(s, { type: "ask" }).phase).toBe("confirming");
   });
 
   test("a failed request shows the error and keeps the selection", () => {

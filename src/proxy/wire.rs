@@ -351,31 +351,42 @@ pub(super) fn find_usage(value: &Value, fields: &UsageFields) -> Option<Usage> {
     })
 }
 
+fn is_sse(content_type: Option<&str>) -> bool {
+    content_type.is_some_and(|c| c.contains("text/event-stream"))
+}
+
+/// The captured SSE bytes as text. The capture is a byte prefix (a cap, an upstream error or a
+/// client disconnect can cut it inside a multibyte character), and strict UTF-8 over the whole
+/// buffer discarded every complete event before the cut (T584). A damaged tail becomes
+/// replacement characters inside one unparseable event, which `sse_events` already skips.
+fn sse_text(body: &[u8]) -> std::borrow::Cow<'_, str> {
+    String::from_utf8_lossy(body)
+}
+
+/// The JSON payloads of an SSE body's `data:` lines, skipping `[DONE]` and unparseable lines.
+fn sse_events(text: &str) -> impl Iterator<Item = Value> + '_ {
+    text.lines().filter_map(|line| {
+        let data = line.strip_prefix("data:")?.trim();
+        if data.is_empty() || data == "[DONE]" {
+            return None;
+        }
+        serde_json::from_str(data).ok()
+    })
+}
+
 /// Decode JSON or SSE response usage through the selected provider wire.
 pub fn usage_from_response(
     wire: &dyn Wire,
     content_type: Option<&str>,
     body: &[u8],
 ) -> Option<Usage> {
-    let text = std::str::from_utf8(body).ok()?;
-    if content_type.is_some_and(|c| c.contains("text/event-stream")) {
+    if is_sse(content_type) {
+        let text = sse_text(body);
         let mut usage = Usage::default();
         let mut found = false;
-        for line in text.lines() {
-            let Some(data) = line.strip_prefix("data:") else {
-                continue;
-            };
-            let data = data.trim();
-            if data.is_empty() || data == "[DONE]" {
-                continue;
-            }
-            let Ok(event) = serde_json::from_str(data) else {
-                continue;
-            };
-            if let Some(next) = wire.usage_from_sse(&event) {
-                found = true;
-                usage.merge(next);
-            }
+        for next in sse_events(&text).filter_map(|event| wire.usage_from_sse(&event)) {
+            found = true;
+            usage.merge(next);
         }
         found.then_some(usage)
     } else {
@@ -383,10 +394,125 @@ pub fn usage_from_response(
     }
 }
 
+/// The tier the provider says it served the request on (T385.12.2). OpenAI puts
+/// `service_tier` on the response object (Responses SSE nests it under `response`); Anthropic
+/// puts it in `usage` (`message.usage` on the `message_start` event). It is the response's
+/// word, not the request's: a Flex request can come back on another tier. Sources, checked
+/// 2026-10-10: openai-python `types/chat/chat_completion.py` and `types/responses/response.py`,
+/// anthropic-sdk-python `types/usage.py`.
+pub fn service_tier_from_response(content_type: Option<&str>, body: &[u8]) -> Option<String> {
+    fn tier(value: &Value) -> Option<String> {
+        let name = |v: &Value| v.get("service_tier")?.as_str().map(str::to_string);
+        name(value)
+            .or_else(|| name(value.get("usage")?))
+            .or_else(|| name(value.get("response")?))
+            .or_else(|| name(value.get("message")?.get("usage")?))
+    }
+    if is_sse(content_type) {
+        // A later event can restate it, so the last one named wins.
+        sse_events(&sse_text(body))
+            .filter_map(|event| tier(&event))
+            .last()
+    } else {
+        tier(&serde_json::from_slice(body).ok()?)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
+
+    /// T385.12.2: the tier is read from the response object, `usage`, or the nested
+    /// `response` / `message.usage` of a stream event, and the last stream mention wins.
+    #[test]
+    fn service_tier_comes_from_the_response_on_every_shape() {
+        let json = |v: Value| service_tier_from_response(None, v.to_string().as_bytes());
+        assert_eq!(
+            json(json!({"service_tier": "flex"})).as_deref(),
+            Some("flex")
+        );
+        assert_eq!(
+            json(json!({"usage": {"service_tier": "batch"}})).as_deref(),
+            Some("batch")
+        );
+        assert_eq!(json(json!({"usage": {"input_tokens": 1}})), None);
+        assert_eq!(service_tier_from_response(None, b"not json"), None);
+
+        let sse = |events: &[Value]| {
+            let text: String = events.iter().map(|e| format!("data: {e}\n\n")).collect();
+            service_tier_from_response(Some("text/event-stream"), text.as_bytes())
+        };
+        let responses = [
+            json!({"type": "response.created", "response": {"service_tier": "auto"}}),
+            json!({"type": "response.completed", "response": {"service_tier": "flex"}}),
+        ];
+        assert_eq!(sse(&responses).as_deref(), Some("flex"));
+        let anthropic =
+            [json!({"type": "message_start", "message": {"usage": {"service_tier": "standard"}}})];
+        assert_eq!(sse(&anthropic).as_deref(), Some("standard"));
+        assert_eq!(
+            sse(&[json!({"service_tier": "default", "choices": []})]).as_deref(),
+            Some("default")
+        );
+        assert_eq!(sse(&[json!({"choices": []})]), None);
+    }
+
+    /// T584: a capture cut inside a multibyte character keeps the complete events before it.
+    /// Every split point of a two-byte and a four-byte character, plus the controls.
+    #[test]
+    fn a_split_utf8_tail_keeps_the_complete_usage_and_tier_events() {
+        let wire = for_path("/v1/messages").unwrap();
+        let start = json!({"type": "message_start", "message": {"usage": {
+            "input_tokens": 100, "output_tokens": 1, "service_tier": "standard"}}});
+        let sse = Some("text/event-stream");
+        let head = format!("event: message_start\ndata: {start}\n\n").into_bytes();
+        let read = |body: &[u8]| {
+            (
+                usage_from_response(wire, sse, body),
+                service_tier_from_response(sse, body),
+            )
+        };
+        let (usage, tier) = read(&head);
+        assert_eq!(usage.map(|u| u.input), Some(100));
+        assert_eq!(tier.as_deref(), Some("standard"));
+
+        for ch in ["é", "€", "😀"] {
+            let delta = format!(
+                "event: content_block_delta\ndata: {{\"type\":\"content_block_delta\",\"delta\":{{\"text\":\"{ch}\"}}}}\n\n"
+            );
+            let at = delta.find(ch).unwrap();
+            for cut in 1..ch.len() {
+                let mut body = head.clone();
+                body.extend_from_slice(&delta.as_bytes()[..at + cut]);
+                assert!(std::str::from_utf8(&body).is_err(), "{ch} cut {cut}");
+                let (usage, tier) = read(&body);
+                let usage = usage.unwrap_or_else(|| panic!("{ch} cut {cut}: usage lost"));
+                assert_eq!((usage.input, usage.output), (100, 1), "{ch} cut {cut}");
+                assert_eq!(tier.as_deref(), Some("standard"), "{ch} cut {cut}");
+            }
+        }
+
+        // A bad byte before a later complete event does not hide either neighbour.
+        let end = format!(
+            "data: {}\n\n",
+            json!({"type": "message_delta", "usage": {"output_tokens": 9}})
+        );
+        let mut body = head.clone();
+        body.extend_from_slice(b"data: \xff\xfe\n\n");
+        body.extend_from_slice(end.as_bytes());
+        assert_eq!(read(&body).0.map(|u| (u.input, u.output)), Some((100, 9)));
+
+        // Controls: no usage event stays unknown; a truncated plain JSON body stays invalid.
+        assert_eq!(
+            read(b"data: {\"type\":\"ping\"}\n\ndata: \xc3"),
+            (None, None)
+        );
+        assert_eq!(
+            usage_from_response(wire, None, b"{\"usage\":{\"input_tokens\":1,\"x\":\"\xc3"),
+            None
+        );
+    }
 
     #[test]
     fn int_field_accepts_whole_number_floats() {

@@ -37,6 +37,12 @@
   and capped together. `symbol` / `callers` / `impact` / `explore` prepend
   `index <oldsha> head <newsha>` when the stored HEAD differs (full hex, no timestamp).
   `outline` does not. `worktree add` copies symbol rows from the main checkout.
+- T620 `lsp.rs`: a `Session` never reads or writes the server's pipes on the caller's thread. A reader
+  and a writer thread own them; `request` waits on a channel for `lsp_timeout_ms`, and expiry kills and
+  reaps the server so it respawns clean. Do not add a blocking pipe call to `Session`.
+- T621 `lsp.rs`: the server keeps the text it was sent and ignores the disk, so `did_open` re-reads the
+  file and sends `didChange` (or close + open) when it differs, and `with_session` re-syncs every open
+  document before each query. Never record a document as sent before its notification is queued.
 - `drill.rs` (T329.14) answers the graph page's level 2 over `/ws` (`{"graph": ...}`); it reads the
   `symbol_graph.rs` scans only, so a name defined in more than 3 files draws no edge.
 - `events.rs` (T329.15) writes the start, progress and end events of an MCP graph call to `graph_events`
@@ -63,11 +69,14 @@
   T329.35: `report` builds the typed `DiffReport` (what `--json` prints and the web `diff` frame carries; a change to it
   regenerates `web/src/api/ws.schema.json`); `page` is the websocket entry. The websocket takes export TEXT (`export::parse`),
   never a path, because anything on localhost can send a message; rows are capped per list (`PAGE_ROWS`).
-- `export.rs` (T329.16) answers `rtok graph export` and MCP `graph_export`, the seventh tool (surface gate 170 tokens, 165 measured).
+- `export.rs` (T329.16) answers `rtok graph export` and MCP `graph_export`, the seventh tool (surface gate 170 tokens, 165 measured). `draw.rs` (T329.31) draws an `Export` as SVG and rasterises it to PNG (`resvg`); it reads nothing but the `Export`, so a saved file draws the same picture, and the MCP tool stays JSON.
   One `Export` (the `rtok.graph.v1` types, schema committed at `docs/schemas/rtok.graph.v1.schema.json` and checked
   by `committed_schema_is_current`) is built from `projects::row` and the store's def/ref scans, or read back by
   `export::read`; every output is a function of it, so the import never touches the registry or the index. Redaction is on by default and always on for MCP. A change to an export type is a schema
-  change: regenerate the file and, when a field changes meaning, bump the schema id.
+  change: regenerate the file and, when a field changes meaning, bump the schema id. The graph page's Export menu
+  (T329.40) is the `ExportRequest` message: `page_file` calls the same `render` as the CLI (redacted, pretty) and the
+  frame carries the bytes as base64; an opened file is the `ImportRequest` text, parsed by `export::parse` with no
+  `Runtime` opened.
 - `tests/graph_contract.rs` pins the four tools through `rtok mcp`. Output changes are a
   task whose commit updates the expected strings; a backend must pass the file untouched.
 - A tool listed by `mcp_tools()` is routed in `src/mcp.rs` `invoke` — `tools/list` and

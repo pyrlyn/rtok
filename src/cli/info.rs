@@ -4,8 +4,8 @@
 
 use super::util::print_json;
 use crate::config::Config;
-use crate::render::with_loader;
 use anyhow::Result;
+use rtok_sys::proc::ProgressRunner;
 use std::path::PathBuf;
 
 #[derive(clap::Args)]
@@ -18,7 +18,7 @@ pub(super) struct Args {
 pub(super) fn run(config_file: &Option<PathBuf>, args: Args) -> Result<()> {
     let Args { json } = args;
     let cfg = Config::load_with(config_file.as_deref(), None)?;
-    let info = with_loader("reading status", || {
+    let info = ProgressRunner::wait("reading status…", || {
         crate::info::collect(&cfg, config_file.as_deref())
     });
     if json {

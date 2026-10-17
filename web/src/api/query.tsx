@@ -16,14 +16,18 @@ import {
 } from "@tanstack/react-query";
 import { createContext, useContext, useEffect, useMemo, useRef, type ReactNode } from "react";
 import type {
-    CallBatch,
+    CallsView,
     Cleared,
     ClientMessage,
     DiffReport,
     DiffRequest,
     DrillGraph,
     DrillRequest,
+    Export,
+    ExportFile,
+    ExportRequest,
     Fixed,
+    ImportRequest,
     Plan,
     ProjectRequest,
     Selection,
@@ -44,6 +48,28 @@ export const JUNK_TIMEOUT_MS = 120_000;
 // A project select can index the project before the server answers.
 export const WRITE_TIMEOUT_MS = 30_000;
 
+/** A saved graph export the server parsed (T329.40); the page shows it read-only. */
+export interface Imported {
+    name: string;
+    export: Export;
+}
+
+/** What removing a project would drop, in the words of `graph projects remove --dry-run` (T329.54). */
+export interface ProjectPlan {
+    project: string;
+    plan: string;
+}
+
+type Answer =
+    | Plan
+    | Fixed
+    | Cleared
+    | DrillGraph
+    | DiffReport
+    | ExportFile
+    | Imported
+    | ProjectPlan;
+
 export interface Api {
     open(): void;
     close(): void;
@@ -53,15 +79,22 @@ export interface Api {
     expand(id: string): Promise<string>;
     set(request: SetRequest): Promise<void>;
     project(request: ProjectRequest): Promise<void>;
+    /** The dry run of removing a project; nothing is removed until a confirmed `project` request. */
+    projectPlan(project: string): Promise<ProjectPlan>;
     doctorPlan(selection: Selection): Promise<Plan>;
-    doctorApply(selection: Selection): Promise<Fixed>;
+    // `confirmed` is the token of the plan the user saw; the server writes only that preview.
+    doctorApply(selection: Selection, confirmed: string): Promise<Fixed>;
     junkPlan(): Promise<Cleared>;
     junkApply(paths: string[]): Promise<Cleared>;
     drill(request: DrillRequest): Promise<DrillGraph>;
     /** What a change did to a project's graph (T329.35); the old side is a ref or export text. */
     diff(request: DiffRequest): Promise<DiffReport>;
+    /** The file `rtok graph export` writes for the same arguments (T329.40). */
+    exportGraph(request: ExportRequest): Promise<ExportFile>;
+    /** A saved export's text, parsed by the server; nothing is written (T329.40). */
+    importGraph(request: ImportRequest): Promise<Imported>;
     /** Starts the graph call stream (T329.26) for as long as a listener is registered; returns the stop. */
-    calls(listener: (batch: CallBatch) => void): () => void;
+    calls(listener: (view: CallsView) => void): () => void;
 }
 
 // `set` and `project` get no reply of their own: the server answers a write with the next
@@ -77,14 +110,23 @@ interface PendingExpand {
     reject(error: Error): void;
 }
 
-// The server answers doctor requests in the order it received them, on one socket, so the
-// queue is matched by the kind of frame it waits for. A graph frame names its project and
-// not the request, and the server answers those off the executor, so `key` (the project)
-// is what ties it back; within one project the order holds.
+// Each doctor-style request carries a fresh `req` and the server echoes it on its answer, so a
+// reply is matched to the request it answers and to nothing else: one that arrives after its
+// request timed out (or after a reconnect) finds no entry and is dropped, instead of settling a
+// newer request for the same project or kind (T623). `kind` is the frame the answer must be.
 interface PendingDoctor {
-    kind: "doctorplan" | "doctorfixed" | "junkplan" | "junkcleared" | "graph" | "diff";
-    key?: string;
-    resolve(frame: Plan | Fixed | Cleared | DrillGraph | DiffReport): void;
+    req: number;
+    kind:
+        | "doctorplan"
+        | "doctorfixed"
+        | "junkplan"
+        | "junkcleared"
+        | "projectplan"
+        | "graph"
+        | "diff"
+        | "export"
+        | "imported";
+    resolve(frame: Answer): void;
     reject(error: Error): void;
 }
 
@@ -97,11 +139,13 @@ export function createApi(
     let pending: PendingExpand[] = [];
     let pendingDoctor: PendingDoctor[] = [];
     let pendingWrites: PendingWrite[] = [];
+    // Never reset, so an id is not reused on this page even across reconnects.
+    let nextReq = 0;
     // While paused the socket keeps reading, but frames fold into `held` and the cache keeps the
     // snapshot on screen, so `dataUpdatedAt` stays the age of what the reader sees.
     let paused = false;
     let held: Snapshot | undefined;
-    const callListeners = new Set<(batch: CallBatch) => void>();
+    const callListeners = new Set<(view: CallsView) => void>();
     const subscribeCalls = (subscribe: boolean) => connection?.send({ calls: { subscribe } });
 
     const writeSnapshot = (update: (prev: Snapshot | undefined) => Snapshot | undefined) => {
@@ -124,6 +168,13 @@ export function createApi(
         const failedWrites = pendingWrites;
         pendingWrites = [];
         for (const p of failedWrites) p.reject(new Error(reason));
+    };
+
+    const rejectDoctor = (req: number, reason: string) => {
+        const i = pendingDoctor.findIndex((p) => p.req === req);
+        if (i < 0) return;
+        const [entry] = pendingDoctor.splice(i, 1);
+        entry?.reject(new Error(reason));
     };
 
     const write = (message: ClientMessage) =>
@@ -153,27 +204,23 @@ export function createApi(
         for (const p of done) p.resolve();
     };
 
-    const settleDoctor = (
-        kind: PendingDoctor["kind"],
-        frame: Plan | Fixed | Cleared | DrillGraph | DiffReport,
-        key?: string,
-    ) => {
-        const i = pendingDoctor.findIndex((p) => p.kind === kind && p.key === key);
+    const settleDoctor = (kind: PendingDoctor["kind"], frame: Answer, req?: number) => {
+        const i = pendingDoctor.findIndex((p) => p.req === req && p.kind === kind);
         if (i < 0) return;
         const [entry] = pendingDoctor.splice(i, 1);
         entry?.resolve(frame);
     };
 
-    const askDoctor = <T extends Plan | Fixed | Cleared | DrillGraph | DiffReport>(
+    const askDoctor = <T extends Answer>(
         kind: PendingDoctor["kind"],
         message: ClientMessage,
-        key?: string,
         timeoutMs = DOCTOR_TIMEOUT_MS,
     ) =>
         new Promise<T>((resolve, reject) => {
+            nextReq += 1;
             const entry: PendingDoctor = {
+                req: nextReq,
                 kind,
-                key,
                 resolve: (frame) => {
                     clearTimeout(timer);
                     resolve(frame as T);
@@ -188,7 +235,7 @@ export function createApi(
                 reject(new Error(`${kind} timed out`));
             }, timeoutMs);
             pendingDoctor.push(entry);
-            if (!connection?.send(message)) {
+            if (!connection?.send({ ...message, req: entry.req })) {
                 pendingDoctor = pendingDoctor.filter((p) => p !== entry);
                 entry.reject(new Error("not connected"));
             }
@@ -213,30 +260,45 @@ export function createApi(
                 return;
             }
             case "doctorplan":
-                settleDoctor("doctorplan", frame.plan);
+                settleDoctor("doctorplan", frame.plan, frame.req);
                 return;
             case "doctorfixed":
-                settleDoctor("doctorfixed", frame.fixed);
+                settleDoctor("doctorfixed", frame.fixed, frame.req);
+                return;
+            case "projectplan":
+                settleDoctor(
+                    "projectplan",
+                    { project: frame.project, plan: frame.plan },
+                    frame.req,
+                );
                 return;
             case "junkplan":
-                settleDoctor("junkplan", frame.plan);
+                settleDoctor("junkplan", frame.plan, frame.req);
                 return;
             case "junkcleared":
-                settleDoctor("junkcleared", frame.cleared);
+                settleDoctor("junkcleared", frame.cleared, frame.req);
                 return;
             case "graph":
-                settleDoctor("graph", frame.graph, String(frame.graph.project));
+                settleDoctor("graph", frame.graph, frame.req);
                 return;
             case "diff":
-                settleDoctor("diff", frame.diff, frame.project);
+                settleDoctor("diff", frame.diff, frame.req);
+                return;
+            case "export":
+                settleDoctor("export", frame.file, frame.req);
+                return;
+            case "imported":
+                settleDoctor("imported", { name: frame.name, export: frame.export }, frame.req);
                 return;
             case "calls":
-                for (const listener of callListeners) listener(frame.batch);
+                for (const listener of callListeners) listener(frame.calls);
                 return;
             case "message":
-                // The server's refusals do not name the request they answer, so a message fails
-                // every request in flight instead of leaving it to the timeout.
-                rejectAll(frame.text);
+                // A refusal names its request when it had an id: only that one fails. One without
+                // (a write, or a message the server could not tie to a request) fails every request
+                // in flight instead of leaving them to the timeout.
+                if (frame.req === undefined) rejectAll(frame.text);
+                else rejectDoctor(frame.req, frame.text);
         }
     };
 
@@ -297,27 +359,36 @@ export function createApi(
         },
         set: (request) => write({ set: request }),
         project: (request) => write({ project: request }),
+        projectPlan: (project) =>
+            askDoctor<ProjectPlan>(
+                "projectplan",
+                { project: { action: "remove", project, confirmed: false } },
+                WRITE_TIMEOUT_MS,
+            ),
         doctorPlan: (selection) =>
-            askDoctor<Plan>("doctorplan", { doctor: { action: "plan", selection } }),
-        doctorApply: (selection) =>
-            askDoctor<Fixed>("doctorfixed", { doctor: { action: "apply", selection } }),
+            askDoctor<Plan>("doctorplan", {
+                doctor: { action: "plan", selection, confirmed: null },
+            }),
+        doctorApply: (selection, confirmed) =>
+            askDoctor<Fixed>("doctorfixed", {
+                doctor: { action: "apply", selection, confirmed },
+            }),
         junkPlan: () =>
             askDoctor<Cleared>(
                 "junkplan",
                 { junk: { action: "plan", paths: [] } },
-                undefined,
                 JUNK_TIMEOUT_MS,
             ),
         junkApply: (paths) =>
             askDoctor<Cleared>(
                 "junkcleared",
                 { junk: { action: "apply", paths } },
-                undefined,
                 JUNK_TIMEOUT_MS,
             ),
-        // `request.project` is the registry id as text, which is what the frame carries back.
-        drill: (request) => askDoctor<DrillGraph>("graph", { graph: request }, request.project),
-        diff: (request) => askDoctor<DiffReport>("diff", { diff: request }, request.project),
+        drill: (request) => askDoctor<DrillGraph>("graph", { graph: request }),
+        diff: (request) => askDoctor<DiffReport>("diff", { diff: request }),
+        exportGraph: (request) => askDoctor<ExportFile>("export", { export: request }),
+        importGraph: (request) => askDoctor<Imported>("imported", { import: request }),
         calls(listener) {
             callListeners.add(listener);
             if (callListeners.size === 1) subscribeCalls(true);
@@ -394,11 +465,19 @@ export function useProjectMutation() {
     return useWrite<ProjectRequest>("project", (request) => api.project(request));
 }
 
+export function useProjectPlan(): Pick<Api, "projectPlan"> {
+    return useApi();
+}
+
 export function useDoctorApi(): Pick<Api, "doctorPlan" | "doctorApply"> {
     return useApi();
 }
 
 export function useJunkApi(): Pick<Api, "junkPlan" | "junkApply"> {
+    return useApi();
+}
+
+export function useGraphFileApi(): Pick<Api, "exportGraph" | "importGraph"> {
     return useApi();
 }
 
@@ -439,10 +518,10 @@ export function useExpandMutation() {
     return useMutation({ mutationFn: (id: string) => api.expand(id) });
 }
 
-/** Delivers every call batch while mounted; the socket subscribes only for as long as a page listens. */
-export function useCallStream(onBatch: (batch: CallBatch) => void) {
+/** Delivers every calls frame while mounted; the socket subscribes only for as long as a page listens. */
+export function useCallStream(onView: (view: CallsView) => void) {
     const api = useApi();
-    const latest = useRef(onBatch);
-    latest.current = onBatch;
-    useEffect(() => api.calls((batch) => latest.current(batch)), [api]);
+    const latest = useRef(onView);
+    latest.current = onView;
+    useEffect(() => api.calls((view) => latest.current(view)), [api]);
 }

@@ -7,7 +7,7 @@
 use crate::config::Config;
 use anyhow::{Result, bail};
 use rtok_plugin_sdk::{Archive, Class, Measurement};
-use std::process::Command;
+use rtok_sys::proc::{ProgressRunner, exit_code};
 
 use super::{formatters, rules};
 
@@ -147,17 +147,27 @@ fn shell(cfg: &Config) -> String {
 /// `shell` running `body`. `script_for` already quoted a cmd.exe body for cmd.exe
 /// (`"…"`, `""`); `Command::arg` would quote it again with MSVC rules (`\"`), which
 /// cmd.exe does not parse, so on Windows the body goes onto the command line as is (T83.8).
-fn shell_command(shell: &str, body: &str) -> Command {
-    let mut cmd = Command::new(shell);
+fn shell_command(shell: &str, body: &str, label: &str) -> ProgressRunner {
     let args = shell_args(shell, body);
     #[cfg(windows)]
     if let (ShellKind::Cmd, Some((body, flags))) = (shell_kind(shell), args.split_last()) {
-        use std::os::windows::process::CommandExt;
-        cmd.args(flags).raw_arg(body);
-        return cmd;
+        return ProgressRunner::new(label, shell, flags).raw_arg(body);
     }
-    cmd.args(args);
-    cmd
+    ProgressRunner::new(label, shell, args)
+}
+
+/// The spinner message of `rtok run`: the command as typed, cut so a long script keeps the
+/// line on one row.
+fn running_label(args: &[String]) -> String {
+    let text = args.join(" ");
+    let line: String = text
+        .lines()
+        .next()
+        .unwrap_or_default()
+        .chars()
+        .take(60)
+        .collect();
+    format!("running {line}…")
 }
 
 /// Flags + script body for `Command::new(shell)`.
@@ -210,8 +220,9 @@ pub(crate) fn names_the_id(filtered: &str, id: &str) -> bool {
 /// The pointer line appended after a filtered body: names the id, the line count and
 /// how to expand it. The one spelling shared by `rtok run`, `rtok filter --archive`
 /// and `rtok filter --stdin` so the three surfaces stay byte-identical.
+/// T661, T672: the first 8 hex chars name the archive; `rtok expand` resolves a unique prefix.
 pub(crate) fn trailer(id: &str, lines: u32) -> String {
-    format!("[rtok {id} · {lines} lines · expand: rtok expand {id}]")
+    format!("[rtok {} · {lines} lines]", crate::names::short_id(id))
 }
 
 /// `body` up to the noise a filter may remove without a reader losing anything:
@@ -266,11 +277,11 @@ const CAPTURE_CAP: u64 = 32 * 1024 * 1024;
 
 /// Run `cmd` and return its stdout then stderr (at most `cap` bytes together) and its exit
 /// code. A capped body ends with a notice line, so the archive says it is partial.
-fn capture_body(cmd: std::process::Command, cap: u64) -> Result<(Vec<u8>, i32)> {
-    let out = crate::proc::capture_capped(cmd, None, Some(cap))?;
-    let (mut body, code) = (out.stdout, out.code.unwrap_or(1));
+fn capture_body(cmd: ProgressRunner, cap: u64) -> Result<(Vec<u8>, i32)> {
+    let (out, dropped) = cmd.run_capped(cap)?;
+    let (mut body, code) = (out.stdout, exit_code(out.status).unwrap_or(1));
     body.extend(out.stderr);
-    if out.dropped > 0 {
+    if dropped > 0 {
         if !body.is_empty() && !body.ends_with(b"\n") {
             body.push(b'\n');
         }
@@ -278,10 +289,7 @@ fn capture_body(cmd: std::process::Command, cap: u64) -> Result<(Vec<u8>, i32)> 
             c if c % (1024 * 1024) == 0 => format!("{} MiB", c / (1024 * 1024)),
             c => format!("{c} bytes"),
         };
-        let notice = format!(
-            "[rtok: output capped at {cap}; {} bytes not captured]\n",
-            out.dropped
-        );
+        let notice = format!("[rtok: output capped at {cap}; {dropped} bytes not captured]\n");
         body.extend_from_slice(notice.as_bytes());
     }
     Ok((body, code))
@@ -297,7 +305,8 @@ pub fn run(cfg: &Config, args: &[String], agent: Option<&str>) -> Result<i32> {
     }
     let sh = shell(cfg);
     let sh_kind = shell_kind(&sh);
-    let (body, code) = capture_body(shell_command(&sh, &script_for(sh_kind, args)), CAPTURE_CAP)?;
+    let cmd = shell_command(&sh, &script_for(sh_kind, args), &running_label(args));
+    let (body, code) = capture_body(cmd, CAPTURE_CAP)?;
     emit_filtered(cfg, args, &body, code, agent);
     Ok(code)
 }
@@ -327,11 +336,19 @@ fn emit_filtered_to(
             let _ = out.write_all(b"\n");
         }
     };
+    // The fallbacks below print the command's own bytes: `before` is a lossy UTF-8 view, and
+    // with no archive to restore from, a replaced `0xff` is lost for good (T536).
+    let write_raw = |out: &mut dyn std::io::Write| {
+        let _ = out.write_all(body);
+        if !body.is_empty() && !body.ends_with(b"\n") {
+            let _ = out.write_all(b"\n");
+        }
+    };
     let cx = match crate::plugin::Runtime::open(cfg.clone(), "run") {
         Ok(cx) => cx,
         Err(_) => {
             // Fail open on the CLI path too: never swallow the command's output (D4).
-            write_text(out, &before);
+            write_raw(out);
             return;
         }
     };
@@ -342,6 +359,20 @@ fn emit_filtered_to(
     if let Some(msg) = crate::plugin::identical_result(&cx, "cmd", body, agent) {
         write_text(out, &msg);
         return;
+    }
+    // T674: a file or line range printed again — unchanged is a pointer, changed is a diff
+    // against what this session saw. Main window only: a sub-agent never saw the parent's
+    // copy (T127), and its own read must not become the parent's baseline.
+    if agent.is_none()
+        && exit == 0
+        && let Some((path, key)) = super::catfile::reread_key(&formatters::family_argv(argv))
+    {
+        let host = rtok_plugin_sdk::Ctx::new(&cx);
+        if let Some(msg) = crate::plugins::read::cache::hit(&host, &key, &path, body, false) {
+            write_text(out, &msg);
+            return;
+        }
+        let _ = crate::plugins::read::cache::remember(&host, &key, body);
     }
     // The id is the body's sha256, so the filter can name it before any store write.
     let id = crate::store::hex_sha256(body);
@@ -356,10 +387,7 @@ fn emit_filtered_to(
     // lossless-by-default holds), and record a zero-saving row so the ledger stays honest.
     let pointer_line = trailer(&id, lines);
     if body.len() <= pointer_line.len() {
-        let _ = out.write_all(body);
-        if !body.is_empty() && !body.ends_with(b"\n") {
-            let _ = out.write_all(b"\n");
-        }
+        write_raw(out);
         let est = cx.estimate(super::bounded::host_visible_prefix(&before), Class::Code);
         let _ = cx.record(&Measurement {
             plugin: "cmd",
@@ -375,28 +403,23 @@ fn emit_filtered_to(
     }
     let settings = rules::Settings::from_config(cfg);
     let family = formatters::family_of(&settings, argv, &before);
-    let (filtered, kind) = formatters::compress(&settings, argv, &before, exit, &id);
+    let (filtered, kind) =
+        formatters::compress(&settings, argv, &before, exit, crate::names::short_id(&id));
     // A formatter that trims a 29-line `git log` to 20 leaves the other 9 reachable only
     // through this id. A shortening that took only whitespace/ANSI has nothing to expand
     // (T160) — and then nothing references the id, so the archive row is skipped too.
-    let named = names_the_id(&filtered, &id);
-    let pointer = needs_pointer(
-        lines,
-        cfg.plugins.cmd.trailer_min_lines,
-        body,
-        &filtered,
-        named,
-    );
-    if pointer || named {
-        // The archive keeps the command's bytes, not the lossy `String` used to filter
-        // and print them: `expand` must return what the command wrote, including invalid UTF-8.
-        if cx.put_archive_for(body, agent).is_err() {
-            write_text(out, &before);
-            return;
-        }
-    }
+    let named = names_the_id(&filtered, crate::names::short_id(&id));
+    let pointer = cfg.plugins.cmd.trailer
+        && needs_pointer(
+            lines,
+            cfg.plugins.cmd.trailer_min_lines,
+            body,
+            &filtered,
+            named,
+        );
     // T247: measure exactly what the host receives — the padding newline and the trailer
     // line are part of the returned bytes, so `after` must count them too.
+    let no_shorter = filtered.trim_end().len() >= before.trim_end().len();
     let mut shown = filtered;
     if !shown.is_empty() && !shown.ends_with('\n') {
         shown.push('\n');
@@ -404,6 +427,38 @@ fn emit_filtered_to(
     if pointer {
         shown.push_str(&pointer_line);
         shown.push('\n');
+    }
+    // T661: never worse than raw. A short valid-UTF-8 body (at or under
+    // `trailer_min_lines`) that the filter made no shorter (a dir grouping of one file per
+    // directory, say) prints verbatim: nothing is cut, so there is nothing to expand and
+    // no archive row. A real cut keeps its trailer, as before.
+    // Above `trailer_min_lines` the same holds for the printed bytes: when the filter
+    // kept everything (a `tree` it cannot shorten) the trailer would only add to raw.
+    let min = cfg.plugins.cmd.trailer_min_lines;
+    if std::str::from_utf8(body).is_ok()
+        && ((lines <= min && no_shorter) || shown.len() >= body.len())
+    {
+        write_raw(out);
+        let est = cx.estimate(super::bounded::host_visible_prefix(&before), Class::Code);
+        let _ = cx.record(&Measurement {
+            plugin: "cmd",
+            kind: "raw",
+            before_bytes: body.len() as u64,
+            after_bytes: body.len() as u64,
+            est_before: est,
+            est_after: est,
+            ref_id: None,
+            call_id: None,
+        });
+        return;
+    }
+    if pointer || named {
+        // The archive keeps the command's bytes, not the lossy `String` used to filter
+        // and print them: `expand` must return what the command wrote, including invalid UTF-8.
+        if cx.put_archive_for(body, agent).is_err() {
+            write_raw(out);
+            return;
+        }
     }
     let _ = out.write_all(shown.as_bytes());
     let _ = cx.record(&Measurement {
@@ -429,8 +484,11 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn capture_body_caps_and_appends_the_notice() {
-        let mut cmd = std::process::Command::new("sh");
-        cmd.args(["-c", "head -c 5000 /dev/zero | tr '\\0' x; exit 2"]);
+        let cmd = ProgressRunner::new(
+            "t…",
+            "sh",
+            ["-c", "head -c 5000 /dev/zero | tr '\\0' x; exit 2"],
+        );
         let (body, code) = capture_body(cmd, 1024).unwrap();
         let notice = "[rtok: output capped at 1024 bytes; 3976 bytes not captured]\n";
         assert_eq!(code, 2);
@@ -443,15 +501,47 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn capture_body_without_overflow_has_no_notice() {
-        let mut cmd = std::process::Command::new("sh");
-        cmd.args(["-c", "printf hi"]);
+        let cmd = ProgressRunner::new("t…", "sh", ["-c", "printf hi"]);
         assert_eq!(capture_body(cmd, 1024).unwrap(), (b"hi".to_vec(), 0));
+    }
+
+    #[test]
+    fn the_spinner_names_the_command_on_one_short_line() {
+        let a = |s: &[&str]| s.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        assert_eq!(running_label(&a(&["cargo", "test"])), "running cargo test…");
+        assert_eq!(running_label(&a(&["a\nb"])), "running a…");
+        let long = running_label(&a(&[&"x".repeat(100)]));
+        assert_eq!(long.chars().count(), "running ".len() + 60 + 1, "{long}");
+    }
+
+    /// T661: a short `find` that the dir grouping would lengthen prints verbatim, with no
+    /// trailer and no archive row: the output is never worse than raw.
+    #[test]
+    fn short_output_a_filter_lengthens_prints_raw() {
+        let (c, dir) = cfg("never-worse");
+        let body: String = (0..9)
+            .map(|i| format!("crates/c{i}/Cargo.toml\n"))
+            .collect();
+        emit_filtered(
+            &c,
+            &["find".into(), "crates".into()],
+            body.as_bytes(),
+            0,
+            None,
+        );
+        let archived = fs::read_dir(&c.core.archive_dir)
+            .map(|d| d.count())
+            .unwrap_or(0);
+        assert_eq!(archived, 0);
+        let v = crate::model::plugin_stats(&c, "cmd").unwrap();
+        assert!(v.to_string().contains("raw"), "{v}");
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn emit_filtered_archives_stdin_and_records() {
         let (c, dir) = cfg("emit-archive");
-        let body = (0..80)
+        let body = (0..400)
             .map(|i| format!("line {i}"))
             .collect::<Vec<_>>()
             .join("\n");
@@ -487,6 +577,17 @@ mod tests {
         assert_eq!(rows[0]["kind"], "skill", "{v}");
         assert_eq!(v["plugin"], "cmd", "{v}");
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// T672: the pointer names the archive by its first 8 hex chars, not 12 or 64.
+    #[test]
+    fn trailer_names_an_eight_char_id() {
+        let id = "0123456789abcdef".repeat(4);
+        assert_eq!(trailer(&id, 5), "[rtok 01234567 · 5 lines]");
+        assert!(names_the_id(
+            "… 4 lines omitted (expand 01234567)",
+            crate::names::short_id(&id)
+        ));
     }
 
     fn on_cmd(c: &Config) -> bool {
@@ -531,7 +632,7 @@ mod tests {
         // something references its id, and a dedup pointer names exactly that id.
         let payload = format!(
             "{}\n",
-            (0..80)
+            (0..400)
                 .map(|i| format!("line {i}"))
                 .collect::<Vec<_>>()
                 .join("\n")
@@ -553,6 +654,33 @@ mod tests {
         assert!(
             rows.iter()
                 .any(|r| r.kind == "dedup" && r.before_bytes > r.after_bytes)
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// T674: `cat f` again after `f` changed is a diff against the first read, not the file.
+    #[cfg(unix)]
+    #[test]
+    fn cat_of_a_changed_file_is_a_delta() {
+        let (c, dir) = cfg("cat-delta");
+        let path = dir.join("big.txt");
+        let text = |n: u32| {
+            (0..400)
+                .map(|i| format!("line {}", if i == 200 { n } else { i }))
+                .collect::<Vec<_>>()
+                .join("\n")
+        };
+        let argv = ["cat".to_string(), path.display().to_string()];
+        fs::write(&path, text(200)).unwrap();
+        assert_eq!(run(&c, &argv, None).unwrap(), 0);
+        fs::write(&path, text(9999)).unwrap();
+        assert_eq!(run(&c, &argv, None).unwrap(), 0);
+        let store = crate::store::Store::open(&c.core.db_path).unwrap();
+        let rows = store.list_measurements("read").unwrap();
+        assert!(
+            rows.iter()
+                .any(|r| r.kind == "delta" && r.before_bytes > 3 * r.after_bytes),
+            "{rows:?}"
         );
         let _ = fs::remove_dir_all(&dir);
     }
@@ -777,9 +905,7 @@ mod tests {
         ));
     }
 
-    /// T175: bodies smaller than their own trailer pass through verbatim. A 150-byte
-    /// `ps` body the `ps_aux` formatter would reshape comes back byte-identical with
-    /// no trailer, no archive row, and a zero-saving `raw` Measurement row.
+    /// T175/T661: a tiny `ps` body the `ps_aux` formatter reshapes never prints longer than raw.
     #[test]
     fn tiny_body_passes_through_verbatim_with_no_negative_saving() {
         let (c, dir) = cfg("tiny-passthrough");
@@ -822,27 +948,17 @@ mod tests {
         if !expect.is_empty() && !expect.ends_with(b"\n") {
             expect.push(b'\n');
         }
-        assert_eq!(
-            printed, expect,
-            "pass-through must be verbatim (no trailer)"
-        );
+        // T661: the trailer is short now, so a tiny body can still shrink with it. The
+        // contract is the same as for every body: never longer than raw.
         assert!(
-            !String::from_utf8_lossy(&printed).contains("expand"),
-            "no expand trailer on tiny body: {}",
+            printed.len() <= expect.len(),
+            "tiny body must not grow: {}",
             String::from_utf8_lossy(&printed)
         );
-        let files: Vec<_> = fs::read_dir(&c.core.archive_dir)
-            .map(|rd| rd.map(|e| e.unwrap().path()).collect())
-            .unwrap_or_default();
-        assert!(files.is_empty(), "no archive on pass-through: {files:?}");
         let store = crate::store::Store::open(&c.core.db_path).unwrap();
         let rows = store.list_measurements("cmd").unwrap();
         assert_eq!(rows.len(), 1, "{rows:?}");
-        assert_eq!(rows[0].kind, "raw", "{rows:?}");
-        assert_eq!(rows[0].before_bytes, body.len() as i64, "{rows:?}");
-        assert_eq!(rows[0].after_bytes, rows[0].before_bytes, "{rows:?}");
-        assert_eq!(rows[0].est_after, rows[0].est_before, "{rows:?}");
-        assert!(rows[0].ref_id.is_none(), "{rows:?}");
+        assert!(rows[0].after_bytes <= rows[0].before_bytes, "{rows:?}");
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -895,11 +1011,39 @@ mod tests {
             &mut printed,
         );
         let shown = String::from_utf8(printed).unwrap();
-        assert!(shown.contains("expand"), "{shown}");
+        assert!(shown.contains("[rtok "), "{shown}");
         let store = crate::store::Store::open(&c.core.db_path).unwrap();
         let rows = store.list_measurements("cmd").unwrap();
         assert_eq!(rows.len(), 1, "{rows:?}");
         assert!(rows[0].est_before > rows[0].est_after, "{rows:?}\n{shown}");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// T536: when the store cannot open, or cannot take the archive file, the command's own
+    /// bytes reach the host — not their lossy UTF-8 rendering — with the usual trailing newline.
+    #[rstest::rstest]
+    #[case::store_will_not_open(false)]
+    #[case::archive_write_fails(true)]
+    fn raw_bytes_survive_a_failing_store(#[case] store_opens: bool) {
+        let (mut c, dir) = cfg("raw-fallback");
+        let blocker = dir.join("blocker");
+        fs::write(&blocker, b"a file, not a directory").unwrap();
+        if store_opens {
+            c.core.archive_dir = blocker;
+        } else {
+            c.core.db_path = blocker.join("rtok.db");
+        }
+        let mut body = Vec::new();
+        for i in 0..400 {
+            body.extend_from_slice(format!("line {i} \u{e9}").as_bytes());
+            body.extend_from_slice(&[0xff, b'\n']);
+        }
+        body.extend_from_slice(b"no newline at the end\xff");
+        let mut printed = Vec::new();
+        emit_filtered_to(&c, &["echo".into()], &body, 0, None, &mut printed);
+        let mut expect = body.clone();
+        expect.push(b'\n');
+        assert_eq!(printed, expect);
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -998,7 +1142,7 @@ mod tests {
     #[test]
     fn cmd_exe_gets_the_body_verbatim() {
         let body = script_for(ShellKind::Cmd, &["echo".into(), "say \"hi\"".into()]);
-        let out = shell_command("cmd.exe", &body).output().unwrap();
+        let out = shell_command("cmd.exe", &body, "t…").run().unwrap();
         assert_eq!(
             String::from_utf8_lossy(&out.stdout).trim_end(),
             "\"say \"\"hi\"\"\""

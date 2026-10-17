@@ -5,6 +5,7 @@
 //! `rtok expand <id>` (plan T3.5) and the shared fetch used by the MCP `expand` tool (T5.4).
 
 use crate::config::Config;
+use crate::names::MIN_PREFIX;
 use crate::plugin::{Measurement, Runtime};
 use crate::tokens::Class;
 use anyhow::{Result, bail};
@@ -24,12 +25,24 @@ fn json_tree_pointer(pointer: &str) -> bool {
 /// the owning plugin sends the original from the next request on, and one `expand`
 /// measurement records the cost — `rtok stats --plugin <id>` derives the expand rate.
 pub fn fetch(cx: &Runtime, id: &str) -> Result<Option<Vec<u8>>> {
+    fetch_range(cx, id, None)
+}
+
+/// [`fetch`] for a call that asked for `lines`. T534: the range is checked against the
+/// payload's real line count before anything is frozen or charged, so a range past the end
+/// fails without turning a decision permanent for an expansion that returned no bytes.
+pub fn fetch_range(cx: &Runtime, id: &str, lines: Option<&str>) -> Result<Option<Vec<u8>>> {
+    let full = resolve_id(cx, id)?;
+    let id = full.as_str();
     let Some(bytes) = cx
         .store
         .get_archive(id, Some(&cx.config.core.archive_dir))?
     else {
         return Ok(None);
     };
+    if let Some(spec) = lines {
+        parse_range(spec, String::from_utf8_lossy(&bytes).lines().count())?;
+    }
     // T208: freeze + measurement commit in one transaction (`Store::mark_expanded_recorded`)
     // — a crash or a failed insert used to leave the decision frozen with no ledger row,
     // permanently under-counting `report_expand.cost`.
@@ -57,11 +70,39 @@ pub fn fetch(cx: &Runtime, id: &str) -> Result<Option<Vec<u8>>> {
     Ok(Some(bytes))
 }
 
+/// T661: a hex prefix of at least 8 chars (the trailer prints 8) names the one archive
+/// that starts with it. A full id, or a prefix with no match, passes through unchanged so
+/// the caller reports it as unknown; two matches is an error naming the ambiguity.
+pub fn resolve_id(cx: &Runtime, id: &str) -> Result<String> {
+    if id.len() >= 64 || id.len() < MIN_PREFIX || !id.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Ok(id.to_string());
+    }
+    let hits = cx.store.archive_ids_with_prefix(id, 2)?;
+    match hits.as_slice() {
+        [one] => Ok(one.clone()),
+        [] => Ok(id.to_string()),
+        _ => bail!("{}", ambiguous_message(id, &hits)),
+    }
+}
+
+/// The ambiguity error names each candidate by a prefix four chars longer than the one
+/// given, so the next call can pick one without a lookup.
+fn ambiguous_message(id: &str, hits: &[String]) -> String {
+    let longer: Vec<&str> = hits
+        .iter()
+        .map(|h| &h[..h.len().min(id.len() + 4)])
+        .collect();
+    format!(
+        "archive id prefix {id} is ambiguous; use one of: {}",
+        longer.join(", ")
+    )
+}
+
 /// The error text for an id with no archive row. An id that cannot be one — `-`,
 /// `/dev/stdin`, anything but the 64-char hex sha256 — gets a hint (T354): agents guess a
 /// stdin form (`cmd | rtok expand -`) to reach raw output, and nothing reads stdin.
 pub fn unknown_id_message(id: &str) -> String {
-    if id.len() == 64 && id.bytes().all(|b| b.is_ascii_hexdigit()) {
+    if id.len() >= 8 && id.len() <= 64 && id.bytes().all(|b| b.is_ascii_hexdigit()) {
         format!("unknown archive id: {id}")
     } else {
         format!(
@@ -203,7 +244,7 @@ pub fn run(
         parse_range(spec, usize::MAX)?;
     }
     let cx = Runtime::open(cfg.clone(), "expand")?;
-    let Some(bytes) = fetch(&cx, id)? else {
+    let Some(bytes) = fetch_range(&cx, id, lines)? else {
         bail!(unknown_id_message(id));
     };
     let max_lines = cfg.expand.max_lines;
@@ -278,10 +319,30 @@ pub(crate) fn parse_range(spec: &str, n: usize) -> Result<(usize, usize)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::names::short_id;
     use rstest::rstest;
 
     fn cfg(name: &str) -> Config {
         crate::testutil::config(name).0
+    }
+
+    #[test]
+    fn short_id_is_the_resolvable_minimum() {
+        let id = "ab".repeat(32);
+        assert_eq!(short_id(&id), "abababab");
+        assert_eq!(short_id("abc"), "abc");
+        assert!(short_id(&id).len() >= MIN_PREFIX);
+    }
+
+    #[test]
+    fn ambiguous_prefix_lists_the_longer_candidates() {
+        let pad = "0".repeat(52);
+        let msg = ambiguous_message(
+            "abababab",
+            &[format!("abababab1111{pad}"), format!("abababab2222{pad}")],
+        );
+        assert!(msg.contains("abababab1111"), "{msg}");
+        assert!(msg.contains("abababab2222"), "{msg}");
     }
 
     /// The MCP `expand` tool takes `context` straight from the model's JSON (`u64`), so a
@@ -403,6 +464,57 @@ mod tests {
                 .expanded,
             "the writer's session must see the freeze"
         );
+    }
+
+    /// T534: seeds one live-zone decision on a one-line archive; returns the id and the config.
+    fn seeded(name: &str, body: &[u8]) -> (Config, String) {
+        let c = cfg(name);
+        let cx = crate::plugin::Runtime::open(c.clone(), "proxy-sess").unwrap();
+        let id = cx
+            .store
+            .put_archive("proxy-sess", body, &c.core.archive_dir)
+            .unwrap();
+        cx.store
+            .put_archive_decision("tu-1", &id, "proxy-sess", &format!("[archived {id}]"))
+            .unwrap();
+        (c, id)
+    }
+
+    fn frozen_and_charged(c: &Config, id: &str) -> (bool, usize) {
+        let cx = crate::plugin::Runtime::open(c.clone(), "probe").unwrap();
+        let frozen = cx
+            .store
+            .archive_decision("proxy-sess", "tu-1")
+            .unwrap()
+            .unwrap()
+            .expanded;
+        let rows = cx.store.list_measurements("archive").unwrap();
+        (
+            frozen,
+            rows.iter()
+                .filter(|r| r.ref_id.as_deref() == Some(id))
+                .count(),
+        )
+    }
+
+    /// T534: a range past the end of the payload is an error that leaves the decision unfrozen
+    /// and the ledger untouched, on the CLI and on the shared fetch the MCP tool uses; a valid
+    /// range then freezes once and records once.
+    #[rstest]
+    #[case(b"only line\n".as_slice(), "2-3")]
+    #[case(b"".as_slice(), "1")]
+    fn a_range_past_the_end_neither_freezes_nor_charges(#[case] body: &[u8], #[case] spec: &str) {
+        let (c, id) = seeded("range-past-end", body);
+        let err = run(&c, &id, Some(spec), None, 0).unwrap_err();
+        assert!(err.to_string().contains("exceeds line count"), "{err}");
+        let cx = crate::plugin::Runtime::open(c.clone(), "mcp-1").unwrap();
+        assert!(fetch_range(&cx, &id, Some(spec)).is_err());
+        assert_eq!(frozen_and_charged(&c, &id), (false, 0));
+        if !body.is_empty() {
+            let out = run(&c, &id, Some("1"), None, 0).unwrap();
+            assert_eq!(out, b"only line\n");
+            assert_eq!(frozen_and_charged(&c, &id), (true, 1));
+        }
     }
 
     /// T55.11: an expand of a toon pointer attributes its Measurement to `toon`;

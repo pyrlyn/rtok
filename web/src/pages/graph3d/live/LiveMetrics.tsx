@@ -2,22 +2,52 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
+import { useMemo } from "react";
+import type { CallsView, WindowView } from "../../../api/snapshot.gen";
 import { Chip } from "../../../ui/Chip";
+import { CountUp } from "../../../ui/CountUp";
 import { Kpi } from "../../../ui/Kpi";
 import { Pill } from "../../../ui/Pill";
-import { compact, fmt, pct } from "../../format";
-import { type CallsStore, latency, windowTotals, WINDOWS, type WindowId } from "./callsStore";
+import { Sparkline } from "../../../ui/Sparkline";
+import { compact, fmt, millis, pct, seconds } from "../../format";
+import { MetricsFold } from "./MetricsFold";
+import { emptyWindow } from "./useCalls";
 
-const seconds = (ms: number) => `${Math.max(0, Math.round(ms / 1000))}s`;
-const millis = (ms: number) => (ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(1)} s`);
+const minutes = (ms: number) => `${Math.round(ms / 60_000)} min`;
+
+/** A sparkline of the server's slots (T329.32); the TUI draws the same series. */
+function Trend({
+    spark,
+    values,
+    what,
+}: {
+    spark: WindowView["spark"];
+    values: number[];
+    what: string;
+}) {
+    const slot = spark.span_ms / Math.max(1, values.length);
+    const x = useMemo(
+        () => values.map((_, i) => `${seconds((values.length - i) * slot)} ago`),
+        [values, slot],
+    );
+    return (
+        <Sparkline
+            values={values}
+            x={x}
+            label={`${what} over the last ${minutes(spark.span_ms)}`}
+            name={what}
+        />
+    );
+}
 
 /**
- * The numbers come from `summary` and the `Measurement` samples of the end events, which are the
- * rows `rtok stats` adds up, so a window here equals `rtok stats` over the same calls.
- * Latency is the exception: a percentile cannot be summed, so it is measured on the calls a batch lists.
+ * The server computes every number (T484), from `summary` and the `Measurement` samples of the end
+ * events, which are the rows `rtok stats` adds up, so a window here equals `rtok stats` over the
+ * same calls, and `rtok tui` shows the same figures. Latency is the exception: a percentile cannot
+ * be summed, so it is measured on the calls a batch lists.
  */
 export function LiveMetrics({
-    store,
+    view,
     now,
     window,
     onWindow,
@@ -25,30 +55,30 @@ export function LiveMetrics({
     pending,
     onFreeze,
 }: {
-    store: CallsStore;
+    view: CallsView;
     now: number;
-    window: WindowId;
-    onWindow(next: WindowId): void;
+    /** Index into the server's windows. */
+    window: number;
+    onWindow(next: number): void;
     frozen: boolean;
     /** Calls that arrived while the picture was held. */
     pending: number;
     onFreeze(on: boolean): void;
 }) {
-    const t = windowTotals(store, window, now);
+    const t = view.windows[window] ?? emptyWindow;
     const saved = t.before - t.after;
-    const lat = latency(t);
-    const tools = Object.entries(t.tools).sort((a, b) => b[1].calls - a[1].calls);
-    const top = Math.max(1, ...tools.map(([, v]) => v.calls));
+    const lat = t.latency;
+    const top = Math.max(1, ...t.tools.map((v) => v.calls));
     const listed = Object.values(t.backends).reduce((n, v) => n + v, 0);
     return (
         <div className="flex flex-col gap-2">
             <div className="flex flex-wrap items-center gap-2">
                 <div role="group" aria-label="window" className="flex gap-1">
-                    {WINDOWS.map((w) => (
+                    {view.windows.map((w, i) => (
                         <Chip
-                            key={w.id}
-                            pressed={window === w.id}
-                            onPressedChange={() => onWindow(w.id)}
+                            key={w.label}
+                            pressed={window === i}
+                            onPressedChange={() => onWindow(i)}
                         >
                             {w.label}
                         </Chip>
@@ -65,50 +95,73 @@ export function LiveMetrics({
                     </Chip>
                 </div>
             </div>
-            <div className="grid grid-cols-2 gap-2 xl:grid-cols-3">
-                <Kpi
-                    label="running"
-                    value={fmt(store.running.length)}
-                    sub={
-                        store.running.length ? store.running.map((r) => r.tool).join(", ") : "idle"
-                    }
-                />
-                <Kpi
-                    label="calls"
-                    value={fmt(t.calls)}
-                    tone={t.failed ? "warn" : "default"}
-                    sub={`${fmt(t.failed)} failed`}
-                />
-                <Kpi
-                    label="latency p50"
-                    value={lat ? millis(lat.p50) : "-"}
-                    sub={lat ? `p95 ${millis(lat.p95)}` : undefined}
-                />
-                <Kpi
-                    label="symbols returned"
-                    value={`${fmt(t.symbolsReturned)} of ${fmt(t.symbols)}`}
-                    sub={`${fmt(t.crossed)} across projects`}
-                />
-                <Kpi label="files touched" value={fmt(t.filesTouched)} />
-                <Kpi label="projects with hits" value={fmt(t.projectsHit)} />
-                <Kpi
-                    label="fallbacks"
-                    value={fmt(t.fallbacks)}
-                    tone={t.fallbacks ? "warn" : "default"}
-                    sub={`${fmt(t.caps)} capped`}
-                />
-                <Kpi label="tokens sent" value={compact(t.after)} />
-                <Kpi label="without rtok" value={compact(t.before)} />
-                <Kpi
-                    label="saved"
-                    value={compact(saved)}
-                    tone="saved"
-                    sub={t.before ? pct(saved / t.before, 0) : "-"}
-                />
-            </div>
-            {store.running.length > 0 && (
+            <MetricsFold
+                strip={
+                    <>
+                        <span>{fmt(view.running.length)} running</span>
+                        <span>{fmt(t.calls)} calls</span>
+                        <span className="text-delta-fg">{compact(saved)} saved</span>
+                    </>
+                }
+            >
+                <div className="grid grid-cols-2 gap-2 xl:grid-cols-3">
+                    <Kpi
+                        label="running"
+                        value={fmt(view.running.length)}
+                        sub={
+                            view.running.length
+                                ? view.running.map((r) => r.tool).join(", ")
+                                : "idle"
+                        }
+                    />
+                    <Kpi
+                        label="calls"
+                        value={<CountUp value={t.calls} format={fmt} />}
+                        tone={t.failed ? "warn" : "default"}
+                        sub={`${fmt(t.failed)} failed`}
+                        viz={<Trend spark={t.spark} values={t.spark.calls} what="calls" />}
+                    />
+                    <Kpi
+                        label="latency p50"
+                        value={lat ? millis(lat.p50) : "-"}
+                        sub={lat ? `p95 ${millis(lat.p95)}` : undefined}
+                    />
+                    <Kpi
+                        label="symbols returned"
+                        value={`${fmt(t.symbols_returned)} of ${fmt(t.symbols)}`}
+                        sub={`${fmt(t.crossed)} across projects`}
+                    />
+                    <Kpi
+                        label="files touched"
+                        value={<CountUp value={t.files_touched} format={fmt} />}
+                    />
+                    <Kpi
+                        label="projects with hits"
+                        value={<CountUp value={t.projects_hit} format={fmt} />}
+                    />
+                    <Kpi
+                        label="fallbacks"
+                        value={<CountUp value={t.fallbacks} format={fmt} />}
+                        tone={t.fallbacks ? "warn" : "default"}
+                        sub={`${fmt(t.caps)} capped`}
+                    />
+                    <Kpi label="tokens sent" value={<CountUp value={t.after} format={compact} />} />
+                    <Kpi
+                        label="without rtok"
+                        value={<CountUp value={t.before} format={compact} />}
+                    />
+                    <Kpi
+                        label="saved"
+                        value={<CountUp value={saved} format={compact} />}
+                        tone="saved"
+                        sub={t.before ? pct(saved / t.before, 0) : "-"}
+                        viz={<Trend spark={t.spark} values={t.spark.saved} what="tokens saved" />}
+                    />
+                </div>
+            </MetricsFold>
+            {view.running.length > 0 && (
                 <ul aria-label="running calls" className="flex flex-col gap-1 text-xs">
-                    {store.running.map((r) => (
+                    {view.running.map((r) => (
                         <li key={r.call} className="flex flex-wrap items-center gap-2">
                             <b>{r.tool}</b>
                             <span className="truncate text-fg-muted">{r.target ?? "-"}</span>
@@ -119,9 +172,9 @@ export function LiveMetrics({
                 </ul>
             )}
             <ul aria-label="calls per tool" className="flex flex-col gap-1 text-xs">
-                {tools.map(([tool, v]) => (
-                    <li key={tool} className="grid grid-cols-[6rem_1fr_auto] items-center gap-2">
-                        <span>{tool}</span>
+                {t.tools.map((v) => (
+                    <li key={v.tool} className="grid grid-cols-[6rem_1fr_auto] items-center gap-2">
+                        <span>{v.tool}</span>
                         <span
                             role="presentation"
                             style={{ width: `${(v.calls / top) * 100}%` }}

@@ -35,6 +35,7 @@ mod since;
 pub use since::{parse_since, parse_since_from};
 
 pub mod layers;
+pub mod root;
 pub mod validate;
 
 use std::borrow::Cow;
@@ -85,6 +86,18 @@ pub const HOSTS: &[&str] = &[
     "devin",
     "roo",
     "qwen",
+    "codebuddy",
+    "goose",
+    "droid",
+    "kiro",
+    "junie",
+    "amp",
+    "warp",
+    "continue",
+    "crush",
+    "openhands",
+    "augment",
+    "reasonix",
 ];
 
 /// Adapters `[tasks] adapter` accepts. `tasks::run::ADAPTERS` re-exports this.
@@ -372,9 +385,12 @@ section! {
 
 section! {
     /// `[proxy.tools_rewrite]` — opt-in `tools[]` description rewrite (T59.5). Off: bytes
-    /// identical. Empty `allow` keeps every tool not in `deny`. `input_schema` is never touched.
+    /// identical. Empty `allow` keeps every tool not in `deny`. `input_schema` keeps its names,
+    /// `type`, `required` and `enum` byte for byte; only with `compact_schema` (T686) do its
+    /// `description`, `default` and `examples` strings shrink.
     ToolsRewrite {
         enabled: bool = false,
+        compact_schema: bool = false,
         max_description_tokens: u32 = 60,
         allow: Vec<String> = Vec::new(),
         deny: Vec<String> = Vec::new(),
@@ -457,8 +473,34 @@ section! {
 }
 
 section! {
-    /// `[proxy.routing]` — model routing (D9). No keys yet.
-    RoutingPolicy {}
+    /// `[proxy.routing]` — model routing (D9, I-101), opt-in. Only rtok's own `internal` calls
+    /// and the `bulk` lane can be routed; the `agent` lane never is, and `batch` and `files`
+    /// are never rewritten. A rule moves a call to another model only when `enabled`, the
+    /// request's model is one of the rule's `from` entries and the rule names the quality
+    /// bench behind the swap in `gate`. No rule ships by default.
+    RoutingPolicy {
+        enabled: bool = false,
+        bulk: RouteRule = RouteRule::default(),
+        internal: RouteRule = RouteRule::default(),
+    }
+}
+
+section! {
+    /// `[proxy.routing.<lane>]` — one lane's routing rule (T385.10).
+    RouteRule {
+        /// Request models this rule applies to: an exact id, or an id ending in `*` for a
+        /// prefix (`gpt-5*`). Empty = the rule is off, so no lane is ever routed wholesale.
+        from: Vec<String> = Vec::new(),
+        /// The model that serves a matching call (a cheaper one). Empty = the rule is off.
+        to: String = String::new(),
+        /// The provider slug recorded for a routed call, when `to` lives at another provider
+        /// than the wire's own (pair it with `[proxy.lanes.<lane>] upstream`); empty = the
+        /// wire's provider.
+        provider: String = String::new(),
+        /// Where the quality bench for this `from` → `to` swap is kept (a path, URL or run
+        /// id). rtok cannot judge answer quality, so the rule stays off while this is empty.
+        gate: String = String::new(),
+    }
 }
 
 section! {
@@ -759,7 +801,19 @@ section! {
         antigravity: SetupAntigravity = SetupAntigravity::default(),
         devin: SetupDevin = SetupDevin::default(),
         roo: SetupRoo = SetupRoo::default(),
+        junie: SetupJunie = SetupJunie::default(),
         qwen: SetupQwen = SetupQwen::default(),
+        codebuddy: SetupCodebuddy = SetupCodebuddy::default(),
+        goose: SetupGoose = SetupGoose::default(),
+        droid: SetupDroid = SetupDroid::default(),
+        kiro: SetupKiro = SetupKiro::default(),
+        amp: SetupAmp = SetupAmp::default(),
+        warp: SetupWarp = SetupWarp::default(),
+        r#continue: SetupContinue = SetupContinue::default(),
+        crush: SetupCrush = SetupCrush::default(),
+        openhands: SetupOpenhands = SetupOpenhands::default(),
+        augment: SetupAugment = SetupAugment::default(),
+        reasonix: SetupReasonix = SetupReasonix::default(),
     }
 }
 
@@ -898,9 +952,81 @@ section! {
 }
 
 section! {
+    /// `[setup.junie]` — Junie CLI's user `mcp.json` (T413.9). Empty `mcp_path`
+    /// means `~/.junie/mcp/mcp.json`; the docs name no variable that moves it.
+    SetupJunie { mcp_path: PathBuf = PathBuf::new() }
+}
+
+section! {
     /// `[setup.qwen]` — Qwen Code's `settings.json` (`hooks`, `mcpServers`) lives under
     /// `dir` (T413.2). `QWEN_HOME` moves that directory; this key is the override.
     SetupQwen { dir: PathBuf = p("~/.qwen") }
+}
+
+section! {
+    /// `[setup.goose]` — Goose's `config.yaml`, where `extensions.rtok` goes (T413.6). Desktop
+    /// and CLI read the same file; `GOOSE_PATH_ROOT` moves it to `<root>/config/config.yaml`.
+    SetupGoose { config_path: PathBuf = p("~/.config/goose/config.yaml") }
+}
+
+section! {
+    /// `[setup.continue]` — Continue's user `config.yaml`, where the `rtok` item of `mcpServers`
+    /// goes (T413.7). The VS Code and JetBrains extensions and `cn` read the same file;
+    /// `CONTINUE_GLOBAL_DIR` moves it, and this key is the override.
+    SetupContinue { config_path: PathBuf = p("~/.continue/config.yaml") }
+}
+
+section! {
+    /// `[setup.codebuddy]` — CodeBuddy Code's config directory (`settings.json` `hooks`, the
+    /// MCP file, `plugins/`; `CODEBUDDY_CONFIG_DIR` moves it) and WorkBuddy Desktop's, which
+    /// embeds the same CLI (T560.2).
+    SetupCodebuddy {
+        dir: PathBuf = p("~/.codebuddy"),
+        workbuddy_dir: PathBuf = p("~/.workbuddy"),
+    }
+}
+
+section! {
+    /// `[setup.droid]` — Factory Droid's user-level MCP file (T413.3).
+    SetupDroid { mcp_path: PathBuf = p("~/.factory/mcp.json") }
+}
+
+section! {
+    /// `[setup.kiro]` — Kiro IDE and CLI user-level MCP file (T413.4).
+    SetupKiro { mcp_path: PathBuf = p("~/.kiro/settings/mcp.json") }
+}
+
+section! {
+    /// `[setup.amp]` — Amp (Sourcegraph) user settings file (`amp.mcpServers`, T413.5);
+    /// `settings.jsonc` is used when it is the only one.
+    SetupAmp { settings_path: PathBuf = p("~/.config/amp/settings.json") }
+}
+
+section! {
+    /// `[setup.warp]` — Warp's user-level MCP file (T413.12).
+    SetupWarp { mcp_path: PathBuf = p("~/.warp/.mcp.json") }
+}
+
+section! {
+    /// `[setup.crush]` — Crush's global JSON config (T413.11). `CRUSH_GLOBAL_CONFIG` or
+    /// `XDG_CONFIG_HOME` move it; this key is the override.
+    SetupCrush { config_path: PathBuf = p("~/.config/crush/crush.json") }
+}
+
+section! {
+    /// `[setup.openhands]` — OpenHands's user-level MCP file (T413.14).
+    SetupOpenhands { mcp_path: PathBuf = p("~/.openhands/mcp.json") }
+}
+
+section! {
+    /// `[setup.augment]` — the Auggie CLI's user settings file (T413.8).
+    SetupAugment { settings_path: PathBuf = p("~/.augment/settings.json") }
+}
+
+section! {
+    /// `[setup.reasonix]` — Reasonix home (`REASONIX_HOME`, `%APPDATA%\reasonix` on Windows):
+    /// `config.toml` holds the `[[plugins]]` MCP servers (T413.15).
+    SetupReasonix { dir: PathBuf = p("~/.reasonix") }
 }
 
 section! {
@@ -935,8 +1061,9 @@ section! {
         /// Off: the commands refuse, MCP lists no `worktree_*` tool and the host hooks do what
         /// the host does without rtok.
         enabled: bool = true,
-        /// Where worktrees are created, as `<root>/<repo>-<task>`.
-        root: PathBuf = p("~/.rtok/worktrees"),
+        /// Where worktrees are created, as `<root>/<repo>-<task>`. A relative root is under the
+        /// main checkout.
+        root: PathBuf = p(".rtok/worktrees"),
     }
 }
 
@@ -951,6 +1078,31 @@ section! {
         disk: TasksDisk = TasksDisk::default(),
         github: TasksGithub = TasksGithub::default(),
         gitlab: TasksGitlab = TasksGitlab::default(),
+        export: TasksExport = TasksExport::default(),
+    }
+}
+
+section! {
+    /// `[tasks.export]` — where `rtok task export` mirrors the disk tasks (T441.13.5).
+    TasksExport {
+        github: TasksExportGithub = TasksExportGithub::default(),
+        linear: TasksExportLinear = TasksExportLinear::default(),
+    }
+}
+
+section! {
+    /// `[tasks.export.linear]` — the Linear team whose issues mirror the tasks (T441.13.6).
+    TasksExportLinear {
+        /// The team's short key, e.g. `ENG`. Empty: `rtok task export linear` refuses to run.
+        team: String = String::new(),
+    }
+}
+
+section! {
+    /// `[tasks.export.github]` — the repository whose issues mirror the tasks.
+    TasksExportGithub {
+        /// `owner/name`. Empty: `[tasks.github] repo`, else the `origin` remote.
+        repo: String = String::new(),
     }
 }
 
@@ -1070,6 +1222,9 @@ section! {
         rules: PathBuf = p("~/.rtok/rules.toml"),
         /// Drop-in dir: every `*.toml` merges after `rules` in name order (T50.2).
         rules_dir: PathBuf = p("~/.rtok/rules.d"),
+        /// Print the `[rtok <id12> · N lines]` reference line after a cut (T661).
+        /// `false` (`RTOK_PLUGINS_CMD_TRAILER=false`, `rtok run --no-ref`) drops it.
+        trailer: bool = true,
         trailer_min_lines: u32 = 40,
         fail_tail_lines: u32 = 80,
         never_wrap: Vec<String> = strs(&["rtok", "sudo"]),
@@ -1183,6 +1338,27 @@ section! {
         model: String = s("all-MiniLM-L6-v2"),
         dimensions: u32 = 384,
         hybrid: bool = true,
+        /// `provider = "http"` (T668): base URL of an OpenAI-compatible embeddings API; rtok
+        /// posts to `<url>/embeddings`.
+        url: String = String::new(),
+        /// Name of the environment variable that holds the API key; empty sends none.
+        api_key_env: String = String::new(),
+        /// Longest text sent to the endpoint, in characters; a longer one is never sent.
+        max_chars: u32 = 8000,
+    }
+}
+
+section! {
+    /// `[plugins.memory.extract]` — `rtok memory extract` turns a transcript into notes through a
+    /// program of the user's choosing (T666.1; off by default because a model call can cost money).
+    MemoryExtract {
+        enabled: bool = false,
+        /// Program and arguments: the transcript arrives on stdin, one `{"title","body"}` JSON
+        /// object per stdout line goes back.
+        command: Vec<String> = Vec::new(),
+        max_notes: u32 = 5,
+        /// Bytes of transcript text sent to the program; the end of the session is kept.
+        max_input_bytes: u32 = 60000,
     }
 }
 
@@ -1205,7 +1381,17 @@ section! {
         spawn_brief: bool = true,
         /// Token budget for the spawn brief (T130).
         spawn_brief_tokens: u32 = 300,
+        /// Admission gate on MCP `mem_save` (T671): a body shorter than `admit_min_chars`, or
+        /// one `admit_similarity` percent or more like a stored note, is refused with the
+        /// stored note's id. Local text only; no network.
+        admit: bool = true,
+        admit_min_chars: u32 = 5,
+        admit_similarity: u32 = 85,
+        /// `rtok memory forget` retires an unpinned note nobody read for this many days
+        /// (T669; 0 = the command needs `--days`). Never runs by itself.
+        forget_after_days: u32 = 90,
         embed: MemoryEmbed = MemoryEmbed::default(),
+        extract: MemoryExtract = MemoryExtract::default(),
     }
 }
 
@@ -1258,6 +1444,13 @@ section! {
         /// T329.17: seconds between the health checks of a process that hosts graph (`rtok mcp`,
         /// `rtok web`); 0 turns the check off.
         health_check_interval_s: u32 = 60,
+        /// T329.34: seconds a node stays warm on the web graph page's live canvas after a call.
+        live_heat_window_s: u32 = 300,
+        /// T329.34: most call events one second of the live panel lists; counters still count
+        /// every call.
+        live_max_events_per_s: u32 = 50,
+        /// T329.34: finished calls the live panel keeps in its feed.
+        live_feed_rows: u32 = 200,
         exclude: Vec<String> = vec![],
         include: Vec<String> = vec![],
         extensions: std::collections::HashMap<String, String> = std::collections::HashMap::new(),
@@ -1281,6 +1474,30 @@ section! {
     /// `[plugins.compress]`
     Compress {
         enabled: bool = true,
+        llm: CompressLlm = CompressLlm::default(),
+    }
+}
+
+section! {
+    /// `[plugins.compress.llm]` — P28 compressor (T385.9), off by default. Summarises an
+    /// archived tool result through the proxy's own `internal` lane and shows the cached summary
+    /// in place of the extractive view; the original stays under `expand <id>`.
+    CompressLlm {
+        enabled: bool = false,
+        /// Where the compressor posts; empty = this proxy (`proxy.bind:proxy.port`), so the
+        /// call is tagged `internal` and `[proxy.routing.internal]` applies.
+        url: String = String::new(),
+        model: String = s("claude-haiku-4-5"),
+        /// Larger archived results are left to the extractive view.
+        max_input_bytes: u64 = 65536,
+        max_output_tokens: u32 = 512,
+        /// More must-keep spans than this and the result is left to the extractive view.
+        max_spans: u32 = 64,
+        /// Compressor calls in flight at once.
+        max_in_flight: u32 = 2,
+        timeout_s: u64 = 60,
+        /// Also summarise diffs and source code; off, only logs and prose are.
+        code: bool = false,
     }
 }
 
@@ -1596,6 +1813,18 @@ impl Config {
             setup.cline.mcp_path,
             setup.gemini.dir,
             setup.qwen.dir,
+            setup.goose.config_path,
+            setup.codebuddy.dir,
+            setup.codebuddy.workbuddy_dir,
+            setup.droid.mcp_path,
+            setup.kiro.mcp_path,
+            setup.junie.mcp_path,
+            setup.amp.settings_path,
+            setup.warp.mcp_path,
+            setup.crush.config_path,
+            setup.openhands.mcp_path,
+            setup.augment.settings_path,
+            setup.reasonix.dir,
             setup.codewhale.dir,
             setup.mimo.config_path,
             setup.antigravity.plugins_path,
@@ -1607,6 +1836,11 @@ impl Config {
             plugins.wasm.dir,
             worktree.root,
         );
+        // `continue` is a keyword, so `stringify!` would spell the key `setup.r#continue`.
+        out.push((
+            "setup.continue.config_path".into(),
+            &mut self.setup.r#continue.config_path,
+        ));
         out.extend(
             self.bench
                 .configs

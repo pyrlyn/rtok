@@ -28,6 +28,7 @@ Estimator: 4 chars/token (heuristic). Usage counters are real API numbers.
 | Session checkpoints (T71.2, 2026-09-18, `rtok stats --since 30d`) | 939 transcript sessions, 0 with a `checkpoint:<id>` or `session:<id>` note, 939 without. Store has 25 legacy `kind=checkpoint` rows (no session suffix, not joinable to a stem). Header `sessions N  compact N  checkpoint N  no_checkpoint N`. Command: `rtok stats --since 30d`. |
 | Foreign MCP results (T59.4, 2026-09-17, `rtok stats --since 30d`, 885 sessions) | `rtok stats --since 30d` (2026-09-17, 885 sessions), `mcp` table: lean-ctx 8,232 calls, 19.66 MB result bytes, mean 2.4 KB, p95 45.7 KB (≈ 4.9 M est. tokens) — ≈ 27 % of the 71.8 MB in the tool table; rtok 579 KB, engram 279 KB, t3-code 73 KB (mean 18 KB), Claude_Browser 45 KB. lean-ctx is above the 5 % gate, so the wrapper is justified for this workload; caveat: lean-ctx already compresses its own results, so the win is in the p95 tail, not the mean. |
 | MCP description tokens × turns (T59.5, 2026-09-18, host without Tool Search) | `rtok doctor` (2026-09-18): 11 MCP servers, 8,951 description tokens (caveman 485, code-review-graph 2,295, engram 1,865, mobile 1,555, serena 1,494, lean-ctx 697, headroom 161, rtok 143+143, jscpd 113, codebase-memory-mcp 0); `mcp_tool_search likely disabled` because `ANTHROPIC_BASE_URL` is set. Transcripts `~/.claude/projects/**/*.jsonl` mtime ≥ 30 d, unique `message.id` (same rule as `measure::jsonl`): 936 sessions, 40,402 API turns, session input 5.834 B (uncached 0.670 M + cache_create 147.1 M + cache_read 5.686 B). 8,951 × 40,402 / 5.834 B = **6.2 %** of session input. Above the 3 % gate → `proxy.tools_rewrite` ships, off by default. Native-tool descriptions are extra, so 6.2 % is a lower bound. |
+| `tools_rewrite` realized saving per request (T124, 2026-10-15, local reference, not the gate) | Scratch `rtok proxy` with `[proxy.tools_rewrite] enabled = true` (default `max_description_tokens = 60`), `mode = "passthrough"`, upstream LM Studio (`prism-ml/bonsai-27b`, its tokenizer, not Anthropic's); 20 sessions of `claude -p "Reply with the single word ok."` (Claude Code 2.1.267, all built-in tools plus the `rtok mcp` server's 12 tools; one API request each, 21 `kind = tools_rewrite` rows). Rows (`proxy` / `tools_rewrite`, store `measurements`): est. tokens **389,991 → 49,266** (−340,725, **16.2 K per request**). Same request through a proxy with the rewrite off (4 sessions, API `usage.input_tokens`): **38,575**; with it on: **22,377** (20 sessions) → **−16,198 per request (−42.0 %)**, which agrees with the estimator. Share of session input over the 20-session window: 340,725 est. / (447,540 observed + 340,725) = **43.2 %** — a one-request session, so the share is the ceiling for the constant 16.2 K saving; in a long session it falls to 16.2 K × requests / total input (T59.5's 6.2 % was MCP descriptions only, over 40,402 real turns). Not measured: answer quality with truncated built-in tool descriptions (every reply was "ok"), real multi-turn sessions on this machine, Anthropic-tokenizer counts. Default stays off; the creator's 20-session precondition on the machine's own proxy is still open. |
 | Cache | read 1,367 M, creation 26.7 M, uncached input 42 K → 98.1 % hit rate |
 | Median final context | 167 K tokens per session |
 | rtk-wrapped commands visible in transcripts | 3 of 3,658 (the PreToolUse rewrite happens after the transcript records the call, so this under-counts) |
@@ -799,6 +800,38 @@ standing rtok rule (the first bullet of §3) but does not prove it for the CLI s
 `claude -p` invocation outside this sandbox — a real terminal or CI runner with its own
 OAuth session — to get an actual Bash/Read/MCP transcript.
 
+**Live probe (2026-10-15, T134): honoured, when the value has the tool's own response shape.**
+Claude Code 2.1.267, run outside the sandbox that blocked the 2026-09-25 attempt by pointing
+`claude -p` at LM Studio's local Anthropic endpoint (`ANTHROPIC_BASE_URL=http://localhost:1234`,
+`ANTHROPIC_MODEL=prism-ml/bonsai-27b`, `--setting-sources project`, `--settings <scratch>`,
+`--permission-mode acceptEdits`, `--allowedTools <tool>`). The hook is a scratch `PostToolUse`
+command hook (matcher `*`) that logs its stdin payload and prints
+`{"hookSpecificOutput":{"hookEventName":"PostToolUse","updatedToolOutput":<value>}}`. The model
+is irrelevant to the question (the hook runs in the CLI before the model sees the result); the
+`tool_result` block in the `stream-json` transcript is the evidence. Original content of the
+scratch file: `original-file-content-ABC`; replacement marker: `REPLACED-BY-HOOK-7731`.
+
+| Tool | `updatedToolOutput` sent | `tool_result` the model received |
+| --- | --- | --- |
+| Bash `cat note.txt` | string `"REPLACED-BY-HOOK-7731"` | `original-file-content-ABC` — **ignored** |
+| Bash `cat note.txt` | object in the shape of the payload's `tool_response` (`{stdout, stderr, interrupted, isImage, noOutputExpected}`) | `REPLACED-BY-HOOK-7731` — **replaced** |
+| Read of `note.txt` | string | `1\toriginal-file-content-ABC` — **ignored** |
+| Read of `note.txt` | object in the Read response shape (`{type: "text", file: {filePath, content, numLines, startLine, totalLines}}`) | `1\tREPLACED-BY-HOOK-7731` — **replaced** (the CLI renders the replaced `file.content` with its line numbers) |
+| MCP `mcp__rtok__ping` | content array `[{type: "text", text: "REPLACED-BY-HOOK-7731"}]` | `[{"type":"text","text":"REPLACED-BY-HOOK-7731"}]` — **replaced** |
+
+Findings. (1) The CLI honours `updatedToolOutput` for built-in tools and MCP tools even though
+the CLI hooks page does not list the field. (2) The value must match the tool's own response
+object (for Bash and Read, the `tool_response` the hook receives on stdin); a bare string is
+silently ignored for both. (3) The hook payload carries `tool_response` in that shape, so a
+hook can copy it, shrink one field and return it. Not probed: `WebSearch`/`WebFetch` (the local
+model cannot drive them), `Edit`/`Write`, parallel tool calls, and later Claude Code versions.
+A scratch hook, not shipped.
+
+Consequence for I-91: the gate is open. Whether rtok may shrink native Read/Bash output in place
+(pointer + `expand <id>`) contradicts the standing rule "PostToolUse can only add context", so it is the
+creator's call (`AGENTS.md` rule line, then the `cmd`/`read`/`guard` design). No product code
+changed by T134.
+
 ## 4. Comparison matrix
 
 Stars/language/license from the GitHub API on 2026-09-01. "Claimed" is the vendor's number; "Measured" is yours or an independent source.
@@ -1423,6 +1456,54 @@ ships no plugin and `hooks`/`plugin` are both `Support::No` (creator instruction
 the plugin package). MiMo Desktop is confirmed to exist (early access, "powered by MiMo Code
 as its core engine") but no separate config path is documented, so no Desktop variant ships.
 
+**Update 2026-10-10 (T520): the plugin package and `mimocode.jsonc`.** The v1 gap above is closed;
+everything below was checked on 2026-10-10 against primary sources.
+
+- Plugin package: `@mimo-ai/plugin` 0.1.15 is on npm, published 2026-09-22
+  (https://registry.npmjs.org/@mimo-ai%2fplugin), from
+  https://github.com/XiaomiMiMo/MiMo-Code/tree/main/packages/plugin. Its `Hooks`
+  (`packages/plugin/src/index.ts`) has `tool.execute.before` (output `{args, cancel?,
+  cancelReason?}`), `tool.execute.after` (output `{title, output, metadata}`), `shell.env`,
+  `experimental.session.compacting` (output `{context, prompt?}`) and
+  `experimental.chat.system.transform` (output `{system}`), the same names and shapes
+  `plugins/opencode/rtok.ts` uses.
+- Loader: `packages/cli/src/config/plugin.ts` scans each config directory with
+  `Glob.scan("{plugin,plugins}/*.{ts,js}")` (symlinks followed), as OpenCode and Kilo do; file
+  hooks (`{hook,hooks}/*.{js,ts}`, `packages/cli/src/plugin/index.ts`) are a separate mechanism
+  and unused. `readV1Plugin` (`packages/cli/src/plugin/shared.ts`) takes a default export object
+  with a `server()` function, and a plugin loaded from a file path must export an `id`
+  (`resolvePluginId`), so `export default { id: "rtok", server }` fits. `rtok.ts` imports only
+  `node:child_process`. `ConfigPaths.directories` (`packages/cli/src/config/paths.ts`) lists the
+  global config dir first, and `packages/cli/src/config/config.ts` runs `ConfigPlugin.load(dir)`
+  for every directory it returns, outside the `.mimocode`-suffix check that only gates the
+  config files, so `~/.config/mimocode/plugins/rtok.ts` is loaded. rtok's tests link the file
+  there without running MiMo (no real agents).
+- Config files: the global directory takes `config.json`, `mimocode.json` and `mimocode.jsonc`,
+  "merged in that order (later overrides earlier)" (https://mimo.xiaomi.com/mimocode/config-overrides);
+  `packages/cli/src/config/config.ts` (`loadGlobal`) reads them in that order and, when none of
+  the three exists, creates a starter `mimocode.jsonc`. So `.jsonc` wins a conflict with `.json`,
+  and a fresh MiMo has only a `.jsonc`. https://mimo.xiaomi.com/mimocode/config-files names only
+  `mimocode.json` and says the format is JSON / JSONC. rtok edits `mimocode.jsonc` when
+  `mimocode.json` is absent; when both exist it keeps writing `mimocode.json`, which MiMo merges
+  under the `.jsonc` (a conflicting `mcp.rtok` in the `.jsonc` would still win).
+- MiMo Desktop: still no documented config path. A third-party README
+  (https://github.com/akaradje/mimo-desktop, **unverified**) says Desktop reads
+  `~/.config/mimocode/mimocode.jsonc`; T521 waits for a read-only probe on the creator's machine.
+- MiMo Desktop, resolved (T521, 2026-10-11). The vendor docs still name no Desktop path: the intro
+  of https://mimo.xiaomi.com/mimocode/start says MiMo Code runs "in the terminal, the desktop
+  app, and IDE extensions", and https://mimo.xiaomi.com/mimocode/config-files lists `default_agent`
+  as "applied across all interfaces (TUI / `mimo run` / desktop / GitHub Action)"; the config-overrides
+  page (all fetched 2026-10-11) lists the global dir as `$XDG_CONFIG_HOME/mimocode/`, i.e.
+  `~/.config/mimocode/`, with `MIMOCODE_HOME` moving it to `$MIMOCODE_HOME/config/`. The vendor's
+  own shipped app is the primary source for Desktop: `Xiaomi MiMo AI.app` 26.1010.101546 (bundle
+  id `com.xiaomi.mimo.desktop-ai`, updater feed `https://mimocode-cdn.xiaomimimo.com/mimocode/mimodesktopai/`,
+  read-only inspection of `Contents/Resources/app.asar` and `app-update.yml` on 2026-10-11)
+  contains `const KM=["mimocode.jsonc","mimocode.json","config.json"]` and a resolver that
+  returns the first existing file of `MIMOCODE_HOME/config`, else `XDG_CONFIG_HOME/mimocode`, else
+  `~/.config/mimocode`: the CLI's config family. The third-party README is therefore confirmed on
+  the path but not needed. The Windows and Linux install paths of the app are not verified, so
+  only the two macOS app paths are probed.
+
 ## 16. Token savings beyond the shipped surface (2026-09-21)
 
 Creator request: what else can save LLM tokens in an agent product like rtok (AirTalk), after inventorying what already ships. Sources: `plan.md` plugin catalogue, `ideas.md`, §§2/4/6/9–15 of this file, and the in-tree plugins under `src/plugins/`. Vendor % claims stay claims unless marked *measured*.
@@ -1571,6 +1652,18 @@ Eligible share by tool (sums to 6.54 %): `Bash` 2.12 %, `Read` of code 1.40 %, r
 
 Caveats: `bytes / 4` underestimates code (about 3 chars per token), so the true token shares are somewhat higher; the tool-name classes come from the transcript's own `tool_use` records; transcripts of the last 60 days only, Claude Code only (Codex, Cursor and others are not in the denominator); mtime-selected files may hold older, uncounted requests; eligibility assumes the 4-message boundary of the proxy even though no proxy ran; micro-compaction by the host, if any, is not modelled. Commands: read-only `sqlite3 -readonly "file:<home>/rtok.db?mode=ro"` for the `archive`, `archive_decisions` and config values; `rtok stats --since 30d --json`.
 
+### 16.9 P28 compressor on a local model: attempt, no gate evidence (T385.9.3, 2026-10-15)
+
+Local reference run, **not the Gate P28 bench** (the creator allowed LM Studio with `prism-ml/bonsai-27b`, a 2-bit 27B, for this card; defaults unchanged). Setup: two scratch `rtok proxy` instances (`rtok 0.17.0`, built from `origin/main`, own `RTOK_HOME`), both `mode = "compress"` with `upstream = http://localhost:1234`; arm A `[plugins.compress.llm] enabled = false`, arm B `enabled = true, model = "prism-ml/bonsai-27b"`. Task: `claude -p` (2.1.267, `--setting-sources project`, `--allowedTools Read`) reads six 15 KB log files one per call, then must name the error code on one `ERROR` line of the first file.
+
+| Run | Result |
+| --- | --- |
+| 3 tasks x 2 arms in parallel | all six hit the 1500 s timeout (the local model cannot prefill six ~37 K-token sessions at once); no data |
+| Arm A alone | 6 turns, 576 s, `usage.input_tokens` 252,859 (213,760 cached), 337 output tokens, **empty final answer** |
+| Arm B alone | 8 turns, 12 s, input 98,386 (98,304 cached), 233 output tokens, **empty final answer**; store shows **0** `archive_summaries`, no internal-lane call and no compress `Measurement` row, so the compressor never fired |
+
+Why nothing can be concluded: the model gave an empty answer in both arms (pass rate 0 of 2, control included), the two runs differ in turns and in LM Studio's prompt-cache state (576 s vs 12 s), and arm B did not compress anything (the `Read` results were not eligible within the last `keep_turns = 4` turns, or the queue did not run in 8 turns). No cost per passed task, no compressor tokens. A real bench needs a model that passes the control, tasks with more than `keep_turns` turns after the large results, and an `rtok bench` arm for the compressor (`rtok bench` has none today). Gate P28 stays open and the flag stays off.
+
 ## 17. Sharing context between an agent and its sub-agents (2026-09-21)
 
 Creator request: a freshly spawned sub-agent gets none of the parent's context, reads the same files again and pays for them again. Find what rtok can apply; sub-agents stay cheap (Haiku). Method: two Haiku agents (repo inventory, web scan), one Haiku docs check, an ad-hoc scan of this machine's transcripts; synthesis in the main session. Vendor numbers stay claims.
@@ -1616,6 +1709,31 @@ Caveats: path-level match (no range or sha), parent reads counted over the whole
 3. **It ships only with a number.** The brief costs tokens in every spawn. T128 makes the re-read share a `rtok stats` row; T131 splits it by brief on/off; default-on only if the net is positive.
 4. **A cheap scout by construction.** A shipped agent definition (`model: haiku`, tools limited to rtok MCP `read`/`search`/`outline`/`explore`/`expand`, answer = `path:line` citations) makes the cheap path the default one → T132; measured by T128's per-`agentType` split.
 5. Not pursued: `fork` (parent model, parent-sized context — the opposite of cheap); shrinking the `Agent` result (0.7 %, T59.6 stands). Parked as ideas: sibling cache-prefix sharing (I-89), sibling findings board (I-90), `updatedToolOutput` (I-91).
+
+### 17.4 rtok-scout vs Explore and general-purpose (T132, 2026-10-12)
+
+Command: `rtok stats --since 18d --json` (read-only; rtok 0.15.1, fe170a431). The table view `rtok stats --since 18d` prints the same split. Window: 2026-09-24 (the day `rtok-scout` shipped) to 2026-10-12. `--since` counts back from the run's clock, so the start is the same time of day on 2026-09-24. Store: this machine's `~/.claude/projects`, 77 sessions. Source: `.subagents.by_type` (T128). Per-agent values are floored.
+
+| agentType | Sub-agents | Tool-result B per agent | Native Read B per agent | Re-read B per agent |
+| --- | --- | --- | --- | --- |
+| `Explore` (all models) | 42 | 140,390 | 8,303 | 1,420 |
+| `general-purpose` (all models) | 1,057 | 184,206 | 41,579 | 2,642 |
+| `rtok:rtok-scout` | 2 | 53,342 | 0 | 0 |
+
+Totals behind the averages: `Explore` 5,896,395 tool-result B, 348,757 Read B, 59,665 re-read B. `general-purpose` 194,705,798 / 43,949,032 / 2,792,842. `rtok-scout` 106,685 / 0 / 0.
+
+Haiku-only rows: `Explore | haiku` 6 agents, 89,571 tool-result B and 7,587 Read B per agent. `general-purpose | haiku` 80 agents, 19,734 and 2,542.
+
+Tokens are not split by agentType. The JSON carries usage only for the whole sub-agent tree: input 214,319, cache read 14,492,408,114, cache write 370,826,742, output 2,243,658. A per-type token split would need T128 to add usage per type.
+
+Caveats:
+- `rtok-scout` has 2 sub-agents, too few to compare with 42 or 1,057.
+- Its five tools are MCP (`mcp__plugin_rtok_rtok__*`). The T128 read column counts native `Read` results only, so its 0 B is structural, not a saving. The tool-result column does count MCP output, but it also includes search and outline output.
+- The scout's meta has no model (`-`), so the model split cannot place it.
+- The store is live. The table run differed slightly from the JSON run (`general-purpose | haiku` tool-result 1,580,442 B, tree input 214,341), so rows drift by a few KB between runs.
+- `general-purpose` mixes models (329 opus, 554 sonnet). Compare within one model only.
+
+Verdict: no decision on the default. The two scout sub-agents used 53 KB of tool results each, against 140 KB for `Explore` and 184 KB for `general-purpose`, but n = 2 and the read column cannot see MCP reads. Keep `rtok-scout` as shipped and re-measure once it has a usable sample. T128's split must also count MCP reads per agentType before the read column can compare them.
 
 ## 18. Git worktrees: accumulation, ownership, build artifacts (2026-09-21)
 
@@ -2172,6 +2290,15 @@ Question: why do Claude Code desktop-app (Code tab) sessions so often lack `RTOK
 - **Measured (the creator's machine, 2026-10-08):** in this session's own Bash tool `CLAUDE_CODE_SESSION_ID` equals the `host_session_id` of its rtok agent row, `CLAUDE_ENV_FILE` is unset and `~/.claude/session-env/<session>/` is an empty directory. The store has PreToolUse/PostToolUse calls for the session but no `SessionStart` (and no `UserPromptSubmit` for the first prompt). Across 28 recent desktop sessions, the env file (`sessionstart-hook-1.sh`, rtok's plugin hook) exists exactly in the 17 where the store has a `SessionStart` call; in 16 of 19 sessions checked, the first `SessionStart` came hours after the session's first hook (a resume or compact), not at startup. So the env-file mechanism works; the plugin's startup `SessionStart` is what does not reach rtok in the desktop app, while the user-settings `SessionStart` hook at index 0 does run (it creates the empty directory). Why the plugin hook is skipped at startup is not documented; third-party reports of plugin `SessionStart` hooks missing the first run exist (anthropics/claude-code issues 10997, 16763, via claudeissues.com mirrors) — **unverified**.
 - **What T473 ships:** `CLAUDE_CODE_SESSION_ID` joins `GROK_SESSION_ID` in `src/agents/link.rs` `SESSION_ENV`. From a shell (`rtok agents whoami/status/send/inbox`, `rtok worktree …`) it names the main agent row of that host session when `RTOK_AGENT_ID` is unset. In `rtok mcp` it links only a row the hooks already wrote and never registers one, because the MCP child's copy can be stale (`/clear`, `--continue`); with no row yet, the ancestor and cwd rules run as before. Measured 2026-10-09 (`ps eww`): each session's own `rtok mcp` child of `claude` carries that session's id, while the app-level servers the desktop app starts from `claude_desktop_config.json` (T455's `Link::Outside` case) carry none, so the env rule never links one server to many sessions.
 
+### Post-create hook file shapes (T289.3, 2026-10-10)
+
+Question: which file does each host read after it creates a worktree, and what exactly is in it, so `rtok agents install <host> --project` can add one entry and leave the rest of the file alone. All three are vendor docs, fetched 2026-10-10.
+
+- **Cursor.** https://cursor.com/docs/configuration/worktrees. The file is `.cursor/worktrees.json`, read "in the worktree path" first, then "in the root path of your project" (the page says nothing about a user-level copy, so project only). Keys, all optional: `setup-worktree-unix` (macOS/Linux, "takes precedence over `setup-worktree` on Unix"), `setup-worktree-windows` (same on Windows) and `setup-worktree` (any OS). A value is either an array of shell command strings, "executed sequentially in the worktree", or a string path to a script relative to `.cursor/worktrees.json`. Example from the page: `{"setup-worktree": ["npm ci", "cp $ROOT_WORKTREE_PATH/.env .env"]}`. `ROOT_WORKTREE_PATH` points at the main checkout. Not documented: what happens when a command fails, and which shell runs the commands. Consequence for the writer: our command goes into every key whose value is an array (so an OS-specific key cannot shadow it); a key whose value is a script path is never edited, because that would change a file that is not ours.
+- **Devin Desktop and Windsurf.** https://docs.devin.ai/desktop/cascade/hooks (https://docs.windsurf.com/windsurf/cascade/hooks answers 307 to it) and https://docs.devin.ai/desktop/cascade/worktrees. Config files: user `~/.codeium/windsurf/hooks.json` (JetBrains: `~/.codeium/hooks.json`), workspace `.devin/hooks.json` in the workspace root, and a system file; "the legacy `.windsurf/hooks.json` is used only when `.devin/hooks.json` is absent or defines no hooks". The worktrees page still says `.windsurf/hooks.json`, so the hooks page is the newer. Shape: `{"hooks": {"post_setup_worktree": [{"command": "bash $ROOT_WORKSPACE_PATH/hooks/setup_worktree.sh", "show_output": true}]}}`. The hook runs inside the new worktree after it is created and configured, gets `$ROOT_WORKSPACE_PATH` (the original workspace) and a JSON payload on stdin (`tool_info.worktree_path`, `tool_info.root_workspace_path`); commands run through `bash -c` or `powershell -Command`. Exit code 2 can block only pre-hooks, any other code lets the action proceed. Cap: 20 worktrees per workspace, oldest last-accessed removed first. Consequence: creating `.devin/hooks.json` next to an existing `.windsurf/hooks.json` would switch the project to the new file and silently disable the legacy hooks, so the writer picks the file the host reads today (`.devin/hooks.json` when it defines hooks, else a `.windsurf/hooks.json` that does, else `.devin/hooks.json`).
+- **Kilo.** https://kilo.ai/docs/automate/agent-manager and https://kilo.ai/docs/automate/agent-manager-workflows. The setup script is `.kilo/setup-script` or `.kilo/setup-script.sh` (macOS/Linux, in that order) and `.kilo/setup-script.ps1`, `.cmd`, `.bat` (Windows, in that order), "in your project". It runs "whenever a new worktree is created", after the root-level `.env` files are copied and before the agent starts, with `WORKTREE_PATH` (the new worktree) and `REPO_PATH` (the repository root) in the environment; `sh` runs a POSIX script, no executable bit needed; five-minute timeout; on failure the worktree is kept for inspection (so a failing setup line can hold the session up, and our line must fail open). Managed worktrees live in `.kilo/worktrees/`. The file is a plain script, so our entry is a marked block, and an existing `.kilo/setup-script.sh` is edited instead of creating `.kilo/setup-script`, which would shadow it. Windows variants are not written (no unix shell to run the block).
+- **Not confirmed** (so not claimed): whether any of the three evicts or breaks on a git-locked worktree (T281's live probe); what Cursor does with a failing command.
+
 ## 27. Memory defaults and one install point (T291–T294) (2026-09-27)
 
 Creator 2026-09-27: the write hook and the session-end hook must fire, smart memory must be on by default, and every agent must get that from one module (or one `create`), not from a hand-written manifest per host. Decision D35. Cloud sync of notes is a later task in a private repo; that repo was not found in the local tree or via `gh repo list` / `gh search` on this date (the only cloud-sync hit was Fern in `listepo/budget-app`, a different product). D8 stands: this repo keeps one SQLite file and does not grow a sync protocol. T294 only widens the JSONL row so a later replicator can carry a tombstone.
@@ -2411,9 +2538,9 @@ What `rtok agents usage --source logs` reads per host, from each host's own sour
 | Host | Reads | Verdict |
 | --- | --- | --- |
 | OpenCode | `message.data` JSON in `opencode.db` | supported |
-| Kilo | `message.data` JSON in `kilo.db` | supported, not run on real data (the local `kilo.db` holds no messages) |
-| Copilot CLI | `modelMetrics` of `session.shutdown` in `session-state/*/events.jsonl` | supported, per session |
-| Gemini CLI | `tokens` of `gemini` messages in `tmp/*/chats/session-*.jsonl` (and legacy `.json`) | supported, not run on real data (no chats on this machine) |
+| Kilo | `message.data` JSON in `kilo.db` | supported; the reader runs on the real `kilo.db`; a real assistant row was read on 2026-10-15 (§30.1, `a_real_kilo_7_8_1_assistant_row_is_read_with_its_extra_fields`) |
+| Copilot CLI | `tokenDetails` (else `usage`) of each `modelMetrics` entry of `session.shutdown` in `session-state/*/events.jsonl` | supported, per session; checked on the one real log (2026-10-12); a resumed session counts its last shutdown only (cumulative per the SDK source, 2026-10-12), not yet seen in a real resumed log |
+| Gemini CLI | `tokens` of `gemini` messages in `tmp/*/chats/session-*.jsonl` (and legacy `.json`) | supported, **unverified** on real files (no Gemini CLI and no chats on this machine, 2026-10-12) |
 | Droid | none | `unsupported` |
 | pi | `usage` of entries in `sessions/*/*.jsonl` | supported, matches an independent sum on real files |
 | Kimi Code | `usage.record` lines of `sessions/*/*/agents/*/wire.jsonl` | supported, matches an independent sum on real files |
@@ -2426,19 +2553,23 @@ What `rtok agents usage --source logs` reads per host, from each host's own sour
 - Sessions live in a SQLite file under the data directory, `${XDG_DATA_HOME}/opencode` (https://github.com/anomalyco/opencode, commit `c42ae0d56b6f86f8df39d451d6d2cfe6414b3928`, `packages/core/src/global.ts`: `path.join(xdgData, "opencode")`). Kilo uses `kilo` the same way (https://github.com/Kilo-Org/kilocode, commit `76bcfd40be616a72f4697b3041565f322245b462`, `packages/core/src/global.ts`) and names its file `kilo.db`, or `kilo-<channel>.db` for a non-stable channel (`packages/opencode/src/storage/db.ts`).
 - The `message` table has `id`, `session_id`, `time_created` (milliseconds) and a JSON `data` column (`packages/core/src/session/sql.ts`). An assistant message's `data` carries `role`, `modelID`, `providerID`, `time.created`, and `tokens` = `{input, output, reasoning, cache: {read, write}}` (`packages/core/src/v1/session.ts`, `Assistant`).
 - `input` already excludes the cache legs and `output` excludes the reasoning tokens: `input = inputTokens - cacheRead - cacheWrite`, `output = outputTokens - reasoningTokens` (`packages/opencode/src/session/session.ts`, `getUsage`, and the same arithmetic in Kilo's `packages/core/src/v1/session.ts`). The reader adds reasoning back into output, as it is billed as output.
+- Checked on this machine on 2026-10-12: Kilo 7.8.1 (`kilo --version`) keeps `~/.local/share/kilo/kilo.db` with 277 sessions, but its `message`, `part` and `session_message` tables hold no rows and the `tokens_*` columns of `session` are all 0, so `rtok agents usage --source logs --host kilo` rightly prints nothing and does not fail. The columns the reader declares (`message.id`, `session_id`, `time_created`, `data`) exist in that schema, and `AssistantMessage.tokens` = `{total?, input, output, reasoning, cache: {read, write}}` is the shape in the host's source (https://github.com/Kilo-Org/kilocode, tag `v7.8.1`, commit `4089197545a01bbc9fa8041c1305b3fb0b0f8e66`, `packages/schema/src/v1/session.ts`). What no file here shows is a real `message.data` row, so that part stays **unverified** (2026-10-12): it needs a machine where Kilo has run a session.
+- **Real message row, 2026-10-15 (T396).** One session was run on this machine with `KILO_CONFIG_CONTENT='{"provider":{"lmstudio":{"npm":"@ai-sdk/openai-compatible","options":{"baseURL":"http://127.0.0.1:1234/v1"},"models":{"prism-ml/bonsai-27b":{}}}}}' kilo run -m lmstudio/prism-ml/bonsai-27b "Reply with the single word ok."` (Kilo 7.8.1, LM Studio local model). `kilo.db` then held 2 `message` rows; the assistant row's `data` is `{"parentID","role":"assistant","mode":"code","agent":"code","path":{"cwd","root"},"cost":0,"tokens":{"total":17074,"input":17049,"output":4,"reasoning":21,"cache":{"write":0,"read":0}},"modelID":"prism-ml/bonsai-27b","providerID":"lmstudio","time":{"created","completed"},"finish":"stop"}`, i.e. the documented shape plus `parentID`, `mode`, `agent`, `path`, `cost`, `tokens.total` and `finish`. `rtok agents usage --source logs --host kilo` printed 17.07K tokens (17,049 + 4 + 21 = `tokens.total`), 1 session. The "unverified" tag on this row is resolved; `tokens.total` equals input + output + reasoning when the cache legs are 0, the cache legs were not exercised (the local provider reports none). Fixture: the same row with the working directory scrubbed, `a_real_kilo_7_8_1_assistant_row_is_read_with_its_extra_fields` in `src/measure/usage/sqlite.rs`.
 - This corrects the 2026-09-17 note in `measure::codex` that `opencode.db` carries no token counts. Checked on this machine on 2026-10-03: the sums over `role = 'assistant'` messages (input, cache read, cache write, output + reasoning) match what `rtok agents usage --host opencode` prints for all four legs.
 
 ### 30.2 Copilot CLI
 
 - The config directory is `~/.copilot`, relocated by `COPILOT_HOME`; `session-state/<session id>/events.jsonl` is the session event log (https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-config-dir-reference, read 2026-10-03).
 - The SDK's event schema (https://github.com/github/copilot-sdk, commit `5b2d7cdd7da1e5d082ae316a533cbb7584a495c1`, `nodejs/src/generated/session-events.ts`) marks `assistant.usage` (per API call) as ephemeral, "not persisted to the session event log on disk". What is persisted is `session.shutdown.data.modelMetrics[<model>].usage`: `inputTokens`, `outputTokens`, `cacheReadTokens`, `cacheWriteTokens`, `reasoningTokens?`, totals over the whole run. A session that never shut down cleanly has no totals and is not counted.
-- **Unverified** (no primary text says it): that `inputTokens` includes the cache legs and `outputTokens` includes reasoning. The one real log on this machine has cache reads below `inputTokens` (18.6M against 17.7M), so the reader treats input as inclusive, and its printed totals are exactly that file's `usage` block. The same event's `tokenDetails` block disagrees with `usage` (uncached input 2.10M plus 17.7M cache reads, output 18.9K against 9.8K): the SDK does not say why, and the reader follows `usage`, the block with documented per-field meaning. Also unverified: whether a resumed session writes a second shutdown with run-only or cumulative totals (the reader sums them).
+- Checked on 2026-10-12 against the one real log on this machine (written by Copilot CLI 1.0.80, `session.start.copilotVersion`; 1.0.83 is installed): one `session.shutdown`, one model, no `session.resume`. Its `modelMetrics` entry carries `usage` and a `tokenDetails` block (`input`, `cache_read`, `cache_write`, `output`, each `{tokenCount}`), and the two differ by exactly the seven `session.compaction_complete` events of the log: `tokenDetails.input` (2,096,414) is `inputTokens - cacheReadTokens` (913,181) plus the sum of the compactions' `compactionTokensUsed.inputTokens` (1,183,233), and `tokenDetails.output` (18,945) is `usage.outputTokens` (9,800) plus their `outputTokens` (9,145); the cache legs are equal. So `usage` leaves the compaction requests out, `tokenDetails` is the whole spend (the SDK describes the per-model block only as "Token count details per type" and the session-wide one as "accumulated token counts", https://github.com/github/copilot-sdk, commit `6be623b01b194a61466385e3f708639ec98ce8ac`, `nodejs/src/generated/session-events.ts`, `ShutdownModelMetric.tokenDetails`, `ShutdownData.tokenDetails`), and `inputTokens` does include the cache legs (confirmed: the equality only holds if it does). The reader therefore takes `tokenDetails` when it has `input` and `output`, and `usage` otherwise. Before this check it followed `usage` and so left out the compaction input and output.
+- **Unverified, kept 2026-10-12**: whether `outputTokens` includes reasoning (the real log has 0 reasoning tokens). The `outputTokens` of the 1,116 `assistant.message` events add up to 84,327, which matches neither block, and `requests.count` is 158; nothing read explains the gap, so per-message counts are not used.
+- **Confirmed from the SDK source, not yet observed in a real resumed log (2026-10-12)**: a resumed session's later `session.shutdown` carries session-wide cumulative totals, so the reader takes the last shutdown of each `events.jsonl` instead of summing them. Source: https://github.com/github/copilot-sdk, commit `6be623b01b194a61466385e3f708639ec98ce8ac` (committed 2026-10-10, checked 2026-10-12), `nodejs/src/generated/session-events.ts`: `ShutdownData.tokenDetails` is "Session-wide per-token-type accumulated token counts"; `ShutdownModelMetric.usage` fields read "across all requests to this model" (`UsageMetricsModelMetricUsage`); `session.usage_checkpoint` is a "Durable session usage checkpoint for reconstructing aggregate accounting on resume" and its `totalNanoAiu` is "Session-wide accumulated nano-AI units cost at checkpoint time". Nothing in the schema says a resume starts a new accounting scope, and `session.resume` (`ResumeData`) carries no usage fields. The checkpoint carries no per-model token legs (only an `@internal` `accountingSnapshot` and cache state), so the reader ignores it. This machine has no resumed log (one `events.jsonl` with a shutdown, no `session.resume` event), so the cumulative behaviour is documentation, not an observed file; it stays to be confirmed on a real resumed session.
 
 ### 30.3 Gemini CLI
 
 - https://github.com/google-gemini/gemini-cli, commit `fb972b2f87fe7d5b06d37eac711490162d98de2c`. `packages/core/src/config/storage.ts`: the project temp directory is `<home>/.gemini/tmp/<project identifier>`, chats are in its `chats/` directory, and `GEMINI_CLI_HOME` replaces the home directory (`packages/core/src/utils/paths.ts`). Sub-agent chats sit in `chats/<parent session id>/`.
 - `packages/core/src/services/chatRecordingService.ts` and `chatRecordingTypes.ts`: a chat is an append-only JSONL log of messages, `$patch` records, `$rewindTo` records and `$set` metadata; a `gemini` message has `id`, `timestamp`, `model` and `tokens` = `{input, output, cached, thoughts?, tool?, total}` where `input` is `promptTokenCount` (which includes `cached`), `output` `candidatesTokenCount`, `thoughts` `thoughtsTokenCount` and `tool` `toolUsePromptTokenCount`. The last record with a given message id wins. An older release wrote one `session-*.json` document with a `messages` array; the CLI migrates it only when the session is opened again.
-- Not run on real files: this machine has no Gemini chats.
+- Not run on real files, **unverified** (kept 2026-10-12): `gemini` is not installed here and `~/.gemini/tmp` is empty, so neither a chat file nor the host's version could be read.
 
 ### 30.4 Droid (Factory)
 
@@ -2448,7 +2579,8 @@ What `rtok agents usage --source logs` reads per host, from each host's own sour
 
 - https://github.com/earendil-works/pi (the former badlogic/pi-mono), commit `69f0be6f0a6ca1bf66a2a9cf59c821b632e6bca1`, `packages/coding-agent/docs/sessions.md`: sessions are stored under `~/.pi/agent/sessions/`, grouped by working directory; `--session-dir`, `PI_CODING_AGENT_SESSION_DIR` or the `sessionDir` setting moves them. `docs/environment-variables.md` names `PI_CODING_AGENT_DIR` as the agent folder.
 - `docs/session-format.md`: a session is JSONL, one entry per line, each with `id` and an ISO `timestamp`. An assistant `message` carries `provider`, `model` and `usage`; `compaction`, `branch_summary` and `usage` entries carry `usage` themselves, and the doc says they all "contribute to session token and cost totals". `docs/message-types.md`: `usage` is `{input, output, cacheRead, cacheWrite, totalTokens, cost}` and `reasoning`, when present, is already inside `output`, so it is not added again. A `usage` entry with an unknown `kind` is normal usage.
-- Not documented: whether a forked session copies the parent's entries with their ids. The reader counts an entry once by (`id`, `timestamp`) across all files, which is the same result either way. **unverified**
+- Forks: the source at the same commit (`packages/coding-agent/src/core/session-manager.ts`) copies the parent's entries with their `id` and `timestamp` unchanged, in `forkFrom` (every non-header entry written verbatim) and `createBranchedSession` (each entry spread with only `parentId` rewritten, labels aside); the new header gets a new `id` and `parentSession`. So counting an entry once by (`id`, `timestamp`) across files is right. Confirmed from source on 2026-10-12; the 10 real files here include no fork (no `parentSession` key, no repeated entry id), so it is not observed in data.
+- Checked again on 2026-10-12 with pi 0.85.1 (`pi --version`): the same 10 files and 953 usage entries (message types 2,123 `message`, 14 `model_change`, 14 `thinking_level_change`, 10 `session` headers at version 3) still give identical reader and `jq` sums for all four legs. Newer entries add `reasoning` (46 entries) and `cacheWrite1h` (882 entries, always 0) next to the four legs; in all 953 `totalTokens` equals input + output + `cacheRead` + `cacheWrite`, so `reasoning` is inside `output` and is not added again. Whether `cacheWrite1h` is inside `cacheWrite` is **unverified** (kept 2026-10-12): it is 0 in every real entry.
 - Checked on this machine on 2026-10-03: a read-only run of `rtok agents usage --source logs --host pi` against the real `~/.pi/agent/sessions` (10 files, 953 usage entries) and an independent `jq` sum of the same entries give identical totals for all four legs (input 8,063,051; cache read 129,106,459; cache write 0; output 744,047). No file content was copied.
 
 ### 30.6 Kimi Code (T358.4)
@@ -2462,6 +2594,7 @@ What `rtok agents usage --source logs` reads per host, from each host's own sour
 
 - xAI's own guide, shipped in `~/.grok/docs/user-guide/17-sessions.md` of grok 1.0.34 (read 2026-10-03; `~/.grok/version.json`): sessions are `~/.grok/sessions/<encoded-cwd>/<session-id>/` (`$GROK_HOME` moves the base), and `signals.json` holds "token usage, tool/turn counters". It names no keys. The same page documents `grok usage <session-id>` ("Use this instead of reading session files") that prints per-session and per-turn tokens and cost as JSON.
 - Verdict: `unsupported`. The documented route is another program, which rtok does not run (D6), and the file's keys are not documented. Reading `signals.json` from observed keys would be a guess. If the creator accepts observed keys as a source, it is a small reader.
+- The creator accepted observed keys on 2026-10-13 (T396), but there are none to observe: grok 1.0.34 (`~/.grok/version.json`) has 3 sessions on this machine and none holds a `signals.json`; their `summary.json`, `updates.jsonl`, `events.jsonl`, `chat_history.jsonl` and `prompt_context.json` have no key path containing `token`, `usage` or `cost` (key names listed with `jq paths`, no content read). The verdict stays `unsupported` until a session with a `signals.json` exists.
 
 ### 30.8 ZCode (T358.4)
 
@@ -2503,6 +2636,139 @@ Qwen Code is a Gemini CLI fork (`qwen`, https://github.com/QwenLM/qwen-code/blob
 - `model.baseUrl` is "Not intended to be set by hand — use the `/model` picker or a `modelProviders` entry". Proxy stays out. https://qwenlm.github.io/qwen-code-docs/en/users/configuration/settings/
 - Desktop: the README links a desktop build (https://github.com/QwenLM/qwen-code/releases/tag/desktop-latest) and does not name a second settings path. No desktop variant.
 - Events with no rtok plugin (`Stop`, `Notification`, `PostToolUseFailure`, and the rest of the hooks page) stay uninstalled.
+
+### 32.3 Factory Droid (T413.3, checked 2026-10-12)
+
+Factory moved its docs from `docs.factory.ai` to `docs.factory.com` (308 redirect from the vendor's own host); the links below are the new host. The CLI binary is `droid` (https://docs.factory.com/cli/getting-started/quickstart).
+
+- User-level MCP file: `~/.factory/mcp.json`; servers added with `droid mcp add` go there. A project `.factory/mcp.json` and ancestor-folder files exist for servers shared by a repository. https://docs.factory.com/cli/configuration/mcp
+- Stdio entry: `mcpServers.<name>` with `command`, `args`, `env`; `type` is `"stdio"`, `"http"` or `"sse"` and optional for stdio, which is the default. `disabled` is a boolean (default `false`). Same page.
+- Hooks: events `PreToolUse`, `PostToolUse`, `UserPromptSubmit`, `Notification`, `Stop`, `SubagentStop`, `PreCompact`, `SessionStart`, `SessionEnd`. User file `~/.factory/hooks.json` is keyed directly by event name (no wrapping `hooks` key); if it is absent, the `hooks` key of `settings.json` is read. Command objects are `{type: "command", command, timeout}` with `timeout` in seconds (default 60). Exit 2 blocks on `PreToolUse`; `hookSpecificOutput.additionalContext` adds context after `PostToolUse` and on `SessionStart`. https://docs.factory.com/cli/configuration/hooks-guide
+- The docs name no tool list for matchers and no `PreCompact` or `SubagentStart` output shape, so rtok has no checked mapping of Droid's tool names or of its `PreToolUse` rewrite output. Hooks stay `Support::No`; a hooks task has to verify both first.
+- Plugins: `.factory-plugin/plugin.json`, `hooks/hooks.json`, `mcp.json` at the plugin root, installed into Droid's cache with `droid plugin install <plugin@marketplace> --scope user`; the page names no directory. https://docs.factory.com/cli/configuration/plugins. No Droid plugin unit exists under `plugins/` (D21), so `plugin` stays `Support::No`.
+- Custom models: `customModels[]` in `~/.factory/settings.json`, each entry with its own `baseUrl`; no single endpoint setting, so proxy stays out. https://docs.factory.com/cli/configuration/byok
+- Settings: `~/.factory/settings.json` (macOS and Linux), `%USERPROFILE%\.factory\settings.json` (Windows); no config-directory environment variable is documented. https://docs.factory.com/cli/configuration/settings
+- No Desktop app is documented, so there is one CLI variant.
+
+### 32.4 Kiro IDE and CLI (T413.4, checked 2026-10-12)
+
+- MCP files: `~/.kiro/settings/mcp.json` (user, "applies globally across all workspaces") and `.kiro/settings/mcp.json` (workspace); both merged, workspace wins. Loading priority on the same page: agent config (`mcpServers` field of the agent JSON, no path given), workspace file, global file. https://kiro.dev/docs/mcp/configuration/
+- Stdio entry: `mcpServers.<name>` with `command` (required), `args`, `env`, `disabled`, `autoApprove`, `disabledTools`. Same page. rtok writes `{command, args}` only.
+- Surfaces: the configuration page and https://kiro.dev/docs/mcp/ carry IDE, CLI and Web tabs, but the fetched text has the file paths under the IDE tab only and states no per-surface path; the page has a Windows note for "Kiro CLI V2" about how stdio commands launch. So the CLI is taken to read the same two files, **unverified** against the CLI itself.
+- Conflict: https://kiro.dev/docs/mcp/registry/ lists "Global: ~/.kiro/mcp.json" and "Workspace: .kiro/mcp.json" for the same scopes. The configuration page is the reference for the file format, so the installer uses `settings/mcp.json`; `[setup.kiro] mcp_path` redirects it. The old `/docs/cli/mcp/` pages are redirects to the unified pages.
+- CLI: binary `kiro-cli`, install `curl -fsSL https://cli.kiro.dev/install | bash`. https://kiro.dev/docs/cli/ . The page names no config directory and no `mcp add` syntax.
+- IDE app: the installation page says to "drag Kiro from Applications to the Trash", so the macOS bundle is `/Applications/Kiro.app` (bundle id not documented); no Windows or Linux install folder is named, so only macOS paths are probed. https://kiro.dev/docs/getting-started/installation/
+- Hooks: JSON files in `.kiro/hooks/` (project) and, for CLI V3, `~/.kiro/hooks/`; each has `version: "v1"` and a `hooks` array of `{name, trigger, matcher, action: {type, command | prompt}, timeout (default 60), enabled}`; triggers named include `PostFileSave`, `PreToolUse`, `PostToolUse`, `Stop`. The command receives session context as JSON on stdin. The page states no exit-code rules and no way for command output to reach the agent's context. https://kiro.dev/docs/hooks/ . Hooks stay `Support::No`.
+- No model base-URL setting and no local plugin directory are documented on the pages above, so proxy and plugin stay `Support::No`.
+- Migration: see 32.10 (T413.10): the Amazon Q CLI migration copies `~/.aws/amazonq/mcp.json` to `~/.kiro/settings/mcp.json`, which supports `~/.kiro/settings/mcp.json` as the CLI's user file.
+
+### 32.6 Goose (T413.6, checked 2026-10-12)
+
+- Config file: https://github.com/aaif-goose/goose/blob/main/documentation/docs/guides/config-files.md — `~/.config/goose/config.yaml` on macOS and Linux, `%APPDATA%\Block\goose\config\config.yaml` on Windows. The CLI and the Desktop app share it.
+- `GOOSE_PATH_ROOT` moves every goose directory: https://github.com/aaif-goose/goose/blob/main/documentation/docs/guides/environment-variables.md. The installer reads it only through `[setup.goose] config_path`, not from the environment.
+- Stdio extension shape: https://github.com/aaif-goose/goose/blob/main/documentation/docs/getting-started/using-extensions.md (section on editing the config file) — `extensions.<key>` with `name`, `type: stdio`, `cmd`, `args`, `enabled`; `envs` and `timeout` are optional. Goose adds defaults when it re-saves an entry, so the installer compares only `name`, `type`, `cmd`, `args`, `enabled`.
+- Hooks: https://github.com/aaif-goose/goose/blob/main/documentation/docs/guides/context-engineering/hooks.md documents Open Plugins hooks with their own payload and decision shape. rtok has no adapter for it, so hooks stay off (`support` says so).
+- Proxy: only the `GOOSE_PROVIDER__HOST` environment variable is documented (environment-variables.md above), so there is no file to write; plugin: Goose's Open Plugins bundle is not shipped by rtok.
+- Desktop app: https://github.com/Homebrew/homebrew-cask/blob/master/Casks/b/block-goose.rb (cask `block-goose`, app `Goose.app`; linked from https://github.com/aaif-goose/goose/blob/main/documentation/docs/getting-started/installation.md). The CLI binary is `goose`.
+
+### 32.9 JetBrains Junie (T413.9, checked 2026-10-12)
+
+- CLI binary `junie`. User MCP file `~/.junie/mcp/mcp.json`, project file `.junie/mcp/mcp.json`. A stdio server is `mcpServers.<name>` with `command`, `args`, optional `env`; a remote one uses `url` and `headers`. The page shows no `type` key and names no environment variable that moves the directory (only the CLI options `--mcp-default-locations` and `--mcp-location <path>`). https://junie.jetbrains.com/docs/junie-cli-mcp-configuration.html
+- Config files: user `~/.junie/config.json`, project `<project-root>/.junie/config.json` (read only for a trusted project), extra files via `--config-location` or `JUNIE_CONFIG_LOCATION`. The page names no variable that relocates `~/.junie`. https://junie.jetbrains.com/docs/junie-cli-configuration.html
+- Hooks: a `hooks` object in `~/.junie/config.json`; hooks in the default project config are ignored. The only documented event is `SessionStart` (matcher `startup` or `resume`, command hook, `timeout` seconds, default 10). There is no tool-use event, so rtok's hooks have nothing to attach to. https://junie.jetbrains.com/docs/junie-cli-hooks.html
+- IDE plugin: the MCP settings page describes the IDE settings dialog and gives no file path, so there is no IDE variant. https://junie.jetbrains.com/docs/junie-plugin-mcp-settings.html
+- Proxy and plugin directory: neither page documents a model base-URL file or a linkable plugin directory. Both stay `Support::No`.
+
+### 32.10 Amazon Q Developer CLI (T413.10, checked 2026-10-12)
+
+Result: no `amazonq` host. The CLI is succeeded by Kiro CLI, which T413.4 covers.
+
+- Succession: "Kiro CLI is the next update of the Q CLI"; staying on Q Developer CLI means "new features and fixes will only be available for Kiro CLI". The page gives no end-of-support date for the Q CLI. Kiro CLI was available from 2025-11-17, and auto-update users were moved to it on 2025-11-24. https://kiro.dev/docs/upgrade-guides/migrating-from-q/ (page updated 2026-08-04)
+- MCP file: the one-time migration copies `~/.aws/amazonq/mcp.json` to `~/.kiro/settings/mcp.json` and skips servers that conflict. Kiro CLI does not modify existing `.amazonq` folders, keeps reading project `.amazonq` configuration, and prefers `.kiro` when both exist. Same page. T413.4 should treat `~/.kiro/settings/mcp.json` as the user MCP file and write nothing to `.amazonq`.
+- Q Developer IDE plugins: no primary source checked, so no IDE variant. Third-party posts about their end of support are leads only (unverified).
+
+### 32.5 Amp (T413.5, checked 2026-10-12)
+
+- User settings: `~/.config/amp/settings.json` or `settings.jsonc` (macOS and Linux; `%USERPROFILE%\.config\amp\` on Windows); workspace: the nearest `.amp/settings.json` or `.jsonc`, searched upward to the repository root; workspace settings override user settings. `--settings-file <path>` swaps the user file; no environment variable for the config directory is documented. https://ampcode.com/docs/cli/settings
+- MCP: key `amp.mcpServers` (a dotted property name), stdio entry `{command, args}`, no `type`. User-level servers need no approval; workspace servers do (`amp mcp approve`). The page does not say which file `amp mcp add` writes. https://ampcode.com/docs/customize/mcp
+- Plugins: `.ts` / `.js` single files or `<name>/index.ts` in `.amp/plugins/` (project) or `$XDG_CONFIG_HOME/amp/plugins/` / `~/.config/amp/plugins/` (system); the entry default-exports `function (amp: PluginAPI)` and registers with `amp.on(event, handler)`; they run under Bun. Events: `session.start`, `tool.call` (returns `allow`, `reject-and-continue`, `modify`, `synthesize`, `error`), `tool.result`, `agent.start` (can add a message), `agent.end`, `changes.prompt`. https://ampcode.com/docs/customize/plugins and https://ampcode.com/docs/plugin-api (first 100000 characters read). rtok's OpenCode-shaped plugin (`plugins/opencode/rtok.ts`) targets another event API and Amp's tool names are not in the pages read, so no Amp plugin is linked: `plugin` stays `Support::No` until a plugin unit exists under `plugins/` (D21).
+- Hooks: no shell hook events appear in the settings or plugin pages; the plugin events above are in-process handlers. `hooks` stays `Support::No`.
+- `amp.url` and `amp.proxy` appear only as keys a workspace-managed document must not set because they could cut the client off from "the server that provides the settings"; `amp.url` is Amp's own server, not a model-provider base URL. Proxy stays `Support::No`. https://ampcode.com/docs/cli/settings
+- Binary: `amp`. No desktop app is documented, so one CLI variant.
+
+### 32.13 Trae (T413.13, checked 2026-10-12)
+
+Trae IDE (ByteDance). Facts are from the vendor's docs, https://docs.trae.ai/ide/add-mcp-servers, fetched 2026-10-12. Result: no installer; the documented user-level surface has no file path.
+
+- Project MCP servers: an `mcp.json` in a `.trae/` directory under the project root (step "Set up project MCP servers"). That file belongs to the project, so setup never writes it.
+- User-level MCP servers: added in the app's MCP panel. The page names the **Raw Config (JSON)** button, which opens "the mcp.json file in TRAE", but gives no path for it. The path is not in the page, and Trae is not installed on this machine to read it back.
+- VS Code layout: Trae is a VS Code fork, but the docs do not say it reads VS Code's `mcp.json` or `settings.json`, so `src/agents/vscode/` cannot be reused on a guess.
+- Because the only documented user-level file has no documented path, a fixed path would be a guess; the host stays out until the docs (or a Trae install to inspect) name one.
+
+### 32.12 Warp (T413.12, checked 2026-10-12)
+
+Warp is a desktop terminal with an agent. All facts below are from the vendor's docs; the Warp page for MCP is served as Markdown at the `.md` URL.
+
+- File-based MCP servers: global `~/.warp/.mcp.json`, project `{repo_root}/.warp/.mcp.json`. Warp's own files are "On by default"; servers detected from other agents (`~/.claude.json`, `~/.codex/config.toml`, `~/.agents/.mcp.json`) need a toggle in Settings. https://docs.warp.dev/agents/capabilities/mcp.md
+- Format: top-level `mcpServers`, each entry keyed by a unique name. A local (CLI) server takes `command`, `args`, `env`, `working_directory`; a URL server takes `url`, `headers`. No `type` key appears in the property tables or any example, so the installer writes none. Same page.
+- Project-scoped servers are detected but never started automatically (each is toggled on per session), and "Warp prevents edits to MCP config files unless you explicitly approve the change" applies to the agent editing them. The installer writes only the user file and only when the user runs it. Same page.
+- Servers added in the app's own MCP settings page are the other path; the page does not say where the app stores them, so they stay out of scope and are never read or changed.
+- Install: macOS "in your Applications folder" (`brew install --cask warp`), Windows via the Start menu (`winget install Warp.Warp`), Linux package with the `warp-terminal` command or an AppImage. No install directory, no PATH command for macOS or Windows and no `--version` flag are documented. https://docs.warp.dev/getting-started/installation-and-setup. Detection is therefore the macOS bundle `/Applications/Warp.app` only (checked present on the creator's machine on this date); `warp-terminal --version` would be a guess that may open the GUI.
+- Hooks, a plugin format and a model endpoint setting: the MCP page does not mention hooks and no page checked names the others, so hooks, plugin and proxy stay `Support::No`. Rules files (`WARP.md`, `AGENTS.md`) are not an rtok module surface here.
+
+### 32.7 Continue (T413.7, checked 2026-10-12)
+
+- Config file: https://docs.continue.dev/customize/deep-dives/configuration (source `docs/customize/deep-dives/configuration.mdx` in https://github.com/continuedev/continue) — `~/.continue/config.yaml` on macOS and Linux, `%USERPROFILE%\.continue\config.yaml` on Windows. `cn` defaults to the same file: https://docs.continue.dev/cli/configuration (`docs/cli/configuration.mdx`). `CONTINUE_GLOBAL_DIR` moves the directory: `core/util/paths.ts` and `extensions/cli` in the same repository (checked on `main`). The installer follows it only through `[setup.continue] config_path`.
+- Required top-level properties of a config: https://docs.continue.dev/reference (`docs/reference.mdx`) — `name`, `version`, `schema`; every other property is optional. A file rtok creates carries exactly those three plus `mcpServers`.
+- `mcpServers` shape: https://docs.continue.dev/customize/deep-dives/mcp (`docs/customize/deep-dives/mcp.mdx`) — a list of items; a stdio item is `name`, `type: stdio`, `command`, `args`, optional `env`; the reference adds `cwd` and `connectionTimeout`. `cn` treats an item with `command` as stdio (`extensions/cli/src/services/MCPService.ts`).
+- `.continue/mcpServers/` is documented for a workspace only ("top level of your workspace"); no global equivalent is documented, so it is not written. Rules and hooks: the docs name `rules` in `config.yaml` but no hook events, so the hooks module stays off.
+- Extension and CLI ids: VS Code `Continue.continue` (https://github.com/continuedev/continue/blob/main/extensions/vscode/package.json: `publisher` `Continue`, `name` `continue`); JetBrains `com.github.continuedev.continueintellijextension` (`extensions/intellij/gradle.properties`); `cn` is the `bin` of `@continuedev/cli` (`extensions/cli/package.json`). The Desktop variant is detected through the VS Code app, as Roo's is; a JetBrains-only install is not detected.
+
+### 32.11 Crush (T413.11, checked 2026-10-12)
+
+Crush (https://github.com/charmbracelet/crush, v0.98.1 released 2026-10-09, not archived) is a terminal agent, one CLI variant (`crush`).
+
+- Config formats: the current format is `crushrc`, a Bash script with Crush builtins (`mcp add`, `hook add`, ...), looked up as `./.crushrc`, `./crushrc`, then `$XDG_CONFIG_HOME/crush/crushrc`. "JSON is still supported but is deprecated"; legacy `.crush.json` / `crush.json` live in the same directories, are merged with `crushrc`, and `crushrc` wins on conflict. https://github.com/charmbracelet/crush/blob/main/docs/config/README.md (sections "Where config lives" and "Legacy JSON")
+- Global JSON path: `GlobalConfig()` returns `$CRUSH_GLOBAL_CONFIG/crush.json` when that variable is set, else `<home.Config()>/crush/crush.json`, where `home.Config()` is `$XDG_CONFIG_HOME` or `~/.config`. https://github.com/charmbracelet/crush/blob/main/internal/config/load.go (`GlobalConfig`) and https://github.com/charmbracelet/crush/blob/main/internal/home/home.go (`Config`)
+- JSON MCP shape: top-level `mcp.<name>` with `command`, `args`, `env`, `type` (`stdio` default, `sse`, `http`), `url`, `headers`, `timeout` (default 10), `disabled`, `disabled_tools`, `enabled_tools`. https://github.com/charmbracelet/crush/blob/main/schema.json (`MCPConfig`)
+- Choice: rtok writes `crush.json`, not `crushrc`. A JSON object lets rtok add and remove only its own `mcp.rtok` and leave every other byte; editing a Bash script would need marker lines whose effect rtok cannot verify, and the docs call both files "trusted code". The cost: when a `crush.json` and a `crushrc` in one directory define the same top-level key, Crush logs "Found both a JSON config and a crushrc in the same directory; merging with crushrc taking precedence" and still merges; disjoint keys do not warn. https://github.com/charmbracelet/crush/blob/main/internal/config/load.go (`loadFromConfigPaths`). A user who adds servers with `mcp add` in `crushrc` therefore sees that warning for `mcp`. Creator to confirm this trade-off.
+- Hooks: only `PreToolUse` exists. Config is `hooks.PreToolUse[]` with `command` (required), `matcher` (regex on the tool name), `name`, `timeout` (seconds, default 30); stdin is `{event, session_id, cwd, tool_name, tool_input}`; output is exit codes (0, 2 block, 49 halt) or a JSON envelope with `decision`, `reason`, `context`, `updated_input`. The payload is documented and Claude-shaped, but its tool names (`bash`, `edit`, `write`, ...) are lower case and rtok has no checked mapping of them, so hooks stay `Support::No` (same reason as Droid). https://github.com/charmbracelet/crush/blob/main/docs/hooks/README.md (sections "Reference", "Claude Code compatibility")
+- Proxy and plugin directory: per-provider base URLs only and skills, no plugin directory; both stay `Support::No`.
+
+### 32.14 OpenHands (T413.14, checked 2026-10-12)
+
+OpenHands CLI. All facts are from the vendor's docs (docs.openhands.dev), fetched 2026-10-12.
+
+- User-level MCP file: `~/.openhands/mcp.json` ("Configuration File Location"; `openhands mcp add|remove|enable|disable` edit it), https://docs.openhands.dev/openhands/usage/cli/mcp-servers. `openhands mcp list|get` read it.
+- Format: top-level `mcpServers`, each server keyed by name with `command`, `args`, `env` for a stdio server (the page links the FastMCP configuration format); the examples carry no `type` for stdio, so the entry is the `{command, args}` shape `register_stdio_mcp` writes.
+- A running conversation does not pick up a changed file; the page says to restart the conversation to load new configurations, so setup does not restart anything.
+- Hooks: `.openhands/hooks.json` in the repository root, events `PreToolUse`, `PostToolUse` and others, `snake_case` keys, https://docs.openhands.dev/openhands/usage/customization/hooks. The page names no user-level hooks file, so hooks stay `Support::No` and a project file is never written (it belongs to the project).
+- Install: `uv tool install openhands --python 3.12`, or `curl -fsSL https://install.openhands.dev/install.sh | sh` for an executable binary; both put an `openhands` command on PATH, https://docs.openhands.dev/openhands/usage/cli/installation. Detection is the `openhands` binary; no `--version` flag is relied on.
+- A model endpoint setting and a plugin format for rtok were not checked, so proxy and plugin stay `Support::No`.
+
+### 32.8 Augment Auggie CLI (T413.8, checked 2026-10-12)
+
+The CLI binary is `auggie`; the IDE extension keeps MCP servers behind a settings panel and documents no file, so there is one CLI variant. https://docs.augmentcode.com/cli/reference
+
+- User-level MCP file: `~/.augment/settings.json`, key `mcpServers`; `auggie mcp add <name> --command <bin> --args "<args>" --env K=V` writes it. https://docs.augmentcode.com/cli/integrations
+- Stdio entry: `command`, `args`, `env`. The settings examples omit `type`; only the `add-json` example carries `"type":"stdio"`. Same page.
+- Hooks: events `PreToolUse`, `PostToolUse`, `Stop`, `SessionStart`, `SessionEnd`, under a `hooks` key of `settings.json` (user `~/.augment/settings.json`, project `.augment/settings.json` and `.augment/settings.local.json`, system `/etc/augment/settings.json`). Entries are `{matcher, hooks: [{type: "command", command, timeout}]}` with `timeout` in milliseconds (default 60000). https://docs.augmentcode.com/cli/hooks
+- A hook command must be a script path ending in `.sh` (executable, with a shebang), `.ps1`, `.cmd` or `.bat`, so a plain `rtok hook ...` command line is not accepted. `PreToolUse` supports only `permissionDecision: "deny"` (`allow` and `ask` are reserved) and `updatedInput` is not implemented, so rtok's command rewrite has no path. Hooks stay `Support::No`. Same page.
+- Matcher tool names (case-sensitive regex): `launch-process`, `view`, `str-replace-editor`, `save-file`, `remove-files`, `web-fetch`, `web-search`, `codebase-retrieval`, `github-api`, `linear`; MCP tools as `mcp:<regex>`. Same page.
+- Plugins: `auggie plugin marketplace add`, `auggie plugin install`, `--plugin-dir`; Augment's own marketplace format. No Augment plugin unit exists under `plugins/` (D21), so `plugin` stays `Support::No`. https://docs.augmentcode.com/cli/reference
+- The CLI reference documents no model endpoint, bring-your-own-key setting or config-directory environment variable, so proxy stays out.
+
+### 32.15 DeepSeek Reasonix (T413.15, checked 2026-10-12)
+
+All facts are from the project's own repository (github.com/esengine/DeepSeek-Reasonix, default branch `studio`, MIT, release `studio-v2.37.0` of 2026-10-12), docs fetched 2026-10-12.
+
+- The card's lead was `~/.reasonix/config.json`. That is the legacy (0.x) file: since v1.8.1 the global config is `<Reasonix home>/config.toml`, and the old `config.json` is read only as a lowest-priority `mcpServers` source, https://github.com/esengine/DeepSeek-Reasonix/blob/studio/docs/CONFIG_PATHS.md and `docs/GUIDE.md` ("Upgrading from 0.x").
+- Reasonix home: `~/.reasonix` on macOS and Linux, `%APPDATA%\reasonix` on Windows; `REASONIX_HOME` overrides it (CONFIG_PATHS.md, "Reasonix Home"). The CLI and the desktop app share it.
+- MCP servers: one `[[plugins]]` table per server in the global `config.toml` (CONFIG_PATHS.md example, `name`, `command`); `type` selects the transport and `stdio` is the default, with `command`, `args`, `env` (GUIDE.md "Plugins (MCP)", https://github.com/esengine/DeepSeek-Reasonix/blob/studio/docs/GUIDE.md). Explicit installs are saved to the user-global `config.toml` and are the authorization; no second trust step.
+- A project `reasonix.toml` or `.mcp.json` overrides a same-named global server, so setup writes neither (they belong to the project). Names are resolved once per workspace and project declarations override same-name global installs (GUIDE.md "Plugins (MCP)").
+- Hooks: `<Reasonix home>/settings.json` under `hooks.<Event>[]` with `match`, `command`, `timeout`; the payload is one line of camelCase JSON on stdin (`toolName`, `toolArgs`, ...) and the verdict is the exit code (GUIDE.md "Hooks"). Reasonix tool names (`bash`, `read_file`) differ from Claude's and the page lists no full tool table, so rtok has no checked mapping and hooks stay `Support::No`.
+- Providers: each `[[providers]]` entry carries its own `base_url`; there is no single endpoint setting, so proxy stays `Support::No`.
+- Install: `npm install -g reasonix` puts `reasonix` (and a `dsnix` shim) on PATH (README "Install"). The desktop installers are GitHub Releases downloads with no documented install path, so there is no Desktop variant.
 
 ## 33. Which tests a change reaches (T420, 2026-10-06)
 
@@ -2581,6 +2847,20 @@ Correction to the T441 card: Backlog.md and Taskmaster both lock id allocation a
 6. Collision check on a remote: list issues by the `rtok:R13` label with `state=all` (not the search API: 30/min and an undocumented index delay).
 7. Tokens: `GH_TOKEN` → `GITHUB_TOKEN` → `gh auth token`; `GITLAB_TOKEN`. User-owned GitHub projects need a classic token with `project`.
 
+### 35.5 Linear GraphQL (T441.13.6, checked 2026-10-11)
+
+Sources: the developer docs under <https://linear.app/developers> and Linear's own `schema.graphql` in <https://github.com/linear/linear> (`packages/sdk/src/schema.graphql`, SDK 97.1.0, master on 2026-10-11).
+
+- Endpoint and auth: one endpoint, `https://api.linear.app/graphql`; a personal API key goes in `Authorization: <key>` with no `Bearer` prefix ([getting started](https://linear.app/developers/graphql)). Errors are a GraphQL `errors` array (`message`, `path`, `extensions`); a response may be HTTP 200 with partial data plus errors, so the array is checked before success is assumed (same page).
+- Create: `issueCreate(input: IssueCreateInput!)` returns `IssuePayload` (`success`, `issue`). The docs example sets `title`, `description` and `teamId`; the schema adds `stateId`, `labelIds`, `parentId` and `priority`, with `teamId` the only required field ([getting started](https://linear.app/developers/graphql); [schema](https://github.com/linear/linear/blob/master/packages/sdk/src/schema.graphql), `IssueCreateInput`).
+- Update: `issueUpdate(id: String!, input: IssueUpdateInput!)`; `id` is a UUID or a short identifier such as `BLA-123` ([getting started](https://linear.app/developers/graphql)). `IssueUpdateInput` takes `title`, `description`, `stateId`, `labelIds` (replaces all), `addedLabelIds`, `removedLabelIds`, `parentId` (schema).
+- Workflow states: `WorkflowState.type` is one of `triage`, `backlog`, `unstarted`, `started`, `completed`, `canceled`, `duplicate`; `position` orders states of one type; each team owns its states (schema, `WorkflowState`). A state is therefore chosen by type, not by name: `completed` for done, `canceled` for closed.
+- Teams: the docs identify a team by id and show a `teams` query ([getting started](https://linear.app/developers/graphql)); the schema's `TeamFilter` has `key: StringComparator`, so `teams(filter: {key: {eq: "ENG"}})` finds it from the short key a person knows.
+- Finding an earlier export: `issues(filter: …)` takes `labels: {name: {eq: …}}` ([filtering](https://linear.app/developers/filtering)), `team` and `title` comparators (`startsWith`, `contains`; schema `IssueFilter`, `StringComparator`). The export tags every issue with the label `rtok:<id>` (plus `rtok`) and a title prefix `R1. ` as the GitHub adapter does, and finds them by the `rtok` label. A label must exist before `labelIds` can name it: `issueLabelCreate(input: {name, teamId})` creates one, `issueLabels(filter: {name, team})` lists them; a workspace label has no team (`NullableTeamFilter.null`) (schema).
+- Pagination: `first` (default 50), `after`, `pageInfo.hasNextPage`, `pageInfo.endCursor` ([pagination](https://linear.app/developers/pagination)); the docs state no maximum page size (**unverified** above 50).
+- Rate limits: API key 2,500 requests/hour and 3,000,000 complexity points/hour; a single query is capped at 10,000 points, each object costs 1, each property 0.1, and a connection multiplies its children by `first` (default 50). A limited request returns HTTP **400** with `extensions.code` = `RATELIMITED` (not 429), plus `X-RateLimit-Requests-*` headers whose reset is UTC epoch milliseconds ([rate limiting](https://linear.app/developers/rate-limiting)). Page sizes are kept at 50 so a listing stays far below the cap.
+- Not documented (**unverified**): whether Linear normalises description markdown on write; the export compares the text trimmed, and a difference shows up as an `update` on every run rather than a lost write.
+
 ## 36. Cross-session read duplication (T385.13, measured 2026-10-08)
 
 Question (optimization.md §5, "Cross-session read dedup"): how much of the input is the same file content read again in a second session on the same day. Build gate: at least 1 % of input. Ad-hoc read-only SQL and a scratch script over a copy of the owner's real store (`rtok.db`, 335k `calls`, 2026-09-14 to 2026-10-08); no code shipped, no `Measurement` row, no saving claimed.
@@ -2623,3 +2903,221 @@ Where the duplicates sit (basenames only): `mod.rs`, `retry.rs`, `gc.rs`, `termi
 **Why it is small.** Sessions on this machine work in separate worktrees, so the same file sits at different paths and a path-keyed cache would catch almost nothing (2 reads); only a content-keyed cache would match, and the content-keyed pool is still 0.4 % of read bytes. Within a session the existing guard and read cache already collapse repeats, and `rtok read` returns line-range slices, so two sessions rarely ask for the same slice of the same file on the same day.
 
 **Limits.** (1) Native Read bodies exist for four days only; the 25-day figure is MCP `read`, which is a lower bound for all reads. (2) The denominator is every Claude Code transcript in the window, sub-agents included (63 % of the input), and the reads counted include sub-agent reads, so the whole-input figure is the matching one. Against main-session input alone (1,518,798,579 tokens) the resident-weighted share would read 0.68 % to 1.17 %, but that pairs sub-agent reads with a denominator that leaves their input out. (3) Reads by a different path to the same content in the same session are not cross-session and are not counted. (4) Commands: `sqlite3 -readonly` on a file copy of `rtok.db` for the schema checks; a Python 3 script (`sqlite3`, `hashlib`) grouped reads by (UTC day, SHA-256); `RTOK_HOME=<copy> rtok stats --since 79h --json` and `--since 24d --json` for input and the CTT ratios. Re-run these after a change to the read plugin or a move to shared worktrees; a result above 1 % would justify a content-keyed, cross-session pointer.
+
+## 37. Deferred tool schemas and replayed thinking, re-measured (T385.11, measured 2026-10-11)
+
+Both ideas were last judged before the thinking page and the tool search page of the Anthropic docs changed (checked 2026-10-11). Method for both: every Claude Code transcript under `~/.claude/projects/**/*.jsonl` with mtime in the last 31 days, lines stamped 2026-09-11 or later, unique `message.id`, context of a request taken from the `parentUuid` chain (so a compaction ends the chain), input = `input_tokens` + `cache_creation_input_tokens` + `cache_read_input_tokens`.
+
+**Vendor facts.** (1) Claude Opus 4.5 and later Opus, Sonnet 4.6 and later Sonnet, Haiku 5.5, Fable and Mythos "keep all prior turns" of thinking, and "retained thinking blocks count as input"; earlier models and Haiku through 4.5 keep the last turn only (https://platform.claude.com/docs/en/build-with-claude/thinking, section "Thinking block preservation by model", fetched 2026-10-11). The old premise of I-86, "the API already strips earlier turns", holds only for those older models. (2) Outside a tool-use turn a client may omit prior turns' thinking; inside one it must pass them back unmodified (same page, "Preserving thinking blocks"). (3) On accounts created from 2026-08-31 a block stays valid only while everything before it is unchanged; a client-side edit of an earlier message makes the later blocks invalid, and the API errors or drops them. "Server-side context management never invalidates thinking blocks" (same page; https://platform.claude.com/docs/en/build-with-claude/context-editing, fetched 2026-10-11). (4) The server-side way to drop old thinking is the beta strategy `clear_thinking_20251015` with `keep` `{type: "thinking_turns", value: N}`; "when thinking blocks are cleared, the cache is invalidated at the point where clearing occurs" (context-editing page). (5) `display: "omitted"` is the default on Opus 4.7 and later and on the 5.x models: the `thinking` field is empty and the `signature` "carries the encrypted full thinking" (thinking page, "Controlling thinking display"). (6) Tool search: `defer_loading: true` per tool plus `tool_search_tool_regex_20251119` or `tool_search_tool_bm25_20251119`; deferred tools are excluded from the prefix, so caching is kept; all tools are still sent every request (https://platform.claude.com/docs/en/agents-and-tools/tool-use/tool-search-tool, fetched 2026-10-11). OpenAI Responses has the same feature for `gpt-5.4` and later: `{"type": "tool_search"}` plus `defer_loading: true` (https://developers.openai.com/api/docs/guides/tools-tool-search, fetched 2026-10-11).
+
+**Why T125's 0.0297 % was wrong.** `measure::jsonl` counts the `thinking` text. On the current models that text is empty (every block in the last 3 days of transcripts has `thinking` = "" and a 900 to 1,600 character `signature`), so the numerator was about zero; it also counted each block once instead of once per request that replays it (the resident weighting T385.13 uses).
+
+**I-86, thinking replay.**
+- Size of an omitted block: two independent fits agree. Output tokens of messages with a thinking block against signature length give a median of 4.6 signature characters per thinking token (10,667 messages); a least-squares fit of the growth in input between consecutive tool-loop requests on signature length gives 3.99 characters per token (130,850 request pairs). Table values use 4.3, with 4.0 to 4.6 as the range.
+- Whether the host replays: on keep-all models the first request after a new user prompt reads 100 % of the previous request's input from cache in the median (91.8 % of 1,643 such requests read at least 90 %), so Claude Code sends earlier turns' thinking unchanged.
+- Window 2026-09-11 to 2026-10-11, 153,539 requests on keep-all models (97.7 % of requests), 22.92 G input tokens: replayed thinking is **11.5 %** of input tokens (10.8 % to 12.4 %). Two thirds of it belongs to the current turn (long tool loops) and must be sent. The part from earlier turns, which the docs allow to omit, is **3.4 %** (3.2 % to 3.7 %).
+- Dollars (cache read 0.1, 5-minute write 1.25, output 5, relative to input 1; 97.8 % of input is cache reads): dropping earlier turns' thinking on every request saves 0.1 per replayed token per request but re-creates the span after the first dropped block each time a new turn starts. Simulated on the same transcripts (3,700 warm turn starts, 681 cold requests): net **1.3 %** of input cost (1.1 % to 1.6 %), 1.2 % of input plus output cost; gross 3.0 %, of which 1.7 % is paid back as cache re-creation. Dropping only at cold requests (TTL expired, no break cost): 1.35 % (1.26 % to 1.45 %).
+- A proxy can only do this client-side (edit `messages`), which on current accounts invalidates the later blocks of the same turn: Claude Code logged 338 `thinking_drop` attachments (`reason: prefix_mismatch`) in the window for that reason. The safe route is the server-side `clear_thinking_20251015` edit (beta). Quality with the older thinking removed is unmeasured; the docs call keeping it "recommended" and say preserving has "no negative effect".
+- Verdict: **I-86 dropped** by the creator (2026-10-11). The token share (3.4 %) clears I-86's own 3 % gate, but the dollar saving (1.1 % to 1.6 %) sits on the 1 % gate used since T385.13, the quality risk is unmeasured, and a client-side edit is unsafe. If it is ever revisited, the only safe route is the server-side beta edit `clear_thinking_20251015`.
+
+**I-85, deferred tool schemas.**
+- Claude Code already defers: 1,491 of 1,495 sessions (99.7 %) carry a `deferred_tools_delta` attachment and in every one of them MCP tool names are among the deferred ones; the session's first request has a median 64,497 input tokens (main sessions, n = 228; sub-agents 53,182, n = 1,267) against a mean of 147,225 per request. 404 `ToolSearch` calls against 4,631 MCP tool calls. `tools_rewrite`'s 6.2 % (§2, 2026-09-18) was measured with Tool Search off on a host with a custom `ANTHROPIC_BASE_URL`; with that variable pointing at `https://api.anthropic.com` the host defers by itself.
+- Hosts that do not defer (Codex, Cursor, Gemini wires) have no request bodies here: `usage` has 0 rows and `calls` has 0 proxy rows in `rtok.db` (2026-10-11), so there is nothing to measure and no saving is claimed. Both Anthropic and OpenAI now do the deferral server side (facts above), so a proxy stub scheme would be a worse copy of a vendor feature.
+- Verdict: **I-85 dropped**, no measured saving left on the traffic we can see.
+
+**Limits.** Signature length is a proxy for billed tokens (two fits, above). The replay assumption is an upper bound for hosts other than Claude Code. The cost model uses list-price ratios, not the invoice. Cursor and Codex sessions are not in the transcripts. Commands: Python 3 scripts reading the transcripts (parent-chain walk, `-I` mode), `sqlite3` on a file copy of `rtok.db` for the empty `usage` table; no change to rtok code.
+
+## 38. Local draft, cloud verify (T404, checked 2026-10-11)
+
+Question (§16.3 #10): can a local model draft output that the cloud model only verifies, so the cloud emits fewer output tokens? Desk research only: no code, no bench, nothing measured here. Primary sources are the vendor pages named in each row, fetched 2026-10-11; "inference" marks a step that follows from those sources but that no page states.
+
+### 38.1 Can a host or proxy hand the cloud model a draft?
+
+| Fact | Source (checked 2026-10-11) |
+| --- | --- |
+| Anthropic Messages API: a last message with role `assistant` is a **prefill** and the answer continues from it, but "on models that don't support prefill" such a request returns 400. | https://platform.claude.com/docs/en/api/messages, `messages` parameter |
+| Prefill is **not supported on Claude 4.6 and later models** (and Mythos Preview). A prefilled last assistant message returns 400 `invalid_request_error`: "This model does not support assistant message prefill. The conversation must end with a user message." Suggested replacements: structured outputs, system-prompt instructions, `output_config.format`. | https://platform.claude.com/docs/en/api/errors, "Prefill not supported" |
+| The current models on the pricing page (Fable 5.1, Mythos 5.1, Opus 5.5, Sonnet 5.5, Haiku 5.5) are all later than 4.6, so **prefill is unavailable on every current Claude model**. Inference from the two rows above plus the model list in the migration index (https://platform.claude.com/docs/en/about-claude/models/migration-guide). | same |
+| OpenAI Predicted Outputs: `prediction` parameter on Chat Completions, only `gpt-4o`, `gpt-4o-mini`, `gpt-4.1`, `gpt-4.1-mini`, `gpt-4.1-nano`; unsupported with `tools`, `max_completion_tokens`, `n` > 1, `logprobs`. Predicted tokens absent from the final answer "are still charged at completion token rates", so a bad draft raises the bill. | https://developers.openai.com/api/docs/guides/predicted-outputs |
+| Gemini text-generation guide: no prefill, speculative-decoding or predicted-output feature documented (absence on that page only, not a statement that none exists). | https://ai.google.dev/gemini-api/docs/text-generation |
+| Claude Code, Codex and other hosts as injection points: not researched from their own docs here. Inference: a proxy only rewrites a request the host built, so on a current Claude model it cannot append an assistant prefill (400 above), and on OpenAI it cannot attach `prediction` to a request that carries `tools`, which every coding-agent turn does. | inference |
+
+Consequence: the "pre-filled draft" mechanism that makes draft-and-verify cheap is gone on Anthropic and unusable with tools on OpenAI. What remains is to put the draft in the **user** turn and ask the model to confirm or correct it.
+
+### 38.2 Is there a draft worth sending? Where the output tokens go
+
+§2 and §16.3 #1 already measured this workload: 96 % of assistant output is tool input (the code and edit arguments the model writes), and `new_string` is 2.2x `old_string`. A local draft would have to be that new code. Prefill-style text continuation cannot carry a `tool_use` block in any case (inference: prefill is text-only in the API reference above), so only a user-turn draft is possible, and the cloud model then has to re-emit the accepted draft as its own tool call: **an accepted draft still costs the full output tokens of the tool call**. Confirming "yes" saves nothing when the useful output is the edit itself. The saving exists only for prose answers the model could end with "accepted as written", and §2 puts the cost in tool input, not prose.
+
+### 38.3 Local draft speed (Apple Silicon)
+
+Generation speed is memory-bandwidth bound. Source: llama.cpp's own benchmark thread, LLaMA 7B (6.74 B parameters), tg128, batch 1, build 8e672ef (https://github.com/ggml-org/llama.cpp/discussions/4167, checked 2026-10-11):
+
+| Chip | Q4_0 | Q8_0 | F16 |
+| --- | --- | --- | --- |
+| M3 Max 40 GPU cores (400 GB/s) | 66.3 t/s | 42.8 | 25.1 |
+| M4 Max 40 GPU cores (546 GB/s) | 83.1 t/s | 54.1 | 31.6 |
+| M3 Ultra 80 cores (800 GB/s) | 92.1 t/s | 63.9 | 39.8 |
+
+So a 7 B model at Q4 drafts about 65 to 90 tokens/s on a Max-class chip; that is fast enough that speed is not the blocker. The numbers are a 2023-era base model on a plain generation test: they say nothing about draft **quality** for code against current Claude models. No coding pass rate for any local model was found or measured. MLX also ships speculative decoding (`--draft-model`, `--num-draft-tokens`, default 3; same tokenizer required: https://github.com/ml-explore/mlx-lm/blob/main/mlx_lm/generate.py), but that is a local-only trick where the *big* model is also local; it does not apply to a cloud verifier, which exposes no draft-token interface in the pages above.
+
+### 38.4 What verification costs
+
+Prices per MTok (https://platform.claude.com/docs/en/about-claude/pricing, checked 2026-10-11; OpenAI: https://developers.openai.com/api/docs/pricing, same date): Fable 5.1 input $10, output $50, cache read $0.25; OpenAI gpt-5 input $1.25, output $10. Output is 5x input on Fable 5.1 (§2 p_out = 5 p_in) and 8x on gpt-5.
+
+Idealised model (inference, not measured). A task has D output tokens when written by the cloud model alone: cost = D x p_out. With a draft in the user turn: the draft is fresh input (no cache hit, it was never seen), so D x p_in; the model answers with the verdict V (small); on reject it writes the D tokens itself, probability 1 - a. Cost = D p_in + V p_out + (1 - a) D p_out. Break-even at p_out = 5 p_in is a > 0.2 + V/D with zero thinking tokens and an accept that costs only V. If the accepted draft must be re-emitted as a tool call (37.2), the accept path also costs D p_out and the saving is **zero or negative** (the draft input is pure extra cost). Adding the reasoning tokens a thinking model spends checking a draft, and the extra turns of a rejected draft, raises the required `a` further; the sources give no figure for either, so none is claimed.
+
+Also: wrong-draft anchoring (the verifier accepts plausible code it would not have written) is a quality risk; no primary source measures it for these models, so it stays unquantified.
+
+### 38.5 Verdict
+
+**Close T404 with this finding; do not build.** (1) The one API mechanism built for this, assistant prefill, is removed on every current Claude model, and OpenAI's equivalent excludes tool calls, so a proxy cannot inject a draft where it matters. (2) The output that dominates cost is tool-call input, which prefill could not carry and which the cloud model must re-emit even after accepting a draft. (3) Local drafting speed is adequate (about 65 to 90 t/s for 7 B at Q4 on Max-class chips), but speed was never the constraint.
+
+Reopen only if a bench could show **cost per passed task falling with the pass rate held**: that needs a host path that lets a verifier accept a draft without re-emitting it (for example a new prefill-like or edit-by-reference API, or a draft delivered as a tool result the model can apply by id), plus a local model whose measured accept rate `a` on this workload clears the break-even in 37.4 with thinking tokens included. Neither exists in the sources checked today. Reliability: every row above is a vendor page or the repository's own file, fetched 2026-10-11; the llama.cpp thread is community-run but primary for its own numbers. No blog or forum fact is used. The break-even is arithmetic on published prices, not a measurement.
+
+
+## 39. `search` latency on large repositories (T378 gate, measured 2026-10-12)
+
+Question: is `search` p95 above 200 ms on a large repository, the gate that decides whether T378 (trigram prefilter) is built? `search` is `src/plugins/read/search.rs::search`: a single-threaded `ignore::WalkBuilder` walk, each file read and run through the regex line by line, early exit at `plugins.read.search_max` hits (50 by default). No divan bench covers `search` (`benches/` has `graph.rs` only), and the CLI has no `search` command, so the timing drives the same function through `rtok mcp` over stdio.
+
+Setup: `rtok 0.17.0`, `cargo build --release --bin rtok` at commit `bf88f07e2` (branch `c23b5-work`), Apple M3 Max, 16 cores, 64 GiB, macOS arm64. One long-lived `rtok mcp` process per root (as a host runs it), one discarded warm-up call per query, then 20 timed `tools/call search` round trips (25 on stator), wall time per call with `time.perf_counter`, p50/p95 by linear interpolation. The 1-minute load average was about 20 during the runs (other agents on the machine), so absolute numbers are pessimistic and noisy. Script: scratchpad `bench_search.py` (not committed).
+
+No local repository has 50k files: the largest tracked trees are `apps/stator` (1 995 files by `git ls-files`), `apps/weft` (1 941), `apps/rtok` (1 624) and `apps/rtok-flakes` (1 563). So two roots were timed. "Real" is `apps/stator` as is. "Large" is a scratchpad tree of 66 493 regular files, 3.0 GB, built from the `git ls-files` content of eight local repositories (stator, weft, rtok-flakes, translate, slint-bindings, rtok, runa, ketch), seven `cp -c -R` copies of it. It is synthetic (duplicated content, tracked `.gitignore` files still apply), so it measures walk plus scan cost per file, not a real monorepo.
+
+| Root | Query | Hits | Runs | p50 | p95 | max |
+| --- | --- | --- | --- | --- | --- | --- |
+| stator, 1 995 files | `the` | 50 (cap) | 25 | 2.9 ms | 3.3 ms | 3.4 ms |
+| stator | `TODO` | 11 | 25 | 122.7 ms | 151.9 ms | 159.8 ms |
+| stator | `unwrap_or_default` | 0 | 25 | 120.9 ms | 156.6 ms | 189.7 ms |
+| stator | `zzqxnotfound_9f3a` (absent) | 0 | 25 | 117.5 ms | 130.2 ms | 131.5 ms |
+| large, 66 493 files | `the` | 50 (cap) | 20 | 1.5 ms | 1.9 ms | 1.9 ms |
+| large | `TODO` | 50 (cap) | 20 | 7.7 ms | 10.7 ms | 13.7 ms |
+| large | `unwrap_or_default` | 50 (cap) | 20 | 124.1 ms | 136.8 ms | 145.4 ms |
+| large | `zzqxnotfound_9f3a` (absent) | 0 | 20 | 18 397 ms | 30 379 ms | 33 937 ms |
+
+Reading: a query that finds `cap` hits early stops the walk and stays far under 200 ms on any size. A query with few or no hits reads every file: about 120 ms on a 2 000-file repository (inside the gate), 15-34 s on 66 000 files (about 150x over the gate), roughly linear in files and bytes. Command: `python3 -I bench_search.py target/release/rtok <root> 20 'the' 'TODO' 'unwrap_or_default' 'zzqxnotfound_9f3a'`, run from the scratchpad.
+
+**Gate verdict (2026-10-12): not met, T378 stays open.** On the real repositories available (about 2 000 files) the absent-literal p95 is 130-157 ms, so p95 is at most 200 ms and the card's close-with-number clause would apply there. On a 66k-file tree the worst case (a literal with no or few hits) is p95 30 s, far above 200 ms. The card's own target is a 50k-file repository, so the gate resolves to "p95 > 200 ms": the prefilter is justified for that size, but the evidence for it is a synthetic tree, and I-95 (parallel walk) has not shipped, so the before/after Check the card names is still missing. The creator decides whether to build T378 on this number, run a real 50k-file repository first, or close the card at the 2 000-file scale.
+
+## 40. Codex `PreToolUse`, `PostToolUse` and `SubagentStart`: docs and live payloads (T645, checked 2026-10-12)
+
+Question: what does Codex send and read on these three events, so rtok can wire its Bash rewrite, tool context and (T262.3) spawn brief? Sources: Codex hooks reference https://learn.chatgpt.com/docs/hooks (fetched 2026-10-12) and a live run of `codex-cli 0.162.1` (macOS arm64, 2026-10-12). The live run used a scratch `CODEX_HOME` and project directory, `model_providers.fake` pointing at a local fake Responses server (no login, no network, no credentials), and `--dangerously-bypass-hook-trust` for the scratch hook script only. The creator's `~/.codex` was not touched. The fake server answered the first request with one `exec_command` (or `spawn_agent`) call, so the tool ran for real in the sandbox. Sanitized payloads: `tests/fixtures/hooks/codex/`.
+
+| Fact | Result | Source |
+| --- | --- | --- |
+| Config | `hooks.json` or inline `[hooks]` next to a config layer; plugins bundle `hooks/hooks.json`; non-managed hooks run only once trusted (hash-bound), `--dangerously-bypass-hook-trust` skips that for one run | docs |
+| Matcher | regex on `tool_name` for tool events, on `agent_type` for `SubagentStart`; `*`, empty or absent matches all; `apply_patch` also matches `Edit` and `Write` | docs |
+| Common stdin | `session_id`, `transcript_path`, `cwd`, `hook_event_name`, `model`, `permission_mode`, and `turn_id` on turn events | docs, live |
+| `PreToolUse` stdin | live Bash: `tool_name: "Bash"`, `tool_input: {"command": "echo hi"}`, `tool_use_id: "call_1"` (fixture `codex/pre_tool_bash.json`). A `spawn_agent` call arrives as `tool_name: "spawn_agent"`, `tool_input: {"message": "..."}` (`codex/pre_tool_spawn_agent.json`) | docs, live |
+| `PostToolUse` stdin | the same fields plus `tool_response`, a plain string (`"rewritten\n"`) where Claude sends an object; `tool_input` carries the command that ran, i.e. the rewritten one (`codex/post_tool_bash.json`) | live |
+| `SubagentStart` stdin | the parent's `session_id`, plus `agent_id` (the child thread id) and `agent_type: "default"` (`codex/subagent_start.json`); no tool fields | docs, live |
+| Rewrite | docs: `hookSpecificOutput.permissionDecision: "allow"` with `updatedInput` (Bash: a string `command`). Live: `{hookEventName, updatedInput}` **without** `permissionDecision` left the original `echo hi` running and Codex printed `hook: PreToolUse Failed`; adding `permissionDecision: "allow"` ran `echo rewritten` and the hook showed `Completed`. rtok's Claude-shaped rewrite carries no decision, so Codex needs an adapter | docs, live |
+| Context | `hookSpecificOutput.additionalContext` is read on `PreToolUse`, `PostToolUse`, `SessionStart`, `UserPromptSubmit` and `SubagentStart`. Live: the `SubagentStart` marker and a `PostToolUse` marker both appeared in the next model request (the subagent's first request for `SubagentStart`) | docs, live |
+| Deny | `permissionDecision: "deny"` with `permissionDecisionReason`; `ask`, `continue: false`, `stopReason` and `suppressOutput` mark the run failed on `PreToolUse` | docs |
+| Plain stdout | ignored on `PreToolUse` and `PostToolUse`; developer context on `SessionStart`, `UserPromptSubmit` and `SubagentStart` | docs |
+| Tool names | `Bash` (shell and `exec_command`), `apply_patch`, `mcp__<server>__<tool>`, other local tools by name; `spawn_agent` also matches `Agent`; hosted tools such as web search are not hooked | docs |
+
+Consequences for rtok: Codex's `Bash` is Claude's `Bash`, so the existing Bash rewrite and deny paths apply once the output carries `allow`; there is no `Read` tool (reads go through `Bash`), and file edits are `apply_patch` with the patch text in `tool_input.command`, so T262.3's ledger cannot count Codex reads and parses the `*** Add/Update/Delete File:` and `*** Move to:` headers out of the patch text in `tool_input.command` (the docs' shape). Not verified: whether `allow` also skips Codex's own approval prompt on a rewritten command (the scratch run used `approval_policy = "never"`), and the `apply_patch` payload itself: the fake model's tool list (`exec_command`, `write_stdin`, `request_user_input`, `view_image`, goal and agent tools) offered no `apply_patch`, with or without `-s workspace-write`, `features.apply_patch_freeform` or a bundled model name, so the hook never fired on one.
+
+## 41. Semantic memory over an embeddings endpoint (T668, checked 2026-10-15)
+
+Question: what real embedding source can sit behind `[plugins.memory.embed]` without a default download, a default spend, or a vector dependency in the default build. The creator chose a remote OpenAI-compatible endpoint; a local ONNX/candle model was rejected for its weights download and native runtime.
+
+| Fact | Source |
+| --- | --- |
+| `POST /embeddings` with `model` and `input` (string or array); `dimensions` only for `text-embedding-3` and later; `encoding_format` `float` (default) or `base64` | OpenAI API reference, Embeddings, create: https://developers.openai.com/api/reference/resources/embeddings/methods/create (checked 2026-10-15) |
+| Answer: `object: "list"`, `data[]` of `{object: "embedding", index, embedding}`, `model`, `usage`; at most 8,192 tokens per input, empty input refused | same page, same date |
+| Ollama serves `/v1/embeddings` (`model`, `input`, `encoding_format`, `dimensions`; `user` unsupported); local base URL `http://localhost:11434/v1/`; the key is required by clients but ignored locally; cloud `https://ollama.com/v1` needs a key in `OLLAMA_API_KEY` | Ollama docs, OpenAI compatibility: https://docs.ollama.com/api/openai-compatibility (checked 2026-10-15) |
+| `reqwest` 0.13.4 with `blocking` and `rustls` is already a workspace dependency | `Cargo.toml` of this repository |
+
+Not verified: OpenAI's base URL `https://api.openai.com/v1` (the fetched reference page shows the relative path only; it is the SDK default), and the price per token (not needed: the cap is `max_chars`, not money).
+
+Decision: `provider = "http"` posts `{"model", "input"}` to `<url>/embeddings` and reads `data[0].embedding`. It sends no `dimensions` field, so a server that lacks it cannot refuse the request; the length of the answer must equal `[embed] dimensions` or the vector is dropped. Cost control is a hard `max_chars` per request, no counters in the database. Any failure falls back to the plain note search with a warning; the hook (10 ms budget) never calls the endpoint and reads only the FTS leg while a remote is configured. Remote vectors are stored under their own model key (`<model>+remote1`), so they never mix with hash vectors.
+
+## 45. Reference recall inside macro arguments (T663, measured 2026-10-16)
+
+serena's LSP-grade references (rtok-vs-serena comparison, PR #1071; **unverified** here) are out of reach without a language server, but the one construct class that held the tags index below LSP on this repo was calls in macro arguments. Measured with `tests/graph_truth.rs` (39 labels, `cargo test --test graph_truth labelled_symbols -- --nocapture`, debug build, this repo at the T663 commit):
+
+| | before | after |
+| --- | --- | --- |
+| references | 119/126, recall 0.944 | 126/126, recall 1.000 |
+| definitions | 91/92, precision 1.000 | 91/92, precision 1.000 |
+| sites | 210/218, 0.963 | 217/218, 0.995 |
+
+Change: one tree-sitter pattern in `RUST_EXTRA_REF` (`src/plugins/read/outline.rs`) captures an identifier directly followed by a parenthesised `token_tree`. No tool and no description token added (graph surface unchanged). The labels are hand-picked from this repo, so 1.000 is a floor guard on that set, not a general recall; reference *precision* of the new pattern was not measured (a call-shaped identifier inside `macro_rules!`/`quote!` bodies counts as a reference).
+
+## 42. engram features: take or skip (T667, checked 2026-10-16)
+
+Source: engram README at tag v3.4.0 (<https://github.com/Gentleman-Programming/engram>, read through the GitHub API on 2026-10-16). No memory-bench number exists for engram, so nothing here is a saving claim.
+
+| engram feature | Decision | Why |
+| --- | --- | --- |
+| Project-aware reads: a read uses the current project when none is named (README, "Project-aware") | **Take** (T667) | rtok's `mem_search` ranked every project's notes alike. Now a note of the searcher's project wins a near tie (`search_notes_in`, boost 1.3), another project's clearly better match still leads, and no new tool or flag is needed. |
+| Topic keys (`mem_suggest_topic_key`) | Already have | `(project, kind, title)` upsert since T66.1; the model need not ask a tool for a key. |
+| Pinned-first recall | Already have | `memory pin` leads SessionStart recall (T69.1) and, since T669, lifts a search hit. |
+| Session summary and session start/end tools | Already have | `session:*` checkpoint notes and `startup_recall` (T71.2). |
+| `mem_judge`, `mem_compare`, `mem_judge_many` (relation judging) | Skip | Spends model output on bookkeeping; the admission gate (T671) and topic keys cover duplicates without a model. |
+| `mem_consolidate` after preview and confirmation | Skip | Model-driven merging of observations; retire/supersede/forget (T69.1, T669) are reversible without it. |
+| `mem_save_prompt` | Skip | The `remember:` prompt prefix already preserves a user request. |
+| Git Sync chunks, Engram Cloud, HTTP core | Skip | A second daemon or network path; `memory export` / `import` JSONL (T294) moves notes through git already. |
+| 18 tools | Skip | About 1 865 description tokens every turn (`research.md` §13); rtok keeps 3 memory tools. |
+
+## 43. Cypher-style query shapes without a query tool (T665, checked 2026-10-16)
+
+codebase-memory-mcp is described as Cypher-style (rtok-vs-codebase-memory-mcp comparison, PR #1071; **unverified** here: the upstream README was not re-read). rtok keeps seven graph tools (description gate: 170 tokens, now 169) and takes shapes as parameters of existing tools. The choice is grounded in the competitor's published shapes and in what `symbol`/`callers`/`impact`/`explore` already answer; no rtok log count backs it, and no shared-corpus saving was measured.
+
+| Cypher shape | rtok today | Decision |
+| --- | --- | --- |
+| callers of X (depth 1..n) | `callers`, `impact(depth)` | already have |
+| callees of X | `symbol` prints `calls:` | already have |
+| path A → B | `impact(to)`, `explore` | already have |
+| definitions in file F | `outline` | already have |
+| definitions in file F of kind K | `outline` printed every kind | **take**: `outline(path, kind)` keeps the lines of one kind |
+| definitions nobody references (dead code), under a path | CLI `graph dead` only | **take**: `callers` with no `name` lists them, `path`/`kind` narrow |
+| arbitrary pattern match / aggregation | none | skip: needs a query language and its description cost |
+| labels, properties, cross-repo traversal | project scope exists | skip |
+
+Cost: the two parameters add 4 description tokens to the MCP surface (report `~1037` → `~1041`). Backends: both shapes read the tags index; a text-mode project says dead-code analysis is unavailable, as `graph dead` does.
+
+## 44. Review and blast-radius features without a bigger tool surface (T664, checked 2026-10-16)
+
+code-review-graph is described as ahead on review features with ~30 MCP tools (rtok-vs-code-review-graph comparison, PR #1071; **unverified** here: the upstream README was not re-read). The take/skip below is by what an agent asks after an edit, "what does this touch and is it covered", judged against what rtok already answers. The graph surface is at its 170-token gate, so a feature must arrive as output of an existing tool.
+
+| Question | rtok today | Decision |
+| --- | --- | --- |
+| Who calls what I changed | `graph_diff` callers per changed definition, `impact` | already have |
+| Blast radius grouped by file, budgeted | `impact` (T377 blast grouping) | already have |
+| Reading list ranked by risk | `rtok graph review` (T454), CLI only | already have; stays CLI to keep the MCP bill flat |
+| Changed definitions no test reaches | only inside `graph review` | **take**: `graph_diff` ends each project's changed list with one `untested: a, b` line |
+| One risk number on `graph_diff` | `graph review` scores | skip: a second scorer would duplicate `review.rs`; the untested line is the actionable part |
+| Execution flows, communities | no such index | skip: needs a new index, no saving evidence |
+| Dedicated review/blast tools | n/a | skip: tool descriptions are the cost rtok competes on |
+
+The line uses the caller rows `graph_diff` already gathers (depth 2), so it costs no extra walk; `graph review` looks 3 callers deep, so the two can differ on a definition reached only at depth 3. Description tokens do not change. No shared-corpus saving was measured.
+
+## 46. Hook p50 harness, rerun script, and why T687 has no number yet (T687, checked 2026-10-16)
+
+The §19.2 harness is not in the repository. This is the script (node, `spawn` with a shell, payload on stdin, clock stops on `close`, commands interleaved round by round so load drift hits all of them). Run it as `node hookbench.js 300 true "<hook.json command>"`:
+
+```js
+// Round-robin node spawn(cmd,{shell:true}), payload on stdin, clock stops on close (research.md 19.2).
+const { spawn } = require('node:child_process');
+const cmds = process.argv.slice(3);
+const rounds = Number(process.argv[2]);
+const payload = JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Read', tool_input: { file_path: '/tmp/x' }, cwd: process.cwd(), session_id: 'bench' });
+const times = cmds.map(() => []);
+const run = (cmd) => new Promise((res) => {
+  const t0 = process.hrtime.bigint();
+  const p = spawn(cmd, { shell: true, stdio: ['pipe', 'ignore', 'ignore'] });
+  p.on('close', () => res(Number(process.hrtime.bigint() - t0) / 1e6));
+  p.stdin.end(payload);
+});
+(async () => {
+  for (let r = 0; r < rounds; r++) for (let i = 0; i < cmds.length; i++) times[i].push(await run(cmds[i]));
+  cmds.forEach((c, i) => {
+    const s = times[i].sort((a, b) => a - b);
+    console.log(`${c.slice(0, 60).padEnd(60)} p50 ${s[Math.floor(s.length / 2)].toFixed(2)} p95 ${s[Math.floor(s.length * 0.95)].toFixed(2)} ms`);
+  });
+})();
+```
+
+No T687 number was taken. The machine was not idle: 16 cores at load average 13 to 20 with other sessions building, and the `true` floor read p50 8.97 ms (100 rounds) against the 5.2 ms of §19.2, so any hook figure would be mostly load. For scale only, the installed `rtok-hook` v0.15.1 (no resident) read p50 26.64 ms in the same run; that is neither the current code nor a result. What §19.2/§19.7 already fix: the floor is 5.2 to 5.6 ms (node plus `/bin/sh`), the hook with a resident is 12.3 to 12.5 ms, so reaching 10 ms means taking at most 4.4 ms above the floor for the shell line, the `rtok-hook` start, the socket round trip and the hook. The next step is a rerun on a quiet machine of `command -v rtok-hook && exec rtok-hook PreToolUse` against `true` and a bare `rtok-hook` start, to see which of those four pieces owns the 6.7 ms, before touching code.

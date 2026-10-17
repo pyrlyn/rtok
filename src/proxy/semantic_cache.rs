@@ -25,6 +25,12 @@ pub struct CachePrompt {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub system: Option<String>,
     pub messages: Vec<(String, String)>,
+    /// Digest of each whole message and of the whole `system` (T532). `messages` and `system`
+    /// above are flattened text for the embedding; flattening drops `is_error`, `name`,
+    /// `image_url.detail` and the block type, so the direct key covers the typed JSON too.
+    pub typed: Vec<TypedMessage>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub system_typed: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tools_fingerprint: Option<String>,
     /// Every other top-level request field (T212): `max_tokens`, `temperature`, `top_p`,
@@ -37,6 +43,15 @@ pub struct CachePrompt {
     /// (the corpus audit), so two API keys never share an entry.
     #[serde(skip_serializing_if = "String::is_empty")]
     pub caller: String,
+}
+
+/// `full` is the message's digest; `shape` is the same digest with its text blanked, which is
+/// what the semantic tier may keep for the last user message: that text is the part it
+/// compares fuzzily, while an image's `detail` or a block's type still has to match.
+#[derive(Debug, Clone, Serialize)]
+pub struct TypedMessage {
+    full: String,
+    shape: String,
 }
 
 pub struct CacheHit {
@@ -176,6 +191,8 @@ pub fn build_prompt(wire: &dyn Wire, body: &Value, cfg: &SemanticCache) -> Optio
         },
         system: system_text(body),
         messages: messages_text(body),
+        typed: typed_messages(body),
+        system_typed: body.get("system").map(|s| digest(s, false)),
         tools_fingerprint: tools_fingerprint(body),
         params: extra_params(body),
         caller: String::new(),
@@ -216,6 +233,19 @@ pub fn caller_identity(headers: &axum::http::HeaderMap) -> String {
     digest.iter().map(|b| format!("{b:02x}")).collect()
 }
 
+/// [`caller_identity`] plus the request's method and resolved upstream URL (T533), hashed so
+/// a credential-bearing query string (Gemini's `?key=`) never reaches the key as text.
+pub fn cache_scope(headers: &axum::http::HeaderMap, method: &str, target: &str) -> String {
+    let mut h = Sha256::new();
+    h.update(caller_identity(headers).as_bytes());
+    for part in [method, target] {
+        h.update([0]);
+        h.update(part.as_bytes());
+    }
+    let digest: [u8; 32] = h.finalize().into();
+    digest.iter().map(|b| format!("{b:02x}")).collect()
+}
+
 pub fn eligible(body: &Value, cfg: &SemanticCache) -> bool {
     if body.get("stream") == Some(&Value::Bool(true)) {
         return false;
@@ -245,7 +275,7 @@ pub fn measurement(hit: &CacheHit, call_id: Option<i32>, nbytes: usize) -> Measu
     let est = (nbytes / 4).max(1) as u32;
     Measurement {
         plugin: "proxy",
-        kind: "semantic_cache_hit",
+        kind: rtok_store::otel::SEMANTIC_CACHE_HIT_KIND,
         before_bytes: nbytes as u64,
         after_bytes: nbytes as u64,
         est_before: est,
@@ -396,6 +426,54 @@ fn messages_text(body: &Value) -> Vec<(String, String)> {
         .unwrap_or_default()
 }
 
+fn typed_messages(body: &Value) -> Vec<TypedMessage> {
+    body.get("messages")
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                // Same filter as `messages_text`, so row i of each describes one message.
+                .filter(|m| m.get("role").and_then(Value::as_str).is_some())
+                .map(|m| TypedMessage {
+                    full: digest(m, false),
+                    shape: digest(m, true),
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// sha256 of the canonical JSON. `cache_control` is dropped because clients move that marker
+/// between turns and it does not change the answer; `blank_text` empties every `text` and
+/// string `content` so only the structure around the words remains.
+fn digest(v: &Value, blank_text: bool) -> String {
+    fn walk(v: &Value, blank_text: bool) -> Value {
+        match v {
+            Value::Object(map) => Value::Object(
+                map.iter()
+                    .filter(|(k, _)| k.as_str() != "cache_control")
+                    .map(|(k, val)| {
+                        let blank = blank_text
+                            && matches!(k.as_str(), "text" | "content")
+                            && val.is_string();
+                        let val = if blank {
+                            Value::String(String::new())
+                        } else {
+                            walk(val, blank_text)
+                        };
+                        (k.clone(), val)
+                    })
+                    .collect(),
+            ),
+            Value::Array(items) => {
+                Value::Array(items.iter().map(|i| walk(i, blank_text)).collect())
+            }
+            other => other.clone(),
+        }
+    }
+    let json = serde_json::to_vec(&canonical_json(&walk(v, blank_text))).unwrap_or_default();
+    crate::store::hex_sha256(&json)
+}
+
 fn system_text(body: &Value) -> Option<String> {
     body.get("system").map(content_text)
 }
@@ -524,8 +602,11 @@ fn canonical_json(v: &Value) -> Value {
 /// another system prompt, tool set or earlier turn used to get that other prompt's answer.
 fn scope_hash(prompt: &CachePrompt) -> [u8; 32] {
     let mut rest = prompt.clone();
-    if let Some((_, text)) = rest.messages.iter_mut().rev().find(|(r, _)| r == "user") {
-        text.clear();
+    if let Some(i) = rest.messages.iter().rposition(|(r, _)| r == "user") {
+        rest.messages[i].1.clear();
+        if let Some(t) = rest.typed.get_mut(i) {
+            t.full.clear();
+        }
     }
     canonical_hash(&rest)
 }
@@ -984,6 +1065,89 @@ mod tests {
         let mut cache = Cache::new();
         cache.store(&pa, &cfg, b"ra", None, 200);
         assert!(cache.lookup(&pb, &cfg).is_none());
+    }
+
+    /// T532: fields the flattened text drops still tell two requests apart, in both tiers; an
+    /// exact replay, reordered keys and a moved `cache_control` marker still hit.
+    #[rstest::rstest]
+    #[case::image_detail(
+        serde_json::json!([{"type": "image_url", "image_url": {"url": "u", "detail": "low"}}]),
+        serde_json::json!([{"type": "image_url", "image_url": {"url": "u", "detail": "high"}}]),
+        None, None,
+    )]
+    #[case::tool_result_error(
+        serde_json::json!([{"type": "tool_result", "tool_use_id": "t", "content": "OK", "is_error": false}]),
+        serde_json::json!([{"type": "tool_result", "tool_use_id": "t", "content": "OK", "is_error": true}]),
+        None, None,
+    )]
+    #[case::participant_name(
+        serde_json::json!("hi"), serde_json::json!("hi"), Some("alice"), Some("bob"),
+    )]
+    #[case::literal_text_versus_typed_block(
+        serde_json::json!([{"type": "text", "text": "tool_result t: OK"}]),
+        serde_json::json!([{"type": "tool_result", "tool_use_id": "t", "content": "OK"}]),
+        None, None,
+    )]
+    fn typed_fields_join_the_cache_key(
+        #[case] a: Value,
+        #[case] b: Value,
+        #[case] name_a: Option<&str>,
+        #[case] name_b: Option<&str>,
+    ) {
+        let ask = |content: &Value, name: Option<&str>| {
+            let mut m = serde_json::json!({"role": "user", "content": content});
+            if let Some(n) = name {
+                m["name"] = n.into();
+            }
+            fixture_prompt(serde_json::json!({"model": "m", "messages": [m]}))
+        };
+        let cfg = SemanticCache {
+            embed_backend: "fixture".into(),
+            ..SemanticCache::default()
+        };
+        let (pa, pb) = (ask(&a, name_a), ask(&b, name_b));
+        assert_ne!(canonical_hash(&pa), canonical_hash(&pb));
+        let mut cache = Cache::new();
+        cache.store(&pa, &cfg, b"first", None, 200);
+        assert!(cache.lookup(&pb, &cfg).is_none(), "both tiers miss");
+        assert_eq!(&*cache.lookup(&pa, &cfg).unwrap().response, b"first");
+    }
+
+    /// T533: method, path and query each change the scope; the same request keeps it, and the
+    /// raw target never appears in it.
+    #[test]
+    fn the_cache_scope_names_method_and_target() {
+        let h = axum::http::HeaderMap::new();
+        let base = cache_scope(&h, "POST", "https://a.test/v1/messages?key=secret");
+        assert_eq!(
+            base,
+            cache_scope(&h, "POST", "https://a.test/v1/messages?key=secret")
+        );
+        for other in [
+            ("GET", "https://a.test/v1/messages?key=secret"),
+            ("POST", "https://b.test/v1/messages?key=secret"),
+            ("POST", "https://a.test/v1/complete?key=secret"),
+            ("POST", "https://a.test/v1/messages?key=other"),
+        ] {
+            assert_ne!(base, cache_scope(&h, other.0, other.1), "{other:?}");
+        }
+        assert!(!base.contains("secret"));
+    }
+
+    #[test]
+    fn key_order_and_cache_control_do_not_split_the_key() {
+        let ask = |block: Value| {
+            fixture_prompt(
+                serde_json::json!({"model": "m", "system": [{"type": "text", "text": "s"}],
+                "messages": [{"role": "user", "content": [block]}]}),
+            )
+        };
+        let plain = ask(serde_json::json!({"type": "text", "text": "hello"}));
+        let reordered = ask(serde_json::json!({"text": "hello", "type": "text"}));
+        let marked = ask(serde_json::json!({"type": "text", "text": "hello",
+            "cache_control": {"type": "ephemeral"}}));
+        assert_eq!(canonical_hash(&plain), canonical_hash(&reordered));
+        assert_eq!(canonical_hash(&plain), canonical_hash(&marked));
     }
 
     #[test]

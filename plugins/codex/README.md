@@ -29,21 +29,30 @@ the POSIX fallback. Install with ketch: `ketch install pyrlyn/rtok`.
 While the plugin is enabled it is the only path for the compaction hooks (D21): `rtok agents
 install codex` takes its own `~/.codex/hooks.json` copy back instead of adding it, so every event
 fires once. `[mcp_servers.rtok]` is independent of the plugin (T275/D33) and is written on every
-install/update regardless.
+install/update regardless. It carries `default_tools_approval_mode = "writes"` (T528): Codex runs
+rtok's read-only tools (marked `readOnlyHint` in `tools/list`) without asking, and still asks
+before a tool that changes a worktree, a task, a note or another agent's inbox. Without the key it
+asks before every call, and in code mode, where nobody can answer, the call fails. An existing rtok
+entry gains the key once; a value you set yourself is kept.
 
 Files:
 
 - `.codex-plugin/plugin.json` — manifest (name, version, metadata, `hooks` path).
-- `hooks/hooks.json` — `PreCompact` and `PostCompact`, each `timeout: 5`, resolving `rtok` from
-  `PATH` then `~/.ketch/bin/rtok` (`commandWindows` bare for `cmd.exe`): the same events
-  `rtok agents install codex` registers. Checked by `tests/codex_plugin.rs`.
+- `hooks/hooks.json` — `PreToolUse` (matcher `Bash|apply_patch`), `PostToolUse` (`*`), `PreCompact`,
+  `PostCompact` and `SubagentStart`, each `timeout: 5` and `rtok hook <event> --host codex`, resolving `rtok` from
+  `PATH` then `~/.ketch/bin/rtok` (`commandWindows` bare for `cmd.exe`): the `codex` rows of
+  `src/agents/hook_events.rs`, the same events `rtok agents install codex` registers. Checked by
+  `tests/codex_plugin.rs` and `tests/hook_manifests.rs`.
 - `.agents/plugins/marketplace.json` — the local marketplace that lists this folder.
 
 Known limits:
 
-- Only the compaction hooks. Codex's `PreToolUse` can rewrite a Bash command (`updatedInput`) and
-  `PostToolUse` can add context, but rtok's handling of Codex's tool payloads has not been checked
-  on a live session, so those events stay off here and in the installer until it is.
+- `PreToolUse` runs on `Bash` (the rewrite) and `apply_patch` (T262.3: its patch text feeds the
+  spawn-brief ledger, never a rewrite); Codex has no `Read` or `Skill` tool. `SubagentStart`
+  answers `additionalContext`, the brief of the files the session edited. A rewrite reaches Codex as `permissionDecision: "allow"` plus
+  `updatedInput` (`rtok hook --host codex` adds the decision; Codex ignores a bare
+  `updatedInput`). Payloads and the live run: `research.md` section 40. Not verified: whether
+  that `allow` also skips Codex's own approval prompt.
 - Verified on codex-cli 0.155.1 in a scratch `CODEX_HOME` (2026-09-21): `marketplace add` accepts
   the `./` entry and `plugin add` copies the tree to `plugins/cache/rtok/rtok/0.0.1/` and enables
   it. Not verified: the hooks firing in a live session (trust prompt).

@@ -1512,6 +1512,16 @@ async fn proxy_cache_hit_records_usage_and_request_bytes() {
             .expect("measurements"),
         1
     );
+    // T653: the hit keeps its usage row above, yet only the upstream request is billed.
+    let billed = state.store.otel_token_totals().expect("token totals");
+    assert_eq!(
+        billed
+            .iter()
+            .map(|t| (t.input, t.output))
+            .collect::<Vec<_>>(),
+        vec![(10, 2)],
+        "cache hit must not count as provider-billed"
+    );
     task.abort();
 }
 
@@ -1994,6 +2004,49 @@ async fn proxy_tools_rewrite_anthropic_drops_denied_call_still_forwards() {
         .map(|m| m.kind)
         .collect();
     assert_eq!(kinds, ["tools_rewrite"]);
+    task.abort();
+}
+
+/// T686: with `compact_schema` the upstream gets the compact catalog, and the measurement's
+/// `ref_id` expands to the full original `tools[]`.
+#[tokio::test]
+async fn proxy_tools_rewrite_compact_schema_archives_the_original_catalog() {
+    let up = MockUpstream::anthropic_messages_body();
+    let (addr, state, task) = proxy_server("t686-a", |cfg| {
+        cfg.proxy.upstream = up.base_url();
+        cfg.proxy.tools_rewrite.enabled = true;
+        cfg.proxy.tools_rewrite.compact_schema = true;
+    })
+    .await;
+    let mut body: serde_json::Value =
+        serde_json::from_str(include_str!("fixtures/mcp_catalog_github.json")).unwrap();
+    let original_tools = body["tools"].clone();
+    body["model"] = T51_MODEL.into();
+    body["max_tokens"] = 8.into();
+    body["metadata"] = serde_json::json!({"user_id": "sess-t686-a"});
+    let resp = t51_post(&addr, serde_json::to_vec(&body).unwrap()).await;
+    assert_eq!(resp.status(), reqwest::StatusCode::OK);
+    let rows = t51_usage(&state.store, "sess-t686-a").await;
+    let sent: serde_json::Value = serde_json::from_slice(
+        &state
+            .store
+            .call_io_request(rows[0].call_id.expect("call") as i32)
+            .unwrap()
+            .unwrap(),
+    )
+    .unwrap();
+    let (before, after) = (
+        original_tools.to_string().len(),
+        sent["tools"].to_string().len(),
+    );
+    assert!(after * 10 < before * 7, "{before} -> {after}");
+    let ms = state.store.list_measurements("proxy").unwrap();
+    assert_eq!(ms.len(), 1);
+    let id = ms[0].ref_id.as_deref().expect("archive id");
+    let recovered: serde_json::Value =
+        serde_json::from_slice(&state.store.get_archive(id, None).unwrap().expect("payload"))
+            .unwrap();
+    assert_eq!(recovered, original_tools);
     task.abort();
 }
 

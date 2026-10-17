@@ -39,7 +39,7 @@ use std::collections::HashMap;
 use std::io;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use anyhow::{Context, Result};
 use axum::Router;
@@ -75,6 +75,7 @@ mod noise;
 pub use live::LiveCall;
 pub mod openai_chat;
 pub mod openai_responses;
+mod route;
 pub mod semantic_cache;
 pub mod tools_rewrite;
 pub mod wire;
@@ -84,9 +85,6 @@ pub mod wire;
 /// task buffers for recording (see `handle`) — one constant for both, since both exist
 /// only to bound memory, not to reject legitimate traffic.
 const MAX_BODY_BYTES: usize = 256 * 1024 * 1024;
-
-/// TCP connect deadline; `proxy.timeout_s` bounds reads only.
-const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// How many rtok proxies a request has passed through (T442). A second pass must not
 /// rewrite or record the request again, and a proxy whose upstream is itself must not
@@ -118,24 +116,6 @@ fn hops_of(headers: &HeaderMap) -> u32 {
     })
 }
 
-/// A *read* timeout, not `Client::timeout`: the latter is a deadline on the whole exchange,
-/// body stream included, so a turn that streams for longer than the budget (extended
-/// thinking, many tool calls) was cut mid-SSE with the client left without a `message_stop`.
-/// The budget bounds one read instead.
-fn build_client(timeout_s: u64) -> Result<Client> {
-    // Connecting is not streaming: a black-holed upstream used to hold the client for the
-    // whole read budget (10 minutes by default) before it saw a 502.
-    Client::builder()
-        .connect_timeout(CONNECT_TIMEOUT)
-        .read_timeout(Duration::from_secs(timeout_s.max(1)))
-        // T53.3: webpki roots instead of reqwest's platform verifier
-        // (Security.framework costs ~1.3–1.5 ms of dyld time per hook
-        // spawn); corporate CAs arrive via `SSL_CERT_FILE` (see `tls`).
-        .use_preconfigured_tls(crate::tls::preconfigured()?)
-        .build()
-        .context("reqwest client")
-}
-
 /// Shared server state: the DB, the upstream client and the effective `[proxy]` settings.
 pub struct ProxyState {
     pub store: Store,
@@ -159,19 +139,22 @@ pub struct ProxyState {
     registry: Registry,
     cfg: Config,
     cache: Mutex<semantic_cache::Cache>,
+    /// P28 model summaries (T385.9.2): `None` unless `[plugins.compress.llm] enabled`.
+    #[cfg(feature = "compress")]
+    summaries: Option<Arc<crate::plugins::compress::queue::Queue>>,
 }
 
 impl ProxyState {
     pub fn new(cfg: &Config) -> Result<Self> {
         let store = Store::open(&cfg.core.db_path)?;
         store.set_store_raw(cfg.core.store_raw);
-        let client = build_client(cfg.proxy.timeout_s)?;
+        let client = crate::tls::client(cfg.proxy.timeout_s)?;
         let mut lane_clients = HashMap::new();
         for lane in lane::Lane::ALL {
             let policy = lane.policy(&cfg.proxy.lanes);
             let secs = flex::lane_timeout_s(policy.flex, policy.timeout_s, cfg.proxy.timeout_s);
             if secs > 0 && secs != cfg.proxy.timeout_s {
-                lane_clients.insert(lane, build_client(secs)?);
+                lane_clients.insert(lane, crate::tls::client(secs)?);
             }
         }
         let mut lane_upstreams = HashMap::new();
@@ -189,6 +172,21 @@ impl ProxyState {
         // Host agent: the `[hook] host` setting (T5.1 says `core.host`, which T12 removed —
         // see plan.md §6 amendment in the T5.1 commit). Unknown slugs fall back to `other` (6).
         let host_id = store.host_id(&cfg.hook.host)?.or(Some(6));
+        // Optional like every extension: a queue that cannot start leaves the extractive view.
+        #[cfg(feature = "compress")]
+        let summaries = crate::plugins::compress::queue::Queue::new(cfg).unwrap_or_else(|e| {
+            crate::log::record(
+                cfg,
+                &store,
+                None,
+                None,
+                "warn",
+                "plugin",
+                "compress",
+                &format!("summary queue not started: {e:#}"),
+            );
+            None
+        });
         Ok(Self {
             store,
             client,
@@ -205,6 +203,8 @@ impl ProxyState {
             registry: Registry::new(cfg),
             cfg: cfg.clone(),
             cache: Mutex::new(semantic_cache::Cache::new()),
+            #[cfg(feature = "compress")]
+            summaries,
         })
     }
 
@@ -283,9 +283,12 @@ pub async fn serve(cfg: &Config) -> Result<()> {
     let listener = TcpListener::bind(&addr)
         .await
         .with_context(|| format!("bind {addr}"))?;
-    axum::serve(listener, app(state))
-        .await
-        .context("proxy server")
+    axum::serve(
+        listener,
+        app(state).into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    )
+    .await
+    .context("proxy server")
 }
 
 /// Upstream chunks buffered between the tee task and the client stream before the tee
@@ -407,8 +410,22 @@ async fn handle(state: Arc<ProxyState>, req: Request<Body>) -> AxumResponse {
     let sc = &state.cfg.plugins.proxy.semantic_cache;
     // A lane that does not use the cache neither reads nor fills it (T385.2).
     let cache_lane = req_lane.policy(&state.cfg.proxy.lanes).semantic_cache;
-    // Who asked (T323): part of the cache key on lookup and, below, on store.
-    let caller = semantic_cache::caller_identity(&headers);
+    // The target is resolved before the lookup (T533): lanes can have their own upstream, and
+    // an answer cached for one must not be served for a request bound for another.
+    let target = match join_upstream(
+        state.upstream_for(req_lane, wire, &path, &headers),
+        &path,
+        query.as_deref(),
+    ) {
+        Ok(u) => u,
+        Err(e) => return error_response(StatusCode::BAD_REQUEST, &e.to_string()),
+    };
+    // Who asked (T323) and where it goes (T533): part of the cache key on lookup and, below,
+    // on store.
+    let caller = semantic_cache::cache_scope(&headers, method.as_str(), &target);
+    // Where a Batch results file lives (T583): the batch or file id is in the path, and the
+    // query holds nothing that identifies the results.
+    let results_scope = target.split('?').next().unwrap_or_default().to_string();
     if sc.enabled
         && cache_lane
         && !plain
@@ -426,15 +443,6 @@ async fn handle(state: Arc<ProxyState>, req: Request<Body>) -> AxumResponse {
             return cache_response(state, Some(wire), recorded, &request_body, start, &hit);
         }
     }
-
-    let target = match join_upstream(
-        state.upstream_for(req_lane, wire, &path, &headers),
-        &path,
-        query.as_deref(),
-    ) {
-        Ok(u) => u,
-        Err(e) => return error_response(StatusCode::BAD_REQUEST, &e.to_string()),
-    };
 
     let mut rb = state.client_for(req_lane).request(method.clone(), target);
     // The client's `accept-encoding` is not honoured by this build: reqwest is linked
@@ -541,7 +549,8 @@ async fn handle(state: Arc<ProxyState>, req: Request<Body>) -> AxumResponse {
     // Batch results are read only after they were forwarded (T385.4), and only when asked.
     let results = (state.cfg.proxy.batch.parse_results && status.is_success())
         .then(|| batch_results::source(req_lane, &method, &path))
-        .flatten();
+        .flatten()
+        .map(|source| (source, results_scope));
     let (tx, rx) = mpsc::channel::<Result<Bytes, io::Error>>(TEE_CHANNEL_CHUNKS);
     let recorder = state.clone();
     let body_stream = upstream.bytes_stream();
@@ -647,6 +656,11 @@ fn shape_request(
 ) -> (Bytes, Option<Recorded>, bool, Option<flex::Retry>) {
     // Each rewrite below runs only when its global switch and this lane's switch are both on.
     let policy = lane.policy(&state.cfg.proxy.lanes);
+    // Before `record`, so the ledger names the model that serves the call (T385.10).
+    let route = lane
+        .route(&state.cfg.proxy.routing)
+        .and_then(|rule| route::apply(rule, &request_body));
+    let request_body = route.as_ref().map_or(request_body, |r| r.body.clone());
     let parsed = serde_json::from_slice::<Value>(&request_body).ok();
     let recorded = record(
         state,
@@ -654,13 +668,19 @@ fn shape_request(
         path,
         parsed.as_ref(),
         headers,
-        lane.kind(),
+        Tag {
+            kind: lane.kind(),
+            provider: route.as_ref().and_then(|r| r.provider.as_deref()),
+        },
         &request_body,
     );
+    if let (Some(route), Some(r)) = (route.as_ref(), recorded.as_ref()) {
+        record_route(state, r, lane, route);
+    }
     // From here on `request_body` is what upstream sees (and what `call_io` records).
     let compressing = state.mode == "compress" && policy.compress;
     let request_body = if compressing {
-        wire.map_or(request_body.clone(), |wire| {
+        let shaped = wire.map_or(request_body.clone(), |wire| {
             compress(
                 state,
                 wire,
@@ -669,7 +689,22 @@ fn shape_request(
                 &policy,
                 request_body,
             )
-        })
+        });
+        // Drained on every pass so a thread reused for the next request starts empty.
+        #[cfg(feature = "compress")]
+        {
+            let offered = crate::plugins::compress::take_offered();
+            if let Some(queue) = state.summaries.as_ref().filter(|_| !offered.is_empty()) {
+                queue.submit(
+                    crate::plugins::compress::llm::Auth::from_headers(
+                        headers,
+                        wire.map(Wire::provider),
+                    ),
+                    offered,
+                );
+            }
+        }
+        shaped
     } else {
         request_body
     };
@@ -773,6 +808,45 @@ fn record_context_path(state: &ProxyState, r: &Recorded, request_body: &[u8]) {
     }
 }
 
+/// T385.10: a routed call is marked by a `model_route` row (both sizes the final body's, so
+/// no token saving is claimed — the dollars are the `usage` rows' at the served model's
+/// price), and the log row keeps the model the client asked for.
+fn record_route(state: &ProxyState, r: &Recorded, lane: lane::Lane, route: &route::Routed) {
+    let nbytes = route.body.len();
+    let est = (nbytes / 4).max(1) as u32;
+    let m = Measurement {
+        plugin: "proxy",
+        kind: "model_route",
+        before_bytes: nbytes as u64,
+        after_bytes: nbytes as u64,
+        est_before: est,
+        est_after: est,
+        ref_id: None,
+        call_id: Some(r.call_id),
+    };
+    if let Err(e) = state.store.insert_measurement(&r.session, &m) {
+        log(
+            state,
+            &r.session,
+            Some(r.call_id),
+            "error",
+            &format!("model route: {e:#}"),
+        );
+    }
+    log(
+        state,
+        &r.session,
+        Some(r.call_id),
+        "info",
+        &format!(
+            "model route on the {} lane: {} -> {}",
+            lane.name(),
+            route.from,
+            route.to
+        ),
+    );
+}
+
 /// T59.5: truncate / drop `tools[]` when enabled. Fail open; unchanged bodies keep original bytes.
 fn rewrite_tools(state: &ProxyState, original: Bytes) -> (Bytes, Option<tools_rewrite::Delta>) {
     if !state.cfg.proxy.tools_rewrite.enabled {
@@ -798,6 +872,26 @@ fn rewrite_tools(state: &ProxyState, original: Bytes) -> (Bytes, Option<tools_re
 }
 
 fn record_tools_rewrite(state: &ProxyState, r: &Recorded, delta: tools_rewrite::Delta) {
+    // The archive is content-addressed, so the same catalog keeps one id and one file. A failed
+    // write leaves the saving unrecoverable, so it is logged and the request still goes out.
+    let ref_id = match (delta.original.as_deref(), state.archive_dir.as_deref()) {
+        (Some(tools), Some(dir)) => {
+            match state.store.put_archive(&r.session, tools.as_bytes(), dir) {
+                Ok(id) => Some(id),
+                Err(e) => {
+                    log(
+                        state,
+                        &r.session,
+                        Some(r.call_id),
+                        "error",
+                        &format!("tools rewrite archive: {e:#}"),
+                    );
+                    None
+                }
+            }
+        }
+        _ => None,
+    };
     let m = Measurement {
         plugin: "proxy",
         kind: "tools_rewrite",
@@ -805,7 +899,7 @@ fn record_tools_rewrite(state: &ProxyState, r: &Recorded, delta: tools_rewrite::
         after_bytes: delta.after_bytes,
         est_before: delta.est_before,
         est_after: delta.est_after,
-        ref_id: None,
+        ref_id,
         call_id: Some(r.call_id),
     };
     if let Err(e) = state.store.insert_measurement(&r.session, &m) {
@@ -883,6 +977,13 @@ fn compress(
         .unwrap_or(original)
 }
 
+/// What `record` writes beside the request itself: the `calls.kind` (the lane) and, for a
+/// routed call, the provider slug the rule names instead of the wire's own (T385.10).
+struct Tag<'a> {
+    kind: &'a str,
+    provider: Option<&'a str>,
+}
+
 /// One request's bookkeeping: session, host, provider+model, and the `calls` row.
 fn record(
     state: &ProxyState,
@@ -890,9 +991,13 @@ fn record(
     path: &str,
     body: Option<&Value>,
     headers: &HeaderMap,
-    kind: &str,
+    tag: Tag,
     raw: &[u8],
 ) -> Option<Recorded> {
+    let Tag {
+        kind,
+        provider: provider_override,
+    } = tag;
     let session = session_for(wire, body, headers, raw);
     // The model slug: each wire knows where its own lives (Gemini's travels in the
     // path, not the body — T51.3). Unwired paths keep the old body lookup.
@@ -900,9 +1005,11 @@ fn record(
         body.and_then(|v| v.get("model").and_then(Value::as_str))
             .map(str::to_string)
     });
-    let provider = wire
-        .map(Wire::provider)
-        .or_else(|| matches!(path, "/v1/chat/completions" | "/v1/responses").then_some("openai"));
+    let provider = provider_override.or_else(|| {
+        wire.map(Wire::provider).or_else(|| {
+            matches!(path, "/v1/chat/completions" | "/v1/responses").then_some("openai")
+        })
+    });
     let result = (|| -> Result<Recorded> {
         state
             .store
@@ -1019,7 +1126,7 @@ fn finish(
     response_total_bytes: usize,
     complete: bool,
     caller: Option<&str>,
-    results: Option<batch_results::Source>,
+    results: Option<(batch_results::Source, String)>,
 ) {
     let Some(r) = recorded else { return };
     let session = r.session.clone();
@@ -1034,6 +1141,12 @@ fn finish(
     };
     if let Err(e) = state.store.set_call_ms(r.call_id, elapsed_ms(start)) {
         log_err("set_call_ms", e.into());
+    }
+    if wire.is_some()
+        && let Some(tier) = wire::service_tier_from_response(content_type, response_body)
+        && let Err(e) = state.store.set_call_service_tier(r.call_id, &tier)
+    {
+        log_err("service_tier", e.into());
     }
     if response_total_bytes > response_body.len() {
         // The true size, since call_io's recorded response_bytes reflects only what was
@@ -1093,13 +1206,14 @@ fn finish(
             );
         }
         None => {
-            if let Some(source) = results
+            if let Some((source, scope)) = results
                 && let Err(e) = batch_results::record(
                     &state.store,
                     &session,
                     r.call_id,
                     r.model.as_deref(),
                     source,
+                    &scope,
                     response_body,
                 )
             {
@@ -1279,6 +1393,7 @@ fn error_response(status: StatusCode, message: &str) -> AxumResponse {
 mod tests {
     use super::*;
     use rstest::rstest;
+    use std::time::Duration;
 
     #[rstest]
     #[case("/v1/batches", false, true)]

@@ -30,6 +30,12 @@ export type ClientMessage =
       diff: DiffRequest;
     }
   | {
+      export: ExportRequest;
+    }
+  | {
+      import: ImportRequest;
+    }
+  | {
       calls: CallsRequest;
     };
 /**
@@ -55,6 +61,15 @@ export type ProjectRequest =
       both: boolean;
       from: string;
       to: string;
+    }
+  | {
+      action: "reindex";
+      project: string;
+    }
+  | {
+      action: "remove";
+      confirmed: boolean;
+      project: string;
     };
 /**
  * This interface was referenced by `WsProtocol`'s JSON-Schema
@@ -67,12 +82,26 @@ export type DoctorAction = "plan" | "apply";
  */
 export type JunkAction = "plan" | "apply";
 /**
- * A frame the server pushes besides the [`Snapshot`] itself.
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "Format".
+ */
+export type Format = "json" | "svg" | "png";
+/**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "Level2".
+ */
+export type Level2 = "overview" | "symbols";
+/**
+ * A frame as it goes out for a request that carried `req`: the same fields plus the id, on
+ * success and on failure (a `message` notice) alike.
  *
  * This interface was referenced by `WsProtocol`'s JSON-Schema
- * via the `definition` "ServerFrame".
+ * via the `definition` "Reply".
  */
-export type ServerFrame =
+export type Reply = {
+  req?: number | null;
+} & Reply1;
+export type Reply1 =
   | {
       text: string;
       type: "message";
@@ -81,6 +110,11 @@ export type ServerFrame =
       id: string;
       text: string;
       type: "expand";
+    }
+  | {
+      plan: string;
+      project: string;
+      type: "projectplan";
     }
   | {
       plan: Plan;
@@ -108,7 +142,16 @@ export type ServerFrame =
       type: "diff";
     }
   | {
-      batch: CallBatch;
+      file: ExportFile;
+      type: "export";
+    }
+  | {
+      export: Export;
+      name: string;
+      type: "imported";
+    }
+  | {
+      calls: CallsView;
       type: "calls";
     };
 /**
@@ -122,10 +165,110 @@ export type DrillEdgeKind = "contains" | "calls" | "implements" | "imports";
  */
 export type DrillNodeKind = ("file" | "type" | "module" | "function") | "external";
 /**
+ * A request with the id its answer comes back under (T623). The server reads `req` off any
+ * message, so [`ClientMessage`] itself stays the bare shape; this is the wire form a client with
+ * more than one request in flight sends.
+ *
  * This interface was referenced by `WsProtocol`'s JSON-Schema
- * via the `definition` "EventPhase".
+ * via the `definition` "Request".
  */
-export type EventPhase = "start" | "progress" | "end";
+export type Request = Request1 & {
+  /**
+   * Chosen by the client, never reused on one page: a reply for a request that timed out
+   * still carries its own id, so it cannot be taken for the answer to a later one.
+   */
+  req?: number | null;
+};
+export type Request1 =
+  | {
+      expand: string;
+    }
+  | {
+      set: SetRequest;
+    }
+  | {
+      project: ProjectRequest;
+    }
+  | {
+      doctor: DoctorRequest;
+    }
+  | {
+      junk: JunkRequest;
+    }
+  | {
+      graph: DrillRequest;
+    }
+  | {
+      diff: DiffRequest;
+    }
+  | {
+      export: ExportRequest;
+    }
+  | {
+      import: ImportRequest;
+    }
+  | {
+      calls: CallsRequest;
+    };
+/**
+ * A frame the server pushes besides the [`Snapshot`] itself.
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "ServerFrame".
+ */
+export type ServerFrame =
+  | {
+      text: string;
+      type: "message";
+    }
+  | {
+      id: string;
+      text: string;
+      type: "expand";
+    }
+  | {
+      plan: string;
+      project: string;
+      type: "projectplan";
+    }
+  | {
+      plan: Plan;
+      type: "doctorplan";
+    }
+  | {
+      fixed: Fixed;
+      type: "doctorfixed";
+    }
+  | {
+      plan: Cleared;
+      type: "junkplan";
+    }
+  | {
+      cleared: Cleared;
+      type: "junkcleared";
+    }
+  | {
+      graph: DrillGraph;
+      type: "graph";
+    }
+  | {
+      diff: DiffReport;
+      project: string;
+      type: "diff";
+    }
+  | {
+      file: ExportFile;
+      type: "export";
+    }
+  | {
+      export: Export;
+      name: string;
+      type: "imported";
+    }
+  | {
+      calls: CallsView;
+      type: "calls";
+    };
 /**
  * This interface was referenced by `WsProtocol`'s JSON-Schema
  * via the `definition` "ModuleState".
@@ -172,12 +315,29 @@ export type LinkKind = "manual" | "auto";
  * via the `definition` "Origin".
  */
 export type Origin = "manual" | "session" | "worktree" | "mcp" | "reference";
+/**
+ * The board's columns, the four statuses of [`Status`] under their `rtok task` names.
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "TaskColumn".
+ */
+export type TaskColumn = "open" | "in-progress" | "done" | "closed";
+/**
+ * Where the Tasks page stands. `Unconfigured` is an ordinary case (the project never ran
+ * `rtok task init`), not a failure, so the page shows how to start instead of an error.
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "TasksState".
+ */
+export type TasksState = "ready" | "reading" | "unconfigured" | "failed";
 
 /**
  * Root of the schema: one property per direction, so every type lands in `$defs` once.
  */
 export interface WsProtocol {
   client: ClientMessage;
+  reply: Reply;
+  request: Request;
   server: ServerFrame;
   snapshot: Snapshot;
 }
@@ -195,6 +355,11 @@ export interface SetRequest {
  */
 export interface DoctorRequest {
   action: DoctorAction;
+  /**
+   * For `apply`: the `token` of the plan the user confirmed. Without the plan's token, or with
+   * one the files no longer produce, nothing is written and a fresh plan comes back.
+   */
+  confirmed: string | null;
   selection: Selection;
 }
 /**
@@ -305,6 +470,45 @@ export interface DiffExport {
   text: string;
 }
 /**
+ * A download from the graph page's Export menu (T329.40): the file `rtok graph export` writes for
+ * the same arguments.
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "ExportRequest".
+ */
+export interface ExportRequest {
+  depth: number | null;
+  /**
+   * A symbol name; it wins over `level`, as `--focus` does.
+   */
+  focus: string | null;
+  format: Format;
+  level: Level2;
+  /**
+   * An id or a root path, as in `rtok graph projects`.
+   */
+  project: string;
+  /**
+   * PNG only: 1 to 4 times the SVG size.
+   */
+  scale: number | null;
+  transparent: boolean;
+}
+/**
+ * A saved JSON export the page read itself, to show read-only. Like Compare mode, it never names
+ * a path: the websocket answers anything on localhost, so the file arrives as its text.
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "ImportRequest".
+ */
+export interface ImportRequest {
+  /**
+   * The file's name, for the banner and the errors.
+   */
+  name: string;
+  text: string;
+}
+/**
  * This interface was referenced by `WsProtocol`'s JSON-Schema
  * via the `definition` "CallsRequest".
  */
@@ -325,6 +529,11 @@ export interface Plan {
    * Selected entries the engine will not remove, with why.
    */
   refused: string[];
+  /**
+   * Names this preview (its selected entries and their diff): `apply` writes only when the
+   * token it is given is the one the fresh rescan produces.
+   */
+  token: string;
 }
 /**
  * One line of the checklist.
@@ -365,6 +574,11 @@ export interface Fixed {
    * 1 when a selected entry was skipped or failed.
    */
   code: number;
+  /**
+   * Set when nothing was written because the files no longer match the confirmed preview:
+   * the fresh preview, which needs its own confirmation.
+   */
+  replan: Plan | null;
   text: string;
 }
 /**
@@ -394,6 +608,10 @@ export interface Planned {
    * Planned and not removed: the re-check refused it or the removal failed.
    */
   failed: boolean;
+  /**
+   * Files in it, counted for a planned item before anything is removed.
+   */
+  files: number;
   kind: string;
   /**
    * Unix seconds of the newest file in it; `None` when unreadable (T330.6).
@@ -570,136 +788,244 @@ export interface DiffUnread {
   reason: string;
 }
 /**
- * What one poll found, as one frame. `summary` counts every event of the poll (including
- * the ones left out of `events`), so a page that adds summaries up never undercounts a burst.
+ * A finished download. The bytes travel as base64 because a PNG is not text and the frame is.
  *
  * This interface was referenced by `WsProtocol`'s JSON-Schema
- * via the `definition` "CallBatch".
+ * via the `definition` "ExportFile".
  */
-export interface CallBatch {
-  /**
-   * Newest last. A call's start and progress events are left out when its end is in the
-   * batch, since the end carries the same call and tool.
-   */
-  events: GraphEvent[];
-  /**
-   * The newest event id the batch covers.
-   */
-  head: number;
-  /**
-   * Events cut because the batch held more than [`MAX_EVENTS`] (the oldest go first).
-   */
-  omitted: number;
-  summary: CallSummary;
+export interface ExportFile {
+  data: string;
+  mime: string;
+  name: string;
 }
 /**
- * One event of a graph call. `call` ties a call's events together; `ts_ms`, `id` and the
- * clipping of free text are the store's, so a writer leaves `id` and `ts_ms` at zero.
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "Export".
+ */
+export interface Export {
+  edges: Edge[];
+  links: Link[];
+  meta: Meta;
+  /**
+   * Empty at the `overview` level.
+   */
+  nodes: Node[];
+  projects: Proj[];
+  schema: "rtok.graph.v1";
+}
+/**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "Edge".
+ */
+export interface Edge {
+  from: string;
+  kind: string;
+  to: string;
+}
+/**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "Link".
+ */
+export interface Link {
+  from: number;
+  kind: string;
+  reason?: string | null;
+  /**
+   * Call references from `from` into `to` found in the indexes.
+   */
+  references: number;
+  to: number;
+}
+/**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "Meta".
+ */
+export interface Meta {
+  depth?: number | null;
+  exported_at: number;
+  focus?: string | null;
+  /**
+   * `overview`, `symbols` or `focus`.
+   */
+  level: string;
+  notes: string[];
+  /**
+   * A project was still indexing, not indexed, or could not answer.
+   */
+  partial: boolean;
+  redacted: boolean;
+  rtok_version: string;
+  /**
+   * Project names of the scope.
+   */
+  scope: string[];
+}
+/**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "Node".
+ */
+export interface Node {
+  id: string;
+  kind: string;
+  line: number;
+  name: string;
+  /**
+   * Relative to the project root.
+   */
+  path: string;
+  project: number;
+}
+/**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "Proj".
+ */
+export interface Proj {
+  /**
+   * `tags`, `lsp` or `text`: the mode that answers for the project.
+   */
+  backend: string;
+  /**
+   * `ok`, `stale`, `not indexed`, `missing` or `unknown`.
+   */
+  health: string;
+  /**
+   * 0 for a directory that is not in the registry.
+   */
+  id: number;
+  indexed_at?: number | null;
+  name: string;
+  origin: string;
+  /**
+   * `~/...` under the home directory, `.../name` elsewhere, unless redaction is off.
+   */
+  root: string;
+}
+/**
+ * The state of the live calls panel at `now`.
  *
  * This interface was referenced by `WsProtocol`'s JSON-Schema
- * via the `definition` "GraphEvent".
+ * via the `definition` "CallsView".
  */
-export interface GraphEvent {
+export interface CallsView {
   /**
-   * Estimated tokens of the answer the caller received (end events).
+   * Newest first.
    */
-  answer_tokens: number | null;
+  feed: Finished[];
   /**
-   * `lsp`, `tags` or `text`: the backend that answered (end events).
+   * `[plugins.graph] live_heat_window_s`: how long a node stays warm on the live canvas.
    */
+  heat_window_s: number;
+  /**
+   * The server's clock in epoch milliseconds: the page ages rows by `now - at` on this clock,
+   * so a skew between the two machines moves nothing.
+   */
+  now: number;
+  running: Running[];
+  /**
+   * One per chip, in the order of [`WINDOWS`]; the last is "since start".
+   */
+  windows: WindowView[];
+}
+/**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "Finished".
+ */
+export interface Finished {
+  after: number;
+  at: number;
   backend: string | null;
+  before: number;
   call: string;
-  /**
-   * Scope members done and in total (progress and end events).
-   */
-  done: number | null;
+  caller: string;
   error: string | null;
-  files_touched: number | null;
-  id: number;
-  /**
-   * Elapsed milliseconds (end events).
-   */
+  interrupted: boolean;
   ms: number | null;
   ok: boolean;
-  phase: EventPhase;
   project: string | null;
-  projects_hit: number | null;
-  /**
-   * The call's `graph` measurement rows (end events); empty when the answer was not shortened.
-   */
-  samples: MeasurementSample[];
   session: string;
-  /**
-   * Symbols the call asked for (every event); `None` for a tool that takes none.
-   */
-  symbols: number | null;
-  /**
-   * What the answer returned, counted by the backends (end events of `symbol`, `callers` and
-   * `impact` by name): asked symbols it lists, distinct files of its rows, projects with a row.
-   */
-  symbols_returned: number | null;
   target: string | null;
   tool: string;
-  total: number | null;
-  ts_ms: number;
-}
-/**
- * One `measurements` row of the call, with the columns `rtok stats` sums. Copied from the
- * table at the call's end, so a page that adds these up gets the report's numbers.
- *
- * This interface was referenced by `WsProtocol`'s JSON-Schema
- * via the `definition` "MeasurementSample".
- */
-export interface MeasurementSample {
-  after_bytes: number;
-  before_bytes: number;
-  est_after: number;
-  est_before: number;
-  id: number;
-  kind: string;
-  /**
-   * Set when the row's answer was cut and archived: how a page tells a cap hit from an
-   * `explore` row that only stands for several smaller calls. Absent in rows written before T329.33.
-   */
-  ref_id: string | null;
 }
 /**
  * This interface was referenced by `WsProtocol`'s JSON-Schema
- * via the `definition` "CallSummary".
+ * via the `definition` "Running".
  */
-export interface CallSummary {
+export interface Running {
   /**
-   * Rows with a `ref_id`: answers cut at `max_tokens`.
+   * The reader's clock: the interrupt timeout must not depend on the writer's.
    */
+  at: number;
+  call: string;
+  /**
+   * T329.34: what the store calls the session (`claude 3f9a1c2e`), else the session's start.
+   */
+  caller: string;
+  project: string | null;
+  session: string;
+  target: string | null;
+  tool: string;
+}
+/**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "WindowView".
+ */
+export interface WindowView {
+  after: number;
+  backends: {
+    [k: string]: number;
+  };
+  before: number;
+  calls: number;
   caps: number;
-  /**
-   * Ended calls whose scope held more than one project.
-   */
   crossed: number;
-  ends: number;
-  est_after: number;
-  /**
-   * Sums of the `samples` of the end events: the `Measurement` columns `rtok stats` adds up.
-   */
-  est_before: number;
   failed: number;
-  /**
-   * `lsp_fallback` rows of the ended calls: each is one answer the tags index gave after the
-   * language server could not.
-   */
   fallbacks: number;
   files_touched: number;
+  label: string;
+  /**
+   * `None` before any call in the window has ended.
+   */
+  latency: Latency | null;
   projects_hit: number;
-  starts: number;
-  /**
-   * Symbols the ended calls asked for.
-   */
+  spark: Spark;
   symbols: number;
-  /**
-   * What the ended calls returned, counted by the graph backends (T329.36): asked symbols
-   * the answers list, distinct files per call and projects with a row per call.
-   */
   symbols_returned: number;
+  /**
+   * Most calls first.
+   */
+  tools: ToolView[];
+}
+/**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "Latency".
+ */
+export interface Latency {
+  p50: number;
+  p95: number;
+}
+/**
+ * Calls and tokens saved per slot over a window, oldest first. Summed from the same buckets as
+ * the window totals, so the slots add up to them.
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "Spark".
+ */
+export interface Spark {
+  calls: number[];
+  saved: number[];
+  /**
+   * What the slots cover. "since start" reads the buckets, which are kept for 15 minutes only.
+   */
+  span_ms: number;
+}
+/**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "ToolView".
+ */
+export interface ToolView {
+  calls: number;
+  saved: number;
+  tool: string;
 }
 /**
  * Everything a surface needs for one refresh. `Default` is the empty frame a surface
@@ -798,6 +1124,7 @@ export interface Snapshot {
    * when this tick's transcripts read failed.
    */
   stats: string | null;
+  tasks: TasksPage;
   type: string;
   usage: Overview;
   /**
@@ -1387,6 +1714,10 @@ export interface ProjectRow {
    */
   backend?: Capability | null;
   created_at: number;
+  /**
+   * Why the last re-index failed, while `state` is `failed` (T329.54).
+   */
+  error?: string | null;
   health: Score;
   id: number;
   index: ProjectIndex | null;
@@ -1539,6 +1870,76 @@ export interface SkillPageRow {
   source: string;
 }
 /**
+ * Tasks page (T441.13.7): the project's `rtok task list --all` as a board, through
+ * [`tasks::page`]. Read-only; the slow adapters are read off the tick.
+ */
+export interface TasksPage {
+  board: TaskBoard | null;
+  state: TasksState;
+  text: string;
+}
+/**
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "TaskBoard".
+ */
+export interface TaskBoard {
+  /**
+   * `disk`, `github` or `gitlab`.
+   */
+  adapter: string;
+  /**
+   * Finished tasks left off `tasks`.
+   */
+  hidden: number;
+  /**
+   * Every active task, and the newest [`FINISHED_SHOWN`] of each finished status, by id.
+   */
+  tasks: TaskCard[];
+}
+/**
+ * One task as the board draws it: the fields of `rtok task list --json` except the description,
+ * which can be pages long and has no place on a card (`rtok task show` has it).
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "TaskCard".
+ */
+export interface TaskCard {
+  assignee: string | null;
+  /**
+   * The tasks this one waits for (`task_dep`), shown as "needs".
+   */
+  blocked_by: string[];
+  conflicts_with: string[];
+  external: TaskLink | null;
+  id: string;
+  parallel: boolean;
+  parent: string | null;
+  /**
+   * `0` is highest. Unlike the CLI's JSON, the default is carried too: a card always has one.
+   */
+  priority: number;
+  status: TaskColumn;
+  title: string;
+  /**
+   * Unix seconds.
+   */
+  updated_at: number;
+}
+/**
+ * The issue a task lives in on GitHub or GitLab.
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "TaskLink".
+ */
+export interface TaskLink {
+  adapter: string;
+  number: number;
+  /**
+   * Always `http(s)`: an issue host's reply is untrusted, and the page turns this into a link.
+   */
+  url: string;
+}
+/**
  * Overview page: provider usage totals, CTT and the per-turn series.
  */
 export interface Overview {
@@ -1687,6 +2088,18 @@ export interface SkillsPage1 {
    */
   header: string;
   rows: SkillPageRow[];
+}
+/**
+ * The Tasks page. `text` is the `rtok task list` screen for the tui and the SPA's status line;
+ * `board` is the same rows as data for the SPA. Both come from one list.
+ *
+ * This interface was referenced by `WsProtocol`'s JSON-Schema
+ * via the `definition` "TasksPage".
+ */
+export interface TasksPage1 {
+  board: TaskBoard | null;
+  state: TasksState;
+  text: string;
 }
 /**
  * The Usage page: one [`usage::Report`] — the call `rtok agents usage` makes — read once and

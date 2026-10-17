@@ -54,9 +54,33 @@ describe("wsUrl", () => {
     expect([plain.protocol, plain.host, plain.pathname]).toEqual(["ws:", "h:1", "/ws"]);
     expect(wsUrl({ protocol: "https:", host: "h" })).toBe("wss://h/ws");
   });
+
+  test("carries the access token as a query parameter, encoded", () => {
+    expect(wsUrl({ protocol: "https:", host: "h" }, "a b")).toBe("wss://h/ws?token=a%20b");
+    expect(wsUrl({ protocol: "https:", host: "h" }, null)).toBe("wss://h/ws");
+  });
 });
 
 describe("parseFrame", () => {
+  test("keeps the request id a reply carries, and none on a push", () => {
+    const plan = { items: [], diff: "", refused: [], token: "t" };
+    expect(parseFrame(JSON.stringify({ req: 4, type: "doctorplan", plan }))).toEqual({
+      type: "doctorplan",
+      plan,
+      req: 4,
+    });
+    expect(parseFrame('{"req":9,"type":"message","text":"no"}')).toEqual({
+      type: "message",
+      text: "no",
+      req: 9,
+    });
+    expect(parseFrame('{"req":"x","type":"message","text":"no"}')).toEqual({
+      type: "message",
+      text: "no",
+    });
+    expect(parseFrame(JSON.stringify({ type: "doctorplan", plan }))).not.toHaveProperty("req");
+  });
+
   test("snapshot, snapshot failure, message and expand", () => {
     const snap = parseFrame(JSON.stringify(sampleSnapshot));
     expect(snap).toEqual({ type: "snapshot", snapshot: sampleSnapshot });
@@ -64,16 +88,22 @@ describe("parseFrame", () => {
       type: "snapshot_error",
       error: "boom",
     });
-    const plan = { items: [], diff: "", refused: [] };
+    const plan = { items: [], diff: "", refused: [], token: "t1" };
     expect(parseFrame(JSON.stringify({ type: "doctorplan", plan }))).toEqual({
       type: "doctorplan",
       plan,
     });
-    const fixed = { text: "ok", code: 0 };
+    const fixed = { text: "ok", code: 0, replan: null };
     expect(parseFrame(JSON.stringify({ type: "doctorfixed", fixed }))).toEqual({
       type: "doctorfixed",
       fixed,
     });
+    expect(parseFrame('{"type":"projectplan","project":"2","plan":"would remove /x\\n"}')).toEqual({
+      type: "projectplan",
+      project: "2",
+      plan: "would remove /x\n",
+    });
+    expect(parseFrame('{"type":"projectplan","project":2,"plan":"x"}')).toBeNull();
     expect(parseFrame('{"type":"doctorplan","plan":null}')).toBeNull();
     expect(parseFrame('{"type":"doctorfixed","fixed":{"text":"x"}}')).toBeNull();
     expect(parseFrame('{"type":"message","text":"refused key x"}')).toEqual({
@@ -87,16 +117,11 @@ describe("parseFrame", () => {
     });
   });
 
-  test("call events keep their batch and refuse a frame without one", () => {
-    const batch = {
-      events: [],
-      omitted: 0,
-      summary: { starts: 0, ends: 0, failed: 0, est_before: 0, est_after: 0 },
-      head: 7,
-    };
-    expect(parseFrame(JSON.stringify({ type: "calls", batch }))).toEqual({ type: "calls", batch });
+  test("a calls frame keeps its view and refuses a frame without one", () => {
+    const calls = { now: 7, running: [], feed: [], windows: [] };
+    expect(parseFrame(JSON.stringify({ type: "calls", calls }))).toEqual({ type: "calls", calls });
     expect(parseFrame('{"type":"calls"}')).toBeNull();
-    expect(parseFrame('{"type":"calls","batch":{"events":[]}}')).toBeNull();
+    expect(parseFrame('{"type":"calls","calls":{"feed":[]}}')).toBeNull();
   });
 
   test("a diff frame carries the project it answers and its project reports", () => {
@@ -106,6 +131,17 @@ describe("parseFrame", () => {
     expect(parseFrame('{"type":"diff","project":3,"diff":{"projects":[]}}')).toBeNull();
     expect(parseFrame('{"type":"diff","project":"3","diff":{}}')).toBeNull();
     expect(parseFrame('{"type":"diff","project":"3","diff":null}')).toBeNull();
+  });
+
+  test("an export frame needs the file's name, type and data; an imported one the parsed lists", () => {
+    const file = { name: "a.json", mime: "application/json", data: "e30=" };
+    expect(parseFrame(JSON.stringify({ type: "export", file }))).toEqual({ type: "export", file });
+    expect(parseFrame('{"type":"export","file":{"name":"a.json","mime":"x"}}')).toBeNull();
+    const doc = { schema: "rtok.graph.v1", projects: [], nodes: [] };
+    const imported = { type: "imported", name: "a.json", export: doc };
+    expect(parseFrame(JSON.stringify(imported))).toEqual(imported);
+    expect(parseFrame('{"type":"imported","name":"a.json","export":{"nodes":[]}}')).toBeNull();
+    expect(parseFrame('{"type":"imported","export":{"projects":[],"nodes":[]}}')).toBeNull();
   });
 
   test("a graph frame needs its project and both lists", () => {

@@ -9,7 +9,7 @@
 **Invariants**
 - Passthrough is byte-exact: the T5.1 test compares response bytes against a mock upstream.
 - Added latency < 20 ms per request (definition of done #4). Do not buffer SSE streams.
-- Never modify `system` or the last 2 turns. `tools[]` stays byte-identical unless `[proxy.tools_rewrite]` is on (T59.5): then descriptions truncate at a sentence boundary and allow/deny drop names; `input_schema` is never touched; a dropped tool's later call is still forwarded.
+- Never modify `system` or the last 2 turns. `tools[]` stays byte-identical unless `[proxy.tools_rewrite]` is on (T59.5): then descriptions truncate at a sentence boundary and allow/deny drop names; a dropped tool's later call is still forwarded. `input_schema` / `parameters` is untouched unless `compact_schema` is on (T686, creator decision 2026-10-16): then only the `description` (first sentence), `default` (the type's zero value) and `examples` (repeating `default` or `enum`) strings inside it shrink, found by schema keyword so a property named `description` is safe; tool names, property names, `type`, `required` and `enum` values stay byte-identical, and enums are never compacted. Any change archives the original `tools[]` and records the id in `Measurement.ref_id` (`expand <id>`).
 - Every request inserts one `usage` row with all four counters; session id comes from
   `metadata.user_id` or a header, else a request hash.
 - Bind `127.0.0.1` only.
@@ -25,8 +25,10 @@
   parsing are **planned** under `[proxy.batch]`.
 - Flex is OpenAI `service_tier` on sync Chat/Responses wires — inject/override in `prepare`
   (**planned**, `[proxy.flex]`), not a separate HTTP API.
-- Model routing (D9) and sticky upstream for prompt-cache affinity (I-84) are **planned**
-  under `[proxy.routing]`; hooks/MCP never see this traffic.
+- Model routing (D9, T385.10) swaps `model` for `internal` and `bulk` calls only
+  (`src/proxy/route.rs`, `Lane::route`), opt-in per lane rule with a named quality `gate` (I-101);
+  the `agent` lane is never routed. Sticky upstream (I-84) is still **planned**. Hooks/MCP never
+  see this traffic.
 - Extension points: new `Wire` / path matchers in `src/proxy/` for Batch observe; `prepare`
-  for Flex; routing policy beside `shape_request`. Do not teach hooks or MCP about LLM HTTP.
+  for Flex; routing rules in `src/proxy/route.rs`, applied first in `shape_request`. Do not teach hooks or MCP about LLM HTTP.
 

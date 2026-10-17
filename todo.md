@@ -1,71 +1,49 @@
 - T124. Realized `tools_rewrite` saving as a dated `research.md` row
 
 - T131. Measure the spawn brief: cost row and on/off re-read share
-- T132. Ship a Haiku scout agent definition with the Claude Code plugin
-- T134. Probe: does a CLI command hook's `PostToolUse` `updatedToolOutput` replace native tool output?
 
 - T156. Probe: `WorktreeCreate`/`WorktreeRemove` hooks and reflink-seeded `target/`
-- T262.3. Codex: spawn brief on `SubagentStart`
 - T261. CI takes ~9.5 min on macOS; the webui check recompiles 183 crates every run
 - T275. Install/update removes rtok's MCP entry from an agent's config while a plugin serves MCP (every host)
 - T275.1. `rtok mcp ping <agent>`: prove the agent's rtok MCP server is alive and answering
 - T276. Spinner audit: every place rtok runs an external command and the user waits for its output
+- T276.3. Shared agent helpers on `ProgressRunner`: `run_cli`, `spawn_cli`, `app_version`, doctor MCP probe
+- T276.6. Retire the point indicators, turn on the `Command::new` ban, docs and changelog
 - T277. Move rtok's MCP core into its own crate `crates/rtok-mcp`
 - T278. `rtok agents info <agent>` reports the real MCP state, not "mcp installed" by assumption
 - T279. One plugin version scheme for every install source (GitHub, local, marketplace), and `agents update` that skips an up-to-date plugin
 - T281. Probe: tie a host session's hooks and its rtok MCP server to one agent
-- T283. An agent learns its own rtok agent id
 - T289. Worktrees the host creates join rtok: `rtok worktree adopt` and the post-create hooks
-- T289.3. Post-create scripts: `rtok agents install <host> --project` for Cursor, Kilo and Devin/Windsurf
-- T329. Graph page: project selector, auto-added projects and linked projects (epic)
-- T329.15. Graph page: two-part UI with the read-only live graph and live metrics
-- T329.32. Graph page: live canvas extras (maximise, collapsed strip, labels, count-up, sparklines, scope marks)
-- T500. TUI: live calls extras (sparklines, outside-scope mark, folded-target counter)
-- T329.34. Graph page: caller names, store-wide totals and `live_*` config keys
-- T329.31. Graph export: SVG, PNG and the page's Export menu and import view
 - T356. Never index `$HOME` or `/` as a graph root
 - T369.1. Measure grep_symbol follow-up rate after an opt-in window
 - T370. SessionStart repo map ranked by file-level personalized PageRank
-- T372. Link tests to sources by naming convention in `affected_from_paths`
-- T373. `rrf_merge` breaks score ties by note id
-- T378. Trigram prefilter for `search` (only if I-95 shows p95 > 200 ms)
 - T385. Proxy lanes and the optimization plan from `docs/research/optimization.md`
 - T385.3. Defaults bench: `compress` mode, context editing, skills, `live_blobs`
 - T385.9. P28 Phase 2: async compressor on the `internal` lane
-- T385.10. Routing for `internal` and `bulk` calls
-- T385.11. Deferred tool schemas and thinking replay
-- T385.12.2. Flex tier on `calls` and the lane/tier breakdown in `stats` and `report`
+- T385.9.3. Gate P28 live bench for the compressor
 - T394. Run the paid live benches and record them
 - T395. One real session as one OpenTelemetry trace in SigNoz and Maple
 - T396. Verify the usage readers against real files
 - T398. Probe editors on a `worktree.useRelativePaths` worktree
-- T404. Evaluate a local draft model that the cloud model only verifies
 - T413. More agent hosts: popular agents rtok does not install into yet
-- T413.1. `rtok agents install roo` — Roo Code
-- T413.2. `rtok agents install qwen` — Qwen Code
-- T413.3. `rtok agents install droid` — Factory Droid
-- T413.4. `rtok agents install kiro` — Kiro IDE and CLI
-- T413.5. `rtok agents install amp` — Amp
-- T413.6. `rtok agents install goose` — Goose
-- T413.7. `rtok agents install continue` — Continue
-- T413.8. `rtok agents install augment` — Augment Code and Auggie CLI
-- T413.9. `rtok agents install junie` — JetBrains Junie
-- T413.10. `rtok agents install amazonq` — Amazon Q Developer CLI
-- T413.11. `rtok agents install crush` — Crush
-- T413.12. `rtok agents install warp` — Warp
 - T413.13. `rtok agents install trae` — Trae
-- T413.14. `rtok agents install openhands` — OpenHands
-- T413.15. `rtok agents install reasonix` — DeepSeek Reasonix
 - T414. Web dashboard restyle on the brand pack, built from `brand/` sources
 - T414.7. Re-shoot `web/screenshots/`; close the web admin gap in `brand/`
 - T416. Shared `change-preview` crate for dry-run output
-- T416.1. rtok renders previews through `change-preview`
-- T416.2. Deletion commands: `--dry-run`, `--stat`, sizes and file counts
-- T416.3. `--stat` on the commands that show a diff
-- T416.4. `--dry-run` for the destructive commands without a preview
 - T428. SessionStart hook back under the 10 ms budget
-- T436.3. Shared operation-icon crate for rtok and ketch
 - T436.4. Spinner on `agents install/update` through T276's `ProgressRunner`
-- T441. Task adapters: agents create and track tasks through rtok, stored on disk, in GitHub or in GitLab (epic)
-- T477. TUI: re-index and remove projects (counterpart of the web actions)
-- T484. Web live panel reads the server's calls totals
+- T522. `read` and `expand` accept the line ranges agents sent this week
+- T523. `worktree add` takes `T504 read-hook-same-path` as an id plus a slug
+- T524. Worktree `--idle` accepts `30m` and `0s`
+- T525. SubagentStart and PreCompact under the 10 ms hook budget
+- T526. `worktree_list` and `search` when `rtok mcp` was started in the home directory
+- T527. A worktree claim does not stay held by an agent idle for days
+- T652. Refuse to replace an unreadable MCP host config
+- T653. Exclude semantic-cache hits from provider-billed OTel usage
+- T654. Re-read graph files after an unreadable index attempt
+- T655. Make compressor in-flight admission atomic
+- T656. Keep worktrees and caches when their age cannot be established
+- T657. Match compressor credentials to the internal provider
+- T651. Honor ProgressRunner timeouts with inherited output
+- T666.2. Provider-backed memory extractor (blocked on the creator)
+- T687. Hooks: PreToolUse/PostToolUse p50 to 10 ms

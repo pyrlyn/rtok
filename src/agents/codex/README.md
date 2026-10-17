@@ -2,7 +2,7 @@
 
 `rtok agents install codex` — the Codex CLI (`codex`).
 
-Files: `~/.codex/config.toml` (MCP / proxy) and `~/.codex/hooks.json` (`PreCompact` / `PostCompact`).
+Files: `~/.codex/config.toml` (MCP / proxy) and `~/.codex/hooks.json` (the `codex` rows of `hook_events`: `PreToolUse` on Bash and `apply_patch`, `PostToolUse`, `PreCompact`, `PostCompact`, `SubagentStart`; T645, T262.3).
 
 Headless ping (`rtok mcp ping codex`): `codex exec "<prompt>"`. `codex exec` runs
 non-interactively (https://developers.openai.com/codex/cli/reference, checked 2026-09-27).
@@ -29,6 +29,6 @@ Host documentation setup writes against; re-check the links when this host chang
 
 - Config reference (`~/.codex/config.toml`: `mcp_servers.<id>.command` / `args`, `model_providers.<id>.base_url`, top-level `model_provider`): https://learn.chatgpt.com/docs/config-file/config-reference
 - MCP (`[mcp_servers.<name>]` example): https://learn.chatgpt.com/docs/extend/mcp
-- Hooks (`hooks.json` / `[hooks]`: `PreCompact`, `PostCompact`, `transcript_path`): https://developers.openai.com/codex/hooks
+- Hooks (`hooks.json` / `[hooks]`: `PreToolUse`, `PostToolUse`, `PreCompact`, `PostCompact`, `SubagentStart`, `transcript_path`): https://developers.openai.com/codex/hooks
 - Skills (`~/.codex/skills/<name>/`): https://agentskills.io
 - Non-interactive prompt (`codex exec "<prompt>"`; `rtok mcp ping codex`): https://developers.openai.com/codex/cli/reference

@@ -20,9 +20,11 @@ pub use crate::agent_view::{AgentState, AgentView, SessionView};
 /// `<checkout dir>[/<path inside it>]` for `cwd`; `cwd` itself outside any checkout.
 pub fn worktree_label(cwd: &str) -> String {
     let path = Path::new(cwd);
-    let Some(root) = path.ancestors().find(|a| a.join(".git").exists()) else {
+    // `checkout`: the label names the directory the agent works in, a worktree included.
+    let Some(root) = rtok_config::root::ProjectRoot::find(path).map(|r| r.checkout) else {
         return cwd.to_string();
     };
+    let root = root.as_path();
     let name = root.file_name().map_or_else(
         || root.display().to_string(),
         |n| n.to_string_lossy().into(),
@@ -213,6 +215,18 @@ pub fn set_status(cfg: &Config, agent_id: Option<&str>, text: &str) -> Result<Op
 mod tests {
     use super::*;
 
+    #[test]
+    fn worktree_label_names_the_linked_worktree_not_the_main_checkout() {
+        let dir = crate::testutil::tmp_dir("t660-label");
+        let (main, wt) = crate::testutil::worktree_layout(&dir);
+        std::fs::create_dir_all(wt.join("src")).unwrap();
+        let label = |p: &Path| worktree_label(&p.to_string_lossy());
+        assert_eq!(label(&wt.join("src")), "repo-t1/src");
+        assert_eq!(label(&wt), "repo-t1");
+        assert_eq!(label(&main), "repo");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     fn row(
         id: &str,
         parent: Option<&str>,
@@ -290,6 +304,46 @@ mod tests {
             Some("/repo"),
             "no claim keeps the cwd label"
         );
+    }
+
+    /// T613: a session whose first observed event was a sub-agent's still shows its real main
+    /// agent, with the sub-agent nested under it and hidden once it ended.
+    #[test]
+    fn a_session_seen_first_through_a_sub_agent_keeps_its_main_agent() {
+        let store = Store::open_in_memory().unwrap();
+        let claude = store.host_id("claude").unwrap().unwrap();
+        let sub = store
+            .register_agent(claude, "s1", Some("sub"), Some("/repo"), Some("Bash: ls"))
+            .unwrap();
+        let main = store
+            .register_agent(claude, "s1", None, Some("/repo"), None)
+            .unwrap();
+        let rows = store.agents_of_sessions(&["s1".to_string()]).unwrap();
+        let live = session_views(
+            vec![session("s1", None)],
+            &rows,
+            i64::MAX - 1,
+            i64::MAX / 2,
+            true,
+        );
+        let agent = live[0].agent.as_ref().expect("session agent");
+        assert_eq!(agent.detail.id, main, "the main row represents the session");
+        let subs: Vec<_> = agent
+            .sub_agents
+            .iter()
+            .map(|s| s.detail.id.as_str())
+            .collect();
+        assert_eq!(subs, [sub.as_str()]);
+
+        store.end_agent(&sub, 5).unwrap();
+        let rows = store.agents_of_sessions(&["s1".to_string()]).unwrap();
+        let hidden = session_views(vec![session("s1", None)], &rows, 100, 600, false);
+        let agent = hidden[0].agent.as_ref().unwrap();
+        assert_eq!(
+            agent.detail.id, main,
+            "an ended orphan cannot hide the session"
+        );
+        assert!(agent.sub_agents.is_empty());
     }
 
     #[test]

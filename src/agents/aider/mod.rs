@@ -33,17 +33,7 @@ static VARIANTS: [Variant; 1] = [Variant {
 }];
 
 impl Agent for Aider {
-    fn id(&self) -> &'static str {
-        "aider"
-    }
-
-    fn variants(&self) -> &'static [Variant] {
-        &VARIANTS
-    }
-
-    fn readme(&self) -> &'static str {
-        include_str!("README.md")
-    }
+    super::agent_identity!("aider");
 
     fn support(&self, _kind: Kind, module: &str) -> Support {
         match module {
@@ -147,20 +137,7 @@ fn unquote(value: &str) -> &str {
 /// True when `value` is the proxy URL setup wrote: exactly it, or a loopback URL on
 /// our port (so `list` still reads back an install after `--port` moved it there).
 fn is_ours_value(value: &str, url: &str, port: u16) -> bool {
-    if value == url {
-        return true;
-    }
-    let loopback = value.contains("127.0.0.1") || value.contains("localhost");
-    loopback && port_at(value, port)
-}
-
-/// `:{port}` followed by a non-digit or the end, so `:8790` never matches `:87901`.
-fn port_at(value: &str, port: u16) -> bool {
-    let needle = format!(":{port}");
-    value
-        .split(&needle)
-        .skip(1)
-        .any(|rest| rest.chars().next().is_none_or(|c| !c.is_ascii_digit()))
+    value == url || super::loopback_port(value) == Some(port)
 }
 
 /// The current `openai-api-base` value when it points at this proxy.
@@ -329,6 +306,46 @@ mod tests {
         assert!(!gone.contains("openai-api-base:"), "{gone}");
         assert!(gone.contains("# mine"), "comments survive: {gone}");
         assert!(Aider.installed(&c, Kind::Cli).is_empty());
+        let _ = fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    /// T626: ownership is the URL's authority, never loopback-looking text elsewhere in it.
+    #[test]
+    fn ownership_reads_the_authority_not_substrings() {
+        let (c, path) = cfg("authority", false);
+        let url = super::super::openai_proxy_url(&c);
+        let ours = |v: &str| is_ours_value(v, &url, c.proxy.port);
+        for v in [
+            "https://api.example/localhost:8790/v1",
+            "https://api.example/v1?base=http://127.0.0.1:8790",
+            "https://localhost:8790@api.example/v1",
+            "https://127.0.0.1:8790@api.example",
+            "https://localhost.example:8790/v1",
+            "http://127.0.0.1:87901/v1",
+            "http://127.0.0.1:879/v1",
+            "ftp://127.0.0.1:8790/v1",
+            "localhost:8790",
+            "not a url localhost:8790",
+        ] {
+            assert!(!ours(v), "{v} is foreign");
+            let raw = format!("model: x\nopenai-api-base: {v}\n");
+            assert_eq!(strip_ours(&raw, &url, c.proxy.port).1, NO_CHANGES, "{v}");
+            fs::write(&path, &raw).unwrap();
+            assert_eq!(run(&c, true).unwrap(), NO_CHANGES, "{v}");
+            assert_eq!(fs::read_to_string(&path).unwrap(), raw, "{v}");
+            assert!(Aider.installed(&c, Kind::Cli).is_empty(), "{v}");
+        }
+        for v in [
+            "http://localhost:8790/v1",
+            "https://127.0.0.1:8790",
+            "http://[::1]:8790/v1",
+            "\"http://LOCALHOST:8790/v1\"",
+        ] {
+            let raw = format!("model: x\nopenai-api-base: {v}\n");
+            assert_eq!(strip_ours(&raw, &url, c.proxy.port).0, "model: x\n", "{v}");
+            fs::write(&path, &raw).unwrap();
+            assert_eq!(Aider.installed(&c, Kind::Cli), ["proxy"], "{v}");
+        }
         let _ = fs::remove_dir_all(path.parent().unwrap());
     }
 

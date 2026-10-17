@@ -166,9 +166,7 @@ pub fn resolve(store: &Store, who: &Caller, env: impl Fn(&str) -> Option<String>
     if let Some(cwd) = who.cwd {
         // One directory has many spellings (`/var` vs `/private/var`, `RUNNER~1`, `\\?\`); a
         // path that no longer resolves still matches only itself.
-        let canon = |p: &str| dunce::canonicalize(p).ok();
-        let here = canon(cwd);
-        let same = |p: &str| p == cwd || (here.is_some() && canon(p) == here);
+        let same = |p: &str| crate::fs::same_dir(p, cwd);
         let mut ids: Vec<String> = live
             .into_iter()
             .filter(|a| a.cwd.as_deref().is_some_and(same))

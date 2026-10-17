@@ -61,17 +61,7 @@ static VARIANTS: [Variant; 2] = [
 ];
 
 impl Agent for Vscode {
-    fn id(&self) -> &'static str {
-        "vscode"
-    }
-
-    fn variants(&self) -> &'static [Variant] {
-        &VARIANTS
-    }
-
-    fn readme(&self) -> &'static str {
-        include_str!("README.md")
-    }
+    super::agent_identity!("vscode");
 
     fn shared(&self) -> bool {
         true

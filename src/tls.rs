@@ -58,6 +58,28 @@ fn store_with(extra: Option<&Path>) -> Result<rustls::RootCertStore> {
     Ok(roots)
 }
 
+/// TCP connect deadline; the caller's timeout bounds reads only.
+const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// The HTTPS client for upstream calls (the proxy's lanes, the P28 compressor). A *read*
+/// timeout, not `Client::timeout`: the latter is a deadline on the whole exchange, body stream
+/// included, so a turn that streams for longer than the budget (extended thinking, many tool
+/// calls) was cut mid-SSE with the client left without a `message_stop`. The budget bounds one
+/// read instead.
+pub fn client(timeout_s: u64) -> Result<reqwest::Client> {
+    // Connecting is not streaming: a black-holed upstream used to hold the client for the
+    // whole read budget (10 minutes by default) before it saw a 502.
+    reqwest::Client::builder()
+        .connect_timeout(CONNECT_TIMEOUT)
+        .read_timeout(std::time::Duration::from_secs(timeout_s.max(1)))
+        // T53.3: webpki roots instead of reqwest's platform verifier (Security.framework
+        // costs ~1.3–1.5 ms of dyld time per hook spawn); corporate CAs arrive via
+        // `SSL_CERT_FILE`.
+        .use_preconfigured_tls(preconfigured()?)
+        .build()
+        .context("reqwest client")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

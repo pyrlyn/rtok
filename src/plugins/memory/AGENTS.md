@@ -35,6 +35,10 @@ if split out per T2.5.
   session read (`read_cache`) or the prompt names (RRF); any error there leaves the text hits.
   Text hits are FTS, or RRF of FTS and vectors already stored when `embed.enabled && embed.hybrid`
   (`search_notes_hybrid_stored`, T454); the hook does not call `embed_stale`.
+  `embed.provider = "http"` (T668, `src/store/http_embed.rs`) swaps the hash embedder for an
+  OpenAI-compatible `/embeddings` endpoint (`url`, `api_key_env`, `max_chars`). Any failure
+  returns the plain FTS search; with a remote set the hook reads FTS only (no network on the
+  hook path); remote vectors live under their own model key. Needs `embed.enabled = true`.
   A file the prompt names (T452) also recalls up to 2 of its notes the text missed, taking slots
   from the same `prompt_recall` budget; a read file only re-ranks text hits (I-115 is the wider
   variant, off until a `Measurement` shows a saving).
@@ -54,7 +58,8 @@ if split out per T2.5.
 - Search returns the right note first for the T6.1 fixture (three notes, one obvious match).
 - A `PostToolUse` stores one mechanical observation (`observe.rs`): type, title, scrubbed
   narrative ≤ 400 characters, and existing root-relative files. The raw tool output is not
-  copied. A repeat of the same session, tool and narrative within 5 seconds inserts nothing.
+  copied. A repeat of the same session, tool and narrative within 5 seconds inserts nothing,
+  and neither does the same hook call (`<event>:<tool_use_id>`) delivered again at any time.
   `mem_*` tools are not observed. `mem_get` with `obs` returns that narrative.
 - `notes.uses` / `last_used` move on `mem_get` and on a prompt-recall injection. Recall order
   is pinned, then retention score, then newest id. A low score is never a delete.

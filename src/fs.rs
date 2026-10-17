@@ -10,36 +10,27 @@
 //! Crate level, not inside the `read` plugin: `plugin.rs` attributes every session through
 //! [`crate::project`] whatever features are compiled in (T154).
 
-use std::path::{Component, Path, PathBuf};
+#[cfg(feature = "read")]
+use std::path::Component;
+use std::path::Path;
+#[cfg(any(feature = "read", test))]
+use std::path::PathBuf;
 
-/// Read bytes as UTF-8 text and canonicalize (follow symlinks when the backend supports them).
-pub trait ReadFs {
-    fn read_to_string(&self, path: &Path) -> std::io::Result<String>;
-    /// Canonical path when the entry exists; `None` if missing (caller keeps the lexical abs).
-    fn canonicalize(&self, path: &Path) -> Option<PathBuf>;
-}
+// The trait and the host backend live in `rtok-config` beside `ProjectRoot::find`, the lowest
+// crate that walks the filesystem this way; `Vfs` implements the trait below.
+pub use rtok_config::root::{HostFs, ReadFs};
 
-/// Host disk backend for production `read` / `resolve`.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct HostFs;
-
-impl ReadFs for HostFs {
-    fn read_to_string(&self, path: &Path) -> std::io::Result<String> {
-        std::fs::read_to_string(path)
-    }
-
-    fn canonicalize(&self, path: &Path) -> Option<PathBuf> {
-        dunce::canonicalize(path).ok()
-    }
-}
-
-/// Lexical join of `path` onto `root` (`..` pops, `.` drops) — no disk access, so a missing
-/// path still normalises. `read` resolves with it; `project` follows `gitdir:` / `commondir`.
-///
-/// Deliberately NOT clamped: `project` legitimately climbs above `root` (a linked
-/// worktree's `gitdir: ../../main/.git/...`). Confinement lives at the boundary —
+/// Lexical join of `path` onto `root`; not clamped, so confinement stays at the boundary —
 /// `read::resolve_with` rejects anything outside the allow-roots via `under()`.
-pub(crate) fn normalize(root: &Path, path: &Path) -> PathBuf {
+pub(crate) use fs_kit::path::normalize;
+
+/// [`normalize`] with the filesystem's meaning of `..`: before a parent segment pops, the
+/// prefix built so far is replaced by its canonical path when it exists, so `link/../x` names
+/// the parent of the link's target, as a native lookup does (T590). A prefix that does not
+/// exist yet pops lexically, so a missing path still normalises. Not in `fs_kit`: the lookup
+/// goes through [`ReadFs`] so tests run on the in-memory filesystem.
+#[cfg(feature = "read")]
+pub(crate) fn normalize_following(fs: &impl ReadFs, root: &Path, path: &Path) -> PathBuf {
     let mut out = if path.is_absolute() {
         PathBuf::new()
     } else {
@@ -47,12 +38,15 @@ pub(crate) fn normalize(root: &Path, path: &Path) -> PathBuf {
     };
     for c in path.components() {
         match c {
-            // Push, do not replace: on Windows `C:\foo` is Prefix("C:") then
-            // RootDir — replacing wiped the drive and confined to `\foo`.
+            // Push, do not replace: on Windows `C:\foo` is Prefix("C:") then RootDir, and
+            // replacing wiped the drive.
             Component::RootDir => out.push(Component::RootDir.as_os_str()),
             Component::Prefix(p) => out = PathBuf::from(p.as_os_str()),
             Component::CurDir => {}
             Component::ParentDir => {
+                if let Some(real) = fs.canonicalize(&out) {
+                    out = real;
+                }
                 out.pop();
             }
             Component::Normal(s) => out.push(s),
@@ -63,7 +57,51 @@ pub(crate) fn normalize(root: &Path, path: &Path) -> PathBuf {
 
 // Path identity lives in `rtok-store` so the store and the host share one definition
 // (Windows case, `\\?\`). Re-exported here at the old paths.
-pub(crate) use rtok_store::{canon, is_unwalkable_root, path_starts_with, same_path, strip_prefix};
+pub(crate) use rtok_store::{
+    canon, is_unwalkable_root, path_ends_with, path_starts_with, same_path, strip_prefix,
+};
+
+/// Whether `dir` is a linked git worktree: its `.git` is a file whose admin dir names a main
+/// checkout. Walks of a project skip such a directory below their root, since
+/// `.rtok/worktrees/*` lives inside the main checkout and ignore rules may not name it.
+/// Submodules (a `.git` file with no `commondir`) and nested clones (a `.git` directory) are
+/// part of the project's files and stay walked. The `.git` stat comes first so an ordinary
+/// directory costs one syscall.
+pub fn is_linked_worktree(dir: &Path) -> bool {
+    std::fs::symlink_metadata(dir.join(".git")).is_ok_and(|m| m.is_file())
+        && rtok_config::root::ProjectRoot::find(dir)
+            .is_some_and(|p| p.checkout == dir && p.main != dir)
+}
+
+/// Whether `path` lies in, or is, a linked worktree nested below `root` (see
+/// [`is_linked_worktree`]). `root` itself never counts, though it may be a worktree.
+pub fn under_linked_worktree(root: &Path, path: &Path) -> bool {
+    let Ok(rel) = path.strip_prefix(root) else {
+        return false;
+    };
+    let mut dir = root.to_path_buf();
+    rel.components().any(|c| {
+        dir.push(c);
+        is_linked_worktree(&dir)
+    })
+}
+
+/// Two spellings of one tool-call path: equal, or one is the other's trailing components
+/// (`src/main.rs` vs `/repo/src/main.rs`, whole components only), with Windows case folding
+/// from the shared helpers. Blank paths match nothing.
+pub(crate) fn same_spelling(a: &str, b: &str) -> bool {
+    let (a, b) = (Path::new(a.trim()), Path::new(b.trim()));
+    if a.as_os_str().is_empty() || b.as_os_str().is_empty() {
+        return false;
+    }
+    same_path(a, b) || path_ends_with(a, b) || path_ends_with(b, a)
+}
+
+/// Whether two spellings name one directory (`/var` vs `/private/var`, `RUNNER~1`, `\\?\`). A
+/// path that no longer resolves matches only itself, so an ended session's row never links.
+pub(crate) fn same_dir(a: &str, b: &str) -> bool {
+    fs_kit::path::same_file(Path::new(a), Path::new(b))
+}
 
 /// Forward-slash Vfs key from a [`Path`] (Windows separators normalized).
 #[cfg(test)]

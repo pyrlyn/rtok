@@ -63,3 +63,26 @@ Absolute paths, the home directory and the user name are redacted unless `--no-r
 redacts); source text is never included, file and symbol names are. A call whose name has more than eight definitions
 draws no edge. `--from FILE` shows a saved export without reading or writing the
 registry or the index.
+
+### Pictures
+
+`rtok graph export --format svg` draws the same export as a picture, and `--format png` rasterises that picture
+(`-o FILE` is required, `--scale 1` to `4` is the multiple of the SVG size). The picture is a function of the export
+alone, so `--from FILE` draws a saved export exactly as the live scope. Projects are panels, symbols are dots on a
+spiral (the best connected in the middle; circle: function, square: type, diamond: module), a solid arrow is a call
+within a project, a dashed one a call across projects, and a thick line a project link. At most 200 nodes are drawn;
+the footer says how many are hidden, and the JSON always has all of them. The footer also names each project with its
+backend and `indexed_at`, the scope, the rtok version, the export time and, when a project could not answer, a
+PARTIAL marker. A PNG needs a font installed on the machine; without one the command says so instead of drawing no
+text. MCP `graph_export` stays JSON.
+
+### On the Graph page
+
+The Graph page has an Export button and a file picker, "open an export". The button opens a panel that says the
+file contains file names and symbol names (never source text) and that the home directory, the user name and
+absolute paths are replaced, then offers the overview, the open project's symbol graph and, with a function in focus,
+the subgraph around it, as JSON, SVG or PNG. The server writes the file with the function `rtok graph export` calls,
+so the JSON is the CLI's, byte for byte but for `exported_at`; the page only saves it. An image of the live frame is
+not part of this menu. The picker sends a saved JSON export as text to the server, which checks it like
+`export::read` and returns it: the page shows it read-only under "viewing export from FILE" and writes nothing to
+the registry or the index. `rtok tui` gets the same actions in T329.41.

@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
-//! The Graph page's registry keys (T476, D27): select a project, link or unlink a pair. The
-//! write is the web page's — [`crate::web::project_write`] over `graph projects` — so the two
-//! surfaces and the CLI cannot disagree about what it does; this module is the keys, the target
-//! picker and the plan the user confirms. Nothing is written before `y`.
+//! The Graph page's registry keys (T476, D27): select a project, link or unlink a pair, and
+//! (T477) re-index or remove one. The write is the web page's — [`crate::web::project_write`]
+//! over `graph projects` — so the two surfaces and the CLI cannot disagree about what it does;
+//! this module is the keys, the target picker and the plan the user confirms. Nothing that
+//! changes the registry is written before `y`; a re-index changes only the index, so it starts
+//! at once and its progress is the status line.
 
 use crossterm::event::KeyCode;
 
@@ -20,6 +22,9 @@ pub(super) struct Entry {
     pub selected: bool,
     pub missing: bool,
     pub state: &'static str,
+    /// The index job's key: the tracker is keyed by root (T329.54).
+    #[cfg(feature = "graph")]
+    pub root: String,
     pub links: Vec<(i32, String)>,
     /// The server's score, painted as it came (T481); with `graph` off there are no rows.
     #[cfg(feature = "graph")]
@@ -40,6 +45,7 @@ pub(super) fn entries(snapshot: &Snapshot) -> Vec<Entry> {
             selected: p.selected,
             missing: p.missing,
             state: p.state,
+            root: p.root.clone(),
             links: p.links.iter().map(|l| (l.to, l.name.clone())).collect(),
             health: p.health.clone(),
             scope_health: p.scope_health,
@@ -90,6 +96,10 @@ pub(super) enum Key {
     Handled,
     /// The user confirmed: write this, then report the plan's outcome.
     Write(ProjectRequest, String),
+    /// Open the one-project view on this registry row, or close it when it is already open.
+    Drill(i32, String),
+    /// A remove was asked for: fetch its dry run for this project, then show it for `y`.
+    Plan(i32),
 }
 
 #[derive(Default)]
@@ -97,6 +107,8 @@ pub(super) struct ProjectsState {
     cursor: usize,
     stage: Stage,
     status: String,
+    /// Projects whose re-index this page started and has not yet reported on.
+    watching: Vec<i32>,
 }
 
 /// Where a link from `from` can go (not itself, not missing, not already linked) or, for an
@@ -138,6 +150,54 @@ impl ProjectsState {
     pub(super) fn set_status(&mut self, status: String) {
         self.status = status;
     }
+
+    /// A re-index of `id` was started on its worker: the status line follows it until
+    /// [`Self::settle`] sees it end.
+    pub(super) fn watch(&mut self, id: i32, all: &[Entry]) {
+        if let Some(e) = all.iter().find(|e| e.id == id) {
+            self.status = format!("indexing {}…", e.name);
+            self.watching.push(id);
+        }
+    }
+
+    /// The dry run of a remove came back: show it and wait for `y`.
+    pub(super) fn confirm_remove(&mut self, id: i32, dry_run: &str) {
+        let plan = dry_run.trim().lines().collect::<Vec<_>>().join("; ");
+        self.stage = Stage::Confirm {
+            req: ProjectRequest::Remove {
+                project: id.to_string(),
+                confirmed: true,
+            },
+            plan: format!("{plan}; y removes it, any other key declines"),
+        };
+    }
+
+    /// Reports the end of every watched re-index. Read from the job tracker, not the snapshot:
+    /// a snapshot read before the job started would say the project was already indexed.
+    #[cfg(feature = "graph")]
+    pub(super) fn settle(&mut self, all: &[Entry]) {
+        use crate::plugins::graph::jobs::{self, Job};
+        let status = &mut self.status;
+        self.watching.retain(|id| {
+            let Some(e) = all.iter().find(|e| e.id == *id) else {
+                return false;
+            };
+            match jobs::get(&e.root) {
+                Some(Job::Running) => true,
+                Some(Job::Failed(err)) => {
+                    *status = format!("index of {} failed: {err}", e.name);
+                    false
+                }
+                None => {
+                    *status = format!("indexed {}", e.name);
+                    false
+                }
+            }
+        });
+    }
+
+    #[cfg(not(feature = "graph"))]
+    pub(super) fn settle(&mut self, _: &[Entry]) {}
 
     /// The line under the table: the plan awaiting `y`, the target being picked, or the last
     /// outcome.
@@ -239,6 +299,21 @@ impl ProjectsState {
                 };
                 return Key::Handled;
             }
+            KeyCode::Char('d') => {
+                self.status.clear();
+                return Key::Drill(row.id, row.name.clone());
+            }
+            // A re-index only rewrites the index from files that stay where they are, so it needs
+            // no plan; the web page's "Re-index" asks for none either.
+            KeyCode::Char('i') => {
+                return Key::Write(
+                    ProjectRequest::Reindex {
+                        project: row.id.to_string(),
+                    },
+                    format!("re-index {}", row.name),
+                );
+            }
+            KeyCode::Char('x') => return Key::Plan(row.id),
             KeyCode::Char(c @ ('l' | 'u')) => {
                 let verb = if c == 'l' { Verb::Link } else { Verb::Unlink };
                 if candidates(verb, all, row).is_empty() {
@@ -417,6 +492,117 @@ mod tests {
         press(&mut app, "sy");
         assert!(screen(&app).contains("no longer exists"));
         assert_eq!(registry_state(&cfg), before);
+    }
+
+    /// alpha holds code, so a re-index of it has something to write.
+    fn with_source(roots: &[PathBuf]) {
+        std::fs::write(
+            roots[0].join("lib.rs"),
+            "pub fn one() {}\npub fn two() {}\n",
+        )
+        .unwrap();
+    }
+
+    /// `(rows, files)` of project `id`'s index, as `graph projects --json` prints them.
+    fn indexed(cfg: &Config, id: i32) -> (i64, i64) {
+        let rt = Runtime::open(cfg.clone(), "t477-index").unwrap();
+        let rows = serde_json::to_value(rows(&rt).unwrap()).unwrap();
+        let i = &rows.as_array().unwrap()[id as usize - 1]["index"];
+        (i["rows"].as_i64().unwrap(), i["files"].as_i64().unwrap())
+    }
+
+    /// Refreshes the page until `want` shows on the status line; the worker runs on its own.
+    fn until(app: &mut App, want: &str) -> String {
+        let end = std::time::Instant::now() + std::time::Duration::from_secs(60);
+        loop {
+            app.key(KeyCode::Char('r'), KeyModifiers::NONE);
+            let shown = screen(app);
+            if shown.contains(want) {
+                return shown;
+            }
+            assert!(
+                std::time::Instant::now() < end,
+                "never saw {want:?}: {shown}"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+    }
+
+    #[test]
+    fn reindex_runs_on_a_worker_and_leaves_what_the_cli_leaves() {
+        let roots = roots();
+        with_source(&roots);
+        let (mut app, cfg) = graph_app(&roots);
+        assert!(screen(&app).contains("not indexed"));
+        assert_eq!(indexed(&cfg, 1), (0, 0));
+
+        // No plan and no confirm: the key starts the worker and the line reports its end.
+        press(&mut app, "i");
+        assert!(
+            !screen(&app).contains("declined"),
+            "a re-index asks for no confirmation"
+        );
+        let shown = until(&mut app, "indexed alpha");
+        assert!(
+            shown.contains("beta") && shown.contains("not indexed"),
+            "only alpha: {shown}"
+        );
+
+        let other = config();
+        registry(&other, &roots);
+        let rt = Runtime::open(other.clone(), "t477-cli").unwrap();
+        run(&rt, Action::Reindex("1".into()), false).unwrap();
+        assert_eq!(indexed(&cfg, 1), indexed(&other, 1));
+        assert!(indexed(&cfg, 1).0 >= 2);
+    }
+
+    #[test]
+    fn reindex_of_a_missing_project_is_refused_on_the_status_line() {
+        let roots = roots();
+        let (mut app, cfg) = graph_app(&roots);
+        std::fs::remove_dir_all(&roots[0]).unwrap();
+        app.key(KeyCode::Char('r'), KeyModifiers::NONE);
+        press(&mut app, "i");
+        assert!(screen(&app).contains("no longer exists"));
+        let rt = Runtime::open(cfg, "t477-none").unwrap();
+        let first = serde_json::to_value(rows(&rt).unwrap().remove(0)).unwrap();
+        assert_eq!(first["state"], "missing", "nothing was started: {first}");
+    }
+
+    #[test]
+    fn remove_shows_the_plan_and_only_the_confirm_key_drops_the_project() {
+        let roots = roots();
+        with_source(&roots);
+        let (mut app, cfg) = graph_app(&roots);
+        let before = registry_state(&cfg);
+
+        press(&mut app, "x");
+        let plan = screen(&app);
+        assert!(
+            plan.contains("would remove"),
+            "the dry run comes first: {plan}"
+        );
+        assert!(plan.contains("files untouched"), "{plan}");
+        assert_eq!(registry_state(&cfg), before, "nothing is removed before y");
+
+        press(&mut app, "n");
+        assert!(screen(&app).contains("declined; nothing written"));
+        assert_eq!(registry_state(&cfg), before, "declining changes nothing");
+
+        press(&mut app, "xy");
+        assert!(screen(&app).contains("removed"), "{}", screen(&app));
+        assert_eq!(
+            registry_state(&cfg).iter().map(|p| p.0).collect::<Vec<_>>(),
+            [2, 3]
+        );
+        assert!(roots[0].join("lib.rs").exists(), "no file is deleted");
+
+        // The same removal through the function `rtok graph projects remove` runs.
+        let other = config();
+        registry(&other, &roots);
+        let rt = Runtime::open(other.clone(), "t477-cli-remove").unwrap();
+        run(&rt, Action::Remove("1".into()), false).unwrap();
+        assert_eq!(registry_state(&cfg), registry_state(&other));
     }
 
     #[test]

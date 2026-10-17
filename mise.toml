@@ -1,4 +1,9 @@
 [tools]
+"pipx:git+https://github.com/pyrlyn/tools.git" = "d6eb6452cbb7ec4b350de87194548915c2648c27" # `mise run sweep`, `just cache`, `just swarfr` (ptools, Python; pyrlyn/tools#8, repin to a tag once merged)
+"cargo:cargo-sweep" = "0.8.0" # `mise run sweep`: drops build artifacts unused for 1 day (ptools sweep)
+mold = { version = "2.42.1", os = ["linux"] } # linker, Linux only; mise [env] below turns it on where it is installed
+sccache = { version = "0.18.0", os = ["linux", "macos"] } # compiler cache; mise [env] below makes it the rustc wrapper where it is installed
+"cargo:cargo-hakari" = "0.9.39" # workspace-hack unification; CI runs `cargo hakari verify`
 "cargo:cargo-cache" = "0.8.3" # `just cache` / `just cache-autoclean` (T17.2); the shared cargo home fills up
 "cargo:cargo-nextest" = "0.9.143" # `just test` / `just check` (cargo nextest run)
 "cargo:cargo-llvm-cov" = "0.9.1" # `just test-cov` (T301): the nextest suite under coverage, lcov for SonarCloud
@@ -26,3 +31,25 @@ docker-cli = "29.8.1" # `docker` client; talks to Colima's Docker daemon (aqua:d
 docker-compose = "5.5.1" # standalone `docker-compose` (Compose v5) against the same daemon (github:docker/compose)
 
 "ubi:bensadeh/tailspin" = { version = "7.0.0", exe = "tspin" } # `just logs` (T225): highlights `~/.rtok/logs/rtok.log` and `RUST_LOG` stderr; a viewer, not a logger
+
+[env]
+# mold as the Linux linker only where mise has installed it (clang is the driver, mold is not one):
+# without mold the variable is empty and the default linker stays. Not in .cargo/config.toml: a missing
+# mold or clang there would break every Linux build, CI included. Cargo takes the target rustflags only when
+# RUSTFLAGS is unset. Rust >= 1.90 already links x86_64-unknown-linux-gnu with rust-lld. macOS keeps Apple
+# ld (mold has no macOS support); Windows uses rust-lld through .cargo/config.toml.
+CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS = "{% if os() == 'linux' and get_env(name='MISE_MOLD_PROBE', default='') == '' %}{{ exec(command='MISE_MOLD_PROBE=1 \"' ~ mise_bin ~ '\" which mold >/dev/null 2>&1 && echo \"-C linker=clang -C link-arg=-fuse-ld=mold\" || true') }}{% endif %}"
+CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_RUSTFLAGS = "{% if os() == 'linux' and get_env(name='MISE_MOLD_PROBE', default='') == '' %}{{ exec(command='MISE_MOLD_PROBE=1 \"' ~ mise_bin ~ '\" which mold >/dev/null 2>&1 && echo \"-C linker=clang -C link-arg=-fuse-ld=mold\" || true') }}{% endif %}"
+# sccache as the rustc wrapper only where mise has it installed; empty means no wrapper (CI jobs
+# that install just Rust, Windows, machines without the tool). Not in .cargo/config.toml: there a
+# missing sccache would break every build. The probe variable stops `mise which` from recursing
+# into this same template. CI backend (R2): .github/actions/sccache, where the repo has its own jobs.
+RUSTC_WRAPPER = "{% if os() != 'windows' and get_env(name='MISE_SCCACHE_PROBE', default='') == '' %}{{ exec(command='MISE_SCCACHE_PROBE=1 \"' ~ mise_bin ~ '\" which sccache 2>/dev/null || true') }}{% endif %}"
+
+[tasks.sweep]
+description = "Remove cargo build artifacts unused for 1 day (cargo-sweep, via ptools)"
+run = "ptools sweep --days 1"
+
+[tasks.sweep-dry]
+description = "Preview what sweep would remove; deletes nothing"
+run = "ptools sweep --days 1 --dry-run"

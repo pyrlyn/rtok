@@ -4,13 +4,14 @@
 
 import type { Decorator, Meta, StoryObj } from "@storybook/react-vite";
 import { expect, waitFor, within } from "storybook/test";
+import { BIG, drillServer } from "../../../api/sampleDrill";
 import { project } from "../../../api/sampleRows";
 import type { Frame, Connect } from "../../../api/ws";
 import { richSnapshot } from "../../fixtures";
 import { drawn } from "../../canvasPixels";
 import { withData } from "../../storyData";
 import { VIEW_KEY } from "../SceneView";
-import { batch, end, event } from "./callsFixtures";
+import { done, LABELS, running, view, windowOf } from "./callsFixtures";
 import { LiveSection } from "./LiveSection";
 
 const projects = [
@@ -75,13 +76,22 @@ export const Waiting: Story = {
 const calls = (): Frame[] => [
     {
         type: "calls",
-        batch: batch([
-            end("a", 1000, 250, { target: "open_index", project: "rtok", backend: "lsp" }),
-            end("b", 400, 100, { target: "store", project: "ketch", tool: "impact" }),
-            end("c", 0, 0, { target: "missing", project: "rtok", ok: false, error: "no backend" }),
-            event({ call: "d", project: "pyrlyn", target: "run" }),
-            event({ call: "e", project: "ketch", target: "go", tool: "explore" }),
-        ]),
+        calls: view({
+            running: [
+                running("d", { project: "rtok", target: "run" }),
+                running("e", { project: "ketch", target: "go", tool: "explore" }),
+            ],
+            feed: [
+                done("c", 0, 0, {
+                    target: "missing",
+                    project: "rtok",
+                    ok: false,
+                    error: "no backend",
+                }),
+                done("b", 400, 100, { target: "store", project: "ketch", tool: "impact" }),
+                done("a", 1000, 250, { target: "open_index", project: "rtok", backend: "lsp" }),
+            ],
+        }),
     },
 ];
 
@@ -99,8 +109,11 @@ export const Busy: Story = {
     },
 };
 
-const running = (): Frame[] => [
-    { type: "calls", batch: batch([event({ call: "d", project: "pyrlyn", target: "run" })]) },
+const runningFrames = (): Frame[] => [
+    {
+        type: "calls",
+        calls: view({ running: [running("d", { project: "rtok", target: "run" })] }),
+    },
 ];
 
 const viewBox = (svg: Element) => svg.getAttribute("viewBox")!.split(" ").map(Number);
@@ -116,7 +129,7 @@ export const IdleOverview2d: Story = {
 
 /** A running call: the 2D camera closes in on its node (140 is the smallest frame). */
 export const CameraFramesRunningCall2d: Story = {
-    decorators: [withData(streaming(running())), viewing("2d")],
+    decorators: [withData(streaming(runningFrames())), viewing("2d")],
     play: async ({ canvasElement }) => {
         const svg = await within(canvasElement).findByTestId("graph-live", undefined, READY);
         await waitFor(() => expect(viewBox(svg)[3]).toBe(140), READY);
@@ -126,7 +139,7 @@ export const CameraFramesRunningCall2d: Story = {
 
 /** The same call in the Three.js canvas: drawn, read-only, and the camera holds the node. */
 export const Live3d: Story = {
-    decorators: [withData(streaming(running(), 1500)), viewing("3d")],
+    decorators: [withData(streaming(runningFrames(), 1500)), viewing("3d")],
     play: async ({ canvasElement }) => {
         const host = await within(canvasElement).findByTestId("graph-live-3d", undefined, READY);
         const canvas = () => {
@@ -143,4 +156,119 @@ export const Live3d: Story = {
     },
 };
 
+/** The label is placed by the frame loop once the view can project its node. */
+const labelShown = async (canvasElement: HTMLElement) => {
+    const label = await within(canvasElement).findByTestId("run-label", undefined, READY);
+    expect(label.textContent).toMatch(/^callers \d+s$/);
+    await waitFor(
+        () => expect(getComputedStyle(label.parentElement!).visibility).toBe("visible"),
+        READY,
+    );
+    const box = canvasElement.querySelector("[data-testid=run-labels]")!.getBoundingClientRect();
+    const at = label.getBoundingClientRect();
+    expect(at.left).toBeGreaterThanOrEqual(box.left);
+    expect(at.right).toBeLessThanOrEqual(box.right + 1);
+};
+
+/** A running call carries a floating label with its tool and a counter, next to its node (T329.50). */
+export const RunningLabel2d: Story = {
+    decorators: [withData(streaming(runningFrames())), viewing("2d")],
+    play: async ({ canvasElement }) => labelShown(canvasElement),
+};
+export const RunningLabel2dLight: Story = { ...RunningLabel2d, globals: { theme: "light" } };
+
+/** 375 px: the label stays inside the narrow canvas. */
+export const RunningLabelPhone: Story = {
+    ...RunningLabel2d,
+    globals: { viewport: { value: "mobile1", isRotated: false } },
+};
+
+/** The same label over the Three.js canvas, placed through the camera's projection. */
+export const RunningLabel3d: Story = {
+    decorators: [withData(streaming(runningFrames(), 1500)), viewing("3d")],
+    play: async ({ canvasElement }) => labelShown(canvasElement),
+};
+export const RunningLabel3dLight: Story = { ...RunningLabel3d, globals: { theme: "light" } };
+
 export const Live3dLight: Story = { ...Live3d, globals: { theme: "light" } };
+
+const outside = (): Frame[] => {
+    const feed = [
+        done("b", 400, 100, { target: "run", project: "pyrlyn" }),
+        done("a", 1000, 250, { target: "open_index", project: "rtok" }),
+    ];
+    return [{ type: "calls", calls: view({ feed }) }];
+};
+
+/** rtok links ketch only: a call on pyrlyn is listed with its mark, and only the call in scope glows. */
+export const OutsideScope: Story = {
+    decorators: [withData(streaming(outside()))],
+    play: async ({ canvasElement }) => {
+        const view = within(canvasElement);
+        const table = await view.findByRole("table", { name: "graph calls" });
+        await waitFor(() => expect(within(table).getAllByText("outside scope")).toHaveLength(1));
+        await waitFor(
+            () => expect(canvasElement.querySelectorAll("[data-testid=heat]").length).toBe(1),
+            READY,
+        );
+    },
+};
+
+const trend = () => {
+    const spark = {
+        span_ms: 300_000,
+        calls: Array.from({ length: 30 }, (_, i) => (i * 7) % 5),
+        saved: Array.from({ length: 30 }, (_, i) => (i * 13) % 40),
+    };
+    const feed = [done("a", 1000, 250)];
+    return [
+        {
+            type: "calls",
+            calls: view({ feed, windows: LABELS.map((l) => windowOf(l, feed, { spark })) }),
+        },
+    ] satisfies Frame[];
+};
+
+/** The calls and saved cards each carry a sparkline of the server's 30 slots. */
+export const Sparklines: Story = {
+    decorators: [withData(streaming(trend()))],
+    play: async ({ canvasElement }) => {
+        const view = within(canvasElement);
+        await view.findByRole("img", { name: "calls over the last 5 min" });
+        expect(view.getByRole("img", { name: "tokens saved over the last 5 min" })).toBeTruthy();
+    },
+};
+
+const bigRows = [project(1, "rtok", { selected: true }), project(3, BIG)];
+
+/** The drill-down cut at 500 nodes: a call on a symbol the cap left out counts on "+N more". */
+export const FoldedCalls: Story = {
+    args: { rows: bigRows, drill: { project: "3", expand: [], focus: null, depth: 1 } },
+    decorators: [
+        withData((h) => {
+            const served = drillServer({ ...snapshot, projects: bigRows })(h);
+            return {
+                ...served,
+                send: (m) => {
+                    if ("calls" in m && m.calls.subscribe) {
+                        const hidden = running("h", { project: BIG, target: "fn_599" });
+                        setTimeout(
+                            () => h.onFrame({ type: "calls", calls: view({ running: [hidden] }) }),
+                            0,
+                        );
+                    }
+                    return served.send(m);
+                },
+            };
+        }),
+        viewing("2d"),
+    ],
+    play: async ({ canvasElement }) => {
+        const list = await within(canvasElement).findByRole(
+            "list",
+            { name: "folded calls" },
+            READY,
+        );
+        expect(within(list).getByText(/^\+\d+ more · 1 folded$/)).toBeTruthy();
+    },
+};

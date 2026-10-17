@@ -5,7 +5,6 @@ edition.workspace = true
 rust-version.workspace = true # a host-integration author needs no newer toolchain than mise.toml
 readme = "README.md"
 repository.workspace = true
-homepage = "https://pyrlyn.github.io/landing/rtok/"
 description = "The rtok agent-host contract: reversible, idempotent installs for `rtok agent setup <host>`"
 license = "Apache-2.0"
 categories = ["development-tools"]
@@ -16,6 +15,9 @@ keywords = ["rtok", "agents", "install", "mcp", "hooks"]
 # stdout line + stdin read (T81), so no prompt crate is needed.
 serde_json = { workspace = true }
 anyhow = { workspace = true }
+# Atomic replace and tree copy, shared with every other project.
+fs-kit = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
 
 [lints]
 workspace = true

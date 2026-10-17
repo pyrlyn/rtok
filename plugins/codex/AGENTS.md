@@ -8,7 +8,7 @@ Agent rules for the **Codex** host package. Humans: [`README.md`](README.md). Sh
 | --- | --- |
 | Manifest / entry | `.codex-plugin/plugin.json` → `hooks/hooks.json` |
 | Marketplace | `.agents/plugins/marketplace.json`, one local entry `rtok` at `./` |
-| Hooks | Claude-shaped hooks → `rtok hook <event>`; same event set as `src/agents/codex/` (`COMPACT`) |
+| Hooks | Claude-shaped hooks → `rtok hook <event> --host codex`; the `codex` rows of `src/agents/hook_events.rs`, which `src/agents/codex/` installs too |
 | MCP | not shipped here (T275/D33): `rtok agents install codex` writes `~/.codex/config.toml`'s `[mcp_servers.rtok]` independently, plugin enabled or not |
 | Installer | [`../../src/agents/codex/`](../../src/agents/codex/) writes the user files; it does not offer this plugin yet |
 | Tests | `tests/codex_plugin.rs` |
@@ -21,5 +21,5 @@ Agent rules for the **Codex** host package. Humans: [`README.md`](README.md). Sh
 
 ## Do not
 
-- Add `PreToolUse` / `PostToolUse` before a live Codex payload confirms rtok's rewrite and context shapes.
+- Send Claude's bare `updatedInput` to Codex: it applies a rewrite only with `permissionDecision: "allow"` (`hooks::codex_output` adds it; `research.md` section 40).
 - Dual-wire plugin and `rtok agents install codex` without documenting the conflict.

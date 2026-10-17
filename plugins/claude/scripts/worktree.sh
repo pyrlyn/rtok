@@ -22,9 +22,25 @@ for b in "$(command -v rtok 2>/dev/null)" "$HOME/.ketch/bin/rtok" \
   fi
 done
 
-# The payload's string fields are slugs and absolute paths, so a sed is enough and no jq is needed.
+# The payload is JSON, and a path may hold \" \\ or \uXXXX escapes that no regex undoes, so the
+# fields go through a real parser: jq, else the perl every Git install ships (JSON::PP is core).
+# Neither is a reason to guess: a payload that cannot be read fails the hook with the reason.
 field() {
-  printf '%s' "$input" | sed -n 's/.*"'"$1"'"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p'
+  if command -v jq >/dev/null 2>&1; then
+    printf '%s' "$input" | jq -r --arg k "$1" '.[$k] | strings'
+  elif command -v perl >/dev/null 2>&1; then
+    printf '%s' "$input" | perl -MJSON::PP -e '
+      local $/;
+      my $d = eval { decode_json(<STDIN>) };
+      die "rtok: hook payload is not a JSON object\n" unless ref $d eq "HASH";
+      binmode STDOUT, ":utf8";
+      my $v = $d->{$ARGV[0]};
+      print "$v\n" if defined $v && !ref $v;
+    ' "$1"
+  else
+    echo "rtok: no jq or perl found to read the hook payload" >&2
+    return 1
+  fi
 }
 
 case "$event" in
@@ -44,9 +60,11 @@ WorktreeCreate)
     fi
   fi
   # printf: a POSIX sed ends its output with a newline, and tr -c would turn it into a dash.
-  name=$(printf '%s' "$(field name)" | tr -c 'A-Za-z0-9._-' '-')
+  name=$(field name) || exit 1
+  cwd=$(field cwd) || exit 1
+  name=$(printf '%s' "$name" | tr -c 'A-Za-z0-9._-' '-')
   case "$name" in '' | .* | -*) name="w-$name" ;; esac
-  root=$(git -C "$(field cwd)" rev-parse --show-toplevel) || exit 1
+  root=$(git -C "$cwd" rev-parse --show-toplevel) || exit 1
   # The host's own default: .claude/worktrees/<name> on worktree-<name>, from the current HEAD.
   dir=$root/.claude/worktrees/$name
   if [ ! -e "$dir/.git" ]; then
@@ -60,9 +78,10 @@ WorktreeRemove)
     printf '%s' "$input" | "$bin" hook WorktreeRemove
     exit $?
   fi
-  path=$(field worktree_path)
+  path=$(field worktree_path) || exit 1
+  cwd=$(field cwd) || exit 1
   [ -d "$path" ] || exit 0
   # Never --force: git refuses a dirty worktree, and the host keeps it and reports the reason.
-  git -C "$(field cwd)" worktree remove "$path"
+  git -C "$cwd" worktree remove "$path"
   ;;
 esac

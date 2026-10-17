@@ -5,9 +5,9 @@
 use super::util::print_json;
 use crate::config::Config;
 use crate::model;
-use crate::render::with_loader;
 use anyhow::Result;
 use clap::Subcommand;
+use rtok_sys::proc::ProgressRunner;
 use std::path::PathBuf;
 
 #[derive(Subcommand)]
@@ -38,7 +38,7 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: OtelCmd) -> Result<()> 
             let rep = if coalesce {
                 crate::otel::export::flush_coalesced_blocking(&cx)
             } else {
-                with_loader("flushing telemetry", || {
+                ProgressRunner::wait("flushing telemetry…", || {
                     crate::otel::export::flush_blocking(&cx)
                 })
             };

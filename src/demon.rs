@@ -12,15 +12,17 @@
 
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
+use std::ffi::OsString;
 use std::fs;
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::ExitStatus;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result};
 use clap::ValueEnum;
+use rtok_sys::proc::{Output, ProgressRunner};
 use serde::{Deserialize, Serialize};
 
 use crate::config::Config;
@@ -103,14 +105,134 @@ fn read(cfg: &Config, service: Service) -> Option<State> {
 /// the supervisor rewrites it on every restart, and a half-written file parses as "not running".
 fn write(cfg: &Config, st: &State) -> Result<()> {
     let path = file(cfg, st.service, "json");
-    rtok_agent_sdk::write_atomic(&path, &serde_json::to_string_pretty(st)?)
-        .with_context(|| path.display().to_string())
+    Ok(fs_kit::write::atomic(
+        &path,
+        serde_json::to_string_pretty(st)?,
+    )?)
 }
 
-/// True while `pid` is a live process. A state file left behind by a supervisor that was
-/// killed from outside reads as stopped instead of as whatever it said.
-fn alive(pid: i32) -> bool {
-    rtok_sys::process_alive(pid)
+/// The process table as the verbs see it: liveness, signals, the boot time and the pause
+/// between polls. A trait so the tests can record signals instead of sending them.
+trait Procs {
+    /// True while `pid` is a live process. A state file left behind by a supervisor that was
+    /// killed from outside reads as stopped instead of as whatever it said.
+    fn alive(&self, pid: i32) -> bool;
+    fn term(&self, pid: i32);
+    fn kill(&self, pid: i32);
+    fn boot_time(&self) -> Option<u64>;
+    fn pause(&self, d: Duration);
+}
+
+struct Os;
+
+impl Procs for Os {
+    fn alive(&self, pid: i32) -> bool {
+        rtok_sys::process_alive(pid)
+    }
+    fn term(&self, pid: i32) {
+        rtok_sys::process_term(pid);
+    }
+    fn kill(&self, pid: i32) {
+        rtok_sys::process_kill(pid);
+    }
+    fn boot_time(&self) -> Option<u64> {
+        boot_time()
+    }
+    fn pause(&self, d: Duration) {
+        std::thread::sleep(d);
+    }
+}
+
+/// Who a state file's pids may be signalled as (T597). A saved pid is only a number: after the
+/// owner died, or a reboot, the kernel hands it to an unrelated process.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Owner {
+    /// A supervisor holds the service lock, so it wrote this state and both pids are its own.
+    Live,
+    /// No supervisor, but the state dates from this boot: its child may still be up.
+    Orphan,
+    /// Nothing proves the pids still belong to us (an earlier boot, or no boot time to tell by).
+    Stale,
+}
+
+fn ownership(procs: &dyn Procs, cfg: &Config, service: Service, st: &State) -> Result<Owner> {
+    // The supervisor's own flock is the truth; it dies with the supervisor. The probe lock, if
+    // it wins, drops at the end of this statement.
+    if claim(cfg, service)?.is_none() {
+        return Ok(Owner::Live);
+    }
+    let this_boot = procs.boot_time().is_some_and(|boot| st.since >= boot);
+    Ok(if this_boot {
+        Owner::Orphan
+    } else {
+        Owner::Stale
+    })
+}
+
+/// The pids `owner` allows signalling. Positive only: signalling 0 or a negative number would
+/// reach a whole process group.
+fn signalable(st: &State, owner: Owner) -> Vec<i32> {
+    let pids = match owner {
+        Owner::Live => vec![st.supervisor, st.child],
+        Owner::Orphan => vec![st.child],
+        Owner::Stale => Vec::new(),
+    };
+    pids.into_iter().filter(|p| *p > 0).collect()
+}
+
+/// True while the state file still says what `st` said. A supervisor that respawned, or a new
+/// one that took over, rewrites it, and then `st` no longer names what is running.
+fn unchanged(cfg: &Config, service: Service, st: &State) -> bool {
+    read(cfg, service).is_some_and(|now| {
+        (now.supervisor, now.child, now.since, now.restarts)
+            == (st.supervisor, st.child, st.since, st.restarts)
+    })
+}
+
+/// Drop the state file, unless a new supervisor has published its own since `st` was read.
+fn retire(cfg: &Config, service: Service, st: &State) {
+    if unchanged(cfg, service, st) {
+        let _ = fs::remove_file(file(cfg, service, "json"));
+    }
+}
+
+/// Signal `pids` (TERM, or KILL when `force`), wait for them to go, and escalate to KILL for
+/// the ones that stayed. The escalation re-checks ownership: a pid that outlived the wait may
+/// by now be someone else's, so it is killed only while the state still names it and, for the
+/// supervisor, while the lock is still held.
+fn bring_down(
+    procs: &dyn Procs,
+    cfg: &Config,
+    service: Service,
+    st: &State,
+    pids: &[i32],
+    force: bool,
+) -> Result<()> {
+    for &pid in pids {
+        if force {
+            procs.kill(pid);
+        } else {
+            procs.term(pid);
+        }
+    }
+    for _ in 0..40 {
+        if pids.iter().all(|&pid| !procs.alive(pid)) {
+            break;
+        }
+        procs.pause(Duration::from_millis(50));
+    }
+    // Last resort: a supervisor that ignored SIGTERM would otherwise outlive its own state.
+    for &pid in pids {
+        if !procs.alive(pid) || !unchanged(cfg, service, st) {
+            continue;
+        }
+        if pid == st.supervisor && claim(cfg, service)?.is_some() {
+            continue;
+        }
+        procs.kill(pid);
+    }
+    retire(cfg, service, st);
+    Ok(())
 }
 
 /// The services a verb acts on: the ones named, else — for the verbs that act on what is
@@ -152,31 +274,32 @@ pub fn start(cfg: &Config, config_file: Option<&Path>, named: &[Service]) -> Res
             continue;
         }
         if let Some(st) = read(cfg, service) {
-            // The lock just proved no supervisor is up, so the state file is stale; its pids
+            // The lock just proved no supervisor was up, so the state file is stale; its pids
             // are only worth signalling if they date from this boot — after a reboot the
             // kernel hands the same numbers to unrelated processes.
-            let this_boot = boot_time().is_some_and(|boot| st.since >= boot);
-            if !this_boot {
-                println!(
+            match ownership(&Os, cfg, service, &st)? {
+                Owner::Live => {
+                    println!("{}", style::info(&format!("{service} already running")));
+                    continue;
+                }
+                Owner::Stale => println!(
                     "{service}: stale state from before this boot, not signalling pid {}",
                     st.child
-                );
-            }
-            // A supervisor that died from outside can leave its child up. Starting another
-            // supervisor would put two owners on the same port — retire the orphan first.
-            if this_boot && alive(st.child) {
-                rtok_sys::process_term(st.child);
-                for _ in 0..40 {
-                    if !alive(st.child) {
-                        break;
-                    }
-                    std::thread::sleep(Duration::from_millis(50));
-                }
-                if alive(st.child) {
-                    rtok_sys::process_kill(st.child);
+                ),
+                // A supervisor that died from outside can leave its child up. Starting another
+                // supervisor would put two owners on the same port — retire the orphan first.
+                Owner::Orphan => {
+                    bring_down(
+                        &Os,
+                        cfg,
+                        service,
+                        &st,
+                        &signalable(&st, Owner::Orphan),
+                        false,
+                    )?;
                 }
             }
-            let _ = fs::remove_file(file(cfg, service, "json"));
+            retire(cfg, service, &st);
         }
         let _ = fs::remove_file(file(cfg, service, "stop"));
         if service == Service::Mcp {
@@ -186,15 +309,9 @@ pub fn start(cfg: &Config, config_file: Option<&Path>, named: &[Service]) -> Res
             eprintln!("{}", style::warn(&msg));
             crate::log::append(cfg, "warn", "demon", service.as_str(), &msg);
         }
-        let mut cmd = Command::new(&exe);
-        if let Some(c) = config_file {
-            cmd.arg("--config").arg(c);
-        }
-        let child = cmd
-            .args(["demon", "supervise", service.as_str()])
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
+        let argv = argv_with_config(config_file, ["demon", "supervise", service.as_str()]);
+        let child = ProgressRunner::quiet(&exe, argv)
+            .output(Output::Detached)
             .spawn()
             .with_context(|| format!("spawn supervisor for {service}"))?;
         let started = format!("{service} started (supervisor {})", child.id());
@@ -204,33 +321,31 @@ pub fn start(cfg: &Config, config_file: Option<&Path>, named: &[Service]) -> Res
 }
 
 /// Ask each supervisor to go away, then make sure it did. The marker is written *before* the
-/// signals: a supervisor that wakes up between them must not start one more child.
+/// signals: a supervisor that wakes up between them must not start one more child. `force`
+/// only skips the grace period: it never signals a pid [`ownership`] does not vouch for.
 pub fn stop(cfg: &Config, named: &[Service], force: bool) -> Result<()> {
+    stop_with(&Os, cfg, named, force)
+}
+
+fn stop_with(procs: &dyn Procs, cfg: &Config, named: &[Service], force: bool) -> Result<()> {
     for service in targets(cfg, named, true)? {
         let Some(st) = read(cfg, service) else {
             println!("{}", style::info(&format!("{service} not running")));
             continue;
         };
-        fs::write(file(cfg, service, "stop"), b"")?;
-        if force {
-            rtok_sys::process_kill(st.supervisor);
-            rtok_sys::process_kill(st.child);
-        } else {
-            rtok_sys::process_term(st.supervisor);
-            rtok_sys::process_term(st.child);
+        let owner = ownership(procs, cfg, service, &st)?;
+        if owner == Owner::Stale {
+            println!(
+                "{service}: stale state from before this boot, not signalling pid {}",
+                st.child
+            );
+            retire(cfg, service, &st);
+            continue;
         }
-        for _ in 0..40 {
-            if !alive(st.supervisor) && !alive(st.child) {
-                break;
-            }
-            std::thread::sleep(Duration::from_millis(50));
+        if owner == Owner::Live {
+            fs::write(file(cfg, service, "stop"), b"")?;
         }
-        // Last resort: a supervisor that ignored SIGTERM would otherwise outlive its own state.
-        if alive(st.supervisor) || alive(st.child) {
-            rtok_sys::process_kill(st.supervisor);
-            rtok_sys::process_kill(st.child);
-        }
-        let _ = fs::remove_file(file(cfg, service, "json"));
+        bring_down(procs, cfg, service, &st, &signalable(&st, owner), force)?;
         println!(
             "{}",
             style::success_op("stop", &format!("{service} stopped"))
@@ -252,6 +367,10 @@ pub fn restart(cfg: &Config, config_file: Option<&Path>, named: &[Service]) -> R
 /// file, and return only once every stopped service's file is gone and stays gone; a
 /// surface that will not stay down fails the upgrade instead of racing the replace.
 fn quiesce(cfg: &Config, services: &[Service]) -> Result<()> {
+    quiesce_with(&Os, cfg, services)
+}
+
+fn quiesce_with(procs: &dyn Procs, cfg: &Config, services: &[Service]) -> Result<()> {
     let deadline = Instant::now() + Duration::from_secs(4);
     loop {
         let mut rogue = false;
@@ -260,13 +379,15 @@ fn quiesce(cfg: &Config, services: &[Service]) -> Result<()> {
                 continue;
             };
             rogue = true;
-            if boot_time().is_some_and(|boot| st.since >= boot) {
+            let pids = signalable(&st, ownership(procs, cfg, *service, &st)?);
+            if !pids.is_empty() {
                 println!(
                     "{service}: respawned during the replace window, retiring pid {}",
                     st.child
                 );
-                rtok_sys::process_kill(st.supervisor);
-                rtok_sys::process_kill(st.child);
+                for pid in pids {
+                    procs.kill(pid);
+                }
             }
             let _ = fs::remove_file(file(cfg, *service, "json"));
         }
@@ -276,7 +397,7 @@ fn quiesce(cfg: &Config, services: &[Service]) -> Result<()> {
         if Instant::now() > deadline {
             anyhow::bail!("demon surfaces did not stay down for the replace");
         }
-        std::thread::sleep(Duration::from_millis(50));
+        procs.pause(Duration::from_millis(50));
     }
 }
 
@@ -310,6 +431,20 @@ pub fn upgrade(cfg: &Config, config_file: Option<&Path>) -> Result<()> {
     }
 }
 
+/// `rtok [--config <file>] <rest>`: the service reads the file the operator started the demon
+/// with, not whatever the default config resolves to.
+fn argv_with_config<'a>(
+    config_file: Option<&Path>,
+    rest: impl IntoIterator<Item = &'a str>,
+) -> Vec<OsString> {
+    let mut argv = Vec::new();
+    if let Some(c) = config_file {
+        argv.extend(["--config".into(), c.as_os_str().to_owned()]);
+    }
+    argv.extend(rest.into_iter().map(OsString::from));
+    argv
+}
+
 /// The path `start` should spawn: `current_exe` after an in-place replace can be the
 /// deleted inode, while the same path on disk already holds the new file.
 fn on_disk_exe() -> Result<PathBuf> {
@@ -323,18 +458,18 @@ fn on_disk_exe() -> Result<PathBuf> {
 
 fn replace_binary() -> Result<()> {
     if let Some(cmd) = std::env::var_os("RTOK_UPDATE_CMD") {
-        return run_replace(Command::new(cmd));
+        return run_replace(ProgressRunner::quiet(cmd, std::iter::empty::<&str>()));
     }
-    match Command::new("ketch")
-        .args(["upgrade", "rtok", "--yes"])
-        .status()
-    {
+    match upgrade_run(ProgressRunner::quiet("ketch", ["upgrade", "rtok", "--yes"])) {
         Ok(st) if st.success() => return Ok(()),
         Ok(st) => anyhow::bail!("ketch upgrade rtok failed ({st})"),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
         Err(e) => return Err(e.into()),
     }
-    match Command::new("rtok-update").status() {
+    match upgrade_run(ProgressRunner::quiet(
+        "rtok-update",
+        std::iter::empty::<&str>(),
+    )) {
         Ok(st) if st.success() => Ok(()),
         Ok(st) => anyhow::bail!("rtok-update failed ({st})"),
         Err(_) => anyhow::bail!(
@@ -343,8 +478,16 @@ fn replace_binary() -> Result<()> {
     }
 }
 
-fn run_replace(mut cmd: Command) -> Result<()> {
-    let st = cmd.status()?;
+/// The updater owns the terminal and prints its own progress, so it gets no spinner of ours.
+fn upgrade_run(updater: ProgressRunner) -> std::io::Result<ExitStatus> {
+    updater
+        .output(Output::Inherit)
+        .run()
+        .map(|done| done.status)
+}
+
+fn run_replace(updater: ProgressRunner) -> Result<()> {
+    let st = upgrade_run(updater)?;
     if st.success() {
         Ok(())
     } else {
@@ -526,17 +669,13 @@ pub fn supervise(cfg: &Config, config_file: Option<&Path>, service: Service) -> 
         // the T24.0 sink instead is what makes rotation possible at all.
         let mut log_cfg = cfg.clone();
         log_cfg.log.path = file(cfg, service, "log");
-        let mut cmd = Command::new(&exe);
-        if let Some(c) = config_file {
-            cmd.arg("--config").arg(c);
-        }
-        let mut child = cmd
-            .args(service.args())
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .with_context(|| format!("spawn {service}"))?;
+        let mut child = ProgressRunner::quiet(
+            &exe,
+            argv_with_config(config_file, service.args().iter().copied()),
+        )
+        .output(Output::Capture)
+        .spawn()
+        .with_context(|| format!("spawn {service}"))?;
         // Two reader threads only forward lines over a channel; the main thread is the sole
         // writer, so two streams landing on the same file are never a rotate/append race.
         let (tx, rx) = mpsc::channel();
@@ -611,9 +750,8 @@ fn boot_time() -> Option<u64> {
     #[cfg(target_os = "macos")]
     {
         // `{ sec = 1700000000, usec = 0 } Tue Nov 14 ...`
-        let out = Command::new("sysctl")
-            .args(["-n", "kern.boottime"])
-            .output()
+        let out = ProgressRunner::quiet("sysctl", ["-n", "kern.boottime"])
+            .run()
             .ok()?;
         let s = String::from_utf8_lossy(&out.stdout);
         let rest = s.split_once("sec = ")?.1;
@@ -664,6 +802,194 @@ mod tests {
         .unwrap();
         quiesce(&cfg, &[Service::Mcp]).unwrap();
         assert!(!file(&cfg, Service::Mcp, "json").exists());
+    }
+
+    /// Records every signal instead of sending one. `alive` lists the pids that exist; a TERM or
+    /// KILL removes its pid unless `ignores_term` keeps it up. `on_pause` runs once, on the first
+    /// wait, to stage a change that lands while `stop` is waiting.
+    struct Recorder {
+        alive: std::sync::Mutex<Vec<i32>>,
+        calls: std::sync::Mutex<Vec<(&'static str, i32)>>,
+        boot: Option<u64>,
+        ignores_term: bool,
+        on_pause: std::sync::Mutex<Option<Box<dyn FnOnce() + Send>>>,
+    }
+
+    impl Recorder {
+        fn new(boot: Option<u64>, alive: &[i32]) -> Self {
+            Self {
+                alive: alive.to_vec().into(),
+                calls: Vec::new().into(),
+                boot,
+                ignores_term: false,
+                on_pause: None.into(),
+            }
+        }
+        fn calls(&self) -> Vec<(&'static str, i32)> {
+            self.calls.lock().unwrap().clone()
+        }
+    }
+
+    impl Procs for Recorder {
+        fn alive(&self, pid: i32) -> bool {
+            self.alive.lock().unwrap().contains(&pid)
+        }
+        fn term(&self, pid: i32) {
+            self.calls.lock().unwrap().push(("term", pid));
+            if !self.ignores_term {
+                self.alive.lock().unwrap().retain(|p| *p != pid);
+            }
+        }
+        fn kill(&self, pid: i32) {
+            self.calls.lock().unwrap().push(("kill", pid));
+            self.alive.lock().unwrap().retain(|p| *p != pid);
+        }
+        fn boot_time(&self) -> Option<u64> {
+            self.boot
+        }
+        fn pause(&self, _: Duration) {
+            if let Some(f) = self.on_pause.lock().unwrap().take() {
+                f();
+            }
+        }
+    }
+
+    fn demon_cfg(name: &str) -> Config {
+        let mut cfg = Config::default();
+        cfg.demon.state_dir = crate::testutil::tmp_dir(name);
+        cfg
+    }
+
+    fn state(supervisor: i32, child: i32, since: u64) -> State {
+        State {
+            service: Service::Web,
+            supervisor,
+            child,
+            since,
+            restarts: 0,
+        }
+    }
+
+    fn save(cfg: &Config, st: &State) {
+        fs::write(
+            file(cfg, st.service, "json"),
+            serde_json::to_vec(st).unwrap(),
+        )
+        .unwrap();
+    }
+
+    /// T597: a state left from an earlier boot names pids the kernel has since handed to
+    /// unrelated processes. Neither a normal stop nor a forced one may signal them.
+    #[test]
+    fn stop_never_signals_the_pids_of_a_state_from_before_this_boot() {
+        for (force, boot) in [(false, Some(1000)), (true, Some(1000)), (true, None)] {
+            let cfg = demon_cfg("demon-stale-stop");
+            save(&cfg, &state(4242, 4243, 1)); // `since` before the boot: stale
+            let procs = Recorder::new(boot, &[4242, 4243]);
+            stop_with(&procs, &cfg, &[Service::Web], force).unwrap();
+            assert!(procs.calls().is_empty(), "force={force} boot={boot:?}");
+            assert!(
+                !file(&cfg, Service::Web, "json").exists(),
+                "stale state retired"
+            );
+        }
+    }
+
+    /// T597: no state at all is a no-op.
+    #[test]
+    fn stop_without_a_state_signals_nothing() {
+        let cfg = demon_cfg("demon-no-state");
+        let procs = Recorder::new(Some(1000), &[1, 2]);
+        stop_with(&procs, &cfg, &[Service::Web], true).unwrap();
+        assert!(procs.calls().is_empty());
+    }
+
+    /// T597: this boot but no supervisor holding the lock: only the orphaned child is ours.
+    #[test]
+    fn stop_signals_only_the_child_when_no_supervisor_holds_the_lock() {
+        let cfg = demon_cfg("demon-orphan-stop");
+        save(&cfg, &state(4242, 4243, now()));
+        let procs = Recorder::new(Some(1000), &[4242, 4243]);
+        stop_with(&procs, &cfg, &[Service::Web], false).unwrap();
+        assert_eq!(procs.calls(), [("term", 4243)]);
+        assert!(!file(&cfg, Service::Web, "json").exists());
+        assert!(
+            !file(&cfg, Service::Web, "stop").exists(),
+            "no supervisor to read a marker"
+        );
+    }
+
+    /// T597: a supervisor that holds the lock owns both pids, in either mode, and positive
+    /// pids only.
+    #[test]
+    fn stop_signals_a_live_supervisor_and_its_child() {
+        for (force, op) in [(false, "term"), (true, "kill")] {
+            let cfg = demon_cfg("demon-live-stop");
+            let _lock = claim(&cfg, Service::Web)
+                .unwrap()
+                .expect("this test is the supervisor");
+            save(&cfg, &state(4242, 4243, 1)); // the lock vouches for it, whatever the boot says
+            let procs = Recorder::new(Some(1000), &[4242, 4243]);
+            stop_with(&procs, &cfg, &[Service::Web], force).unwrap();
+            assert_eq!(procs.calls(), [(op, 4242), (op, 4243)], "force={force}");
+            assert!(file(&cfg, Service::Web, "stop").exists());
+        }
+        let cfg = demon_cfg("demon-live-nonpositive");
+        let _lock = claim(&cfg, Service::Web).unwrap().unwrap();
+        save(&cfg, &state(0, -1, now()));
+        let procs = Recorder::new(Some(1000), &[]);
+        stop_with(&procs, &cfg, &[Service::Web], true).unwrap();
+        assert!(procs.calls().is_empty(), "{:?}", procs.calls());
+    }
+
+    /// T597: a pid that outlives the grace period is killed only while the state still names it;
+    /// a new supervisor's state is neither signalled nor deleted.
+    #[test]
+    fn escalation_is_revalidated_and_keeps_a_replacement_state() {
+        let cfg = demon_cfg("demon-escalate");
+        let _lock = claim(&cfg, Service::Web).unwrap().unwrap();
+        save(&cfg, &state(4242, 4243, now()));
+        let mut procs = Recorder::new(Some(1000), &[4242, 4243]);
+        procs.ignores_term = true;
+        stop_with(&procs, &cfg, &[Service::Web], false).unwrap();
+        assert_eq!(
+            procs.calls(),
+            [
+                ("term", 4242),
+                ("term", 4243),
+                ("kill", 4242),
+                ("kill", 4243)
+            ]
+        );
+
+        let cfg = demon_cfg("demon-replaced");
+        let _lock = claim(&cfg, Service::Web).unwrap().unwrap();
+        save(&cfg, &state(4242, 4243, now()));
+        let mut procs = Recorder::new(Some(1000), &[4242, 4243]);
+        procs.ignores_term = true;
+        let replacement = state(5000, 5001, now() + 1);
+        let (dir, text) = (cfg.clone(), serde_json::to_vec(&replacement).unwrap());
+        *procs.on_pause.lock().unwrap() = Some(Box::new(move || {
+            fs::write(file(&dir, Service::Web, "json"), text).unwrap();
+        }));
+        stop_with(&procs, &cfg, &[Service::Web], false).unwrap();
+        assert_eq!(
+            procs.calls(),
+            [("term", 4242), ("term", 4243)],
+            "no kill of a reused pid"
+        );
+        assert_eq!(read(&cfg, Service::Web).unwrap().supervisor, 5000, "kept");
+    }
+
+    /// T597: quiesce retires a respawn by the same rule: nothing for a stale state.
+    #[test]
+    fn quiesce_never_kills_the_pids_of_a_stale_state() {
+        let cfg = demon_cfg("demon-quiesce-stale");
+        save(&cfg, &state(4242, 4243, 1));
+        let procs = Recorder::new(Some(1000), &[4242, 4243]);
+        quiesce_with(&procs, &cfg, &[Service::Web]).unwrap();
+        assert!(procs.calls().is_empty());
+        assert!(!file(&cfg, Service::Web, "json").exists());
     }
 
     #[test]
@@ -831,8 +1157,8 @@ mod tests {
 
     #[test]
     fn a_group_pid_is_never_signalled() {
-        assert!(alive(std::process::id() as i32));
+        assert!(Os.alive(std::process::id() as i32));
         // Both of these mean "a process group" to kill(2), and `stop` must never reach one.
-        assert!(!alive(0) && !alive(-1));
+        assert!(!Os.alive(0) && !Os.alive(-1));
     }
 }

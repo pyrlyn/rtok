@@ -140,7 +140,7 @@ fn read_dedup_on_second_mcp_read() {
         .collect();
     let (first, second) = (&texts[0], &texts[1]);
     assert!(first.contains("line one"), "{first}");
-    assert!(second.contains("unchanged since"), "{second}");
+    assert!(second.contains("unchanged id "), "{second}");
     assert!(kinds(&home, "read").iter().any(|k| k == "dedup"));
 }
 #[test]
@@ -151,6 +151,22 @@ fn memory_save_then_search() {
     let found = tool(&home, &home.0, "mem_search", r#"{"query":"milk"}"#);
     assert!(saved.contains("id"), "{saved}");
     assert!(found.contains("t382 milk"), "{found}");
+}
+#[test]
+fn memory_save_refuses_a_repeat_and_names_the_stored_note() {
+    let home = tmp("memory-admit");
+    let first = r#"{"title":"cache","body":"The walrus cache evicts the oldest entry."}"#;
+    let twin = r#"{"title":"cache again","body":"the walrus cache evicts the OLDEST entry."}"#;
+    let stored: serde_json::Value =
+        serde_json::from_str(&tool(&home, &home.0, "mem_save", first)).unwrap();
+    let refused: serde_json::Value =
+        serde_json::from_str(&tool(&home, &home.0, "mem_save", twin)).unwrap();
+    assert_eq!(refused["refused"], "duplicate", "{refused}");
+    assert_eq!(refused["id"], stored["id"], "{refused}");
+    let tiny = r#"{"title":"tiny","body":"ok"}"#;
+    let tiny: serde_json::Value =
+        serde_json::from_str(&tool(&home, &home.0, "mem_save", tiny)).unwrap();
+    assert_eq!(tiny["refused"], "too_short", "{tiny}");
 }
 #[test]
 fn memory_pack_returns_a_tier_and_records() {
@@ -434,7 +450,7 @@ async fn compress_summary_row_visible_in_stats() {
 /// *is* what `PostToolUse` would see. So this test confirms the rewrite, then runs it.
 ///
 /// Default config: 200 lines pass `trailer_min_lines`, so stdout ends with the
-/// `[rtok <id> · N lines · expand …]` trailer, which `after` must count too (T247).
+/// `[rtok <id12> · N lines]` trailer, which `after` must count too (T247).
 #[test]
 fn cmd_hook_measurement_matches_returned_bytes() {
     let home = tmp("cmd-bytes");
@@ -460,7 +476,7 @@ fn cmd_hook_measurement_matches_returned_bytes() {
         .to_string();
     assert!(modified.starts_with("rtok run -- "), "{modified}");
     let out = run(&home, &["run", "cat", file.to_str().unwrap()], "", &home.0);
-    assert!(out.contains("expand: rtok expand "), "{out}");
+    assert!(out.contains(" lines]"), "{out}");
     let rows = rows(&home, "cmd");
     let row = rows
         .iter()

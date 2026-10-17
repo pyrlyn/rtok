@@ -101,7 +101,7 @@ fn deny(cx: &Ctx, reason: String) -> PreToolDecision {
 
 /// Archive id of the last MCP `read` of this path (`mode=full`), if still cached.
 fn last_read_id(cx: &Ctx, path: &str) -> Option<String> {
-    let abs = dunce::canonicalize(path).ok()?;
+    let abs = fs_kit::path::canonicalize(path).ok()?;
     let key = super::cache::key(abs.to_string_lossy().as_ref(), "full", None);
     cx.get_read_cache(&key).ok().flatten()?.0
 }
@@ -146,22 +146,7 @@ fn edits_path(v: &serde_json::Value, path: &str) -> bool {
         .and_then(|i| i.get("file_path").or_else(|| i.get("path")))
         .and_then(|p| p.as_str())
         .unwrap_or("");
-    same_path(edited, path)
-}
-
-/// Exact match, or relative-vs-absolute (`src/main.rs` vs `/repo/src/main.rs`).
-/// Component-aware: `/repo/main.rs` must not match `ain.rs`.
-fn same_path(a: &str, b: &str) -> bool {
-    let (a, b) = (a.trim(), b.trim());
-    if a.is_empty() || b.is_empty() {
-        return false;
-    }
-    if a == b {
-        return true;
-    }
-    let a_path = std::path::Path::new(a);
-    let b_path = std::path::Path::new(b);
-    a_path.ends_with(b_path) || b_path.ends_with(a_path)
+    crate::fs::same_spelling(edited, path)
 }
 
 #[cfg(test)]
@@ -215,7 +200,7 @@ mod tests {
         let p = dir.join("delta.txt");
         fs::write(&p, "x".repeat(100 * 1024)).unwrap();
         let path = p.to_str().unwrap();
-        let abs = dunce::canonicalize(&p).unwrap();
+        let abs = fs_kit::path::canonicalize(&p).unwrap();
         let key = crate::plugins::read::cache::key(abs.to_str().unwrap(), "full", None);
         let ctx = Ctx::new(&cx);
         let id = ctx.put_archive(b"previous body").unwrap();
@@ -317,7 +302,7 @@ mod tests {
             other => panic!("{other:?}"),
         };
         let first = reason(&json!({"file_path": path}));
-        let abs = dunce::canonicalize(&p).unwrap();
+        let abs = fs_kit::path::canonicalize(&p).unwrap();
         let key = crate::plugins::read::cache::key(abs.to_str().unwrap(), "full", None);
         let id = Ctx::new(&cx).put_archive(b"previous body").unwrap();
         Ctx::new(&cx).put_read_cache(&key, "h", Some(&id)).unwrap();
@@ -415,7 +400,7 @@ mod tests {
         assert_eq!(m.est_before, 0);
         assert!(m.est_after > 0);
 
-        let abs = dunce::canonicalize(&p).unwrap();
+        let abs = fs_kit::path::canonicalize(&p).unwrap();
         let key = crate::plugins::read::cache::key(abs.to_str().unwrap(), "full", None);
         let id = Ctx::new(&cx).put_archive(b"previous body").unwrap();
         Ctx::new(&cx).put_read_cache(&key, "h", Some(&id)).unwrap();
@@ -469,9 +454,30 @@ mod tests {
 
     #[test]
     fn same_path_rejects_suffix_false_positive() {
+        use crate::fs::same_spelling as same_path;
         assert!(!same_path("/repo/main.rs", "ain.rs"));
         assert!(same_path("/repo/src/main.rs", "src/main.rs"));
         assert!(same_path("src/main.rs", "/repo/src/main.rs"));
+        assert!(!same_path("", "src/main.rs"));
+    }
+
+    /// T504: a Windows tool call can spell the drive and folders in another case than the
+    /// path the hook was asked about; on case-sensitive hosts they stay different files.
+    #[test]
+    fn same_path_follows_the_platform_case_rule() {
+        let folds = cfg!(windows);
+        assert_eq!(
+            crate::fs::same_spelling(r"C:\Repo\Src\Main.rs", r"c:\repo\src\main.rs"),
+            folds
+        );
+        assert_eq!(
+            crate::fs::same_spelling("/Repo/Src/Main.rs", "/repo/src/main.rs"),
+            folds
+        );
+        assert_eq!(
+            crate::fs::same_spelling("/Repo/Src/Main.rs", "src/MAIN.rs"),
+            folds
+        );
     }
 
     /// A hook body the store could not keep (above `core.call_io_inline_bytes`, no archive

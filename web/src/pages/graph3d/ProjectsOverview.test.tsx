@@ -3,12 +3,12 @@
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { project } from "../../api/sampleRows";
 import type { ProjectRow, Snapshot } from "../../api/snapshot.gen";
 import { richSnapshot } from "../fixtures";
-import { mount, serving } from "../testHelpers";
+import { mount, serving, wire } from "../testHelpers";
 import { VIEW_KEY } from "./ProjectsOverview";
 
 beforeEach(() => localStorage.clear());
@@ -97,5 +97,86 @@ describe("graph overview", () => {
         page([]);
         await screen.findByText("No projects");
         expect(screen.queryByRole("group", { name: "view" })).toBeNull();
+    });
+});
+
+describe("re-index and remove from the node menu (T329.54)", () => {
+    const mounted = (projects: ProjectRow[] = rows) => {
+        localStorage.setItem(VIEW_KEY, "2d");
+        const w = wire({ ...richSnapshot, projects });
+        mount(w.connect, "/graph");
+        return w;
+    };
+    const menuOf = async (name: string) => {
+        const nodes = await screen.findAllByTestId("node-2d");
+        fireEvent.contextMenu(nodes.find((n) => n.getAttribute("aria-label")!.startsWith(name))!);
+    };
+    const asked = (w: ReturnType<typeof wire>) =>
+        w.sent.filter((m) => "project" in m).map((m) => ("project" in m ? m.project : m));
+
+    test("Re-index sends the request, and not for a missing or indexing project", async () => {
+        const w = mounted([
+            project(1, "rtok", { selected: true }),
+            project(2, "gone", { state: "missing", missing: true }),
+            project(3, "busy", { state: "indexing" }),
+        ]);
+        await menuOf("rtok");
+        fireEvent.click(await screen.findByRole("menuitem", { name: "Re-index" }));
+        await waitFor(() => expect(asked(w)).toEqual([{ action: "reindex", project: "1" }]));
+
+        for (const name of ["gone", "busy"]) {
+            await menuOf(name);
+            const item = await screen.findByRole("menuitem", { name: "Re-index" });
+            expect(item.hasAttribute("disabled")).toBe(true);
+            fireEvent.keyDown(document, { key: "Escape" });
+        }
+        expect(asked(w)).toHaveLength(1);
+    });
+
+    test("Remove asks for the plan, and only Confirm sends the removal", async () => {
+        const w = mounted();
+        await menuOf("ketch");
+        fireEvent.click(await screen.findByRole("menuitem", { name: "Remove…" }));
+        expect(asked(w)).toEqual([{ action: "remove", project: "2", confirmed: false }]);
+
+        const region = await screen.findByRole("region", { name: "remove ketch" });
+        const confirm = within(region).getByRole("button", { name: /Remove ketch/ });
+        expect(confirm.hasAttribute("disabled")).toBe(true);
+        act(() =>
+            w.answer({
+                type: "projectplan",
+                project: "2",
+                plan: "would remove /x/ketch\n  files untouched; nothing removed (dry run)\n",
+            }),
+        );
+        expect((await within(region).findByText(/files untouched/)).textContent).toMatch(
+            /nothing removed/,
+        );
+        expect(asked(w)).toHaveLength(1);
+        fireEvent.click(confirm);
+        await waitFor(() =>
+            expect(asked(w)[1]).toEqual({ action: "remove", project: "2", confirmed: true }),
+        );
+        expect(screen.queryByRole("region", { name: "remove ketch" })).toBeNull();
+    });
+
+    test("declining the plan sends nothing more", async () => {
+        const w = mounted();
+        await menuOf("rtok");
+        fireEvent.click(await screen.findByRole("menuitem", { name: "Remove…" }));
+        const region = await screen.findByRole("region", { name: "remove rtok" });
+        act(() => w.answer({ type: "projectplan", project: "1", plan: "would remove /x/rtok\n" }));
+        fireEvent.click(within(region).getByRole("button", { name: "Cancel" }));
+        expect(screen.queryByRole("region", { name: "remove rtok" })).toBeNull();
+        expect(asked(w)).toEqual([{ action: "remove", project: "1", confirmed: false }]);
+    });
+
+    test("the page shows an indexing project and a failed one with its error", async () => {
+        mounted([
+            project(1, "rtok", { selected: true, state: "indexing" }),
+            project(2, "ketch", { state: "failed", error: "disk full" }),
+        ]);
+        expect((await screen.findByText("Indexing rtok…")).getAttribute("role")).toBe("status");
+        expect((await screen.findByText(/ketch: disk full/)).closest("[role=alert]")).toBeTruthy();
     });
 });

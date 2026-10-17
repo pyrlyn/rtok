@@ -183,17 +183,7 @@ pub fn plugin_serves(cfg: &Config, remove: bool) -> bool {
 }
 
 impl Agent for Zcode {
-    fn id(&self) -> &'static str {
-        "zcode"
-    }
-
-    fn variants(&self) -> &'static [Variant] {
-        &VARIANTS
-    }
-
-    fn readme(&self) -> &'static str {
-        include_str!("README.md")
-    }
+    super::agent_identity!("zcode");
 
     fn plugin_surfaces(&self) -> &'static [rtok_plugin_sdk::Surface] {
         &[rtok_plugin_sdk::Surface::Hook]

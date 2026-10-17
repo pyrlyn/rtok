@@ -30,7 +30,7 @@ pub struct HostPlugin {
     /// Where the plugin lands under a given config — the one part that needs the config.
     pub dest: fn(&Config) -> PathBuf,
     /// True for a host whose official docs have no GitHub/subdir install, so the local
-    /// link is the only path there is (T164: pi, opencode, kilo, zcode, cursor) — installed
+    /// link is the only path there is (T164: pi, opencode, kilo, mimo, zcode, cursor) — installed
     /// without asking, once the host itself is detected. False keeps the old `--yes`
     /// question (omp, a pi fork, is unchanged for now).
     pub default_install: bool,
@@ -105,12 +105,13 @@ mod tests {
 
     /// Every declared `HostPlugin`, for tests that must cover the whole set rather than
     /// pick a few by hand (T164).
-    fn all_host_plugins() -> [&'static HostPlugin; 7] {
+    fn all_host_plugins() -> [&'static HostPlugin; 8] {
         [
             &super::super::cursor::PLUGIN,
             &super::super::opencode::PLUGIN,
             &super::super::pi::PLUGIN,
             &super::super::kilo::PLUGIN,
+            &super::super::mimo::PLUGIN,
             &super::super::zcode::PLUGIN,
             &super::super::omp::PLUGIN,
             &super::super::antigravity::PLUGIN,
@@ -118,8 +119,8 @@ mod tests {
     }
 
     /// Every host plugin names a distinct host, so a table keyed by host name (below) and a
-    /// report line can never point at two declarations. Two hosts (kilo, omp) do share
-    /// another host's `src_rel` on purpose — kilo links opencode's JS plugin, omp links
+    /// report line can never point at two declarations. Three hosts (kilo, mimo, omp) do share
+    /// another host's `src_rel` on purpose — kilo and mimo link opencode's JS plugin, omp links
     /// pi's extension, neither duplicates the tree — so this does not check sources.
     #[test]
     fn declared_host_plugins_have_distinct_hosts() {
@@ -136,7 +137,7 @@ mod tests {
         }
     }
 
-    /// T164: exactly pi, opencode, kilo, zcode and cursor install without asking — every
+    /// T164, T520: exactly pi, opencode, kilo, mimo, zcode and cursor install without asking — every
     /// host whose official docs have no GitHub/subdir install, so the local link is the
     /// only path there is. omp (a pi fork) is unchanged for now. A table, not one
     /// assertion per host, so a new host plugin is forced to state its answer here too.
@@ -147,6 +148,7 @@ mod tests {
             ("OpenCode", true),
             ("pi", true),
             ("Kilo Code", true),
+            ("MiMo Code", true),
             ("ZCode", true),
             ("oh my pi", false),
             ("Antigravity", false),

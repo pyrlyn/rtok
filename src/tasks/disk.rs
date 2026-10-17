@@ -7,7 +7,7 @@
 //! diffable in the repository. Done and closed tasks move to `<dir>/done/` (§8), so the plan is
 //! a directory listing. Writes are temp file + rename.
 
-use std::fs::OpenOptions;
+use std::fs::{File, OpenOptions};
 use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -24,9 +24,6 @@ const SLUG_MAX: usize = 48;
 /// How a claim waits for another process's lock before giving up.
 const LOCK_TRIES: u32 = 50;
 const LOCK_WAIT: Duration = Duration::from_millis(20);
-
-/// A lock older than this is a crashed process. The next claim removes it and takes over.
-const LOCK_STALE: Duration = Duration::from_secs(10);
 
 pub struct DiskAdapter {
     dir: PathBuf,
@@ -51,21 +48,21 @@ struct Head {
     assignee: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     blocked_by: Vec<TaskId>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    conflicts_with: Vec<TaskId>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    parallel: bool,
 }
 
-/// Removes `<dir>/.claim.lock` when the claim finishes, including on panic.
+/// Holds the OS lock on `<dir>/.claim.lock`. The lock goes with the handle (dropped on panic,
+/// released by the kernel when the process dies), and the file is never unlinked, so a late
+/// release cannot remove a successor's lock.
 #[derive(Debug)]
 struct DiskGuard {
-    path: PathBuf,
+    _file: File,
 }
 
 impl ClaimLock for DiskGuard {}
-
-impl Drop for DiskGuard {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.path);
-    }
-}
 
 impl DiskAdapter {
     /// Tasks live in `dir` (`[tasks.disk] dir` joined to the project root).
@@ -88,12 +85,21 @@ impl DiskAdapter {
         for entry in entries {
             let path = entry?.path();
             // Only `<id> - <slug>.md` is ours; a README or notes beside the tasks stay theirs.
-            if file_id(&path).is_none() {
+            let Some(name_id) = file_id(&path) else {
                 continue;
-            }
+            };
             let text = std::fs::read_to_string(&path)
                 .with_context(|| format!("disk tasks: {}", path.display()))?;
             let task = parse(&text).with_context(|| format!("disk tasks: {}", path.display()))?;
+            // `place` writes under the front-matter id, so a copied file with a foreign id
+            // would overwrite that task's file; reject it before any mutation.
+            if task.id != name_id {
+                bail!(
+                    "disk tasks: {}: file name says {name_id} but the front matter says {}",
+                    path.display(),
+                    task.id
+                );
+            }
             out.push((path, task));
         }
         Ok(out)
@@ -116,7 +122,7 @@ impl DiskAdapter {
     fn write(&self, dir: &Path, task: &Task) -> Result<PathBuf> {
         std::fs::create_dir_all(dir).with_context(|| format!("disk tasks: {}", dir.display()))?;
         let path = dir.join(file_name(&task.id, &task.title));
-        rtok_agent_sdk::write_atomic(&path, &render(task)?)?;
+        fs_kit::write::atomic(&path, render(task)?)?;
         Ok(path)
     }
 
@@ -190,6 +196,10 @@ impl TaskAdapter for DiskAdapter {
         Ok(Box::new(lock_claim(&self.dir)?))
     }
 
+    fn stores_markers(&self) -> bool {
+        true
+    }
+
     fn save(&self, task: &Task) -> Result<Task> {
         let Some((old, _)) = self.find(&task.id)? else {
             bail!("disk tasks: no task {} in {}", task.id, self.dir.display());
@@ -201,6 +211,8 @@ impl TaskAdapter for DiskAdapter {
         }
         task.blocked_by.sort();
         task.blocked_by.dedup();
+        task.conflicts_with.sort();
+        task.conflicts_with.dedup();
         self.place(Some(old), &task)
     }
 
@@ -214,40 +226,27 @@ impl TaskAdapter for DiskAdapter {
     }
 }
 
-/// `<dir>/.claim.lock`, created with `create_new`. A lock whose mtime is older than
-/// [`LOCK_STALE`] is removed and taken; a live one is waited out.
+/// An exclusive `flock` on the stable `<dir>/.claim.lock`, polled for a bounded time. A holder
+/// that is paused keeps the lock, so a waiter gets the "locked" error instead of racing it; a
+/// crashed holder's lock is released by the OS, so no leftover file ever blocks a claim.
 fn lock_claim(dir: &Path) -> Result<DiskGuard> {
     std::fs::create_dir_all(dir).with_context(|| format!("disk tasks: {}", dir.display()))?;
     let path = dir.join(".claim.lock");
+    let file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(&path)
+        .with_context(|| format!("disk tasks: {}", path.display()))?;
     for _ in 0..LOCK_TRIES {
-        match OpenOptions::new().write(true).create_new(true).open(&path) {
-            Ok(file) => {
-                drop(file);
-                return Ok(DiskGuard { path });
-            }
-            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-                if lock_is_stale(&path) {
-                    let _ = std::fs::remove_file(&path);
-                    continue;
-                }
-                thread::sleep(LOCK_WAIT);
-            }
-            Err(e) => {
-                return Err(e).with_context(|| format!("disk tasks: {}", path.display()));
-            }
+        if rtok_sys::try_lock_exclusive(&file)
+            .with_context(|| format!("disk tasks: {}", path.display()))?
+        {
+            return Ok(DiskGuard { _file: file });
         }
+        thread::sleep(LOCK_WAIT);
     }
     bail!("disk tasks: {} is locked", path.display())
-}
-
-fn lock_is_stale(path: &Path) -> bool {
-    let Ok(meta) = std::fs::metadata(path) else {
-        return true;
-    };
-    let Ok(modified) = meta.modified() else {
-        return false;
-    };
-    modified.elapsed().is_ok_and(|age| age > LOCK_STALE)
 }
 
 fn now() -> i64 {
@@ -301,6 +300,8 @@ fn render(task: &Task) -> Result<String> {
         priority: task.priority,
         assignee: task.assignee.clone(),
         blocked_by: task.blocked_by.clone(),
+        conflicts_with: task.conflicts_with.clone(),
+        parallel: task.parallel,
     };
     let yaml = serde_saphyr::to_string(&head)?;
     let body = task.description.trim_end();
@@ -326,6 +327,9 @@ fn parse(text: &str) -> Result<Task> {
     let mut blocked_by = head.blocked_by;
     blocked_by.sort();
     blocked_by.dedup();
+    let mut conflicts_with = head.conflicts_with;
+    conflicts_with.sort();
+    conflicts_with.dedup();
     let assignee = head.assignee.filter(|s| !s.is_empty());
     Ok(Task {
         description: body.trim().to_string(),
@@ -336,6 +340,8 @@ fn parse(text: &str) -> Result<Task> {
         priority: head.priority,
         assignee,
         blocked_by,
+        conflicts_with,
+        parallel: head.parallel,
         ..Task::open(head.id, head.title, "", 0)
     })
 }
@@ -473,6 +479,74 @@ mod tests {
     }
 
     #[test]
+    fn a_file_whose_front_matter_id_differs_from_its_name_is_rejected_untouched() {
+        let dir = tmp("identity");
+        let disk = DiskAdapter::new(dir.clone());
+        disk.create(&new("target"), &id("R2")).unwrap();
+        let copy = dir.join("R1 - copy.md");
+        std::fs::write(
+            &copy,
+            "---\nid: R2\ntitle: target\nstatus: open\ncreated_at: 1\nupdated_at: 2\n---\n\nCopied body\n",
+        )
+        .unwrap();
+        let target = dir.join("R2 - target.md");
+        let before = (
+            std::fs::read(&copy).unwrap(),
+            std::fs::read(&target).unwrap(),
+        );
+
+        for err in [
+            disk.get(&id("R1")).unwrap_err(),
+            disk.list(&Filter::default()).unwrap_err(),
+            disk.write_status(&id("R1"), Status::InProgress)
+                .unwrap_err(),
+            disk.save(&Task::open(id("R1"), "x", "", 0)).unwrap_err(),
+        ] {
+            let msg = format!("{err:#}");
+            assert!(
+                msg.contains("R1 - copy.md") && msg.contains("R1") && msg.contains("R2"),
+                "{msg}"
+            );
+        }
+        assert_eq!(
+            before,
+            (
+                std::fs::read(&copy).unwrap(),
+                std::fs::read(&target).unwrap()
+            )
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_mismatch_in_done_is_rejected_and_a_lower_case_name_still_matches() {
+        let dir = tmp("identity-done");
+        std::fs::create_dir_all(dir.join("done")).unwrap();
+        std::fs::write(
+            dir.join("done/R3 - a.md"),
+            "---\nid: R4\ntitle: a\nstatus: done\ncreated_at: 1\nupdated_at: 2\n---\n",
+        )
+        .unwrap();
+        let disk = DiskAdapter::new(dir.clone());
+        let err = disk
+            .list(&Filter {
+                all: true,
+                ..Filter::default()
+            })
+            .unwrap_err();
+        assert!(format!("{err:#}").contains("R3 - a.md"), "{err:#}");
+        std::fs::remove_file(dir.join("done/R3 - a.md")).unwrap();
+
+        std::fs::write(
+            dir.join("r5 - b.md"),
+            "---\nid: R5\ntitle: b\nstatus: open\ncreated_at: 1\nupdated_at: 2\n---\n",
+        )
+        .unwrap();
+        assert!(disk.get(&id("R5")).unwrap().is_some());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn the_file_round_trips_through_render_and_parse() {
         let task = Task {
             title: "Title: with \"quotes\" and # hash".into(),
@@ -480,10 +554,16 @@ mod tests {
             status: Status::InProgress,
             created_at: 10,
             updated_at: 20,
+            conflicts_with: vec![id("R2"), id("R3")],
+            parallel: true,
             ..Task::open(id("R4"), "", "", 0)
         };
         let text = render(&task).unwrap();
         assert!(text.starts_with("---\nid: R4\n"), "{text}");
+        assert!(
+            text.contains("conflicts_with:") && text.contains("parallel: true"),
+            "{text}"
+        );
         assert_eq!(parse(&text).unwrap(), task);
         assert_eq!(parse(&text.replace('\n', "\r\n")).unwrap(), task);
         let bare = Task {
@@ -514,18 +594,14 @@ mod tests {
     }
 
     #[test]
-    fn a_stale_claim_lock_is_taken_and_a_live_one_is_kept() {
+    fn a_leftover_lock_file_is_taken_and_a_held_one_is_kept() {
         let dir = tmp("lock");
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join(".claim.lock");
-        let file = std::fs::File::create(&path).unwrap();
-        file.set_modified(SystemTime::now() - Duration::from_secs(11))
-            .unwrap();
-        drop(file);
+        std::fs::File::create(&path).unwrap();
         let guard = lock_claim(&dir).unwrap();
-        assert!(path.is_file());
         drop(guard);
-        assert!(!path.exists(), "the guard removes the lock");
+        assert!(path.is_file(), "the lock file is stable, never unlinked");
 
         let held = lock_claim(&dir).unwrap();
         let err = lock_claim(&dir).unwrap_err();
@@ -533,6 +609,66 @@ mod tests {
         drop(held);
         let again = lock_claim(&dir).unwrap();
         drop(again);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn an_old_lock_file_does_not_let_a_second_claimant_in() {
+        let dir = tmp("lock-held-old");
+        let a = lock_claim(&dir).unwrap();
+        // A paused holder looks "stale" by mtime; the lock must still exclude.
+        let file = OpenOptions::new()
+            .write(true)
+            .open(dir.join(".claim.lock"))
+            .unwrap();
+        file.set_modified(SystemTime::now() - Duration::from_secs(11))
+            .unwrap();
+        drop(file);
+        let err = lock_claim(&dir).unwrap_err();
+        assert!(err.to_string().contains("locked"), "{err}");
+        drop(a);
+        // A's release leaves the file and the exclusion free for the next claimant.
+        let b = lock_claim(&dir).unwrap();
+        let err = lock_claim(&dir).unwrap_err();
+        assert!(err.to_string().contains("locked"), "{err}");
+        drop(b);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Child half of [`a_killed_holder_releases_the_lock`]: holds the lock until killed.
+    #[test]
+    fn lock_holder_child() {
+        let Ok(dir) = std::env::var("RTOK_DISK_LOCK_CHILD") else {
+            return;
+        };
+        let _guard = lock_claim(Path::new(&dir)).unwrap();
+        std::fs::write(Path::new(&dir).join("child-ready"), "").unwrap();
+        thread::sleep(Duration::from_secs(60));
+    }
+
+    #[test]
+    fn a_killed_holder_releases_the_lock() {
+        use std::process::Command;
+
+        let dir = tmp("lock-kill");
+        let mut child = Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "tasks::disk::tests::lock_holder_child"])
+            .env("RTOK_DISK_LOCK_CHILD", &dir)
+            .spawn()
+            .unwrap();
+        let ready = dir.join("child-ready");
+        for _ in 0..500 {
+            if ready.exists() {
+                break;
+            }
+            thread::sleep(Duration::from_millis(20));
+        }
+        assert!(ready.exists(), "child never locked");
+        let err = lock_claim(&dir).unwrap_err();
+        assert!(err.to_string().contains("locked"), "{err}");
+        child.kill().unwrap();
+        child.wait().unwrap();
+        drop(lock_claim(&dir).unwrap());
         let _ = std::fs::remove_dir_all(&dir);
     }
 

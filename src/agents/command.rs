@@ -8,12 +8,11 @@
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 
 use super::link::shell_agent;
 use super::{Mode, OutdatedSelection, Request, installed_hosts, print_human, report};
 use crate::config::Config;
-use crate::render::with_loader;
 use crate::store::{AgentDetail, Store};
 use crate::ui::style;
 
@@ -40,6 +39,8 @@ pub struct Install {
     pub desktop: bool,
     pub all: bool,
     pub no_restart: bool,
+    /// T289.3: write the project's post-create script entry instead of the host's own config.
+    pub project: bool,
 }
 
 /// The host installers, one call site for `rtok agents install|uninstall` and the deprecated
@@ -52,6 +53,11 @@ pub fn install(
     let mut cfg = Config::load_with(config_file, flags)?;
     // Comma-separated hosts: `rtok agents install opencode,cursor` installs both.
     let hosts = parse_hosts(&args.host)?;
+    if args.project {
+        let root = project_checkout(&std::env::current_dir()?)?;
+        crate::log::stdout(&super::post_create::run(&cfg, &hosts, args.remove, &root)?);
+        return Ok(());
+    }
     let mode = if args.remove {
         Mode::Remove
     } else if args.replace {
@@ -67,6 +73,14 @@ pub fn install(
         all: args.all,
     };
     apply_hosts(&mut cfg, &req, args.no_restart)
+}
+
+/// Where `--project` writes: the post-create entries are checked-in files, so a linked
+/// worktree gets its own, not the main checkout's.
+fn project_checkout(cwd: &Path) -> Result<PathBuf> {
+    rtok_config::root::ProjectRoot::find(cwd)
+        .map(|r| r.checkout)
+        .context("--project: run it inside the project's git repository")
 }
 
 /// `rtok agents outdated`.
@@ -138,22 +152,12 @@ pub fn update(
     apply_hosts(&mut cfg, &req, args.no_restart)
 }
 
-/// Run `req` with the loader and desktop-restart handling every `agents` writer shares.
+/// Run `req` with the desktop-restart handling every `agents` writer shares.
 fn apply_hosts(cfg: &mut Config, req: &Request, no_restart: bool) -> Result<()> {
-    // T81: `agents::run` may ask the plugin question mid-run, and a loader ticking on
-    // stderr redraws right over a prompt — the question turns invisible and the wait for
-    // its answer reads as a hang. A spinner must never share a terminal with a question,
-    // so interactive runs render no loader; pipes and CI (which can never be asked) keep it.
-    let interactive = std::io::IsTerminal::is_terminal(&std::io::stdin());
     // T141: closes a running desktop app before the write if it would change that host's
     // config, and reopens it after; CLI-only hosts just get a "restart your session" note.
-    let out = if interactive {
-        super::restart::run(cfg, req, no_restart)?
-    } else {
-        with_loader("updating host", || {
-            super::restart::run(cfg, req, no_restart)
-        })?
-    };
+    // The per-host bar lives in `agents::run` (T436.4).
+    let out = super::restart::run(cfg, req, no_restart)?;
     crate::log::stdout(&out);
     // T279 step 3/6 "Failure": a Claude reinstall that removed the old plugin and then failed
     // to install the new one must not exit 0 like every other `claude` degrade — the host is
@@ -199,7 +203,13 @@ pub fn status_caller(cfg: &Config) -> Option<String> {
 
 /// `rtok agents send` (T287): one recipient by id prefix, or every live agent of the caller's
 /// project (`project_name` of its cwd, else the cwd itself) minus the sender.
-pub fn send(cfg: &Config, to: Option<String>, text: Option<String>, all_live: bool) -> Result<()> {
+pub fn send(
+    cfg: &Config,
+    to: Option<String>,
+    text: Option<String>,
+    all_live: bool,
+    task: Option<&str>,
+) -> Result<()> {
     let (to, text) = match (all_live, to, text) {
         (false, Some(to), Some(text)) => (Some(to), text),
         (true, Some(text), None) => (None, text),
@@ -246,7 +256,7 @@ pub fn send(cfg: &Config, to: Option<String>, text: Option<String>, all_live: bo
         vec![id]
     };
     for id in targets {
-        let msg = store.send_message(from.as_deref(), &id, &text)?;
+        let msg = store.send_message_on(from.as_deref(), &id, &text, task)?;
         crate::log::stdout_ln(&format!(
             "sent #{msg} to {}",
             crate::store::short_agent_id(&id)
@@ -257,7 +267,13 @@ pub fn send(cfg: &Config, to: Option<String>, text: Option<String>, all_live: bo
 
 /// `rtok agents inbox` (T287): with no id the caller reads — and marks read — its own queue;
 /// with one the user peeks at that agent's queue and marks nothing.
-pub fn inbox(cfg: &Config, id: Option<String>, unread: bool, json: bool) -> Result<()> {
+pub fn inbox(
+    cfg: &Config,
+    id: Option<String>,
+    unread: bool,
+    task: Option<&str>,
+    json: bool,
+) -> Result<()> {
     let store = Store::open(&cfg.core.db_path)?;
     let (to, mark) = match id {
         Some(prefix) => (
@@ -271,7 +287,7 @@ pub fn inbox(cfg: &Config, id: Option<String>, unread: bool, json: bool) -> Resu
             None => bail!("not inside an agent session; pass an agent id"),
         },
     };
-    let rows = store.inbox(&to, unread, mark)?;
+    let rows = store.inbox_limited(&to, unread, mark, None, task)?;
     if json {
         let framed: Vec<serde_json::Value> = rows
             .iter()
@@ -294,4 +310,20 @@ pub fn inbox(cfg: &Config, id: Option<String>, unread: bool, json: bool) -> Resu
         crate::log::stdout(&crate::render::agent_message_frame(m));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn project_files_go_to_the_linked_worktree_not_the_main_checkout() {
+        let dir = crate::testutil::tmp_dir("t660-project-flag");
+        let (main, wt) = crate::testutil::worktree_layout(&dir);
+        std::fs::create_dir_all(wt.join("src")).unwrap();
+        assert_eq!(project_checkout(&wt.join("src")).unwrap(), wt);
+        assert_eq!(project_checkout(&main).unwrap(), main);
+        assert!(project_checkout(&dir).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

@@ -9,6 +9,7 @@
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
+use rtok_sys::proc::{ProgressRunner, Unit};
 use serde::Serialize;
 
 use super::list::newest_until;
@@ -39,6 +40,9 @@ pub struct Policy<'a> {
     pub now: SystemTime,
     /// Live rtok agents (T282): a worktree bound to one is never removed (T285).
     pub live: std::collections::HashSet<String>,
+    /// Worktrees a post-create script adopted before any agent took them (T289.5): no agent
+    /// to ask yet, so they are held like a live agent's.
+    pub pending: Vec<PathBuf>,
 }
 
 impl Policy<'_> {
@@ -70,6 +74,11 @@ pub fn decide(
         let short: String = agent.chars().take(8).collect();
         format!("agent {short} is live")
     });
+    let pending = || {
+        let dir = crate::fs::canon(&record.path);
+        p.pending.iter().any(|d| crate::fs::same_path(&dir, d))
+    };
+    let live = live.or_else(|| pending().then(|| "pending claim, no agent has taken it".into()));
     let held = record.held_against(p.owner);
     let owner = || {
         let owner = record.owner().map(|o| o.owner);
@@ -107,8 +116,12 @@ pub fn decide(
             Some(b) => keep(&format!("not merged into the base; check `gh pr view {b}`")),
             None => keep("detached HEAD not merged into the base"),
         },
-        _ if age(p.idle).is_some_and(|a| a < p.idle) => keep("modified within the idle window"),
-        _ => Verdict::Remove,
+        _ => match age(p.idle) {
+            Some(a) if a < p.idle => keep("modified within the idle window"),
+            Some(_) => Verdict::Remove,
+            // T656: no evidence of age is no evidence of idleness.
+            None => keep(super::clean::AGE_UNKNOWN),
+        },
     }
 }
 
@@ -116,6 +129,9 @@ pub fn decide(
 pub struct Outcome {
     pub path: String,
     pub branch: Option<String>,
+    /// What a removal frees, counted before it runs; 0 unless the action is `remove`.
+    pub bytes: u64,
+    pub files: u64,
     /// `remove`, `drop-record` or `keep`.
     pub action: &'static str,
     /// Why it was kept, what was done, or git's message when a step failed.
@@ -152,12 +168,11 @@ pub fn judge(cwd: &Path, policy: &Policy) -> anyhow::Result<(PathBuf, Vec<Judged
         .first()
         .map_or(cwd, |main| main.record.path.as_path())
         .to_path_buf();
+    let current_at = super::deepest(&here, 0..entries.len(), |i| entries[*i].record.path.clone());
     // The walks are the expensive part: side by side, and stopped at the first recent file.
-    let verdicts = par_map(&entries, |_, entry| {
+    let verdicts = par_map(&entries, |i, entry| {
         let path = &entry.record.path;
-        let current = path
-            .canonicalize()
-            .is_ok_and(|p| crate::fs::path_starts_with(&here, &crate::fs::canon(&p)));
+        let current = current_at == Some(i);
         let modified = |within| newest_until(path, |m| policy.age(m) < within);
         decide(entry, modified, current, policy)
     });
@@ -172,14 +187,37 @@ pub fn judge(cwd: &Path, policy: &Policy) -> anyhow::Result<(PathBuf, Vec<Judged
 
 pub fn run(cwd: &Path, policy: &Policy, yes: bool) -> anyhow::Result<Vec<Outcome>> {
     let (repo, judged) = judge(cwd, policy)?;
+    let acting = |v: &Verdict| yes && v.plan().0 != "keep";
+    let count = judged.iter().filter(|j| acting(&j.verdict)).count();
+    // One removal keeps its own spinner; several get a bar over the worktrees (T276.2).
+    let mut bar = (count > 1)
+        .then(|| ProgressRunner::batch("removing worktrees…", count as u64, Unit::Items));
     // Removals stay one at a time: each takes the repository's locks.
-    let outcomes = judged.iter().map(|Judged { entry, verdict }| {
+    let mut outcomes = Vec::with_capacity(judged.len());
+    for Judged { entry, verdict } in &judged {
         let (action, planned) = verdict.plan();
-        let done = (yes && action != "keep")
-            .then(|| super::remove::detach(&repo, &entry.record, entry.merged));
-        Outcome {
+        let (bytes, files) = match action {
+            "remove" => crate::removal_preview::size_of(&entry.record.path),
+            _ => (0, 0),
+        };
+        let done = acting(verdict).then(|| {
+            if let Some(bar) = bar.as_mut() {
+                bar.step(
+                    &entry
+                        .record
+                        .path
+                        .file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy(),
+                );
+            }
+            super::remove::detach(&repo, &entry.record, entry.merged)
+        });
+        outcomes.push(Outcome {
             path: entry.record.path.display().to_string(),
             branch: entry.record.branch.clone(),
+            bytes,
+            files,
             action,
             failed: matches!(done, Some(Err(_))),
             note: match done {
@@ -187,9 +225,12 @@ pub fn run(cwd: &Path, policy: &Policy, yes: bool) -> anyhow::Result<Vec<Outcome
                 Some(Err(e)) => format!("failed, kept: {e:#}"),
                 None => planned,
             },
-        }
-    });
-    Ok(outcomes.collect())
+        });
+    }
+    if let Some(bar) = bar {
+        bar.finish();
+    }
+    Ok(outcomes)
 }
 
 pub fn to_table(outcomes: &[Outcome], yes: bool) -> String {
@@ -204,6 +245,13 @@ pub fn to_table(outcomes: &[Outcome], yes: bool) -> String {
     let mut out = super::noted_table(&cols, &lines, notes);
     let planned = outcomes.iter().filter(|o| o.action != "keep").count();
     if !yes && planned > 0 {
+        let removals = outcomes.iter().filter(|o| o.action == "remove");
+        let removals = removals.map(|o| (o.path.as_str(), o.bytes, o.files));
+        let preview = crate::removal_preview::render(removals);
+        if !preview.is_empty() {
+            out.push('\n');
+            out.push_str(&preview);
+        }
         out.push_str(&format!(
             "\ndry run: {planned} to act on, nothing changed; rerun with --yes\n"
         ));
@@ -321,6 +369,7 @@ mod tests {
             stale_lock: Duration::from_secs(500),
             now: at(1_000),
             live: ["0193ab12-live".to_string()].into(),
+            pending: Vec::new(),
         };
         let asked = std::cell::Cell::new(None);
         let walk = |within| {
@@ -358,9 +407,40 @@ mod tests {
             stale_lock: Duration::ZERO,
             now: at(1_000),
             live: Default::default(),
+            pending: Vec::new(),
         };
         let verdict = decide(&entry, |_| None, false, &policy);
         assert_eq!(verdict, Verdict::Keep(format!("locked by {ME}")));
+    }
+
+    /// T656: a merged, unlocked worktree whose newest mtime is unknown stays; with an old one
+    /// it goes.
+    #[rstest]
+    #[case::unknown(None, "keep:age unknown: a file or its mtime could not be read")]
+    #[case::old(Some(0), "remove")]
+    #[case::fresh(Some(990), "keep:modified within the idle window")]
+    fn an_unknown_age_keeps_a_merged_worktree(#[case] modified: Option<u64>, #[case] want: &str) {
+        let entry = Entry {
+            record: Record {
+                branch: Some("t1".into()),
+                ..Record::default()
+            },
+            state: State::Merged,
+            merged: true,
+            done: false,
+        };
+        let policy = Policy {
+            owner: Some(ME),
+            idle: Duration::from_secs(100),
+            stale_lock: Duration::from_secs(500),
+            now: at(1_000),
+            live: Default::default(),
+            pending: Vec::new(),
+        };
+        assert_eq!(
+            label(decide(&entry, |_| modified.map(at), false, &policy)),
+            want
+        );
     }
 
     const LIVE: &str = "Cursor / grok | t1 | 2026-09-22 | agent 0193ab12-live";
@@ -398,8 +478,45 @@ mod tests {
             stale_lock: Duration::from_secs(500),
             now: at(1_000),
             live: ["0193ab12-live".to_string()].into(),
+            pending: Vec::new(),
         };
         let got = label(decide(&entry, |_| modified.map(at), false, &policy));
         assert_eq!(got, want);
+    }
+
+    /// T289.5: a worktree a post-create script parked for the next agent is not an orphan: it is
+    /// kept, and goes only once its finished task has been idle.
+    #[rstest]
+    #[case::unfinished(false, Some(0), "keep:pending claim, no agent has taken it")]
+    #[case::finished_busy(true, Some(990), "keep:pending claim, no agent has taken it")]
+    #[case::finished_idle(true, Some(0), "finished:pending claim, no agent has taken it")]
+    fn a_pending_claim_is_not_an_orphan(
+        #[case] done: bool,
+        #[case] modified: Option<u64>,
+        #[case] want: &str,
+    ) {
+        let record = Record {
+            path: "/w/parked".into(),
+            branch: Some("t1".into()),
+            ..Record::default()
+        };
+        let entry = Entry {
+            record,
+            state: State::Merged,
+            merged: true,
+            done,
+        };
+        let policy = Policy {
+            owner: Some(ME),
+            idle: Duration::from_secs(100),
+            stale_lock: Duration::from_secs(500),
+            now: at(1_000),
+            live: Default::default(),
+            pending: vec!["/w/parked".into()],
+        };
+        assert_eq!(
+            label(decide(&entry, |_| modified.map(at), false, &policy)),
+            want
+        );
     }
 }

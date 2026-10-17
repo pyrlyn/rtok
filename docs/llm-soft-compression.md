@@ -216,7 +216,24 @@ dollars. Promote cards into `plan.md` before coding.
 | P4 optional | Phase 4 native ranker upgrade | Only if LLM loses Gate |
 | Parallel | Batch/Flex, model routing | Usually better $/effort first |
 
-## 8. Related docs
+## 8. Shipped behind a flag (T385.9)
+
+`[plugins.compress.llm] enabled = false` by default; with it off the proxy forwards exactly what
+it did before and makes no model call. With it on, in `proxy.mode = "compress"`:
+
+- A tool result outside `keep_turns` that `archive` already pointed at is offered to a background
+  queue (`max_in_flight` jobs at once). A request never waits for it.
+- The job asks the model for a summary on the proxy's own `internal` lane, with the agent
+  request's credentials, and stores it beside the archive row, keyed by archive id and compressor
+  version (prompt-file hash + model). Logs and prose only unless `code = true`.
+- A summary that drops a must-keep span (paths, identifiers, errors, numbers, commands, ids) is
+  rejected and not stored; an upstream error stores nothing and is warned.
+- From the next request on the block is `summary + expand(<id>)` instead of the extractive view,
+  when that is shorter than the pointer. A stored summary never changes, so the block is
+  byte-stable from the turn it first appears; until then the extractive view stays (fail open).
+  `expand <id>` still returns the original.
+
+## 9. Related docs
 
 - `src/plugins/compress/PLAN.md` — T28.0 survey and mechanism
 - `docs/batch-flex.md` — sync vs Batch (no soft compress on Batch)

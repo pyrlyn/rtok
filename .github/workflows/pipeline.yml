@@ -44,10 +44,9 @@ jobs:
     uses: ./.github/workflows/ci.yml
     with:
       docs-only: ${{ needs.changes.outputs.docs-only == 'true' }}
-    # ci.yml's jobs request these (e.g. revert-on-failure); a called workflow cannot exceed them.
+    # ci.yml's jobs request these; a called workflow cannot exceed them.
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
       actions: write # ci.yml cancels the run on the first failed step
 
   pipeline:

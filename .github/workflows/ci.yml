@@ -1,8 +1,8 @@
 name: ci
 
-# Push to main arms `revert-on-failure` (auto-revert of a bad push, then a draft PR
-# `revert-<branch>` that brings the work back — T84). That is intentional: main must stay
-# green. Pull requests against main are the review gate; draft PRs are skipped so
+# Pull requests against main are the review gate: the `protect-main` ruleset requires a green
+# `gate` before merge. A red main push (merge skew or a flake) is fixed forward; T502 retired
+# the auto-revert job (T84), whose push to main that ruleset rejects. Draft PRs are skipped so
 # half-finished work does not burn runners. `workflow_dispatch` remains for manual runs
 # (release branches, one-off checks).
 on:
@@ -26,7 +26,7 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# Read-only by default; `revert-on-failure` widens its own.
+# Read-only by default; jobs that cancel the run add `actions: write`.
 permissions:
   contents: read
 
@@ -37,6 +37,9 @@ env:
   # file:line (`Location` is compiled in); backtrace frames lose it. Local builds keep
   # `line-tables-only`.
   CARGO_PROFILE_DEV_DEBUG: "0"
+  # nextest's `ci` profile (.config/nextest.toml): two retries, no fail-fast, so one timing flake
+  # does not cancel the other shard and the macOS job. Reaches `just test` and the Windows run.
+  NEXTEST_PROFILE: ci
 
 jobs:
   # T261: everything that is not the test suite, once, on ubuntu, in parallel with `check`.
@@ -55,7 +58,14 @@ jobs:
       # Rust toolchain from the last run; mise then skips `rustup toolchain install`.
       - id: rustup
         uses: ./.github/actions/rustup-toolchain-cache
-      - uses: jdx/mise-action@7a4e45a543138629540c9a1616d08632b893e492 # v5.0.1
+      - uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
+      - uses: ./.github/actions/sccache
+        with:
+          access-key-id: ${{ secrets.R2_ACCESS_KEY_ID }}
+          secret-access-key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          bucket: ${{ vars.SCCACHE_BUCKET }}
+          endpoint: ${{ vars.SCCACHE_ENDPOINT }}
+          read-only: ${{ github.event_name == 'pull_request' }}
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           # T261 experiment: also save on the branch's manual runs to measure a warm cache.
@@ -93,7 +103,14 @@ jobs:
       - id: rustup
         uses: ./.github/actions/rustup-toolchain-cache
       # Installs the Rust version pinned in mise.toml — same toolchain as local.
-      - uses: jdx/mise-action@7a4e45a543138629540c9a1616d08632b893e492 # v5.0.1
+      - uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
+      - uses: ./.github/actions/sccache
+        with:
+          access-key-id: ${{ secrets.R2_ACCESS_KEY_ID }}
+          secret-access-key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          bucket: ${{ vars.SCCACHE_BUCKET }}
+          endpoint: ${{ vars.SCCACHE_ENDPOINT }}
+          read-only: ${{ github.event_name == 'pull_request' }}
       - if: steps.rustup.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6
         with:
@@ -116,10 +133,12 @@ jobs:
       # T310.9: build.rs embeds web/dist, so build the SPA before cargo; without it the binary
       # carries the "UI not built" page and the SPA-serving tests only see the placeholder.
       - run: just spa-install spa-build
-      - run: just test
-      # T310.10: the Playwright e2e drives the target/debug/rtok that `just test` just built with the
+      # The suite itself runs in `build-tests` + `test` below (archive, 2 shards per OS); this job
+      # keeps what needs the real binary: the Playwright e2e and the examples.
+      - run: mise exec -- cargo build -q
+      # T310.10: the Playwright e2e drives the target/debug/rtok that `cargo build` just built with the
       # SPA embedded. In the `spa` job it would need its own Rust toolchain and a cold cargo build;
-      # here the binary and the cargo cache are already warm, and only Chromium is added.
+      # here the cargo cache is already warm, and only Chromium is added.
       - if: runner.os == 'Linux'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -131,12 +150,161 @@ jobs:
       - if: failure() && github.event_name == 'pull_request'
         uses: pyrlyn/ci/.github/actions/cancel-run@4e652d891cc6e6f0be316eda1a1f9630d76a8b7e # main
 
+  # Unix test binaries are built once per OS and archived (`cargo nextest archive`); the `test`
+  # shards below only download the archive and run their partition. Archive and run share one
+  # runner OS and target. build.rs embeds web/dist, so the SPA is built first, as in `check`.
+  build-tests:
+    if: >-
+      (github.event_name != 'pull_request' || !github.event.pull_request.draft)
+      && !inputs.docs-only
+    strategy:
+      fail-fast: true
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      actions: write # cancel-run
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - id: rustup
+        uses: ./.github/actions/rustup-toolchain-cache
+      - uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
+      - uses: ./.github/actions/sccache
+        with:
+          access-key-id: ${{ secrets.R2_ACCESS_KEY_ID }}
+          secret-access-key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          bucket: ${{ vars.SCCACHE_BUCKET }}
+          endpoint: ${{ vars.SCCACHE_ENDPOINT }}
+          read-only: ${{ github.event_name == 'pull_request' }}
+      - if: steps.rustup.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ steps.rustup.outputs.path }}
+          key: ${{ steps.rustup.outputs.key }}
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
+      - run: just spa-install spa-build
+      - run: mise exec -- cargo nextest archive --workspace --archive-file nextest-archive.tar.zst
+      - uses: actions/upload-artifact@v7
+        with:
+          name: nextest-archive-${{ matrix.os }}
+          # web/dist rides along: tests/web.rs compares the embedded SPA with the file on disk.
+          path: |
+            nextest-archive.tar.zst
+            web/dist
+          retention-days: 1
+          if-no-files-found: error
+      - if: failure() && github.event_name == 'pull_request'
+        uses: pyrlyn/ci/.github/actions/cancel-run@4e652d891cc6e6f0be316eda1a1f9630d76a8b7e # main
+
+  # The suite, split over 2 shards per OS (nextest `--partition count:i/n`) from the archive.
+  test:
+    needs: build-tests
+    if: >-
+      (github.event_name != 'pull_request' || !github.event.pull_request.draft)
+      && !inputs.docs-only
+    strategy:
+      fail-fast: true
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        partition: [1, 2]
+        partitions: [2]
+    name: test (${{ matrix.os }}, ${{ matrix.partition }}/${{ matrix.partitions }})
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      actions: write # cancel-run
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - id: rustup
+        uses: ./.github/actions/rustup-toolchain-cache
+      - uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
+      - if: steps.rustup.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ steps.rustup.outputs.path }}
+          key: ${{ steps.rustup.outputs.key }}
+      # The host plugin tests (vitest) run on Linux only; keep vitest's cacheDir warm as in `check`.
+      - if: runner.os == 'Linux'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: target/vitest
+          key: vitest-${{ runner.os }}-${{ hashFiles('mise.toml', 'vitest.config.mjs', 'plugins/**/*.ts') }}
+          restore-keys: vitest-${{ runner.os }}-
+      # tests/deps.rs runs `cargo metadata --offline`; nothing was built here, so fetch the crates.
+      - run: mise exec -- cargo fetch --locked
+      - uses: actions/download-artifact@v8
+        with:
+          name: nextest-archive-${{ matrix.os }}
+      # Extracted into the checkout, not a temp dir: the tests call env!("CARGO_BIN_EXE_rtok"),
+      # a path fixed at build time under ./target, and the cached target/vitest is already there.
+      - run: >-
+          mise exec -- cargo nextest run --archive-file nextest-archive.tar.zst
+          --workspace-remap .
+          --extract-to . --extract-overwrite
+          --partition count:${{ matrix.partition }}/${{ matrix.partitions }}
+      - if: failure() && github.event_name == 'pull_request'
+        uses: pyrlyn/ci/.github/actions/cancel-run@4e652d891cc6e6f0be316eda1a1f9630d76a8b7e # main
+
+  # The Windows test binaries are built once here and archived (`cargo nextest archive`); the
+  # `windows` shards below only download the archive and run their partition, so the build is
+  # no longer repeated per shard. Archive and run share one runner OS and target.
+  windows-build:
+    if: >-
+      (github.event_name != 'pull_request' || !github.event.pull_request.draft)
+      && !inputs.docs-only
+    runs-on: windows-latest
+    permissions:
+      contents: read
+      actions: write # cancel-run
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - id: rustup
+        uses: ./.github/actions/rustup-toolchain-cache
+      - uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
+      - uses: ./.github/actions/sccache
+        with:
+          access-key-id: ${{ secrets.R2_ACCESS_KEY_ID }}
+          secret-access-key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          bucket: ${{ vars.SCCACHE_BUCKET }}
+          endpoint: ${{ vars.SCCACHE_ENDPOINT }}
+          read-only: ${{ github.event_name == 'pull_request' }}
+      - if: steps.rustup.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ steps.rustup.outputs.path }}
+          key: ${{ steps.rustup.outputs.key }}
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - run: mise exec -- cargo nextest archive --workspace --archive-file nextest-archive.tar.zst
+      - uses: actions/upload-artifact@v7
+        with:
+          name: nextest-archive-windows
+          path: nextest-archive.tar.zst
+          retention-days: 1
+          if-no-files-found: error
+      # T902: `cfg(windows)` code is invisible to the ubuntu `lint` job, so its lint debt (the
+      # T273/T274 class) only showed up in the first local Windows gate. Same flags as
+      # `just lint`: libs and bins keep the `Command::new` ban, tests are exempt (T276.6).
+      - run: mise exec -- cargo clippy --workspace --all-targets --all-features --exclude rtok-wasm-demo-guest -- -D warnings -A clippy::disallowed_methods
+      - run: mise exec -- cargo clippy --workspace --lib --bins --all-features --exclude rtok-wasm-demo-guest -- -D warnings
+      - if: failure() && github.event_name == 'pull_request'
+        uses: pyrlyn/ci/.github/actions/cancel-run@4e652d891cc6e6f0be316eda1a1f9630d76a8b7e # main
+
   # T44.4: the agent installers write Windows paths and `%APPDATA%` files; run the suite there.
-  # T83.4: a gate like `check` — a Windows-only failure fails the run and reverts main.
+  # T83.4: a gate like `check` — a Windows-only failure fails the run.
   # The suite run (~250 s) outweighs the build (~85 s) on this runner, so it is split across
-  # `partitions` runners with nextest `--partition count:i/n`. Every shard builds the same
-  # test binaries and runs its share; the job still fails if any shard fails.
+  # `partitions` runners with nextest `--partition count:i/n`. `windows-build` archives the test
+  # binaries once and every shard runs its share from that archive;
+  # the job still fails if any shard fails.
   windows:
+    needs: windows-build
     if: >-
       (github.event_name != 'pull_request' || !github.event.pull_request.draft)
       && !inputs.docs-only
@@ -157,18 +325,23 @@ jobs:
       # Rust toolchain from the last run; mise then skips `rustup toolchain install`.
       - id: rustup
         uses: ./.github/actions/rustup-toolchain-cache
-      - uses: jdx/mise-action@7a4e45a543138629540c9a1616d08632b893e492 # v5.0.1
+      - uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
       - if: steps.rustup.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6
         with:
           path: ${{ steps.rustup.outputs.path }}
           key: ${{ steps.rustup.outputs.key }}
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      # tests/deps.rs runs `cargo metadata --offline`; nothing was built here, so fetch the crates.
+      - run: mise exec -- cargo fetch --locked
+      - uses: actions/download-artifact@v8
         with:
-          # The shards build the same target dir; one upload is enough.
-          save-if: ${{ github.ref == 'refs/heads/main' && matrix.partition == 1 }}
+          name: nextest-archive-windows
+      # Extracted into the checkout, not a temp dir: the tests call env!("CARGO_BIN_EXE_rtok"), a path
+      # fixed at build time under ./target.
       - run: >-
-          mise exec -- cargo nextest run --workspace
+          mise exec -- cargo nextest run --archive-file nextest-archive.tar.zst
+          --workspace-remap .
+          --extract-to . --extract-overwrite
           --partition count:${{ matrix.partition }}/${{ matrix.partitions }}
       - if: failure() && github.event_name == 'pull_request'
         uses: pyrlyn/ci/.github/actions/cancel-run@4e652d891cc6e6f0be316eda1a1f9630d76a8b7e # main
@@ -193,7 +366,7 @@ jobs:
       NPM: npm
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: jdx/mise-action@7a4e45a543138629540c9a1616d08632b893e492 # v5.0.1
+      - uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
         with:
           install_args: just node
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -238,9 +411,16 @@ jobs:
       # Rust toolchain from the last run; mise then skips `rustup toolchain install`.
       - id: rustup
         uses: ./.github/actions/rustup-toolchain-cache
-      - uses: jdx/mise-action@7a4e45a543138629540c9a1616d08632b893e492 # v5.0.1
+      - uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
         with:
           install_args: just rust
+      - uses: ./.github/actions/sccache
+        with:
+          access-key-id: ${{ secrets.R2_ACCESS_KEY_ID }}
+          secret-access-key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          bucket: ${{ vars.SCCACHE_BUCKET }}
+          endpoint: ${{ vars.SCCACHE_ENDPOINT }}
+          read-only: ${{ github.event_name == 'pull_request' }}
       - if: steps.rustup.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6
         with:
@@ -253,20 +433,22 @@ jobs:
       - if: failure() && github.event_name == 'pull_request'
         uses: pyrlyn/ci/.github/actions/cancel-run@4e652d891cc6e6f0be316eda1a1f9630d76a8b7e # main
 
-  revert-on-failure:
-    name: revert-on-failure
-    needs: [lint, check, windows, spa, docs]
-    if: >-
-      always()
-      && github.event_name == 'push'
-      && github.ref == 'refs/heads/main'
-      && contains(join(needs.*.result, ','), 'failure')
+  # Fails when workspace-hack drifts from the dependency graph (cargo-hakari
+  # comes from mise.toml). Own job, so the required check names stay as they are.
+  hakari:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
     steps:
-      # Revert, then a draft `revert-<branch>` PR that re-applies the work (T84, T253). The
-      # shared action skips new branches, bot and auto-revert commits, and pushes touching
-      # .github/ (GITHUB_TOKEN cannot push workflow files).
-      - uses: pyrlyn/ci/.github/actions/revert-on-failure@4e652d891cc6e6f0be316eda1a1f9630d76a8b7e # main
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
+        with:
+          # Only what the check needs, not every tool in mise.toml; mise makes sccache an install
+          # dependency of every cargo: tool, so it has to come along.
+          install_args: rust sccache cargo:cargo-hakari
+      - run: cargo hakari generate --diff
+      - run: cargo hakari manage-deps --dry-run
+      - run: cargo hakari verify

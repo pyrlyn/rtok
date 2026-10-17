@@ -48,13 +48,30 @@ lang: uk
 | [`cline`](https://github.com/pyrlyn/rtok/blob/main/src/agents/cline/README.md) | Cline for VS Code | Desktop | yes | yes | — | `--yes` | measure, cmd, read, json_tree (off), archive, inject, guard, memory, graph, toon, docs (off) |
 | [`gemini`](https://github.com/pyrlyn/rtok/blob/main/src/agents/gemini/README.md) | Gemini CLI | CLI | yes | yes | — | `--yes` | measure, cmd, read, json_tree (off), archive, inject, guard, memory, graph, toon, docs (off) |
 | [`codewhale`](https://github.com/pyrlyn/rtok/blob/main/src/agents/codewhale/README.md) | CodeWhale | CLI | yes | yes | — | — | measure, cmd, read, json_tree (off), archive, inject, guard, memory, graph, toon, docs (off) |
-| [`mimo`](https://github.com/pyrlyn/rtok/blob/main/src/agents/mimo/README.md) | MiMo Code | CLI | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
+| [`mimo`](https://github.com/pyrlyn/rtok/blob/main/src/agents/mimo/README.md) | MiMo Code | CLI | — | yes | — | yes | measure, cmd, read, json_tree (off), archive, guard, memory, graph, toon, docs (off) |
+| [`mimo`](https://github.com/pyrlyn/rtok/blob/main/src/agents/mimo/README.md) | MiMo Desktop | Desktop | — | yes | — | yes | measure, cmd, read, json_tree (off), archive, guard, memory, graph, toon, docs (off) |
 | [`antigravity`](https://github.com/pyrlyn/rtok/blob/main/src/agents/antigravity/README.md) | Antigravity CLI | CLI | — | — | — | `--yes` | read, json_tree (off), archive, memory, graph, toon, docs (off) |
 | [`antigravity`](https://github.com/pyrlyn/rtok/blob/main/src/agents/antigravity/README.md) | Antigravity | Desktop | — | — | — | `--yes` | read, json_tree (off), archive, memory, graph, toon, docs (off) |
 | [`devin`](https://github.com/pyrlyn/rtok/blob/main/src/agents/devin/README.md) | Devin CLI | CLI | yes | yes | — | `--yes` | measure, cmd, read, json_tree (off), archive, inject, guard, memory, graph, toon, docs (off) |
 | [`devin`](https://github.com/pyrlyn/rtok/blob/main/src/agents/devin/README.md) | Devin | Desktop | yes | yes | — | `--yes` | measure, cmd, read, json_tree (off), archive, inject, guard, memory, graph, toon, docs (off) |
 | [`roo`](https://github.com/pyrlyn/rtok/blob/main/src/agents/roo/README.md) | Roo Code | Desktop | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
 | [`qwen`](https://github.com/pyrlyn/rtok/blob/main/src/agents/qwen/README.md) | Qwen Code | CLI | yes | yes | — | `--yes` | measure, cmd, read, json_tree (off), archive, inject, guard, memory, graph, toon, docs (off) |
+| [`codebuddy`](https://github.com/pyrlyn/rtok/blob/main/src/agents/codebuddy/README.md) | CodeBuddy Code | CLI | yes | yes | — | `--yes` | measure, cmd, read, json_tree (off), archive, inject, guard, memory, graph, toon, docs (off) |
+| [`codebuddy`](https://github.com/pyrlyn/rtok/blob/main/src/agents/codebuddy/README.md) | WorkBuddy | Desktop | yes | yes | — | `--yes` | measure, cmd, read, json_tree (off), archive, inject, guard, memory, graph, toon, docs (off) |
+| [`goose`](https://github.com/pyrlyn/rtok/blob/main/src/agents/goose/README.md) | Goose CLI | CLI | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
+| [`goose`](https://github.com/pyrlyn/rtok/blob/main/src/agents/goose/README.md) | Goose | Desktop | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
+| [`droid`](https://github.com/pyrlyn/rtok/blob/main/src/agents/droid/README.md) | Factory Droid | CLI | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
+| [`kiro`](https://github.com/pyrlyn/rtok/blob/main/src/agents/kiro/README.md) | Kiro CLI | CLI | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
+| [`kiro`](https://github.com/pyrlyn/rtok/blob/main/src/agents/kiro/README.md) | Kiro IDE | Desktop | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
+| [`junie`](https://github.com/pyrlyn/rtok/blob/main/src/agents/junie/README.md) | Junie CLI | CLI | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
+| [`amp`](https://github.com/pyrlyn/rtok/blob/main/src/agents/amp/README.md) | Amp | CLI | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
+| [`warp`](https://github.com/pyrlyn/rtok/blob/main/src/agents/warp/README.md) | Warp | Desktop | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
+| [`continue`](https://github.com/pyrlyn/rtok/blob/main/src/agents/continue/README.md) | Continue CLI | CLI | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
+| [`continue`](https://github.com/pyrlyn/rtok/blob/main/src/agents/continue/README.md) | Continue | Desktop | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
+| [`crush`](https://github.com/pyrlyn/rtok/blob/main/src/agents/crush/README.md) | Crush | CLI | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
+| [`openhands`](https://github.com/pyrlyn/rtok/blob/main/src/agents/openhands/README.md) | OpenHands | CLI | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
+| [`augment`](https://github.com/pyrlyn/rtok/blob/main/src/agents/augment/README.md) | Augment Auggie CLI | CLI | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
+| [`reasonix`](https://github.com/pyrlyn/rtok/blob/main/src/agents/reasonix/README.md) | Reasonix | CLI | — | yes | — | — | read, json_tree (off), archive, memory, graph, toon, docs (off) |
 <!-- agents-table:end -->
 
 Таблицю генерує з коду хостів (`src/agents/<host>/mod.rs` і каталогу плагінів) тест `tests/agents_doc.rs`, який падає, коли вона застаріла. Після зміни хоста, додавання нового чи зміни інтерфейсів плагіна згенеруйте її заново:

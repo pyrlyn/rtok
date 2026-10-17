@@ -90,7 +90,7 @@ fn create(p: &Payload, cfg: &Config, store: Option<&Store>) -> Result<PathBuf> {
     let task = p.name.to_ascii_lowercase();
     let known = |r: &super::Record| r.path.exists() && r.owner().is_some_and(|o| o.task == task);
     // One spelling for both answers: git lists `C:/…` on Windows, `add` plans `C:\…`.
-    let native = |p: PathBuf| dunce::canonicalize(&p).unwrap_or(p);
+    let native = |p: PathBuf| fs_kit::path::canonicalize(&p).unwrap_or(p);
     if let Some(r) = git::list(cwd)?.iter().skip(1).find(|r| known(r)) {
         return Ok(native(r.path.clone()));
     }

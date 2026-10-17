@@ -13,8 +13,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::Serialize;
 
 use super::{Entry, inventory_with, par_map};
-use crate::bytes::human_bytes;
 use crate::render::{Col, duration, table};
+use change_preview::human_bytes;
 
 /// First line of a valid `CACHEDIR.TAG` (<https://bford.info/cachedir/>); cargo writes one
 /// into `target/`. The tag, not a directory name, is what makes bytes "cache".
@@ -33,6 +33,9 @@ pub struct Usage {
     pub modified: Option<SystemTime>,
     /// Every tagged cache root under the worktree; `cache` is their sum.
     pub caches: Vec<Cache>,
+    /// A directory, entry or mtime could not be read (T656): sizes and `modified` are lower
+    /// bounds, since the newest file may be the one the walk missed.
+    pub incomplete: bool,
 }
 
 /// One tagged cache root: the unit `rtok worktree clean` (T152) deletes.
@@ -41,6 +44,8 @@ pub struct Cache {
     pub path: PathBuf,
     pub bytes: u64,
     pub modified: Option<SystemTime>,
+    /// [`Usage::incomplete`] for this cache root alone.
+    pub incomplete: bool,
 }
 
 pub fn usage(dir: &Path) -> Usage {
@@ -62,10 +67,23 @@ pub fn usage_until(dir: &Path, deadline: std::time::Instant) -> (Usage, bool) {
 /// file whose mtime satisfies `enough`. `gc` only asks whether a worktree was touched within
 /// its idle window, which one recent file answers; `enough` must hold for every later mtime
 /// too, so that it holds for the newest exactly when it holds for this answer.
+/// `None` when the walk could not read everything and found no file that settles it.
 pub fn newest_until(dir: &Path, enough: impl Fn(SystemTime) -> bool) -> Option<SystemTime> {
     let mut total = Usage::default();
-    let _ = walk(dir, true, None, &mut total, None, &enough);
-    total.modified
+    let settled = walk(dir, true, None, &mut total, None, &enough).is_break();
+    total.modified.filter(|_| settled || !total.incomplete)
+}
+
+/// Records a read the walk could not make. A path gone mid-walk is not missing evidence:
+/// nothing is there to be newer.
+fn missed(total: &mut Usage, cache: Option<usize>, err: Option<&std::io::Error>) {
+    if err.is_some_and(|e| e.kind() == std::io::ErrorKind::NotFound) {
+        return;
+    }
+    total.incomplete = true;
+    if let Some(i) = cache {
+        total.caches[i].incomplete = true;
+    }
 }
 
 /// `cache` indexes `total.caches` once the walk is inside a tagged root. The listing in hand
@@ -83,10 +101,21 @@ fn walk(
     if deadline.is_some_and(|d| std::time::Instant::now() >= d) {
         return ControlFlow::Break(());
     }
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return ControlFlow::Continue(());
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(e) => {
+            missed(total, cache, Some(&e));
+            return ControlFlow::Continue(());
+        }
     };
-    let entries: Vec<_> = entries.flatten().collect();
+    let mut entries_ok = Vec::new();
+    for entry in entries {
+        match entry {
+            Ok(entry) => entries_ok.push(entry),
+            Err(e) => missed(total, cache, Some(&e)),
+        }
+    }
+    let entries = entries_ok;
     let (mut git, mut tag) = (false, false);
     for entry in &entries {
         let name = entry.file_name();
@@ -103,6 +132,7 @@ fn walk(
                 path: dir.to_path_buf(),
                 bytes: 0,
                 modified: None,
+                incomplete: false,
             };
             total.caches.push(root);
             total.caches.len() - 1
@@ -111,17 +141,28 @@ fn walk(
     for entry in entries {
         // Neither the listing's file type nor `DirEntry::metadata` follows symlinks: a link
         // costs its own length.
-        let Ok(kind) = entry.file_type() else {
-            continue;
+        let kind = match entry.file_type() {
+            Ok(kind) => kind,
+            Err(e) => {
+                missed(total, cache, Some(&e));
+                continue;
+            }
         };
         if kind.is_dir() {
             walk(&entry.path(), false, cache, total, deadline, enough)?;
             continue;
         }
-        let Ok(meta) = entry.metadata() else {
-            continue;
+        let meta = match entry.metadata() {
+            Ok(meta) => meta,
+            Err(e) => {
+                missed(total, cache, Some(&e));
+                continue;
+            }
         };
         let modified = meta.modified().ok();
+        if modified.is_none() {
+            missed(total, cache, None);
+        }
         match cache {
             Some(i) => {
                 let root = &mut total.caches[i];
@@ -461,6 +502,32 @@ mod tests {
         assert!(found.is_some() && found <= usage(&dir).modified);
         assert_eq!(newest_until(&dir.join("missing"), |_| true), None);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// T656: a directory the walk cannot open may hold the newest file, so the walk says it
+    /// is incomplete and `newest_until` reports no age unless a recent file already settled it.
+    #[cfg(unix)]
+    #[test]
+    fn an_unreadable_directory_makes_the_walk_incomplete() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tmp_dir("wt-t656-unreadable");
+        write(dir.join("old"), b"x").unwrap();
+        let hidden = dir.join("hidden");
+        std::fs::create_dir(&hidden).unwrap();
+        write(hidden.join("new"), b"x").unwrap();
+        assert!(!usage(&dir).incomplete);
+        std::fs::set_permissions(&hidden, std::fs::Permissions::from_mode(0o000)).unwrap();
+        let blocked = std::fs::read_dir(&hidden).is_err(); // root ignores the mode bits
+        let used = usage(&dir);
+        let newest = newest_until(&dir, |_| false);
+        let settled = newest_until(&dir, |_| true);
+        std::fs::set_permissions(&hidden, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        if blocked {
+            assert!(used.incomplete);
+            assert_eq!(newest, None, "an incomplete walk has no newest mtime");
+            assert!(settled.is_some(), "a file that settles it still answers");
+        }
     }
 
     #[test]

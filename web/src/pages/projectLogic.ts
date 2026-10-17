@@ -65,6 +65,20 @@ export function applyProject(rows: ProjectRow[], req: ProjectRequest): ProjectRo
     if (!rows.some((p) => String(p.id) === req.project)) return rows;
     return rows.map((p) => ({ ...p, selected: String(p.id) === req.project }));
   }
+  if (req.action === "reindex") {
+    // The sample server finishes at once; the real one reports `indexing` while its worker runs.
+    return rows.map((p) =>
+      String(p.id) === req.project && !p.missing ? { ...p, state: "ok" } : p,
+    );
+  }
+  if (req.action === "remove") {
+    // Only the confirmed request writes; the plan is a separate reply.
+    if (!req.confirmed) return rows;
+    const gone = rows.find((p) => String(p.id) === req.project)?.id;
+    return rows
+      .filter((p) => p.id !== gone)
+      .map((p) => ({ ...p, links: p.links.filter((l) => l.to !== gone) }));
+  }
   const pairs = [[req.from, req.to]];
   if (req.both) pairs.push([req.to, req.from]);
   return pairs.reduce(

@@ -1,0 +1,8 @@
+error[E0308]: mismatched types
+   --> crates/rtok-log/src/lib.rs:321:25
+    |
+321 | fn bench_err() -> u32 { "x" }
+    |                   ---   ^^^ expected `u32`, found `&str`
+    |                   |
+    |                   expected `u32` because of return type
+cargo build: 1 errors, 0 warnings (1 crates)

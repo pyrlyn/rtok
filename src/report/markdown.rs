@@ -130,6 +130,20 @@ ledger).\n"
             cache.busts, cache.turns, cache.sessions
         );
     }
+    if !doc.ledgers.lanes.is_empty() {
+        let _ = writeln!(
+            s,
+            "\nPrompt-cache hit rate per proxy lane and service tier:\n\n| {} |\n| --- | ---: | ---: | ---: | ---: | ---: |",
+            crate::model::LANE_HEADS.join(" | ")
+        );
+        for row in doc.ledgers.lane_cells() {
+            let _ = writeln!(
+                s,
+                "| {} |",
+                row.iter().map(|c| cell(c)).collect::<Vec<_>>().join(" | ")
+            );
+        }
+    }
 
     // ── Expand ──────────────────────────────────────────────────────────────
     let exp = &doc.ledgers.expand;

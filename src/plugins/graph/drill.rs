@@ -139,7 +139,7 @@ struct Link {
     n: i64,
 }
 
-fn node_kind(kind: &str) -> DrillNodeKind {
+pub(super) fn node_kind(kind: &str) -> DrillNodeKind {
     match kind {
         "class" | "struct" | "enum" | "interface" | "trait" | "type" | "union" | "impl" => {
             DrillNodeKind::Type

@@ -88,6 +88,17 @@ function filterArgs(event) {
   return ["filter", "--stdin", "--cmd", hint];
 }
 
+// The archive holds only the joined text, so everything that is not text
+// (images, ...) must survive the replacement. The compressed text takes the
+// place of the first text block; the other blocks keep their order.
+function replaceText(content: any[], text: string): any[] {
+  const isText = (c: any) => typeof c?.text === "string";
+  const at = content.findIndex(isText);
+  const kept = content.filter((c) => !isText(c));
+  kept.splice(at, 0, { type: "text", text });
+  return kept;
+}
+
 export default function (pi) {
   let restore = false;
   let compactSession = "";
@@ -168,7 +179,7 @@ export default function (pi) {
     if (!r.stdout) return;
     const out = r.stdout.trimEnd();
     if (out && out !== text.trimEnd()) {
-      return { content: [{ type: "text", text: out }] };
+      return { content: replaceText(event.content, out) };
     }
   });
 

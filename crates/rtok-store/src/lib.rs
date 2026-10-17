@@ -21,7 +21,9 @@ pub(crate) use bail;
 mod error;
 pub use error::{Result, StoreError};
 mod paths;
-pub use paths::{canon, is_unwalkable_root, path_starts_with, same_path, strip_prefix};
+pub use paths::{
+    canon, is_unwalkable_root, path_ends_with, path_starts_with, same_path, strip_prefix,
+};
 pub mod sanitize;
 mod task_id;
 pub use task_id::{MAX_DEPTH, MAX_PREFIX, TaskId, check_prefix};
@@ -29,6 +31,8 @@ pub use task_id::{MAX_DEPTH, MAX_PREFIX, TaskId, check_prefix};
 // Agent registry (T282, D34): one row per host session rtok sees, one per sub-agent.
 mod agents;
 pub use agents::{AgentDetail, AgentRow, idle_secs};
+// T385.9.1: the P28 compressor's summaries.
+mod archive_summaries;
 // Graph call events the web page streams (T329.15).
 mod graph_events;
 pub use graph_events::{EventPhase, GraphEvent, MeasurementSample};
@@ -36,7 +40,7 @@ pub use graph_events::{EventPhase, GraphEvent, MeasurementSample};
 mod messages;
 pub use messages::{Message, short_agent_id};
 pub mod embed;
-pub use embed::EmbedSettings;
+pub use embed::{EmbedSettings, Remote, TextEmbedder};
 // T433: hook session fields saved once, spliced back into the stdin on read.
 mod hook_fields;
 mod host_usage;
@@ -68,6 +72,7 @@ pub use projects::{Origin, Project, Resolved, canon_root};
 mod task_claims;
 mod task_counters;
 mod worktree_claims;
+mod worktree_pending;
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::io::ErrorKind;
@@ -95,7 +100,11 @@ use schema::{
 pub(crate) use sql_ext::{coalesce, length, substr, sum_bigint, unixepoch};
 
 // `usage_by_model_tier` groups by a column of each table.
-diesel::allow_columns_to_appear_in_same_group_by_clause!(usage::model, calls::kind);
+diesel::allow_columns_to_appear_in_same_group_by_clause!(
+    usage::model,
+    calls::kind,
+    calls::service_tier
+);
 
 /// Pause between `open` attempts while another connection holds the lock.
 const OPEN_RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(100);
@@ -135,6 +144,8 @@ pub struct Store {
     wait: LockWait,
     /// `[core] store_raw` (T431): save request bodies verbatim instead of cleaned.
     store_raw: std::sync::atomic::AtomicBool,
+    /// The last parsed graph IDF cache (T646).
+    idf_memo: Mutex<Option<symbols::IdfMemo>>,
 }
 
 /// How long one connection waits on another process's lock (T178).
@@ -180,6 +191,10 @@ pub(crate) fn unix_now() -> u64 {
 
 /// `calls.kind` of a Batch-lane request. The host's `lane::KIND_BATCH` is this string.
 pub const BATCH_CALL_KIND: &str = "api_request:batch";
+
+/// `calls.service_tier` of a request a provider served on its Flex tier (T385.12.2); the price
+/// key suffix `@flex` is this name.
+pub const FLEX_SERVICE_TIER: &str = "flex";
 
 /// What [`Store::housekeeping`] skipped. The caller prints and logs `message`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -338,6 +353,25 @@ pub fn retention_score(
     (salience * temporal + boost).min(1.0)
 }
 
+/// Kinds a forget pass never retires: what the user asked to remember and decisions (T669).
+const FORGET_KEEPS: [&str; 2] = ["user", "decision"];
+
+/// How many bm25-ranked rows each requested hit is re-ranked from (T669).
+const RANK_WINDOW: u32 = 3;
+
+/// Score factor for a note of the searcher's own project (T667). Past one reciprocal-rank step
+/// (9/8) so it wins a near tie, short of three steps (11/8) so a clearly better match from
+/// another project stays ahead.
+const PROJECT_BOOST: f64 = 1.3;
+
+/// Re-rank score for the note at 0-based bm25 position `rank` (T669). Reciprocal rank with a
+/// shallow offset, scaled by `0.4 + 0.6 * retention`: a pinned note gains about 43% and a
+/// well-read one about 17%, so they overtake a neighbour or two while a match several places
+/// better stays ahead.
+pub fn rank_blend(rank: usize, retention: f64) -> f64 {
+    (0.4 + 0.6 * retention) / (8.0 + rank as f64)
+}
+
 mod archive_rows;
 mod cache;
 mod call_log;
@@ -394,7 +428,6 @@ fn rebuild_hook_inputs(rows: Vec<HookInputRow>) -> Vec<String> {
 }
 
 /// `(host slug, project, cwd)` — [`Store::session_row`].
-#[cfg(any(test, feature = "test-util"))]
 pub type SessionRow = (Option<String>, Option<String>, Option<String>);
 
 /// Text stored inline for display, the sha256 of `body`'s raw bytes, and — only when `body`
@@ -427,7 +460,7 @@ pub fn hex_sha256(bytes: &[u8]) -> String {
 /// The bool says whether this call created the file (`false` when it already held this exact
 /// content) — only a file this call created is safe to remove if the caller's insert fails.
 fn write_archive_file(dir: &Path, sha: &str, body: &[u8]) -> Result<(PathBuf, bool)> {
-    std::fs::create_dir_all(dir)?;
+    handle::create_private_dir(dir)?;
     let path = dir.join(sha);
     let created = !path.exists();
     // T324: `expand` reads this file lock-free, and another hook process may write the same
@@ -436,11 +469,34 @@ fn write_archive_file(dir: &Path, sha: &str, body: &[u8]) -> Result<(PathBuf, bo
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let tmp = dir.join(format!(".{sha}.tmp-{}-{n}", std::process::id()));
-    if let Err(e) = std::fs::write(&tmp, body).and_then(|()| std::fs::rename(&tmp, &path)) {
+    if let Err(e) = write_private(&tmp, body).and_then(|()| std::fs::rename(&tmp, &path)) {
         let _ = std::fs::remove_file(&tmp);
         return Err(e.into());
     }
     Ok((path, created))
+}
+
+/// `fs::write` with an owner-only mode on Unix: archived bodies are prompts and tool output.
+fn write_private(path: &Path, body: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    let mut o = std::fs::OpenOptions::new();
+    o.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut o, 0o600);
+    o.open(path)?.write_all(body)
+}
+
+#[cfg(all(test, unix))]
+#[test]
+fn archive_files_are_owner_only() {
+    use std::os::unix::fs::PermissionsExt;
+    let base = support::tmp_dir("private-archive");
+    let dir = base.join("archive");
+    let (path, _) = write_archive_file(&dir, "abc", b"secret prompt").unwrap();
+    let mode = |p: &Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
+    let (d, f) = (mode(&dir), mode(&path));
+    let _ = std::fs::remove_dir_all(&base);
+    assert_eq!((d, f), (0o700, 0o600));
 }
 
 /// The `archive` row behind a file [`write_archive_file`] already wrote. `on_conflict …
@@ -635,10 +691,12 @@ pub struct ApiUsage {
     pub output: i64,
 }
 
-/// Aggregated usage totals grouped by `calls.kind` (T385.6).
+/// Aggregated usage totals grouped by `calls.kind` and `calls.service_tier` (T385.6, T385.12.2).
 #[derive(Debug, Clone)]
 pub struct LaneUsage {
     pub kind: String,
+    /// The tier the provider reported; `None` when the response named none.
+    pub tier: Option<String>,
     pub input: i64,
     pub cache_create: i64,
     pub cache_read: i64,
@@ -654,6 +712,13 @@ pub struct ModelUsage {
     pub cache_create: i64,
     pub cache_read: i64,
     pub output: i64,
+}
+
+/// [`ModelUsage`] of one `calls.kind` (the proxy lane), T385.10.
+#[derive(Debug, Clone)]
+pub struct LaneModelUsage {
+    pub kind: Option<String>,
+    pub usage: ModelUsage,
 }
 
 /// One [`Store::usage_slices`] row: the usage of one session on one model at `ts` (unix

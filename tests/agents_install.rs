@@ -18,7 +18,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 /// `(host, extra setup flags, the file whose backups we count)`; pi links a directory and
-/// edits no file, so it has nothing to back up. claude, cursor, opencode, kilo, pi and
+/// edits no file, so it has nothing to back up. claude, cursor, opencode, kilo, mimo, pi and
 /// zcode install their plugin by default (T139, T164); `--yes` is kept here only so
 /// `already installed` needs the link regardless of a future default change.
 fn hosts(home: &Path) -> Vec<(&'static str, Vec<&'static str>, Option<PathBuf>)> {
@@ -100,14 +100,25 @@ fn hosts(home: &Path) -> Vec<(&'static str, Vec<&'static str>, Option<PathBuf>)>
             vec!["--yes"],
             Some(home.join(".codewhale/config.toml")),
         ),
+        // T520: the plugin links by default, so `.config/mimocode/plugins/rtok.ts` is the
+        // second thing install writes beside `mimocode.json`.
         (
             "mimo",
-            vec![],
+            vec!["--yes"],
             Some(home.join(".config/mimocode/mimocode.json")),
         ),
         // Desktop links the plugin on `--yes` (no `default_install`); nothing file-backed.
         ("antigravity", vec!["--yes"], None),
         ("devin", vec!["--yes"], Some(home.join("devin/config.json"))),
+        ("droid", vec![], Some(home.join(".factory/mcp.json"))),
+        ("kiro", vec![], Some(home.join(".kiro/settings/mcp.json"))),
+        ("junie", vec![], Some(home.join(".junie/mcp/mcp.json"))),
+        ("amp", vec![], Some(home.join(".config/amp/settings.json"))),
+        ("warp", vec![], Some(home.join(".warp/.mcp.json"))),
+        ("crush", vec![], Some(home.join(".config/crush/crush.json"))),
+        ("openhands", vec![], Some(home.join(".openhands/mcp.json"))),
+        ("augment", vec![], Some(home.join(".augment/settings.json"))),
+        ("reasonix", vec![], Some(home.join(".reasonix/config.toml"))),
     ]
 }
 
@@ -269,6 +280,25 @@ fn list_reports_installed_modules_per_host() {
     }
 }
 
+/// T416.3: the default dry run ends with the totals line; `--stat` swaps the step lines for the
+/// stat row and the same totals.
+#[test]
+fn dry_run_ends_with_totals_and_stat_replaces_the_steps() {
+    let home = tmp("dry-stat");
+    let cfg = write_cfg(&home);
+    let mut args = setup_args("codex", &[]);
+    args.push("--dry-run");
+    let plain = rtok(&args, &cfg, &home);
+    assert!(plain.contains("+ [mcp_servers.rtok]"), "{plain}");
+    assert!(plain.contains(" changed, "), "no totals line:\n{plain}");
+    args.push("--stat");
+    let stat = rtok(&args, &cfg, &home);
+    assert!(!stat.contains("+ [mcp_servers.rtok]"), "{stat}");
+    assert!(stat.contains(" | "), "no stat row:\n{stat}");
+    assert!(stat.contains(" changed, "), "no totals line:\n{stat}");
+    assert!(!home.join(".codex/config.toml").exists());
+}
+
 #[test]
 fn dry_run_setup_creates_nothing_and_copies_nothing() {
     let home = tmp("dry");
@@ -337,6 +367,24 @@ fn cli_and_desktop_flags_pick_the_block() {
     assert!(only.contains("Desktop: OpenCode Desktop"), "{only}");
     assert!(!only.contains("CLI: OpenCode"), "{only}");
     assert!(!home.join(".config/opencode/opencode.json").exists());
+}
+
+/// T521: MiMo Desktop reads the CLI's `~/.config/mimocode/`, so its block writes those files and
+/// a plain install lists it as the CLI's sibling instead of editing twice.
+#[test]
+fn mimo_desktop_installs_the_cli_files() {
+    let home = tmp("mimo-desktop");
+    let cfg = write_cfg(&home);
+    let out = rtok(&["agents", "install", "mimo", "--desktop"], &cfg, &home);
+    assert!(out.contains("Desktop: MiMo Desktop"), "{out}");
+    assert!(!out.contains("CLI: MiMo Code"), "{out}");
+    let file = fs::read_to_string(home.join(".config/mimocode/mimocode.json")).unwrap();
+    assert!(file.contains("\"rtok\""), "{file}");
+    let both = rtok(&["agents", "install", "mimo"], &cfg, &home);
+    assert!(
+        both.contains("Desktop: MiMo Desktop — same files as above"),
+        "{both}"
+    );
 }
 
 #[test]
@@ -537,5 +585,38 @@ fn backup_files_caps_copies_and_a_no_change_run_prunes_nothing() {
     let after = backups(&file);
     assert_eq!(after.len(), 1, "{after:?}");
     assert!(fs::read_to_string(&after[0]).unwrap().contains("# edited"));
+    let _ = fs::remove_dir_all(home);
+}
+
+/// T520: MiMo writes `mimocode.jsonc` itself, so a home that holds only that file gets the MCP
+/// entry in it, with its comments and every other byte kept, and the plugin link beside it;
+/// remove takes both back and leaves the user's text as it was.
+#[test]
+fn mimo_edits_a_lone_mimocode_jsonc_and_links_the_plugin() {
+    let home = tmp("mimo-jsonc");
+    let cfg = write_cfg(&home);
+    let dir = home.join(".config/mimocode");
+    let jsonc = dir.join("mimocode.jsonc");
+    let mine = "{\n  // mine\n  \"theme\": \"dark\", // inline\n}\n";
+    fs::write(&jsonc, mine).unwrap();
+
+    let first = rtok(&setup_args("mimo", &[]), &cfg, &home);
+    assert!(first.contains("mcp.rtok"), "{first}");
+    assert!(!dir.join("mimocode.json").exists(), "{first}");
+    let body = fs::read_to_string(&jsonc).unwrap();
+    assert!(body.starts_with(&mine[..mine.len() - 2]), "{body}");
+    assert!(body.contains("\"rtok\""), "{body}");
+    assert!(dir.join("plugins/rtok.ts").exists(), "{first}");
+    let second = rtok(&setup_args("mimo", &[]), &cfg, &home);
+    assert!(second.contains("already installed"), "{second}");
+
+    rtok(&["agents", "remove", "mimo"], &cfg, &home);
+    let left = fs::read_to_string(&jsonc).unwrap();
+    assert!(
+        left.contains("// mine") && left.contains("// inline"),
+        "{left}"
+    );
+    assert!(!left.contains("rtok"), "{left}");
+    assert!(dir.join("plugins/rtok.ts").symlink_metadata().is_err());
     let _ = fs::remove_dir_all(home);
 }

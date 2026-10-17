@@ -77,8 +77,9 @@ impl Apply {
 pub const BACKUP_DIR: &str = "_backup";
 
 /// Copy `path` to `_backup/<name>.bak-<unix-seconds>` beside it. `None` when there is no file
-/// yet, or when any file in that folder already holds the same bytes — a second install or
-/// uninstall of unchanged content is the same undo, whatever the copy is named.
+/// yet, or when a generation of that same name already holds the same bytes — a second install
+/// or uninstall of unchanged content is the same undo. Another file's copy never counts: its
+/// own retention cap could prune it, taking this file's only undo bytes along (T569).
 ///
 /// After a copy is taken, [`prune_backups`] keeps the newest `keep` generations of that name.
 pub fn backup(path: &Path, keep: usize) -> Result<Option<PathBuf>> {
@@ -184,7 +185,7 @@ fn backup_at(path: &Path, ts: u64) -> Result<Option<PathBuf>> {
     let Some(dir) = backup_dir(path) else {
         return Ok(None);
     };
-    if identical_backup_exists(&dir, &body) {
+    if identical_backup_exists(&dir, &name, &body) {
         return Ok(None);
     }
     fs::create_dir_all(&dir).with_context(|| dir.display().to_string())?;
@@ -209,18 +210,12 @@ fn backup_at(path: &Path, ts: u64) -> Result<Option<PathBuf>> {
     Ok(Some(bak))
 }
 
-/// True when any regular file in `dir` is byte-equal to `body`. Size first; names are ignored.
-fn identical_backup_exists(dir: &Path, body: &[u8]) -> bool {
-    let Ok(entries) = fs::read_dir(dir) else {
-        return false;
-    };
-    entries
-        .filter_map(Result::ok)
-        .filter(|e| e.path().is_file())
-        .any(|e| {
-            e.metadata().is_ok_and(|m| m.len() == body.len() as u64)
-                && fs::read(e.path()).is_ok_and(|b| b == body)
-        })
+/// True when a `<name>.bak-*` generation in `dir` is byte-equal to `body`. Size first.
+fn identical_backup_exists(dir: &Path, name: &str, body: &[u8]) -> bool {
+    generations(dir, name).into_iter().any(|(_, p)| {
+        fs::metadata(&p).is_ok_and(|m| m.len() == body.len() as u64)
+            && fs::read(&p).is_ok_and(|b| b == body)
+    })
 }
 
 /// A host's JSON config as a value to edit. A missing or empty file is an empty object, not an
@@ -235,10 +230,16 @@ pub fn read_json(path: &Path) -> Result<Value> {
         return Ok(json!({}));
     }
     let raw = fs::read_to_string(path).with_context(|| path.display().to_string())?;
+    parse_strict_json(path, &raw)
+}
+
+/// [`read_json`] on text a caller already holds (rtok-mcp reads through its own `Fs`): an empty
+/// document is an empty object, anything that is not strict JSON gets the same refusal message.
+pub fn parse_strict_json(path: &Path, raw: &str) -> Result<Value> {
     if raw.trim().is_empty() {
         return Ok(json!({}));
     }
-    serde_json::from_str(&raw).map_err(|e| {
+    serde_json::from_str(raw).map_err(|e| {
         let line = e.line();
         let src = raw.lines().nth(line.saturating_sub(1)).unwrap_or("").trim();
         anyhow::anyhow!(
@@ -316,78 +317,7 @@ pub fn write(apply: &Apply, path: &Path, body: &str, report: &str) -> Result<()>
     if let Some(dir) = path.parent() {
         fs::create_dir_all(dir).ok();
     }
-    let target = link_target(path);
-    write_atomic(&target, body).with_context(|| target.display().to_string())
-}
-
-/// The file `path` resolves to. `canonicalize` fails on a dangling link (a dotfile manager's
-/// link whose target is not there yet), and the rename then replaced the link with a plain
-/// file; following the links by hand writes the target and keeps the link. A target whose
-/// directory is gone fails the write instead of being created.
-fn link_target(path: &Path) -> PathBuf {
-    let mut p = path.to_path_buf();
-    // 40: the kernel's own ELOOP limit, so a cycle ends.
-    for _ in 0..40 {
-        if let Ok(real) = fs::canonicalize(&p) {
-            return real;
-        }
-        match fs::read_link(&p) {
-            Ok(next) => p = p.parent().unwrap_or(Path::new("")).join(next),
-            Err(_) => break,
-        }
-    }
-    p
-}
-
-/// [`write`]'s atomic swap: write `body` to a sibling temp file, copy `target`'s
-/// permissions onto it when `target` exists (a 0600 `~/.claude.json` must stay
-/// 0600 on Unix), then `fs::rename` the temp file over `target` — atomic on one
-/// filesystem. Any failed step cleans up the temp file before returning the error.
-///
-/// On Windows, `MoveFileExW(REPLACE_EXISTING)` fails when the destination has the
-/// read-only attribute. Copying that bit onto the temp file (as Unix mode copy
-/// would) then made every update of a read-only host config fail; clear it on
-/// the destination instead. Temp names include a nanos suffix so two writes in
-/// the same process cannot share one leftover `.rtok-tmp-*` file.
-pub fn write_atomic(target: &Path, body: &str) -> Result<()> {
-    let dir = target.parent().unwrap_or(Path::new("."));
-    let name = target.file_name().unwrap_or_default().to_string_lossy();
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_nanos())
-        .unwrap_or(0);
-    let tmp = dir.join(format!(".{name}.rtok-tmp-{}-{nanos}", std::process::id()));
-    let result: Result<()> = (|| -> Result<()> {
-        fs::write(&tmp, body)?;
-        #[cfg(unix)]
-        if let Ok(meta) = fs::metadata(target) {
-            fs::set_permissions(&tmp, meta.permissions())?;
-        }
-        #[cfg(windows)]
-        clear_readonly(target);
-        fs::rename(&tmp, target)?;
-        Ok(())
-    })();
-    if result.is_err() {
-        let _ = fs::remove_file(&tmp);
-    }
-    result
-}
-
-/// `MOVEFILE_REPLACE_EXISTING` cannot replace a read-only file; drop that bit.
-#[cfg(windows)]
-// Windows-only, so the world-writable risk the lint names for Unix cannot arise here.
-#[allow(clippy::permissions_set_readonly_false)]
-fn clear_readonly(path: &Path) {
-    let Ok(meta) = fs::metadata(path) else {
-        return;
-    };
-    let mut perms = meta.permissions();
-    if !perms.readonly() {
-        return;
-    }
-    perms.set_readonly(false);
-    let _ = fs::set_permissions(path, perms);
+    Ok(fs_kit::write::atomic(path, body)?)
 }
 
 /// [`write`] for a JSON document: pretty-printed with the trailing newline host files carry.
@@ -554,7 +484,7 @@ pub fn runs_bin(v: &Value, is_bin: fn(&str) -> bool) -> bool {
 
 /// `v` without a top-level `"type": "stdio"`, the MCP default [`mcp_entry`] spells out:
 /// Claude.app drops it when it re-saves its config (T265). Anything else is unchanged.
-fn without_default_type(v: &Value) -> Value {
+pub fn without_default_type(v: &Value) -> Value {
     match v {
         Value::Object(m) if m.get("type").and_then(Value::as_str) == Some("stdio") => {
             let mut m = m.clone();
@@ -616,6 +546,22 @@ pub fn accepted(apply: &Apply, question: &str) -> bool {
     ask(apply, question, true)
 }
 
+/// How the binary hides its live progress bars around a question; the SDK draws none itself.
+static PROMPT_PAUSE: std::sync::OnceLock<fn(&mut dyn FnMut())> = std::sync::OnceLock::new();
+
+/// Register how to hide live progress bars while a question waits for its answer (T276.3): a
+/// bar redrawn over the question makes the wait read as a hang (T81). The first one wins.
+pub fn set_prompt_pause(pause: fn(&mut dyn FnMut())) {
+    let _ = PROMPT_PAUSE.set(pause);
+}
+
+fn with_pause(prompt: &mut dyn FnMut()) {
+    match PROMPT_PAUSE.get() {
+        Some(pause) => pause(prompt),
+        None => prompt(),
+    }
+}
+
 fn ask(apply: &Apply, question: &str, default: bool) -> bool {
     if apply.yes {
         return true;
@@ -623,6 +569,13 @@ fn ask(apply: &Apply, question: &str, default: bool) -> bool {
     if !std::io::stdin().is_terminal() {
         return false;
     }
+    let mut got = None;
+    with_pause(&mut || got = Some(prompt(question, default)));
+    // A pause that never ran the prompt left the question unanswered: never act on it.
+    got.unwrap_or(false)
+}
+
+fn prompt(question: &str, default: bool) -> bool {
     use std::io::Write;
     let mut out = std::io::stdout();
     let hint = if default { "[Y/n]" } else { "[y/N]" };
@@ -1103,37 +1056,25 @@ fn copy_owned_with(src: &Path, dest: &Path, fix: CopyFix) -> Result<()> {
             .with_context(|| format!("copy plugin {} → {}", src.display(), dest.display()))?;
         return Ok(());
     }
-    copy_dir(src, dest, fix, Path::new(""))
+    copy_dir(src, dest, fix)
         .with_context(|| format!("copy plugin {} → {}", src.display(), dest.display()))?;
     fs::write(dest.join(OWNED_MARKER), b"")
         .with_context(|| format!("mark owned {}", dest.display()))?;
     Ok(())
 }
 
-#[allow(dead_code)]
-fn copy_dir(src: &Path, dest: &Path, fix: CopyFix, rel: &Path) -> Result<()> {
-    fs::create_dir_all(dest)?;
-    for entry in fs::read_dir(src)? {
-        let entry = entry?;
-        let from = entry.path();
-        let to = dest.join(entry.file_name());
-        let rel = rel.join(entry.file_name());
-        let file_type = entry.file_type()?;
-        if file_type.is_dir() {
-            copy_dir(&from, &to, fix, &rel)?;
-        } else {
-            // Plain files and symlink targets we can read: plugins ship as a normal tree.
-            // `fs::copy` keeps the mode (a skill's scripts); a fix rewrites the bytes after.
-            fs::copy(&from, &to)
-                .with_context(|| format!("copy {} → {}", from.display(), to.display()))?;
-            let bytes = fs::read(&to)?;
-            let fixed = fix(&rel, bytes.clone());
-            if fixed != bytes {
-                fs::write(&to, fixed).with_context(|| format!("fix {}", to.display()))?;
-            }
-        }
-    }
-    Ok(())
+fn copy_dir(src: &Path, dest: &Path, fix: CopyFix) -> Result<()> {
+    // Links are followed: a plugin ships as a plain tree, and the copy must stand alone.
+    let links = fs_kit::tree::Links::Follow;
+    Ok(fs_kit::tree::copy_tree_with(
+        src,
+        dest,
+        links,
+        &mut |rel, bytes| {
+            let fixed = fix(rel, bytes.to_vec());
+            (fixed != bytes).then_some(fixed)
+        },
+    )?)
 }
 
 #[cfg(test)]
@@ -1209,6 +1150,23 @@ mod tests {
         let a = Apply::default();
         assert!(!a.writes("leave a (changed by you; remove by hand)\n? b (remove asks)"));
         assert!(a.writes("leave a (changed by you; remove by hand)\n3 removed"));
+    }
+
+    /// T276.3: the registered pause wraps the question, so the binary's bars are hidden
+    /// exactly while it waits for the answer.
+    #[test]
+    fn a_registered_pause_wraps_the_question() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        static PAUSED: AtomicBool = AtomicBool::new(false);
+        set_prompt_pause(|prompt| {
+            PAUSED.store(true, Ordering::SeqCst);
+            prompt();
+            PAUSED.store(false, Ordering::SeqCst);
+        });
+        let mut seen = None;
+        with_pause(&mut || seen = Some(PAUSED.load(Ordering::SeqCst)));
+        assert_eq!(seen, Some(true));
+        assert!(!PAUSED.load(Ordering::SeqCst));
     }
 
     /// The one line `accepted` reads, judged: Enter keeps the default (yes — the old
@@ -1457,42 +1415,55 @@ mod tests {
     }
 
     /// T44.1: a second `setup`/`remove` over an unchanged file must not add a second copy,
-    /// whatever suffix the existing copy carries; changed content still gets its own.
+    /// whatever suffix the existing generation carries; changed content still gets its own.
     #[test]
-    fn backup_skips_when_an_identical_copy_exists_under_any_name() {
+    fn backup_skips_when_an_identical_generation_of_that_name_exists() {
         let dir = tmp("backup-identical");
         let path = dir.join("settings.json");
         fs::write(&path, "same").unwrap();
         let first = backup_at(&path, 1).unwrap().expect("first copy");
         assert_eq!(backup_at(&path, 2).unwrap(), None, "same bytes, no copy");
-        // Only a differently named identical copy remains: still no new copy.
+        // A differently suffixed generation of the same name still counts.
         let backup = dir.join(BACKUP_DIR);
         fs::rename(&first, backup.join("settings.json.bak-9-7")).unwrap();
         assert_eq!(backup_at(&path, 3).unwrap(), None);
-        fs::rename(
-            backup.join("settings.json.bak-9-7"),
-            backup.join("other.txt"),
-        )
-        .unwrap();
-        assert_eq!(
-            backup_at(&path, 3).unwrap(),
-            None,
-            "name in _backup is ignored"
-        );
         // Same size, different bytes: a copy is due.
         fs::write(&path, "diff").unwrap();
         let third = backup_at(&path, 4)
             .unwrap()
             .expect("changed content is copied");
         assert_eq!(fs::read_to_string(&third).unwrap(), "diff");
-        // Identical bytes under any name in _backup skip a new copy.
-        fs::write(backup.join("other.json"), "back").unwrap();
+        // Identical bytes under another file's name do not: that copy is not ours to rely on.
+        fs::write(backup.join("other.json.bak-1"), "back").unwrap();
         fs::write(&path, "back").unwrap();
-        assert_eq!(
-            backup_at(&path, 5).unwrap(),
-            None,
-            "bytes anywhere in _backup count"
-        );
+        assert!(backup_at(&path, 5).unwrap().is_some());
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T569: two host files that start with the same bytes each keep their own undo copy, so
+    /// pruning one file's generations under a cap of 1 never removes the other's only original.
+    #[test]
+    fn same_original_bytes_in_two_files_keep_one_undo_copy_each() {
+        let dir = tmp("backup-two-files");
+        let (a, b) = (dir.join("A.json"), dir.join("B.json"));
+        fs::write(&a, "orig").unwrap();
+        fs::write(&b, "orig").unwrap();
+        let apply = Apply {
+            backup: true,
+            backup_files: 1,
+            ..apply()
+        };
+        write(&apply, &a, "a1", "a1").unwrap();
+        write(&apply, &b, "b1", "b1").unwrap();
+        write(&apply, &a, "a2", "a2").unwrap();
+        let held = |name: &str| -> Vec<String> {
+            generations(&dir.join(BACKUP_DIR), name)
+                .into_iter()
+                .map(|(_, p)| fs::read_to_string(p).unwrap())
+                .collect()
+        };
+        assert_eq!(held("B.json"), ["orig"], "B's original survives A's prune");
+        assert_eq!(held("A.json"), ["a1"], "the cap is per file");
         let _ = fs::remove_dir_all(dir);
     }
 
@@ -1714,6 +1685,68 @@ mod tests {
             fs::read_to_string(dir.join("dots/real.json")).unwrap(),
             "{}\n"
         );
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T570: a link chain that never reaches a file used to end at the 40th hop, and the
+    /// rename then replaced a link with a regular file (and repointed its partner). The
+    /// refusal now comes from `fs_kit::write`, which resolves the chain since T640.
+    #[cfg(unix)]
+    #[test]
+    fn write_refuses_a_symlink_cycle_and_leaves_every_link_alone() {
+        use std::os::unix::fs::symlink;
+        let dir = tmp("cycle");
+        let (a, b, me) = (dir.join("a"), dir.join("b"), dir.join("me"));
+        symlink("b", &a).unwrap();
+        symlink("a", &b).unwrap();
+        symlink("me", &me).unwrap();
+        let backups = Apply {
+            backup: true,
+            ..apply()
+        };
+        for link in [&a, &me] {
+            let err = write(&backups, link, "{}\n", "+ something").unwrap_err();
+            assert!(format!("{err:#}").contains("symbolic links"), "{err:#}");
+        }
+        for (link, to) in [(&a, "b"), (&b, "a"), (&me, "me")] {
+            assert_eq!(fs::read_link(link).unwrap(), Path::new(to));
+        }
+        assert!(!dir.join(BACKUP_DIR).exists());
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T570: acyclic chains, relative and absolute, still update the real file under the links.
+    #[cfg(unix)]
+    #[test]
+    fn write_follows_a_chain_of_links_to_the_real_file() {
+        use std::os::unix::fs::symlink;
+        let dir = tmp("chain");
+        fs::create_dir_all(dir.join("dots")).unwrap();
+        let real = dir.join("dots/real.json");
+        fs::write(&real, "{}\n").unwrap();
+        let (mid, top) = (dir.join("dots/mid.json"), dir.join("top.json"));
+        symlink("real.json", &mid).unwrap();
+        symlink(&mid, &top).unwrap();
+
+        write(&apply(), &top, "{\"a\":1}\n", "+ something").unwrap();
+
+        assert_eq!(fs::read_link(&top).unwrap(), mid);
+        assert_eq!(fs::read_link(&mid).unwrap(), Path::new("real.json"));
+        assert_eq!(fs::read_to_string(&real).unwrap(), "{\"a\":1}\n");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T570: a link into a directory that does not exist fails the write; the link stays.
+    #[cfg(unix)]
+    #[test]
+    fn write_through_a_link_into_a_missing_directory_fails_and_keeps_the_link() {
+        let dir = tmp("missing-parent");
+        let link = dir.join("linked.json");
+        std::os::unix::fs::symlink("gone/real.json", &link).unwrap();
+
+        assert!(write(&apply(), &link, "{}\n", "+ something").is_err());
+
+        assert_eq!(fs::read_link(&link).unwrap(), Path::new("gone/real.json"));
         let _ = fs::remove_dir_all(dir);
     }
 

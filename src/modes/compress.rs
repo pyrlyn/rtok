@@ -69,9 +69,9 @@ const KEEP_WORDS: &[&str] = &["not", "never", "no", "only", "except"];
 /// Strip English fluff from `text` at `intensity`.
 ///
 /// Algorithm (why this shape):
-/// 1. Split on ``` fences first — copy each fence body **verbatim** (opening through
-///    closing fence). Unclosed fence → preserve the remainder untouched (fail closed on
-///    code, never half-edit it).
+/// 1. Find Markdown code fences by line (see [`find_fence`]) and copy each one **verbatim**
+///    (opening line through closing fence). Unclosed fence → preserve the remainder
+///    untouched (fail closed on code, never half-edit it).
 /// 2. Outside fences only: drop pleasantries (all intensities), then filler + articles at
 ///    Full/Ultra, then conjunction padding at Ultra.
 /// 3. Word drops are whole-token only; configured negation tokens are never stripped.
@@ -82,23 +82,52 @@ const KEEP_WORDS: &[&str] = &["not", "never", "no", "only", "except"];
 pub fn compress_prose(text: &str, intensity: CaveIntensity) -> String {
     let mut out = String::with_capacity(text.len());
     let mut rest = text;
-    while let Some(start) = rest.find("```") {
-        let (prose, after) = rest.split_at(start);
-        out.push_str(&compress_outside(prose, intensity));
-        // Copy fence: opening ```…\n … closing ```
-        let after_open = &after[3..];
-        if let Some(end) = after_open.find("```") {
-            let fence_end = 3 + end + 3;
-            out.push_str(&after[..fence_end]);
-            rest = &after[fence_end..];
-        } else {
-            // Unclosed fence: preserve the remainder untouched.
-            out.push_str(after);
-            return out;
-        }
+    while let Some((start, end)) = find_fence(rest) {
+        out.push_str(&compress_outside(&rest[..start], intensity));
+        out.push_str(&rest[start..end]);
+        rest = &rest[end..];
     }
     out.push_str(&compress_outside(rest, intensity));
     out
+}
+
+/// Byte range of the first fenced code block in `text`, from the opening line start to the
+/// end of the closing run (or to the end of `text` when it is never closed).
+///
+/// Fences follow CommonMark: an opening line holds at most three spaces of indent and a run
+/// of three or more backticks or tildes (a backtick info string may not contain a backtick,
+/// otherwise the run is an inline span); only a line with the same character, a run at least
+/// as long and nothing else closes it. Matching raw "```" substrings instead let a shorter
+/// run inside a longer fence end the block early and expose its code to word stripping.
+fn find_fence(text: &str) -> Option<(usize, usize)> {
+    let mut lines = text.split_inclusive('\n').scan(0, |pos, line| {
+        let start = *pos;
+        *pos += line.len();
+        Some((start, line))
+    });
+    let (start, ch, len) = lines.find_map(|(start, line)| {
+        let (ch, len, info) = fence_run(line)?;
+        (ch != b'`' || !info.contains('`')).then_some((start, ch, len))
+    })?;
+    let close = lines.find_map(|(at, line)| {
+        let (c, n, tail) = fence_run(line)?;
+        (c == ch && n >= len && tail.trim().is_empty()).then(|| at + line.len() - tail.len())
+    });
+    Some((start, close.unwrap_or(text.len())))
+}
+
+/// Fence character, run length and the rest of the line, when `line` starts a fence run.
+fn fence_run(line: &str) -> Option<(u8, usize, &str)> {
+    let body = line.trim_start_matches(' ');
+    if line.len() - body.len() > 3 {
+        return None;
+    }
+    let ch = *body
+        .as_bytes()
+        .first()
+        .filter(|c| matches!(c, b'`' | b'~'))?;
+    let run = body.bytes().take_while(|b| *b == ch).count();
+    (run >= 3).then(|| (ch, run, &body[run..]))
 }
 
 /// Compress an unfenced prose segment and normalize whitespace within each line.
@@ -261,6 +290,9 @@ fn strip_words(text: &str, words: &[&str]) -> String {
     let keep: std::collections::HashSet<&str> = KEEP_WORDS.iter().copied().collect();
     let mut out = String::with_capacity(text.len());
     let mut chars = text.chars().peekable();
+    // The character before the current one in the *input*, so the left boundary is judged
+    // like the right one and never from text this pass already edited.
+    let mut prev: Option<char> = None;
     while let Some(c) = chars.next() {
         if c.is_ascii_alphabetic() {
             let mut word = String::new();
@@ -273,21 +305,30 @@ fn strip_words(text: &str, words: &[&str]) -> String {
                 }
             }
             let lower = word.to_ascii_lowercase();
-            // A word glued to a dot, dash, slash or digit is part of an identifier or a path
-            // (`a.txt`, `a-b`, `a/b`, `item1`), not an article: dropping it turned
-            // `Edit a.txt` into `Edit .txt`.
-            let glued = chars
-                .peek()
-                .is_some_and(|c| matches!(c, '.' | '-' | '_' | '/' | '\\') || c.is_ascii_digit());
+            // A word glued to a dot, dash, slash, digit or non-ASCII letter on either side is
+            // part of an identifier or a path (`a.txt`, `a-b`, `a/b`, `item1`, `foo_a`,
+            // `/tmp/a`, `item1a`), not an article: dropping it turned `Edit a.txt` into
+            // `Edit .txt` and `foo_a` into `foo_`.
+            let glued =
+                prev.is_some_and(is_name_glue) || chars.peek().copied().is_some_and(is_name_glue);
             if glued || keep.contains(lower.as_str()) || !drop.contains(lower.as_str()) {
                 out.push_str(&word);
             }
             // else: drop the word
+            prev = word.chars().last();
         } else {
             out.push(c);
+            prev = Some(c);
         }
     }
     out
+}
+
+/// True for a character that joins a word to a neighbouring name or path.
+fn is_name_glue(c: char) -> bool {
+    matches!(c, '.' | '-' | '_' | '/' | '\\')
+        || c.is_ascii_digit()
+        || !c.is_ascii() && c.is_alphanumeric()
 }
 
 fn cleanup_ws_segment(s: &str, preserve_start: bool, preserve_end: bool) -> String {
@@ -425,6 +466,116 @@ mod tests {
         assert_eq!(
             compress_prose("Edit the file", CaveIntensity::Full),
             "Edit file"
+        );
+    }
+
+    /// A word glued to a name on its *left* (`foo_a`, `/tmp/a`, `item1a`) is part of that name:
+    /// only the right-hand glue used to be checked, so `foo_a` came back as `foo_`.
+    #[test]
+    fn a_suffix_inside_a_name_is_kept() {
+        for intensity in [
+            CaveIntensity::Lite,
+            CaveIntensity::Full,
+            CaveIntensity::Ultra,
+        ] {
+            for name in [
+                "foo_a",
+                "foo_the",
+                "/tmp/a",
+                "C:\\tmp\\the",
+                "item1a",
+                "v2an",
+                "x-a",
+                "x.the",
+                "_a_",
+                "naïvea",
+                "a_b",
+                "1_a_2",
+            ] {
+                let input = format!("Edit {name} now");
+                let out = compress_prose(&input, intensity);
+                assert!(out.contains(name), "{intensity:?}: {input} → {out}");
+            }
+        }
+        assert_eq!(
+            compress_prose("Edit the file and a test", CaveIntensity::Ultra),
+            "Edit file and test"
+        );
+        assert_eq!(
+            compress_prose("foo_a is really the one", CaveIntensity::Full),
+            "foo_a is one"
+        );
+    }
+
+    #[test]
+    fn a_suffix_name_next_to_code_is_kept() {
+        assert_eq!(
+            compress_prose("Use `x` then foo_a, and the `y`.", CaveIntensity::Full),
+            "Use `x` then foo_a, and `y`."
+        );
+    }
+
+    /// The outer four-backtick fence holds a triple-backtick example: the shorter run must not
+    /// close it, or the filler words inside the outer block get stripped.
+    #[test]
+    fn a_longer_fence_survives_a_shorter_inner_run() {
+        let fence =
+            "````md\nSure! Example:\n```rs\nlet the = 1;\n```\nThe really exact content\n````";
+        for intensity in [
+            CaveIntensity::Lite,
+            CaveIntensity::Full,
+            CaveIntensity::Ultra,
+        ] {
+            let input = format!("Sure! The bug is really here.\n{fence}\nFix the thing.");
+            let out = compress_prose(&input, intensity);
+            assert!(out.contains(fence), "{intensity:?}: {out}");
+        }
+        let out = compress_prose(
+            &format!("The bug is really here.\n{fence}\nFix the thing."),
+            CaveIntensity::Full,
+        );
+        assert!(out.starts_with("bug is here.\n"), "{out}");
+        assert!(out.ends_with("Fix thing."), "{out}");
+    }
+
+    #[test]
+    fn fences_follow_markdown_opening_and_closing_rules() {
+        // A longer closer, a tilde fence and an indented fence are all verbatim blocks.
+        for fence in [
+            "```\nthe really\n`````",
+            "~~~\nthe really\n~~~",
+            "   ```\nthe really\n   ```",
+            "```\nthe really\n```   ",
+        ] {
+            let out = compress_prose(
+                &format!("The intro\n{fence}\nThe outro"),
+                CaveIntensity::Full,
+            );
+            assert!(out.contains(fence.trim_end()), "{fence:?} → {out}");
+            assert!(out.ends_with("outro"), "{out}");
+        }
+        // Backticks inside a code line, or a different delimiter, never close the block.
+        for body in ["``` the really", "~~~", "`` the really ``", "````` the"] {
+            let fence = format!("````\nx\n{body}\nthe really exact\n````");
+            let out = compress_prose(&fence, CaveIntensity::Full);
+            assert_eq!(out, fence);
+        }
+        // Unclosed block: everything after the opener is kept.
+        let unclosed = "The intro\n```\nthe really\n```x\nthe end";
+        assert_eq!(
+            compress_prose(unclosed, CaveIntensity::Full),
+            "intro\n```\nthe really\n```x\nthe end"
+        );
+    }
+
+    #[test]
+    fn inline_triple_backtick_spans_stay_inline() {
+        assert_eq!(
+            compress_prose(
+                "The ```the really``` span and the rest.",
+                CaveIntensity::Full
+            ),
+            "```the really``` span and rest."
         );
     }
 

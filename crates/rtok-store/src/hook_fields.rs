@@ -204,6 +204,26 @@ mod tests {
         assert_eq!(json(otel.as_bytes()), json(PRE.as_bytes()));
     }
 
+    /// `rtok discover` reads only one event's bodies, and only from the cutoff on, with the
+    /// session fields put back.
+    #[test]
+    fn event_bodies_are_filtered_by_event_and_cutoff() {
+        let s = Store::open_in_memory().unwrap();
+        s.upsert_session("s1", None, None, None, None).unwrap();
+        let (pre, post) = (hook_call(&s, "PreToolUse"), hook_call(&s, "PostToolUse"));
+        s.insert_hook_call_io(pre, PRE.as_bytes(), Some(b"{}"), 65536)
+            .unwrap();
+        s.insert_hook_call_io(post, POST.as_bytes(), Some(b"{}"), 65536)
+            .unwrap();
+        let got = s.hook_inputs_since("PostToolUse", 0, 10).unwrap();
+        assert_eq!(got.len(), 1, "{got:?}");
+        assert_eq!(json(got[0].as_bytes()), json(POST.as_bytes()));
+        for (event, since) in [("PostToolUse", i64::MAX), ("Stop", 0)] {
+            let none = s.hook_inputs_since(event, since, 10).unwrap();
+            assert!(none.is_empty(), "{event} {since}: {none:?}");
+        }
+    }
+
     /// `[core] store_raw` keeps the stdin byte for byte; a row saved before T433 (or by any
     /// other writer) keeps its full body and reads back unchanged.
     #[test]

@@ -7,6 +7,12 @@
     "client": {
       "$ref": "#/$defs/ClientMessage"
     },
+    "reply": {
+      "$ref": "#/$defs/Reply"
+    },
+    "request": {
+      "$ref": "#/$defs/Request"
+    },
     "server": {
       "$ref": "#/$defs/ServerFrame"
     },
@@ -17,7 +23,9 @@
   "required": [
     "snapshot",
     "server",
-    "client"
+    "client",
+    "reply",
+    "request"
   ],
   "$defs": {
     "Agent": {
@@ -146,39 +154,6 @@
         "root",
         "since",
         "detail"
-      ]
-    },
-    "CallBatch": {
-      "description": "What one poll found, as one frame. `summary` counts every event of the poll (including\nthe ones left out of `events`), so a page that adds summaries up never undercounts a burst.",
-      "type": "object",
-      "properties": {
-        "events": {
-          "description": "Newest last. A call's start and progress events are left out when its end is in the\nbatch, since the end carries the same call and tool.",
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/GraphEvent"
-          }
-        },
-        "head": {
-          "description": "The newest event id the batch covers.",
-          "type": "integer",
-          "format": "int64"
-        },
-        "omitted": {
-          "description": "Events cut because the batch held more than [`MAX_EVENTS`] (the oldest go first).",
-          "type": "integer",
-          "format": "uint32",
-          "minimum": 0
-        },
-        "summary": {
-          "$ref": "#/$defs/CallSummary"
-        }
-      },
-      "required": [
-        "events",
-        "omitted",
-        "summary",
-        "head"
       ]
     },
     "CallRow": {
@@ -313,89 +288,6 @@
         "output"
       ]
     },
-    "CallSummary": {
-      "type": "object",
-      "properties": {
-        "caps": {
-          "description": "Rows with a `ref_id`: answers cut at `max_tokens`.",
-          "type": "integer",
-          "format": "uint32",
-          "minimum": 0
-        },
-        "crossed": {
-          "description": "Ended calls whose scope held more than one project.",
-          "type": "integer",
-          "format": "uint32",
-          "minimum": 0
-        },
-        "ends": {
-          "type": "integer",
-          "format": "uint32",
-          "minimum": 0
-        },
-        "est_after": {
-          "type": "integer",
-          "format": "int64"
-        },
-        "est_before": {
-          "description": "Sums of the `samples` of the end events: the `Measurement` columns `rtok stats` adds up.",
-          "type": "integer",
-          "format": "int64"
-        },
-        "failed": {
-          "type": "integer",
-          "format": "uint32",
-          "minimum": 0
-        },
-        "fallbacks": {
-          "description": "`lsp_fallback` rows of the ended calls: each is one answer the tags index gave after the\nlanguage server could not.",
-          "type": "integer",
-          "format": "uint32",
-          "minimum": 0
-        },
-        "files_touched": {
-          "type": "integer",
-          "format": "uint32",
-          "minimum": 0
-        },
-        "projects_hit": {
-          "type": "integer",
-          "format": "uint32",
-          "minimum": 0
-        },
-        "starts": {
-          "type": "integer",
-          "format": "uint32",
-          "minimum": 0
-        },
-        "symbols": {
-          "description": "Symbols the ended calls asked for.",
-          "type": "integer",
-          "format": "uint32",
-          "minimum": 0
-        },
-        "symbols_returned": {
-          "description": "What the ended calls returned, counted by the graph backends (T329.36): asked symbols\nthe answers list, distinct files per call and projects with a row per call.",
-          "type": "integer",
-          "format": "uint32",
-          "minimum": 0
-        }
-      },
-      "required": [
-        "starts",
-        "ends",
-        "failed",
-        "est_before",
-        "est_after",
-        "fallbacks",
-        "caps",
-        "symbols",
-        "crossed",
-        "symbols_returned",
-        "files_touched",
-        "projects_hit"
-      ]
-    },
     "CallsRequest": {
       "type": "object",
       "properties": {
@@ -405,6 +297,50 @@
       },
       "required": [
         "subscribe"
+      ]
+    },
+    "CallsView": {
+      "description": "The state of the live calls panel at `now`.",
+      "type": "object",
+      "properties": {
+        "feed": {
+          "description": "Newest first.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Finished"
+          }
+        },
+        "heat_window_s": {
+          "description": "`[plugins.graph] live_heat_window_s`: how long a node stays warm on the live canvas.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "now": {
+          "description": "The server's clock in epoch milliseconds: the page ages rows by `now - at` on this clock,\nso a skew between the two machines moves nothing.",
+          "type": "integer",
+          "format": "int64"
+        },
+        "running": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Running"
+          }
+        },
+        "windows": {
+          "description": "One per chip, in the order of [`WINDOWS`]; the last is \"since start\".",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/WindowView"
+          }
+        }
+      },
+      "required": [
+        "now",
+        "running",
+        "feed",
+        "heat_window_s",
+        "windows"
       ]
     },
     "Capability": {
@@ -653,6 +589,30 @@
           },
           "required": [
             "diff"
+          ]
+        },
+        {
+          "description": "Download the graph as JSON, SVG or PNG (T329.40); read-only.",
+          "type": "object",
+          "properties": {
+            "export": {
+              "$ref": "#/$defs/ExportRequest"
+            }
+          },
+          "required": [
+            "export"
+          ]
+        },
+        {
+          "description": "Open a saved JSON export, sent as text, for the page's read-only view (T329.40).",
+          "type": "object",
+          "properties": {
+            "import": {
+              "$ref": "#/$defs/ImportRequest"
+            }
+          },
+          "required": [
+            "import"
           ]
         },
         {
@@ -1007,6 +967,14 @@
         "action": {
           "$ref": "#/$defs/DoctorAction"
         },
+        "confirmed": {
+          "description": "For `apply`: the `token` of the plan the user confirmed. Without the plan's token, or with\none the files no longer produce, nothing is written and a fresh plan comes back.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
         "selection": {
           "$ref": "#/$defs/Selection",
           "default": {
@@ -1017,7 +985,8 @@
       },
       "required": [
         "action",
-        "selection"
+        "selection",
+        "confirmed"
       ]
     },
     "DrillEdge": {
@@ -1283,12 +1252,228 @@
         "query"
       ]
     },
-    "EventPhase": {
-      "type": "string",
-      "enum": [
-        "start",
-        "progress",
-        "end"
+    "Edge": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "from",
+        "to",
+        "kind"
+      ]
+    },
+    "Export": {
+      "type": "object",
+      "properties": {
+        "edges": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Edge"
+          }
+        },
+        "links": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Link"
+          }
+        },
+        "meta": {
+          "$ref": "#/$defs/Meta"
+        },
+        "nodes": {
+          "description": "Empty at the `overview` level.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Node"
+          }
+        },
+        "projects": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Proj"
+          }
+        },
+        "schema": {
+          "type": "string",
+          "const": "rtok.graph.v1"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "projects",
+        "links",
+        "nodes",
+        "edges",
+        "meta"
+      ]
+    },
+    "ExportFile": {
+      "description": "A finished download. The bytes travel as base64 because a PNG is not text and the frame is.",
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "string"
+        },
+        "mime": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "mime",
+        "data"
+      ]
+    },
+    "ExportRequest": {
+      "description": "A download from the graph page's Export menu (T329.40): the file `rtok graph export` writes for\nthe same arguments.",
+      "type": "object",
+      "properties": {
+        "depth": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "default": null,
+          "minimum": 0
+        },
+        "focus": {
+          "description": "A symbol name; it wins over `level`, as `--focus` does.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "format": {
+          "$ref": "#/$defs/Format"
+        },
+        "level": {
+          "$ref": "#/$defs/Level2"
+        },
+        "project": {
+          "description": "An id or a root path, as in `rtok graph projects`.",
+          "type": "string"
+        },
+        "scale": {
+          "description": "PNG only: 1 to 4 times the SVG size.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "default": null,
+          "minimum": 0
+        },
+        "transparent": {
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "required": [
+        "project",
+        "level",
+        "focus",
+        "depth",
+        "format",
+        "scale",
+        "transparent"
+      ]
+    },
+    "Finished": {
+      "type": "object",
+      "properties": {
+        "after": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "at": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "backend": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "before": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "call": {
+          "type": "string"
+        },
+        "caller": {
+          "type": "string"
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "interrupted": {
+          "type": "boolean"
+        },
+        "ms": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "ok": {
+          "type": "boolean"
+        },
+        "project": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "session": {
+          "type": "string"
+        },
+        "target": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tool": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "call",
+        "tool",
+        "target",
+        "project",
+        "session",
+        "caller",
+        "ok",
+        "error",
+        "backend",
+        "ms",
+        "before",
+        "after",
+        "at",
+        "interrupted"
       ]
     },
     "Fixed": {
@@ -1299,164 +1484,50 @@
           "type": "integer",
           "format": "int32"
         },
+        "replan": {
+          "description": "Set when nothing was written because the files no longer match the confirmed preview:\nthe fresh preview, which needs its own confirmation.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Plan"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "text": {
           "type": "string"
         }
       },
       "required": [
         "text",
-        "code"
+        "code",
+        "replan"
       ]
     },
-    "GraphEvent": {
-      "description": "One event of a graph call. `call` ties a call's events together; `ts_ms`, `id` and the\nclipping of free text are the store's, so a writer leaves `id` and `ts_ms` at zero.",
+    "Format": {
+      "type": "string",
+      "enum": [
+        "json",
+        "svg",
+        "png"
+      ]
+    },
+    "ImportRequest": {
+      "description": "A saved JSON export the page read itself, to show read-only. Like Compare mode, it never names\na path: the websocket answers anything on localhost, so the file arrives as its text.",
       "type": "object",
       "properties": {
-        "answer_tokens": {
-          "description": "Estimated tokens of the answer the caller received (end events).",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint32",
-          "minimum": 0
-        },
-        "backend": {
-          "description": "`lsp`, `tags` or `text`: the backend that answered (end events).",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "call": {
+        "name": {
+          "description": "The file's name, for the banner and the errors.",
           "type": "string"
         },
-        "done": {
-          "description": "Scope members done and in total (progress and end events).",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint32",
-          "minimum": 0
-        },
-        "error": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "files_touched": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint32",
-          "minimum": 0
-        },
-        "id": {
-          "type": "integer",
-          "format": "int64"
-        },
-        "ms": {
-          "description": "Elapsed milliseconds (end events).",
-          "type": [
-            "number",
-            "null"
-          ],
-          "format": "double"
-        },
-        "ok": {
-          "type": "boolean"
-        },
-        "phase": {
-          "$ref": "#/$defs/EventPhase"
-        },
-        "project": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "projects_hit": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint32",
-          "minimum": 0
-        },
-        "samples": {
-          "description": "The call's `graph` measurement rows (end events); empty when the answer was not shortened.",
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/MeasurementSample"
-          }
-        },
-        "session": {
+        "text": {
           "type": "string"
-        },
-        "symbols": {
-          "description": "Symbols the call asked for (every event); `None` for a tool that takes none.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint32",
-          "minimum": 0
-        },
-        "symbols_returned": {
-          "description": "What the answer returned, counted by the backends (end events of `symbol`, `callers` and\n`impact` by name): asked symbols it lists, distinct files of its rows, projects with a row.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint32",
-          "minimum": 0
-        },
-        "target": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "tool": {
-          "type": "string"
-        },
-        "total": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint32",
-          "minimum": 0
-        },
-        "ts_ms": {
-          "type": "integer",
-          "format": "int64"
         }
       },
       "required": [
-        "id",
-        "ts_ms",
-        "call",
-        "phase",
-        "session",
-        "tool",
-        "target",
-        "project",
-        "backend",
-        "ok",
-        "error",
-        "ms",
-        "done",
-        "total",
-        "answer_tokens",
-        "samples",
-        "symbols",
-        "symbols_returned",
-        "files_touched",
-        "projects_hit"
+        "name",
+        "text"
       ]
     },
     "InstructionRow": {
@@ -1649,6 +1720,23 @@
         "link_broken"
       ]
     },
+    "Latency": {
+      "type": "object",
+      "properties": {
+        "p50": {
+          "type": "number",
+          "format": "double"
+        },
+        "p95": {
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "required": [
+        "p50",
+        "p95"
+      ]
+    },
     "Level": {
       "oneOf": [
         {
@@ -1679,6 +1767,48 @@
         }
       ]
     },
+    "Level2": {
+      "type": "string",
+      "enum": [
+        "overview",
+        "symbols"
+      ]
+    },
+    "Link": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "references": {
+          "description": "Call references from `from` into `to` found in the indexes.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "to": {
+          "type": "integer",
+          "format": "int32"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "from",
+        "to",
+        "kind",
+        "references"
+      ]
+    },
     "LinkKind": {
       "type": "string",
       "enum": [
@@ -1686,50 +1816,65 @@
         "auto"
       ]
     },
-    "MeasurementSample": {
-      "description": "One `measurements` row of the call, with the columns `rtok stats` sums. Copied from the\ntable at the call's end, so a page that adds these up gets the report's numbers.",
+    "Meta": {
       "type": "object",
       "properties": {
-        "after_bytes": {
+        "depth": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "exported_at": {
           "type": "integer",
-          "format": "int64"
+          "format": "uint64",
+          "minimum": 0
         },
-        "before_bytes": {
-          "type": "integer",
-          "format": "int64"
-        },
-        "est_after": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "est_before": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "id": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "kind": {
-          "type": "string"
-        },
-        "ref_id": {
-          "description": "Set when the row's answer was cut and archived: how a page tells a cap hit from an\n`explore` row that only stands for several smaller calls. Absent in rows written before T329.33.",
+        "focus": {
           "type": [
             "string",
             "null"
-          ],
-          "default": null
+          ]
+        },
+        "level": {
+          "description": "`overview`, `symbols` or `focus`.",
+          "type": "string"
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "partial": {
+          "description": "A project was still indexing, not indexed, or could not answer.",
+          "type": "boolean"
+        },
+        "redacted": {
+          "type": "boolean"
+        },
+        "rtok_version": {
+          "type": "string"
+        },
+        "scope": {
+          "description": "Project names of the scope.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       },
+      "additionalProperties": false,
       "required": [
-        "id",
-        "kind",
-        "before_bytes",
-        "after_bytes",
-        "est_before",
-        "est_after",
-        "ref_id"
+        "scope",
+        "level",
+        "exported_at",
+        "rtok_version",
+        "redacted",
+        "partial",
+        "notes"
       ]
     },
     "ModelRow": {
@@ -1803,6 +1948,41 @@
         "installed",
         "not_installed",
         "not_supported"
+      ]
+    },
+    "Node": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "line": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "description": "Relative to the project root.",
+          "type": "string"
+        },
+        "project": {
+          "type": "integer",
+          "format": "int32"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "project",
+        "kind",
+        "name",
+        "path",
+        "line"
       ]
     },
     "Origin": {
@@ -1954,12 +2134,17 @@
           "items": {
             "type": "string"
           }
+        },
+        "token": {
+          "description": "Names this preview (its selected entries and their diff): `apply` writes only when the\ntoken it is given is the one the fresh rescan produces.",
+          "type": "string"
         }
       },
       "required": [
         "items",
         "diff",
-        "refused"
+        "refused",
+        "token"
       ]
     },
     "Planned": {
@@ -1981,6 +2166,12 @@
         "failed": {
           "description": "Planned and not removed: the re-check refused it or the removal failed.",
           "type": "boolean"
+        },
+        "files": {
+          "description": "Files in it, counted for a planned item before anything is removed.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
         },
         "kind": {
           "type": "string"
@@ -2013,6 +2204,7 @@
         "kind",
         "path",
         "bytes",
+        "files",
         "last_used",
         "reason",
         "planned",
@@ -2143,6 +2335,50 @@
         "path",
         "detail",
         "fixable"
+      ]
+    },
+    "Proj": {
+      "type": "object",
+      "properties": {
+        "backend": {
+          "description": "`tags`, `lsp` or `text`: the mode that answers for the project.",
+          "type": "string"
+        },
+        "health": {
+          "description": "`ok`, `stale`, `not indexed`, `missing` or `unknown`.",
+          "type": "string"
+        },
+        "id": {
+          "description": "0 for a directory that is not in the registry.",
+          "type": "integer",
+          "format": "int32"
+        },
+        "indexed_at": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64"
+        },
+        "name": {
+          "type": "string"
+        },
+        "origin": {
+          "type": "string"
+        },
+        "root": {
+          "description": "`~/...` under the home directory, `.../name` elsewhere, unless redaction is off.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "root",
+        "origin",
+        "backend",
+        "health"
       ]
     },
     "ProjectIndex": {
@@ -2277,6 +2513,45 @@
             "to",
             "both"
           ]
+        },
+        {
+          "description": "Re-read the project's files (T329.54). Answered at once; the row reads `indexing` until\nthe worker ends, then `ok` or `failed` with the error.",
+          "type": "object",
+          "properties": {
+            "action": {
+              "type": "string",
+              "const": "reindex"
+            },
+            "project": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "action",
+            "project"
+          ]
+        },
+        {
+          "description": "Drop the project from the registry with its index rows; its files are never touched.\nWithout `confirmed` nothing is written and the dry run comes back as a\n[`ServerFrame::ProjectPlan`].",
+          "type": "object",
+          "properties": {
+            "action": {
+              "type": "string",
+              "const": "remove"
+            },
+            "confirmed": {
+              "type": "boolean",
+              "default": false
+            },
+            "project": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "action",
+            "project",
+            "confirmed"
+          ]
         }
       ]
     },
@@ -2305,6 +2580,13 @@
         "created_at": {
           "type": "integer",
           "format": "int64"
+        },
+        "error": {
+          "description": "Why the last re-index failed, while `state` is `failed` (T329.54).",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "health": {
           "description": "The 0 to 100 health score with its components, reasons and fixes (T329.19).",
@@ -2443,6 +2725,242 @@
       "required": [
         "source",
         "path"
+      ]
+    },
+    "Reply": {
+      "description": "A frame as it goes out for a request that carried `req`: the same fields plus the id, on\nsuccess and on failure (a `message` notice) alike.",
+      "type": "object",
+      "properties": {
+        "req": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "oneOf": [
+        {
+          "description": "A one-line notice for the operator (refused key, failed `set`, unknown archive id).",
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "message"
+            }
+          },
+          "required": [
+            "type",
+            "text"
+          ]
+        },
+        {
+          "description": "The archived payload a client asked for with [`ClientMessage::Expand`].",
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "expand"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "text"
+          ]
+        },
+        {
+          "description": "What removing a project would drop (T329.54): the dry run `graph projects remove\n--dry-run` prints. Nothing was removed; the page asks the user before it sends the\nconfirmed request.",
+          "type": "object",
+          "properties": {
+            "plan": {
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "projectplan"
+            }
+          },
+          "required": [
+            "type",
+            "project",
+            "plan"
+          ]
+        },
+        {
+          "description": "The checklist of `rtok doctor --fix` and the diff of the selection (T331.12).",
+          "type": "object",
+          "properties": {
+            "plan": {
+              "$ref": "#/$defs/Plan"
+            },
+            "type": {
+              "type": "string",
+              "const": "doctorplan"
+            }
+          },
+          "required": [
+            "type",
+            "plan"
+          ]
+        },
+        {
+          "description": "What a confirmed `doctor` apply did.",
+          "type": "object",
+          "properties": {
+            "fixed": {
+              "$ref": "#/$defs/Fixed"
+            },
+            "type": {
+              "type": "string",
+              "const": "doctorfixed"
+            }
+          },
+          "required": [
+            "type",
+            "fixed"
+          ]
+        },
+        {
+          "description": "The dry run of \"clear safe junk\" (T330.7): what `agents junk clear` would remove for every\nagent; nothing was removed.",
+          "type": "object",
+          "properties": {
+            "plan": {
+              "$ref": "#/$defs/Cleared"
+            },
+            "type": {
+              "type": "string",
+              "const": "junkplan"
+            }
+          },
+          "required": [
+            "type",
+            "plan"
+          ]
+        },
+        {
+          "description": "What a confirmed junk apply removed.",
+          "type": "object",
+          "properties": {
+            "cleared": {
+              "$ref": "#/$defs/Cleared"
+            },
+            "type": {
+              "type": "string",
+              "const": "junkcleared"
+            }
+          },
+          "required": [
+            "type",
+            "cleared"
+          ]
+        },
+        {
+          "description": "The answer to [`ClientMessage::Graph`]: one project's nodes and edges (T329.14).",
+          "type": "object",
+          "properties": {
+            "graph": {
+              "$ref": "#/$defs/DrillGraph"
+            },
+            "type": {
+              "type": "string",
+              "const": "graph"
+            }
+          },
+          "required": [
+            "type",
+            "graph"
+          ]
+        },
+        {
+          "description": "The answer to [`ClientMessage::Diff`] (T329.35); `project` echoes the request's, which is\nhow the page matches a reply to its question.",
+          "type": "object",
+          "properties": {
+            "diff": {
+              "$ref": "#/$defs/DiffReport"
+            },
+            "project": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "diff"
+            }
+          },
+          "required": [
+            "type",
+            "project",
+            "diff"
+          ]
+        },
+        {
+          "description": "The answer to [`ClientMessage::Export`] (T329.40): the file the CLI would write.",
+          "type": "object",
+          "properties": {
+            "file": {
+              "$ref": "#/$defs/ExportFile"
+            },
+            "type": {
+              "type": "string",
+              "const": "export"
+            }
+          },
+          "required": [
+            "type",
+            "file"
+          ]
+        },
+        {
+          "description": "The answer to [`ClientMessage::Import`]: the saved export, parsed and checked against the\nschema; the page shows it read-only.",
+          "type": "object",
+          "properties": {
+            "export": {
+              "$ref": "#/$defs/Export"
+            },
+            "name": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "imported"
+            }
+          },
+          "required": [
+            "type",
+            "name",
+            "export"
+          ]
+        },
+        {
+          "description": "The live calls panel's whole state (T329.15, T484): running calls, the feed and the totals\nof every window. Sent after [`ClientMessage::Calls`] subscribed, first at once and then\nwhen something in it changed, at most four times a second.",
+          "type": "object",
+          "properties": {
+            "calls": {
+              "$ref": "#/$defs/CallsView"
+            },
+            "type": {
+              "type": "string",
+              "const": "calls"
+            }
+          },
+          "required": [
+            "type",
+            "calls"
+          ]
+        }
       ]
     },
     "Report": {
@@ -2659,6 +3177,187 @@
         "skipped"
       ]
     },
+    "Request": {
+      "description": "A request with the id its answer comes back under (T623). The server reads `req` off any\nmessage, so [`ClientMessage`] itself stays the bare shape; this is the wire form a client with\nmore than one request in flight sends.",
+      "type": "object",
+      "properties": {
+        "req": {
+          "description": "Chosen by the client, never reused on one page: a reply for a request that timed out\nstill carries its own id, so it cannot be taken for the answer to a later one.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "anyOf": [
+        {
+          "description": "Ask for the archived payload behind an archive id.",
+          "type": "object",
+          "properties": {
+            "expand": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "expand"
+          ]
+        },
+        {
+          "description": "Flip an allowlisted boolean key (`plugins.<id>.enabled`).",
+          "type": "object",
+          "properties": {
+            "set": {
+              "$ref": "#/$defs/SetRequest"
+            }
+          },
+          "required": [
+            "set"
+          ]
+        },
+        {
+          "description": "Change the project registry (T329.12, T329.20): select a project, or link two of them.",
+          "type": "object",
+          "properties": {
+            "project": {
+              "$ref": "#/$defs/ProjectRequest"
+            }
+          },
+          "required": [
+            "project"
+          ]
+        },
+        {
+          "description": "The `doctor --fix` checklist: plan it, or write it once the user confirmed.",
+          "type": "object",
+          "properties": {
+            "doctor": {
+              "$ref": "#/$defs/DoctorRequest"
+            }
+          },
+          "required": [
+            "doctor"
+          ]
+        },
+        {
+          "description": "\"Clear safe junk\" on the Hosts page: plan it, or remove once the user confirmed.",
+          "type": "object",
+          "properties": {
+            "junk": {
+              "$ref": "#/$defs/JunkRequest"
+            }
+          },
+          "required": [
+            "junk"
+          ]
+        },
+        {
+          "description": "The inside of one project for the graph page's level 2 (T329.14); read-only.",
+          "type": "object",
+          "properties": {
+            "graph": {
+              "$ref": "#/$defs/DrillRequest"
+            }
+          },
+          "required": [
+            "graph"
+          ]
+        },
+        {
+          "description": "What a change did to one project's graph, for Compare mode (T329.35); read-only.",
+          "type": "object",
+          "properties": {
+            "diff": {
+              "$ref": "#/$defs/DiffRequest"
+            }
+          },
+          "required": [
+            "diff"
+          ]
+        },
+        {
+          "description": "Download the graph as JSON, SVG or PNG (T329.40); read-only.",
+          "type": "object",
+          "properties": {
+            "export": {
+              "$ref": "#/$defs/ExportRequest"
+            }
+          },
+          "required": [
+            "export"
+          ]
+        },
+        {
+          "description": "Open a saved JSON export, sent as text, for the page's read-only view (T329.40).",
+          "type": "object",
+          "properties": {
+            "import": {
+              "$ref": "#/$defs/ImportRequest"
+            }
+          },
+          "required": [
+            "import"
+          ]
+        },
+        {
+          "description": "Start or stop the graph call events (T329.15); the page subscribes while the live\ngraph is visible, so a hidden one costs nothing.",
+          "type": "object",
+          "properties": {
+            "calls": {
+              "$ref": "#/$defs/CallsRequest"
+            }
+          },
+          "required": [
+            "calls"
+          ]
+        }
+      ]
+    },
+    "Running": {
+      "type": "object",
+      "properties": {
+        "at": {
+          "description": "The reader's clock: the interrupt timeout must not depend on the writer's.",
+          "type": "integer",
+          "format": "int64"
+        },
+        "call": {
+          "type": "string"
+        },
+        "caller": {
+          "description": "T329.34: what the store calls the session (`claude 3f9a1c2e`), else the session's start.",
+          "type": "string"
+        },
+        "project": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "session": {
+          "type": "string"
+        },
+        "target": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tool": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "call",
+        "tool",
+        "target",
+        "project",
+        "session",
+        "caller",
+        "at"
+      ]
+    },
     "SavingsDay": {
       "description": "One day of the Δtok savings trend (T414.13).",
       "type": "object",
@@ -2797,6 +3496,27 @@
           ]
         },
         {
+          "description": "What removing a project would drop (T329.54): the dry run `graph projects remove\n--dry-run` prints. Nothing was removed; the page asks the user before it sends the\nconfirmed request.",
+          "type": "object",
+          "properties": {
+            "plan": {
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "projectplan"
+            }
+          },
+          "required": [
+            "type",
+            "project",
+            "plan"
+          ]
+        },
+        {
           "description": "The checklist of `rtok doctor --fix` and the diff of the selection (T331.12).",
           "type": "object",
           "properties": {
@@ -2903,11 +3623,49 @@
           ]
         },
         {
-          "description": "What the graph tools did since the last frame (T329.15): sent only after\n[`ClientMessage::Calls`] subscribed, at most four times a second.",
+          "description": "The answer to [`ClientMessage::Export`] (T329.40): the file the CLI would write.",
           "type": "object",
           "properties": {
-            "batch": {
-              "$ref": "#/$defs/CallBatch"
+            "file": {
+              "$ref": "#/$defs/ExportFile"
+            },
+            "type": {
+              "type": "string",
+              "const": "export"
+            }
+          },
+          "required": [
+            "type",
+            "file"
+          ]
+        },
+        {
+          "description": "The answer to [`ClientMessage::Import`]: the saved export, parsed and checked against the\nschema; the page shows it read-only.",
+          "type": "object",
+          "properties": {
+            "export": {
+              "$ref": "#/$defs/Export"
+            },
+            "name": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "imported"
+            }
+          },
+          "required": [
+            "type",
+            "name",
+            "export"
+          ]
+        },
+        {
+          "description": "The live calls panel's whole state (T329.15, T484): running calls, the feed and the totals\nof every window. Sent after [`ClientMessage::Calls`] subscribed, first at once and then\nwhen something in it changed, at most four times a second.",
+          "type": "object",
+          "properties": {
+            "calls": {
+              "$ref": "#/$defs/CallsView"
             },
             "type": {
               "type": "string",
@@ -2916,7 +3674,7 @@
           },
           "required": [
             "type",
-            "batch"
+            "calls"
           ]
         }
       ]
@@ -3413,6 +4171,10 @@
             "null"
           ]
         },
+        "tasks": {
+          "description": "Tasks page (T441.13.7): the project's `rtok task list --all` as a board, through\n[`tasks::page`]. Read-only; the slow adapters are read off the tick.",
+          "$ref": "#/$defs/TasksPage"
+        },
         "type": {
           "type": "string"
         },
@@ -3446,7 +4208,39 @@
         "config",
         "services",
         "worktrees",
-        "agent_usage"
+        "agent_usage",
+        "tasks"
+      ]
+    },
+    "Spark": {
+      "description": "Calls and tokens saved per slot over a window, oldest first. Summed from the same buckets as\nthe window totals, so the slots add up to them.",
+      "type": "object",
+      "properties": {
+        "calls": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          }
+        },
+        "saved": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "span_ms": {
+          "description": "What the slots cover. \"since start\" reads the buckets, which are kept for 15 minutes only.",
+          "type": "integer",
+          "format": "int64"
+        }
+      },
+      "required": [
+        "span_ms",
+        "calls",
+        "saved"
       ]
     },
     "Stats": {
@@ -3493,6 +4287,197 @@
         "rows"
       ]
     },
+    "TaskBoard": {
+      "type": "object",
+      "properties": {
+        "adapter": {
+          "description": "`disk`, `github` or `gitlab`.",
+          "type": "string"
+        },
+        "hidden": {
+          "description": "Finished tasks left off `tasks`.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "tasks": {
+          "description": "Every active task, and the newest [`FINISHED_SHOWN`] of each finished status, by id.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TaskCard"
+          }
+        }
+      },
+      "required": [
+        "adapter",
+        "tasks",
+        "hidden"
+      ]
+    },
+    "TaskCard": {
+      "description": "One task as the board draws it: the fields of `rtok task list --json` except the description,\nwhich can be pages long and has no place on a card (`rtok task show` has it).",
+      "type": "object",
+      "properties": {
+        "assignee": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "blocked_by": {
+          "description": "The tasks this one waits for (`task_dep`), shown as \"needs\".",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "conflicts_with": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "external": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TaskLink"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "parallel": {
+          "type": "boolean"
+        },
+        "parent": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "priority": {
+          "description": "`0` is highest. Unlike the CLI's JSON, the default is carried too: a card always has one.",
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "status": {
+          "$ref": "#/$defs/TaskColumn"
+        },
+        "title": {
+          "type": "string"
+        },
+        "updated_at": {
+          "description": "Unix seconds.",
+          "type": "integer",
+          "format": "int64"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "status",
+        "parent",
+        "priority",
+        "assignee",
+        "blocked_by",
+        "conflicts_with",
+        "parallel",
+        "external",
+        "updated_at"
+      ]
+    },
+    "TaskColumn": {
+      "description": "The board's columns, the four statuses of [`Status`] under their `rtok task` names.",
+      "type": "string",
+      "enum": [
+        "open",
+        "in-progress",
+        "done",
+        "closed"
+      ]
+    },
+    "TaskLink": {
+      "description": "The issue a task lives in on GitHub or GitLab.",
+      "type": "object",
+      "properties": {
+        "adapter": {
+          "type": "string"
+        },
+        "number": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "url": {
+          "description": "Always `http(s)`: an issue host's reply is untrusted, and the page turns this into a link.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "adapter",
+        "number",
+        "url"
+      ]
+    },
+    "TasksPage": {
+      "description": "The Tasks page. `text` is the `rtok task list` screen for the tui and the SPA's status line;\n`board` is the same rows as data for the SPA. Both come from one list.",
+      "type": "object",
+      "properties": {
+        "board": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TaskBoard"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "state": {
+          "$ref": "#/$defs/TasksState"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "state",
+        "text",
+        "board"
+      ]
+    },
+    "TasksState": {
+      "description": "Where the Tasks page stands. `Unconfigured` is an ordinary case (the project never ran\n`rtok task init`), not a failure, so the page shows how to start instead of an error.",
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "ready"
+          ]
+        },
+        {
+          "description": "The first read has not landed yet.",
+          "type": "string",
+          "const": "reading"
+        },
+        {
+          "description": "No `[tasks]` key in any config layer.",
+          "type": "string",
+          "const": "unconfigured"
+        },
+        {
+          "description": "The adapter would not open or list; [`TasksPage::text`] says why.",
+          "type": "string",
+          "const": "failed"
+        }
+      ]
+    },
     "ToolSearch": {
       "description": "The tool-search state and where it came from; `source` is `None` for the default (nothing to\nreport), so a plain install prints no line.",
       "type": "object",
@@ -3526,6 +4511,28 @@
           "type": "string",
           "const": "unknown"
         }
+      ]
+    },
+    "ToolView": {
+      "type": "object",
+      "properties": {
+        "calls": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "saved": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "tool": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "tool",
+        "calls",
+        "saved"
       ]
     },
     "Totals": {
@@ -3665,6 +4672,114 @@
         "root",
         "score",
         "reasons"
+      ]
+    },
+    "WindowView": {
+      "type": "object",
+      "properties": {
+        "after": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "backends": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          }
+        },
+        "before": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "calls": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "caps": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "crossed": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "failed": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "fallbacks": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "files_touched": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "label": {
+          "type": "string"
+        },
+        "latency": {
+          "description": "`None` before any call in the window has ended.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Latency"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "projects_hit": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "spark": {
+          "$ref": "#/$defs/Spark"
+        },
+        "symbols": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "symbols_returned": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "tools": {
+          "description": "Most calls first.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ToolView"
+          }
+        }
+      },
+      "required": [
+        "label",
+        "calls",
+        "failed",
+        "before",
+        "after",
+        "tools",
+        "backends",
+        "fallbacks",
+        "caps",
+        "symbols",
+        "crossed",
+        "symbols_returned",
+        "files_touched",
+        "projects_hit",
+        "latency",
+        "spark"
       ]
     }
   }

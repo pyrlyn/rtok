@@ -30,6 +30,7 @@ use axum::http::header::{
 };
 use axum::http::{HeaderMap, HeaderValue, Method, StatusCode, Uri};
 use axum::response::{IntoResponse, Response};
+use percent_encoding::percent_decode_str;
 use rust_embed::RustEmbed;
 
 /// `build.rs` points `RTOK_SPA_DIR` at `web/dist`, or at a one-page placeholder when the SPA was
@@ -133,6 +134,25 @@ fn safe_join(root: &Path, name: &str) -> Option<PathBuf> {
         .then(|| root.join(rel))
 }
 
+/// The file name a URL path asks for: each segment percent-decoded exactly once. `None` for text
+/// that is not a file name: a malformed escape, bytes that are not UTF-8, or a segment that
+/// decodes to a separator or NUL (`%2F` must not turn one segment into a nested path).
+fn decode_path(path: &str) -> Option<String> {
+    let segments = path
+        .split('/')
+        .map(|seg| {
+            let well_formed = seg.match_indices('%').all(|(i, _)| {
+                seg.as_bytes()
+                    .get(i + 1..i + 3)
+                    .is_some_and(|hex| hex.iter().all(u8::is_ascii_hexdigit))
+            });
+            let decoded = percent_decode_str(seg).decode_utf8().ok()?;
+            (well_formed && !decoded.contains(['/', '\\', '\0'])).then_some(decoded)
+        })
+        .collect::<Option<Vec<_>>>()?;
+    Some(segments.join("/"))
+}
+
 /// Whether the client accepts `coding` (`q=0` refuses it).
 fn accepts(headers: &HeaderMap, coding: &str) -> bool {
     headers
@@ -195,7 +215,10 @@ async fn serve(
     if method != Method::GET && method != Method::HEAD {
         return secured(StatusCode::METHOD_NOT_ALLOWED.into_response());
     }
-    let path = uri.path().trim_start_matches('/');
+    let Some(path) = decode_path(uri.path()) else {
+        return secured(StatusCode::BAD_REQUEST.into_response());
+    };
+    let path = path.trim_start_matches('/');
     let name = if path.is_empty() { "index.html" } else { path };
     let (name, served) = match lookup(&assets, name, &headers).await {
         Some(s) => (name, Some(s)),
@@ -303,6 +326,19 @@ mod tests {
         assert!(!is_page_route("assets/missing"));
         assert!(!is_page_route("favicon.ico"));
         assert!(!is_page_route("a/b.js"));
+    }
+
+    #[test]
+    fn url_paths_are_decoded_once_and_only_into_file_names() {
+        assert_eq!(
+            decode_path("/assets/a%20b.svg").as_deref(),
+            Some("/assets/a b.svg")
+        );
+        assert_eq!(decode_path("/a%2520b").as_deref(), Some("/a%20b"));
+        assert_eq!(decode_path("/caf%C3%A9").as_deref(), Some("/caf\u{e9}"));
+        for bad in ["/a%2Fb", "/a%5cb", "/a%00", "/100%", "/%zz", "/%4", "/%FF"] {
+            assert_eq!(decode_path(bad), None, "{bad}");
+        }
     }
 
     #[test]

@@ -6,9 +6,9 @@
 //! summaries, `--help`). One table, so every command marks a warning the same way.
 //!
 //! A line that names an operation (`index`, `start`, `remove`, …) takes that operation's icon
-//! from [`OPERATION_ICONS`], the way ketch draws them; any other line falls back to the icon
-//! of its [`Kind`]. Every icon is padded to [`ICON_WIDTH`] columns so the text after it starts
-//! in one column whichever icon a line carries.
+//! from the `operation_icons` crate (shared with ketch) and [`OWN_ICONS`]; any other line falls
+//! back to the icon of its [`Kind`]. Every icon is padded to `operation_icons::ICON_WIDTH`
+//! columns so the text after it starts in one column whichever icon a line carries.
 //!
 //! What agents read stays plain: the filtered command output, hook and MCP JSON, `--json`,
 //! and anything written to a pipe or a file. Two rules keep it that way:
@@ -25,7 +25,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use clap::builder::styling::{AnsiColor, Effects, Styles};
 use owo_colors::{OwoColorize, Stream};
-use unicode_width::UnicodeWidthStr;
 
 use crate::config::Ui;
 
@@ -52,26 +51,10 @@ pub enum Kind {
     Error,
 }
 
-/// Icons for what a verb is doing, looked up before the [`Kind`]'s own. Same model as ketch's
-/// table; the rows from `index` down are rtok's own verbs.
-///
-/// Matched as substrings of the verb, in order, so `installing` and `installed` share one row
-/// and `uninstall` must come before `install`, which it contains. Each icon is one code point
-/// that is wide by default: a narrow symbol made wide by U+FE0F (`⚠️`) is two columns to
-/// `unicode-width` but one to a terminal that ignores the selector.
-pub const OPERATION_ICONS: &[(&str, &str)] = &[
-    ("uninstall", "🧹"),
-    ("remov", "🧹"),
-    ("prun", "🧹"),
-    ("install", "📦"),
-    ("upgrad", "⏫"),
-    ("updat", "⏫"),
-    ("download", "⏬"),
-    ("fetch", "⏬"),
-    ("link", "🔗"),
-    ("roll", "⏪"),
-    ("search", "🔍"),
-    ("doctor", "🩺"),
+/// rtok's own verbs, looked up after the shared table in `operation_icons`, which keeps the
+/// order-dependent rows (`uninstall` before `install`). Each icon is one code point that is
+/// wide by default, as that crate requires.
+pub const OWN_ICONS: &[(&str, &str)] = &[
     ("index", "📚"),
     ("worktree", "🌳"),
     ("compress", "📉"),
@@ -81,23 +64,11 @@ pub const OPERATION_ICONS: &[(&str, &str)] = &[
     ("stop", "🛑"),
 ];
 
-/// Columns every icon is padded to. Each icon is still measured rather than assumed, so a
-/// narrower one added later pads out instead of pulling its line left.
-pub const ICON_WIDTH: usize = 2;
-
 /// The icon a line carries: its operation's when `verb` names one, else its `kind`'s.
 pub fn icon(verb: &str, kind: Kind) -> &'static str {
-    let verb = verb.to_ascii_lowercase();
-    OPERATION_ICONS
-        .iter()
-        .find(|(key, _)| verb.contains(key))
-        .map_or_else(|| kind.emoji(), |(_, icon)| icon)
-}
-
-/// `icon`, blank-padded to [`ICON_WIDTH`] columns, and one space.
-fn gutter(icon: &str) -> String {
-    let pad = ICON_WIDTH.saturating_sub(UnicodeWidthStr::width(icon));
-    format!("{icon}{} ", " ".repeat(pad))
+    operation_icons::icon(verb)
+        .or_else(|| operation_icons::icon_in(OWN_ICONS, verb))
+        .unwrap_or_else(|| kind.emoji())
 }
 
 impl Kind {
@@ -146,7 +117,7 @@ fn paint(kind: Kind, text: &str, stream: Stream) -> String {
 /// `text` with the icon of `verb` (else of `kind`) in front when `emoji` is set.
 pub fn prefix(kind: Kind, verb: &str, text: &str, emoji: bool) -> String {
     if emoji {
-        format!("{}{text}", gutter(icon(verb, kind)))
+        format!("{}{text}", operation_icons::gutter(Some(icon(verb, kind))))
     } else {
         text.to_string()
     }
@@ -193,6 +164,7 @@ pub fn error(text: &str) -> String {
 mod tests {
     use super::*;
     use rstest::rstest;
+    use unicode_width::UnicodeWidthStr;
 
     #[rstest]
     #[case(true, true, true)]
@@ -260,10 +232,42 @@ mod tests {
     #[test]
     fn every_icon_fills_the_same_gutter() {
         let kinds = [Kind::Success, Kind::Info, Kind::Warn, Kind::Error].map(Kind::emoji);
-        for icon in OPERATION_ICONS.iter().map(|(_, icon)| *icon).chain(kinds) {
-            assert_eq!(UnicodeWidthStr::width(icon), ICON_WIDTH, "{icon}");
+        let shared = operation_icons::OPERATION_ICONS.iter();
+        for icon in shared.chain(OWN_ICONS).map(|(_, icon)| *icon).chain(kinds) {
+            assert_eq!(
+                UnicodeWidthStr::width(icon),
+                operation_icons::ICON_WIDTH,
+                "{icon}"
+            );
             assert_eq!(icon.chars().count(), 1, "{icon} needs a selector");
         }
+    }
+
+    /// The web draws the same operations (T436): the same stems in the same order, because the
+    /// first stem a verb contains decides its icon. The check lives here, not in vitest, since the
+    /// shared half of the table is in the `operation_icons` crate, which only Rust can see.
+    #[test]
+    fn the_web_list_names_the_operations_of_the_cli_table() {
+        let ts = std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("web/src/ui/operations.ts"),
+        )
+        .expect("web/src/ui/operations.ts");
+        let table = ts
+            .split_once("export const OPERATION_ICONS")
+            .and_then(|(_, rest)| rest.split_once("\n];"))
+            .map(|(table, _)| table)
+            .expect("OPERATION_ICONS table in operations.ts");
+        let web: Vec<&str> = table
+            .lines()
+            .filter_map(|line| line.trim().strip_prefix("[\"")?.split_once('"'))
+            .map(|(stem, _)| stem)
+            .collect();
+        let cli: Vec<&str> = operation_icons::OPERATION_ICONS
+            .iter()
+            .chain(OWN_ICONS)
+            .map(|(stem, _)| *stem)
+            .collect();
+        assert_eq!(web, cli);
     }
 
     /// The text after the icon starts in one column for every icon, even a narrower one.
@@ -275,9 +279,10 @@ mod tests {
             prefix(Kind::Success, "uninstall", "x", true),
         ];
         for l in lines {
-            assert_eq!(UnicodeWidthStr::width(l.as_str()), ICON_WIDTH + 2, "{l}");
+            let want = operation_icons::ICON_WIDTH + 2;
+            assert_eq!(UnicodeWidthStr::width(l.as_str()), want, "{l}");
         }
-        assert_eq!(gutter("→"), "→  ");
+        assert_eq!(operation_icons::gutter(Some("→")), "→  ");
     }
 
     #[test]

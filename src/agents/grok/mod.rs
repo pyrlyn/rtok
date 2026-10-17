@@ -17,9 +17,9 @@ use std::path::{Path, PathBuf};
 use anyhow::Result;
 use rtok_agent_sdk::{KETCH_INSTALL, NO_CHANGES};
 use serde_json::{Value, json};
-use toml_edit::{DocumentMut, Item, Table, value};
+use toml_edit::{Item, Table, value};
 
-use super::{Agent, Kind, Mode, Support, Variant, apply, rtok_command};
+use super::{Agent, Kind, Mode, Support, Variant, apply, load_toml, rtok_command};
 use crate::config::Config;
 
 /// Grok Build: one CLI (`grok` on PATH, or the binary under `~/.grok` / `GROK_HOME`).
@@ -33,17 +33,7 @@ static VARIANTS: [Variant; 1] = [Variant {
 }];
 
 impl Agent for Grok {
-    fn id(&self) -> &'static str {
-        "grok"
-    }
-
-    fn variants(&self) -> &'static [Variant] {
-        &VARIANTS
-    }
-
-    fn readme(&self) -> &'static str {
-        include_str!("README.md")
-    }
+    super::agent_identity!("grok");
 
     fn shared(&self) -> bool {
         true
@@ -150,7 +140,7 @@ pub(crate) fn covered(cfg: &Config, module: &str) -> bool {
 }
 
 fn compat_claude(cfg: &Config, key: &str) -> bool {
-    load(&cfg.setup.grok.config_path)
+    load_toml(&cfg.setup.grok.config_path)
         .ok()
         .and_then(|doc| {
             doc.get("compat")
@@ -215,7 +205,7 @@ pub fn register_mcp(cfg: &Config) -> Result<String> {
         });
     }
     let path = &cfg.setup.grok.config_path;
-    let mut doc = load(path)?;
+    let mut doc = load_toml(path)?;
     let servers = doc
         .entry("mcp_servers")
         .or_insert_with(|| Table::new().into())
@@ -264,7 +254,7 @@ fn mcp_entry(cmd: &str) -> Value {
 /// from [`mcp_entry`] unless `--yes` says remove. A missing slot is already the goal.
 pub fn unregister_mcp(cfg: &Config) -> Result<String> {
     let path = &cfg.setup.grok.config_path;
-    let mut doc = load(path)?;
+    let mut doc = load_toml(path)?;
     let have = doc
         .get("mcp_servers")
         .and_then(|s| s.get("rtok"))
@@ -290,11 +280,6 @@ pub fn unregister_mcp(cfg: &Config) -> Result<String> {
     }
     rtok_agent_sdk::write(&apply(cfg), path, &doc.to_string(), "- mcp_servers.rtok")?;
     Ok("- mcp_servers.rtok".into())
-}
-
-fn load(path: &Path) -> Result<DocumentMut> {
-    let text = super::read(path);
-    Ok(text.parse().unwrap_or_default())
 }
 
 #[cfg(test)]
@@ -468,7 +453,7 @@ mod tests {
                 // no-op once any `rtok` table exists, edited or not — so reseeding after
                 // (e) left an edited one first clears it, matching what a user actually
                 // removing the file's `[mcp_servers.rtok]` by hand would leave behind.
-                let mut doc = load(&path).unwrap();
+                let mut doc = load_toml(&path).unwrap();
                 if let Some(t) = doc
                     .get_mut("mcp_servers")
                     .and_then(toml_edit::Item::as_table_mut)
@@ -479,6 +464,41 @@ mod tests {
                 register_mcp(&c)
             },
         );
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T625: a config that does not parse is an error naming the file, never an empty document
+    /// the MCP table is written into; install and remove both leave its bytes alone.
+    #[test]
+    fn an_unparseable_config_is_refused_and_left_byte_for_byte() {
+        let dir = tmp("malformed");
+        let mut c = cfg(&dir, false, false);
+        let path = c.setup.grok.config_path.clone();
+        let broken = "[providers.mine]\nname = \"x\"\nmodels = [\"a\",\n";
+        for backup in [false, true] {
+            c.setup.backup = backup;
+            fs::write(&path, broken).unwrap();
+            let err = register_mcp(&c).unwrap_err();
+            assert!(format!("{err:#}").contains("config.toml"), "{err:#}");
+            assert!(unregister_mcp(&c).is_err());
+            assert!(Grok.apply(&c, Kind::Cli, Mode::Install).is_err());
+            assert_eq!(fs::read_to_string(&path).unwrap(), broken);
+        }
+        // Controls: a missing file is created, a valid one keeps its own tables.
+        fs::remove_file(&path).unwrap();
+        assert_eq!(
+            register_mcp(&c).unwrap(),
+            "mcp_servers.rtok: rtok mcp --host grok"
+        );
+        fs::write(&path, "[providers.mine]\nname = \"x\"\n").unwrap();
+        register_mcp(&c).unwrap();
+        let text = fs::read_to_string(&path).unwrap();
+        assert!(
+            text.starts_with("[providers.mine]\nname = \"x\"\n"),
+            "{text}"
+        );
+        assert!(text.contains("[mcp_servers.rtok]"), "{text}");
+        assert_eq!(register_mcp(&c).unwrap(), NO_CHANGES);
         let _ = fs::remove_dir_all(dir);
     }
 

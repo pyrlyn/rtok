@@ -67,8 +67,10 @@ pub fn identical_result(
     let hit = host.archive_in_session(&sha, context).ok().flatten()?;
     let n = hit.turns.max(1);
     let id = hit.id;
-    let msg =
-        format!("[rtok {id} · identical to a result {n} turns ago · expand: rtok expand {id}]");
+    let short = crate::names::short_id(&id);
+    let msg = format!(
+        "[rtok {short} · identical to a result {n} turns ago · expand: rtok expand {short}]"
+    );
     if body.len() <= msg.len() {
         return None;
     }
@@ -112,6 +114,18 @@ pub struct Runtime {
     /// `Some` while [`Runtime::defer_measurements`] is on: `record` queues here and
     /// [`Runtime::flush_measurements`] writes the queue in one transaction.
     deferred: Mutex<Option<Vec<Measurement>>>,
+    /// The dir [`Runtime::in_memory`] made for this runtime's files; it goes with the runtime.
+    scratch: Option<ScratchDir>,
+}
+
+/// Removes its directory when dropped. Tests make tens of thousands of in-memory runtimes, and
+/// their dirs left behind made every path lookup in `$TMPDIR` slow under load (T643, T644).
+struct ScratchDir(std::path::PathBuf);
+
+impl Drop for ScratchDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
 }
 
 impl Runtime {
@@ -139,10 +153,13 @@ impl Runtime {
             .unwrap_or(0);
         let dir = std::env::temp_dir().join(format!("rtok-mem-{}-{nanos}", std::process::id()));
         std::fs::create_dir_all(&dir)?;
+        let scratch = ScratchDir(dir.clone());
         let mut config = Config::default();
         config.rebase_paths(&dir);
         config.log.path = dir.join("rtok.log");
-        Self::with_store(config, Store::open_in_memory()?, session)
+        let mut rt = Self::with_store(config, Store::open_in_memory()?, session)?;
+        rt.scratch = Some(scratch);
+        Ok(rt)
     }
 
     fn with_store(config: Config, store: Store, session: impl Into<String>) -> Result<Self> {
@@ -158,6 +175,7 @@ impl Runtime {
             cwd: None,
             graph_watch_pending: Arc::new(Mutex::new(HashMap::new())),
             deferred: Mutex::new(None),
+            scratch: None,
         })
     }
 
@@ -451,6 +469,12 @@ impl Archive for Runtime {
         }
     }
 
+    fn archive_summary(&self, archive_id: &str, version: &str) -> Result<Option<String>> {
+        self.store
+            .archive_summary(archive_id, version)
+            .map_err(Into::into)
+    }
+
     fn session_live_archives(&self, session: &str) -> Result<Vec<(String, String, i64)>> {
         self.store
             .session_live_archives(session)
@@ -550,7 +574,9 @@ impl Notes for Runtime {
     }
 
     fn insert_observation(&self, obs: &NewObservation<'_>) -> Result<Option<i32>> {
-        self.store.insert_observation(obs).map_err(Into::into)
+        self.store
+            .insert_observation_once(obs, self.once.as_deref())
+            .map_err(Into::into)
     }
 
     fn search_observations(
@@ -904,6 +930,16 @@ mod tests {
         );
         assert!(seen[0].last_seen > 0 && seen[0].ended_at.is_none());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// T644: every call made a dir and none was removed, so 24,000 piled up in `$TMPDIR`.
+    #[test]
+    fn a_dropped_in_memory_runtime_leaves_no_directory() {
+        let cx = Runtime::in_memory("t644").unwrap();
+        let dir = cx.config.log.path.parent().unwrap().to_path_buf();
+        assert!(dir.is_dir());
+        drop(cx);
+        assert!(!dir.exists(), "{}", dir.display());
     }
 
     #[test]

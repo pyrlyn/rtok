@@ -65,6 +65,7 @@ fn policy(cfg: &Config, now: SystemTime) -> gc::Policy<'static> {
         stale_lock: idle,
         now,
         live: ops::live_ids(cfg),
+        pending: ops::pending_paths(cfg),
     }
 }
 

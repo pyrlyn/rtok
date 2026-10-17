@@ -6,6 +6,10 @@
 
 use super::*;
 
+/// One row for [`Store::insert_usage_rows`]: `(model, api, [input, cache_create, cache_read,
+/// output], result_key)`.
+pub type UsageRowInput<'a> = (Option<&'a str>, &'a str, [i64; 4], Option<&'a str>);
+
 impl Store {
     #[allow(clippy::too_many_arguments)]
     pub fn insert_call(
@@ -40,6 +44,15 @@ impl Store {
         let mut conn = self.lock()?;
         diesel::update(calls::table.filter(calls::id.eq(id)))
             .set(calls::parent_id.eq(parent))
+            .execute(&mut *conn)?;
+        Ok(())
+    }
+
+    /// The tier the provider reported serving the request on (T385.12.2).
+    pub fn set_call_service_tier(&self, id: i32, tier: &str) -> Result<()> {
+        let mut conn = self.lock()?;
+        diesel::update(calls::table.filter(calls::id.eq(id)))
+            .set(calls::service_tier.eq(tier))
             .execute(&mut *conn)?;
         Ok(())
     }
@@ -248,37 +261,44 @@ impl Store {
 
     /// Many `usage` rows for one call in a single transaction — a Batch results file (T385.4)
     /// carries one per request. Each row is `(model, api, [input, cache_create, cache_read,
-    /// output])`, the same four counters as [`Store::insert_usage`].
+    /// output], result_key)`: the same four counters as [`Store::insert_usage`] plus the
+    /// result's identity (T583). A row whose key is already stored is skipped, so a results
+    /// file fetched again, or one that a partial download had begun, counts each result once;
+    /// a row without a key always lands. Returns how many rows were written.
     pub fn insert_usage_rows(
         &self,
         session: &str,
         call_id: i32,
-        rows: &[(Option<&str>, &str, [i64; 4])],
-    ) -> Result<()> {
+        rows: &[UsageRowInput<'_>],
+    ) -> Result<usize> {
         let mut conn = self.lock()?;
-        conn.transaction(|conn| -> Result<()> {
-            // 8 binds per row, well under SQLite's 32766-variable cap per statement.
+        conn.transaction(|conn| -> Result<usize> {
+            let mut written = 0;
+            // 9 binds per row, well under SQLite's 32766-variable cap per statement.
             for chunk in rows.chunks(500) {
                 let values: Vec<_> = chunk
                     .iter()
-                    .map(|(model, api, [input, cache_create, cache_read, output])| {
-                        (
-                            usage::session.eq(session),
-                            usage::model.eq(*model),
-                            usage::api.eq(*api),
-                            usage::input.eq(*input),
-                            usage::cache_create.eq(*cache_create),
-                            usage::cache_read.eq(*cache_read),
-                            usage::output.eq(*output),
-                            usage::call_id.eq(call_id),
-                        )
-                    })
+                    .map(
+                        |(model, api, [input, cache_create, cache_read, output], key)| {
+                            (
+                                usage::session.eq(session),
+                                usage::model.eq(*model),
+                                usage::api.eq(*api),
+                                usage::input.eq(*input),
+                                usage::cache_create.eq(*cache_create),
+                                usage::cache_read.eq(*cache_read),
+                                usage::output.eq(*output),
+                                usage::call_id.eq(call_id),
+                                usage::result_key.eq(*key),
+                            )
+                        },
+                    )
                     .collect();
-                diesel::insert_into(usage::table)
+                written += diesel::insert_or_ignore_into(usage::table)
                     .values(&values)
                     .execute(conn)?;
             }
-            Ok(())
+            Ok(written)
         })
     }
 
@@ -495,27 +515,37 @@ impl Store {
     }
 
     /// Usage totals grouped by the `calls.kind` of the request that produced them, which is
-    /// the proxy lane that handled it (T385.6). Every proxy `usage` row carries its call, so
-    /// the inner join drops nothing.
-    pub fn usage_by_lane(&self) -> Result<Vec<LaneUsage>> {
+    /// the proxy lane that handled it (T385.6), and by the service tier the provider reported
+    /// (T385.12.2). Every proxy `usage` row carries its call, so the inner join drops nothing.
+    pub fn usage_by_lane_tier(&self) -> Result<Vec<LaneUsage>> {
+        type Row = (
+            String,
+            Option<String>,
+            Option<i64>,
+            Option<i64>,
+            Option<i64>,
+            Option<i64>,
+        );
         let mut conn = self.lock()?;
-        let rows = usage::table
+        let rows: Vec<Row> = usage::table
             .inner_join(calls::table)
-            .group_by(calls::kind)
+            .group_by((calls::kind, calls::service_tier))
             .select((
                 calls::kind,
+                calls::service_tier,
                 sum_bigint(usage::input),
                 sum_bigint(usage::cache_create),
                 sum_bigint(usage::cache_read),
                 sum_bigint(usage::output),
             ))
-            .order(calls::kind)
-            .load::<(String, Option<i64>, Option<i64>, Option<i64>, Option<i64>)>(&mut *conn)?;
+            .order((calls::kind, calls::service_tier))
+            .load(&mut *conn)?;
         Ok(rows
             .into_iter()
             .map(
-                |(kind, input, cache_create, cache_read, output)| LaneUsage {
+                |(kind, tier, input, cache_create, cache_read, output)| LaneUsage {
                     kind,
+                    tier,
                     input: input.unwrap_or(0),
                     cache_create: cache_create.unwrap_or(0),
                     cache_read: cache_read.unwrap_or(0),
@@ -540,13 +570,42 @@ impl Store {
     }
 
     /// [`Self::usage_by_model`] with the usage of Batch-lane calls (T385.12.1) listed under
-    /// `<model>@batch`, the key of the matching `[stats.prices]` row.
+    /// `<model>@batch` and that of calls the provider served on Flex (T385.12.2) under
+    /// `<model>@flex`, the keys of the matching `[stats.prices]` rows. A Batch call is never
+    /// Flex, so the lane wins.
     pub fn usage_by_model_tier(&self) -> Result<Vec<ModelUsage>> {
         self.model_usage(true)
     }
 
+    /// [`Self::usage_by_model_tier`] split by the `calls.kind` (the proxy lane) that produced
+    /// the usage (T385.10), so `rtok stats --price` can cost each lane at the model that
+    /// really served it. A usage row with no call reads back with `kind = None`.
+    pub fn usage_by_lane_model_tier(&self) -> Result<Vec<LaneModelUsage>> {
+        self.lane_model_usage(true)
+    }
+
     fn model_usage(&self, by_tier: bool) -> Result<Vec<ModelUsage>> {
+        let mut by_model: BTreeMap<String, ModelUsage> = BTreeMap::new();
+        for row in self.lane_model_usage(by_tier)? {
+            let u = row.usage;
+            let entry = by_model.entry(u.model.clone()).or_insert(ModelUsage {
+                model: u.model,
+                input: 0,
+                cache_create: 0,
+                cache_read: 0,
+                output: 0,
+            });
+            entry.input += u.input;
+            entry.cache_create += u.cache_create;
+            entry.cache_read += u.cache_read;
+            entry.output += u.output;
+        }
+        Ok(by_model.into_values().collect())
+    }
+
+    fn lane_model_usage(&self, by_tier: bool) -> Result<Vec<LaneModelUsage>> {
         type Row = (
+            Option<String>,
             Option<String>,
             Option<String>,
             Option<i64>,
@@ -558,35 +617,43 @@ impl Store {
         let mut conn = self.lock()?;
         let rows: Vec<Row> = usage::table
             .left_join(calls::table)
-            .group_by((usage::model, calls::kind))
+            .group_by((usage::model, calls::kind, calls::service_tier))
             .select((
                 usage::model,
                 calls::kind.nullable(),
+                calls::service_tier.nullable(),
                 sum_bigint(usage::input),
                 sum_bigint(usage::cache_create),
                 sum_bigint(usage::cache_read),
                 sum_bigint(usage::output),
             ))
             .load(&mut *conn)?;
-        let mut by_model: BTreeMap<String, ModelUsage> = BTreeMap::new();
-        for (model, kind, input, cache_create, cache_read, output) in rows {
+        let mut merged: BTreeMap<(Option<String>, String), LaneModelUsage> = BTreeMap::new();
+        for (model, kind, tier, input, cache_create, cache_read, output) in rows {
             let mut model = model.unwrap_or_else(|| "unknown".to_string());
             if by_tier && kind.as_deref() == Some(batch) {
                 model.push_str("@batch");
+            } else if by_tier && tier.as_deref() == Some(FLEX_SERVICE_TIER) {
+                model.push_str("@flex");
             }
-            let entry = by_model.entry(model.clone()).or_insert(ModelUsage {
-                model,
-                input: 0,
-                cache_create: 0,
-                cache_read: 0,
-                output: 0,
-            });
-            entry.input += input.unwrap_or(0);
-            entry.cache_create += cache_create.unwrap_or(0);
-            entry.cache_read += cache_read.unwrap_or(0);
-            entry.output += output.unwrap_or(0);
+            let entry = merged
+                .entry((kind.clone(), model.clone()))
+                .or_insert_with(|| LaneModelUsage {
+                    kind,
+                    usage: ModelUsage {
+                        model,
+                        input: 0,
+                        cache_create: 0,
+                        cache_read: 0,
+                        output: 0,
+                    },
+                });
+            entry.usage.input += input.unwrap_or(0);
+            entry.usage.cache_create += cache_create.unwrap_or(0);
+            entry.usage.cache_read += cache_read.unwrap_or(0);
+            entry.usage.output += output.unwrap_or(0);
         }
-        Ok(by_model.into_values().collect())
+        Ok(merged.into_values().collect())
     }
 
     /// Usage grouped by session, model and timestamp for `rtok agents usage` (T358.1), with

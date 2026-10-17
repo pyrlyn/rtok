@@ -5,12 +5,19 @@
 # toolchain; tests that commit pass their own git `user.*`. Each run starts from an empty home.
 # T280: `RTOK_HOST_SANDBOX` hides every agent installed on this machine (CLIs on PATH, apps in
 # `/Applications` and the like): rtok sees only hosts under `HOME`, i.e. a test's own fakes.
+# T644: `TMPDIR` (`TMP`/`TEMP` on Windows) is a per-checkout dir emptied each run too, so the
+# dirs tests leave behind never pile up in this machine's own temp dir. On Unix it is a short
+# path in `/tmp`: under a deep worktree's `target/`, `hook.sock` would pass `sun_path`'s limit.
+# The temp dir stays outside the checkout on Windows too: under `target\` git discovery from a
+# test's scratch dir would find this repo, and tests that expect "not a git repo" would fail.
 experimental = ["setup-scripts"]
 
 [scripts.setup.test-home-unix]
 command = ['sh', '-c', '''
-h="$PWD/target/test-home" && rm -rf "$h" && mkdir -p "$h" && {
+h="$PWD/target/test-home" && rm -rf "$h" && mkdir -p "$h" &&
+t="/tmp/rtok-test-$(printf %s "$PWD" | cksum | cut -d ' ' -f 1)" && rm -rf "$t" && mkdir -p "$t" && {
   echo "HOME=$h"
+  echo "TMPDIR=$t"
   echo "RTOK_HOST_SANDBOX=1"
   echo "CARGO_HOME=${CARGO_HOME:-$HOME/.cargo}"
   echo "RUSTUP_HOME=${RUSTUP_HOME:-$HOME/.rustup}"
@@ -26,9 +33,13 @@ command = ['powershell', '-NoProfile', '-NonInteractive', '-Command', '''
 $h = Join-Path (Get-Location) "target\test-home"
 Remove-Item -Recurse -Force -ErrorAction SilentlyContinue -Path $h
 New-Item -ItemType Directory -Force -Path $h | Out-Null
+$k = [BitConverter]::ToString([Security.Cryptography.SHA1]::Create().ComputeHash([Text.Encoding]::UTF8.GetBytes((Get-Location).Path))).Replace("-", "").Substring(0, 10)
+$t = Join-Path ([IO.Path]::GetTempPath()) "rtok-test-$k"
+Remove-Item -Recurse -Force -ErrorAction SilentlyContinue -Path $t
+New-Item -ItemType Directory -Force -Path $t | Out-Null
 $c = if ($env:CARGO_HOME) { $env:CARGO_HOME } else { Join-Path $env:USERPROFILE ".cargo" }
 $r = if ($env:RUSTUP_HOME) { $env:RUSTUP_HOME } else { Join-Path $env:USERPROFILE ".rustup" }
-[IO.File]::AppendAllText($env:NEXTEST_ENV, "HOME=$h`nUSERPROFILE=$h`nRTOK_HOST_SANDBOX=1`nCARGO_HOME=$c`nRUSTUP_HOME=$r`n")
+[IO.File]::AppendAllText($env:NEXTEST_ENV, "HOME=$h`nUSERPROFILE=$h`nTMP=$t`nTEMP=$t`nRTOK_HOST_SANDBOX=1`nCARGO_HOME=$c`nRUSTUP_HOME=$r`n")
 ''']
 
 [[profile.default.scripts]]
@@ -110,3 +121,24 @@ threads-required = "num-test-threads"
 [[profile.default.overrides]]
 filter = 'test(/list_reports_installed_modules_per_host/)'
 threads-required = "num-test-threads"
+
+# Every test that spawns `rtok mcp` (a stdio server with a watcher, health and retention thread
+# each) shares this group. On the 4-vCPU Windows runner, a dozen of them next to the heavy tests
+# stretched a 0.3 s exchange to 7-10 s and failed `mcp_with_watcher_exits_on_stdin_eof` and
+# `mcp_moves_into_the_first_file_root_after_roots_list` (run 38073132494). Two at a time keeps
+# the other threads for the rest of the suite.
+[test-groups]
+mcp-spawn = { max-threads = 2 }
+
+[[profile.default.overrides]]
+filter = 'binary(/^mcp(_agent_messages|_agents|_call_lsp_orphan|_http|_ping|_wrap)?$/)'
+test-group = "mcp-spawn"
+
+# CI (`NEXTEST_PROFILE=ci`, set in ci.yml): one flake must not cancel the other shard and the
+# macOS job (run 38073132494 lost ~10 min of green work to two timing failures), and a test that
+# passes on retry is reported FLAKY in the log instead of failing the gate. Two retries, not
+# more: a test that fails three times in a row is broken. Local runs keep the default profile,
+# where a flake stays visible.
+[profile.ci]
+retries = 2
+fail-fast = false

@@ -14,11 +14,13 @@
 # missing, or — for a PyPI upload — when a platform wheel is missing.
 set -euo pipefail
 
-mode=pypi
+# Independent, so no order of flags can turn a dry run into an upload.
+dry_run=0
+target=pypi
 while [ $# -gt 0 ]; do
   case "$1" in
-    --dry-run) mode=dry-run ;;
-    --testpypi) mode=testpypi ;;
+    --dry-run) dry_run=1 ;;
+    --testpypi) target=testpypi ;;
     -h | --help)
       sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'
       exit 0
@@ -57,7 +59,7 @@ for tag in "${platform_tags[@]}"; do
 done
 shopt -u nullglob
 if [ ${#missing[@]} -gt 0 ]; then
-  if [ "$mode" = pypi ]; then
+  if [ "$target" = pypi ] && [ "$dry_run" = 0 ]; then
     problems+=("no wheel for: ${missing[*]}")
   else
     echo "note: no wheel for ${missing[*]} (a PyPI upload refuses until they are there)" >&2
@@ -71,8 +73,15 @@ fi
 
 if command -v twine >/dev/null 2>&1; then twine=(twine); else twine=(uvx twine); fi
 "${twine[@]}" check --strict "${files[@]}"
-case "$mode" in
-  dry-run) echo "dry run: ${#files[@]} file(s) for ${dist_name} ${version} pass; nothing uploaded" ;;
-  testpypi) "${twine[@]}" upload --repository-url https://test.pypi.org/legacy/ "${files[@]}" ;;
-  pypi) "${twine[@]}" upload "${files[@]}" ;;
-esac
+if [ "$target" = testpypi ]; then
+  repo=(--repository-url https://test.pypi.org/legacy/)
+  repo_name=TestPyPI
+else
+  repo=()
+  repo_name=PyPI
+fi
+if [ "$dry_run" = 1 ]; then
+  echo "dry run: ${#files[@]} file(s) for ${dist_name} ${version} pass for ${repo_name}; nothing uploaded"
+else
+  "${twine[@]}" upload ${repo[@]+"${repo[@]}"} "${files[@]}"
+fi

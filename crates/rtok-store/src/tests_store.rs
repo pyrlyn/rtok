@@ -46,6 +46,22 @@ fn migration_is_idempotent() {
     let _: i64 = usage::table.count().get_result(&mut *conn).unwrap();
 }
 
+/// Diesel keys a migration by the number before the first `_`, so two branches that both
+/// took the next number merge into one migration and the other one never runs (0043, T501).
+/// The directory is read, not the embedded list, because embedding already lost the second.
+#[test]
+fn every_migration_has_its_own_number() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("migrations");
+    let mut seen = std::collections::BTreeMap::new();
+    for entry in std::fs::read_dir(&dir).unwrap() {
+        let name = entry.unwrap().file_name().to_string_lossy().into_owned();
+        let number = name.split('_').next().unwrap().to_owned();
+        if let Some(other) = seen.insert(number.clone(), name.clone()) {
+            panic!("{other} and {name} share the number {number}; renumber the newer one");
+        }
+    }
+}
+
 /// A database that already recorded `NNNN.sql` in `schema_migrations` must not run those
 /// files again when Diesel's version table is empty.
 #[test]
@@ -178,6 +194,77 @@ fn migration_0015_adds_lifecycle_columns_to_a_previous_schema_db() {
         store.search_notes("before", 5).unwrap().is_empty(),
         "retired note does not search"
     );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// T615: claims written before `seq` existed keep the order the old query gave them
+/// (newest `since`, ties by task id) once 0047 numbers them.
+#[test]
+fn migration_0047_numbers_old_claims_in_their_old_order() {
+    let (dir, mut conn) = db_before_migration("0047");
+    let db = dir.join("rtok.db");
+    for (id, since) in [("R1", 100_i64), ("R2", 100), ("R3", 50), ("R4", 200)] {
+        diesel::insert_into(schema::task_claims::table)
+            .values((
+                schema::task_claims::project.eq("p"),
+                schema::task_claims::task_id.eq(id),
+                schema::task_claims::agent_id.eq("a"),
+                schema::task_claims::title.eq(id),
+                schema::task_claims::since.eq(since),
+            ))
+            .execute(&mut conn)
+            .unwrap();
+    }
+    drop(conn);
+    let store = Store::open(&db).unwrap();
+    let mut seen = Vec::new();
+    while let Some(claim) = store.latest_task_claim("p", "a").unwrap() {
+        store.clear_task_claim("p", &claim.task_id).unwrap();
+        seen.push(claim.task_id);
+    }
+    assert_eq!(seen, ["R4", "R1", "R2", "R3"]);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// T592: sessions that ended before `end_seq` existed are numbered in (ended_at, id) order,
+/// and the old per-second mark resumes in front of its whole second, replaying rather than
+/// guessing which tied sessions were posted.
+#[test]
+fn migration_0050_numbers_ended_sessions_and_rewinds_the_old_mark() {
+    let (dir, mut conn) = db_before_migration("0050");
+    let db = dir.join("rtok.db");
+    for (id, ended) in [
+        ("a", Some(100_i64)),
+        ("b", Some(200)),
+        ("c", Some(200)),
+        ("d", Some(300)),
+        ("e", None),
+    ] {
+        diesel::insert_into(schema::sessions::table)
+            .values((
+                schema::sessions::id.eq(id),
+                schema::sessions::ended_at.eq(ended),
+            ))
+            .execute(&mut conn)
+            .unwrap();
+    }
+    for (stream, mark) in [("sessions", 200_i64), ("sessions_tail", 1)] {
+        diesel::insert_into(schema::otel_export::table)
+            .values((
+                schema::otel_export::stream.eq(stream),
+                schema::otel_export::mark.eq(mark),
+            ))
+            .execute(&mut conn)
+            .unwrap();
+    }
+    drop(conn);
+    let store = Store::open(&db).unwrap();
+    assert_eq!(store.otel_mark("sessions_seq").unwrap(), 1);
+    assert_eq!(store.otel_mark("sessions").unwrap(), 0);
+    assert_eq!(store.otel_mark("sessions_tail").unwrap(), 0);
+    let pending = store.sessions_pending_export(1, 10).unwrap();
+    let got: Vec<_> = pending.iter().map(|(n, s)| (*n, s.id.as_str())).collect();
+    assert_eq!(got, [(2, "b"), (3, "c"), (4, "d")]);
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -555,6 +642,82 @@ fn request_bodies_are_saved_clean_unless_store_raw() {
         .first(&mut *conn)
         .unwrap();
     assert_eq!(req.as_deref(), Some(dirty));
+}
+
+/// T599: a wrapper that only appears once noise is gone is removed on the first save, on the
+/// plain and the split hook path, so a body cleaned again stays as saved; `store_raw` keeps
+/// the bytes, and size and sha describe whatever was saved.
+#[test]
+fn a_wrapper_hidden_by_noise_is_removed_before_saving() {
+    let dir = std::env::temp_dir().join(format!("rtok-io-hidden-{}", std::process::id()));
+    let (store, id) = io_fixture(&dir);
+    let dirty = "{\"prompt\":\"<system-\\u001b[0mreminder>hidden</system-reminder>\\nvisible\"}";
+    let saved = |store: &Store, id: i32| -> (String, i64, String) {
+        let mut conn = store.lock().unwrap();
+        call_io::table
+            .filter(call_io::call_id.eq(id))
+            .select((
+                call_io::request_json.assume_not_null(),
+                call_io::request_bytes,
+                call_io::request_sha256.assume_not_null(),
+            ))
+            .first(&mut *conn)
+            .unwrap()
+    };
+    store
+        .insert_call_io(id, Some(dirty.as_bytes()), None, 65536, None)
+        .unwrap();
+    let (req, bytes, sha) = saved(&store, id);
+    assert_eq!(req, r#"{"prompt":"visible"}"#);
+    assert_eq!(bytes, req.len() as i64);
+    assert_eq!(sha, hex_sha256(req.as_bytes()));
+    assert_eq!(&*crate::sanitize::body(req.as_bytes()), req.as_bytes());
+
+    let hook = format!(r#"{{"session_id":"s1",{}"#, &dirty[1..]);
+    let hook_id = store
+        .insert_call(
+            "s1",
+            "hook",
+            "hook",
+            None,
+            None,
+            None,
+            None,
+            Some("UserPromptSubmit"),
+        )
+        .unwrap();
+    store
+        .insert_hook_call_io(hook_id, hook.as_bytes(), None, 65536)
+        .unwrap();
+    let (req, bytes, sha) = saved(&store, hook_id);
+    assert_eq!(req, r#"{"prompt":"visible"}"#);
+    assert_eq!((bytes, sha), (req.len() as i64, hex_sha256(req.as_bytes())));
+    let back = store.call_io_request(hook_id).unwrap().unwrap();
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&back).unwrap(),
+        serde_json::json!({"session_id": "s1", "prompt": "visible"})
+    );
+
+    store.set_store_raw(true);
+    let raw_id = store
+        .insert_call(
+            "s1",
+            "hook",
+            "hook",
+            None,
+            None,
+            None,
+            None,
+            Some("UserPromptSubmit"),
+        )
+        .unwrap();
+    store
+        .insert_hook_call_io(raw_id, hook.as_bytes(), None, 65536)
+        .unwrap();
+    assert_eq!(
+        store.call_io_request(raw_id).unwrap().unwrap(),
+        hook.as_bytes()
+    );
 }
 
 #[test]
@@ -1007,4 +1170,74 @@ fn recent_calls_is_newest_first_bounded_and_linked() {
     let bounded = store.recent_calls(1).unwrap();
     assert_eq!(bounded.len(), 1);
     assert_eq!(bounded[0].id, api);
+}
+
+#[test]
+fn an_observation_call_key_holds_past_the_narrative_window() {
+    let store = Store::open_in_memory().unwrap();
+    let obs = rtok_plugin_sdk::NewObservation {
+        session_id: "s",
+        project: None,
+        obs_type: "command_run",
+        title: "t",
+        narrative: "n",
+        dedup: "d",
+        files: &[],
+    };
+    let insert = |once| store.insert_observation_once(&obs, once).unwrap();
+    assert!(insert(Some("PostToolUse:a")).is_some());
+    assert!(insert(Some("PostToolUse:a")).is_none(), "inside the window");
+    store.set_observation_ts("s", 0).unwrap();
+    assert!(
+        insert(Some("PostToolUse:a")).is_none(),
+        "the same call, late"
+    );
+    assert!(
+        insert(Some("PostToolUse:b")).is_some(),
+        "another call, late"
+    );
+    assert!(insert(None).is_none(), "no key: the window still holds");
+    store.set_observation_ts("s", 0).unwrap();
+    assert!(insert(None).is_some(), "no key, late");
+    store.set_observation_ts("s", 0).unwrap();
+    assert!(insert(None).is_some(), "keyless rows never collide");
+}
+
+/// T617: an observation linked to several queried files counts once, so the limit is in
+/// observations and an older distinct hit is not starved by a newer multi-file one.
+#[test]
+fn file_linked_observations_are_distinct_before_the_limit() {
+    let store = Store::open_in_memory().unwrap();
+    let add = |project: Option<&str>, dedup: &str, files: &[&str]| {
+        let files: Vec<String> = files.iter().map(|f| (*f).to_string()).collect();
+        store
+            .insert_observation(&rtok_plugin_sdk::NewObservation {
+                session_id: "s",
+                project,
+                obs_type: "file_read",
+                title: "t",
+                narrative: dedup,
+                dedup,
+                files: &files,
+            })
+            .unwrap()
+            .unwrap()
+    };
+    let older = add(Some("p"), "older", &["a.rs"]);
+    let newer = add(Some("p"), "newer", &["a.rs", "b.rs"]);
+    let other = add(Some("q"), "other", &["a.rs", "b.rs"]);
+    let paths = ["a.rs".to_string(), "b.rs".to_string()];
+    let ids = |project, paths: &[String], limit| -> Vec<i32> {
+        store
+            .observations_for_files(project, paths, limit)
+            .unwrap()
+            .iter()
+            .map(|h| h.id)
+            .collect()
+    };
+    assert_eq!(ids(Some("p"), &paths, 2), vec![newer, older]);
+    assert_eq!(ids(Some("p"), &paths[..1], 5), vec![newer, older]);
+    assert_eq!(ids(Some("p"), &paths[1..], 5), vec![newer]);
+    assert_eq!(ids(Some("q"), &paths, 5), vec![other]);
+    assert!(ids(Some("p"), &[], 5).is_empty());
 }

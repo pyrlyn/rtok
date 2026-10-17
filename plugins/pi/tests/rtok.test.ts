@@ -77,6 +77,29 @@ process.stdout.write("short [rtok expand abc]");`,
   expect(result).toEqual({ content: [{ type: "text", text: "short [rtok expand abc]" }] });
 });
 
+// T622: the archive holds only the joined text, so a text-plus-image result must keep the image.
+test("a compressed read result keeps non-text blocks in order", async () => {
+  const { on } = load(`process.stdout.write("short [rtok expand abc]");`);
+  const image = { type: "image", data: "AAAA", mimeType: "image/png" };
+  const other = { type: "resource", uri: "file:///x" };
+  const result = await on.tool_result({
+    toolName: "read",
+    input: { path: "src/lib.rs" },
+    content: [image, { type: "text", text: "line\n".repeat(80) }, other, { text: "more\n" }],
+  });
+  expect(result).toEqual({
+    content: [image, { type: "text", text: "short [rtok expand abc]" }, other],
+  });
+});
+
+test("an image-only result is left untouched", async () => {
+  const { on } = load(filterPrints("echo"));
+  const content = [{ type: "image", data: "AAAA", mimeType: "image/png" }];
+  expect(
+    await on.tool_result({ toolName: "read", input: { path: "a.png" }, content }),
+  ).toBeUndefined();
+});
+
 test("a small read result stays byte-identical", async () => {
   const { on } = load(filterPrints("echo"));
   expect(

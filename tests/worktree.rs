@@ -22,8 +22,10 @@ fn find<'a>(entries: &'a [Entry], name: &str) -> &'a Entry {
 /// Claim rows store `fs::canon`. On Windows that drops a safe `\\?\` prefix that
 /// `std::fs::canonicalize` keeps, so a string compare against the raw canonical path fails.
 fn stored_claim_path(path: &Path) -> String {
-    let text = path.canonicalize().unwrap().display().to_string();
-    text.strip_prefix(r"\\?\").unwrap_or(&text).to_string()
+    fs_kit::path::canonicalize(path)
+        .unwrap()
+        .display()
+        .to_string()
 }
 
 #[test]
@@ -482,14 +484,18 @@ fn add_creates_one_locked_worktree_per_task_from_a_fresh_base() {
     // Only on the remote: a stale local `origin/main` would branch from the wrong commit.
     run(&tmp, &["clone", "-q", "origin.git", "other"]);
     commit(&tmp.join("other"), "b.txt");
+    // T441.13.3: the host config is only written where git ignores it.
+    std::fs::write(tmp.join("other/.gitignore"), ".claude/\n").unwrap();
+    run(&tmp.join("other"), &["add", ".gitignore"]);
+    run(&tmp.join("other"), &["commit", "-q", "-m", "ignore"]);
     run(&tmp.join("other"), &["push", "-q", "origin", "main"]);
     let tip = run(&tmp.join("other"), &["rev-parse", "HEAD"]);
-    // T410: the default root is `~/.rtok/worktrees`; a `_worktrees/` beside the repository
-    // no longer pulls the worktree there.
+    // T660.4: the default root is `<main>/.rtok/worktrees`; neither a `_worktrees/` beside the
+    // repository nor `~/.rtok/worktrees` (T410) pulls the worktree there.
     std::fs::create_dir_all(tmp.join("_worktrees")).unwrap();
     let home = tmp.join("home");
     std::fs::create_dir_all(&home).unwrap();
-    let root = home.join(".rtok/worktrees");
+    let root = work.join(".rtok/worktrees");
 
     let owner = "Claude Code / sonnet";
     let add = ["worktree", "add", "T158", "Worktree-Add", "--owner", owner];
@@ -504,6 +510,15 @@ fn add_creates_one_locked_worktree_per_task_from_a_fresh_base() {
     let expected = root.join("rtok-t158").canonicalize().unwrap();
     assert_eq!(path.canonicalize().unwrap(), expected);
     assert_eq!(run(path, &["rev-parse", "HEAD"]), tip);
+    // T441.13.3: the session started in the worktree shares one Claude Code task list.
+    let local: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(path.join(".claude/settings.local.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        local["env"]["CLAUDE_CODE_TASK_LIST_ID"], "origin-t158",
+        "{local}"
+    );
     assert_eq!(
         run(path, &["branch", "--show-current"]).trim(),
         "t158-worktree-add"
@@ -614,10 +629,37 @@ fn clean_deletes_idle_tagged_caches_and_nothing_else() {
     let table = rtok(&work, &["worktree", "clean"]);
     let table = String::from_utf8_lossy(&table.stdout);
     assert!(table.contains("dry run: 2 caches, "), "{table}");
+    // T416.2: each cache is a removal line with its file count, then the totals; `--stat` and
+    // `--dry-run` print the same preview, `--json` carries the count.
+    assert_eq!(row("wt-idle")["files"], 2);
+    assert_eq!(row("wt-fresh")["files"], 0);
+    assert!(table.contains("2 paths, 4 files"), "{table}");
+    assert!(table.contains("  2 files"), "{table}");
+    // The idle column counts seconds, so two runs may differ in it: compare the words with
+    // every age (`9s`, `2h`) masked.
+    let words = |out: &std::process::Output| -> Vec<String> {
+        let age = |w: &str| {
+            let (n, unit) = w.split_at(w.len().saturating_sub(1));
+            !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()) && "smhd".contains(unit)
+        };
+        let text = String::from_utf8_lossy(&out.stdout).into_owned();
+        let mask = |w: &str| if age(w) { "AGE".into() } else { w.to_string() };
+        text.split_whitespace().map(mask).collect()
+    };
+    for flag in ["--stat", "--dry-run"] {
+        let flagged = rtok(&work, &["worktree", "clean", flag]);
+        assert_eq!(words(&flagged), words(&rtok(&work, &["worktree", "clean"])));
+    }
 
     let out = rtok(&work, &["worktree", "clean", "--yes"]);
     assert!(
         out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    // T276.2: two caches go, so a bar is due on a terminal; off one, stderr stays untouched.
+    assert!(
+        out.stderr.is_empty(),
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );
@@ -964,6 +1006,70 @@ fn remove_takes_only_the_caller_s_own_clean_worktree() {
     let _ = std::fs::remove_dir_all(&tmp);
 }
 
+/// T416.4: `remove --dry-run` names the path, branch, size and file count, keeps every refusal,
+/// and leaves the worktree, its branch and its claim alone.
+#[test]
+fn remove_dry_run_previews_and_changes_nothing() {
+    let tmp = rtok::testutil::tmp_dir("worktree-remove-dry");
+    run(&tmp, &["init", "-q", "--bare", "origin.git"]);
+    run(&tmp, &["clone", "-q", "origin.git", "work"]);
+    let work = tmp.join("work");
+    commit(&work, "a.txt");
+    run(&work, &["push", "-q", "-u", "origin", "main"]);
+    run(&work, &["remote", "set-head", "origin", "main"]);
+    let (store, ids) = agents(&tmp, &["sess-me"]);
+    let me = ids[0].as_str();
+    add(
+        &work,
+        "done",
+        Some(&format!("claude | t1 | 2026-09-27 | agent {me}")),
+    );
+    add(
+        &work,
+        "open",
+        Some(&format!("claude | t2 | 2026-09-27 | agent {me}")),
+    );
+    commit(&tmp.join("wt-done"), "done.txt");
+    commit(&tmp.join("wt-open"), "open.txt");
+    squash(&work, "t-done");
+    run(&work, &["push", "-q", "origin", "main"]);
+    let done = tmp.join("wt-done").canonicalize().unwrap();
+    store
+        .claim_worktree(&done.display().to_string(), me, "t1")
+        .unwrap();
+    let remove = |args: &[&str]| {
+        let args = [&["worktree", "remove", "--dry-run"][..], args].concat();
+        rtok_as(&tmp, &work, Some(me), &args, b"")
+    };
+
+    let out = remove(&["t1"]);
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(text.contains(&stored_claim_path(&done)), "{text}");
+    assert!(text.contains("files"), "{text}");
+    assert!(text.contains("branch t-done: would be deleted"), "{text}");
+    assert!(done.exists() && !run(&work, &["branch", "--list", "t-done"]).is_empty());
+    assert_eq!(store.open_worktree_claims().unwrap().len(), 1);
+
+    let out = remove(&["t1", "--json"]);
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert!(
+        v["files"].as_u64().unwrap() > 0 && v["bytes"].as_u64().is_some(),
+        "{v}"
+    );
+
+    let out = remove(&["../wt-open"]);
+    assert!(
+        String::from_utf8_lossy(&out.stderr).contains("--keep-branch"),
+        "an unmerged branch is refused in a dry run too"
+    );
+    let _ = std::fs::remove_dir_all(&tmp);
+}
+
 /// T412: what `remove` guards beyond `git worktree remove` + `git branch -d`. `--keep-branch`
 /// never lets a detached HEAD's commits or uncommitted files go; ignored build output does not
 /// make a worktree dirty; a merged branch `git branch -D` cannot delete (checked out in a second
@@ -1219,7 +1325,7 @@ fn disabled_worktrees_refuse_every_command_and_drop_the_mcp_tools() {
             "{args:?}: {err}"
         );
     }
-    assert!(!tmp.join(".rtok/worktrees").exists());
+    assert!(!work.join(".rtok").exists());
 
     let (store, _) = agents(&tmp, &[]);
     let claude = store.host_id("claude").unwrap().unwrap();
@@ -1275,9 +1381,10 @@ fn whoami_shows_the_root_and_only_the_caller_s_worktrees() {
     let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
     let real = |p: &serde_json::Value| Path::new(p.as_str().unwrap()).canonicalize().unwrap();
     assert_eq!(v["agent"], me);
+    // T660.4: the default root is under the main checkout, which git reports canonical.
     assert_eq!(
-        Path::new(v["root"].as_str().unwrap()),
-        tmp.join(".rtok/worktrees")
+        real(&v["root"]),
+        work.join(".rtok/worktrees").canonicalize().unwrap()
     );
     assert_eq!(real(&v["here"]), claimed.canonicalize().unwrap());
     let mut held: Vec<std::path::PathBuf> = v["worktrees"]
@@ -1408,7 +1515,7 @@ fn worktree_create_hook_returns_the_add_path_bound_to_the_session_agent() {
         .unwrap()
         .trim_end()
         .to_string();
-    let want = tmp.join(".rtok/worktrees/rtok-bold-oak-a3f2");
+    let want = work.join(".rtok/worktrees/rtok-bold-oak-a3f2");
     assert_eq!(
         Path::new(&path).canonicalize().unwrap(),
         want.canonicalize().unwrap()
@@ -1520,7 +1627,7 @@ fn worktree_launcher_creates_a_plain_worktree_when_rtok_cannot() {
     );
     let err = String::from_utf8_lossy(&out.stderr);
     assert!(out.status.success(), "{err}");
-    let want = tmp.join(".rtok/worktrees/rtok-third");
+    let want = work.join(".rtok/worktrees/rtok-third");
     assert!(
         same(std::str::from_utf8(&out.stdout).unwrap().trim_end(), &want),
         "{out:?}"
@@ -1754,4 +1861,343 @@ fn mcp_worktree_adopt_binds_a_host_made_worktree_for_the_linked_agent() {
         claims.iter().any(|(p, a)| *p == want && *a == me),
         "{claims:?}"
     );
+}
+
+/// T289.3: `adopt` from a post-create script has no agent. The one live agent of the pool's host
+/// whose cwd is the repository takes the worktree; none, two, or a lone agent of another host
+/// park a claim for the next agent (T289.5), and a pool without a post-create script still needs
+/// an agent.
+#[test]
+fn adopt_without_an_agent_binds_the_one_live_agent_of_the_pools_host() {
+    let tmp = rtok::testutil::tmp_dir("worktree-adopt-unattended");
+    run(&tmp, &["init", "-q", "work"]);
+    let work = tmp.join("work");
+    commit(&work, "a.txt");
+    let (store, _) = agents(&tmp, &[]);
+    let cwd = work.to_str().unwrap();
+    let host = |name: &str| store.host_id(name).unwrap().unwrap();
+    let wt = |name: &str| tmp.join(".cursor/worktrees/work").join(name);
+    for (branch, dir) in [
+        ("t7-none", wt("none")),
+        ("t7-one", wt("one")),
+        ("t7-two", wt("two")),
+        ("t9-k", tmp.join(".kilo/worktrees/t9-k")),
+        ("t8-x", tmp.join("elsewhere")),
+    ] {
+        run(
+            &work,
+            &["worktree", "add", "-q", "-b", branch, dir.to_str().unwrap()],
+        );
+    }
+    let adopt = |dir: &Path| rtok_as(&tmp, dir, None, &["worktree", "adopt"], b"");
+    let refused = |dir: &Path, why: &str| {
+        let out = adopt(dir);
+        assert!(!out.status.success());
+        let err = String::from_utf8_lossy(&out.stderr).to_string();
+        assert!(err.contains(why), "{err}");
+    };
+
+    let parks = |dir: &Path| {
+        let out = adopt(dir);
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(String::from_utf8_lossy(&out.stderr).contains("pending"));
+        assert!(
+            store
+                .pending_worktrees()
+                .unwrap()
+                .iter()
+                .any(|(p, _)| *p == stored_claim_path(dir))
+        );
+    };
+    parks(&wt("none"));
+    let mine = store
+        .register_agent(host("cursor"), "cur-1", None, Some(cwd), None)
+        .unwrap();
+    // Another cursor agent elsewhere, and a Claude one in the repository, do not count.
+    store
+        .register_agent(host("cursor"), "cur-away", None, Some("/elsewhere"), None)
+        .unwrap();
+    store
+        .register_agent(host("claude"), "cl-1", None, Some(cwd), None)
+        .unwrap();
+
+    let out = adopt(&wt("one"));
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(
+        store.open_worktree_claims().unwrap(),
+        [(stored_claim_path(&wt("one")), mine)]
+    );
+    parks(&tmp.join(".kilo/worktrees/t9-k"));
+    refused(&tmp.join("elsewhere"), "no agent to bind");
+
+    store
+        .register_agent(host("cursor"), "cur-2", None, Some(cwd), None)
+        .unwrap();
+    parks(&wt("two"));
+    assert_eq!(store.open_worktree_claims().unwrap().len(), 1);
+    assert_eq!(store.pending_worktrees().unwrap().len(), 3);
+}
+
+/// T660.3: a worktree nested in another counts as the current one alone; the checkout around
+/// it does not, so `clean` and `gc` run from inside it still act on the outer one.
+#[test]
+fn clean_and_gc_take_the_deepest_worktree_as_current() {
+    let tmp = rtok::testutil::tmp_dir("worktree-nested-current");
+    // With an origin, so a branch at the base commit reads as merged.
+    let work = common::git::repo(&tmp);
+    // Nested checkouts are untracked content of their parent: keep them from reading as dirty.
+    std::fs::write(work.join(".git/info/exclude"), "target/\ninner/\n").unwrap();
+    add(&work, "a", None);
+    let (outer, nested) = (tmp.join("wt-a"), tmp.join("wt-a/inner"));
+    run(&outer, &["worktree", "add", "-q", "-b", "t-inner", "inner"]);
+
+    let tag = "Signature: 8a477f597d28d172789f06886806bc55\n";
+    let old = std::time::SystemTime::now() - std::time::Duration::from_secs(3 * 86_400);
+    for dir in [&outer, &nested] {
+        std::fs::create_dir_all(dir.join("target")).unwrap();
+        let file = dir.join("target/CACHEDIR.TAG");
+        std::fs::write(&file, tag).unwrap();
+        let file = std::fs::File::options().write(true).open(file).unwrap();
+        file.set_modified(old).unwrap();
+    }
+
+    let rows = json_in(&tmp, &nested, &["worktree", "clean", "--json"]);
+    assert_eq!(by_name(&rows, "wt-a")["action"], "clean", "{rows}");
+    assert_eq!(by_name(&rows, "inner")["action"], "keep", "{rows}");
+
+    let gc = ["worktree", "gc", "--json", "--owner", ME, "--idle", "0h"];
+    let plan = json_in(&tmp, &nested, &gc);
+    assert_eq!(by_name(&plan, "wt-a")["action"], "remove", "{plan}");
+    assert_eq!(by_name(&plan, "inner")["action"], "keep", "{plan}");
+}
+
+/// T660.3: the symbol index a new worktree starts from leaves out main's `.rtok/` rows, where
+/// the other worktrees live.
+#[test]
+fn a_new_worktree_inherits_no_symbol_rows_under_rtok() {
+    let tmp = rtok::testutil::tmp_dir("worktree-copy-index");
+    let work = common::git::repo(&tmp);
+    let store = rtok::store::Store::open_in_memory().unwrap();
+    let row = rtok_plugin_sdk::SymbolRow::new("main", "function", 1, true, 1, "");
+    let main = rtok::store::canon_root(&work);
+    for path in ["src/a.rs", ".rtok/worktrees/x/src/a.rs", ".rtokish/b.rs"] {
+        let rows = std::slice::from_ref(&row);
+        store
+            .replace_symbols(&main, path, "sha", (0, 0), rows)
+            .unwrap();
+    }
+
+    let plan = rtok::worktree::claim::add(
+        Some(&store),
+        &work,
+        &tmp.join("_worktrees"),
+        ("t1", None),
+        None,
+        Some(ME.into()),
+        false,
+    )
+    .unwrap();
+
+    let copied = store
+        .symbol_stats(&rtok::store::canon_root(&plan.path))
+        .unwrap();
+    let mut paths: Vec<_> = copied.keys().map(String::as_str).collect();
+    paths.sort_unstable();
+    assert_eq!(paths, [".rtokish/b.rs", "src/a.rs"]);
+}
+
+/// T660.4: `.rtok/` is made ignored once, in `.gitignore` when the project has one (the rest
+/// byte-for-byte, a missing final newline added first), else in `info/exclude`; a rule already
+/// in effect is left alone.
+#[test]
+fn rtok_dir_is_ignored_through_gitignore_or_info_exclude() {
+    use rtok::worktree::add::ensure_ignored;
+    let tmp = rtok::testutil::tmp_dir("worktree-ignore-rtok");
+    let work = common::git::repo(&tmp);
+    let exclude = work.join(".git/info/exclude");
+    let before = std::fs::read(&exclude).unwrap_or_default();
+
+    std::fs::write(work.join(".gitignore"), "target\n# keep\r\n*.log").unwrap();
+    ensure_ignored(&work).unwrap();
+    let want = "target\n# keep\r\n*.log\n.rtok/\n";
+    assert_eq!(
+        std::fs::read_to_string(work.join(".gitignore")).unwrap(),
+        want
+    );
+    ensure_ignored(&work).unwrap();
+    assert_eq!(
+        std::fs::read_to_string(work.join(".gitignore")).unwrap(),
+        want
+    );
+    assert_eq!(std::fs::read(&exclude).unwrap_or_default(), before);
+
+    std::fs::write(work.join(".gitignore"), "/.rtok\n").unwrap();
+    ensure_ignored(&work).unwrap();
+    assert_eq!(
+        std::fs::read_to_string(work.join(".gitignore")).unwrap(),
+        "/.rtok\n"
+    );
+
+    std::fs::remove_file(work.join(".gitignore")).unwrap();
+    ensure_ignored(&work).unwrap();
+    ensure_ignored(&work).unwrap();
+    let text = std::fs::read_to_string(&exclude).unwrap();
+    assert_eq!(text.matches(".rtok/").count(), 1, "{text}");
+    assert!(text.ends_with(".rtok/\n"), "{text}");
+    assert!(!work.join(".gitignore").exists());
+}
+
+/// T660.4: by default `rtok worktree add` puts the worktree under `<main>/.rtok/worktrees`,
+/// from main and from inside a linked worktree alike, and main stays clean.
+#[test]
+fn the_default_root_is_under_the_main_checkout_from_main_and_from_a_worktree() {
+    let tmp = rtok::testutil::tmp_dir("worktree-default-root");
+    let work = common::git::repo(&tmp);
+    let home = tmp.join("home");
+    std::fs::create_dir_all(&home).unwrap();
+    let add = |cwd: &Path, task: &str| {
+        let out = rtok_in(&home, cwd, &["worktree", "add", task, "--owner", ME], b"");
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let printed = String::from_utf8_lossy(&out.stdout).trim_end().to_string();
+        Path::new(&printed).canonicalize().unwrap()
+    };
+    let first = add(&work, "t1");
+    assert_eq!(first, work.join(".rtok/worktrees/rtok-t1"));
+    std::fs::create_dir_all(first.join("sub")).unwrap();
+    let second = add(&first.join("sub"), "t2");
+    assert_eq!(second, work.join(".rtok/worktrees/rtok-t2"));
+    assert_eq!(run(&work, &["status", "--porcelain"]), "");
+    assert!(!home.join(".rtok/worktrees").exists());
+}
+
+/// T660.5: `migrate` moves the worktrees outside the root into it, named by their task, with
+/// lock and claim following; it skips main, the current worktree, another agent's lock or
+/// claim, a live session's worktree, one with submodules and a taken target. A dry run moves
+/// nothing.
+#[test]
+fn migrate_moves_free_worktrees_into_the_root_and_skips_held_ones() {
+    use rtok::worktree::migrate::{Held, Me, run as migrate};
+    let tmp = rtok::testutil::tmp_dir("worktree-migrate");
+    let work = common::git::repo(&tmp);
+    let store = rtok::store::Store::open_in_memory().unwrap();
+    let claude = store.host_id("claude").unwrap().unwrap();
+    let agent = store.register_agent(claude, "s", None, None, None).unwrap();
+    let other = store.register_agent(claude, "o", None, None, None).unwrap();
+    let me = agent.as_str();
+    let mine = format!("{ME} | t1 | 2026-10-14 | agent {me}");
+    add(&work, "mine", Some(&mine));
+    add(&work, "free", None);
+    add(
+        &work,
+        "theirs",
+        Some("Other / model | t3 | 2026-10-14 | agent agent-other"),
+    );
+    add(&work, "claimed", None);
+    add(&work, "live", None);
+    add(&work, "subs", None);
+    add(&work, "here", None);
+    add(&work, "taken", None);
+    std::fs::write(tmp.join("wt-subs/.gitmodules"), "").unwrap();
+    let root = work.join(".rtok/worktrees");
+    std::fs::create_dir_all(root.join("wt-taken")).unwrap();
+    let wt = |n: &str| tmp.join(format!("wt-{n}")).canonicalize().unwrap();
+
+    let path_of = |p: &Path| p.display().to_string();
+    store
+        .claim_worktree(&path_of(&wt("mine")), &agent, "t1")
+        .unwrap();
+    store
+        .claim_worktree(&path_of(&wt("claimed")), &other, "t4")
+        .unwrap();
+    let held = Held {
+        claims: store.open_worktree_claims().unwrap(),
+        pending: Vec::new(),
+        live: vec![("agent-live".into(), wt("live").join("src"))],
+    };
+    let who = Me {
+        agent: Some(me),
+        owner: None,
+    };
+    let rel = Path::new(".rtok/worktrees");
+
+    let dry = migrate(&wt("here"), rel, &who, &held, Some(&store), false).unwrap();
+    let action = |rows: &[rtok::worktree::migrate::Outcome], n: &str| {
+        let row = rows.iter().find(|o| o.path.ends_with(n)).unwrap();
+        (row.action, row.note.clone())
+    };
+    assert_eq!(action(&dry, "wt-mine").0, "move");
+    assert!(wt("mine").exists() && !root.join("rtok-t1").exists());
+
+    let done = migrate(&wt("here"), rel, &who, &held, Some(&store), true).unwrap();
+    assert_eq!(action(&done, "rtok").1, "main checkout");
+    assert_eq!(action(&done, "wt-mine"), ("move", "moved".into()));
+    assert_eq!(action(&done, "wt-free"), ("move", "moved".into()));
+    assert_eq!(action(&done, "wt-theirs").1, "locked by Other / model");
+    assert!(
+        action(&done, "wt-claimed")
+            .1
+            .starts_with("claimed by agent")
+    );
+    assert!(action(&done, "wt-live").1.starts_with("live session"));
+    assert!(action(&done, "wt-subs").1.contains("submodules"));
+    assert_eq!(
+        action(&done, "wt-here").1,
+        "the worktree this command runs from"
+    );
+    assert!(action(&done, "wt-taken").1.ends_with("already exists"));
+    assert!(done.iter().all(|o| !o.failed));
+
+    // Named by its lock's task; without a lock it keeps its directory name.
+    let moved = root.join("rtok-t1").canonicalize().unwrap();
+    assert!(root.join("wt-free").is_dir() && !tmp.join("wt-free").exists());
+    let records = git::list(&work).unwrap();
+    let record = records
+        .iter()
+        .find(|r| r.path.canonicalize().unwrap() == moved);
+    assert_eq!(record.unwrap().locked.as_deref(), Some(mine.as_str()));
+    let claims = store.open_worktree_claims().unwrap();
+    assert!(
+        claims
+            .iter()
+            .any(|(p, a)| *p == stored_claim_path(&moved) && *a == agent),
+        "{claims:?}"
+    );
+    assert_eq!(run(&work, &["status", "--porcelain"]), "");
+
+    let again = migrate(&work, rel, &who, &held, Some(&store), true).unwrap();
+    assert_eq!(action(&again, "rtok-t1").1, "already in the root");
+}
+
+/// T660.5: two worktrees that would land on one path: the plan moves one and keeps the other,
+/// rather than letting `git worktree move` fail halfway through.
+#[test]
+fn migrate_gives_one_target_to_one_worktree() {
+    use rtok::worktree::migrate::{Held, Me, run as migrate};
+    let tmp = rtok::testutil::tmp_dir("worktree-migrate-twin");
+    let work = common::git::repo(&tmp);
+    for (branch, dir) in [("a", "../a/wt"), ("b", "../b/wt")] {
+        run(&work, &["worktree", "add", "-q", "-b", branch, dir]);
+    }
+    let rel = Path::new(".rtok/worktrees");
+    let plan = migrate(&work, rel, &Me::default(), &Held::default(), None, false).unwrap();
+    let mut notes: Vec<_> = plan.iter().skip(1).map(|o| o.note.as_str()).collect();
+    notes.sort_unstable();
+    assert_eq!(notes.len(), 2, "{plan:?}");
+    assert!(
+        notes[0].ends_with("is another worktree's target"),
+        "{plan:?}"
+    );
+    assert_eq!(notes[1], "outside the root");
 }

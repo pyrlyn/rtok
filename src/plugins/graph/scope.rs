@@ -546,7 +546,7 @@ fn holder(scope: &[Member], path: &str) -> usize {
     let p = Path::new(path);
     // Both sides canonical: Windows' `canonicalize` adds `\\?\` and expands 8.3 names
     // (`RUNNER~1`), macOS resolves `/var` to `/private/var`.
-    let canon = |q: &Path| dunce::canonicalize(q).unwrap_or_else(|_| q.to_path_buf());
+    let canon = |q: &Path| fs_kit::path::canonicalize(q).unwrap_or_else(|_| q.to_path_buf());
     let real = canon(p);
     scope
         .iter()
@@ -689,6 +689,33 @@ pub fn dead(cx: &Ctx, scope: &[Member]) -> Result<String> {
         }
         let names: Vec<&str> = done.iter().map(|(m, _)| m.name.as_str()).collect();
         return Ok(format!("{notes}no dead code in [{}]", names.join("], [")));
+    }
+    capped(cx, &notes, body)
+}
+
+/// `callers` with no name (T665): the unreferenced definitions `graph dead` lists, narrowed by the
+/// `path` and `kind` filters — "functions nobody calls under src/x" in one call, no new tool.
+pub fn dead_filtered(cx: &Ctx, scope: &[Member], filter: &Filter) -> Result<String> {
+    let (done, notes) = dead_by_project(cx, scope, super::dead_rows)?;
+    let tagged = scope.len() > 1;
+    let mut body = String::new();
+    for (m, rows) in &done {
+        let tag = if tagged { label(m) } else { String::new() };
+        for r in rows
+            .iter()
+            .filter(|r| filter.path_ok(&r.path) && filter.kind_ok(&r.kind))
+        {
+            body.push_str(&format!(
+                "{tag}{}:{} {} {}\n",
+                r.path, r.line, r.kind, r.name
+            ));
+        }
+    }
+    if body.is_empty() {
+        if done.iter().all(|(m, _)| text::applies(cx, &m.root)) {
+            return Ok(notes);
+        }
+        return Ok(format!("{notes}no dead code{}", filter.scope_note()));
     }
     capped(cx, &notes, body)
 }

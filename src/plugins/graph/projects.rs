@@ -15,7 +15,7 @@ use rtok_plugin_sdk::Ctx;
 
 use super::capability::{self, Capability};
 use super::health::score::{self, Score};
-use super::{health, index, status};
+use super::{health, index, jobs, status};
 use crate::plugin::Runtime;
 use crate::render::{Col, table};
 use crate::store::{LinkKind, Origin, Project, Store};
@@ -24,8 +24,8 @@ use crate::store::{LinkKind, Origin, Project, Store};
 /// readable to count.
 #[derive(Debug, Serialize, schemars::JsonSchema)]
 pub struct ProjectIndex {
-    rows: i64,
-    files: i64,
+    pub(super) rows: i64,
+    pub(super) files: i64,
     pending: usize,
     watch: String,
     pub(super) indexed_at: Option<i64>,
@@ -45,11 +45,14 @@ pub struct ProjectLink {
 pub struct ProjectRow {
     pub id: i32,
     pub name: String,
-    pub(super) root: String,
+    pub root: String,
     pub(super) origin: Origin,
     pub selected: bool,
     pub missing: bool,
     pub state: &'static str,
+    /// Why the last re-index failed, while `state` is `failed` (T329.54).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
     created_at: i64,
     last_used_at: i64,
     pub(super) index: Option<ProjectIndex>,
@@ -81,6 +84,7 @@ impl ProjectRow {
             selected: false,
             missing: health.level == score::Level::Missing,
             state: "indexed",
+            error: None,
             created_at: 0,
             last_used_at: 0,
             index: None,
@@ -140,6 +144,12 @@ pub(super) fn row(rt: &Runtime, p: Project) -> Result<ProjectRow> {
         Some(i) if i.pending > 0 => "stale",
         Some(_) => "ok",
     };
+    // A job of this process outranks what the index says: its rows are about to change.
+    let (state, error) = match jobs::get(&p.root) {
+        Some(jobs::Job::Running) if !missing => ("indexing", None),
+        Some(jobs::Job::Failed(e)) if !missing => ("failed", Some(e)),
+        _ => (state, None),
+    };
     let backend = (!missing)
         .then(|| capability::mirrored(cx, Path::new(&p.root)))
         .flatten();
@@ -152,6 +162,7 @@ pub(super) fn row(rt: &Runtime, p: Project) -> Result<ProjectRow> {
         selected: p.selected,
         missing,
         state,
+        error,
         created_at: p.created_at,
         last_used_at: p.last_used_at,
         index,
@@ -344,6 +355,28 @@ pub fn run(rt: &Runtime, action: Action, json: bool) -> Result<String> {
             }
             changes(&done, "unlinked", "was not linked", json)
         }
+        Action::Reindex(target) => {
+            let p = resolve(&rt.store, &target)?;
+            if p.missing() {
+                bail!(
+                    "{} no longer exists; remove it or restore the directory",
+                    p.root
+                );
+            }
+            let r = index::run(&Ctx::new(rt), Path::new(&p.root), false)?;
+            if json {
+                return Ok(serde_json::to_string_pretty(&serde_json::json!({
+                    "reindexed": p.id,
+                    "root": p.root,
+                    "files": r.indexed,
+                    "rows_written": r.inserted,
+                }))? + "\n");
+            }
+            Ok(format!(
+                "indexed {}: {} files, {} rows written\n",
+                p.root, r.indexed, r.inserted
+            ))
+        }
         Action::Remove(target) => {
             let p = resolve(&rt.store, &target)?;
             rt.store.remove_project(p.id)?;
@@ -358,6 +391,47 @@ pub fn run(rt: &Runtime, action: Action, json: bool) -> Result<String> {
                 p.root
             ))
         }
+    }
+}
+
+/// What `Remove` or `Unlink` would drop, with nothing written (T416.4). Any other action is
+/// refused: only the two that delete rows have a preview.
+pub fn preview(rt: &Runtime, action: Action, json: bool) -> Result<String> {
+    match action {
+        Action::Unlink { to, from, both } => {
+            let (a, b) = pair(rt, &to, from.as_deref())?;
+            let links = rt.store.project_links()?;
+            let linked =
+                |x: &Project, y: &Project| links.iter().any(|l| l.from == x.id && l.to == y.id);
+            let mut done = vec![(&a, &b, linked(&a, &b))];
+            if both {
+                done.push((&b, &a, linked(&b, &a)));
+            }
+            changes(&done, "would unlink", "is not linked", json)
+        }
+        Action::Remove(target) => {
+            let p = resolve(&rt.store, &target)?;
+            let links = rt.store.project_links()?;
+            let out = links.iter().filter(|l| l.from == p.id).count();
+            let incoming = links.iter().filter(|l| l.to == p.id).count();
+            let index = row(rt, p.clone())?.index;
+            let (rows, files) = index.as_ref().map_or((0, 0), |i| (i.rows, i.files));
+            if json {
+                return Ok(serde_json::to_string_pretty(&serde_json::json!({
+                    "would_remove": p.id,
+                    "root": p.root,
+                    "index_rows": rows,
+                    "indexed_files": files,
+                    "links_out": out,
+                    "links_in": incoming,
+                }))? + "\n");
+            }
+            Ok(format!(
+                "would remove {} (id {})\n  index rows: {rows} over {files} files\n  links: {out} out, {incoming} in\n  files untouched; nothing removed (dry run)\n",
+                p.root, p.id
+            ))
+        }
+        _ => bail!("only `remove` and `unlink` have a dry run"),
     }
 }
 
@@ -376,6 +450,9 @@ pub enum Action {
     List,
     Add(std::path::PathBuf),
     Select(String),
+    /// Re-reads the project's files into its index (T329.54); shared by the CLI, the web page
+    /// and the TUI.
+    Reindex(String),
     Remove(String),
 }
 

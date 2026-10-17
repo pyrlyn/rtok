@@ -3,7 +3,8 @@
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
 import type { Scene } from "../scene";
-import type { CallsStore } from "./callsStore";
+import type { CallsView } from "../../../api/snapshot.gen";
+import { outsideScope } from "./scope";
 
 /** What the live canvas adds to one node. */
 export interface Lit {
@@ -13,21 +14,54 @@ export interface Lit {
   accents: number[];
   /** A call on the node failed a moment ago. */
   failed: boolean;
+  /** Calls whose own node the cap folded into "+N more", counted on the nearest node that holds them. */
+  folded: number;
+}
+
+/** The small floating label of one call on its node (T329.50). */
+export interface CallLabel {
+  call: string;
+  node: number;
+  tool: string;
+  /** Epoch ms the call started; the label's counter runs from here while `ms` is null. */
+  at: number;
+  /** How long a finished call ran; null while it runs. */
+  ms: number | null;
+  /** When a finished call ended: the label fades from here. */
+  endedAt: number | null;
+  failed: boolean;
+  /** The call's accent slot while it runs, so the label matches its ring. */
+  accent: number | null;
+  /** The node holds this call only because the cap folded the call's own node into "+N more". */
+  folded: boolean;
 }
 
 export interface LiveState {
   lit: Map<number, Lit>;
+  /** Running calls first, then calls that ended within `LABEL_MS`; each on the one node that shows it. */
+  labels: CallLabel[];
   /** Running calls beyond the accents: drawn as one "busy" count, not as nodes. */
   busy: number;
   /** The nodes the camera frames: running calls and calls that ended a moment ago, sorted. Empty means the overview. */
   focus: number[];
+  /** Folded calls no visible node holds: they count on the "+N more" group itself. */
+  group: number;
 }
 
-/** Heat fades over this long. */
-const HEAT_MS = 300_000;
+export interface LiveOptions {
+  /** Names of the projects in scope; calls on any other do not light the canvas. `null` means no scope. */
+  scope?: ReadonlySet<string> | null;
+  /** Nodes the cap left out of the drill-down. Without any, a target nobody drew is just unknown. */
+  more?: number;
+}
+
 /** The accents: running calls beyond this many are only counted ("busy"). */
 export const MAX_ACCENTS = 8;
 const FAIL_FLASH_MS = 5000;
+/** A finished call's label stays at full strength this long, then fades. */
+export const LABEL_HOLD_MS = 2000;
+/** And is gone this long after the call ended. */
+export const LABEL_MS = 4000;
 /** A call that ended this long ago still holds the camera: most calls end before a frame shows them running. */
 export const FOCUS_MS = 4000;
 /** About this many recent calls on one node make it fully hot. */
@@ -40,7 +74,14 @@ const bare = (label: string) => label.replace(/^⚠ /, "");
  * files, so it lights the node named like the call's target. A call on something the picture
  * does not hold lights nothing (the totals still count it).
  */
-export function liveState(scene: Scene, store: CallsStore, now: number): LiveState {
+export function liveState(
+  scene: Scene,
+  store: CallsView,
+  now: number,
+  { scope = null, more = 0 }: LiveOptions = {},
+): LiveState {
+  // `[plugins.graph] live_heat_window_s`: heat fades over this long.
+  const heatMs = store.heat_window_s * 1000;
   const overview = scene.label === "registered projects";
   const key = (c: { project: string | null; target: string | null }) =>
     overview ? c.project : c.target;
@@ -53,33 +94,95 @@ export function liveState(scene: Scene, store: CallsStore, now: number): LiveSta
   const focus = new Set<number>();
   const at = (id: number) => {
     let l = lit.get(id);
-    if (!l) lit.set(id, (l = { heat: 0, accents: [], failed: false }));
+    if (!l) lit.set(id, (l = { heat: 0, accents: [], failed: false, folded: 0 }));
     return l;
   };
+  // A folded node has no position, but its file or directory may be drawn: a target that is a
+  // path counts on the drawn node whose path holds it, the longest first.
+  const holders = scene.nodes.filter((n) => n.root).sort((a, b) => b.root.length - a.root.length);
+  let group = 0;
+  const fold = (target: string | null) => {
+    if (!more || !target) return undefined;
+    const holder = holders.find((n) => target === n.root || target.startsWith(`${n.root}/`));
+    if (holder) at(holder.id).folded++;
+    else group++;
+    return holder?.id;
+  };
+  const ended: CallLabel[] = [];
+  const active: CallLabel[] = [];
   for (const r of store.feed) {
     const age = now - r.at;
     const k = key(r);
-    if (r.interrupted || age > HEAT_MS || !k) continue;
-    for (const id of byKey.get(k) ?? []) {
+    if (r.interrupted || age > heatMs || !k || outsideScope(scope, r.project)) continue;
+    const drawn = byKey.get(k);
+    const holder = !drawn && !overview ? fold(r.target) : undefined;
+    // The label sits on one node even when the name is drawn twice.
+    const labelOn = drawn?.[0] ?? holder;
+    if (labelOn !== undefined && age <= LABEL_MS) {
+      ended.push({
+        call: r.call,
+        node: labelOn,
+        tool: r.tool,
+        at: r.at - (r.ms ?? 0),
+        ms: r.ms,
+        endedAt: r.at,
+        failed: !r.ok,
+        accent: null,
+        folded: holder !== undefined,
+      });
+    }
+    for (const id of drawn ?? []) {
       if (age <= FOCUS_MS) focus.add(id);
       const l = at(id);
-      l.heat = Math.min(1, l.heat + (1 - age / HEAT_MS) / FULL_HEAT);
+      l.heat = Math.min(1, l.heat + (1 - age / heatMs) / FULL_HEAT);
       if (!r.ok && age < FAIL_FLASH_MS) l.failed = true;
     }
   }
   store.running.forEach((r, slot) => {
     if (slot >= MAX_ACCENTS) return;
     const k = key(r);
-    for (const id of (k && byKey.get(k)) || []) {
+    if (outsideScope(scope, r.project)) return;
+    const drawn = k ? byKey.get(k) : undefined;
+    const holder = !drawn && !overview ? fold(r.target) : undefined;
+    const labelOn = drawn?.[0] ?? holder;
+    if (labelOn !== undefined) {
+      active.push({
+        call: r.call,
+        node: labelOn,
+        tool: r.tool,
+        at: r.at,
+        ms: null,
+        endedAt: null,
+        failed: false,
+        accent: slot,
+        folded: holder !== undefined,
+      });
+    }
+    for (const id of drawn ?? []) {
       at(id).accents.push(slot);
       focus.add(id);
     }
   });
   return {
     lit,
+    labels: [...active, ...ended],
     busy: Math.max(0, store.running.length - MAX_ACCENTS),
     focus: [...focus].sort((a, b) => a - b),
+    group,
   };
+}
+
+/**
+ * What the canvas says about calls on folded nodes: the drawn node that holds them, or the
+ * "+N more" group when none does. Largest first, so the busiest ancestor leads.
+ */
+export function foldedCounters(scene: Scene, live: LiveState, more: number) {
+  const counters = scene.nodes.flatMap((n) => {
+    const calls = live.lit.get(n.id)?.folded ?? 0;
+    return calls ? [{ label: bare(n.label), calls }] : [];
+  });
+  if (live.group) counters.push({ label: `+${more} more`, calls: live.group });
+  return counters.sort((a, b) => b.calls - a.calls);
 }
 
 const ACCENT_ROLES = ["--pyr-accent-fg", "--pyr-delta-fg", "--pyr-success-fg", "--pyr-warn-fg"];

@@ -219,7 +219,9 @@ fn needs_quotes(s: &str) -> bool {
         )
 }
 
-#[allow(dead_code)]
+/// The round-trip oracle for `encode` (the plugin's lossless rule); no runtime path reads TOON
+/// back, so it, `unescape_quoted_cell` and `decode_cell` are compiled for tests only.
+#[cfg(test)]
 fn decode(toon: &str) -> Option<Value> {
     let (header, body) = toon.split_once('\n')?;
     let s = header.trim().strip_suffix(':')?;
@@ -231,9 +233,13 @@ fn decode(toon: &str) -> Option<Value> {
         .split(',')
         .map(str::to_string)
         .collect();
+    let declared: usize = s[1..s.find(']')?].parse().ok()?;
     let mut rows = Vec::new();
     for line in body.lines() {
-        let cells: Vec<Value> = line.trim_start().split(',').map(decode_cell).collect();
+        let cells: Vec<Value> = split_cells(line.trim_start())?
+            .into_iter()
+            .map(decode_cell)
+            .collect();
         if cells.len() != keys.len() {
             return None;
         }
@@ -243,9 +249,56 @@ fn decode(toon: &str) -> Option<Value> {
         }
         rows.push(Value::Object(obj));
     }
-    Some(Value::Array(rows))
+    (rows.len() == declared).then_some(Value::Array(rows))
 }
 
+/// Split a row on commas outside quoted cells, following `encode_cell`'s grammar: a quote
+/// opens only at a cell start, `\` escapes the next char inside it, and the closing quote
+/// must end the cell. Anything else is malformed.
+#[cfg(test)]
+fn split_cells(line: &str) -> Option<Vec<&str>> {
+    let mut cells = Vec::new();
+    let mut start = 0;
+    let mut chars = line.char_indices().peekable();
+    loop {
+        if line[start..].starts_with('"') {
+            chars.next_if(|&(i, _)| i == start);
+            let mut closed = false;
+            while let Some((_, c)) = chars.next() {
+                match c {
+                    '\\' => {
+                        chars.next()?;
+                    }
+                    '"' => {
+                        closed = true;
+                        break;
+                    }
+                    _ => {}
+                }
+            }
+            if !closed {
+                return None;
+            }
+            if let Some(&(_, c)) = chars.peek()
+                && c != ','
+            {
+                return None;
+            }
+        }
+        match chars.find(|&(_, c)| c == ',') {
+            Some((i, _)) => {
+                cells.push(&line[start..i]);
+                start = i + 1;
+            }
+            None => {
+                cells.push(&line[start..]);
+                return Some(cells);
+            }
+        }
+    }
+}
+
+#[cfg(test)]
 fn unescape_quoted_cell(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     let mut chars = s.chars().peekable();
@@ -270,7 +323,7 @@ fn unescape_quoted_cell(s: &str) -> String {
     out
 }
 
-#[allow(dead_code)]
+#[cfg(test)]
 fn decode_cell(s: &str) -> Value {
     if s.is_empty() {
         return Value::Null;
@@ -378,6 +431,15 @@ mod tests {
     #[case("number", "123")]
     #[case("bool", "true")]
     #[case("null", "null")]
+    #[case("comma", "x,y")]
+    #[case("only-comma", ",")]
+    #[case("quote-comma", "\",\"")]
+    #[case("backslash", "back\\slash")]
+    #[case("trailing-backslash", "end\\")]
+    #[case("escaped-quote", "a\\\"b,c")]
+    #[case("brace", "{k,v}")]
+    #[case("padded", " lead, and trail ")]
+    #[case("control", "bell\u{7},tab\t,nl\n")]
     fn round_trip_values(#[case] _control: &str, #[case] cell: &str) {
         let table = json!([
             {"a": 11, "b": "alpha-value-one", "c": 33, "d": "delta-value-one"},
@@ -390,6 +452,46 @@ mod tests {
         let body_lines = encoded.split_once('\n').unwrap().1.lines().count();
         assert_eq!(body_lines, rows.len(), "each row must be one physical line");
         assert_eq!(decode(&encoded).unwrap(), table);
+    }
+
+    /// T560: the accepted table from the audit probe, plus every awkward cell shape in one
+    /// row, must read back verbatim with the declared row and column counts.
+    #[test]
+    fn generated_cells_round_trip_with_declared_counts() {
+        let cells = [
+            "", ",", "x,y", "\"", "\\", "\\\"", "a\\nb", "\n", "\r\n", "\t", "123", "-1.5e3",
+            "true", "null", " x", "x ", "{}", "é,ü", "plain",
+        ];
+        let table = Value::Array(
+            cells
+                .iter()
+                .flat_map(|l| {
+                    cells
+                        .iter()
+                        .map(move |r| json!({"a": l, "b": r, "c": 1, "d": null}))
+                })
+                .collect(),
+        );
+        let rows = table.as_array().unwrap();
+        let keys = tabular_keys(&table, 1).unwrap();
+        let encoded = encode(rows, &keys);
+        assert_eq!(decode(&encoded).unwrap(), table);
+        let one = json!([{"a": "x,y", "b": 1, "c": true}]);
+        let keys = tabular_keys(&one, 1).unwrap();
+        assert_eq!(
+            decode(&encode(one.as_array().unwrap(), &keys)).unwrap(),
+            one
+        );
+    }
+
+    #[rstest]
+    #[case::unterminated_quote("[1]{a,b}:\n  \"x,1")]
+    #[case::text_after_closing_quote("[1]{a,b}:\n  \"x\"y,1")]
+    #[case::too_few_cells("[1]{a,b}:\n  \"x,y\"")]
+    #[case::too_many_cells("[1]{a,b}:\n  x,y,z")]
+    #[case::row_count_mismatch("[2]{a,b}:\n  x,y")]
+    fn malformed_rows_are_rejected(#[case] toon: &str) {
+        assert_eq!(decode(toon), None);
     }
 
     #[test]

@@ -4,7 +4,7 @@
 
 import type { Decorator, Meta, StoryObj } from "@storybook/react-vite";
 import { createRef, type ReactNode, useEffect, useRef } from "react";
-import { expect, userEvent, waitFor, within } from "storybook/test";
+import { expect, screen, userEvent, waitFor, within } from "storybook/test";
 import { connectSample } from "../api/sample";
 import { alertRow, project } from "../api/sampleRows";
 import type { ProjectRow } from "../api/snapshot.gen";
@@ -72,6 +72,18 @@ const noWebgl: Decorator = (Story) => (
 /** The lazy scene chunks and the layout worker outlast the default 1 s wait on a busy host; a scene that never renders still fails. */
 const READY = { timeout: 10_000 };
 
+/** The 3D canvas once the stage has drawn the scene on it. */
+async function drawn3d(canvasElement: HTMLElement): Promise<HTMLCanvasElement> {
+    const host = await within(canvasElement).findByTestId("graph-3d", undefined, READY);
+    const gl = await waitFor(() => {
+        const c = host.querySelector("canvas");
+        if (!c) throw new Error("no canvas yet");
+        return c;
+    }, READY);
+    await waitFor(() => expect(drawn(gl)).toBeGreaterThan(200), READY);
+    return gl;
+}
+
 export const List: Story = { args: { rows: registry }, decorators: [viewing("list")] };
 export const TwoD: Story = { args: { rows: registry }, decorators: [viewing("2d")] };
 export const Light: Story = {
@@ -82,6 +94,23 @@ export const Light: Story = {
 export const Single: Story = {
     args: { rows: [project(1, "solo", { selected: true })] },
     decorators: [viewing("2d")],
+};
+/**
+ * No remembered view, right after a 2D story: every story starts from empty storage, so a page
+ * story that never picks a view (`Projects.stories.tsx` renders the whole graph page) does not
+ * draw whichever view the story files before it left behind.
+ */
+export const FirstVisitOpens3D: Story = {
+    name: "First Visit Opens 3D",
+    args: { rows: registry },
+    play: async ({ canvasElement }) => {
+        // The choice, not the drawing: the 3D chunk and WebGL are the WebGL stories' cost.
+        const views = within(within(canvasElement).getByRole("group", { name: "view" }));
+        await expect(views.getByRole("button", { name: "3D" })).toHaveAttribute(
+            "aria-pressed",
+            "true",
+        );
+    },
 };
 
 const alerted: ProjectRow[] = [
@@ -152,28 +181,15 @@ export const WebglDrawsAndClickSelects: StoryObj = {
     decorators: [withData(connectSample), viewing("3d")],
     play: async ({ canvasElement }) => {
         const canvas = within(canvasElement);
-        const host = await canvas.findByTestId("graph-3d", undefined, READY);
-        const gl = await waitFor(() => {
-            const c = host.querySelector("canvas");
-            if (!c) throw new Error("no canvas yet");
-            return c;
-        }, READY);
-        await waitFor(() => expect(drawn(gl)).toBeGreaterThan(200), READY);
+        const gl = await drawn3d(canvasElement);
 
         const probe = (globalThis as { __probe?: { current: ViewApi | null } }).__probe!;
         // ketch is not selected in the sample registry; a click on its sphere selects it.
-        // Until the layout and the camera fit stop, the click can land where the sphere was.
-        let last = "";
-        const target = await waitFor(() => {
-            const at = probe.current?.screenOf(2);
-            if (!at) throw new Error("layout not ready");
-            const spot = `${Math.round(at.x)},${Math.round(at.y)}`;
-            if (spot !== last) {
-                last = spot;
-                throw new Error("layout still moving");
-            }
-            return at;
-        }, READY);
+        // The sphere is small on screen, and a cooling layout drifts it past its edge after two
+        // equal samples: only the stage's resting signal says where it stays.
+        await waitFor(() => expect(gl).toHaveAttribute("data-settled"), READY);
+        const target = probe.current?.screenOf(2);
+        if (!target) throw new Error("ketch has no position on a settled layout");
         const coords = { clientX: target.x, clientY: target.y };
         await userEvent.pointer([
             { keys: "[MouseLeft>]", target: gl, coords },
@@ -181,5 +197,47 @@ export const WebglDrawsAndClickSelects: StoryObj = {
         ]);
         const header = within(await canvas.findByLabelText("current project", undefined, READY));
         await expect(await header.findByText("ketch", undefined, READY)).toBeVisible();
+    },
+};
+
+/**
+ * No project links another: three.js leaves `instanceColor` null until the first edge colour, and
+ * the stage once wrote through it, so the scene threw and the router rebuilt the whole page.
+ */
+export const WebglWithoutLinks: Story = {
+    args: { rows: [project(1, "rtok", { selected: true }), project(2, "ketch")] },
+    decorators: [viewing("3d")],
+    play: async ({ canvasElement }) => {
+        await drawn3d(canvasElement);
+    },
+};
+
+/** The node menu against the sample server (T329.54): Re-index settles a stale project, and Remove drops one only after its plan is confirmed. */
+export const ReindexAndRemoveAgainstSampleServer: StoryObj = {
+    render: () => (
+        <WithSnapshot>{(snap) => <ProjectsOverview rows={snap.projects ?? []} />}</WithSnapshot>
+    ),
+    decorators: [withData(connectSample), viewing("2d")],
+    play: async ({ canvasElement }) => {
+        const canvas = within(canvasElement);
+        const node = async (name: RegExp) =>
+            (await canvas.findAllByTestId("node-2d", undefined, READY)).find((n) =>
+                name.test(n.getAttribute("aria-label") ?? ""),
+            )!;
+        const menu = async (name: RegExp, item: string) => {
+            await userEvent.pointer({ keys: "[MouseRight]", target: await node(name) });
+            // The menu is portalled to the body, outside the story root.
+            await userEvent.click(await screen.findByRole("menuitem", { name: item }));
+        };
+
+        await expect(await node(/^ketch, stale/)).toBeVisible();
+        await menu(/^ketch, stale/, "Re-index");
+        await waitFor(async () => expect(await node(/^ketch, ok/)).toBeVisible(), READY);
+
+        await menu(/^notes/, "Remove…");
+        const region = await canvas.findByRole("region", { name: "remove notes" });
+        await expect(await within(region).findByText(/files untouched/)).toBeVisible();
+        await userEvent.click(within(region).getByRole("button", { name: /Remove notes/ }));
+        await waitFor(async () => expect(canvas.getAllByTestId("node-2d")).toHaveLength(6), READY);
     },
 };

@@ -8,10 +8,13 @@
 //! wrong types, and out-of-range values with `file:line`. `set` writes the user file
 //! through `toml_edit` so comments survive. Figment does not write files.
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use anyhow::Context;
+use figment::Figment;
+use figment::providers::{Format, Serialized, Toml};
 use figment::value::{Dict, Value as FigValue};
 
 use crate::Result;
@@ -42,7 +45,42 @@ pub fn issues_in(path: &Path, text: &str) -> Vec<String> {
     let mut errors = Vec::new();
     check_table(path, text, "", doc.as_table(), &schema, &mut errors);
     check_graph_maps(path, text, doc.as_table(), &mut errors);
+    // The walk above sees keys, not the shapes of the open maps or the elements of arrays, so a
+    // file it accepts can still fail `Config::load`. Only when it found nothing else: the typed
+    // error would repeat what it already named.
+    if errors.is_empty() {
+        check_typed(path, text, doc.as_table(), &mut errors);
+    }
     errors
+}
+
+/// Extract `Config` from defaults plus this file alone, so project and environment layers
+/// cannot mask a value the user file gets wrong. The same extraction `Config::load` ends in
+/// decides, so no second type schema is kept in step by hand.
+fn check_typed(path: &Path, src: &str, doc: &dyn TableLike, errors: &mut Vec<String>) {
+    let extracted = Figment::from(Serialized::defaults(Config::default()))
+        .merge(Toml::string(src))
+        .extract::<Config>();
+    let Err(err) = extracted else { return };
+    for e in err {
+        // The failing item, else the deepest table that exists on the way to it.
+        let mut item: Option<&Item> = None;
+        let mut table = Some(doc);
+        for part in &e.path {
+            let Some(found) = table.and_then(|t| t.get(part)) else {
+                break;
+            };
+            item = Some(found);
+            table = found.as_table_like();
+        }
+        let at = item.map_or_else(|| format!("{}:1", path.display()), |i| loc(path, src, i));
+        let key = e.path.join(".");
+        if key.is_empty() {
+            errors.push(format!("{at}: {}", e.kind));
+        } else {
+            errors.push(format!("{at}: {key}: {}", e.kind));
+        }
+    }
 }
 
 fn check_graph_maps(path: &Path, src: &str, doc: &dyn TableLike, errors: &mut Vec<String>) {
@@ -199,7 +237,12 @@ fn reveal_assignment(text: &str, table: Option<&str>, leaf: &str) -> String {
     let mut current: Option<String> = None;
     let mut revealed = false;
     let mut out = String::with_capacity(text.len());
-    for line in text.split_inclusive('\n') {
+    let payload = string_payload_lines(text);
+    for (n, line) in text.split_inclusive('\n').enumerate() {
+        if payload.contains(&n) {
+            out.push_str(line);
+            continue;
+        }
         let raw = line.trim_end_matches(['\r', '\n']);
         let trimmed = raw.trim();
         if let Some(header) = table_header(trimmed) {
@@ -229,7 +272,11 @@ fn reveal_assignment(text: &str, table: Option<&str>, leaf: &str) -> String {
 
 fn live_key_present(text: &str, table: Option<&str>, leaf: &str) -> bool {
     let mut current: Option<String> = None;
-    for line in text.lines() {
+    let payload = string_payload_lines(text);
+    for (n, line) in text.lines().enumerate() {
+        if payload.contains(&n) {
+            continue;
+        }
         let trimmed = line.trim();
         if let Some(header) = table_header(trimmed) {
             current = Some(header);
@@ -251,6 +298,43 @@ fn live_key_present(text: &str, table: Option<&str>, leaf: &str) -> bool {
         }
     }
     false
+}
+
+/// Zero-based lines that begin inside a multi-line string value. The line scans above read
+/// raw text, so a payload line shaped like `[proxy]` or `# port = 12` would pass for document
+/// syntax and be rewritten. The parser knows where each string really ends (T595).
+fn string_payload_lines(text: &str) -> HashSet<usize> {
+    let mut lines = HashSet::new();
+    // Unparsable text is refused by the caller right after; nothing to protect then.
+    let Ok(doc) = text.parse::<toml_edit::Document<String>>() else {
+        return lines;
+    };
+    let line_at = |off: usize| text[..off.min(text.len())].matches('\n').count();
+    let mut mark = |span: Option<std::ops::Range<usize>>| {
+        if let Some(span) = span {
+            lines.extend(line_at(span.start) + 1..=line_at(span.end.saturating_sub(1)));
+        }
+    };
+    fn walk(item: &Item, mark: &mut dyn FnMut(Option<std::ops::Range<usize>>)) {
+        match item {
+            Item::Value(v) => walk_value(v, mark),
+            Item::Table(t) => t.iter().for_each(|(_, i)| walk(i, mark)),
+            Item::ArrayOfTables(a) => a
+                .iter()
+                .for_each(|t| t.iter().for_each(|(_, i)| walk(i, mark))),
+            Item::None => {}
+        }
+    }
+    fn walk_value(v: &TomlValue, mark: &mut dyn FnMut(Option<std::ops::Range<usize>>)) {
+        match v {
+            TomlValue::String(f) => mark(f.span()),
+            TomlValue::Array(a) => a.iter().for_each(|v| walk_value(v, mark)),
+            TomlValue::InlineTable(t) => t.iter().for_each(|(_, v)| walk_value(v, mark)),
+            _ => {}
+        }
+    }
+    walk(doc.as_item(), &mut mark);
+    lines
 }
 
 fn table_header(trimmed: &str) -> Option<String> {
@@ -472,23 +556,8 @@ pub(crate) fn file_diff(path: &Path, before: &str, after: &str) -> String {
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     match paint {
         Some(paint) => paint(path, before, after),
-        None => unified_diff(path, before, after),
+        None => change_preview::unified_diff(path, before, after),
     }
-}
-
-/// Uncoloured unified diff, three lines of context. Empty when nothing differs.
-fn unified_diff(path: &Path, before: &str, after: &str) -> String {
-    if before == after {
-        return String::new();
-    }
-    similar::TextDiff::from_lines(before, after)
-        .unified_diff()
-        .context_radius(3)
-        .header(
-            &format!("a/{}", path.display()),
-            &format!("b/{}", path.display()),
-        )
-        .to_string()
 }
 
 /// `cli::run` registers the `cmd` rules checker. Config stays free of `plugins`.
@@ -688,6 +757,17 @@ fn check_leaf(
             "proxy.flex.retries" if n > 5 => {
                 errors.push(format!("{at}: {dotted} must be ≤ 5"));
             }
+            // A zero window or rate would blank the live panel; 1000 rows is what a frame carries.
+            "plugins.graph.live_heat_window_s"
+            | "plugins.graph.live_max_events_per_s"
+            | "plugins.graph.live_feed_rows"
+                if n < 1 =>
+            {
+                errors.push(format!("{at}: {dotted} must be ≥ 1"));
+            }
+            "plugins.graph.live_feed_rows" if n > 1000 => {
+                errors.push(format!("{at}: {dotted} must be ≤ 1000"));
+            }
             "tui.tick_secs" if n < 1 => {
                 errors.push(format!("{at}: {dotted} must be ≥ 1"));
             }
@@ -778,8 +858,8 @@ fn check_leaf(
                 ));
             }
             // Caught here, not as a 400 on every request of that lane once the proxy runs.
-            lane if lane.starts_with("proxy.lanes.")
-                && lane.ends_with(".upstream")
+            lane if ((lane.starts_with("proxy.lanes.") && lane.ends_with(".upstream"))
+                || lane == "plugins.compress.llm.url")
                 && !s.trim().is_empty()
                 && !url::Url::parse(s.trim())
                     .is_ok_and(|u| matches!(u.scheme(), "http" | "https")) =>
@@ -841,6 +921,108 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    /// T594: a value the key walk accepts but typed extraction refuses is rejected before the
+    /// write, in the real and the dry-run setter, and the existing file keeps its bytes.
+    #[test]
+    fn set_refuses_values_typed_extraction_rejects() {
+        let home = tmp("typed");
+        let (path, _) = Config::init_maybe(&home, None, false, false).unwrap();
+        let before = std::fs::read(&path).unwrap();
+        for (key, raw, want) in [
+            ("stats.prices", "42", "stats.prices"),
+            ("stats.prices.custom", "\"x\"", "stats.prices.custom"),
+            (
+                "plugins.read.allow_paths",
+                "[1]",
+                "plugins.read.allow_paths",
+            ),
+            (
+                "plugins.read.allow_paths",
+                "[\"a\", 2]",
+                "plugins.read.allow_paths",
+            ),
+            ("bench.configs.mine", "7", "bench.configs.mine"),
+        ] {
+            for dry_run in [true, false] {
+                let err = set(&home, key, raw, dry_run).unwrap_err().to_string();
+                assert!(err.contains(want), "{key}={raw} dry={dry_run}: {err}");
+            }
+            assert_eq!(std::fs::read(&path).unwrap(), before, "{key}={raw}");
+        }
+        assert!(Config::load_from(&home).is_ok(), "the file still loads");
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    /// T594: free-form names stay accepted, and a valid edit keeps the file's comments.
+    #[test]
+    fn set_keeps_free_form_maps_and_arrays_usable() {
+        let home = tmp("typed-ok");
+        let (path, _) = Config::init_maybe(&home, None, false, false).unwrap();
+        std::fs::write(&path, "# keep me\n[proxy]\nport = 8790 # port\n").unwrap();
+        for (key, raw) in [
+            ("stats.prices.my-model", "{ input = 1.0, output = 2.0 }"),
+            ("bench.configs.mine", "\"/tmp/x\""),
+            ("plugins.graph.extensions.zig", "\"c\""),
+            ("plugins.read.allow_paths", "[]"),
+            ("plugins.read.allow_paths", "[\"/tmp\"]"),
+        ] {
+            set(&home, key, raw, false).unwrap_or_else(|e| panic!("{key}={raw}: {e}"));
+        }
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(text.starts_with("# keep me\n"), "{text}");
+        assert!(text.contains("port = 8790 # port"), "{text}");
+        assert!(Config::load_from(&home).is_ok());
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    /// T594: `validate` names the key and its line, not just the first failing field.
+    #[test]
+    fn validate_reports_the_typed_error_with_key_and_line() {
+        let errs = issues_in(Path::new("c.toml"), "[stats]\nprices = 42\n");
+        assert_eq!(errs.len(), 1, "{errs:?}");
+        assert!(errs[0].starts_with("c.toml:2: stats.prices: "), "{errs:?}");
+        let errs = issues_in(Path::new("c.toml"), "[plugins.read]\nallow_paths = [1]\n");
+        assert!(
+            errs[0].starts_with("c.toml:2: plugins.read.allow_paths"),
+            "{errs:?}"
+        );
+    }
+
+    /// T595: header-shaped and assignment-shaped lines inside a multi-line string are payload.
+    /// Setting another key changes that key only and leaves the string's bytes alone.
+    #[test]
+    fn set_leaves_multiline_string_payloads_untouched() {
+        for quote in ["'''", "\"\"\""] {
+            for eol in ["\n", "\r\n"] {
+                let home = tmp("payload");
+                let (path, _) = Config::init_maybe(&home, None, false, false).unwrap();
+                let payload = format!("{quote}\n[proxy]\n# port = 12\n# [x] = 1\n{quote}");
+                let body = format!("[otel]\nservice_name = {payload}\n[proxy]\n# port = 8790\n");
+                let payload = payload.replace('\n', eol);
+                std::fs::write(&path, body.replace('\n', eol)).unwrap();
+                set(&home, "proxy.port", "9000", false).unwrap();
+                let after = std::fs::read_to_string(&path).unwrap();
+                // toml_edit renders its own header and key line ends, so only the payload's
+                // bytes (the string's value) are compared across line-ending styles.
+                assert!(after.contains(&payload), "{quote:?} {eol:?}: {after:?}");
+                assert!(after.contains("port = 9000"), "{after:?}");
+                assert!(!after.contains("\nport = 12"), "{after:?}");
+                let _ = std::fs::remove_dir_all(&home);
+            }
+        }
+    }
+
+    /// T595: both line scans skip payload lines, including those of a string inside an array.
+    #[test]
+    fn payload_lines_are_skipped_by_both_scans() {
+        let text = "[a]\nk = [\"\"\"\n[proxy]\nport = 1\n\"\"\"]\n";
+        assert!(!live_key_present(text, Some("proxy"), "port"));
+        assert_eq!(
+            reveal_assignment("[a]\nk = \'\'\'\n[p]\n# q = 1\n\'\'\'\n", Some("p"), "q"),
+            "[a]\nk = \'\'\'\n[p]\n# q = 1\n\'\'\'\n"
+        );
     }
 
     /// `set` swaps in a new file (new inode) instead of truncating the old one in place, so a

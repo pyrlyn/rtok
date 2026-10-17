@@ -16,12 +16,13 @@ use std::fmt;
 use std::fmt::Write as _;
 use std::fs::{File, OpenOptions};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
 use std::time::Duration;
 
 use anyhow::{Result, anyhow};
 
 use super::{map, metrics, otlp};
+use rtok_sys::proc::{Output, ProgressRunner};
+
 use crate::config::{Config, Endpoint};
 use crate::plugin::Runtime;
 
@@ -229,10 +230,9 @@ async fn flush_into(cx: &Runtime, ep: &Endpoint, rep: &mut Report) -> Result<()>
         .build()?;
     let res = resource(cx);
 
-    let smark = store.otel_mark("sessions")?;
-    let stail = store.otel_mark("sessions_tail")?;
+    let smark = store.otel_mark("sessions_seq")?;
     let cmark = store.otel_mark("calls")?;
-    let sessions = store.sessions_pending_export(smark, stail, BATCH)?;
+    let sessions = store.sessions_pending_export(smark, BATCH)?;
     let mut calls = store.calls_after(cmark, BATCH)?;
     // Stop in front of the first row still running: the mark advances to the last exported
     // id, so the finished span ships on the flush after `finish`.
@@ -242,7 +242,7 @@ async fn flush_into(cx: &Runtime, ep: &Endpoint, rep: &mut Report) -> Result<()>
     }
     if !(sessions.is_empty() && calls.is_empty()) {
         let mut spans = Vec::with_capacity(sessions.len() + calls.len());
-        for se in &sessions {
+        for (_, se) in &sessions {
             let host = match se.host_id {
                 Some(id) => store.host_slug(id)?,
                 None => None,
@@ -260,7 +260,9 @@ async fn flush_into(cx: &Runtime, ep: &Endpoint, rep: &mut Report) -> Result<()>
                 if let Some(c) = calls.last() {
                     store.otel_advance("calls", i64::from(c.id))?;
                 }
-                advance_sessions(store, smark, stail, &sessions)?;
+                if let Some((seq, _)) = sessions.last() {
+                    store.otel_advance("sessions_seq", *seq)?;
+                }
             }
             Ok(false) => rep.skipped.push("traces"),
             Err(e) => push_error(rep, e.to_string()),
@@ -310,33 +312,6 @@ fn push_error(rep: &mut Report, msg: String) {
         }
         None => rep.error = Some(msg),
     }
-}
-
-fn advance_sessions(
-    store: &crate::store::Store,
-    smark: i64,
-    stail: i64,
-    exported: &[crate::store::models::Session],
-) -> Result<()> {
-    let Some(last) = exported
-        .iter()
-        .max_by(|a, b| a.ended_at.cmp(&b.ended_at).then_with(|| a.id.cmp(&b.id)))
-    else {
-        return Ok(());
-    };
-    let last_e = last.ended_at.unwrap();
-    let n_at_last = exported
-        .iter()
-        .filter(|s| s.ended_at == Some(last_e))
-        .count();
-    store.otel_advance("sessions", last_e)?;
-    let new_tail = if last_e > smark {
-        i64::try_from(n_at_last)?
-    } else {
-        stail + i64::try_from(n_at_last)?
-    };
-    store.otel_advance("sessions_tail", new_tail)?;
-    Ok(())
 }
 
 /// `Ok(false)`: HTTP 404, the backend has no pipeline for this stream.
@@ -454,7 +429,7 @@ pub fn status(cx: &Runtime) -> Result<String> {
         "logs: mark {} · {logs} pending",
         store.otel_mark("logs")?
     )?;
-    writeln!(out, "sessions: mark {}", store.otel_mark("sessions")?)?;
+    writeln!(out, "sessions: mark {}", store.otel_mark("sessions_seq")?)?;
     if let Some(l) = store.last_log("otel")? {
         writeln!(out, "last: {} {} {}", l.level, l.name, l.message)?;
     }
@@ -497,19 +472,16 @@ pub fn spawn_child(cx: &Runtime) {
     let Ok(exe) = std::env::current_exe() else {
         return;
     };
-    let mut cmd = Command::new(exe);
-    cmd.args(["otel", "flush", "--coalesce"])
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
+    let mut flush =
+        ProgressRunner::quiet(exe, ["otel", "flush", "--coalesce"]).output(Output::Detached);
     if !cx.config.home.as_os_str().is_empty() {
-        cmd.env("RTOK_HOME", &cx.config.home);
+        flush = flush.env("RTOK_HOME", &cx.config.home);
     }
     // The flush child outlives this hook; on Windows it would otherwise inherit whatever piped
     // our own stdout/stderr (the agent, a test harness) and hold that pipe open until the flush
     // gives up on the endpoint, so the reader's wait for EOF stalls (T83.3, T83.9). No-op on Unix.
     rtok_sys::stop_inheriting_own_stdio();
-    if let Ok(child) = cmd.spawn() {
+    if let Ok(child) = flush.spawn() {
         FlushTrace::spawned(child.id());
     }
 }
@@ -575,7 +547,7 @@ mod tests {
         }
         assert_eq!((r.spans, r.logs, r.points, r.posted), (0, 0, 0, 0));
         assert!(r.skipped.is_empty(), "a refusal is not a 404");
-        for stream in ["calls", "logs", "sessions", "sessions_tail"] {
+        for stream in ["calls", "logs", "sessions_seq"] {
             assert_eq!(s.otel_mark(stream).unwrap(), 0, "{stream} mark moved");
         }
         let last = s.last_log("otel").unwrap().expect("failure logged");

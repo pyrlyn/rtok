@@ -53,44 +53,61 @@ pub fn source(lane: Lane, method: &Method, path: &str) -> Option<Source> {
 /// Write the `usage` rows of a results `body` under the call that fetched it, and re-tag a
 /// file download that turned out to be Batch output. Best-effort: a store error logs and the
 /// response, already forwarded, is untouched. Returns how many rows were written.
+///
+/// `scope` names where the results came from (the request target without its query: it holds
+/// the batch or output-file id), which with a line's own id identifies one result (T583). A
+/// results location fetched again writes nothing for results it already recorded, and a
+/// partial download followed by a whole one adds only the rest. A line without an id has no
+/// identity to dedupe by and is recorded each time, as before.
 pub fn record(
     store: &Store,
     session: &str,
     call_id: i32,
     fallback_model: Option<&str>,
     source: Source,
+    scope: &str,
     body: &[u8],
 ) -> Result<usize> {
     let parsed = parse(body);
     if parsed.is_empty() {
         return Ok(0);
     }
-    let rows: Vec<_> = parsed
+    let keys: Vec<Option<String>> = parsed
         .iter()
         .map(|r| {
+            r.id.as_ref()
+                .map(|id| crate::store::hex_sha256(format!("{}\0{scope}\0{id}", r.api).as_bytes()))
+        })
+        .collect();
+    let rows: Vec<_> = parsed
+        .iter()
+        .zip(&keys)
+        .map(|(r, key)| {
             let u = r.usage;
             let model = r.model.as_deref().or(fallback_model);
             (
                 model,
                 r.api,
                 [u.input, u.cache_create, u.cache_read, u.output],
+                key.as_deref(),
             )
         })
         .collect();
-    store.insert_usage_rows(session, call_id, &rows)?;
+    let written = store.insert_usage_rows(session, call_id, &rows)?;
     if source == Source::File {
         store.set_call_kind(call_id, Lane::Batch.kind())?;
     }
-    Ok(rows.len())
+    Ok(written)
 }
 
 /// One result line's counters: the model that answered, the `usage.api` the shared wire
-/// parser belongs to, and the four disjoint counters.
+/// parser belongs to, and the four disjoint counters. `id` is the line's own request id.
 #[derive(Debug, PartialEq, Eq)]
 pub struct ResultUsage {
     pub model: Option<String>,
     pub api: &'static str,
     pub usage: Usage,
+    pub id: Option<String>,
 }
 
 /// Every line of `body` that carries usage. Splits on bytes so a malformed (or, past the
@@ -108,7 +125,9 @@ fn line_usage(line: &Value) -> Option<ResultUsage> {
             return None;
         }
         // The Anthropic wire reads `message.usage` from the object that holds `message`.
-        return found(&ANTHROPIC, API_ANTHROPIC, result, result.get("message")?);
+        let mut found = found(&ANTHROPIC, API_ANTHROPIC, result, result.get("message")?)?;
+        found.id = line_id(line, &["custom_id"]);
+        return Some(found);
     }
     let response = line.get("response")?;
     let ok = response
@@ -124,7 +143,19 @@ fn line_usage(line: &Value) -> Option<ResultUsage> {
         } else {
             (&OPENAI_CHAT, API_OPENAI_CHAT)
         };
-    found(wire, api, body, body)
+    let mut found = found(wire, api, body, body)?;
+    // OpenAI's `id` is unique per request line; `custom_id` is the caller's own label.
+    found.id = line_id(line, &["id", "custom_id"]);
+    Some(found)
+}
+
+/// The first of `fields` that is a non-empty string.
+fn line_id(line: &Value, fields: &[&str]) -> Option<String> {
+    fields
+        .iter()
+        .filter_map(|f| line.get(*f)?.as_str())
+        .find(|s| !s.is_empty())
+        .map(str::to_string)
 }
 
 fn found(
@@ -140,6 +171,7 @@ fn found(
             .map(str::to_string),
         api,
         usage: wire.usage_from_body(usage_in)?,
+        id: None,
     })
 }
 
@@ -179,6 +211,7 @@ mod tests {
                     cache_read: 4,
                     output: 5
                 },
+                id: Some("a".into()),
             }]
         );
     }
@@ -206,6 +239,113 @@ mod tests {
             got,
             vec![("openai_chat", 60, 40, 7), ("openai_responses", 9, 0, 2)]
         );
+    }
+
+    fn anthropic_line(id: Option<&str>, input: i64) -> Value {
+        let mut line = json!({"result":{"type":"succeeded","message":{
+            "model":"m","usage":{"input_tokens":input,"output_tokens":1}}}});
+        if let Some(id) = id {
+            line["custom_id"] = id.into();
+        }
+        line
+    }
+
+    /// An in-memory store holding session `s`, which the calls' foreign key needs.
+    fn fresh_store() -> Store {
+        let store = Store::open_in_memory().unwrap();
+        store
+            .upsert_session("s", Some(1), None, None, Some("proxy"))
+            .unwrap();
+        store
+    }
+
+    fn totals(store: &Store) -> (usize, i64) {
+        let rows = store.usage_rows("s").unwrap();
+        (rows.len(), rows.iter().map(|r| r.input).sum())
+    }
+
+    /// T583: the same results location fetched again, under a new call, adds nothing; a
+    /// partial download followed by a whole one adds only what was missing; another batch with
+    /// the same custom ids is not collapsed into the first; a line with no id keeps counting.
+    #[test]
+    fn a_result_is_recorded_once_per_location() {
+        let store = fresh_store();
+        let call = || {
+            store
+                .insert_call(
+                    "s",
+                    "proxy",
+                    "api_request:batch",
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                )
+                .unwrap()
+        };
+        let rec = |scope: &str, body: &[u8]| {
+            record(&store, "s", call(), None, Source::Batch, scope, body).unwrap()
+        };
+        let (a, b) = (anthropic_line(Some("a"), 100), anthropic_line(Some("b"), 7));
+        let first = jsonl(std::slice::from_ref(&a));
+        let whole = jsonl(&[a.clone(), b.clone()]);
+        assert_eq!(rec("https://up/batches/1/results", &first), 1);
+        assert_eq!(totals(&store), (1, 100));
+        // A replay, and a whole file that contains the partial one.
+        assert_eq!(rec("https://up/batches/1/results", &first), 0);
+        assert_eq!(rec("https://up/batches/1/results", &whole), 1);
+        assert_eq!(rec("https://up/batches/1/results", &whole), 0);
+        assert_eq!(totals(&store), (2, 107));
+        // Same custom ids in another batch are other requests.
+        assert_eq!(rec("https://up/batches/2/results", &whole), 2);
+        assert_eq!(totals(&store), (4, 214));
+        // No id, no identity: nothing to dedupe by, so both fetches count as they used to.
+        let anonymous = jsonl(&[anthropic_line(None, 3)]);
+        assert_eq!(rec("https://up/batches/3/results", &anonymous), 1);
+        assert_eq!(rec("https://up/batches/3/results", &anonymous), 1);
+        assert_eq!(totals(&store), (6, 220));
+    }
+
+    #[test]
+    fn openai_results_are_keyed_by_the_request_line_id() {
+        let store = fresh_store();
+        let line = |id: &str, custom: &str| {
+            json!({"id":id,"custom_id":custom,"error":null,"response":{"status_code":200,"body":{
+                "object":"chat.completion","model":"gpt-5",
+                "usage":{"prompt_tokens":10,"completion_tokens":2}}}})
+        };
+        let mut seen = 0;
+        for _ in 0..2 {
+            let call = store
+                .insert_call(
+                    "s",
+                    "proxy",
+                    "api_request:files",
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                )
+                .unwrap();
+            let body = jsonl(&[line("batch_req_1", "x"), line("batch_req_2", "x")]);
+            seen += record(
+                &store,
+                "s",
+                call,
+                None,
+                Source::File,
+                "https://up/files/f/content",
+                &body,
+            )
+            .unwrap();
+        }
+        assert_eq!(
+            seen, 2,
+            "two lines sharing a custom_id are still two requests"
+        );
+        assert_eq!(totals(&store), (2, 20));
     }
 
     #[test]

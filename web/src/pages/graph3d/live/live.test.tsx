@@ -5,14 +5,15 @@
 // @vitest-environment happy-dom
 import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { drillServer } from "../../../api/sampleDrill";
+import { BIG, drillServer } from "../../../api/sampleDrill";
 import { project } from "../../../api/sampleRows";
 import type { Snapshot } from "../../../api/snapshot.gen";
+import type { Connect, Frame } from "../../../api/ws";
 import { richSnapshot } from "../../fixtures";
 import { mount, wire } from "../../testHelpers";
 import { VIEW_KEY } from "../ProjectsOverview";
-import { batch, end, event } from "./callsFixtures";
-import { FOCUS_MS } from "./lit";
+import { done, LABELS, running, view, windowOf } from "./callsFixtures";
+import { FOCUS_MS, LABEL_MS } from "./lit";
 import { HIDE_KEY, SPLIT_KEY } from "./Split";
 
 const snap: Snapshot = {
@@ -23,6 +24,12 @@ const snap: Snapshot = {
 beforeEach(() => {
     localStorage.clear();
     localStorage.setItem(VIEW_KEY, "list");
+    // The cards' numbers jump under reduced motion (T329.53), so a test reads the total at once.
+    vi.stubGlobal("matchMedia", (q: string) => ({
+        matches: q.includes("reduce"),
+        addEventListener: () => {},
+        removeEventListener: () => {},
+    }));
 });
 afterEach(() => {
     cleanup();
@@ -46,13 +53,13 @@ describe("live graph", () => {
         expect(await screen.findByText("Waiting for graph calls")).toBeTruthy();
         await waitFor(() => expect(calls(w.sent)).toEqual([true]));
 
-        act(() => w.frame({ type: "calls", batch: batch([event({ call: "a" })]) }));
+        act(() => w.frame({ type: "calls", calls: view({ running: [running("a")] }) }));
         await waitFor(() => expect(screen.queryByText("Waiting for graph calls")).toBeNull());
         expect(
             within(screen.getByRole("list", { name: "running calls" })).getByText("callers"),
         ).toBeTruthy();
 
-        act(() => w.frame({ type: "calls", batch: batch([end("a", 1000, 250)]) }));
+        act(() => w.frame({ type: "calls", calls: view({ feed: [done("a", 1000, 250)] }) }));
         const table = await screen.findByRole("table", { name: "graph calls" });
         await waitFor(() => expect(within(table).getByText(/750 saved/)).toBeTruthy());
         expect(screen.getByText("75%")).toBeTruthy();
@@ -62,38 +69,22 @@ describe("live graph", () => {
         const w = wire(snap);
         mount(w.connect, "/graph");
         await canvas();
-        const row = (kind: string, ref_id: string | null) => ({
-            id: 1,
-            kind,
-            before_bytes: 0,
-            after_bytes: 0,
-            est_before: 0,
-            est_after: 0,
-            ref_id,
-        });
         act(() =>
             w.frame({
                 type: "calls",
-                batch: batch([
-                    end("a", 0, 0, {
-                        ms: 40,
-                        symbols: 2,
-                        symbols_returned: 1,
-                        files_touched: 3,
-                        projects_hit: 2,
-                        total: 2,
-                        samples: [row("lsp_fallback", null)],
-                    }),
-                    end("b", 0, 0, {
-                        ms: 1500,
-                        symbols: 1,
-                        symbols_returned: 1,
-                        files_touched: 2,
-                        projects_hit: 1,
-                        total: 1,
-                        samples: [row("cap", "ab")],
-                    }),
-                ]),
+                calls: view({
+                    feed: [done("b", 0, 0, { ms: 1500 }), done("a", 0, 0, { ms: 40 })],
+                    totals: {
+                        latency: { p50: 40, p95: 1500 },
+                        symbols: 3,
+                        symbols_returned: 2,
+                        crossed: 1,
+                        files_touched: 5,
+                        projects_hit: 3,
+                        fallbacks: 1,
+                        caps: 1,
+                    },
+                }),
             }),
         );
         const card = async (label: string) =>
@@ -107,6 +98,40 @@ describe("live graph", () => {
         expect(await card("fallbacks")).toContain("11 capped");
     });
 
+    test("calls and tokens saved each get a sparkline named for the window's span", async () => {
+        const w = wire(snap);
+        mount(w.connect, "/graph");
+        await canvas();
+        const feed = [done("a", 10, 4)];
+        const spark = { span_ms: 300_000, calls: [0, 2, 1], saved: [0, 8, 4] };
+        act(() =>
+            w.frame({
+                type: "calls",
+                calls: view({ feed, windows: LABELS.map((l) => windowOf(l, feed, { spark })) }),
+            }),
+        );
+        expect(await screen.findByRole("img", { name: "calls over the last 5 min" })).toBeTruthy();
+        expect(screen.getByRole("img", { name: "tokens saved over the last 5 min" })).toBeTruthy();
+    });
+
+    test("a call on a project outside the scope is marked in the feed and does not light the canvas", async () => {
+        const w = wire(snap);
+        mount(w.connect, "/graph");
+        const svg = await canvas();
+        const feed = [
+            done("b", 10, 4, { project: "pyrlyn" }),
+            done("a", 10, 4, { project: "ketch" }),
+        ];
+        act(() => w.frame({ type: "calls", calls: view({ feed }) }));
+        const table = await screen.findByRole("table", { name: "graph calls" });
+        // The snapshot selects rtok, which links nothing here, so ketch is outside too.
+        await waitFor(() => expect(within(table).getAllByText("outside scope")).toHaveLength(2));
+        expect(svg.querySelectorAll("[data-testid=heat]")).toHaveLength(0);
+        act(() => w.frame({ type: "calls", calls: view({ feed: [done("c", 10, 4)] }) }));
+        await waitFor(() => expect(svg.querySelectorAll("[data-testid=heat]")).toHaveLength(1));
+        expect(within(table).queryByText("outside scope")).toBeNull();
+    });
+
     test("a failed call is red in the feed", async () => {
         const w = wire(snap);
         mount(w.connect, "/graph");
@@ -114,7 +139,7 @@ describe("live graph", () => {
         act(() =>
             w.frame({
                 type: "calls",
-                batch: batch([end("a", 0, 0, { ok: false, error: "no backend" })]),
+                calls: view({ feed: [done("a", 0, 0, { ok: false, error: "no backend" })] }),
             }),
         );
         const cell = await screen.findByText("no backend");
@@ -137,13 +162,13 @@ describe("live graph", () => {
         const w = wire(snap);
         mount(w.connect, "/graph");
         const svg = await canvas();
-        const running = ["a", "b"].map((call) => event({ call }));
-        act(() => w.frame({ type: "calls", batch: batch(running) }));
+        const calls = ["a", "b"].map((call) => running(call));
+        act(() => w.frame({ type: "calls", calls: view({ running: calls }) }));
         await waitFor(() => expect(svg.querySelectorAll("[data-testid=accent]")).toHaveLength(2));
         expect(svg.querySelectorAll("[data-running]")).toHaveLength(1);
 
-        const ended = [end("a", 10, 4), end("b", 0, 0, { ok: false, error: "no backend" })];
-        act(() => w.frame({ type: "calls", batch: batch(ended) }));
+        const ended = [done("b", 0, 0, { ok: false, error: "no backend" }), done("a", 10, 4)];
+        act(() => w.frame({ type: "calls", calls: view({ feed: ended }) }));
         await waitFor(() => expect(svg.querySelectorAll("[data-testid=failed]")).toHaveLength(1));
         expect(svg.querySelectorAll("[data-testid=heat]")).toHaveLength(1);
         expect(svg.querySelectorAll("[data-testid=accent]")).toHaveLength(0);
@@ -153,8 +178,8 @@ describe("live graph", () => {
         const w = wire(snap);
         mount(w.connect, "/graph");
         const svg = await canvas();
-        const many = Array.from({ length: 10 }, (_, i) => event({ call: `c${i}` }));
-        act(() => w.frame({ type: "calls", batch: batch(many) }));
+        const many = Array.from({ length: 10 }, (_, i) => running(`c${i}`));
+        act(() => w.frame({ type: "calls", calls: view({ running: many }) }));
         expect(await screen.findByText("busy: 2 more")).toBeTruthy();
         expect(svg.querySelectorAll("[data-testid=accent]")).toHaveLength(8);
     });
@@ -175,16 +200,52 @@ describe("live graph", () => {
         const height = () => Number(svg.getAttribute("viewBox")!.split(" ")[3]);
         await waitFor(() => expect(height()).toBeGreaterThan(140));
         act(() =>
-            w.frame({ type: "calls", batch: batch([event({ call: "a", project: "ketch" })]) }),
+            w.frame({
+                type: "calls",
+                calls: view({ running: [running("a")] }),
+            }),
         );
         await waitFor(() => expect(height()).toBe(140));
         act(() =>
-            w.frame({ type: "calls", batch: batch([end("a", 10, 4, { project: "ketch" })]) }),
+            w.frame({
+                type: "calls",
+                calls: view({ feed: [done("a", 10, 4)] }),
+            }),
         );
         // The call has ended; the next one-second tick finds it older than the hold.
         const real = Date.now();
         vi.spyOn(Date, "now").mockReturnValue(real + FOCUS_MS + 2000);
         await waitFor(() => expect(height()).toBeGreaterThan(140), { timeout: 3000 });
+    });
+
+    test("the caller column names the agent and host, else the session, and the filter lists the names", async () => {
+        const w = wire(snap);
+        mount(w.connect, "/graph");
+        await canvas();
+        act(() =>
+            w.frame({
+                type: "calls",
+                calls: view({
+                    feed: [
+                        done("b", 2, 1, {
+                            caller: "mcp-4242",
+                            session: "mcp-4242",
+                            target: "beta",
+                        }),
+                        done("a", 2, 1, { target: "alpha" }),
+                    ],
+                }),
+            }),
+        );
+        await screen.findByText("alpha");
+        const table = within(screen.getByRole("table", { name: "graph calls" }));
+        expect(table.getAllByText("claude 3f9a1c2e")).toHaveLength(1);
+        expect(table.getByText("mcp-4242")).toBeTruthy();
+        const pick = screen.getByLabelText("filter by caller") as HTMLSelectElement;
+        expect([...pick.options].map((o) => o.value)).toEqual(["", "claude 3f9a1c2e", "mcp-4242"]);
+        fireEvent.change(pick, { target: { value: "mcp-4242" } });
+        expect(table.queryByText("alpha")).toBeNull();
+        expect(table.getByText("beta")).toBeTruthy();
     });
 
     test("the 2D/3D switch is remembered; 3D without WebGL says so and still shows 2D", async () => {
@@ -204,16 +265,17 @@ describe("live graph", () => {
         const w = wire(snap);
         mount(w.connect, "/graph");
         await canvas();
-        act(() =>
-            w.frame({ type: "calls", batch: batch([end("a", 100, 50, { target: "alpha" })]) }),
-        );
+        const alpha = done("a", 100, 50, { target: "alpha" });
+        act(() => w.frame({ type: "calls", calls: view({ feed: [alpha] }) }));
         await screen.findByText("alpha");
 
         fireEvent.click(screen.getByRole("button", { name: "Freeze" }));
         act(() =>
             w.frame({
                 type: "calls",
-                batch: batch([end("b", 100, 50, { target: "beta" }), end("c", 100, 50)]),
+                calls: view({
+                    feed: [done("c", 100, 50), done("b", 100, 50, { target: "beta" }), alpha],
+                }),
             }),
         );
         expect(await screen.findByText("2 held")).toBeTruthy();
@@ -222,22 +284,37 @@ describe("live graph", () => {
         fireEvent.click(screen.getByRole("button", { name: "Unfreeze" }));
         expect(await screen.findByText("beta")).toBeTruthy();
         await waitFor(() => expect(screen.queryByText("2 held")).toBeNull());
-        fireEvent.click(screen.getByRole("button", { name: "since open" }));
+        fireEvent.click(screen.getByRole("button", { name: "since start" }));
         // Three calls of 100 tokens each, none dropped by the freeze.
         expect(await screen.findByText("300")).toBeTruthy();
     });
 
-    test("the window selector recomputes the totals", async () => {
+    test("each window chip shows that window's totals from the frame", async () => {
         const w = wire(snap);
         mount(w.connect, "/graph");
         await canvas();
-        act(() => w.frame({ type: "calls", batch: batch([end("a", 10, 4)]) }));
+        const feed = [done("a", 10, 4)];
+        act(() =>
+            w.frame({
+                type: "calls",
+                calls: view({
+                    feed,
+                    windows: LABELS.map((label, i) => windowOf(label, feed, { calls: i + 1 })),
+                }),
+            }),
+        );
         await screen.findByRole("table", { name: "graph calls" });
-        for (const label of ["1 min", "5 min", "15 min", "since open"]) {
+        const card = () =>
+            screen
+                .getAllByText("calls")
+                .map((e) => e.parentElement?.textContent)
+                .find((t) => t?.includes("failed"));
+        for (const [i, label] of LABELS.entries()) {
             fireEvent.click(screen.getByRole("button", { name: label }));
             expect(screen.getByRole("button", { name: label }).getAttribute("aria-pressed")).toBe(
                 "true",
             );
+            expect(card()).toBe(`calls${i + 1}0 failed`);
         }
     });
 
@@ -245,9 +322,11 @@ describe("live graph", () => {
         const w = wire(snap);
         mount(w.connect, "/graph");
         await canvas();
-        const listed = Array.from({ length: 100 }, (_, i) => end(`c${i}`, 10, 4));
-        act(() => w.frame({ type: "calls", batch: batch(listed, 400) }));
-        fireEvent.click(screen.getByRole("button", { name: "since open" }));
+        const listed = Array.from({ length: 100 }, (_, i) => done(`c${i}`, 10, 4));
+        act(() =>
+            w.frame({ type: "calls", calls: view({ feed: listed, totals: { calls: 500 } }) }),
+        );
+        fireEvent.click(screen.getByRole("button", { name: "since start" }));
         await waitFor(() => expect(screen.getByText("500")).toBeTruthy());
     });
 });
@@ -303,6 +382,63 @@ describe("split", () => {
         expect(localStorage.getItem(SPLIT_KEY)).toBe("0.55");
         fireEvent.doubleClick(bar);
         expect(bar.getAttribute("aria-valuenow")).toBe("50");
+    });
+
+    test("calls on nodes the cap folded away are counted on the +N more group", async () => {
+        const big = {
+            ...snap,
+            projects: [project(1, "rtok", { selected: true }), project(3, BIG)],
+        };
+        let push: (f: Frame) => void = () => {};
+        const served = drillServer(big);
+        const connect: Connect = (h) => ((push = h.onFrame), served(h));
+        mount(connect, "/graph?p=3");
+        const svg = await canvas();
+        await waitFor(() =>
+            expect(svg.querySelectorAll("[data-testid=node-live]").length).toBeGreaterThan(100),
+        );
+        const hidden = running("a", { project: BIG, target: "fn_599" });
+        act(() => push({ type: "calls", calls: view({ running: [hidden] }) }));
+        const list = await screen.findByRole("list", { name: "folded calls" });
+        expect(within(list).getByText(/^\+\d+ more · 1 folded$/)).toBeTruthy();
+    });
+
+    test("a running call gets a label with its tool and a counter, which fades once the call ends", async () => {
+        const w = wire(snap);
+        mount(w.connect, "/graph");
+        await canvas();
+        act(() => w.frame({ type: "calls", calls: view({ running: [running("a")] }) }));
+        const label = await screen.findByTestId("run-label");
+        expect(label.textContent).toMatch(/^callers \d+s$/);
+        expect(label.getAttribute("data-state")).toBe("running");
+
+        act(() =>
+            w.frame({ type: "calls", calls: view({ feed: [done("a", 10, 4, { ms: 250 })] }) }),
+        );
+        await waitFor(() =>
+            expect(screen.getByTestId("run-label").textContent).toBe("callers 250 ms"),
+        );
+        // The next one-second tick finds the call older than the label's life.
+        const real = Date.now();
+        vi.spyOn(Date, "now").mockReturnValue(real + LABEL_MS + 2000);
+        await waitFor(() => expect(screen.queryByTestId("run-label")).toBeNull(), {
+            timeout: 3000,
+        });
+    });
+
+    test("a call outside the scope gets no label, though the running list still shows it", async () => {
+        const w = wire(snap);
+        mount(w.connect, "/graph");
+        await canvas();
+        act(() =>
+            w.frame({
+                type: "calls",
+                calls: view({ running: [running("a", { project: "ketch" })] }),
+            }),
+        );
+        const list = await screen.findByRole("list", { name: "running calls" });
+        expect(within(list).getByText("callers")).toBeTruthy();
+        expect(screen.queryByTestId("run-label")).toBeNull();
     });
 
     test("the live graph follows the drilled project", async () => {

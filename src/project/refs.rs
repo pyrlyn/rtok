@@ -118,10 +118,19 @@ impl Ctx {
         what: &str,
     ) -> Vec<PathBuf> {
         let base = from.parent().unwrap_or(&self.root).to_path_buf();
+        // pnpm and npm: a `!pattern` removes its matches from the others, wherever it stands.
+        // Cargo and uv have no such syntax, so for them this set stays empty.
+        let skipped = negated(patterns, marker);
         let mut dirs = Vec::new();
         for pat in patterns.iter().filter(|p| !p.starts_with('!')) {
             let glob = pat.contains(['*', '?', '[', '{']);
             for dir in expand(&base, pat, marker) {
+                let rel = pathdiff::diff_paths(&dir, &base).unwrap_or_else(|| dir.clone());
+                if skipped
+                    .is_match(Path::new(&rel.to_string_lossy().replace('\\', "/")).join(marker))
+                {
+                    continue;
+                }
                 let written = if glob {
                     dir.to_string_lossy().into_owned()
                 } else {
@@ -133,6 +142,22 @@ impl Ctx {
         }
         dirs
     }
+}
+
+/// The `!pattern`s as globs over `<member dir>/<marker>`, the way pnpm matches its ignore
+/// list: `!packages/skip` drops that member, `!**/gen/**` every member below a `gen`.
+fn negated(patterns: &[String], marker: &str) -> globset::GlobSet {
+    let mut set = globset::GlobSetBuilder::new();
+    for pat in patterns.iter().filter_map(|p| p.strip_prefix('!')) {
+        let pat = pat.trim_start_matches("./").trim_end_matches('/');
+        if let Ok(glob) = globset::GlobBuilder::new(&format!("{pat}/{marker}"))
+            .literal_separator(true)
+            .build()
+        {
+            set.add(glob);
+        }
+    }
+    set.build().unwrap_or_else(|_| globset::GlobSet::empty())
 }
 
 /// `pattern` below `base`: the directory itself when it has no glob, else the existing matches
@@ -343,6 +368,47 @@ registry-patch = { git = "https://example.com/x" }
         assert_eq!(refs[0].1, "npm workspace member ../ws");
         assert_eq!(refs[2].1, "npm dependencies lib");
         assert_eq!(warnings, ["package.json: references ../gone, not found"]);
+    }
+
+    /// T567: a `!pattern` of `pnpm-workspace.yaml` subtracts its matches, whatever its place in
+    /// the list: an excluded member's manifest is never read, so its dependencies are neither
+    /// referenced nor warned about. The root package stays in.
+    #[test]
+    fn negative_workspace_patterns_subtract_members() {
+        let fx = Fx::new();
+        fx.file(
+            "proj/package.json",
+            r#"{"dependencies": {"root": "file:../rootdep"}}"#,
+        );
+        fx.file(
+            "proj/pnpm-workspace.yaml",
+            "packages:\n  - '!packages/skip'\n  - 'packages/*'\n  - 'libs/*'\n  - '!**/gen/**'\n  \
+             - '../outer-a'\n  - '../outer-b'\n  - '!../outer-b'\n",
+        );
+        for (pkg, dep) in [
+            ("proj/packages/keep", "keepdep"),
+            ("proj/packages/skip", "skipdep"),
+            ("proj/libs/ok", "okdep"),
+            ("proj/libs/gen", "gendep"),
+            ("outer-a", "adep"),
+            ("outer-b", "bdep"),
+        ] {
+            let up = if pkg.starts_with("proj") {
+                "../../../"
+            } else {
+                "../"
+            };
+            fx.file(
+                &format!("{pkg}/package.json"),
+                &format!(r#"{{"dependencies": {{"d": "file:{up}{dep}"}}}}"#),
+            );
+            fx.dir(dep);
+        }
+        fx.dir("rootdep");
+        let (refs, warnings) = fx.run();
+        let dirs: Vec<&str> = refs.iter().map(|(d, _)| d.as_str()).collect();
+        assert_eq!(dirs, ["outer-a", "rootdep", "keepdep", "okdep", "adep"]);
+        assert_eq!(warnings, Vec::<String>::new());
     }
 
     #[test]

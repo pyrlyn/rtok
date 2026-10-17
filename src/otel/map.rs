@@ -333,6 +333,7 @@ mod tests {
             ms: Some(25.0),
             ok: 1,
             error: None,
+            service_tier: None,
         }
     }
 
