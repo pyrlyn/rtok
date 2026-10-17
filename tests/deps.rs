@@ -31,6 +31,29 @@ fn only_store_depends_on_diesel() {
     );
 }
 
+/// T668: semantic memory is the opt-in HTTP embedder over the stored hash/vector table. No
+/// vector, ONNX or embedding-model crate may enter any member's manifest (default or feature).
+#[test]
+fn no_member_depends_on_a_vector_or_model_crate() {
+    for dep in [
+        "ort",
+        "candle-core",
+        "fastembed",
+        "sqlite-vec",
+        "usearch",
+        "hnsw_rs",
+        "qdrant-client",
+        "lancedb",
+        "tract-onnx",
+    ] {
+        assert_eq!(
+            owners_of(dep),
+            Vec::<String>::new(),
+            "{dep} is not allowed (T668)"
+        );
+    }
+}
+
 /// T329.10: the graph text backend searches in process (D6, D18). Neither its module nor the walk
 /// it shares with `search` may name a way to start a program, so `rg`, `grep` and `ssh` cannot be
 /// run from it.

@@ -283,9 +283,12 @@ pub async fn serve(cfg: &Config) -> Result<()> {
     let listener = TcpListener::bind(&addr)
         .await
         .with_context(|| format!("bind {addr}"))?;
-    axum::serve(listener, app(state))
-        .await
-        .context("proxy server")
+    axum::serve(
+        listener,
+        app(state).into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    )
+    .await
+    .context("proxy server")
 }
 
 /// Upstream chunks buffered between the tee task and the client stream before the tee
@@ -869,6 +872,26 @@ fn rewrite_tools(state: &ProxyState, original: Bytes) -> (Bytes, Option<tools_re
 }
 
 fn record_tools_rewrite(state: &ProxyState, r: &Recorded, delta: tools_rewrite::Delta) {
+    // The archive is content-addressed, so the same catalog keeps one id and one file. A failed
+    // write leaves the saving unrecoverable, so it is logged and the request still goes out.
+    let ref_id = match (delta.original.as_deref(), state.archive_dir.as_deref()) {
+        (Some(tools), Some(dir)) => {
+            match state.store.put_archive(&r.session, tools.as_bytes(), dir) {
+                Ok(id) => Some(id),
+                Err(e) => {
+                    log(
+                        state,
+                        &r.session,
+                        Some(r.call_id),
+                        "error",
+                        &format!("tools rewrite archive: {e:#}"),
+                    );
+                    None
+                }
+            }
+        }
+        _ => None,
+    };
     let m = Measurement {
         plugin: "proxy",
         kind: "tools_rewrite",
@@ -876,7 +899,7 @@ fn record_tools_rewrite(state: &ProxyState, r: &Recorded, delta: tools_rewrite::
         after_bytes: delta.after_bytes,
         est_before: delta.est_before,
         est_after: delta.est_after,
-        ref_id: None,
+        ref_id,
         call_id: Some(r.call_id),
     };
     if let Err(e) = state.store.insert_measurement(&r.session, &m) {

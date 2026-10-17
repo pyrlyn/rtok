@@ -1,0 +1,4 @@
+ README.md                 | 3 +++
+ rules/default.toml        | 2 +-
+ src/plugins/cmd/filter.rs | 2 ++
+ 3 files changed, 6 insertions(+), 1 deletion(-)

@@ -26,6 +26,12 @@ pub(super) enum MemoryCmd {
         #[arg(long)]
         project: Option<String>,
     },
+    // T666.1
+    /// Save notes an external program extracts from a transcript (off by default)
+    Extract {
+        /// Claude Code transcript (`.jsonl`)
+        transcript: std::path::PathBuf,
+    },
     // T69.1
     /// Retire a note: a tombstone — never recalled or searched, body kept
     Retire {
@@ -33,6 +39,19 @@ pub(super) enum MemoryCmd {
         /// The replacement note id this one is superseded by
         #[arg(long)]
         superseded_by: Option<i32>,
+    },
+    // T669
+    /// Retire notes nobody read for a long time (a dry run unless `--apply`)
+    Forget {
+        /// Only this project
+        #[arg(long)]
+        project: Option<String>,
+        /// Idle days; default `[plugins.memory] forget_after_days`
+        #[arg(long)]
+        days: Option<u32>,
+        /// Retire the notes; without it nothing is written
+        #[arg(long)]
+        apply: bool,
     },
     // T69.1
     /// Pin a note so it leads SessionStart recall
@@ -105,11 +124,29 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: MemoryCmd) -> Result<()
             let mut out = io::stdout().lock();
             crate::plugins::memory::export::run(&cfg, project.as_deref(), &mut out)?;
         }
+        MemoryCmd::Extract { transcript } => {
+            let cx = crate::plugin::Runtime::open(cfg, "memory")?;
+            println!(
+                "{}",
+                crate::plugins::memory::extract::run_configured(&cx, &transcript)?
+            );
+        }
         MemoryCmd::Retire { id, superseded_by } => {
             let cx = crate::plugin::Runtime::open(cfg, "memory")?;
             println!(
                 "{}",
                 crate::plugins::memory::mem_update(&cx, id, true, superseded_by, None)?
+            );
+        }
+        MemoryCmd::Forget {
+            project,
+            days,
+            apply,
+        } => {
+            let cx = crate::plugin::Runtime::open(cfg, "memory")?;
+            println!(
+                "{}",
+                crate::plugins::memory::mem_forget(&cx, project.as_deref(), days, apply)?
             );
         }
         MemoryCmd::Pin { id } => {

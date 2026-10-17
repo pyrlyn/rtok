@@ -29,9 +29,9 @@ Competitor: [rtk](https://github.com/rtk-ai/rtk) · category: Command-output fil
 
 ## Verdict
 
-**rtok is better overall for agent work; rtk is better at filter coverage.** rtk shrinks more command families out of the box, but it is lossy and its only independent bill measurement is neutral-to-negative. rtok keeps the raw output, measures every cut, and fits the cache-aware stack. Pick rtk if you only want the biggest shell-output filter set and accept lossy cuts (`docs/comparison.md` §7 says the same). The head-to-head token and latency numbers below are still pending.
+**rtok is better overall for agent work; rtk is better at filter coverage.** rtk shrinks more command families out of the box, but it is lossy and its only independent bill measurement is neutral-to-negative. rtok keeps the raw output, measures every cut, and fits the cache-aware stack. Pick rtk if you only want the biggest shell-output filter set and accept lossy cuts (`docs/comparison.md` §7 says the same). Head-to-head token numbers are in the sections below.
 
-**Gap to close:** competitor ahead on filter coverage (~100+ filters vs rtok's 28 rule families). Tracked as [T661](../../plan.md) — make rtok beat this.
+**Gap to close:** competitor ahead on filter coverage (~100+ filters vs rtok's 28 rule families). Tracked as [T688](../../done.md) — make rtok beat this.
 
 ## Savings (both sides)
 
@@ -58,126 +58,343 @@ Vendor figures are claims unless the source says *measured*.
 | rtok one Rust process p95 8.25 ms per hook call; static binary 18.9 MiB | `docs/comparison.md` §3 (research.md §2, Gate P17, 2026-09-09) |
 | rtok table formatters: `docker ps` 3147→1190, `kubectl get` 4542→1731, `ps aux` 2341→870 bytes | `research.md` §9.3 (T58.5) |
 
-## Own measurements
+## What changed
 
-Shared clean harness, `bench/harness` (README there lists the fairness rules). Reproduce with
-`python3 bench/harness/run.py rtk --rtok-pr feat/rtk-parity-filters`.
+Re-run on 2026-10-14 (Docker, Colima profile `rtok-bench`, 4 CPU / 8 GiB) of the shared harness: main `7a7666ad` vs rtok#1077 `0ef259b2` vs rtk 1.0.1.
 
-* Workload: the rtok repo at `12ebeb972e2bea88bec939a9ca9b436db884de13`, the same commit for all three columns.
-* `rtok` = main `12ebeb972e2b`; `rtok-pr` = rtok#1077 `0129fe203dda` (built before the narrowing fix 462d3f86, which does not change these cases); `rtk` = rtk 1.0.1 (release tarball, sha256-checked).
-* Every command's real output is captured once and replayed byte-for-byte to every tool. Each call gets a fresh HOME/tool state. The tokenizer is tiktoken 0.12.0 o200k_base. Every tool runs every case twice and the outputs must match: all 29 cases were deterministic.
-* Latency: median of 30 rounds in a seeded shuffled order after 3 warmups. It is the tool's overhead on a replayed command (includes a ~30 ms Python shim for every tool), not cargo or git time.
-* Results: `bench/harness/results/rtk/20261014-212517/` (`results.json`, `samples/<case>/{raw,rtok,rtok-pr,rtk}.txt`).
+* rtok-pr is never worse than the raw output: the never-worse guard prints the original when the trailer would make it longer (`find_cargo_toml`, `rg_files_with`, `tree_crates_l2`).
+* The trailer is short (`[rtok 3bc88fd9efbd · 11 lines]`, about 15 tokens instead of about 90); `--no-ref` drops it.
+* Largest gains over main: `cargo build` 0.5 % → 64.6 %, `git status` −13.2 % → 52.8 %, `git diff` −9.8 % → 29.1 %, `ls -la` 46.1 % → 73.7 %, `cargo test` 90.8 % → 96.6 %.
 
-### `cargo test`
+## Performance figures
 
-| case | raw | rtok | rtok-pr | rtk | ms rtok / pr / rtk |
-|---|---:|---:|---:|---:|---|
-| `cargo_test_pass` | 1756 | 158 (91.0 %) | 100 (94.3 %) | 16 (99.1 %) | 67.19 / 71.37 / 65.28 |
-| `cargo_test_fail` | 1751 | 164 (90.6 %) | 168 (90.4 %) | 136 (92.2 %) | 82.38 / 82.75 / 97.64 |
-| **total** | 3507 | **322 (90.8 %)** | **268 (92.4 %)** | **152 (95.7 %)** | |
+Token savings per command, re-run 2026-10-14 (total over its cases, tiktoken o200k_base, higher is better; cells are output tokens and saving vs raw):
 
-### `cargo build`
+| Command | raw | rtok main | rtok PR | rtok PR `--no-ref` | rtk |
+|---|---:|---:|---:|---:|---:|
+| `cargo test` | 3507 | 322 (90.8%) | 119 (96.6%) | 88 (97.5%) | 151 (95.7%) |
+| `cargo build` | 390 | 388 (0.5%) | 138 (64.6%) | 76 (80.5%) | 251 (35.6%) |
+| `find` | 5864 | 1482 (74.7%) | 1148 (80.4%) | 1100 (81.2%) | 589 (90.0%) |
+| `ls -la` | 2141 | 1155 (46.1%) | 564 (73.7%) | 518 (75.8%) | 599 (72.0%) |
+| `git status` | 144 | 163 (-13.2%) | 68 (52.8%) | 54 (62.5%) | 54 (62.5%) |
+| `git diff` | 357 | 392 (-9.8%) | 253 (29.1%) | 237 (33.6%) | 294 (17.6%) |
+| `git log` | 6502 | 1398 (78.5%) | 1182 (81.8%) | 1132 (82.6%) | 3830 (41.1%) |
+| `grep` | 2578 | 1266 (50.9%) | 1107 (57.1%) | 1076 (58.3%) | 2578 (0.0%) |
+| `rg` | 671 | 808 (-20.4%) | 671 (0.0%) | 671 (0.0%) | 648 (3.4%) |
+| `cat` | 6414 | 1512 (76.4%) | 1359 (78.8%) | 1326 (79.3%) | 6414 (0.0%) |
+| `tree` | 367 | 444 (-21.0%) | 367 (0.0%) | 360 (1.9%) | 353 (3.8%) |
+| `wc` | 33 | 33 (0.0%) | 33 (0.0%) | 33 (0.0%) | 24 (27.3%) |
 
-| case | raw | rtok | rtok-pr | rtk | ms rtok / pr / rtk |
-|---|---:|---:|---:|---:|---|
-| `cargo_build_noop` | 45 | 45 (0.0 %) | 45 (0.0 %) | 30 (33.3 %) | 91.21 / 96.06 / 110.43 |
-| `cargo_build_incremental` | 45 | 45 (0.0 %) | 45 (0.0 %) | 30 (33.3 %) | 54.1 / 65.09 / 52.61 |
-| `cargo_build_warning` | 167 | 166 (0.6 %) | 112 (32.9 %) | 103 (38.3 %) | 59.95 / 71.99 / 61.66 |
-| `cargo_build_error` | 133 | 132 (0.8 %) | 132 (0.8 %) | 88 (33.8 %) | 64.22 / 66.56 / 59.08 |
-| **total** | 390 | **388 (0.5 %)** | **334 (14.4 %)** | **251 (35.6 %)** | |
+Latency is flat (re-run 2026-10-14, about 31–35 ms for every tool): it is dominated by the ~30 ms Python replay shim, so it says nothing about filter speed.
 
-### `find`
+## Filter coverage (checked 2026-10-15)
 
-| case | raw | rtok | rtok-pr | rtk | ms rtok / pr / rtk |
-|---|---:|---:|---:|---:|---|
-| `find_rs` | 4561 | 725 (84.1 %) | 725 (84.1 %) | 232 (94.9 %) | 83.09 / 64.85 / 85.33 |
-| `find_src_files` | 807 | 363 (55.0 %) | 363 (55.0 %) | 171 (78.8 %) | 97.43 / 84.86 / 96.98 |
-| `find_cargo_toml` | 107 | 233 (-117.8 %) | 107 (0.0 %) | 80 (25.2 %) | 82.02 / 81.09 / 53.88 |
-| `find_dirs` | 389 | 161 (58.6 %) | 161 (58.6 %) | 106 (72.8 %) | 83.68 / 81.76 / 54.57 |
-| **total** | 5864 | **1482 (74.7 %)** | **1356 (76.9 %)** | **589 (90.0 %)** | |
+Which commands rtk filters and what rtok does for the same command. Both sides come from repository files, not from either project's marketing:
 
-### `ls -la`
+* rtk: `src/discover/rules.rs` (the table of commands `rtk` rewrites) and the file listing of `src/cmds/` and `src/filters/` at commit [`5eb0509`](https://github.com/rtk-ai/rtk/tree/5eb0509690a6f0110bb9bdd453fcf75c480e0d05) on `develop`, release v1.0.1 (GitHub API, 2026-10-15). 92 distinct commands; the tree holds 62 declarative `src/filters/*.toml` files and 54 `src/cmds/**/*_cmd.rs` modules.
+* rtok: `rules/default.toml` (29 rule families) and `FORMATTER_STEMS` in `src/plugins/cmd/formatters.rs` (12 stems, 2 of them also have a rule) at the commit this branch is cut from. 39 distinct stems.
 
-| case | raw | rtok | rtok-pr | rtk | ms rtok / pr / rtk |
-|---|---:|---:|---:|---:|---|
-| `ls_la_root` | 1586 | 591 (62.7 %) | 476 (70.0 %) | 425 (73.2 %) | 65.75 / 70.35 / 87.4 |
-| `ls_la_subdir` | 285 | 285 (0.0 %) | 166 (41.8 %) | 112 (60.7 %) | 73.66 / 72.74 / 57.37 |
-| `ls_la_crates` | 270 | 270 (0.0 %) | 138 (48.9 %) | 62 (77.0 %) | 47.78 / 48.0 / 38.9 |
-| **total** | 2141 | **1146 (46.5 %)** | **780 (63.6 %)** | **599 (72.0 %)** | |
+Columns: `formatter` = a Rust formatter for the stem, `rule` = a `[<stem>]` table in `rules/default.toml`, `none` = no rule and no formatter; the command still gets the default cut (`Rule::default`: 40 lines kept as 10 head + 10 tail, adjacent-duplicate fold, column collapse) and an archive, and `rtok discover` lists it when it shows up often. A row says nothing about how well either tool shortens the output: no savings number is implied.
 
-### `git status`
+Totals over rtk's 92 commands: **11 `formatter`, 20 `rule`, 61 `none`**.
 
-| case | raw | rtok | rtok-pr | rtk | ms rtok / pr / rtk |
-|---|---:|---:|---:|---:|---|
-| `git_status_clean` | 17 | 17 (0.0 %) | 17 (0.0 %) | 16 (5.9 %) | 77.26 / 82.83 / 79.82 |
-| `git_status_dirty` | 127 | 146 (-15.0 %) | 119 (6.3 %) | 38 (70.1 %) | 60.98 / 56.56 / 72.49 |
-| **total** | 144 | **163 (-13.2 %)** | **136 (5.6 %)** | **54 (62.5 %)** | |
+rtk is broader: the 61 `none` rows below, mostly ecosystems rtok has no family for (PHP, Ruby, Terraform/OpenTofu/Pulumi, JS test and lint runners other than `jest`/`vitest`/`tsc`/`eslint`, Swift, Scala, system tools such as `systemctl`, `du`, `ping`). rtok is broader on nine stems rtk has no rewrite rule for: `apt`, `awk`, `cmake`, `node`, `python`, `python3`, `sed`, `sqlite3`, `script` (the bucket for a Bash line that chains several programs).
 
-### `git diff`
+| rtk command | rtk implementation | rtok today |
+| --- | --- | --- |
+| `rtk ansible-playbook` | `filters/ansible-playbook.toml` | none |
+| `rtk ast-grep` | rewrite rule only | none |
+| `rtk aws` | `cmds/cloud/aws_cmd.rs` | rule |
+| `rtk brew` | `filters/brew-install.toml` | rule |
+| `rtk bun` | `cmds/js/bun_cmd.rs` | none |
+| `rtk bundle` | `filters/bundle-install.toml` | none |
+| `rtk bunx` | rewrite rule only | none |
+| `rtk cargo` | `cmds/rust/cargo_cmd.rs` | formatter |
+| `rtk composer` | `filters/composer-install.toml` | none |
+| `rtk ctest` | `cmds/system/ctest_cmd.rs` | none |
+| `rtk curl` | `cmds/cloud/curl_cmd.rs` | rule |
+| `rtk deno` | `cmds/js/deno_cmd.rs` | none |
+| `rtk df` | `filters/df.toml` | formatter |
+| `rtk diff` | `cmds/git/diff_cmd.rs` | none |
+| `rtk docker` | rewrite rule only | formatter |
+| `rtk dotnet` | `cmds/dotnet/dotnet_cmd.rs`, `filters/dotnet-build.toml` | rule |
+| `rtk du` | `filters/du.toml` | none |
+| `rtk ecs` | `cmds/php/ecs_cmd.rs` | none |
+| `rtk fail2ban-client` | `filters/fail2ban-client.toml` | none |
+| `rtk find` | `cmds/system/find_cmd.rs` | rule |
+| `rtk gcloud` | `filters/gcloud.toml` | none |
+| `rtk gh` | `cmds/git/gh_cmd.rs` | rule |
+| `rtk git` | `cmds/git/git_cmd.rs` | formatter |
+| `rtk glab` | `cmds/git/glab_cmd.rs` | none |
+| `rtk go` | `cmds/go/go_cmd.rs` | formatter |
+| `rtk golangci-lint run` | rewrite rule only | none |
+| `rtk gradlew` | `cmds/jvm/gradlew_cmd.rs` | rule |
+| `rtk grep` | rewrite rule only | rule |
+| `rtk gt` | `cmds/git/gt_cmd.rs` | none |
+| `rtk hadolint` | `filters/hadolint.toml` | none |
+| `rtk helm` | `filters/helm.toml` | none |
+| `rtk iptables` | `filters/iptables.toml` | none |
+| `rtk jest` | rewrite rule only | formatter |
+| `rtk kubectl` | rewrite rule only | formatter |
+| `rtk lint` | `cmds/js/lint_cmd.rs` | rule |
+| `rtk liquibase` | `filters/liquibase.toml` | none |
+| `rtk ls` | `cmds/system/ls.rs` | rule |
+| `rtk make` | `filters/make.toml` | rule |
+| `rtk markdownlint` | `filters/markdownlint.toml` | none |
+| `rtk mix` | `filters/mix-compile.toml`, `filters/mix-format.toml` | none |
+| `rtk mvn` | `cmds/jvm/mvn_cmd.rs` | rule |
+| `rtk mvnd` | rewrite rule only | rule |
+| `rtk mypy` | `cmds/python/mypy_cmd.rs` | none |
+| `rtk next` | `cmds/js/next_cmd.rs` | none |
+| `rtk npm` | `cmds/js/npm_cmd.rs` | rule |
+| `rtk npx` | rewrite rule only | none |
+| `rtk oc` | rewrite rule only | none |
+| `rtk paratest` | `cmds/php/paratest_cmd.rs` | none |
+| `rtk pest` | `cmds/php/pest_cmd.rs` | none |
+| `rtk php` | `cmds/php/php_cmd.rs` | none |
+| `rtk phpstan` | `cmds/php/phpstan_cmd.rs` | none |
+| `rtk phpt` | `cmds/php/phpt_cmd.rs` | none |
+| `rtk phpunit` | `cmds/php/phpunit_cmd.rs` | none |
+| `rtk ping` | `filters/ping.toml` | none |
+| `rtk pint` | `cmds/php/pint_cmd.rs` | none |
+| `rtk pio` | `filters/pio-run.toml` | none |
+| `rtk pip` | `cmds/python/pip_cmd.rs` | rule |
+| `rtk playwright` | `cmds/js/playwright_cmd.rs` | none |
+| `rtk pnpm` | `cmds/js/pnpm_cmd.rs` | rule |
+| `rtk poetry` | `filters/poetry-install.toml` | none |
+| `rtk pre-commit` | `filters/pre-commit.toml` | none |
+| `rtk prettier` | `cmds/js/prettier_cmd.rs` | none |
+| `rtk prisma` | `cmds/js/prisma_cmd.rs` | none |
+| `rtk ps` | `filters/ps.toml` | formatter |
+| `rtk psql` | `cmds/cloud/psql_cmd.rs` | none |
+| `rtk pulumi` | `filters/pulumi-destroy.toml`, `filters/pulumi-preview.toml`, `filters/pulumi-refresh.toml`, `filters/pulumi-stack.toml`, `filters/pulumi-up.toml` | none |
+| `rtk pytest` | `cmds/python/pytest_cmd.rs` | formatter |
+| `rtk quarto` | `filters/quarto-render.toml` | none |
+| `rtk rake` | `cmds/ruby/rake_cmd.rs` | none |
+| `rtk read` | `cmds/system/read.rs` | rule |
+| `rtk rg` | rewrite rule only | rule |
+| `rtk rspec` | `cmds/ruby/rspec_cmd.rs` | none |
+| `rtk rsync` | `filters/rsync.toml` | none |
+| `rtk rubocop` | `cmds/ruby/rubocop_cmd.rs` | none |
+| `rtk ruff` | `cmds/python/ruff_cmd.rs` | none |
+| `rtk sbt` | `cmds/scala/sbt_cmd.rs` | none |
+| `rtk shellcheck` | `filters/shellcheck.toml` | none |
+| `rtk shopify` | `filters/shopify-theme.toml` | none |
+| `rtk sops` | `filters/sops.toml` | none |
+| `rtk sqlfluff` | `cmds/python/sqlfluff_cmd.rs` | none |
+| `rtk swift` | `filters/swift-build.toml` | none |
+| `rtk systemctl` | `filters/systemctl-status.toml` | none |
+| `rtk terraform` | `filters/terraform-plan.toml` | none |
+| `rtk tofu` | `filters/tofu-fmt.toml`, `filters/tofu-init.toml`, `filters/tofu-plan.toml`, `filters/tofu-validate.toml` | none |
+| `rtk tree` | `cmds/system/tree.rs` | formatter |
+| `rtk trunk` | `filters/trunk-build.toml` | none |
+| `rtk tsc` | `cmds/js/tsc_cmd.rs` | rule |
+| `rtk uv` | `cmds/python/uv_cmd.rs`, `filters/uv-sync.toml` | rule |
+| `rtk vitest` | `cmds/js/vitest_cmd.rs` | formatter |
+| `rtk wc` | `cmds/system/wc_cmd.rs` | none |
+| `rtk wget` | `cmds/cloud/wget_cmd.rs` | none |
+| `rtk yamllint` | `filters/yamllint.toml` | none |
 
-| case | raw | rtok | rtok-pr | rtk | ms rtok / pr / rtk |
-|---|---:|---:|---:|---:|---|
-| `git_diff` | 312 | 347 (-11.2 %) | 278 (10.9 %) | 249 (20.2 %) | 53.21 / 57.05 / 73.4 |
-| `git_diff_stat` | 45 | 45 (0.0 %) | 45 (0.0 %) | 45 (0.0 %) | 49.5 / 44.46 / 49.71 |
-| **total** | 357 | **392 (-9.8 %)** | **323 (9.5 %)** | **294 (17.6 %)** | |
+Sources (all checked 2026-10-15): [`src/discover/rules.rs`](https://github.com/rtk-ai/rtk/blob/5eb0509690a6f0110bb9bdd453fcf75c480e0d05/src/discover/rules.rs), [`src/filters/`](https://github.com/rtk-ai/rtk/tree/5eb0509690a6f0110bb9bdd453fcf75c480e0d05/src/filters), [`src/cmds/`](https://github.com/rtk-ai/rtk/tree/5eb0509690a6f0110bb9bdd453fcf75c480e0d05/src/cmds), release [v1.0.1](https://github.com/rtk-ai/rtk/releases/tag/v1.0.1). The `rtk implementation` column is matched by file name, so `rewrite rule only` means no file of that name, not that rtk has no filter.
 
-### `git log`
+Close the gap in order, and not all of it: a family is worth a rule only if agents run it. `rtok discover --since 30d --limit 20` ranks exactly that from the local store. It reads the recorded `PostToolUse` Bash bodies, unwraps the `rtok run --` wrapper, buckets each command with the family bucketing `rtok stats` uses, drops the families that already have a formatter or a named rule, and lists the rest by the output tokens that reached the model. Bodies over `core.call_io_inline_bytes` are not stored inline, so the biggest outputs can be missing and the numbers are a floor.
 
-| case | raw | rtok | rtok-pr | rtk | ms rtok / pr / rtk |
-|---|---:|---:|---:|---:|---|
-| `git_log_20` | 4027 | 449 (88.9 %) | 449 (88.9 %) | 1355 (66.4 %) | 51.06 / 49.09 / 44.92 |
-| `git_log_oneline_50` | 1200 | 551 (54.1 %) | 551 (54.1 %) | 1200 (0.0 %) | 64.19 / 61.53 / 45.28 |
-| `git_log_stat_5` | 1275 | 398 (68.8 %) | 398 (68.8 %) | 1275 (0.0 %) | 82.09 / 69.64 / 58.05 |
-| **total** | 6502 | **1398 (78.5 %)** | **1398 (78.5 %)** | **3830 (41.1 %)** | |
+### By area
 
-### `grep`
+The same data grouped by ecosystem, with the gap named per area. The rtok side of this table was cross-checked at rtok commit `1932bc928`; the rtk side is the same `v1.0.1` tree as above. Where rtok is broader: `sqlite3`, `awk` and `apt` have no rtk counterpart in the tree; every rtok filter writes a `Measurement` row, archives the raw output for `rtok expand`, and runs from hooks, MCP and the proxy, which rtk's filters do not.
 
-| case | raw | rtok | rtok-pr | rtk | ms rtok / pr / rtk |
-|---|---:|---:|---:|---:|---|
-| `grep_fn_main` | 1158 | 689 (40.5 %) | 689 (40.5 %) | 1158 (0.0 %) | 81.32 / 76.31 / 75.49 |
-| `grep_settings_src` | 1420 | 577 (59.4 %) | 577 (59.4 %) | 1420 (0.0 %) | 138.73 / 162.64 / 158.63 |
-| **total** | 2578 | **1266 (50.9 %)** | **1266 (50.9 %)** | **2578 (0.0 %)** | |
+| Area | rtk (filter or module) | rtok | Gap |
+|---|---|---|---|
+| Version control | `git`, `diff`, `gh`, `glab`, `gt`, `jj`, `yadm` | `git` formatter, `gh` rule | `glab`, `gt`, `jj`, `yadm` |
+| Rust | `cargo` (+ runner) | `cargo` formatter and rule | none |
+| Go | `go`, `golangci-lint` | `go` formatter and rule | `golangci-lint` |
+| JavaScript | `npm`, `pnpm`, `bun`, `deno`, `next`, `nx`, `turbo`, `playwright`, `prettier`, `prisma`, `tsc`, `vitest`, lint, `biome`, `oxlint` | `npm`, `pnpm`, `node`, `tsc`, `eslint` rules; `jest`, `vitest` formatters | `bun`, `deno`, `next`, `nx`, `turbo`, `playwright`, `prettier`, `prisma`, `biome`, `oxlint` |
+| Python | `pytest`, `pip`, `uv`, `mypy`, `ruff`, `sqlfluff`, `poetry-install`, `basedpyright`, `ty`, `uv-sync` | `pytest` formatter; `pip`, `uv`, `python`, `python3` rules | `mypy`, `ruff`, `sqlfluff`, `poetry`, `basedpyright`, `ty` |
+| JVM and .NET | `mvn`, `gradlew`, `sbt`, `dotnet` (build, format, trx), `spring-boot` | `mvn`, `gradle`, `dotnet` rules | `sbt`, `spring-boot`, `dotnet` format/trx |
+| PHP and Ruby | `artisan`, `ecs`, `paratest`, `pest`, `phpstan`, `phpunit`, `pint`, `rake`, `rspec`, `rubocop`, `bundle-install`, `composer-install`, `mix` | none | all |
+| C, C++ and Apple | `gcc`, `ctest`, `xcodebuild`, `swift-build`, `pio-run`, `make` | `make`, `cmake` rules | `gcc`, `ctest`, `xcodebuild`, `swift-build`, `pio-run` |
+| Containers and cloud | `docker`/`container`, `kubectl`, `helm`, `aws`, `gcloud`, `skopeo`, `hadolint`, `terraform`, `tofu`, `pulumi`, `ansible-playbook`, `sops` | `docker`, `kubectl` formatters; `aws` rule | `helm`, `gcloud`, `skopeo`, `hadolint`, `terraform`/`tofu`, `pulumi`, `ansible-playbook`, `sops` |
+| System | `ls`, `find`, `tree`, `df`, `du`, `ps`, `stat`, `wc`, `env`, `ping`, `ssh`, `rsync`, `systemctl-status`, `iptables`, `fail2ban-client`, `curl`, `wget`, `psql`, `jq` | `ls`, `find`, `curl` rules; `tree`, `df`, `ps` formatters | `du`, `stat`, `wc`, `env`, `ping`, `ssh`, `rsync`, `systemctl`, `iptables`, `fail2ban-client`, `wget`, `psql`, `jq` |
+| Search and files | `search`, `read`, `log` | `grep`, `rg`, `sed`, `cat`, `awk` rules | none (`log` is covered by the shared head/tail/dedupe pass) |
+| Lint and CI | `shellcheck`, `yamllint`, `markdownlint`, `pre-commit`, `trunk-build`, `liquibase` | none | all |
+| Task runners | `just`, `mise`, `task` | wrapper peel (`just -c`, `mise exec`, echoed recipe line) | `task` |
+| Misc | `jira`, `ollama`, `shopify-theme`, `quarto-render`, `brew-install` | `brew`, `apt` rules, `sqlite3` formatter | `jira`, `ollama`, `shopify-theme`, `quarto-render` |
 
-### `rg`
+### Savings, sourced only
 
-| case | raw | rtok | rtok-pr | rtk | ms rtok / pr / rtk |
-|---|---:|---:|---:|---:|---|
-| `rg_pub_fn` | 521 | 521 (0.0 %) | 521 (0.0 %) | 521 (0.0 %) | 78.92 / 98.48 / 81.71 |
-| `rg_files_with` | 150 | 283 (-88.7 %) | 150 (0.0 %) | 127 (15.3 %) | 98.09 / 89.77 / 106.4 |
-| **total** | 671 | **804 (-19.8 %)** | **671 (0.0 %)** | **648 (3.4 %)** | |
+| Case | rtok saved | rtk saved | Source |
+|---|---|---|---|
+| bash bytes cut (author corpus, 5,725 cmds) | no data | 40.4 % (1.1 M of 2.8 M bytes) | `research.md` §2 A/B (T9.2) |
+| claimed bash cut | no data | 60–90 % (claim) | `research.md` §2 |
+| agentic bill (JetBrains) | no data | +7.6 % to 0 % (worse/neutral) | `research.md` §1, §7 |
+| head-to-head harness (`bench/competitors/rtk`) | see "Results" above | see "Results" above | `bench/harness/results/rtk/20261014-231100/summary.md` |
 
-### `cat`
+## Command table
 
-| case | raw | rtok | rtok-pr | rtk | ms rtok / pr / rtk |
-|---|---:|---:|---:|---:|---|
-| `cat_rust` | 1469 | 517 (64.8 %) | 517 (64.8 %) | 1469 (0.0 %) | 78.06 / 75.89 / 43.66 |
-| `cat_toml` | 4945 | 995 (79.9 %) | 995 (79.9 %) | 4945 (0.0 %) | 87.75 / 101.19 / 60.91 |
-| **total** | 6414 | **1512 (76.4 %)** | **1512 (76.4 %)** | **6414 (0.0 %)** | |
+One table per command; each cell is output tokens (saving vs raw).
 
-### `tree`
+### `cargo test` (re-run 2026-10-14)
 
-| case | raw | rtok | rtok-pr | rtk | ms rtok / pr / rtk |
-|---|---:|---:|---:|---:|---|
-| `tree_plugins` | 65 | 65 (0.0 %) | 65 (0.0 %) | 58 (10.8 %) | 65.57 / 70.47 / 56.84 |
-| `tree_crates_l2` | 302 | 379 (-25.5 %) | 379 (-25.5 %) | 295 (2.3 %) | 83.88 / 80.98 / 66.22 |
-| **total** | 367 | **444 (-21.0 %)** | **444 (-21.0 %)** | **353 (3.8 %)** | |
+| case | raw | rtok | rtok-pr | rtok-pr `--no-ref` | rtk |
+|---|---:|---:|---:|---:|---:|
+| `cargo_test_pass` | 1756 | 158 (91.0%) | 24 (98.6%) | 10 (99.4%) | 16 (99.1%) |
+| `cargo_test_fail` | 1751 | 164 (90.6%) | 95 (94.6%) | 78 (95.5%) | 135 (92.3%) (nondet!) |
+| **total** | 3507 | 322 (90.8%) | 119 (96.6%) | 88 (97.5%) | 151 (95.7%) |
 
-### `wc`
+### `cargo build` (re-run 2026-10-14)
 
-| case | raw | rtok | rtok-pr | rtk | ms rtok / pr / rtk |
-|---|---:|---:|---:|---:|---|
-| `wc_l` | 33 | 33 (0.0 %) | 33 (0.0 %) | 24 (27.3 %) | 86.91 / 86.09 / 58.84 |
-| **total** | 33 | **33 (0.0 %)** | **33 (0.0 %)** | **24 (27.3 %)** | |
+| case | raw | rtok | rtok-pr | rtok-pr `--no-ref` | rtk |
+|---|---:|---:|---:|---:|---:|
+| `cargo_build_noop` | 45 | 45 (0.0%) | 19 (57.8%) | 3 (93.3%) | 30 (33.3%) |
+| `cargo_build_incremental` | 45 | 45 (0.0%) | 19 (57.8%) | 3 (93.3%) | 30 (33.3%) |
+| `cargo_build_warning` | 167 | 166 (0.6%) | 40 (76.0%) | 26 (84.4%) | 103 (38.3%) |
+| `cargo_build_error` | 133 | 132 (0.8%) | 60 (54.9%) | 44 (66.9%) | 88 (33.8%) |
+| **total** | 390 | 388 (0.5%) | 138 (64.6%) | 76 (80.5%) | 251 (35.6%) |
 
-### What differs, case by case
+### `find` (re-run 2026-10-14)
 
-* **The trailer is most of the gap.** Each cut rtok output ends with `[rtok <64-hex> · N lines · expand: rtok expand <64-hex>]`, about 90 tokens. rtk prints `[full output: rtk recall <12-hex>]` or nothing. In `cargo_test_pass` rtok-pr's payload (`cargo test: 93 passed (2 suites)`) is ~9 tokens against rtk's 16, but the trailer brings the total to 100. Same story for `git_status_dirty` (payload ≈ rtk's), `ls_la_crates` and `cargo_build_warning`. Proposal: a 12-hex id printed once, with prefix lookup in `rtok expand`; that would win most of these cases.
-* **cargo test**: rtk and rtok-pr both aggregate the suite totals into one line. On a failure, rtk keeps the whole `---- name stdout ----` block plus the `note: RUST_BACKTRACE` line and the raw `test result:` line. rtok-pr keeps only the panic location, message and left/right, plus `FAILED: names`.
-* **cargo build**: rtk keeps the full rustc snippet (source line, carets, `= note`) and adds a `cargo build: N errors, M warnings` line. rtok keeps only the headline, the `-->` location and the `could not compile` verdict, so its payload is smaller but has less context. A noop or incremental build is under the 170-byte raw threshold (T175), so rtok prints it verbatim.
-* **find**: rtk prints paths relative to the search root, `dir/ a b c` with every name, and adds an extension histogram. rtok's `group = "dir"` lists 3 names per dir plus `…` (lossy, archived) and repeats `(N files):`. rtok#1077 stops the regression on short finds (−117.8 % → 0 %). Next step: print single-file dirs as plain paths and drop `files` from the count.
-* **ls -la**: rtk prints `755 name/` and `644 name 12.8K` one per line. rtok-pr prints every directory on one line and files as `name size`, which is a smaller payload. The trailer is the gap.
-* **git status / diff**: rtok-pr now uses porcelain codes like rtk. For diff it keeps one `+++ b/path` per file, while rtk adds a `--stat` summary and per-file `+N -M`. Both regressions on main (−15 %, −11 %) are fixed.
-* **git log, grep, cat**: rtok is far ahead. rtk passes `git log --oneline`, `--stat`, `grep -rn ... --include/--exclude-dir` and `rtk read` through unchanged (0 %).
-* **tree, wc, rg -l**: rtk is slightly ahead. rtok's `tree` cut at 40 lines plus the trailer is longer than the raw output on `tree -L 2 crates` (still −25.5 %, open). `rg -l` is fixed to 0 % by never-worse.
+| case | raw | rtok | rtok-pr | rtok-pr `--no-ref` | rtk |
+|---|---:|---:|---:|---:|---:|
+| `find_rs` | 4561 | 725 (84.1%) | 659 (85.6%) | 643 (85.9%) | 232 (94.9%) |
+| `find_src_files` | 807 | 363 (55.0%) | 288 (64.3%) | 271 (66.4%) | 171 (78.8%) |
+| `find_cargo_toml` | 107 | 233 (-117.8%) | 107 (0.0%) | 107 (0.0%) | 80 (25.2%) |
+| `find_dirs` | 389 | 161 (58.6%) | 94 (75.8%) | 79 (79.7%) | 106 (72.8%) |
+| **total** | 5864 | 1482 (74.7%) | 1148 (80.4%) | 1100 (81.2%) | 589 (90.0%) |
 
+### `ls -la` (re-run 2026-10-14)
+
+| case | raw | rtok | rtok-pr | rtok-pr `--no-ref` | rtk |
+|---|---:|---:|---:|---:|---:|
+| `ls_la_root` | 1586 | 600 (62.2%) | 407 (74.3%) | 390 (75.4%) | 425 (73.2%) |
+| `ls_la_subdir` | 285 | 285 (0.0%) | 98 (65.6%) | 82 (71.2%) | 112 (60.7%) |
+| `ls_la_crates` | 270 | 270 (0.0%) | 59 (78.1%) | 46 (83.0%) | 62 (77.0%) |
+| **total** | 2141 | 1155 (46.1%) | 564 (73.7%) | 518 (75.8%) | 599 (72.0%) |
+
+### `git status` (re-run 2026-10-14)
+
+| case | raw | rtok | rtok-pr | rtok-pr `--no-ref` | rtk |
+|---|---:|---:|---:|---:|---:|
+| `git_status_clean` | 17 | 17 (0.0%) | 17 (0.0%) | 17 (0.0%) | 16 (5.9%) |
+| `git_status_dirty` | 127 | 146 (-15.0%) | 51 (59.8%) | 37 (70.9%) | 38 (70.1%) |
+| **total** | 144 | 163 (-13.2%) | 68 (52.8%) | 54 (62.5%) | 54 (62.5%) |
+
+### `git diff` (re-run 2026-10-14)
+
+| case | raw | rtok | rtok-pr | rtok-pr `--no-ref` | rtk |
+|---|---:|---:|---:|---:|---:|
+| `git_diff` | 312 | 347 (-11.2%) | 208 (33.3%) | 192 (38.5%) | 249 (20.2%) |
+| `git_diff_stat` | 45 | 45 (0.0%) | 45 (0.0%) | 45 (0.0%) | 45 (0.0%) |
+| **total** | 357 | 392 (-9.8%) | 253 (29.1%) | 237 (33.6%) | 294 (17.6%) |
+
+### `git log` (re-run 2026-10-14)
+
+| case | raw | rtok | rtok-pr | rtok-pr `--no-ref` | rtk |
+|---|---:|---:|---:|---:|---:|
+| `git_log_20` | 4027 | 449 (88.9%) | 383 (90.5%) | 367 (90.9%) | 1355 (66.4%) |
+| `git_log_oneline_50` | 1200 | 551 (54.1%) | 476 (60.3%) | 459 (61.8%) | 1200 (0.0%) |
+| `git_log_stat_5` | 1275 | 398 (68.8%) | 323 (74.7%) | 306 (76.0%) | 1275 (0.0%) |
+| **total** | 6502 | 1398 (78.5%) | 1182 (81.8%) | 1132 (82.6%) | 3830 (41.1%) |
+
+### `grep` (re-run 2026-10-14)
+
+| case | raw | rtok | rtok-pr | rtok-pr `--no-ref` | rtk |
+|---|---:|---:|---:|---:|---:|
+| `grep_fn_main` | 1158 | 689 (40.5%) | 606 (47.7%) | 591 (49.0%) | 1158 (0.0%) |
+| `grep_settings_src` | 1420 | 577 (59.4%) | 501 (64.7%) | 485 (65.8%) | 1420 (0.0%) |
+| **total** | 2578 | 1266 (50.9%) | 1107 (57.1%) | 1076 (58.3%) | 2578 (0.0%) |
+
+### `rg` (re-run 2026-10-14)
+
+| case | raw | rtok | rtok-pr | rtok-pr `--no-ref` | rtk |
+|---|---:|---:|---:|---:|---:|
+| `rg_pub_fn` | 521 | 521 (0.0%) | 521 (0.0%) | 521 (0.0%) | 521 (0.0%) |
+| `rg_files_with` | 150 | 287 (-91.3%) | 150 (0.0%) | 150 (0.0%) | 127 (15.3%) |
+| **total** | 671 | 808 (-20.4%) | 671 (0.0%) | 671 (0.0%) | 648 (3.4%) |
+
+### `cat` (re-run 2026-10-14)
+
+| case | raw | rtok | rtok-pr | rtok-pr `--no-ref` | rtk |
+|---|---:|---:|---:|---:|---:|
+| `cat_rust` | 1469 | 517 (64.8%) | 439 (70.1%) | 423 (71.2%) | 1469 (0.0%) |
+| `cat_toml` | 4945 | 995 (79.9%) | 920 (81.4%) | 903 (81.7%) | 4945 (0.0%) |
+| **total** | 6414 | 1512 (76.4%) | 1359 (78.8%) | 1326 (79.3%) | 6414 (0.0%) |
+
+### `tree` (re-run 2026-10-14)
+
+| case | raw | rtok | rtok-pr | rtok-pr `--no-ref` | rtk |
+|---|---:|---:|---:|---:|---:|
+| `tree_plugins` | 65 | 65 (0.0%) | 65 (0.0%) | 65 (0.0%) | 58 (10.8%) |
+| `tree_crates_l2` | 302 | 379 (-25.5%) | 302 (0.0%) | 295 (2.3%) | 295 (2.3%) |
+| **total** | 367 | 444 (-21.0%) | 367 (0.0%) | 360 (1.9%) | 353 (3.8%) |
+
+### `wc` (re-run 2026-10-14)
+
+| case | raw | rtok | rtok-pr | rtok-pr `--no-ref` | rtk |
+|---|---:|---:|---:|---:|---:|
+| `wc_l` | 33 | 33 (0.0%) | 33 (0.0%) | 33 (0.0%) | 24 (27.3%) |
+| **total** | 33 | 33 (0.0%) | 33 (0.0%) | 33 (0.0%) | 24 (27.3%) |
+## Where rtok wins / loses (re-run 2026-10-14)
+
+**Wins (rtok-pr vs rtk, default output):**
+
+* `cargo test` 96.6 % vs 95.7 % (97.5 % with `--no-ref`).
+* `cargo build` 64.6 % vs 35.6 %.
+* `git log` 81.8 % vs 41.1 %: rtk passes `--oneline` and `--stat` through unchanged.
+* `ls -la` 73.7 % vs 72.0 %.
+* `git diff` 29.1 % vs 17.6 %.
+* `grep` 57.1 % vs 0.0 % and `cat` 78.8 % vs 0.0 %: rtk has no filter for them.
+
+**Losses (rtok-pr vs rtk; the `WARN NEGATIVE` lines of the run):**
+
+* `find` 80.4 % vs 90.0 % (`find_rs` 85.6 vs 94.9, `find_src_files` 64.3 vs 78.8, `find_cargo_toml` 0.0 vs 25.2).
+* `git status` 52.8 % vs 62.5 %: dirty 59.8 % vs 70.1 % (ties with `--no-ref`, 70.9 %); clean 0.0 % vs 5.9 % (17 vs 16 tokens).
+* `tree` 0.0 % vs 3.8 % (`tree_plugins` 0.0 vs 10.8).
+* `rg` 0.0 % vs 3.4 % (`rg_files_with` 0.0 vs 15.3).
+* `wc -l` 0.0 % vs 27.3 %.
+
+No case is worse than raw output for rtok-pr. Main still has negatives: `find_cargo_toml` −117.8 %, `rg_files_with` −91.3 %, `tree_crates_l2` −25.5 %, `git_status_dirty` −15.0 %, `git_diff` −11.2 %.
+
+Caveat: the rtk output for `cargo_test_fail` was not byte-identical across the two determinism runs (`nondet!`), so its 92.3 % there is approximate.
+
+## Methodology
+
+Shared clean harness, `bench/harness` (its README lists the fairness rules). Reproduce with
+`python3 bench/harness/run.py rtk --rtok-ref origin/main --rtok-pr origin/feat/rtk-parity-filters`.
+
+* Workload: the rtok repo at `12ebeb972e2bea88bec939a9ca9b436db884de13`, identical for all columns.
+* `rtok` = main `7a7666ad`; `rtok-pr` = rtok#1077 `0ef259b2`; `rtok-pr --no-ref` = same build without the trailer; `rtk` = rtk 1.0.1 (release tarball, sha256-checked).
+* Every command's real output is captured once and replayed byte-for-byte to every tool, in one container (`--cpus 4 --memory 8g --network none`), fresh HOME per call.
+* Tokenizer: tiktoken 0.12.0 o200k_base. 30 timing rounds after 3 warmups, seeded shuffle.
+* Results: `bench/harness/results/rtk/20261014-231100/` (`results.json`, `summary.md`, `negatives.txt`, `samples/`).
+* Fixture test: `cargo test --test bench_fixtures` (29 stored outputs, no Docker or network needed), also run inside a container.
+
+## Competitor landscape
+
+Measured in the same harness family on 2026-10-14 (draft #1076, commit `a449e6a3`; rtok = main at that time). Savings are token savings vs raw. Techniques and licences: `docs/research/competitors-techniques.md`.
+
+| Case | rtok | Best competitor |
+|---|---:|---|
+| git status (dirty) | 0.0 % | lean-ctx 40.5 % |
+| git diff HEAD~5 | 1.4 % | token-optimizer 97.9 % (keeps 51 % of paths), sqz 44.4 % (93 % of paths) |
+| git diff worktree | 14.7 % | token-optimizer 79.1 % (100 % of paths) |
+| ls -la | 0.0 % | lean-ctx 66.6 % |
+| grep -rn | 81.7 % (71 % anchors kept) | token-optimizer 89.7 %, lean-ctx 89.6 % (100 % anchors) |
+| cat source file | 86.2 % | lean-ctx 91.4 % |
+| MCP tool catalogs | 0 % | caveman 10–29 % |
+
+In that run (2026-10-14) rtok led on `git log` (after #1079, which keeps 89 % of commit hashes), `find`, `ls -laR` and `cat app.log`. Targets for the open gaps are tasks T672–T686 in `plan.md`; they are targets, not measurements.
+
+Sources studied: sqz (MIT OR Apache-2.0, code read), lean-ctx (Apache-2.0 for `rust/**`, code read), caveman (Apache-2.0, code read), token-optimizer (PolyForm Noncommercial, code **not** read; behaviour and documentation only).
+
+## How to reproduce
+
+Requirements: Python 3.10+ and a working `docker` CLI. On macOS use a Colima profile (here `rtok-bench`, 4 CPU / 8 GiB) and point `DOCKER_HOST` at its socket.
+
+```
+python3 bench/harness/run.py rtk --rtok-ref origin/main --rtok-pr origin/feat/rtk-parity-filters
+```
+
+* `run.py` exits with code 3 and prints `WARN NEGATIVE` lines when rtok-pr saves less than the competitor on any command or case; `--no-fail-on-negative` forces exit 0.
+* Fixture test, no Docker or network needed: `cargo test --test bench_fixtures` (29 stored outputs, a floor per case, output never longer than raw). It also passed inside a container in this run.
+* Refresh fixtures from a new capture: `python3 bench/harness/run.py rtk --refresh-fixtures <dir>`.
+* The run took about 12 minutes on the Mac with cached images.

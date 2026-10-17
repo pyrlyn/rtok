@@ -433,6 +433,44 @@ impl Store {
         Ok(n == 1)
     }
 
+    /// Notes a forget pass would retire (T669): live, unpinned, never read, older than
+    /// `idle_days`, and not a checkpoint, a session note, a user-asked note or a decision.
+    /// `apply` retires them (a tombstone like [`Store::retire_note`]: the body stays and a
+    /// re-save of the topic revives it). Returns `(id, title)` in id order either way.
+    pub fn forget_stale_notes(
+        &self,
+        project: Option<&str>,
+        idle_days: u32,
+        apply: bool,
+    ) -> Result<Vec<(i32, String)>> {
+        let cutoff = i64::try_from(unix_now())
+            .unwrap_or(0)
+            .saturating_sub(i64::from(idle_days) * 86_400);
+        let mut conn = self.lock()?;
+        let mut q = notes::table
+            .filter(notes::retired.is_null())
+            .filter(notes::pinned.eq(0))
+            .filter(notes::uses.eq(0))
+            .filter(notes::ts.lt(cutoff))
+            .filter(notes::kind.not_like("checkpoint:%"))
+            .filter(notes::kind.not_like("session:%"))
+            .filter(notes::kind.ne_all(FORGET_KEEPS))
+            .order(notes::id.asc())
+            .select((notes::id, notes::title))
+            .into_boxed();
+        if let Some(p) = project {
+            q = q.filter(notes::project.eq(p));
+        }
+        let rows: Vec<(i32, String)> = q.load(&mut *conn)?;
+        if apply && !rows.is_empty() {
+            let ids: Vec<i32> = rows.iter().map(|(id, _)| *id).collect();
+            diesel::update(notes::table.filter(notes::id.eq_any(ids)))
+                .set(notes::retired.eq(unixepoch()))
+                .execute(&mut *conn)?;
+        }
+        Ok(rows)
+    }
+
     /// Last-written `rtok memory sync` block digest (T69.6 hand-edit guard).
     pub fn kv_get(&self, key: &str) -> Result<Option<String>> {
         let mut conn = self.lock()?;
@@ -505,6 +543,35 @@ impl Store {
             .map_err(Into::into)
     }
 
+    /// The newest live notes of `project` as `(id, title, body)`, for the admission gate
+    /// (T671). Checkpoint and session rows are not notes an agent wrote, and the row that
+    /// `(kind, title)` names is the one a save would update, so neither is a duplicate.
+    pub fn admit_candidates(
+        &self,
+        project: Option<&str>,
+        kind: &str,
+        title: &str,
+        limit: u32,
+    ) -> Result<Vec<(i32, String, String)>> {
+        let mut conn = self.lock()?;
+        let mut q = notes::table
+            .filter(notes::retired.is_null())
+            .filter(notes::kind.not_like("checkpoint:%"))
+            .filter(notes::kind.not_like("session:%"))
+            .filter(diesel::dsl::not(
+                notes::kind.eq(kind).and(notes::title.eq(title)),
+            ))
+            .order(notes::id.desc())
+            .limit(i64::from(limit))
+            .select((notes::id, notes::title, notes::body))
+            .into_boxed();
+        q = match project {
+            Some(p) => q.filter(notes::project.eq(p)),
+            None => q.filter(notes::project.is_null()),
+        };
+        q.load(&mut *conn).map_err(Into::into)
+    }
+
     /// Full note body by row id.
     pub fn get_note_body(&self, id: i32) -> Result<Option<String>> {
         let mut conn = self.lock()?;
@@ -523,18 +590,62 @@ impl Store {
     /// token is quoted into a phrase, so the words are searched for literally; a query with
     /// nothing quotable left returns no hits instead of an error.
     pub fn search_notes(&self, query: &str, limit: u32) -> Result<Vec<NoteHit>> {
+        self.search_notes_in(query, limit, None)
+    }
+
+    /// [`Self::search_notes`] that also lifts the notes of `project` (T667): other projects'
+    /// notes stay searchable, a same-project note just wins a near tie.
+    pub fn search_notes_in(
+        &self,
+        query: &str,
+        limit: u32,
+        project: Option<&str>,
+    ) -> Result<Vec<NoteHit>> {
         let Some(q) = fts_phrase_query(query) else {
             return Ok(Vec::new());
         };
         let mut conn = self.lock()?;
-        let hits = sql_ext::SearchNotes {
+        // T669: bm25 picks a wider window, then use, age and pin re-rank it.
+        let window = limit.saturating_mul(RANK_WINDOW).max(limit);
+        let rows = sql_ext::SearchNotes {
             query: q,
-            limit: i32::try_from(limit).unwrap_or(5),
+            limit: i32::try_from(window).unwrap_or(i32::MAX),
         }
-        .load::<(i32, String, String)>(&mut *conn)?
-        .into_iter()
-        .map(|(id, title, snippet)| NoteHit { id, title, snippet })
-        .collect::<Vec<_>>();
-        Ok(hits)
+        .load::<(
+            i32,
+            String,
+            String,
+            i32,
+            i32,
+            i64,
+            Option<i64>,
+            Option<String>,
+        )>(&mut *conn)?;
+        let now = i64::try_from(unix_now()).unwrap_or(0);
+        let mut scored: Vec<(f64, usize, NoteHit)> = rows
+            .into_iter()
+            .enumerate()
+            .map(
+                |(rank, (id, title, snippet, pinned, uses, ts, last_used, note_project))| {
+                    let kept = retention_score(
+                        pinned != 0,
+                        uses,
+                        age_days(now, ts),
+                        days_since(now, last_used),
+                    );
+                    let home = project.is_some() && note_project.as_deref() == project;
+                    let score = rank_blend(rank, kept) * if home { PROJECT_BOOST } else { 1.0 };
+                    (score, rank, NoteHit { id, title, snippet })
+                },
+            )
+            .collect();
+        // Equal scores keep the bm25 order, so a store with no use signal ranks as before.
+        scored.sort_by(|a, b| {
+            b.0.partial_cmp(&a.0)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| a.1.cmp(&b.1))
+        });
+        scored.truncate(limit as usize);
+        Ok(scored.into_iter().map(|(.., hit)| hit).collect())
     }
 }

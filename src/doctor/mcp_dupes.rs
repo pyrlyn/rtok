@@ -514,6 +514,8 @@ fn own_findings(own: &[Srv], next: &mut dyn FnMut() -> u32) -> Vec<Problem> {
 }
 
 #[cfg(test)]
+// T902: every `#[test]` below is unix-only (POSIX paths), so on Windows the shared helpers are unused.
+#[cfg_attr(windows, allow(dead_code, unused_imports))]
 mod tests {
     use super::*;
     use crate::config::Config;

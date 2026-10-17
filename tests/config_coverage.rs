@@ -47,6 +47,9 @@ const ALLOW: &[&str] = &[
 /// `--dry-run` has a key wherever the command owns a config table (`setup`, `proxy`, `bench`);
 /// on `config init` / `config set` it sits beside `--force` and means "print, do not write".
 const ALLOW_KEYS: &[&str] = &[
+    // `discover --since/--limit` (T688): the window and row count of one call, not stored settings.
+    "discover.since",
+    "discover.limit",
     // `man --dir` (T316): where one call writes the pages, not a stored setting.
     "man.dir",
     // `completions --install/--uninstall` (T318): one-shot actions, not settings.
@@ -98,6 +101,10 @@ const ALLOW_KEYS: &[&str] = &[
     // `memory status` (T69.4): one-shot filters, not settings.
     "memory.status.project",
     "memory.status.since",
+    // `memory forget` (T669): one-shot scope and the dry-run switch; `forget_after_days` is the setting.
+    "memory.forget.project",
+    "memory.forget.apply",
+    "memory.forget.days",
     // `otel flush --coalesce` (T143): hidden, hook-spawned-only mode switch for one call,
     // not a stored setting — a manual `rtok otel flush` never passes it.
     "otel.flush.coalesce",
@@ -122,6 +129,10 @@ const ALLOW_KEYS: &[&str] = &[
     // without anyone typing it; `--idle` is T153's flag with T153's default.
     "worktree.clean.yes",
     "worktree.clean.idle",
+    // `worktree migrate` (T660.5): `--yes` moves without asking, per call like `gc`; `--owner`
+    // names whose old lock this one run may move, like `claim --owner`.
+    "worktree.migrate.yes",
+    "worktree.migrate.owner",
     // `agents junk clear --yes` (T182): same per-call rule as `worktree gc`/`clean` — a
     // stored value would delete without anyone typing it, and it must not share `setup.yes`,
     // which confirms a different destructive action (`agents install --replace`).
@@ -223,6 +234,11 @@ const ALLOW_KEYS: &[&str] = &[
     "batch.status.url",
     "batch.fetch.provider",
     "batch.fetch.url",
+    // `run|filter --no-ref` (T661): drops the reference line for one call; the stored
+    // setting is `plugins.cmd.trailer`.
+    "plugins.cmd.no_ref",
+    // `filter --exit` (hidden): the exit code of the command whose stdin is filtered.
+    "plugins.cmd.exit",
 ];
 
 #[test]

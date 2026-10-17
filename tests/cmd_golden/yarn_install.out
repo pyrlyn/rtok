@@ -1,0 +1,40 @@
+yarn install v1.22.19
+[1/4] Resolving packages...
+[2/4] Fetching packages...
+info fsevents@2.3.2: The platform "linux" is incompatible with this module.
+info "fsevents@2.3.2" is an optional dependency and failed compatibility check. Excluding it from installation.
+[3/4] Linking dependencies...
+warning " > @testing-library/dom-0@9.0.0" has unmet peer dependency "react@^18.0.0".
+warning " > @testing-library/dom-1@9.1.0" has unmet peer dependency "react@^18.0.0".
+warning " > @testing-library/dom-2@9.2.0" has unmet peer dependency "react@^18.0.0".
+warning " > @testing-library/dom-3@9.3.0" has unmet peer dependency "react@^18.0.0".
+warning " > @testing-library/dom-4@9.4.0" has unmet peer dependency "react@^18.0.0".
+warning " > @testing-library/dom-5@9.5.0" has unmet peer dependency "react@^18.0.0".
+warning " > @testing-library/dom-6@9.6.0" has unmet peer dependency "react@^18.0.0".
+warning " > @testing-library/dom-7@9.7.0" has unmet peer dependency "react@^18.0.0".
+warning " > @testing-library/dom-8@9.8.0" has unmet peer dependency "react@^18.0.0".
+warning " > @testing-library/dom-9@9.9.0" has unmet peer dependency "react@^18.0.0".
+warning " > @testing-library/dom-10@9.10.0" has unmet peer dependency "react@^18.0.0".
+warning " > @testing-library/dom-11@9.11.0" has unmet peer dependency "react@^18.0.0".
+warning " > @testing-library/dom-12@9.12.0" has unmet peer dependency "react@^18.0.0".
+warning " > @testing-library/dom-13@9.13.0" has unmet peer dependency "react@^18.0.0".
+warning " > @testing-library/dom-14@9.14.0" has unmet peer dependency "react@^18.0.0".
+warning " > @testing-library/dom-15@9.15.0" has unmet peer dependency "react@^18.0.0".
+warning " > @testing-library/dom-16@9.16.0" has unmet peer dependency "react@^18.0.0".
+warning " > @testing-library/dom-17@9.17.0" has unmet peer dependency "react@^18.0.0".
+warning " > @testing-library/dom-18@9.18.0" has unmet peer dependency "react@^18.0.0".
+warning " > @testing-library/dom-19@9.19.0" has unmet peer dependency "react@^18.0.0".
+warning " > @testing-library/dom-20@9.20.0" has unmet peer dependency "react@^18.0.0".
+warning " > @testing-library/dom-21@9.21.0" has unmet peer dependency "react@^18.0.0".
+warning " > @testing-library/dom-22@9.22.0" has unmet peer dependency "react@^18.0.0".
+warning " > @testing-library/dom-23@9.23.0" has unmet peer dependency "react@^18.0.0".
+warning " > @testing-library/dom-24@9.24.0" has unmet peer dependency "react@^18.0.0".
+warning " > @testing-library/dom-25@9.25.0" has unmet peer dependency "react@^18.0.0".
+warning " > @testing-library/dom-26@9.26.0" has unmet peer dependency "react@^18.0.0".
+warning " > @testing-library/dom-27@9.27.0" has unmet peer dependency "react@^18.0.0".
+warning " > @testing-library/dom-28@9.28.0" has unmet peer dependency "react@^18.0.0".
+warning " > @testing-library/dom-29@9.29.0" has unmet peer dependency "react@^18.0.0".
+warning " > @testing-library/dom-30@9.30.0" has unmet peer dependency "react@^18.0.0".
+warning " > @testing-library/dom-31@9.31.0" has unmet peer dependency "react@^18.0.0".
+warning " > @testing-library/dom-32@9.32.0" has unmet peer dependency "react@^18.0.0".
+… 10 lines omitted (expand deadbeef)

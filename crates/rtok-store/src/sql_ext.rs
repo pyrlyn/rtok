@@ -466,7 +466,8 @@ pub(crate) struct SearchNotes {
 impl QueryFragment<Sqlite> for SearchNotes {
     fn walk_ast<'b>(&'b self, mut out: AstPass<'_, 'b, Sqlite>) -> QueryResult<()> {
         out.push_sql(
-            "SELECT n.id, n.title, substr(n.body, 1, 120) \
+            "SELECT n.id, n.title, substr(n.body, 1, 120), n.pinned, n.uses, n.ts, n.last_used, \
+             n.project \
              FROM notes_fts f JOIN notes n ON n.id = f.rowid \
              WHERE notes_fts MATCH ",
         );
@@ -478,7 +479,18 @@ impl QueryFragment<Sqlite> for SearchNotes {
 }
 
 impl Query for SearchNotes {
-    type SqlType = (Integer, Text, Text);
+    /// `(id, title, snippet, pinned, uses, ts, last_used, project)`: the columns `rank_blend`
+    /// and the project boost read.
+    type SqlType = (
+        Integer,
+        Text,
+        Text,
+        Integer,
+        Integer,
+        BigInt,
+        Nullable<BigInt>,
+        Nullable<Text>,
+    );
 }
 
 impl RunQueryDsl<SqliteConnection> for SearchNotes {}

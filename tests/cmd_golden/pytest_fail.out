@@ -1,0 +1,16 @@
+______________________________ test_order_total ________________________________
+
+    def test_order_total():
+        order = Order([Item("a", 3), Item("b", 4)])
+>       assert order.total() == 8
+E       assert 7 == 8
+E        +  where 7 = <bound method Order.total of <Order>>()
+
+tests/test_order.py:21: AssertionError
+tests/test_user.py::test_login
+  /work/shop/user.py:9: DeprecationWarning: utcnow() is deprecated
+    return datetime.utcnow()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+FAILED tests/test_order.py::test_order_total - assert 7 == 8
+==================== 1 failed, 47 passed, 1 warning in 0.31s ====================

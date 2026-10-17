@@ -28,6 +28,7 @@ Estimator: 4 chars/token (heuristic). Usage counters are real API numbers.
 | Session checkpoints (T71.2, 2026-09-18, `rtok stats --since 30d`) | 939 transcript sessions, 0 with a `checkpoint:<id>` or `session:<id>` note, 939 without. Store has 25 legacy `kind=checkpoint` rows (no session suffix, not joinable to a stem). Header `sessions N  compact N  checkpoint N  no_checkpoint N`. Command: `rtok stats --since 30d`. |
 | Foreign MCP results (T59.4, 2026-09-17, `rtok stats --since 30d`, 885 sessions) | `rtok stats --since 30d` (2026-09-17, 885 sessions), `mcp` table: lean-ctx 8,232 calls, 19.66 MB result bytes, mean 2.4 KB, p95 45.7 KB (≈ 4.9 M est. tokens) — ≈ 27 % of the 71.8 MB in the tool table; rtok 579 KB, engram 279 KB, t3-code 73 KB (mean 18 KB), Claude_Browser 45 KB. lean-ctx is above the 5 % gate, so the wrapper is justified for this workload; caveat: lean-ctx already compresses its own results, so the win is in the p95 tail, not the mean. |
 | MCP description tokens × turns (T59.5, 2026-09-18, host without Tool Search) | `rtok doctor` (2026-09-18): 11 MCP servers, 8,951 description tokens (caveman 485, code-review-graph 2,295, engram 1,865, mobile 1,555, serena 1,494, lean-ctx 697, headroom 161, rtok 143+143, jscpd 113, codebase-memory-mcp 0); `mcp_tool_search likely disabled` because `ANTHROPIC_BASE_URL` is set. Transcripts `~/.claude/projects/**/*.jsonl` mtime ≥ 30 d, unique `message.id` (same rule as `measure::jsonl`): 936 sessions, 40,402 API turns, session input 5.834 B (uncached 0.670 M + cache_create 147.1 M + cache_read 5.686 B). 8,951 × 40,402 / 5.834 B = **6.2 %** of session input. Above the 3 % gate → `proxy.tools_rewrite` ships, off by default. Native-tool descriptions are extra, so 6.2 % is a lower bound. |
+| `tools_rewrite` realized saving per request (T124, 2026-10-15, local reference, not the gate) | Scratch `rtok proxy` with `[proxy.tools_rewrite] enabled = true` (default `max_description_tokens = 60`), `mode = "passthrough"`, upstream LM Studio (`prism-ml/bonsai-27b`, its tokenizer, not Anthropic's); 20 sessions of `claude -p "Reply with the single word ok."` (Claude Code 2.1.267, all built-in tools plus the `rtok mcp` server's 12 tools; one API request each, 21 `kind = tools_rewrite` rows). Rows (`proxy` / `tools_rewrite`, store `measurements`): est. tokens **389,991 → 49,266** (−340,725, **16.2 K per request**). Same request through a proxy with the rewrite off (4 sessions, API `usage.input_tokens`): **38,575**; with it on: **22,377** (20 sessions) → **−16,198 per request (−42.0 %)**, which agrees with the estimator. Share of session input over the 20-session window: 340,725 est. / (447,540 observed + 340,725) = **43.2 %** — a one-request session, so the share is the ceiling for the constant 16.2 K saving; in a long session it falls to 16.2 K × requests / total input (T59.5's 6.2 % was MCP descriptions only, over 40,402 real turns). Not measured: answer quality with truncated built-in tool descriptions (every reply was "ok"), real multi-turn sessions on this machine, Anthropic-tokenizer counts. Default stays off; the creator's 20-session precondition on the machine's own proxy is still open. |
 | Cache | read 1,367 M, creation 26.7 M, uncached input 42 K → 98.1 % hit rate |
 | Median final context | 167 K tokens per session |
 | rtk-wrapped commands visible in transcripts | 3 of 3,658 (the PreToolUse rewrite happens after the transcript records the call, so this under-counts) |
@@ -798,6 +799,38 @@ Agent SDK, not the `claude` CLI's command-hook schema). That is consistent with 
 standing rtok rule (the first bullet of §3) but does not prove it for the CLI surface. Re-run needs a
 `claude -p` invocation outside this sandbox — a real terminal or CI runner with its own
 OAuth session — to get an actual Bash/Read/MCP transcript.
+
+**Live probe (2026-10-15, T134): honoured, when the value has the tool's own response shape.**
+Claude Code 2.1.267, run outside the sandbox that blocked the 2026-09-25 attempt by pointing
+`claude -p` at LM Studio's local Anthropic endpoint (`ANTHROPIC_BASE_URL=http://localhost:1234`,
+`ANTHROPIC_MODEL=prism-ml/bonsai-27b`, `--setting-sources project`, `--settings <scratch>`,
+`--permission-mode acceptEdits`, `--allowedTools <tool>`). The hook is a scratch `PostToolUse`
+command hook (matcher `*`) that logs its stdin payload and prints
+`{"hookSpecificOutput":{"hookEventName":"PostToolUse","updatedToolOutput":<value>}}`. The model
+is irrelevant to the question (the hook runs in the CLI before the model sees the result); the
+`tool_result` block in the `stream-json` transcript is the evidence. Original content of the
+scratch file: `original-file-content-ABC`; replacement marker: `REPLACED-BY-HOOK-7731`.
+
+| Tool | `updatedToolOutput` sent | `tool_result` the model received |
+| --- | --- | --- |
+| Bash `cat note.txt` | string `"REPLACED-BY-HOOK-7731"` | `original-file-content-ABC` — **ignored** |
+| Bash `cat note.txt` | object in the shape of the payload's `tool_response` (`{stdout, stderr, interrupted, isImage, noOutputExpected}`) | `REPLACED-BY-HOOK-7731` — **replaced** |
+| Read of `note.txt` | string | `1\toriginal-file-content-ABC` — **ignored** |
+| Read of `note.txt` | object in the Read response shape (`{type: "text", file: {filePath, content, numLines, startLine, totalLines}}`) | `1\tREPLACED-BY-HOOK-7731` — **replaced** (the CLI renders the replaced `file.content` with its line numbers) |
+| MCP `mcp__rtok__ping` | content array `[{type: "text", text: "REPLACED-BY-HOOK-7731"}]` | `[{"type":"text","text":"REPLACED-BY-HOOK-7731"}]` — **replaced** |
+
+Findings. (1) The CLI honours `updatedToolOutput` for built-in tools and MCP tools even though
+the CLI hooks page does not list the field. (2) The value must match the tool's own response
+object (for Bash and Read, the `tool_response` the hook receives on stdin); a bare string is
+silently ignored for both. (3) The hook payload carries `tool_response` in that shape, so a
+hook can copy it, shrink one field and return it. Not probed: `WebSearch`/`WebFetch` (the local
+model cannot drive them), `Edit`/`Write`, parallel tool calls, and later Claude Code versions.
+A scratch hook, not shipped.
+
+Consequence for I-91: the gate is open. Whether rtok may shrink native Read/Bash output in place
+(pointer + `expand <id>`) contradicts the standing rule "PostToolUse can only add context", so it is the
+creator's call (`AGENTS.md` rule line, then the `cmd`/`read`/`guard` design). No product code
+changed by T134.
 
 ## 4. Comparison matrix
 
@@ -1618,6 +1651,18 @@ Eligible share by tool (sums to 6.54 %): `Bash` 2.12 %, `Read` of code 1.40 %, r
 **Must-keep fixture.** `tests/fixtures/p28_must_keep.toml` (hand-written, fictional `acme` project, no real data): 7 tool results (build errors, test failure, diff, grep records, JSON response, service log, design note) with 54 verbatim must-keep spans of six kinds: paths with `file:line`, identifiers, error lines, numbers, commands, ids. At least two spans per body sit outside the first 8 and last 4 lines the pointer shows. `tests/p28_must_keep.rs` validates the fixture and scores the shipped pointer: the pointer keeps 14 of the 54 (26 %), exactly those on the first 8 or last 4 lines; `expand` returns all of them.
 
 Caveats: `bytes / 4` underestimates code (about 3 chars per token), so the true token shares are somewhat higher; the tool-name classes come from the transcript's own `tool_use` records; transcripts of the last 60 days only, Claude Code only (Codex, Cursor and others are not in the denominator); mtime-selected files may hold older, uncounted requests; eligibility assumes the 4-message boundary of the proxy even though no proxy ran; micro-compaction by the host, if any, is not modelled. Commands: read-only `sqlite3 -readonly "file:<home>/rtok.db?mode=ro"` for the `archive`, `archive_decisions` and config values; `rtok stats --since 30d --json`.
+
+### 16.9 P28 compressor on a local model: attempt, no gate evidence (T385.9.3, 2026-10-15)
+
+Local reference run, **not the Gate P28 bench** (the creator allowed LM Studio with `prism-ml/bonsai-27b`, a 2-bit 27B, for this card; defaults unchanged). Setup: two scratch `rtok proxy` instances (`rtok 0.17.0`, built from `origin/main`, own `RTOK_HOME`), both `mode = "compress"` with `upstream = http://localhost:1234`; arm A `[plugins.compress.llm] enabled = false`, arm B `enabled = true, model = "prism-ml/bonsai-27b"`. Task: `claude -p` (2.1.267, `--setting-sources project`, `--allowedTools Read`) reads six 15 KB log files one per call, then must name the error code on one `ERROR` line of the first file.
+
+| Run | Result |
+| --- | --- |
+| 3 tasks x 2 arms in parallel | all six hit the 1500 s timeout (the local model cannot prefill six ~37 K-token sessions at once); no data |
+| Arm A alone | 6 turns, 576 s, `usage.input_tokens` 252,859 (213,760 cached), 337 output tokens, **empty final answer** |
+| Arm B alone | 8 turns, 12 s, input 98,386 (98,304 cached), 233 output tokens, **empty final answer**; store shows **0** `archive_summaries`, no internal-lane call and no compress `Measurement` row, so the compressor never fired |
+
+Why nothing can be concluded: the model gave an empty answer in both arms (pass rate 0 of 2, control included), the two runs differ in turns and in LM Studio's prompt-cache state (576 s vs 12 s), and arm B did not compress anything (the `Read` results were not eligible within the last `keep_turns = 4` turns, or the queue did not run in 8 turns). No cost per passed task, no compressor tokens. A real bench needs a model that passes the control, tasks with more than `keep_turns` turns after the large results, and an `rtok bench` arm for the compressor (`rtok bench` has none today). Gate P28 stays open and the flag stays off.
 
 ## 17. Sharing context between an agent and its sub-agents (2026-09-21)
 
@@ -2493,7 +2538,7 @@ What `rtok agents usage --source logs` reads per host, from each host's own sour
 | Host | Reads | Verdict |
 | --- | --- | --- |
 | OpenCode | `message.data` JSON in `opencode.db` | supported |
-| Kilo | `message.data` JSON in `kilo.db` | supported; the reader runs on the real `kilo.db` (2026-10-12) but that file holds no messages, so a real message row is **unverified** |
+| Kilo | `message.data` JSON in `kilo.db` | supported; the reader runs on the real `kilo.db`; a real assistant row was read on 2026-10-15 (§30.1, `a_real_kilo_7_8_1_assistant_row_is_read_with_its_extra_fields`) |
 | Copilot CLI | `tokenDetails` (else `usage`) of each `modelMetrics` entry of `session.shutdown` in `session-state/*/events.jsonl` | supported, per session; checked on the one real log (2026-10-12); a resumed session counts its last shutdown only (cumulative per the SDK source, 2026-10-12), not yet seen in a real resumed log |
 | Gemini CLI | `tokens` of `gemini` messages in `tmp/*/chats/session-*.jsonl` (and legacy `.json`) | supported, **unverified** on real files (no Gemini CLI and no chats on this machine, 2026-10-12) |
 | Droid | none | `unsupported` |
@@ -2509,6 +2554,7 @@ What `rtok agents usage --source logs` reads per host, from each host's own sour
 - The `message` table has `id`, `session_id`, `time_created` (milliseconds) and a JSON `data` column (`packages/core/src/session/sql.ts`). An assistant message's `data` carries `role`, `modelID`, `providerID`, `time.created`, and `tokens` = `{input, output, reasoning, cache: {read, write}}` (`packages/core/src/v1/session.ts`, `Assistant`).
 - `input` already excludes the cache legs and `output` excludes the reasoning tokens: `input = inputTokens - cacheRead - cacheWrite`, `output = outputTokens - reasoningTokens` (`packages/opencode/src/session/session.ts`, `getUsage`, and the same arithmetic in Kilo's `packages/core/src/v1/session.ts`). The reader adds reasoning back into output, as it is billed as output.
 - Checked on this machine on 2026-10-12: Kilo 7.8.1 (`kilo --version`) keeps `~/.local/share/kilo/kilo.db` with 277 sessions, but its `message`, `part` and `session_message` tables hold no rows and the `tokens_*` columns of `session` are all 0, so `rtok agents usage --source logs --host kilo` rightly prints nothing and does not fail. The columns the reader declares (`message.id`, `session_id`, `time_created`, `data`) exist in that schema, and `AssistantMessage.tokens` = `{total?, input, output, reasoning, cache: {read, write}}` is the shape in the host's source (https://github.com/Kilo-Org/kilocode, tag `v7.8.1`, commit `4089197545a01bbc9fa8041c1305b3fb0b0f8e66`, `packages/schema/src/v1/session.ts`). What no file here shows is a real `message.data` row, so that part stays **unverified** (2026-10-12): it needs a machine where Kilo has run a session.
+- **Real message row, 2026-10-15 (T396).** One session was run on this machine with `KILO_CONFIG_CONTENT='{"provider":{"lmstudio":{"npm":"@ai-sdk/openai-compatible","options":{"baseURL":"http://127.0.0.1:1234/v1"},"models":{"prism-ml/bonsai-27b":{}}}}}' kilo run -m lmstudio/prism-ml/bonsai-27b "Reply with the single word ok."` (Kilo 7.8.1, LM Studio local model). `kilo.db` then held 2 `message` rows; the assistant row's `data` is `{"parentID","role":"assistant","mode":"code","agent":"code","path":{"cwd","root"},"cost":0,"tokens":{"total":17074,"input":17049,"output":4,"reasoning":21,"cache":{"write":0,"read":0}},"modelID":"prism-ml/bonsai-27b","providerID":"lmstudio","time":{"created","completed"},"finish":"stop"}`, i.e. the documented shape plus `parentID`, `mode`, `agent`, `path`, `cost`, `tokens.total` and `finish`. `rtok agents usage --source logs --host kilo` printed 17.07K tokens (17,049 + 4 + 21 = `tokens.total`), 1 session. The "unverified" tag on this row is resolved; `tokens.total` equals input + output + reasoning when the cache legs are 0, the cache legs were not exercised (the local provider reports none). Fixture: the same row with the working directory scrubbed, `a_real_kilo_7_8_1_assistant_row_is_read_with_its_extra_fields` in `src/measure/usage/sqlite.rs`.
 - This corrects the 2026-09-17 note in `measure::codex` that `opencode.db` carries no token counts. Checked on this machine on 2026-10-03: the sums over `role = 'assistant'` messages (input, cache read, cache write, output + reasoning) match what `rtok agents usage --host opencode` prints for all four legs.
 
 ### 30.2 Copilot CLI
@@ -2971,3 +3017,107 @@ Question: what does Codex send and read on these three events, so rtok can wire 
 | Tool names | `Bash` (shell and `exec_command`), `apply_patch`, `mcp__<server>__<tool>`, other local tools by name; `spawn_agent` also matches `Agent`; hosted tools such as web search are not hooked | docs |
 
 Consequences for rtok: Codex's `Bash` is Claude's `Bash`, so the existing Bash rewrite and deny paths apply once the output carries `allow`; there is no `Read` tool (reads go through `Bash`), and file edits are `apply_patch` with the patch text in `tool_input.command`, so T262.3's ledger cannot count Codex reads and parses the `*** Add/Update/Delete File:` and `*** Move to:` headers out of the patch text in `tool_input.command` (the docs' shape). Not verified: whether `allow` also skips Codex's own approval prompt on a rewritten command (the scratch run used `approval_policy = "never"`), and the `apply_patch` payload itself: the fake model's tool list (`exec_command`, `write_stdin`, `request_user_input`, `view_image`, goal and agent tools) offered no `apply_patch`, with or without `-s workspace-write`, `features.apply_patch_freeform` or a bundled model name, so the hook never fired on one.
+
+## 41. Semantic memory over an embeddings endpoint (T668, checked 2026-10-15)
+
+Question: what real embedding source can sit behind `[plugins.memory.embed]` without a default download, a default spend, or a vector dependency in the default build. The creator chose a remote OpenAI-compatible endpoint; a local ONNX/candle model was rejected for its weights download and native runtime.
+
+| Fact | Source |
+| --- | --- |
+| `POST /embeddings` with `model` and `input` (string or array); `dimensions` only for `text-embedding-3` and later; `encoding_format` `float` (default) or `base64` | OpenAI API reference, Embeddings, create: https://developers.openai.com/api/reference/resources/embeddings/methods/create (checked 2026-10-15) |
+| Answer: `object: "list"`, `data[]` of `{object: "embedding", index, embedding}`, `model`, `usage`; at most 8,192 tokens per input, empty input refused | same page, same date |
+| Ollama serves `/v1/embeddings` (`model`, `input`, `encoding_format`, `dimensions`; `user` unsupported); local base URL `http://localhost:11434/v1/`; the key is required by clients but ignored locally; cloud `https://ollama.com/v1` needs a key in `OLLAMA_API_KEY` | Ollama docs, OpenAI compatibility: https://docs.ollama.com/api/openai-compatibility (checked 2026-10-15) |
+| `reqwest` 0.13.4 with `blocking` and `rustls` is already a workspace dependency | `Cargo.toml` of this repository |
+
+Not verified: OpenAI's base URL `https://api.openai.com/v1` (the fetched reference page shows the relative path only; it is the SDK default), and the price per token (not needed: the cap is `max_chars`, not money).
+
+Decision: `provider = "http"` posts `{"model", "input"}` to `<url>/embeddings` and reads `data[0].embedding`. It sends no `dimensions` field, so a server that lacks it cannot refuse the request; the length of the answer must equal `[embed] dimensions` or the vector is dropped. Cost control is a hard `max_chars` per request, no counters in the database. Any failure falls back to the plain note search with a warning; the hook (10 ms budget) never calls the endpoint and reads only the FTS leg while a remote is configured. Remote vectors are stored under their own model key (`<model>+remote1`), so they never mix with hash vectors.
+
+## 45. Reference recall inside macro arguments (T663, measured 2026-10-16)
+
+serena's LSP-grade references (rtok-vs-serena comparison, PR #1071; **unverified** here) are out of reach without a language server, but the one construct class that held the tags index below LSP on this repo was calls in macro arguments. Measured with `tests/graph_truth.rs` (39 labels, `cargo test --test graph_truth labelled_symbols -- --nocapture`, debug build, this repo at the T663 commit):
+
+| | before | after |
+| --- | --- | --- |
+| references | 119/126, recall 0.944 | 126/126, recall 1.000 |
+| definitions | 91/92, precision 1.000 | 91/92, precision 1.000 |
+| sites | 210/218, 0.963 | 217/218, 0.995 |
+
+Change: one tree-sitter pattern in `RUST_EXTRA_REF` (`src/plugins/read/outline.rs`) captures an identifier directly followed by a parenthesised `token_tree`. No tool and no description token added (graph surface unchanged). The labels are hand-picked from this repo, so 1.000 is a floor guard on that set, not a general recall; reference *precision* of the new pattern was not measured (a call-shaped identifier inside `macro_rules!`/`quote!` bodies counts as a reference).
+
+## 42. engram features: take or skip (T667, checked 2026-10-16)
+
+Source: engram README at tag v3.4.0 (<https://github.com/Gentleman-Programming/engram>, read through the GitHub API on 2026-10-16). No memory-bench number exists for engram, so nothing here is a saving claim.
+
+| engram feature | Decision | Why |
+| --- | --- | --- |
+| Project-aware reads: a read uses the current project when none is named (README, "Project-aware") | **Take** (T667) | rtok's `mem_search` ranked every project's notes alike. Now a note of the searcher's project wins a near tie (`search_notes_in`, boost 1.3), another project's clearly better match still leads, and no new tool or flag is needed. |
+| Topic keys (`mem_suggest_topic_key`) | Already have | `(project, kind, title)` upsert since T66.1; the model need not ask a tool for a key. |
+| Pinned-first recall | Already have | `memory pin` leads SessionStart recall (T69.1) and, since T669, lifts a search hit. |
+| Session summary and session start/end tools | Already have | `session:*` checkpoint notes and `startup_recall` (T71.2). |
+| `mem_judge`, `mem_compare`, `mem_judge_many` (relation judging) | Skip | Spends model output on bookkeeping; the admission gate (T671) and topic keys cover duplicates without a model. |
+| `mem_consolidate` after preview and confirmation | Skip | Model-driven merging of observations; retire/supersede/forget (T69.1, T669) are reversible without it. |
+| `mem_save_prompt` | Skip | The `remember:` prompt prefix already preserves a user request. |
+| Git Sync chunks, Engram Cloud, HTTP core | Skip | A second daemon or network path; `memory export` / `import` JSONL (T294) moves notes through git already. |
+| 18 tools | Skip | About 1 865 description tokens every turn (`research.md` §13); rtok keeps 3 memory tools. |
+
+## 43. Cypher-style query shapes without a query tool (T665, checked 2026-10-16)
+
+codebase-memory-mcp is described as Cypher-style (rtok-vs-codebase-memory-mcp comparison, PR #1071; **unverified** here: the upstream README was not re-read). rtok keeps seven graph tools (description gate: 170 tokens, now 169) and takes shapes as parameters of existing tools. The choice is grounded in the competitor's published shapes and in what `symbol`/`callers`/`impact`/`explore` already answer; no rtok log count backs it, and no shared-corpus saving was measured.
+
+| Cypher shape | rtok today | Decision |
+| --- | --- | --- |
+| callers of X (depth 1..n) | `callers`, `impact(depth)` | already have |
+| callees of X | `symbol` prints `calls:` | already have |
+| path A → B | `impact(to)`, `explore` | already have |
+| definitions in file F | `outline` | already have |
+| definitions in file F of kind K | `outline` printed every kind | **take**: `outline(path, kind)` keeps the lines of one kind |
+| definitions nobody references (dead code), under a path | CLI `graph dead` only | **take**: `callers` with no `name` lists them, `path`/`kind` narrow |
+| arbitrary pattern match / aggregation | none | skip: needs a query language and its description cost |
+| labels, properties, cross-repo traversal | project scope exists | skip |
+
+Cost: the two parameters add 4 description tokens to the MCP surface (report `~1037` → `~1041`). Backends: both shapes read the tags index; a text-mode project says dead-code analysis is unavailable, as `graph dead` does.
+
+## 44. Review and blast-radius features without a bigger tool surface (T664, checked 2026-10-16)
+
+code-review-graph is described as ahead on review features with ~30 MCP tools (rtok-vs-code-review-graph comparison, PR #1071; **unverified** here: the upstream README was not re-read). The take/skip below is by what an agent asks after an edit, "what does this touch and is it covered", judged against what rtok already answers. The graph surface is at its 170-token gate, so a feature must arrive as output of an existing tool.
+
+| Question | rtok today | Decision |
+| --- | --- | --- |
+| Who calls what I changed | `graph_diff` callers per changed definition, `impact` | already have |
+| Blast radius grouped by file, budgeted | `impact` (T377 blast grouping) | already have |
+| Reading list ranked by risk | `rtok graph review` (T454), CLI only | already have; stays CLI to keep the MCP bill flat |
+| Changed definitions no test reaches | only inside `graph review` | **take**: `graph_diff` ends each project's changed list with one `untested: a, b` line |
+| One risk number on `graph_diff` | `graph review` scores | skip: a second scorer would duplicate `review.rs`; the untested line is the actionable part |
+| Execution flows, communities | no such index | skip: needs a new index, no saving evidence |
+| Dedicated review/blast tools | n/a | skip: tool descriptions are the cost rtok competes on |
+
+The line uses the caller rows `graph_diff` already gathers (depth 2), so it costs no extra walk; `graph review` looks 3 callers deep, so the two can differ on a definition reached only at depth 3. Description tokens do not change. No shared-corpus saving was measured.
+
+## 46. Hook p50 harness, rerun script, and why T687 has no number yet (T687, checked 2026-10-16)
+
+The §19.2 harness is not in the repository. This is the script (node, `spawn` with a shell, payload on stdin, clock stops on `close`, commands interleaved round by round so load drift hits all of them). Run it as `node hookbench.js 300 true "<hook.json command>"`:
+
+```js
+// Round-robin node spawn(cmd,{shell:true}), payload on stdin, clock stops on close (research.md 19.2).
+const { spawn } = require('node:child_process');
+const cmds = process.argv.slice(3);
+const rounds = Number(process.argv[2]);
+const payload = JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Read', tool_input: { file_path: '/tmp/x' }, cwd: process.cwd(), session_id: 'bench' });
+const times = cmds.map(() => []);
+const run = (cmd) => new Promise((res) => {
+  const t0 = process.hrtime.bigint();
+  const p = spawn(cmd, { shell: true, stdio: ['pipe', 'ignore', 'ignore'] });
+  p.on('close', () => res(Number(process.hrtime.bigint() - t0) / 1e6));
+  p.stdin.end(payload);
+});
+(async () => {
+  for (let r = 0; r < rounds; r++) for (let i = 0; i < cmds.length; i++) times[i].push(await run(cmds[i]));
+  cmds.forEach((c, i) => {
+    const s = times[i].sort((a, b) => a - b);
+    console.log(`${c.slice(0, 60).padEnd(60)} p50 ${s[Math.floor(s.length / 2)].toFixed(2)} p95 ${s[Math.floor(s.length * 0.95)].toFixed(2)} ms`);
+  });
+})();
+```
+
+No T687 number was taken. The machine was not idle: 16 cores at load average 13 to 20 with other sessions building, and the `true` floor read p50 8.97 ms (100 rounds) against the 5.2 ms of §19.2, so any hook figure would be mostly load. For scale only, the installed `rtok-hook` v0.15.1 (no resident) read p50 26.64 ms in the same run; that is neither the current code nor a result. What §19.2/§19.7 already fix: the floor is 5.2 to 5.6 ms (node plus `/bin/sh`), the hook with a resident is 12.3 to 12.5 ms, so reaching 10 ms means taking at most 4.4 ms above the floor for the shell line, the `rtok-hook` start, the socket round trip and the hook. The next step is a rerun on a quiet machine of `command -v rtok-hook && exec rtok-hook PreToolUse` against `true` and a bare `rtok-hook` start, to see which of those four pieces owns the 6.7 ms, before touching code.

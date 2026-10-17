@@ -10,6 +10,8 @@
 
 pub use rtok_store::*;
 
+mod http_embed;
+
 /// Show the migration spinner on a terminal. [`crate::cli::run`] calls this before any open.
 pub fn install_migrate_spinner() {
     rtok_store::on_long_migrate(|msg, f| rtok_sys::proc::ProgressRunner::wait(msg, f));
@@ -17,12 +19,19 @@ pub fn install_migrate_spinner() {
 
 /// `[plugins.memory.embed]` as the plain settings the store accepts.
 pub fn embed_settings(embed: &crate::config::MemoryEmbed) -> rtok_store::EmbedSettings {
+    // T668: only an enabled `provider = "http"` builds a client; every other value keeps the
+    // offline hash embedder.
+    let remote = (embed.enabled && embed.provider == "http")
+        .then(|| http_embed::HttpEmbedder::from_config(embed, |k| std::env::var(k).ok()))
+        .flatten()
+        .map(|e| rtok_store::Remote(std::sync::Arc::new(e)));
     rtok_store::EmbedSettings {
         enabled: embed.enabled,
         provider: embed.provider.clone(),
         model: embed.model.clone(),
         dimensions: embed.dimensions,
         hybrid: embed.hybrid,
+        remote,
     }
 }
 
