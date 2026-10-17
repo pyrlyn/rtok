@@ -80,7 +80,7 @@ type Rule = { reply?: string; hold?: boolean };
 async function interceptSocket(page: Page, rule: (request: unknown) => Rule | undefined) {
   let release = () => {};
   const gate = new Promise<void>((open) => (release = open));
-  await page.routeWebSocket(/\/ws$/, (ws) => {
+  await page.routeWebSocket(/\/ws(\?.*)?$/, (ws) => {
     const server = ws.connectToServer();
     ws.onMessage((message) => {
       const { reply, hold } = rule(JSON.parse(String(message))) ?? {};
@@ -164,7 +164,7 @@ test("clear safe junk plans without deleting and deletes only on the confirmed m
   rtok,
 }) => {
   const sent: { junk?: { action: string; paths: string[] } }[] = [];
-  await page.routeWebSocket(/\/ws$/, (ws) => {
+  await page.routeWebSocket(/\/ws(\?.*)?$/, (ws) => {
     const server = ws.connectToServer();
     ws.onMessage((message) => {
       sent.push(JSON.parse(String(message)));
