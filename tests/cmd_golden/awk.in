@@ -27,6 +27,11 @@ src/a21.rs
 src/a22.rs
 src/a23.rs
 src/a24.rs
+src/a25.rs
+src/a26.rs
+src/a27.rs
+src/a28.rs
+src/a29.rs
 tests/t0.rs
 tests/t1.rs
 tests/t2.rs
@@ -52,4 +57,9 @@ tests/t21.rs
 tests/t22.rs
 tests/t23.rs
 tests/t24.rs
+tests/t25.rs
+tests/t26.rs
+tests/t27.rs
+tests/t28.rs
+tests/t29.rs
 awk: line 1: fatal: division by zero

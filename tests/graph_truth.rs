@@ -123,6 +123,7 @@ pub struct OnlyTyped;
 pub struct Recv;
 impl Recv {
     pub fn method_callee(&self) {}
+    pub fn macro_method(&self) -> u8 { 1 }
 }
 pub fn plain_callee() {}
 pub fn scoped_callee() {}
@@ -140,6 +141,7 @@ pub fn user(r: Recv, t: Vec<OnlyTyped>) {
     self::scoped_callee();
     r.method_callee();
     assert!(macro_callee());
+    assert_eq!(r.macro_method(), 1);
 }
 ";
     std::fs::write(root.join("lib.rs"), src).unwrap();
@@ -168,7 +170,8 @@ export function ts_user(t: Array<TsTyped>) {
         ("ts_plain_callee", true),  // T52.5 plain call via TS_CALL_TYPE_REF
         ("ts_member_callee", true), // T52.5 member call via TS_CALL_TYPE_REF
         ("TsTyped", true),          // T52.5 generic argument via TS_CALL_TYPE_REF
-        ("macro_callee", false),    // macro arguments are an opaque token_tree
+        ("macro_callee", true),     // T663 call in macro arguments via RUST_EXTRA_REF
+        ("macro_method", true),     // T663 method call in macro arguments
     ]
     .into_iter()
     .filter(|(n, want)| seen(n) != *want)
@@ -238,8 +241,8 @@ fn new_constructs_group_under_the_enclosing_definition() {
 /// Definitions must clear the P8b bar of 0.9 and do, at 1.0. References clear it
 /// too since T52.5: rtok's own `RUST_EXTRA_REF` / `TS_CALL_TYPE_REF` cover type
 /// positions, scoped calls and path segments, and every remaining miss is inside
-/// a macro body (opaque `token_tree`), which no tags query can reach. The floor
-/// below is a regression guard on the measured 0.924 (0.314 while the T52.5 queries were reverted, 0.351
+/// a macro body (opaque `token_tree`), which only T663's `token_tree` pattern reaches. The floor
+/// below is a regression guard on the measured 1.000 after T663 (0.944 before it; 0.924 at T387, 0.314 while the T52.5 queries were reverted, 0.351
 /// at T8.8, 0.339 at T8.19, 0.318 before T34.6; repo drift, not index drift),
 /// with slack for label drift — not a target. `src/plugins/graph/PLAN.md`
 /// names the constructs under "Known misses".
@@ -349,9 +352,9 @@ fn labelled_symbols_are_found() {
         "definition precision {precision:.3}: a name resolved to a file it is not defined in"
     );
     assert!(
-        ref_recall >= 0.92,
-        "reference recall {ref_recall:.3} fell below the 0.92 floor (measured 0.924 after \
-         T52.5 / T387; every remaining miss is a macro body); run \
+        ref_recall >= 0.98,
+        "reference recall {ref_recall:.3} fell below the 0.98 floor (measured 1.000 after \
+         T663, which reads calls inside macro arguments; 0.944 before); run \
          every_label_names_a_file_that_mentions_the_symbol first — a stale label reads as a miss"
     );
     assert!(

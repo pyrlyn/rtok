@@ -1,0 +1,3 @@
+24 checks: 20 pass, 1 fail, 1 pending, 2 skipping
+job-7 (ubuntu-latest)	fail	7m3s	https://github.com/o/r/actions/runs/1007/job/207
+job-15 (ubuntu-latest)	pending	15m3s	https://github.com/o/r/actions/runs/10015/job/2015

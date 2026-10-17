@@ -1,20 +1,16 @@
-commit 0000000000000000000000000000000000000000
-Author: Dev <dev@example.com>
-Date:   Wed Sep 20 00:00:00 2026
-
-    add retry to fetch client
-
-commit 0100000000000000000000000000000000000001
-Author: Dev <dev@example.com>
-Date:   Wed Sep 19 00:00:00 2026
-
-    fix off-by-one in pagination
-
-commit 0200000000000000000000000000000000000002
-Author: Dev <dev@example.com>
-Date:   Wed Sep 18 00:00:00 2026
-
-    T240: golden coverage for cargo rules
-
-commit 0300000000000000000000000000000000000003
-Author: Dev <dev@example.com>
+[15 commits] Dev · 2026
+0000000 Sep 20 add retry to fetch client
+0100000 Sep 19 fix off-by-one in pagination
+0200000 Sep 18 T240: golden coverage for cargo rules
+0300000 Sep 17 refactor: split settings loader
+0400000 Sep 16 bump tokio to 1.38
+0500000 Sep 15 docs: update README examples
+0600000 Sep 14 T241: dedupe adjacent lines
+0700000 Sep 13 fix flaky test in store::tests::lock
+0800000 Sep 12 add cat rule golden
+0900000 Sep 11 clippy: silence needless_return
+1000000 Sep 10 T242: kubectl get formatter
+1100000 Sep 9 fix panic on empty argv
+1200000 Sep 8 add benchmark for compress()
+1300000 Sep 7 T243: group diag rule
+1400000 Sep 6 release v0.9.0

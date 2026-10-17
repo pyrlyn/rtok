@@ -287,11 +287,26 @@ fn config(doc: &Document) -> String {
     s
 }
 
+/// The doctor page with the agents block cut to the host variants where rtok has at least one
+/// module installed. The full list names every supported host (over 30 variants on macOS, each
+/// with four reasoned rows) and alone outgrew the default budget, so `--ai` dropped the whole
+/// section on an empty store; the rest is counted, and `rtok doctor` still prints it all.
 fn doctor(doc: &Document) -> String {
+    use crate::agents::ModuleState;
+    let mut report = doc.doctor.clone();
+    let total = report.agents.len();
+    report
+        .agents
+        .retain(|a| a.modules.iter().any(|m| m.state == ModuleState::Installed));
+    let hidden = total - report.agents.len();
     let mut s = String::from("units: live probes, not store rows\n");
-    s.push_str(&doc.doctor.to_compact_text());
+    s.push_str(&report.to_compact_text());
     if !s.ends_with('\n') {
         s.push('\n');
+    }
+    if hidden > 0 {
+        use std::fmt::Write as _;
+        let _ = writeln!(s, "agents without rtok: {hidden} (rtok doctor lists them)");
     }
     s
 }
@@ -480,6 +495,40 @@ mod tests {
                 },
             ],
         }
+    }
+
+    fn agent(host: &'static str, state: crate::agents::ModuleState) -> crate::doctor::AgentModules {
+        crate::doctor::AgentModules {
+            host,
+            kind: "cli",
+            modules: vec![crate::agents::ModuleRow {
+                name: "hooks",
+                state,
+                note: String::new(),
+            }],
+        }
+    }
+
+    /// Only host variants with rtok installed are listed; the rest are counted, so a machine
+    /// with many supported hosts does not push the doctor section past the budget.
+    #[test]
+    fn doctor_lists_only_hosts_with_rtok_installed() {
+        use crate::agents::ModuleState;
+        let mut d = doc();
+        d.doctor.agents = vec![
+            agent("claude", ModuleState::Installed),
+            agent("zed", ModuleState::NotSupported),
+            agent("kimi", ModuleState::NotInstalled),
+        ];
+        let out = doctor(&d);
+        assert!(out.contains("  claude (cli)"), "{out}");
+        assert!(
+            !out.contains("zed (cli)") && !out.contains("kimi (cli)"),
+            "{out}"
+        );
+        assert!(out.contains("agents without rtok: 2"), "{out}");
+        d.doctor.agents.truncate(1);
+        assert!(!doctor(&d).contains("agents without rtok"));
     }
 
     fn cfg_with_budget(budget: u32) -> Config {

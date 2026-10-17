@@ -1,0 +1,6 @@
+On branch feat/cmd-formatters ahead 3 (origin/feat/cmd-formatters)
+M  src/plugins/cmd/{compact.rs,formatters.rs}
+A  src/plugins/cmd/loops.rs tests/cmd_golden/{for_poll.in,for_poll.out}
+ M src/plugins/cmd/mod.rs plan.md todo.md done.md tests/cmd_golden/{git_status.out,git_status.in}
+ D src/plugins/cmd/old.rs
+?? bench/c14/ notes.txt scratch/{a.log,b.log,c.log}

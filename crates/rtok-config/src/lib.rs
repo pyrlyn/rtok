@@ -385,9 +385,12 @@ section! {
 
 section! {
     /// `[proxy.tools_rewrite]` — opt-in `tools[]` description rewrite (T59.5). Off: bytes
-    /// identical. Empty `allow` keeps every tool not in `deny`. `input_schema` is never touched.
+    /// identical. Empty `allow` keeps every tool not in `deny`. `input_schema` keeps its names,
+    /// `type`, `required` and `enum` byte for byte; only with `compact_schema` (T686) do its
+    /// `description`, `default` and `examples` strings shrink.
     ToolsRewrite {
         enabled: bool = false,
+        compact_schema: bool = false,
         max_description_tokens: u32 = 60,
         allow: Vec<String> = Vec::new(),
         deny: Vec<String> = Vec::new(),
@@ -1058,8 +1061,9 @@ section! {
         /// Off: the commands refuse, MCP lists no `worktree_*` tool and the host hooks do what
         /// the host does without rtok.
         enabled: bool = true,
-        /// Where worktrees are created, as `<root>/<repo>-<task>`.
-        root: PathBuf = p("~/.rtok/worktrees"),
+        /// Where worktrees are created, as `<root>/<repo>-<task>`. A relative root is under the
+        /// main checkout.
+        root: PathBuf = p(".rtok/worktrees"),
     }
 }
 
@@ -1218,6 +1222,9 @@ section! {
         rules: PathBuf = p("~/.rtok/rules.toml"),
         /// Drop-in dir: every `*.toml` merges after `rules` in name order (T50.2).
         rules_dir: PathBuf = p("~/.rtok/rules.d"),
+        /// Print the `[rtok <id12> · N lines]` reference line after a cut (T661).
+        /// `false` (`RTOK_PLUGINS_CMD_TRAILER=false`, `rtok run --no-ref`) drops it.
+        trailer: bool = true,
         trailer_min_lines: u32 = 40,
         fail_tail_lines: u32 = 80,
         never_wrap: Vec<String> = strs(&["rtok", "sudo"]),
@@ -1331,6 +1338,27 @@ section! {
         model: String = s("all-MiniLM-L6-v2"),
         dimensions: u32 = 384,
         hybrid: bool = true,
+        /// `provider = "http"` (T668): base URL of an OpenAI-compatible embeddings API; rtok
+        /// posts to `<url>/embeddings`.
+        url: String = String::new(),
+        /// Name of the environment variable that holds the API key; empty sends none.
+        api_key_env: String = String::new(),
+        /// Longest text sent to the endpoint, in characters; a longer one is never sent.
+        max_chars: u32 = 8000,
+    }
+}
+
+section! {
+    /// `[plugins.memory.extract]` — `rtok memory extract` turns a transcript into notes through a
+    /// program of the user's choosing (T666.1; off by default because a model call can cost money).
+    MemoryExtract {
+        enabled: bool = false,
+        /// Program and arguments: the transcript arrives on stdin, one `{"title","body"}` JSON
+        /// object per stdout line goes back.
+        command: Vec<String> = Vec::new(),
+        max_notes: u32 = 5,
+        /// Bytes of transcript text sent to the program; the end of the session is kept.
+        max_input_bytes: u32 = 60000,
     }
 }
 
@@ -1353,7 +1381,17 @@ section! {
         spawn_brief: bool = true,
         /// Token budget for the spawn brief (T130).
         spawn_brief_tokens: u32 = 300,
+        /// Admission gate on MCP `mem_save` (T671): a body shorter than `admit_min_chars`, or
+        /// one `admit_similarity` percent or more like a stored note, is refused with the
+        /// stored note's id. Local text only; no network.
+        admit: bool = true,
+        admit_min_chars: u32 = 5,
+        admit_similarity: u32 = 85,
+        /// `rtok memory forget` retires an unpinned note nobody read for this many days
+        /// (T669; 0 = the command needs `--days`). Never runs by itself.
+        forget_after_days: u32 = 90,
         embed: MemoryEmbed = MemoryEmbed::default(),
+        extract: MemoryExtract = MemoryExtract::default(),
     }
 }
 

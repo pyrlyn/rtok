@@ -1,0 +1,85 @@
+argv: mypy src
+exit: 0
+min_saving: 70
+---
+src/app/mod0.py:20: error: Argument 1 to "f0" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod0.py:20: note: Possible overload variant: def f0(x: int) -> None
+src/app/mod1.py:21: error: Argument 1 to "f1" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod2.py:22: error: Argument 1 to "f2" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod3.py:23: error: Argument 1 to "f3" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod3.py:23: note: Possible overload variant: def f3(x: int) -> None
+src/app/mod4.py:24: error: Argument 1 to "f4" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod5.py:25: error: Argument 1 to "f5" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod6.py:26: error: Argument 1 to "f6" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod6.py:26: note: Possible overload variant: def f6(x: int) -> None
+src/app/mod0.py:27: error: Argument 1 to "f7" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod1.py:28: error: Argument 1 to "f8" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod2.py:29: error: Argument 1 to "f9" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod2.py:29: note: Possible overload variant: def f9(x: int) -> None
+src/app/mod3.py:30: error: Argument 1 to "f10" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod4.py:31: error: Argument 1 to "f11" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod5.py:32: error: Argument 1 to "f12" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod5.py:32: note: Possible overload variant: def f12(x: int) -> None
+src/app/mod6.py:33: error: Argument 1 to "f13" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod0.py:34: error: Argument 1 to "f14" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod1.py:35: error: Argument 1 to "f15" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod1.py:35: note: Possible overload variant: def f15(x: int) -> None
+src/app/mod2.py:36: error: Argument 1 to "f16" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod3.py:37: error: Argument 1 to "f17" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod4.py:38: error: Argument 1 to "f18" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod4.py:38: note: Possible overload variant: def f18(x: int) -> None
+src/app/mod5.py:39: error: Argument 1 to "f19" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod6.py:40: error: Argument 1 to "f20" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod0.py:41: error: Argument 1 to "f21" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod0.py:41: note: Possible overload variant: def f21(x: int) -> None
+src/app/mod1.py:42: error: Argument 1 to "f22" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod2.py:43: error: Argument 1 to "f23" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod3.py:44: error: Argument 1 to "f24" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod3.py:44: note: Possible overload variant: def f24(x: int) -> None
+src/app/mod4.py:45: error: Argument 1 to "f25" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod5.py:46: error: Argument 1 to "f26" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod6.py:47: error: Argument 1 to "f27" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod6.py:47: note: Possible overload variant: def f27(x: int) -> None
+src/app/mod0.py:48: error: Argument 1 to "f28" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod1.py:49: error: Argument 1 to "f29" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod2.py:50: error: Argument 1 to "f30" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod2.py:50: note: Possible overload variant: def f30(x: int) -> None
+src/app/mod3.py:51: error: Argument 1 to "f31" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod4.py:52: error: Argument 1 to "f32" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod5.py:53: error: Argument 1 to "f33" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod5.py:53: note: Possible overload variant: def f33(x: int) -> None
+src/app/mod6.py:54: error: Argument 1 to "f34" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod0.py:55: error: Argument 1 to "f35" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod1.py:56: error: Argument 1 to "f36" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod1.py:56: note: Possible overload variant: def f36(x: int) -> None
+src/app/mod2.py:57: error: Argument 1 to "f37" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod3.py:58: error: Argument 1 to "f38" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod4.py:59: error: Argument 1 to "f39" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod4.py:59: note: Possible overload variant: def f39(x: int) -> None
+src/app/mod5.py:60: error: Argument 1 to "f40" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod6.py:61: error: Argument 1 to "f41" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod0.py:62: error: Argument 1 to "f42" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod0.py:62: note: Possible overload variant: def f42(x: int) -> None
+src/app/mod1.py:63: error: Argument 1 to "f43" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod2.py:64: error: Argument 1 to "f44" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod3.py:65: error: Argument 1 to "f45" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod3.py:65: note: Possible overload variant: def f45(x: int) -> None
+src/app/mod4.py:66: error: Argument 1 to "f46" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod5.py:67: error: Argument 1 to "f47" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod6.py:68: error: Argument 1 to "f48" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod6.py:68: note: Possible overload variant: def f48(x: int) -> None
+src/app/mod0.py:69: error: Argument 1 to "f49" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod1.py:70: error: Argument 1 to "f50" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod2.py:71: error: Argument 1 to "f51" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod2.py:71: note: Possible overload variant: def f51(x: int) -> None
+src/app/mod3.py:72: error: Argument 1 to "f52" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod4.py:73: error: Argument 1 to "f53" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod5.py:74: error: Argument 1 to "f54" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod5.py:74: note: Possible overload variant: def f54(x: int) -> None
+src/app/mod6.py:75: error: Argument 1 to "f55" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod0.py:76: error: Argument 1 to "f56" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod1.py:77: error: Argument 1 to "f57" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod1.py:77: note: Possible overload variant: def f57(x: int) -> None
+src/app/mod2.py:78: error: Argument 1 to "f58" has incompatible type "str"; expected "int"  [arg-type]
+src/app/mod3.py:79: error: Argument 1 to "f59" has incompatible type "str"; expected "int"  [arg-type]
+Found 60 errors in 7 files (checked 112 source files)

@@ -28,7 +28,38 @@ pub async fn health(State(state): State<Arc<ProxyState>>) -> Json<Value> {
     }
 }
 
-/// `GET /live` → newest-first plain-proxy request summaries (in-memory only).
-pub async fn live_calls() -> Json<Value> {
-    Json(json!(super::live::snapshot()))
+/// `GET /live` → newest-first plain-proxy request summaries (in-memory only). Operator data:
+/// only a loopback peer gets it, so a proxy bound to `0.0.0.0` does not publish its traffic.
+pub async fn live_calls(req: axum::extract::Request) -> axum::response::Response {
+    use axum::response::IntoResponse;
+    let peer = req
+        .extensions()
+        .get::<axum::extract::ConnectInfo<std::net::SocketAddr>>()
+        .map(|c| c.0);
+    if !peer_is_local(peer) {
+        return axum::http::StatusCode::FORBIDDEN.into_response();
+    }
+    Json(json!(super::live::snapshot())).into_response()
+}
+
+/// A loopback peer, or none known (an in-process router without connect info).
+pub(crate) fn peer_is_local(peer: Option<std::net::SocketAddr>) -> bool {
+    peer.is_none_or(|p| p.ip().is_loopback() || p.ip().to_canonical().is_loopback())
+}
+
+#[cfg(test)]
+mod peer_tests {
+    use super::peer_is_local;
+
+    #[test]
+    fn only_loopback_peers_read_live_calls() {
+        assert!(peer_is_local(None));
+        assert!(peer_is_local(Some("127.0.0.1:5000".parse().unwrap())));
+        assert!(peer_is_local(Some("[::1]:5000".parse().unwrap())));
+        assert!(peer_is_local(Some(
+            "[::ffff:127.0.0.1]:5000".parse().unwrap()
+        )));
+        assert!(!peer_is_local(Some("192.168.1.9:5000".parse().unwrap())));
+        assert!(!peer_is_local(Some("[2001:db8::1]:5000".parse().unwrap())));
+    }
 }

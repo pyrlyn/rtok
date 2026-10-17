@@ -532,6 +532,8 @@ pub fn interactive(
 }
 
 #[cfg(test)]
+// T902: every `#[test]` below is unix-only (POSIX paths), so on Windows the shared helpers are unused.
+#[cfg_attr(windows, allow(dead_code, unused_imports))]
 pub(crate) mod tests {
     use super::*;
     use crate::doctor::probe::{Env, Fs, PathKind, Which};
