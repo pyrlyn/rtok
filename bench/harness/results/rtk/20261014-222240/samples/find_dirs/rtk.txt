@@ -1,0 +1,6 @@
+75F 7D:
+
+./ agents bin cli completions config doctor hooks mcp measure model modes otel plugins project proxy report store tasks tui ui web worktree
+agents/ aider amp antigravity augment claude cline codebuddy codewhale codex commandcode continue copilot crush cursor devin droid gemini goose grok junie kilo kimi kiro mimo omp opencode openhands pi
++25 more
+[+25 hidden: rtk recall c9f6c25b04d9]

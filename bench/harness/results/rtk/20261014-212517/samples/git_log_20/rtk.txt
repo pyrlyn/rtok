@@ -1,0 +1,61 @@
+12ebeb97 feat: T660.3 nested worktrees do not leak into walks, gc or clean (#1072) (62 minutes ago) <Ivan Tugay>
+  A linked worktree nested in its project (under .rtok/worktrees) is another checkout: search, tree, the graph walk and...
+a6fcf2b7 feat: T660.2 every project-root caller goes through ProjectRoot (#1070) (89 minutes ago) <Ivan Tugay>
+  The .rtok.toml layer, agents --project, checkpoint's legacy lookup, grep_symbol, memory files, rtok task, the doctor'...
+de96106a docs: claim T660.3, T660.4 and T660.5 (#1069) (2 hours ago) <Ivan Tugay>
+5c52c8f7 test(web): T661 deterministic graph overview and project link stories (#1047) (9 hours ago) <Ivan Tugay>
+  * docs: T661 claim deterministic graph overview and project link stories
+  * test(web): T661 deterministic graph overview and project link stories
+  Projects > Link And Unlink failed when Stage3D.setScene threw on a scene
+  [+8 lines omitted]
+15b3f457 docs: refresh README and move details into docs/ (#1062) (9 hours ago) <Ivan Tugay>
+a4357ac0 style: rustfmt the rtok task subcommand list in tests/skill.rs (#1041) (9 hours ago) <Ivan Tugay>
+  main fails cargo fmt --check since #1034; formatting only, so no new test.
+8511b43b test: T666 commands_e2e runs rtok outside the checkout (#1067) (12 hours ago) <Ivan Tugay>
+  The cmd() helper isolated HOME/RTOK_HOME but left the cwd at the checkout,
+  so doctor_reports_the_chain ran rtok doctor there and its junk section walked
+  every real worktree of the repository (>180 s on a machine with many large
+  [+3 lines omitted]
+7067aab3 feat: T276.3 T276.6 run every external program through ProgressRunner and ban Command::new (#1057) (12 hours...
+  * feat: T276.3 run host CLIs and the doctor MCP probe through ProgressRunner
+  - `run_cli` runs through `ProgressRunner` with the Windows shim and a
+  `running <bin> <subcommand>…` spinner; `spawn_cli`, `version_command`
+  [+30 lines omitted]
+628825f7 fix: T655 make compressor in-flight admission atomic (#1056) (13 hours ago) <Ivan Tugay>
+  * fix: T655 make compressor in-flight admission atomic
+  `submit` checked `in_flight` against the cap, marked the id seen, and only
+  then incremented, so concurrent submits could all pass the check and run
+  [+9 lines omitted]
+edc6c621 fix: T656 keep worktrees and caches when their age cannot be established (#1055) (13 hours ago) <Ivan Tugay>
+  The newest-mtime walk skipped unreadable directories, entries and mtimes
+  silently, so a partial walk could report an old mtime (or none) and
+  `worktree clean` / `worktree gc` treated the tree as idle and deleted it.
+  [+8 lines omitted]
+845af7ed fix: T654 re-read graph files after an unreadable index attempt (#1054) (13 hours ago) <Ivan Tugay>
+  An unreadable file was stored with its real mtime and size, so restoring read access (which changes neither) left the...
+888b0548 fix: T651 honor ProgressRunner timeouts with inherited output (#1053) (13 hours ago) <Ivan Tugay>
+  Output::Inherit used Command::status, which cannot be bounded, so .timeout() was
+  ignored for inherited children. Spawn and reuse the piped path's wait so the
+  direct child is killed and reaped at the deadline.
+9b33846e fix: T657 match compressor credentials to the internal provider (#1052) (13 hours ago) <Ivan Tugay>
+  The compressor sends an Anthropic Messages body, so only credentials from an Anthropic-wire
+  agent turn may reach it. An OpenAI bearer was forwarded there; Auth::from_headers now takes
+  the wire provider and yields no credential otherwise, so the summary is skipped (fail open).
+  [+1 lines omitted]
+b1c2d7fb fix: T653 exclude semantic-cache hits from provider-billed OTel usage (#1050) (13 hours ago) <Ivan Tugay>
+  A cache hit keeps its usage row for per-call analytics, but no provider request happened, so rtok.tokens skips calls ...
+3c5c790d fix: T652 refuse to replace an unreadable MCP host config (#1048) (13 hours ago) <Ivan Tugay>
+  A host config that exists but cannot be read was treated as absent, so install replaced it and dropped every other se...
+3c137617 docs: T662 record the oxfmt fix that landed through #1065 (#1049) (13 hours ago) <Ivan Tugay>
+  * docs: claim T662
+  * style: T662 oxfmt web/e2e/rtok.ts
+  oxfmt 0.68.0 wraps the spawnGroup call in Rtok.start; formatting only.
+  [+5 lines omitted]
+dcd9b326 fix: T663 T664 unblock main (jscpd, report --ai budget, Windows test tmp) (#1065) (17 hours ago) <Ivan Tugay>
+  * docs: claim T663 just dup under the jscpd threshold
+  * refactor: T663 shared agent impl macros and apply assertion bring just dup under 2%
+  jscpd rose to 2.09% (424 clones) with the T413 install hosts, each repeating
+  [+31 lines omitted]
+cd964488 chore: rename crates-packages repo to crates (#1043) (24 hours ago) <Ivan Tugay>
+6557b6d1 docs: claim T276.3 and T276.6 (#1046) (26 hours ago) <Ivan Tugay>
+804a1a75 docs: claim T651-T657 (#1045) (26 hours ago) <Ivan Tugay>

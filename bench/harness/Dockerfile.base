@@ -1,0 +1,45 @@
+# Shared base. Build context = the staging dir run.py writes (.ctx/):
+#   fixture.bundle  rtok history up to FIXTURE_REF (the workload)
+#   rtok.tar        `git archive RTOK_REF`      -> /usr/local/bin/rtok
+#   rtok-pr.tar     `git archive RTOK_PR_REF`   -> /usr/local/bin/rtok-pr (optional)
+# Layers go from least to most often changed, so a new PR commit only
+# rebuilds the rtok-pr layer.
+ARG BASE=rust:1.98.1-trixie
+FROM ${BASE}
+ARG BASE
+LABEL bench.base="${BASE}"
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      git python3 python3-venv ca-certificates curl build-essential ripgrep tree \
+    && rm -rf /var/lib/apt/lists/*
+RUN python3 -m venv /opt/tok && /opt/tok/bin/pip install --no-cache-dir tiktoken==0.12.0 \
+    && /opt/tok/bin/python -c "import tiktoken; tiktoken.get_encoding('o200k_base')"
+ENV CARGO_TERM_COLOR=never NO_COLOR=1 TERM=dumb
+
+# Fixture: the rtok repository itself at a pinned commit, the crates the cargo
+# cases touch already built so a capture measures output, not downloads.
+ARG FIXTURE_REF
+COPY fixture.bundle /tmp/fixture.bundle
+RUN set -eux; git clone -q /tmp/fixture.bundle /fixture; cd /fixture; git checkout -q "$FIXTURE_REF"; \
+    git config user.email bench@example.invalid; git config user.name bench; rm /tmp/fixture.bundle; \
+    cargo fetch --locked; cargo build -q --locked -p rtok-log; cargo test -q --locked -p rtok-config --no-run
+
+ARG RTOK_REF
+COPY rtok.tar /tmp/rtok.tar
+RUN set -eux; mkdir /build; tar -xf /tmp/rtok.tar -C /build; rm /tmp/rtok.tar; cd /build; \
+    CARGO_INCREMENTAL=0 cargo build -q --release --locked --bin rtok; \
+    install target/release/rtok /usr/local/bin/rtok; echo "$RTOK_REF" > /rtok.sha; rtok --version
+
+# The PR build reuses /build/target, so only changed crates recompile.
+ARG RTOK_PR_REF=
+COPY rtok-pr.tar /tmp/rtok-pr.tar
+RUN set -eux; if [ -n "$RTOK_PR_REF" ]; then \
+      find /build -mindepth 1 -maxdepth 1 ! -name target -exec rm -rf {} +; \
+      tar -xf /tmp/rtok-pr.tar -C /build; cd /build; \
+      CARGO_INCREMENTAL=0 cargo build -q --release --locked --bin rtok; \
+      install target/release/rtok /usr/local/bin/rtok-pr; echo "$RTOK_PR_REF" > /rtok-pr.sha; fi; \
+    rm -f /tmp/rtok-pr.tar
+
+COPY inside /bench
+COPY cases.py /bench/cases.py
+COPY tools /bench/tooldefs
+RUN mkdir -p /bench/tools && for d in /bench/tooldefs/*/; do cp "$d/tool.py" "/bench/tools/$(basename "$d").py"; done

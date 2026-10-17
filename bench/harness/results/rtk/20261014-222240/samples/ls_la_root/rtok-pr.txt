@@ -1,0 +1,39 @@
+dirs: .agents/ .cargo/ .claude/ .claude-plugin/ .config/ .git/ .github/ assets/ bench/ benches/ brand/ crates/ docs/ examples/ fuzz/ modes/ npm/ plugins/ rules/ skills/ src/ target/ tests/ tools/ web/ workspace-hack/
+.editorconfig 2.4K
+.gitattributes 204B
+.gitignore 852B
+.jscpd.json 315B
+AGENTS.md 1.3K
+CHANGELOG.md 140.4K
+CLAUDE.md -> AGENTS.md
+CONTRIBUTING.md 7.7K
+Cargo.lock 170.9K
+Cargo.toml 16.0K
+LICENSE 34.3K
+LICENSE-ROYALTY-FREE.md 2.3K
+PRICING.md 180B
+README.md 9.4K
+architecture.md 19.2K
+audit-coverage.md 15.0K
+build.rs 5.4K
+cliff.toml 2.0K
+clippy.toml 390B
+dist-workspace.toml 2.4K
+done.md 2.2M
+ideas.md 54.8K
+justfile 12.6K
+ketch.toml 1.4K
+migration.md 16.7K
+mise.toml 4.0K
+plan.md 140.0K
+pyproject.toml 2.0K
+release-plz.toml 1.3K
+research.md 407.5K
+roadmap.md 66.0K
+rustfmt.toml 23B
+skills-lock.json 278B
+sonar-project.properties 413B
+todo.md 3.5K
+toolchain.md 19.7K
+vitest.config.mjs 1.2K
+[rtok ce1a0493ed36 · 66 lines]

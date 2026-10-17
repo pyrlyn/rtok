@@ -1,0 +1,4 @@
+warning: unused variable: `unused`
+   --> crates/rtok-log/src/lib.rs:321:23
+Finished dev
+[rtok ec03d61337403036ceeb406eaa89ac5a3e52bce47ba9522a88d2d69ab7353ce1 · 11 lines · expand: rtok expand ec03d61337403036ceeb406eaa89ac5a3e52bce47ba9522a88d2d69ab7353ce1]

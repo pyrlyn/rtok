@@ -1,0 +1,11 @@
+---- bench_fail::bench_fails stdout ----
+
+thread 'bench_fail::bench_fails' (1481) panicked at crates/rtok-config/src/lib.rs:2640:9:
+assertion `left == right` failed: bench: intentional failure
+  left: 2
+ right: 3
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+test result: FAILED. 93 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+[full output: rtk recall bc8bf2bc1449]
