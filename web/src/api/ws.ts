@@ -86,7 +86,10 @@ export function pageToken(): string | null {
   }
 }
 
-export function wsUrl(location: Pick<Location, "protocol" | "host">, token?: string | null): string {
+export function wsUrl(
+  location: Pick<Location, "protocol" | "host">,
+  token?: string | null,
+): string {
   const scheme = location.protocol === "https:" ? "wss:" : "ws:";
   const query = token ? `?token=${encodeURIComponent(token)}` : "";
   return `${scheme}//${location.host}/ws${query}`;
