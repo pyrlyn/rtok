@@ -1,0 +1,13 @@
+{
+  "fixture_sha": "12ebeb972e2bea88bec939a9ca9b436db884de13",
+  "rtok_sha": "12ebeb972e2bea88bec939a9ca9b436db884de13",
+  "tokenizer": "tiktoken 0.12.0 o200k_base",
+  "runs": 30,
+  "warmup": 3,
+  "seed": 1071,
+  "rtok_pr_sha": "0129fe203ddaa2f74a4a23c56e3d402ff90c9e20",
+  "rtok": "rtok 0.17.0 (unknown)",
+  "rtk": "rtk 1.0.1",
+  "cargo": "cargo 1.98.1 (797e8a9bc 2026-08-05)",
+  "git": "git version 2.47.3"
+}

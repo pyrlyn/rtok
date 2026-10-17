@@ -1,0 +1,2092 @@
+[
+  {
+    "id": "cargo_test_pass",
+    "group": "cargo test",
+    "argv": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "rtok-config"
+    ],
+    "exit": 0,
+    "raw": 1756,
+    "tools": {
+      "rtok": {
+        "supported": true,
+        "argv": [
+          "rtok",
+          "run",
+          "--",
+          "cargo test --locked -p rtok-config"
+        ],
+        "tokens": 158,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 34.96,
+        "stdev_ms": 2.18
+      },
+      "rtok-pr": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--",
+          "cargo test --locked -p rtok-config"
+        ],
+        "tokens": 24,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 35.52,
+        "stdev_ms": 0.76
+      },
+      "rtok-pr-noref": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--no-ref",
+          "--",
+          "cargo test --locked -p rtok-config"
+        ],
+        "tokens": 10,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 34.8,
+        "stdev_ms": 1.22
+      },
+      "rtk": {
+        "supported": true,
+        "argv": [
+          "rtk",
+          "cargo",
+          "test",
+          "--locked",
+          "-p",
+          "rtok-config"
+        ],
+        "tokens": 16,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 30.2,
+        "stdev_ms": 1.35
+      }
+    }
+  },
+  {
+    "id": "cargo_test_fail",
+    "group": "cargo test",
+    "argv": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "rtok-config"
+    ],
+    "exit": 101,
+    "raw": 1751,
+    "tools": {
+      "rtok": {
+        "supported": true,
+        "argv": [
+          "rtok",
+          "run",
+          "--",
+          "cargo test --locked -p rtok-config"
+        ],
+        "tokens": 172,
+        "exit": 101,
+        "deterministic": true,
+        "median_ms": 34.68,
+        "stdev_ms": 0.56
+      },
+      "rtok-pr": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--",
+          "cargo test --locked -p rtok-config"
+        ],
+        "tokens": 97,
+        "exit": 101,
+        "deterministic": true,
+        "median_ms": 34.29,
+        "stdev_ms": 1.25
+      },
+      "rtok-pr-noref": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--no-ref",
+          "--",
+          "cargo test --locked -p rtok-config"
+        ],
+        "tokens": 78,
+        "exit": 101,
+        "deterministic": true,
+        "median_ms": 33.9,
+        "stdev_ms": 0.63
+      },
+      "rtk": {
+        "supported": true,
+        "argv": [
+          "rtk",
+          "cargo",
+          "test",
+          "--locked",
+          "-p",
+          "rtok-config"
+        ],
+        "tokens": 134,
+        "exit": 101,
+        "deterministic": true,
+        "median_ms": 37.63,
+        "stdev_ms": 2.0
+      }
+    }
+  },
+  {
+    "id": "cargo_build_noop",
+    "group": "cargo build",
+    "argv": [
+      "cargo",
+      "build",
+      "--locked",
+      "-p",
+      "rtok-log"
+    ],
+    "exit": 0,
+    "raw": 45,
+    "tools": {
+      "rtok": {
+        "supported": true,
+        "argv": [
+          "rtok",
+          "run",
+          "--",
+          "cargo build --locked -p rtok-log"
+        ],
+        "tokens": 45,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 35.07,
+        "stdev_ms": 0.88
+      },
+      "rtok-pr": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--",
+          "cargo build --locked -p rtok-log"
+        ],
+        "tokens": 19,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 36.08,
+        "stdev_ms": 0.89
+      },
+      "rtok-pr-noref": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--no-ref",
+          "--",
+          "cargo build --locked -p rtok-log"
+        ],
+        "tokens": 3,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 35.49,
+        "stdev_ms": 1.26
+      },
+      "rtk": {
+        "supported": true,
+        "argv": [
+          "rtk",
+          "cargo",
+          "build",
+          "--locked",
+          "-p",
+          "rtok-log"
+        ],
+        "tokens": 30,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 29.27,
+        "stdev_ms": 1.54
+      }
+    }
+  },
+  {
+    "id": "cargo_build_incremental",
+    "group": "cargo build",
+    "argv": [
+      "cargo",
+      "build",
+      "--locked",
+      "-p",
+      "rtok-log"
+    ],
+    "exit": 0,
+    "raw": 45,
+    "tools": {
+      "rtok": {
+        "supported": true,
+        "argv": [
+          "rtok",
+          "run",
+          "--",
+          "cargo build --locked -p rtok-log"
+        ],
+        "tokens": 45,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 34.44,
+        "stdev_ms": 1.62
+      },
+      "rtok-pr": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--",
+          "cargo build --locked -p rtok-log"
+        ],
+        "tokens": 19,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 36.25,
+        "stdev_ms": 1.23
+      },
+      "rtok-pr-noref": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--no-ref",
+          "--",
+          "cargo build --locked -p rtok-log"
+        ],
+        "tokens": 3,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 36.64,
+        "stdev_ms": 1.21
+      },
+      "rtk": {
+        "supported": true,
+        "argv": [
+          "rtk",
+          "cargo",
+          "build",
+          "--locked",
+          "-p",
+          "rtok-log"
+        ],
+        "tokens": 30,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 30.95,
+        "stdev_ms": 2.56
+      }
+    }
+  },
+  {
+    "id": "cargo_build_warning",
+    "group": "cargo build",
+    "argv": [
+      "cargo",
+      "build",
+      "--locked",
+      "-p",
+      "rtok-log"
+    ],
+    "exit": 0,
+    "raw": 167,
+    "tools": {
+      "rtok": {
+        "supported": true,
+        "argv": [
+          "rtok",
+          "run",
+          "--",
+          "cargo build --locked -p rtok-log"
+        ],
+        "tokens": 166,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 34.03,
+        "stdev_ms": 0.51
+      },
+      "rtok-pr": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--",
+          "cargo build --locked -p rtok-log"
+        ],
+        "tokens": 40,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 34.14,
+        "stdev_ms": 0.92
+      },
+      "rtok-pr-noref": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--no-ref",
+          "--",
+          "cargo build --locked -p rtok-log"
+        ],
+        "tokens": 26,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 35.17,
+        "stdev_ms": 1.14
+      },
+      "rtk": {
+        "supported": true,
+        "argv": [
+          "rtk",
+          "cargo",
+          "build",
+          "--locked",
+          "-p",
+          "rtok-log"
+        ],
+        "tokens": 103,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 27.74,
+        "stdev_ms": 1.05
+      }
+    }
+  },
+  {
+    "id": "cargo_build_error",
+    "group": "cargo build",
+    "argv": [
+      "cargo",
+      "build",
+      "--locked",
+      "-p",
+      "rtok-log"
+    ],
+    "exit": 101,
+    "raw": 133,
+    "tools": {
+      "rtok": {
+        "supported": true,
+        "argv": [
+          "rtok",
+          "run",
+          "--",
+          "cargo build --locked -p rtok-log"
+        ],
+        "tokens": 132,
+        "exit": 101,
+        "deterministic": true,
+        "median_ms": 35.86,
+        "stdev_ms": 1.01
+      },
+      "rtok-pr": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--",
+          "cargo build --locked -p rtok-log"
+        ],
+        "tokens": 60,
+        "exit": 101,
+        "deterministic": true,
+        "median_ms": 35.59,
+        "stdev_ms": 1.7
+      },
+      "rtok-pr-noref": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--no-ref",
+          "--",
+          "cargo build --locked -p rtok-log"
+        ],
+        "tokens": 44,
+        "exit": 101,
+        "deterministic": true,
+        "median_ms": 35.15,
+        "stdev_ms": 1.48
+      },
+      "rtk": {
+        "supported": true,
+        "argv": [
+          "rtk",
+          "cargo",
+          "build",
+          "--locked",
+          "-p",
+          "rtok-log"
+        ],
+        "tokens": 88,
+        "exit": 101,
+        "deterministic": true,
+        "median_ms": 28.57,
+        "stdev_ms": 1.21
+      }
+    }
+  },
+  {
+    "id": "find_rs",
+    "group": "find",
+    "argv": [
+      "find",
+      ".",
+      "-name",
+      "*.rs",
+      "-not",
+      "-path",
+      "./target/*"
+    ],
+    "exit": 0,
+    "raw": 4561,
+    "tools": {
+      "rtok": {
+        "supported": true,
+        "argv": [
+          "rtok",
+          "run",
+          "--",
+          "find . -name '*.rs' -not -path './target/*'"
+        ],
+        "tokens": 725,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 36.64,
+        "stdev_ms": 1.35
+      },
+      "rtok-pr": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--",
+          "find . -name '*.rs' -not -path './target/*'"
+        ],
+        "tokens": 659,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 36.03,
+        "stdev_ms": 1.38
+      },
+      "rtok-pr-noref": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--no-ref",
+          "--",
+          "find . -name '*.rs' -not -path './target/*'"
+        ],
+        "tokens": 643,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 39.08,
+        "stdev_ms": 1.56
+      },
+      "rtk": {
+        "supported": true,
+        "argv": [
+          "rtk",
+          "find",
+          ".",
+          "-name",
+          "*.rs",
+          "-not",
+          "-path",
+          "./target/*"
+        ],
+        "tokens": 232,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 47.89,
+        "stdev_ms": 2.02
+      }
+    }
+  },
+  {
+    "id": "find_src_files",
+    "group": "find",
+    "argv": [
+      "find",
+      "src/plugins",
+      "-type",
+      "f"
+    ],
+    "exit": 0,
+    "raw": 807,
+    "tools": {
+      "rtok": {
+        "supported": true,
+        "argv": [
+          "rtok",
+          "run",
+          "--",
+          "find src/plugins -type f"
+        ],
+        "tokens": 363,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 37.64,
+        "stdev_ms": 0.95
+      },
+      "rtok-pr": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--",
+          "find src/plugins -type f"
+        ],
+        "tokens": 288,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 37.47,
+        "stdev_ms": 0.77
+      },
+      "rtok-pr-noref": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--no-ref",
+          "--",
+          "find src/plugins -type f"
+        ],
+        "tokens": 271,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 37.7,
+        "stdev_ms": 0.97
+      },
+      "rtk": {
+        "supported": true,
+        "argv": [
+          "rtk",
+          "find",
+          "src/plugins",
+          "-type",
+          "f"
+        ],
+        "tokens": 171,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 26.07,
+        "stdev_ms": 1.86
+      }
+    }
+  },
+  {
+    "id": "find_cargo_toml",
+    "group": "find",
+    "argv": [
+      "find",
+      "crates",
+      "-name",
+      "Cargo.toml"
+    ],
+    "exit": 0,
+    "raw": 107,
+    "tools": {
+      "rtok": {
+        "supported": true,
+        "argv": [
+          "rtok",
+          "run",
+          "--",
+          "find crates -name Cargo.toml"
+        ],
+        "tokens": 233,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 39.12,
+        "stdev_ms": 1.78
+      },
+      "rtok-pr": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--",
+          "find crates -name Cargo.toml"
+        ],
+        "tokens": 107,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 36.53,
+        "stdev_ms": 1.23
+      },
+      "rtok-pr-noref": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--no-ref",
+          "--",
+          "find crates -name Cargo.toml"
+        ],
+        "tokens": 107,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 37.9,
+        "stdev_ms": 0.63
+      },
+      "rtk": {
+        "supported": true,
+        "argv": [
+          "rtk",
+          "find",
+          "crates",
+          "-name",
+          "Cargo.toml"
+        ],
+        "tokens": 80,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 18.53,
+        "stdev_ms": 0.68
+      }
+    }
+  },
+  {
+    "id": "find_dirs",
+    "group": "find",
+    "argv": [
+      "find",
+      "src",
+      "-maxdepth",
+      "2",
+      "-type",
+      "d"
+    ],
+    "exit": 0,
+    "raw": 389,
+    "tools": {
+      "rtok": {
+        "supported": true,
+        "argv": [
+          "rtok",
+          "run",
+          "--",
+          "find src -maxdepth 2 -type d"
+        ],
+        "tokens": 161,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 37.69,
+        "stdev_ms": 1.88
+      },
+      "rtok-pr": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--",
+          "find src -maxdepth 2 -type d"
+        ],
+        "tokens": 94,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 37.77,
+        "stdev_ms": 2.11
+      },
+      "rtok-pr-noref": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--no-ref",
+          "--",
+          "find src -maxdepth 2 -type d"
+        ],
+        "tokens": 79,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 38.05,
+        "stdev_ms": 1.4
+      },
+      "rtk": {
+        "supported": true,
+        "argv": [
+          "rtk",
+          "find",
+          "src",
+          "-maxdepth",
+          "2",
+          "-type",
+          "d"
+        ],
+        "tokens": 106,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 30.44,
+        "stdev_ms": 3.0
+      }
+    }
+  },
+  {
+    "id": "ls_la_root",
+    "group": "ls -la",
+    "argv": [
+      "ls",
+      "-la"
+    ],
+    "exit": 0,
+    "raw": 1586,
+    "tools": {
+      "rtok": {
+        "supported": true,
+        "argv": [
+          "rtok",
+          "run",
+          "--",
+          "ls -la"
+        ],
+        "tokens": 588,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 31.84,
+        "stdev_ms": 1.82
+      },
+      "rtok-pr": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--",
+          "ls -la"
+        ],
+        "tokens": 405,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 34.49,
+        "stdev_ms": 1.3
+      },
+      "rtok-pr-noref": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--no-ref",
+          "--",
+          "ls -la"
+        ],
+        "tokens": 390,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 33.87,
+        "stdev_ms": 2.36
+      },
+      "rtk": {
+        "supported": true,
+        "argv": [
+          "rtk",
+          "ls",
+          "-la"
+        ],
+        "tokens": 425,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 25.77,
+        "stdev_ms": 3.34
+      }
+    }
+  },
+  {
+    "id": "ls_la_subdir",
+    "group": "ls -la",
+    "argv": [
+      "ls",
+      "-la",
+      "src/plugins/cmd"
+    ],
+    "exit": 0,
+    "raw": 285,
+    "tools": {
+      "rtok": {
+        "supported": true,
+        "argv": [
+          "rtok",
+          "run",
+          "--",
+          "ls -la src/plugins/cmd"
+        ],
+        "tokens": 285,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 32.61,
+        "stdev_ms": 0.6
+      },
+      "rtok-pr": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--",
+          "ls -la src/plugins/cmd"
+        ],
+        "tokens": 98,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 34.34,
+        "stdev_ms": 0.98
+      },
+      "rtok-pr-noref": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--no-ref",
+          "--",
+          "ls -la src/plugins/cmd"
+        ],
+        "tokens": 82,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 32.06,
+        "stdev_ms": 0.76
+      },
+      "rtk": {
+        "supported": true,
+        "argv": [
+          "rtk",
+          "ls",
+          "-la",
+          "src/plugins/cmd"
+        ],
+        "tokens": 112,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 20.49,
+        "stdev_ms": 1.96
+      }
+    }
+  },
+  {
+    "id": "ls_la_crates",
+    "group": "ls -la",
+    "argv": [
+      "ls",
+      "-la",
+      "crates"
+    ],
+    "exit": 0,
+    "raw": 270,
+    "tools": {
+      "rtok": {
+        "supported": true,
+        "argv": [
+          "rtok",
+          "run",
+          "--",
+          "ls -la crates"
+        ],
+        "tokens": 270,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 33.86,
+        "stdev_ms": 1.48
+      },
+      "rtok-pr": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--",
+          "ls -la crates"
+        ],
+        "tokens": 63,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 35.16,
+        "stdev_ms": 5.8
+      },
+      "rtok-pr-noref": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--no-ref",
+          "--",
+          "ls -la crates"
+        ],
+        "tokens": 46,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 33.56,
+        "stdev_ms": 1.73
+      },
+      "rtk": {
+        "supported": true,
+        "argv": [
+          "rtk",
+          "ls",
+          "-la",
+          "crates"
+        ],
+        "tokens": 62,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 21.74,
+        "stdev_ms": 1.27
+      }
+    }
+  },
+  {
+    "id": "git_status_clean",
+    "group": "git status",
+    "argv": [
+      "git",
+      "status"
+    ],
+    "exit": 0,
+    "raw": 17,
+    "tools": {
+      "rtok": {
+        "supported": true,
+        "argv": [
+          "rtok",
+          "run",
+          "--",
+          "git status"
+        ],
+        "tokens": 17,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 35.8,
+        "stdev_ms": 8.09
+      },
+      "rtok-pr": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--",
+          "git status"
+        ],
+        "tokens": 17,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 33.9,
+        "stdev_ms": 0.77
+      },
+      "rtok-pr-noref": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--no-ref",
+          "--",
+          "git status"
+        ],
+        "tokens": 17,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 35.95,
+        "stdev_ms": 2.05
+      },
+      "rtk": {
+        "supported": true,
+        "argv": [
+          "rtk",
+          "git",
+          "status"
+        ],
+        "tokens": 16,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 42.55,
+        "stdev_ms": 2.53
+      }
+    }
+  },
+  {
+    "id": "git_status_dirty",
+    "group": "git status",
+    "argv": [
+      "git",
+      "status"
+    ],
+    "exit": 0,
+    "raw": 127,
+    "tools": {
+      "rtok": {
+        "supported": true,
+        "argv": [
+          "rtok",
+          "run",
+          "--",
+          "git status"
+        ],
+        "tokens": 146,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 33.01,
+        "stdev_ms": 1.15
+      },
+      "rtok-pr": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--",
+          "git status"
+        ],
+        "tokens": 51,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 32.86,
+        "stdev_ms": 1.21
+      },
+      "rtok-pr-noref": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--no-ref",
+          "--",
+          "git status"
+        ],
+        "tokens": 37,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 33.89,
+        "stdev_ms": 0.62
+      },
+      "rtk": {
+        "supported": true,
+        "argv": [
+          "rtk",
+          "git",
+          "status"
+        ],
+        "tokens": 38,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 40.86,
+        "stdev_ms": 0.55
+      }
+    }
+  },
+  {
+    "id": "git_diff",
+    "group": "git diff",
+    "argv": [
+      "git",
+      "diff"
+    ],
+    "exit": 0,
+    "raw": 312,
+    "tools": {
+      "rtok": {
+        "supported": true,
+        "argv": [
+          "rtok",
+          "run",
+          "--",
+          "git diff"
+        ],
+        "tokens": 347,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 31.75,
+        "stdev_ms": 0.56
+      },
+      "rtok-pr": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--",
+          "git diff"
+        ],
+        "tokens": 208,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 32.43,
+        "stdev_ms": 0.59
+      },
+      "rtok-pr-noref": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--no-ref",
+          "--",
+          "git diff"
+        ],
+        "tokens": 192,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 31.98,
+        "stdev_ms": 0.59
+      },
+      "rtk": {
+        "supported": true,
+        "argv": [
+          "rtk",
+          "git",
+          "diff"
+        ],
+        "tokens": 249,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 34.57,
+        "stdev_ms": 1.85
+      }
+    }
+  },
+  {
+    "id": "git_diff_stat",
+    "group": "git diff",
+    "argv": [
+      "git",
+      "diff",
+      "--stat"
+    ],
+    "exit": 0,
+    "raw": 45,
+    "tools": {
+      "rtok": {
+        "supported": true,
+        "argv": [
+          "rtok",
+          "run",
+          "--",
+          "git diff --stat"
+        ],
+        "tokens": 45,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 32.56,
+        "stdev_ms": 0.66
+      },
+      "rtok-pr": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--",
+          "git diff --stat"
+        ],
+        "tokens": 45,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 33.06,
+        "stdev_ms": 0.81
+      },
+      "rtok-pr-noref": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--no-ref",
+          "--",
+          "git diff --stat"
+        ],
+        "tokens": 45,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 34.84,
+        "stdev_ms": 0.77
+      },
+      "rtk": {
+        "supported": true,
+        "argv": [
+          "rtk",
+          "git",
+          "diff",
+          "--stat"
+        ],
+        "tokens": 45,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 22.1,
+        "stdev_ms": 1.86
+      }
+    }
+  },
+  {
+    "id": "git_log_20",
+    "group": "git log",
+    "argv": [
+      "git",
+      "log",
+      "-n",
+      "20"
+    ],
+    "exit": 0,
+    "raw": 4027,
+    "tools": {
+      "rtok": {
+        "supported": true,
+        "argv": [
+          "rtok",
+          "run",
+          "--",
+          "git log -n 20"
+        ],
+        "tokens": 449,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 33.07,
+        "stdev_ms": 0.82
+      },
+      "rtok-pr": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--",
+          "git log -n 20"
+        ],
+        "tokens": 383,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 34.3,
+        "stdev_ms": 0.84
+      },
+      "rtok-pr-noref": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--no-ref",
+          "--",
+          "git log -n 20"
+        ],
+        "tokens": 367,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 33.83,
+        "stdev_ms": 0.46
+      },
+      "rtk": {
+        "supported": true,
+        "argv": [
+          "rtk",
+          "git",
+          "log",
+          "-n",
+          "20"
+        ],
+        "tokens": 1355,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 20.54,
+        "stdev_ms": 2.47
+      }
+    }
+  },
+  {
+    "id": "git_log_oneline_50",
+    "group": "git log",
+    "argv": [
+      "git",
+      "log",
+      "--oneline",
+      "-n",
+      "50"
+    ],
+    "exit": 0,
+    "raw": 1200,
+    "tools": {
+      "rtok": {
+        "supported": true,
+        "argv": [
+          "rtok",
+          "run",
+          "--",
+          "git log --oneline -n 50"
+        ],
+        "tokens": 551,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 32.29,
+        "stdev_ms": 0.68
+      },
+      "rtok-pr": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--",
+          "git log --oneline -n 50"
+        ],
+        "tokens": 476,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 34.6,
+        "stdev_ms": 1.2
+      },
+      "rtok-pr-noref": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--no-ref",
+          "--",
+          "git log --oneline -n 50"
+        ],
+        "tokens": 459,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 33.04,
+        "stdev_ms": 0.41
+      },
+      "rtk": {
+        "supported": true,
+        "argv": [
+          "rtk",
+          "git",
+          "log",
+          "--oneline",
+          "-n",
+          "50"
+        ],
+        "tokens": 1200,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 21.66,
+        "stdev_ms": 0.6
+      }
+    }
+  },
+  {
+    "id": "git_log_stat_5",
+    "group": "git log",
+    "argv": [
+      "git",
+      "log",
+      "--stat",
+      "-n",
+      "5"
+    ],
+    "exit": 0,
+    "raw": 1275,
+    "tools": {
+      "rtok": {
+        "supported": true,
+        "argv": [
+          "rtok",
+          "run",
+          "--",
+          "git log --stat -n 5"
+        ],
+        "tokens": 398,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 33.23,
+        "stdev_ms": 1.53
+      },
+      "rtok-pr": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--",
+          "git log --stat -n 5"
+        ],
+        "tokens": 323,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 31.74,
+        "stdev_ms": 1.11
+      },
+      "rtok-pr-noref": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--no-ref",
+          "--",
+          "git log --stat -n 5"
+        ],
+        "tokens": 306,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 33.56,
+        "stdev_ms": 1.19
+      },
+      "rtk": {
+        "supported": true,
+        "argv": [
+          "rtk",
+          "git",
+          "log",
+          "--stat",
+          "-n",
+          "5"
+        ],
+        "tokens": 1275,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 22.46,
+        "stdev_ms": 2.12
+      }
+    }
+  },
+  {
+    "id": "grep_fn_main",
+    "group": "grep",
+    "argv": [
+      "grep",
+      "-rn",
+      "fn main",
+      "--include=*.rs",
+      "--exclude-dir=target",
+      "--exclude-dir=.git",
+      "."
+    ],
+    "exit": 0,
+    "raw": 1158,
+    "tools": {
+      "rtok": {
+        "supported": true,
+        "argv": [
+          "rtok",
+          "run",
+          "--",
+          "grep -rn 'fn main' '--include=*.rs' --exclude-dir=target --exclude-dir=.git ."
+        ],
+        "tokens": 689,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 33.82,
+        "stdev_ms": 0.55
+      },
+      "rtok-pr": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--",
+          "grep -rn 'fn main' '--include=*.rs' --exclude-dir=target --exclude-dir=.git ."
+        ],
+        "tokens": 606,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 33.17,
+        "stdev_ms": 1.41
+      },
+      "rtok-pr-noref": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--no-ref",
+          "--",
+          "grep -rn 'fn main' '--include=*.rs' --exclude-dir=target --exclude-dir=.git ."
+        ],
+        "tokens": 591,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 34.71,
+        "stdev_ms": 1.73
+      },
+      "rtk": {
+        "supported": true,
+        "argv": [
+          "rtk",
+          "grep",
+          "-rn",
+          "fn main",
+          "--include=*.rs",
+          "--exclude-dir=target",
+          "--exclude-dir=.git",
+          "."
+        ],
+        "tokens": 1158,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 40.11,
+        "stdev_ms": 1.38
+      }
+    }
+  },
+  {
+    "id": "grep_settings_src",
+    "group": "grep",
+    "argv": [
+      "grep",
+      "-rn",
+      "Settings",
+      "src/plugins/cmd"
+    ],
+    "exit": 0,
+    "raw": 1420,
+    "tools": {
+      "rtok": {
+        "supported": true,
+        "argv": [
+          "rtok",
+          "run",
+          "--",
+          "grep -rn Settings src/plugins/cmd"
+        ],
+        "tokens": 577,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 33.57,
+        "stdev_ms": 2.21
+      },
+      "rtok-pr": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--",
+          "grep -rn Settings src/plugins/cmd"
+        ],
+        "tokens": 501,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 34.07,
+        "stdev_ms": 0.74
+      },
+      "rtok-pr-noref": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--no-ref",
+          "--",
+          "grep -rn Settings src/plugins/cmd"
+        ],
+        "tokens": 485,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 32.99,
+        "stdev_ms": 0.86
+      },
+      "rtk": {
+        "supported": true,
+        "argv": [
+          "rtk",
+          "grep",
+          "-rn",
+          "Settings",
+          "src/plugins/cmd"
+        ],
+        "tokens": 1420,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 24.09,
+        "stdev_ms": 1.07
+      }
+    }
+  },
+  {
+    "id": "rg_pub_fn",
+    "group": "rg",
+    "argv": [
+      "rg",
+      "-n",
+      "pub fn",
+      "src/plugins/cmd"
+    ],
+    "exit": 0,
+    "raw": 521,
+    "tools": {
+      "rtok": {
+        "supported": true,
+        "argv": [
+          "rtok",
+          "run",
+          "--",
+          "rg -n 'pub fn' src/plugins/cmd"
+        ],
+        "tokens": 521,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 32.62,
+        "stdev_ms": 0.42
+      },
+      "rtok-pr": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--",
+          "rg -n 'pub fn' src/plugins/cmd"
+        ],
+        "tokens": 521,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 32.91,
+        "stdev_ms": 0.76
+      },
+      "rtok-pr-noref": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--no-ref",
+          "--",
+          "rg -n 'pub fn' src/plugins/cmd"
+        ],
+        "tokens": 521,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 34.42,
+        "stdev_ms": 1.51
+      },
+      "rtk": {
+        "supported": true,
+        "argv": [
+          "rtk",
+          "rg",
+          "-n",
+          "pub fn",
+          "src/plugins/cmd"
+        ],
+        "tokens": 521,
+        "exit": 0,
+        "deterministic": false,
+        "median_ms": 23.89,
+        "stdev_ms": 0.67
+      }
+    }
+  },
+  {
+    "id": "rg_files_with",
+    "group": "rg",
+    "argv": [
+      "rg",
+      "-l",
+      "Settings",
+      "src"
+    ],
+    "exit": 0,
+    "raw": 150,
+    "tools": {
+      "rtok": {
+        "supported": true,
+        "argv": [
+          "rtok",
+          "run",
+          "--",
+          "rg -l Settings src"
+        ],
+        "tokens": 283,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 33.92,
+        "stdev_ms": 0.52
+      },
+      "rtok-pr": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--",
+          "rg -l Settings src"
+        ],
+        "tokens": 150,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 33.87,
+        "stdev_ms": 1.07
+      },
+      "rtok-pr-noref": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--no-ref",
+          "--",
+          "rg -l Settings src"
+        ],
+        "tokens": 150,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 34.19,
+        "stdev_ms": 0.77
+      },
+      "rtk": {
+        "supported": true,
+        "argv": [
+          "rtk",
+          "rg",
+          "-l",
+          "Settings",
+          "src"
+        ],
+        "tokens": 127,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 22.69,
+        "stdev_ms": 0.94
+      }
+    }
+  },
+  {
+    "id": "cat_rust",
+    "group": "cat",
+    "argv": [
+      "cat",
+      "src/plugins/cmd/filter.rs"
+    ],
+    "exit": 0,
+    "raw": 1469,
+    "tools": {
+      "rtok": {
+        "supported": true,
+        "argv": [
+          "rtok",
+          "run",
+          "--",
+          "cat src/plugins/cmd/filter.rs"
+        ],
+        "tokens": 517,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 32.09,
+        "stdev_ms": 1.22
+      },
+      "rtok-pr": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--",
+          "cat src/plugins/cmd/filter.rs"
+        ],
+        "tokens": 439,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 32.54,
+        "stdev_ms": 1.17
+      },
+      "rtok-pr-noref": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--no-ref",
+          "--",
+          "cat src/plugins/cmd/filter.rs"
+        ],
+        "tokens": 423,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 32.32,
+        "stdev_ms": 0.83
+      },
+      "rtk": {
+        "supported": true,
+        "argv": [
+          "rtk",
+          "read",
+          "src/plugins/cmd/filter.rs"
+        ],
+        "tokens": 1469,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 7.64,
+        "stdev_ms": 1.63
+      }
+    }
+  },
+  {
+    "id": "cat_toml",
+    "group": "cat",
+    "argv": [
+      "cat",
+      "Cargo.toml"
+    ],
+    "exit": 0,
+    "raw": 4945,
+    "tools": {
+      "rtok": {
+        "supported": true,
+        "argv": [
+          "rtok",
+          "run",
+          "--",
+          "cat Cargo.toml"
+        ],
+        "tokens": 995,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 32.08,
+        "stdev_ms": 0.77
+      },
+      "rtok-pr": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--",
+          "cat Cargo.toml"
+        ],
+        "tokens": 920,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 32.27,
+        "stdev_ms": 0.99
+      },
+      "rtok-pr-noref": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--no-ref",
+          "--",
+          "cat Cargo.toml"
+        ],
+        "tokens": 903,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 32.76,
+        "stdev_ms": 0.79
+      },
+      "rtk": {
+        "supported": true,
+        "argv": [
+          "rtk",
+          "read",
+          "Cargo.toml"
+        ],
+        "tokens": 4945,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 7.67,
+        "stdev_ms": 1.75
+      }
+    }
+  },
+  {
+    "id": "tree_plugins",
+    "group": "tree",
+    "argv": [
+      "tree",
+      "src/plugins/cmd"
+    ],
+    "exit": 0,
+    "raw": 65,
+    "tools": {
+      "rtok": {
+        "supported": true,
+        "argv": [
+          "rtok",
+          "run",
+          "--",
+          "tree src/plugins/cmd"
+        ],
+        "tokens": 65,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 32.92,
+        "stdev_ms": 1.22
+      },
+      "rtok-pr": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--",
+          "tree src/plugins/cmd"
+        ],
+        "tokens": 65,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 33.96,
+        "stdev_ms": 0.86
+      },
+      "rtok-pr-noref": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--no-ref",
+          "--",
+          "tree src/plugins/cmd"
+        ],
+        "tokens": 65,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 33.44,
+        "stdev_ms": 1.23
+      },
+      "rtk": {
+        "supported": true,
+        "argv": [
+          "rtk",
+          "tree",
+          "src/plugins/cmd"
+        ],
+        "tokens": 58,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 19.53,
+        "stdev_ms": 0.74
+      }
+    }
+  },
+  {
+    "id": "tree_crates_l2",
+    "group": "tree",
+    "argv": [
+      "tree",
+      "-L",
+      "2",
+      "crates"
+    ],
+    "exit": 0,
+    "raw": 302,
+    "tools": {
+      "rtok": {
+        "supported": true,
+        "argv": [
+          "rtok",
+          "run",
+          "--",
+          "tree -L 2 crates"
+        ],
+        "tokens": 379,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 32.43,
+        "stdev_ms": 3.01
+      },
+      "rtok-pr": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--",
+          "tree -L 2 crates"
+        ],
+        "tokens": 302,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 32.37,
+        "stdev_ms": 0.81
+      },
+      "rtok-pr-noref": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--no-ref",
+          "--",
+          "tree -L 2 crates"
+        ],
+        "tokens": 295,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 33.43,
+        "stdev_ms": 1.06
+      },
+      "rtk": {
+        "supported": true,
+        "argv": [
+          "rtk",
+          "tree",
+          "-L",
+          "2",
+          "crates"
+        ],
+        "tokens": 295,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 19.84,
+        "stdev_ms": 0.61
+      }
+    }
+  },
+  {
+    "id": "wc_l",
+    "group": "wc",
+    "argv": [
+      "wc",
+      "-l",
+      "Cargo.toml",
+      "README.md",
+      "rules/default.toml",
+      "src/main.rs"
+    ],
+    "exit": 0,
+    "raw": 33,
+    "tools": {
+      "rtok": {
+        "supported": true,
+        "argv": [
+          "rtok",
+          "run",
+          "--",
+          "wc -l Cargo.toml README.md rules/default.toml src/main.rs"
+        ],
+        "tokens": 33,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 33.53,
+        "stdev_ms": 1.13
+      },
+      "rtok-pr": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--",
+          "wc -l Cargo.toml README.md rules/default.toml src/main.rs"
+        ],
+        "tokens": 33,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 33.62,
+        "stdev_ms": 0.96
+      },
+      "rtok-pr-noref": {
+        "supported": true,
+        "argv": [
+          "rtok-pr",
+          "run",
+          "--no-ref",
+          "--",
+          "wc -l Cargo.toml README.md rules/default.toml src/main.rs"
+        ],
+        "tokens": 33,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 32.93,
+        "stdev_ms": 1.5
+      },
+      "rtk": {
+        "supported": true,
+        "argv": [
+          "rtk",
+          "wc",
+          "-l",
+          "Cargo.toml",
+          "README.md",
+          "rules/default.toml",
+          "src/main.rs"
+        ],
+        "tokens": 24,
+        "exit": 0,
+        "deterministic": true,
+        "median_ms": 22.22,
+        "stdev_ms": 0.91
+      }
+    }
+  }
+]

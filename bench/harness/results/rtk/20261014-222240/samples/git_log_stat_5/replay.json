@@ -1,0 +1,1 @@
+{"argv": ["git", "log", "--stat", "-n", "5"], "cwd": "/fixture", "exit": 0}

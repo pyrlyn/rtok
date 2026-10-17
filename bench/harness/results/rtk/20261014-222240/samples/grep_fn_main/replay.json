@@ -1,0 +1,1 @@
+{"argv": ["grep", "-rn", "fn main", "--include=*.rs", "--exclude-dir=target", "--exclude-dir=.git", "."], "cwd": "/fixture", "exit": 0}

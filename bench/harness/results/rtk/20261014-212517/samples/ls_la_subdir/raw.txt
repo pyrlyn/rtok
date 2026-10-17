@@ -1,0 +1,13 @@
+total 260
+drwxr-xr-x 1 root root  4096 Oct 14 21:25 .
+drwxr-xr-x 1 root root  4096 Oct 14 21:25 ..
+-rw-r--r-- 1 root root  3106 Oct 14 21:25 AGENTS.md
+-rw-r--r-- 1 root root  1794 Oct 14 21:25 PLAN.md
+-rw-r--r-- 1 root root  2130 Oct 14 21:25 README.md
+-rw-r--r-- 1 root root 15534 Oct 14 21:25 bounded.rs
+-rw-r--r-- 1 root root  5679 Oct 14 21:25 filter.rs
+-rw-r--r-- 1 root root 61956 Oct 14 21:25 formatters.rs
+-rw-r--r-- 1 root root 21593 Oct 14 21:25 hook.rs
+-rw-r--r-- 1 root root  1144 Oct 14 21:25 mod.rs
+-rw-r--r-- 1 root root 76204 Oct 14 21:25 rules.rs
+-rw-r--r-- 1 root root 41912 Oct 14 21:25 run.rs
