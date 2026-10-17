@@ -23,15 +23,15 @@ toml_edit = "0.25" # in-place TOML: `config set` and rtok-mcp
 diesel = { version = "2.2", features = ["sqlite", "returning_clauses_for_sqlite_3_35"] }
 rstest = "0.27.0" # parameterized tests in the binary and rtok-agent-sdk
 sha2 = "0.11" # checksums: the store, the proxy cache, and otel
-fs-kit = { path = "../../packages/crates/rust/fs-kit" } # one entry point for paths, atomic writes, trees
+fs-kit = "0.1.0" # one entry point for paths, atomic writes, trees
 regex = "1" # request-body noise (store) and search/bench patterns (binary)
 schemars = "1.2.2" # JSON Schema: store project rows and the /ws protocol
 humantime = "2.4" # idle duration: the store and `rtok agents`
 uuid = { version = "1.26", features = ["v4"] } # agent ids in the store; already transitive elsewhere
 thiserror = "2.0" # public error enums: rtok-store and rtok-config
 figment = { version = "0.10", features = ["toml", "env"] } # config layering; the CLI builds flag dicts
-change-preview = { path = "../../packages/crates/rust/change-preview" } # config and file-edit previews, byte sizes (replaces the in-tree diff and bytes renderers)
-operation-icons = { path = "../../packages/crates/rust/operation-icons" } # verb icons and the icon gutter, shared with ketch (T436.3)
+change-preview = "0.1.0" # config and file-edit previews, byte sizes (replaces the in-tree diff and bytes renderers)
+operation-icons = "0.1.0" # verb icons and the icon gutter, shared with ketch (T436.3)
 globset = "0.4" # junk globs and config validation of agents.junk.exclude
 url = "2.5" # file:// MCP roots and http(s) checks in config
 

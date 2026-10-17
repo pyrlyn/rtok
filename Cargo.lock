@@ -632,6 +632,8 @@ dependencies = [
 [[package]]
 name = "change-preview"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "79afe5aba12959b75109736b1d0af509e9863ee57fb5c7d3985a3f0b40edc561"
 dependencies = [
  "owo-colors",
  "serde",
@@ -1601,6 +1603,8 @@ dependencies = [
 [[package]]
 name = "fs-kit"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ce7c1d8e448538e4054724fc0978228824b84b74f499069665cccc99b09a9a1"
 dependencies = [
  "dunce",
 ]
@@ -3198,6 +3202,8 @@ checksum = "7c87def4c32ab89d880effc9e097653c8da5d6ef28e6b539d313baaacfbafcbe"
 [[package]]
 name = "operation-icons"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee0ee8e86512fd8b912264296bb9732875d65127379bcd687e37cef6c054cc01"
 dependencies = [
  "unicode-width",
 ]
