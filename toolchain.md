@@ -16,6 +16,9 @@ Project programs and direct packages from the manifests.
 | codeql | mise | `just codeql` (T119): local run of the code scanning in `.github/workflows/codeql.yml` | https://github.com/github/codeql-cli-binaries |
 | git-cliff | mise | Changelog | https://github.com/orhun/git-cliff |
 | just | mise | Command recipes | https://github.com/casey/just |
+| jactionlint | mise (`mise.toml` pins `github:jdx/jactionlint` 2.0.2) | Lint the workflows and composite actions (the pre-push hook and `mise x -- jactionlint`); CI lints through pyrlyn/ci | https://github.com/jdx/jactionlint |
+| hk | mise (`mise.toml` pins 2.5.0) | Runs jactionlint as a pre-push hook (`hk.pkl`) | https://github.com/jdx/hk |
+| shellcheck | mise (`mise.toml` pins 0.11.0) | Checks `run:` scripts inside jactionlint | https://github.com/koalaman/shellcheck |
 | ketch | see its README | Installs swarfr | https://github.com/pyrlyn/ketch |
 | swarfr | ketch | `just test` / `just test-changed` end with a lossless cleanup of `target/` (T236) | https://github.com/listepo/swarfr |
 | tailspin | mise (`ubi:bensadeh/tailspin`) | `just logs` (T225): `tspin` highlights `~/.rtok/logs/rtok.log` and the `RUST_LOG` stderr stream; a viewer, not a logger | https://github.com/bensadeh/tailspin |
