@@ -38,7 +38,7 @@ pub const MAX_RISK_NODES_PER_FILE: usize = 8;
 /// Defs scored across the whole diff.
 pub const MAX_RISK_SCORED_NODES: usize = 400;
 
-const SCORED_KINDS: &[&str] = &["function", "method", "class"];
+pub(super) const SCORED_KINDS: &[&str] = &["function", "method", "class"];
 
 /// Whole-token keywords. Substring matches (`sign` inside `assign`) are not hits.
 const SECURITY: &[&str] = &[

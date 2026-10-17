@@ -10,6 +10,7 @@
 **Invariants**
 - Lossless: anything a reader could miss is archived before it is dropped; `rtok expand <id>` returns the raw bytes. A whitespace/ANSI-only change drops nothing and stores no archive row (T160).
 - Exit code of the wrapped command is preserved exactly.
+- Logfmt cut (T683, `logfmt.rs`): when a head/tail cut happens, the pairs every record shares print once in an `[every record: …]` first line and leave the printed records; error/warn lines stay verbatim, and each `omitted` marker lists the run's varying keys as `first..last`. Never emit a pair that is not in the raw lines.
 - Never wrap: first word in `never_wrap` (default `rtok`, `sudo`), heredocs (`<<`), trailing `&`,
   `-i`/`--interactive`, or when `rewrite = false`.
 - Never redact. A fixture with a fake AWS key must pass through unchanged (T3.3 Check).

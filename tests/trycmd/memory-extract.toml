@@ -1,0 +1,13 @@
+bin.name = "rtok"
+args = "memory extract missing.jsonl"
+status.code = 1
+stdout = ""
+stderr = """
+Error: memory extraction is off: set [plugins.memory.extract] enabled = true (it can cost money)
+"""
+
+[env]
+inherit = false
+
+[env.add]
+RTOK_HOME = "target/tmp/trycmd-memory-extract"

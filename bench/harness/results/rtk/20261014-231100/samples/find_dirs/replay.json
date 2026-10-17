@@ -1,0 +1,1 @@
+{"argv": ["find", "src", "-maxdepth", "2", "-type", "d"], "cwd": "/fixture", "exit": 0}

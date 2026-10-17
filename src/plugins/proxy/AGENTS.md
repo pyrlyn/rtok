@@ -9,7 +9,7 @@
 **Invariants**
 - Passthrough is byte-exact: the T5.1 test compares response bytes against a mock upstream.
 - Added latency < 20 ms per request (definition of done #4). Do not buffer SSE streams.
-- Never modify `system` or the last 2 turns. `tools[]` stays byte-identical unless `[proxy.tools_rewrite]` is on (T59.5): then descriptions truncate at a sentence boundary and allow/deny drop names; `input_schema` is never touched; a dropped tool's later call is still forwarded.
+- Never modify `system` or the last 2 turns. `tools[]` stays byte-identical unless `[proxy.tools_rewrite]` is on (T59.5): then descriptions truncate at a sentence boundary and allow/deny drop names; a dropped tool's later call is still forwarded. `input_schema` / `parameters` is untouched unless `compact_schema` is on (T686, creator decision 2026-10-16): then only the `description` (first sentence), `default` (the type's zero value) and `examples` (repeating `default` or `enum`) strings inside it shrink, found by schema keyword so a property named `description` is safe; tool names, property names, `type`, `required` and `enum` values stay byte-identical, and enums are never compacted. Any change archives the original `tools[]` and records the id in `Measurement.ref_id` (`expand <id>`).
 - Every request inserts one `usage` row with all four counters; session id comes from
   `metadata.user_id` or a header, else a request hash.
 - Bind `127.0.0.1` only.

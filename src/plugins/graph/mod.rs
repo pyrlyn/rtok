@@ -101,8 +101,8 @@ impl Plugin for Graph {
             },
             ToolDef {
                 name: "callers",
-                description: "Which definitions reference a symbol: path, calling definition, count. Optional path substring keeps one subtree.",
-                input_schema: json!({"type":"object","properties":{"name":{"type":"string"},"path":{"type":"string"},"project":{"type":"string"}},"required":["name"]}),
+                description: "Which definitions reference a symbol: path, caller, count. Optional path keeps one subtree. No name: unreferenced.",
+                input_schema: json!({"type":"object","properties":{"name":{"type":"string"},"path":{"type":"string"},"kind":{"type":"string"},"project":{"type":"string"}}}),
             },
             ToolDef {
                 name: "impact",
@@ -111,8 +111,8 @@ impl Plugin for Graph {
             },
             ToolDef {
                 name: "outline",
-                description: "Definitions in one file (read mode=map).",
-                input_schema: json!({"type":"object","properties":{"path":{"type":"string"},"project":{"type":"string"}},"required":["path"]}),
+                description: "Definitions in one file (read mode=map); kind filters.",
+                input_schema: json!({"type":"object","properties":{"path":{"type":"string"},"kind":{"type":"string"},"project":{"type":"string"}},"required":["path"]}),
             },
             ToolDef {
                 name: "explore",
@@ -482,6 +482,7 @@ pub fn call(cx: &Ctx, name: &str, args: &Value, scope: &[scope::Member]) -> Resu
                 scope::symbols(cx, scope, &names, &filter)?
             }
         }
+        "callers" if arg("name").is_empty() => scope::dead_filtered(cx, scope, &filter)?,
         "callers" => scope::callers(cx, scope, arg("name"), &filter)?,
         "impact" => {
             let name = arg("name");
@@ -499,11 +500,30 @@ pub fn call(cx: &Ctx, name: &str, args: &Value, scope: &[scope::Member]) -> Resu
                 )?
             }
         }
-        "outline" => return scope::outline(cx, scope, arg("path")),
+        "outline" => {
+            let text = scope::outline(cx, scope, arg("path"))?;
+            return Ok(outline_of_kind(&text, arg("path"), &filter.kind));
+        }
         "explore" => scope::explore(cx, scope, arg("query"), &filter)?,
         _ => anyhow::bail!("unknown tool: {name}"),
     };
     Ok(format!("{}{text}", head_stale_prefix(cx, scope)))
+}
+
+/// T665: `outline` narrowed to one kind of definition (`fn`, `struct`, …) — the word the map
+/// prints after any `pub…` marker. A whole-file answer (no `kind`) stays byte-exact.
+fn outline_of_kind(text: &str, path: &str, kind: &str) -> String {
+    if kind.is_empty() {
+        return text.to_string();
+    }
+    let kept: Vec<&str> = text
+        .lines()
+        .filter(|l| l.split_whitespace().find(|w| !w.starts_with("pub")) == Some(kind))
+        .collect();
+    if kept.is_empty() {
+        return format!("no {kind} in {path}");
+    }
+    kept.join("\n")
 }
 
 /// `name`, or `names` when the caller asks for several. One name stays the old call.

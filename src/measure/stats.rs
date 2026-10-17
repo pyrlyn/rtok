@@ -1472,10 +1472,11 @@ fn fold_repeat(row: &mut RepeatRow, parsed: &Parsed) {
 /// `expand` of a shown id is a re-expand — the bytes the cut made the agent fetch again.
 fn fold_expand_after(row: &mut ExpandAfterRow, parsed: &Parsed) {
     static NAMED: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
-        regex::Regex::new(r"expand:? (?:rtok expand )?([0-9a-f]{64})").expect("static regex")
+        regex::Regex::new(r"(?:expand:? (?:rtok expand )?|\[rtok )([0-9a-f]{12,64})\b")
+            .expect("static regex")
     });
     static CALLED: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
-        regex::Regex::new(r"rtok expand ([0-9a-f]{64})").expect("static regex")
+        regex::Regex::new(r"rtok expand ([0-9a-f]{12,64})").expect("static regex")
     });
     let results: BTreeMap<&str, &str> = parsed
         .tool_results
@@ -1497,7 +1498,10 @@ fn fold_expand_after(row: &mut ExpandAfterRow, parsed: &Parsed) {
         } else {
             None
         };
-        if let Some(seen) = asked.and_then(|id| shown.get_mut(id)) {
+        // T661: the trailer names a 12-char prefix; key every id by it so a full-id
+        // expand still matches a prefix-shown result and vice versa.
+        let key = |id: &str| id[..id.len().min(12)].to_string();
+        if let Some(seen) = asked.and_then(|id| shown.get_mut(&key(id))) {
             row.calls += 1;
             row.bytes += content.len() as u64;
             row.shown_bytes += seen.take().unwrap_or(0);
@@ -1505,7 +1509,7 @@ fn fold_expand_after(row: &mut ExpandAfterRow, parsed: &Parsed) {
         }
         for c in NAMED.captures_iter(content) {
             shown
-                .entry(c[1].to_string())
+                .entry(key(&c[1]))
                 .or_insert(Some(content.len() as u64));
         }
     }

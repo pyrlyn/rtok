@@ -13,6 +13,7 @@ pub mod gc;
 pub mod git;
 pub mod host;
 pub mod list;
+pub mod migrate;
 pub mod ops;
 pub mod origin;
 pub mod remove;

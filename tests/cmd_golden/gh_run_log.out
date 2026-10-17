@@ -1,0 +1,7 @@
+## build / Run tests
+  …
+Compiling crate-29 v0.1.0
+test cache::hits ... ok
+test cache::misses ... FAILED
+##[error]Process completed with exit code 101.
+2 steps without errors (41 lines)

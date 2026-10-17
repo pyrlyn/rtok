@@ -1,0 +1,8 @@
+mise: 18 install/progress lines dropped
+mise node@20.11.0 node-20.11.0-darwin-arm64/bin/node -v
+mise node@20.11.0 ✓ installed
+mise python@3.12.2 python-3.12.2-darwin-arm64/bin/python -v
+mise python@3.12.2 ✓ installed
+mise rust@1.80.0 rust-1.80.0-darwin-arm64/bin/rust -v
+mise rust@1.80.0 ✓ installed
+mise ~/proj/mise.toml tools: node@20.11.0, python@3.12.2, rust@1.80.0

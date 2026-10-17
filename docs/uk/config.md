@@ -165,6 +165,7 @@ dry_run         = false               # --dry-run: вивести фактичн
 
 [proxy.tools_rewrite]                 # T59.5; вимкнено: байти запиту лишаються ідентичними
 enabled = false
+compact_schema = false                # T686; також перше речення в описах властивостей і зайві default/examples у input_schema; оригінал в архіві (Measurement.ref_id)
 max_description_tokens = 60           # 0 = без обрізання; за межею речення; оцінювач Class::Prose
 allow = []                            # порожньо = зберігати всі назви, яких немає в deny
 deny = []                             # прибрати ці назви з tools[]; подальші виклики все одно пересилаються
@@ -475,7 +476,7 @@ cmd = ""                              # підказка сімейства ко
 
 [worktree]                            # rtok worktree add | claim | remove | list | gc
 enabled = true                        # false: кожна команда `rtok worktree` (і list) каже, що worktree не ввімкнено, MCP не показує жодного інструмента worktree_*, а хуки Claude WorktreeCreate/WorktreeRemove роблять те, що Claude робить без rtok
-root = "~/.rtok/worktrees"            # де `rtok worktree add` створює worktree, як <root>/<repo>-<task>; `~` розкривається
+root = ".rtok/worktrees"              # де `rtok worktree add` створює worktree, як <root>/<repo>-<task>; відносний: у основному checkout; `~` розкривається
 
 [tasks]                               # адаптери задач (T441); зазвичай задаються для проєкту в .rtok.toml
 adapter = "disk"                      # disk | github | gitlab
@@ -517,7 +518,8 @@ rewrite  = true                       # PreToolUse(Bash) → `rtok run -- …`
 shell    = ""                         # "" = $SHELL
 rules    = "~/.rtok/rules.toml"       # додаткові правила фільтрування; якщо немає → вбудований rules/default.toml
 rules_dir = "~/.rtok/rules.d"         # drop-in-файли: кожен *.toml об'єднується після rules у порядку назв (T50.2)
-trailer_min_lines = 40                # додавати `[rtok <id> · N lines · expand …]` понад це
+trailer  = true                       # друкувати `[rtok <id12> · N lines]` після скорочення; false = `--no-ref`
+trailer_min_lines = 40                # додавати `[rtok <id12> · N lines]` понад це
 fail_tail_lines   = 80                # ненульовий код виходу → останні N рядків дослівно
 never_wrap = ["rtok", "sudo"]         # список заборонених перших слів; heredoc, `&`, -i завжди пропускаються
 
@@ -577,13 +579,26 @@ startup_recall = true                 # SessionStart(startup) відновлює
 handoff        = true                 # MCP-інструмент T59.6 для зведення субагента
 spawn_brief        = true             # T130: зведення-вказівник для SubagentStart
 spawn_brief_tokens = 300              # T130: бюджет токенів для брифу під час запуску
+admit              = true             # T671: mem_save відхиляє надто коротку або дубльовану нотатку
+admit_min_chars    = 5                # T671: найкоротше тіло, яке пропускає шлюз
+admit_similarity   = 85               # T671: відсоток збігу триграм, що вважається дублем
+forget_after_days = 90                # T669: «memory forget» вилучає нотатки, які не читали так довго; 0 — потрібен --days
 
 [plugins.memory.embed]
 enabled    = false                    # P29: якщо false — лише FTS5; векторний пошук вмикається явно
-provider   = "local"                  # "local" | "openai"
-model      = "all-MiniLM-L6-v2"
-dimensions = 384
+provider   = "local"                  # "local" = офлайн-хеш-вектори | "http" = OpenAI-сумісний API ембедингів
+model      = "all-MiniLM-L6-v2"       # "http": назва моделі на сервері
+dimensions = 384                      # "http": має збігатися з довжиною вектора сервера
 hybrid     = true                     # коли ввімкнено: RRF(fts5, knn) для mem_search і prompt_recall; хук читає лише збережені вектори; false = лише knn
+url         = ""                      # "http": базовий URL, напр. "http://localhost:11434/v1" (Ollama) або "https://api.openai.com/v1"; текст нотаток надсилається туди
+api_key_env = ""                      # "http": назва змінної середовища з ключем; порожньо = без заголовка Authorization
+max_chars   = 8000                    # "http": довший текст не надсилається (працює звичайний пошук по нотатках)
+
+[plugins.memory.extract]
+enabled         = false                 # rtok memory extract: off by default, a model call can cost money
+command         = []                    # program reading the transcript on stdin, one {"title","body"} JSON line out per note
+max_notes       = 5                     # notes kept per run
+max_input_bytes = 60000                 # transcript bytes sent to the program; the end of the session is kept
 
 [plugins.graph]
 enabled    = true

@@ -516,6 +516,27 @@ pub fn plugin_stats(cfg: &Config, plugin: &str) -> Result<Value> {
     Ok(out)
 }
 
+/// The `rtok discover` page (T688): shell commands with no rule or formatter, ranked by the
+/// output the agent read. The store is required, like `plugin_stats`: an unreadable store is
+/// an error, not an empty ranking. At most 50 000 of the newest `PostToolUse` rows
+/// are read, so a long history costs a bounded scan.
+#[cfg(feature = "cmd")]
+pub fn discover(
+    cfg: &Config,
+    since: std::time::Duration,
+    limit: usize,
+) -> Result<crate::measure::discover::Discovery> {
+    const DISCOVER_SCAN_ROWS: i64 = 50_000;
+    let store = Store::open(&cfg.core.db_path)?;
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs());
+    let floor = i64::try_from(now.saturating_sub(since.as_secs())).unwrap_or(0);
+    let bodies = store.hook_inputs_since("PostToolUse", floor, DISCOVER_SCAN_ROWS)?;
+    let settings = crate::plugins::cmd::rules::Settings::from_config(cfg);
+    Ok(crate::measure::discover::rank(&bodies, &settings, limit))
+}
+
 /// The `rtok stats --cache` page: per-session prompt-cache health from the proxy's
 /// `usage` rows.
 pub fn cache_health(cfg: &Config) -> Result<Vec<cache::SessionHealth>> {

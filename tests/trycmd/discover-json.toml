@@ -1,0 +1,10 @@
+bin.name = "rtok"
+args = "--config tests/trycmd/input/json-readers.toml discover --json"
+
+# Hermetic by construction: an empty store under target/ via RTOK_HOME, and a cleared env
+# keeps ambient RTOK_* / HOME out. The ranking itself is covered by fixture-store unit tests.
+[env]
+inherit = false
+
+[env.add]
+RTOK_HOME = "target/tmp/t688-discover-json"

@@ -903,12 +903,20 @@ const EXEMPT: &[(&str, &str)] = &[
     ("bench", "runs the A/B schedule and writes Measurement rows"),
     ("memory import", "inserts note rows"),
     (
+        "memory extract",
+        "runs the user's configured program, then inserts note rows (T666.1)",
+    ),
+    (
         "docs fetch",
         "downloads rustdoc JSON into the local cache; not a dashboard page",
     ),
     (
         "memory retire",
         "tombstones a note row; the Memory page renders the notes, not the verdict (T69.1)",
+    ),
+    (
+        "memory forget",
+        "tombstones notes nobody read; dry run unless --apply (T669)",
     ),
     ("memory pin", "flags a note row to lead recall (T69.1)"),
     ("memory unpin", "drops the recall lead flag (T69.1)"),
@@ -1013,6 +1021,10 @@ const EXEMPT: &[(&str, &str)] = &[
         "deletes tagged build caches on the checkout's file system, not the store (T152)",
     ),
     (
+        "worktree migrate",
+        "moves git worktrees into the configured root with their locks and claim rows (T660.5)",
+    ),
+    (
         "agents junk clear",
         "deletes log siblings and archive payloads on rtok's own file system, not the store (T182)",
     ),
@@ -1105,6 +1117,10 @@ const EXEMPT: &[(&str, &str)] = &[
         "logs export",
         "the same Logs selection, unnumbered and uncoloured",
     ),
+    (
+        "discover",
+        "an on-demand query of the recorded shell history (`model::discover`), not a snapshot page; the ranking is one function the CLI renders (T688)",
+    ),
 ];
 
 /// Every runnable command path, space-joined — the walk `config_coverage` already
@@ -1171,6 +1187,7 @@ fn every_command_is_exempt_or_renders_a_page_of_the_model() {
 /// Table-printing readers must accept `--json` and serialize the model page (T60.1).
 const JSON_READERS: &[&str] = &[
     "stats",
+    "discover",
     "info",
     "config show",
     "config get",
