@@ -81,6 +81,27 @@ lookups are exact (recall and precision 1.000 over a hand-labelled set); referen
 find about a third of the sites, which [docs/comparison.md](comparison.md) explains
 rather than hides.
 
+A small project shows the CLI side of the same index. Given `src/lib.rs` with `total` calling a
+private `apply_tax` and an unused private `unused_helper`:
+
+```bash
+rtok graph index .
+rtok graph dead                        # unreferenced private definitions, one per line
+rtok graph impact apply_tax            # who is affected if it changes (default --depth 2)
+rtok graph impact total --to apply_tax # a call path between two symbols
+rtok graph affected                    # indexed tests that reach files changed in git
+```
+
+```text
+src/lib.rs:9 function unused_helper
+1  src/lib.rs  total
+total → apply_tax
+no indexed test reaches the change; run the suite
+```
+
+(Sample output from rtok 0.15.1 on that two-function project. Point `RTOK_HOME` at a scratch
+directory to try this without touching your real rtok data.)
+
 ### See what is on and where it runs
 
 ```bash
