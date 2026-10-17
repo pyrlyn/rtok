@@ -59,7 +59,7 @@ print_stderr = "warn"
 
 [package]
 name = "rtok"
-version = "0.17.0"
+version = "0.17.0-alpha.2"
 edition.workspace = true
 rust-version.workspace = true
 repository.workspace = true
