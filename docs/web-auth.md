@@ -13,8 +13,8 @@ once `web.host` is bound beyond loopback.
   before it prints its startup line.
 - **Owner-only file.** Unix: created with mode `0600` atomically (`create_new` + `mode`, then
   renamed into place), so it is never readable by group/other, not even briefly. Windows: the
-  file's inheritance is removed and only the creating user is granted access (`icacls`); if that
-  fails the server does not start.
+  file's DACL is replaced with one protected ACE for the creating user (no inherited or default
+  entries, `SetNamedSecurityInfoW`); if that fails the server does not start.
 - **Fresh per start.** Every start replaces the file with a new token; the previous token stops
   working immediately. There is no TTL beyond the process lifetime.
 - **Presenting the token.** CLI and other non-browser clients send

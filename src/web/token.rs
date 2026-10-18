@@ -70,45 +70,18 @@ fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     f.write_all(bytes)
 }
 
-/// Windows: the file inherits the home's ACL, so inheritance is cut and only the current user
-/// is granted access (`icacls`, no extra dependency) before the secret is written. A failure
-/// is an error: a token file others can read would be worse than no server.
+/// Windows: the file would inherit the home's ACL (or get the token's default DACL), so its
+/// DACL is replaced with a single protected ACE for the current user
+/// ([`rtok_sys::restrict_to_current_user`]) before the secret is written. A failure is an
+/// error: a token file others can read would be worse than no server.
 #[cfg(windows)]
 fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     let mut f = std::fs::OpenOptions::new()
         .write(true)
         .create_new(true)
         .open(path)?;
-    restrict_to_current_user(path)?;
+    rtok_sys::restrict_to_current_user(path)?;
     f.write_all(bytes)
-}
-
-#[cfg(windows)]
-fn restrict_to_current_user(path: &Path) -> std::io::Result<()> {
-    let user = std::env::var("USERNAME").map_err(|_| {
-        std::io::Error::other("USERNAME is not set; cannot restrict the token file")
-    })?;
-    let domain = std::env::var("USERDOMAIN").ok();
-    let account = domain.map_or(user.clone(), |d| format!("{d}\\{user}"));
-    let grant = format!("{account}:(F)");
-    let out = rtok_sys::proc::ProgressRunner::quiet(
-        "icacls",
-        [
-            path.as_os_str(),
-            std::ffi::OsStr::new("/inheritance:r"),
-            std::ffi::OsStr::new("/grant:r"),
-            std::ffi::OsStr::new(&grant),
-        ],
-    )
-    .run()?;
-    if out.status.success() {
-        Ok(())
-    } else {
-        Err(std::io::Error::other(format!(
-            "icacls failed: {}",
-            String::from_utf8_lossy(&out.stdout)
-        )))
-    }
 }
 
 #[cfg(not(any(unix, windows)))]
