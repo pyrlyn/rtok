@@ -15386,3 +15386,13 @@ Execution plan: reproduce the advisory audit; apply compatible package-manager u
 Check: RustSec audit has no vulnerabilities; full workspace nextest, clippy, format, minimum-feature build, duplication, JavaScript and Python gates pass with diagnostic environment variables unset.
 
 Validation: rustls 0.23.46 and quinn-proto 0.11.19 leave no RustSec vulnerabilities. All 3857 workspace tests passed across the complete run and focused retries (8 configured skips): the complete run passed 3853; two load-related timeouts and the claim-lock test passed at one test thread, and the plan-card check passed after adding its required Check line. CLI snapshots require the ambient RUST_LOG variable unset. Clippy (default and all features), formatting, duplication, JS checks and 43 Python tests passed. Minimum-feature build passed with existing unused-import warnings. Hakari generate --diff is clean. Existing dependencies are reused; no new source implementation was added.
+
+### T903. Use shared shell completion generation
+
+Use the local `shell-completions` crate in `packages/crates/rust`. Preserve rtok scripts and ketch package-name completion and installation behavior. Add `cox completions <shell>` without loading configuration, credentials, telemetry or a session.
+
+Execution plan: establish existing completion tests; extract the clap generator and Clink implementation with regression tests into the shared crate; connect consumers through local Cargo paths; update dependency inventories; run focused tests, formatting and clippy. Application-specific installation policies and ketch dynamic package lookup stay with their owners. Done when generation has one owner and the three CLI surfaces pass their checks.
+
+Validation: 23 focused tests passed; all six generated scripts are byte-identical to the pre-extraction baseline. Formatting and production clippy passed. `just check` passed workspace clippy and 2779 tests before unrelated cli_trycmd logging snapshots failed (completion snapshots passed; 8 skipped, 1261 not run by fail-fast).
+
+Reused `clap_complete` and the existing rtok Clink generator. No replacement library or custom generator was introduced. Local path dependencies resolve in the standard apps/packages layout.
