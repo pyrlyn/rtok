@@ -90,11 +90,17 @@ fn restrict_to_current_user(path: &Path) -> std::io::Result<()> {
     })?;
     let domain = std::env::var("USERDOMAIN").ok();
     let account = domain.map_or(user.clone(), |d| format!("{d}\\{user}"));
-    let out = std::process::Command::new("icacls")
-        .arg(path)
-        .args(["/inheritance:r", "/grant:r"])
-        .arg(format!("{account}:(F)"))
-        .output()?;
+    let grant = format!("{account}:(F)");
+    let out = rtok_sys::proc::ProgressRunner::quiet(
+        "icacls",
+        [
+            path.as_os_str(),
+            std::ffi::OsStr::new("/inheritance:r"),
+            std::ffi::OsStr::new("/grant:r"),
+            std::ffi::OsStr::new(&grant),
+        ],
+    )
+    .run()?;
     if out.status.success() {
         Ok(())
     } else {
