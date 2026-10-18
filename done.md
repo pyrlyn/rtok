@@ -15387,6 +15387,12 @@ Check: RustSec audit has no vulnerabilities; full workspace nextest, clippy, for
 
 Validation: rustls 0.23.46 and quinn-proto 0.11.19 leave no RustSec vulnerabilities. All 3857 workspace tests passed across the complete run and focused retries (8 configured skips): the complete run passed 3853; two load-related timeouts and the claim-lock test passed at one test thread, and the plan-card check passed after adding its required Check line. CLI snapshots require the ambient RUST_LOG variable unset. Clippy (default and all features), formatting, duplication, JS checks and 43 Python tests passed. Minimum-feature build passed with existing unused-import warnings. Hakari generate --diff is clean. Existing dependencies are reused; no new source implementation was added.
 
+### T903.1. Consume the published shell-completions crate
+
+Changed rtok from the sibling-local `shell-completions` path dependency to the published crates.io `shell-completions = "0.1.0"` dependency. The Cargo.lock change adds only the registry source and checksum for version 0.1.0; no dependency versions were bumped. The package archive proof confirmed the standalone release contains 691 archive entries and 11 package members.
+
+Validation: against the registry package with `--locked`, `cargo test -p rtok --lib completions` passed 11 tests; `RUST_LOG=warn cargo test -p rtok --test cli_trycmd -- --test-threads=1` passed 4 tests; `cargo fmt --all -- --check` passed. The standalone locked archive proof resolved and built rtok with 691 archive entries and 11 package members.
+
 ### T903.2. Isolate CLI snapshots from ambient logging
 
 The merge gate's CLI snapshots inherited `RUST_LOG=warn` and gained timestamped error logs. The CLI snapshot subprocess now strips ambient logging alongside session variables, while dedicated logging tests retain control over their logging environment. A regression test launches snapshots with `RUST_LOG=warn`; application logging behavior is preserved. No shared snapshot-isolation helper was found in the existing fs-kit or scoped-check code.

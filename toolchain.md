@@ -97,7 +97,7 @@ Project programs and direct packages from the manifests.
 | base64 | local | https://crates.io/crates/base64 | T329.40: the graph page receives a PNG export inside a text frame |
 | change-preview | local | https://crates.io/crates/change-preview | Shared dry-run diff, colour and byte-size rendering (T416.1) |
 | clap | local | https://crates.io/crates/clap | CLI |
-| shell-completions | local | https://github.com/pyrlyn/crates/tree/main/rust/shell-completions | Shared clap shell scripts and Clink generator; local path dependency |
+| shell-completions | local | https://crates.io/crates/shell-completions | Shared clap shell scripts and Clink generator; published dependency |
 | clap_mangen | local | https://crates.io/crates/clap_mangen | `rtok man` roff page (T53.2) |
 | crossterm | local | https://crates.io/crates/crossterm | Terminal |
 | diesel | local | https://crates.io/crates/diesel | SQLite ORM |

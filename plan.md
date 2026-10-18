@@ -111,7 +111,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 
 | # | Status | Priority | Complexity | Readiness | Agent |
 | --- | --- | --- | --- | --- | --- |
-| T903.1 | in progress | P1 | 2 | 0% | OpenAI / GPT-6 |
 | T124 | todo | P3 | 2 | 60% | |
 | T131 | todo | P2 | 3 | 70% | |
 | T156 | in progress | P3 | 3 | 50% | Claude Code / claude-opus-5-5 |
@@ -1072,7 +1071,3 @@ Check: a test shows a dropped `Runtime::in_memory` leaves no directory behind, a
 ## Beat sqz, lean-ctx, token-optimizer and caveman per category (T672–T686)
 
 Source: `docs/research/competitors-techniques.md` (techniques, licenses, links). Every card: keep 100 % of hashes, paths and WARN/ERROR lines, never more tokens than raw, stderr and exit line kept on failure.
-
-### T903.1. Consume the published shell-completions crate
-
-Use the managed crates.io release so an independent checkout builds without sibling repositories. Execution plan: replace the local Cargo path with the published version, resolve Cargo.lock only after publication, preserve existing dependency versions, verify locked metadata outside the sibling layout, and run completion checks through CI. Done when the published dependency resolves and the PR is merged after required checks.
