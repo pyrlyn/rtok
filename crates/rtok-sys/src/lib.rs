@@ -171,6 +171,16 @@ pub fn stop_inheriting_own_stdio() {
     }
 }
 
+/// Windows: replace the DACL of `path` with one ACE that gives the user this process runs as
+/// full control, and mark it protected so nothing is inherited from the parent. `icacls
+/// /inheritance:r /grant:r` is not enough: when the parent directory has no inheritable ACEs
+/// the new file gets the token's default DACL (SYSTEM, Administrators) as explicit entries,
+/// which `/inheritance:r` keeps.
+#[cfg(windows)]
+pub fn restrict_to_current_user(path: &std::path::Path) -> io::Result<()> {
+    win::restrict_to_current_user(path)
+}
+
 #[cfg(windows)]
 mod win {
     use windows_sys::Win32::Foundation::{
@@ -181,6 +191,73 @@ mod win {
         GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_TERMINATE,
         TerminateProcess,
     };
+
+    pub fn restrict_to_current_user(path: &std::path::Path) -> std::io::Result<()> {
+        use std::os::windows::ffi::OsStrExt;
+        use windows_sys::Win32::Foundation::{ERROR_SUCCESS, GENERIC_ALL, HANDLE, LocalFree};
+        use windows_sys::Win32::Security::Authorization::{
+            EXPLICIT_ACCESS_W, NO_MULTIPLE_TRUSTEE, SE_FILE_OBJECT, SET_ACCESS, SetEntriesInAclW,
+            SetNamedSecurityInfoW, TRUSTEE_IS_SID, TRUSTEE_IS_USER, TRUSTEE_W,
+        };
+        use windows_sys::Win32::Security::{
+            ACL, DACL_SECURITY_INFORMATION, GetTokenInformation, NO_INHERITANCE,
+            PROTECTED_DACL_SECURITY_INFORMATION, TOKEN_QUERY, TOKEN_USER, TokenUser,
+        };
+        use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
+
+        let mut token: HANDLE = std::ptr::null_mut();
+        if unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) } == 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        let mut len = 0u32;
+        unsafe { GetTokenInformation(token, TokenUser, std::ptr::null_mut(), 0, &mut len) };
+        // u64 cells keep the buffer aligned for TOKEN_USER's pointer field.
+        let mut buf = vec![0u64; (len as usize).div_ceil(8).max(1)];
+        let ok = unsafe {
+            GetTokenInformation(token, TokenUser, buf.as_mut_ptr().cast(), len, &mut len)
+        };
+        let token_err = std::io::Error::last_os_error();
+        unsafe { CloseHandle(token) };
+        if ok == 0 {
+            return Err(token_err);
+        }
+        let user = unsafe { &*buf.as_ptr().cast::<TOKEN_USER>() };
+
+        let access = EXPLICIT_ACCESS_W {
+            grfAccessPermissions: GENERIC_ALL,
+            grfAccessMode: SET_ACCESS,
+            grfInheritance: NO_INHERITANCE,
+            Trustee: TRUSTEE_W {
+                pMultipleTrustee: std::ptr::null_mut(),
+                MultipleTrusteeOperation: NO_MULTIPLE_TRUSTEE,
+                TrusteeForm: TRUSTEE_IS_SID,
+                TrusteeType: TRUSTEE_IS_USER,
+                ptstrName: user.User.Sid.cast(),
+            },
+        };
+        let mut acl: *mut ACL = std::ptr::null_mut();
+        let rc = unsafe { SetEntriesInAclW(1, &access, std::ptr::null(), &mut acl) };
+        if rc != ERROR_SUCCESS {
+            return Err(std::io::Error::from_raw_os_error(rc as i32));
+        }
+        let wide: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+        let rc = unsafe {
+            SetNamedSecurityInfoW(
+                wide.as_ptr(),
+                SE_FILE_OBJECT,
+                DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                acl,
+                std::ptr::null(),
+            )
+        };
+        unsafe { LocalFree(acl.cast()) };
+        if rc != ERROR_SUCCESS {
+            return Err(std::io::Error::from_raw_os_error(rc as i32));
+        }
+        Ok(())
+    }
 
     pub fn stop_inheriting_std_handles() {
         for id in [STD_OUTPUT_HANDLE, STD_ERROR_HANDLE] {
