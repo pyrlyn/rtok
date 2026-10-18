@@ -82,7 +82,7 @@ jobs:
       # so a host that caches a plugin by its manifest version sees a new build.
       - run: tools/plugin-versions.sh --check "$(grep -m1 '^version = ' Cargo.toml | cut -d'"' -f2)"
       - if: failure() && github.event_name == 'pull_request'
-        uses: pyrlyn/ci/.github/actions/cancel-run@4e652d891cc6e6f0be316eda1a1f9630d76a8b7e # main
+        uses: pyrlyn/ci/.github/actions/cancel-run@main
 
   check:
     # Draft PRs still emit synchronize; skip until ready_for_review.
@@ -92,7 +92,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: ${{ fromJSON(vars.MACOS_CI_DISABLED == 'true' && '["ubuntu-latest"]' || '["ubuntu-latest", "macos-latest"]') }}
     permissions:
       contents: read
       actions: write # cancel-run
@@ -148,7 +148,7 @@ jobs:
         run: just spa-browsers spa-e2e-run
       - run: just example
       - if: failure() && github.event_name == 'pull_request'
-        uses: pyrlyn/ci/.github/actions/cancel-run@4e652d891cc6e6f0be316eda1a1f9630d76a8b7e # main
+        uses: pyrlyn/ci/.github/actions/cancel-run@main
 
   # Unix test binaries are built once per OS and archived (`cargo nextest archive`); the `test`
   # shards below only download the archive and run their partition. Archive and run share one
@@ -160,7 +160,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: ${{ fromJSON(vars.MACOS_CI_DISABLED == 'true' && '["ubuntu-latest"]' || '["ubuntu-latest", "macos-latest"]') }}
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
@@ -198,7 +198,7 @@ jobs:
           retention-days: 1
           if-no-files-found: error
       - if: failure() && github.event_name == 'pull_request'
-        uses: pyrlyn/ci/.github/actions/cancel-run@4e652d891cc6e6f0be316eda1a1f9630d76a8b7e # main
+        uses: pyrlyn/ci/.github/actions/cancel-run@main
 
   # The suite, split over 2 shards per OS (nextest `--partition count:i/n`) from the archive.
   test:
@@ -209,7 +209,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: ${{ fromJSON(vars.MACOS_CI_DISABLED == 'true' && '["ubuntu-latest"]' || '["ubuntu-latest", "macos-latest"]') }}
         partition: [1, 2]
         partitions: [2]
     name: test (${{ matrix.os }}, ${{ matrix.partition }}/${{ matrix.partitions }})
@@ -248,7 +248,7 @@ jobs:
           --extract-to . --extract-overwrite
           --partition count:${{ matrix.partition }}/${{ matrix.partitions }}
       - if: failure() && github.event_name == 'pull_request'
-        uses: pyrlyn/ci/.github/actions/cancel-run@4e652d891cc6e6f0be316eda1a1f9630d76a8b7e # main
+        uses: pyrlyn/ci/.github/actions/cancel-run@main
 
   # The Windows test binaries are built once here and archived (`cargo nextest archive`); the
   # `windows` shards below only download the archive and run their partition, so the build is
@@ -295,7 +295,7 @@ jobs:
       - run: mise exec -- cargo clippy --workspace --all-targets --all-features --exclude rtok-wasm-demo-guest -- -D warnings -A clippy::disallowed_methods
       - run: mise exec -- cargo clippy --workspace --lib --bins --all-features --exclude rtok-wasm-demo-guest -- -D warnings
       - if: failure() && github.event_name == 'pull_request'
-        uses: pyrlyn/ci/.github/actions/cancel-run@4e652d891cc6e6f0be316eda1a1f9630d76a8b7e # main
+        uses: pyrlyn/ci/.github/actions/cancel-run@main
 
   # T44.4: the agent installers write Windows paths and `%APPDATA%` files; run the suite there.
   # T83.4: a gate like `check` — a Windows-only failure fails the run.
@@ -344,7 +344,7 @@ jobs:
           --extract-to . --extract-overwrite
           --partition count:${{ matrix.partition }}/${{ matrix.partitions }}
       - if: failure() && github.event_name == 'pull_request'
-        uses: pyrlyn/ci/.github/actions/cancel-run@4e652d891cc6e6f0be316eda1a1f9630d76a8b7e # main
+        uses: pyrlyn/ci/.github/actions/cancel-run@main
 
   # T310.11: the admin SPA in web/ (the `just spa-*` recipes). oxlint and oxfmt already cover
   # web/ in `lint` (`just js` lints every tracked .ts/.tsx), so they are not run twice. The
@@ -387,7 +387,7 @@ jobs:
       - run: just spa-stories
       - run: just spa-build
       - if: failure() && github.event_name == 'pull_request'
-        uses: pyrlyn/ci/.github/actions/cancel-run@4e652d891cc6e6f0be316eda1a1f9630d76a8b7e # main
+        uses: pyrlyn/ci/.github/actions/cancel-run@main
 
   # Docs-only pull requests skip the jobs above; this one still runs the tests that validate the
   # Markdown (`just docs-check`: plan.md/todo.md ids and Check: lines, ideas.md, docs/ structure,
@@ -431,7 +431,7 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
       - run: just docs-check
       - if: failure() && github.event_name == 'pull_request'
-        uses: pyrlyn/ci/.github/actions/cancel-run@4e652d891cc6e6f0be316eda1a1f9630d76a8b7e # main
+        uses: pyrlyn/ci/.github/actions/cancel-run@main
 
   # Fails when workspace-hack drifts from the dependency graph (cargo-hakari
   # comes from mise.toml). Own job, so the required check names stay as they are.
