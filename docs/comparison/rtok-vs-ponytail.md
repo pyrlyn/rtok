@@ -9,7 +9,7 @@ Competitor: [ponytail](https://github.com/DietrichGebert/ponytail) · category: 
 **What rtok does here.** Native `yagni` mode (145 tokens) with a typed ladder in `src/modes`, inside the 800-token budget.
 
 ### ponytail: pros
-- Zero runtime; cheapest lever (output tokens are 20–39 % of the bill).
+- Zero runtime; cheapest lever (output tokens are 20–39 % of the bill) (rtok's docs at `de96106a9`, 2026-10-14).
 
 ### ponytail: cons
 - Only its own bench (Haiku 4.5, n=4).

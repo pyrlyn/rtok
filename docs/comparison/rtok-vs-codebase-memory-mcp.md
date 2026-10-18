@@ -1,4 +1,4 @@
-# rtok vs codebase-memory-mcp 0.11.0 (release `codebase-memory-mcp-linux-arm64-portable.mcpb`, github.com/DeusData/codebase-memory-mcp)
+# rtok vs codebase-memory-mcp 0.11.0 (release `codebase-memory-mcp-linux-arm64-portable.mcpb`, github.com/DeusData/codebase-memory-mcp), measured with `bench/c14/run_b3.py`
 
 Measured with `bench/c14/run_b3.py` in image `rtok-c15:3` (`bench/c14/b3.Dockerfile`: `rtok-c14b:2`
 plus rustup 1.90.0 with `rust-analyzer`, which serena needs). rtok built from
@@ -42,14 +42,14 @@ Competitor: [codebase-memory-mcp](https://github.com/DeusData/codebase-memory-mc
 
 ### codebase-memory-mcp: pros
 - Huge grammar coverage and hybrid LSP precision.
-- Published paper (31 repos, 83 % answer quality).
+- Its published paper reports 83 % answer quality on 31 repos.
 
 ### codebase-memory-mcp: cons
 - Exited on start on the author's machine (0 tools, 2026-09-02).
-- 281 MB binary, 141 MB cache.
+- 281 MB binary, 141 MB cache (rtok's docs at `de96106a9`, 2026-10-14).
 
 ### rtok: pros
-- Small binary (18.9 MiB), works on the author's machine.
+- Small binary (18.9 MiB), works on the author's machine (rtok's docs at `de96106a9`, 2026-10-14).
 
 ### rtok: cons
 - Fewer grammars; no LSP backend yet (v0.2).

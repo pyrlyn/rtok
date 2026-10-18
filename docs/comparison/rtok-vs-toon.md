@@ -1,4 +1,4 @@
-# rtok vs toon (`@toon-format/cli` 4.4.0, github.com/toon-format/toon)
+# rtok vs toon (`@toon-format/cli` 4.4.0, github.com/toon-format/toon), measured with `bench/c14`
 
 Measured with `bench/c14` (image `rtok-c14:12ebeb9`): rtok built from
 `12ebeb972e2bea88bec939a9ca9b436db884de13` (main, 2026-10-14) and run on the same commit

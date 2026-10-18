@@ -1,4 +1,4 @@
-# rtok vs code-review-graph (PyPI 2.3.9, github.com/tirth8205/code-review-graph)
+# rtok vs code-review-graph (PyPI 2.3.9, github.com/tirth8205/code-review-graph), measured with `bench/c14`
 
 Measured with `bench/c14` (image `rtok-c14:12ebeb9`): rtok built from
 `12ebeb972e2bea88bec939a9ca9b436db884de13` (main, 2026-10-14) and run on the same commit

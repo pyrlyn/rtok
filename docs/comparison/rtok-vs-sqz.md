@@ -1,4 +1,4 @@
-# rtok vs sqz 2.1.1 (release binary `sqz-v2.1.1-aarch64-unknown-linux-musl`, github.com/ojuschugh1/sqz)
+# rtok vs sqz 2.1.1 (release binary `sqz-v2.1.1-aarch64-unknown-linux-musl`, github.com/ojuschugh1/sqz), measured with `bench/c14/run_b2_shell.py`
 
 Measured with `bench/c14/run_b2_shell.py` in image `rtok-c14b` (`bench/c14/b2/Dockerfile`):
 rtok built from `12ebeb972e2bea88bec939a9ca9b436db884de13`, input repo checked out at the same commit.
@@ -52,7 +52,7 @@ Competitor: [sqz](https://github.com/ojuschugh1/sqz) · category: Command-output
 
 ### sqz: cons
 - Elastic License 2.0, not OSI open source.
-- All numbers self-reported (24.7 % average over 3,003 compressions).
+- All numbers are self-reported: sqz reports a 24.7 % average over 3,003 compressions.
 - No proxy or MCP surface.
 
 ### rtok: pros

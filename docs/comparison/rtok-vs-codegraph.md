@@ -1,4 +1,4 @@
-# rtok vs codegraph 1.6.2 (release `codegraph-linux-arm64.tar.gz`, github.com/colbymchenry/codegraph)
+# rtok vs codegraph 1.6.2 (release `codegraph-linux-arm64.tar.gz`, github.com/colbymchenry/codegraph), measured with `bench/c14/run_b3.py`
 
 Measured with `bench/c14/run_b3.py` in image `rtok-c15:3` (`bench/c14/b3.Dockerfile`: `rtok-c14b:2`
 plus rustup 1.90.0 with `rust-analyzer`, which serena needs). rtok built from
@@ -47,7 +47,7 @@ Competitor: [codegraph](https://github.com/colbymchenry/codegraph) · category: 
 - Published multi-repo claim (−88 % tool calls, −62 % tokens).
 
 ### codegraph: cons
-- 97 MB `.codegraph/` for one repo (cross-code).
+- 97 MB `.codegraph/` for one repo (cross-code) (rtok's docs at `de96106a9`, 2026-10-14).
 - Claims are vendor numbers.
 
 ### rtok: pros

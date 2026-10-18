@@ -1,4 +1,4 @@
-# rtok vs token-optimizer v5.13.44 (git tag, github.com/alexgreensh/token-optimizer)
+# rtok vs token-optimizer v5.13.44 (git tag, github.com/alexgreensh/token-optimizer), measured with `bench/c14/run_b2_shell.py`
 
 Measured with `bench/c14/run_b2_shell.py` in image `rtok-c14b` (`bench/c14/b2/Dockerfile`):
 rtok built from `12ebeb972e2bea88bec939a9ca9b436db884de13`, input repo checked out at the same commit.
@@ -43,7 +43,7 @@ Competitor: [token-optimizer](https://github.com/alexgreensh/token-optimizer) ·
 
 ## RTOK vs token-optimizer
 
-**What token-optimizer does.** A pile of Python hooks (27 on the author's machine): delta reads, structure maps, bash compression for 111 commands, archive of results over 4 KB, compaction checkpoints and quality nudges. Licence: PolyForm Noncommercial 1.0.0 (local LICENSE).
+**What token-optimizer does.** A pile of Python hooks (27 on the author's machine): delta reads, structure maps, bash compression for 111 commands, archive of results over 4 KB, compaction checkpoints and quality nudges. Licence: PolyForm Noncommercial 1.0.0 (local LICENSE) (rtok's docs at `de96106a9`, 2026-10-14).
 
 **What rtok does here.** One Rust binary, 8 hook entries across 7 events; `read`, `cmd`, `archive`, `inject` plugins cover the same jobs; checkpoints at `PreCompact`.
 
@@ -57,7 +57,7 @@ Competitor: [token-optimizer](https://github.com/alexgreensh/token-optimizer) ·
 - Only the author's own meter ("$313/mo").
 
 ### rtok: pros
-- One process, p95 8.25 ms per hook; fail-open.
+- One process, p95 8.25 ms per hook; fail-open (rtok's docs at `de96106a9`, 2026-10-14).
 - One ledger.
 - Permissive licence.
 

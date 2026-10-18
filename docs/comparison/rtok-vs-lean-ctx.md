@@ -1,4 +1,4 @@
-# rtok vs lean-ctx 3.11.4 (release binary `lean-ctx-aarch64-unknown-linux-musl`, github.com/yvgude/lean-ctx)
+# rtok vs lean-ctx 3.11.4 (release binary `lean-ctx-aarch64-unknown-linux-musl`, github.com/yvgude/lean-ctx), measured with `bench/c14/run_b2_shell.py`
 
 Measured with `bench/c14/run_b2_shell.py` in image `rtok-c14b` (`bench/c14/b2/Dockerfile`):
 rtok built from `12ebeb972e2bea88bec939a9ca9b436db884de13`, input repo checked out at the same commit.

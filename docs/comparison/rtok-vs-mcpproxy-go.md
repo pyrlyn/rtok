@@ -59,7 +59,7 @@ Competitor: [mcpproxy-go](https://github.com/smart-mcp-proxy/mcpproxy-go) · cat
 
 ## Verdict
 
-**Not ported; rtok's approach is better for its scope.** The honest saving (17–43 % on description bytes) is a slice of a 6.2 % slice, and host-native Tool Search covers much of it.
+**Not ported; rtok's approach is better for its scope.** The honest saving (17–43 % on description bytes) is a slice of a 6.2 % slice, and host-native Tool Search covers much of it (rtok's docs at `de96106a9`, 2026-10-14).
 
 ## Savings (both sides)
 
