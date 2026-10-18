@@ -64,6 +64,10 @@
 # T433 (2026-10-08): the hook dispatcher saves its stdin through `insert_hook_call_io`, which
 # splits off the session fields and falls back to `insert_call_io` from
 # `crates/rtok-store/src/hook_fields.rs`; that file takes over the `src/hooks/mod.rs` ref.
+#
+# S1-S8 security audit (#1064, 2026-10-17): `tests/web_token.rs` added its own `connect` helper
+# (a `/ws` handshake with or without a bearer token), so that file joined the `connect` defs.
+# A new definition of the name, not an index regression.
 
 [[symbol]]
 name = "Manifest"
@@ -282,7 +286,7 @@ refs = ["crates/rtok-hook/src/lib.rs", "tests/hook_resident.rs"]
 name = "connect"
 kind = "fn"
 rank = true
-defs = ["crates/rtok-hook/src/lib.rs", "crates/rtok-store/src/handle.rs"]
+defs = ["crates/rtok-hook/src/lib.rs", "crates/rtok-store/src/handle.rs", "tests/web_token.rs"]
 refs = ["crates/rtok-hook/src/lib.rs", "src/bin/rtok-hook.rs", "tests/hook_resident.rs"]
 
 [[symbol]]
