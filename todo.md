@@ -47,3 +47,4 @@
 - T651. Honor ProgressRunner timeouts with inherited output
 - T666.2. Provider-backed memory extractor (blocked on the creator)
 - T687. Hooks: PreToolUse/PostToolUse p50 to 10 ms
+- T903.1. Consume the published shell-completions crate

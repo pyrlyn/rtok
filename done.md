@@ -15387,6 +15387,12 @@ Check: RustSec audit has no vulnerabilities; full workspace nextest, clippy, for
 
 Validation: rustls 0.23.46 and quinn-proto 0.11.19 leave no RustSec vulnerabilities. All 3857 workspace tests passed across the complete run and focused retries (8 configured skips): the complete run passed 3853; two load-related timeouts and the claim-lock test passed at one test thread, and the plan-card check passed after adding its required Check line. CLI snapshots require the ambient RUST_LOG variable unset. Clippy (default and all features), formatting, duplication, JS checks and 43 Python tests passed. Minimum-feature build passed with existing unused-import warnings. Hakari generate --diff is clean. Existing dependencies are reused; no new source implementation was added.
 
+### T903.2. Isolate CLI snapshots from ambient logging
+
+The merge gate's CLI snapshots inherited `RUST_LOG=warn` and gained timestamped error logs. The CLI snapshot subprocess now strips ambient logging alongside session variables, while dedicated logging tests retain control over their logging environment. A regression test launches snapshots with `RUST_LOG=warn`; application logging behavior is preserved. No shared snapshot-isolation helper was found in the existing fs-kit or scoped-check code.
+
+Validation: regression command with ambient `RUST_LOG` unset passed (1 test); the full `cli_trycmd` suite with `RUST_LOG=warn` and one test thread passed (4 tests); `tests/logs.rs` with `RUST_LOG` unset and one test thread passed (9 tests). The initial red run before the fix failed 10 of 90 snapshots with timestamped `ERROR` lines, including `cli/run: not inside an agent session`. `cargo fmt --all -- --check` passed after formatting the test change.
+
 ### T903. Use shared shell completion generation
 
 Use the local `shell-completions` crate in `packages/crates/rust`. Preserve rtok scripts and ketch package-name completion and installation behavior. Add `cox completions <shell>` without loading configuration, credentials, telemetry or a session.
