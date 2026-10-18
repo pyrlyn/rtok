@@ -1,4 +1,4 @@
-# rtok vs serena-agent 2.0.0 (PyPI `serena-agent`, LSP backend rust-analyzer 1.90.0)
+# rtok vs serena-agent 2.0.0 (PyPI `serena-agent`, LSP backend rust-analyzer 1.90.0), measured with `bench/c14/run_b3.py`
 
 Measured with `bench/c14/run_b3.py` in image `rtok-c15:3` (`bench/c14/b3.Dockerfile`: `rtok-c14b:2`
 plus rustup 1.90.0 with `rust-analyzer`, which serena needs). rtok built from

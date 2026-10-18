@@ -1,4 +1,4 @@
-# rtok vs graymatter 0.20.1 (release `graymatter_0.20.1_linux_arm64.tar.gz`, github.com/angelnicolasc/graymatter)
+# rtok vs graymatter 0.20.1 (release `graymatter_0.20.1_linux_arm64.tar.gz`, github.com/angelnicolasc/graymatter), measured with `bench/c14/run_b3.py`
 
 Measured with `bench/c14/run_b3.py` in image `rtok-c15:3` (`bench/c14/b3.Dockerfile`: `rtok-c14b:2`
 plus rustup 1.90.0 with `rust-analyzer`, which serena needs). rtok built from
@@ -37,7 +37,7 @@ Competitor: [graymatter](https://github.com/angelnicolasc/graymatter) · categor
 
 ## RTOK vs graymatter
 
-**What graymatter does.** One ~10 MB Go binary (MIT): bbolt + chromem-go, MCP + Claude Code hooks, hybrid recall (vector + keyword + recency), decay, tombstones, pinning.
+**What graymatter does.** One ~10 MB Go binary (MIT): bbolt + chromem-go, MCP + Claude Code hooks, hybrid recall (vector + keyword + recency), decay, tombstones, pinning (rtok's docs at `de96106a9`, 2026-10-14).
 
 **What rtok does here.** `memory` with lifecycle (retire, supersede, pin — T69.1), FTS5 + optional hash-embed.
 
@@ -45,7 +45,7 @@ Competitor: [graymatter](https://github.com/angelnicolasc/graymatter) · categor
 - Closest design to rtok; hybrid ranking with receipts; decay.
 
 ### graymatter: cons
-- Its 90 % is against full-history injection, a baseline no host uses.
+- Its claimed 90 % is against full-history injection, a baseline no host uses.
 
 ### rtok: pros
 - Measured 20/20 recall at N=100; integrated with the rest of rtok.

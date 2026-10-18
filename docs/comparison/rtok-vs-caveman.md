@@ -1,4 +1,4 @@
-# rtok vs caveman v4.0.1 (github.com/JuliusBrussee/caveman)
+# rtok vs caveman v4.0.1 (github.com/JuliusBrussee/caveman), measured with `bench/c14/run_b2_catalog.py`
 
 caveman's headline saving, the terse "caveman" reply style, is a prompt/skill. It changes what a model
 writes and needs a live model, so it can't be measured deterministically and is not benchmarked here.
@@ -41,7 +41,7 @@ Competitor: [caveman](https://github.com/JuliusBrussee/caveman) · category: Com
 - Proxy was inert on the author's machine (0 saved).
 
 ### rtok: pros
-- Fixture bench: full compress 34.9 % chars / 147 tokens saved vs a caveman-lite baseline 11.7 % / 50.
+- Measured on the fixture bench: full compress 34.9 % chars / 147 tokens saved vs a caveman-lite baseline 11.7 % / 50.
 - Fences and negations preserved (hard-fail tests).
 
 ### rtok: cons
