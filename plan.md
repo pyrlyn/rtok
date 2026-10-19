@@ -144,7 +144,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T428 | in progress | P2 | 3 | 85% | Claude Code / sonnet-5.5 |
 | T651 | in progress | P2 | 2 | 35% | Claude Code / sonnet-5.5 |
 | T653 | in progress | P2 | 2 | 55% | Claude Code / sonnet-5.5 |
-| T655 | in progress | P2 | 2 | 60% | Claude Code / sonnet-5.5 |
 | T656 | in progress | P2 | 2 | 60% | Claude Code / sonnet-5.5 |
 | T436.4 | todo | P3 | 2 | 90% | |
 | T522 | in progress | P2 | 2 | 0% | MiMo / mimo |
@@ -182,16 +181,6 @@ Evidence baseline: `eb7d980af235f0ccb3d8ff58471d24b8267af35d`. Where: [`cache_re
 
 Check: a hit keeps its request usage but does not increase provider-billed totals; a live response still does.
 
-### T655. Make compressor in-flight admission atomic
-
-Evidence baseline: `eb7d980af235f0ccb3d8ff58471d24b8267af35d`. Where: [`queue.rs`](src/plugins/compress/queue.rs#L58-L79), cap check separated from increment. Impact/trigger: concurrent `submit` calls can exceed `max_in_flight`, spawning more compressor jobs than configured. Evidence level: deterministic extracted schedule synchronized after the load and before increment; cap 1 accepted two (`/tmp/rtok-t650-queue-probe.rs`). T385.9 documents a cap but not concurrent admission.
-
-1. Reserve capacity atomically before inserting a new ID into `seen`; if capacity is full, leave the ID retryable. If it is a duplicate or the seen lock fails, release the reservation.
-2. Release the slot on every spawn/task completion path.
-3. Add a barrier-controlled distinct-ID concurrency regression for cap 1, plus duplicate, saturation/retry and completion/release controls.
-4. Run compressor queue and live-compression tests plus `just check`.
-
-Check: no concurrent schedule admits more than `max_in_flight`, and every completion/error path releases its reservation.
 
 ### T656. Keep worktrees and caches when their age cannot be established
 
