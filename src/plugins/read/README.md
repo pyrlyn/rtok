@@ -13,7 +13,7 @@ Five MCP tools instead of seventy-eight, and no per-turn banner.
 - `read(path, mode=full|lines|map|signatures|diff|stripped|density:X, range?)` — numbered lines; `map` and
   `signatures` come from tree-sitter tags queries (Rust, TS, JS, Python, Dart, C, Go);
   `stripped` drops comment nodes (same grammars; unknown language or parse fail → `full`);
-  unknown language for `map`/`signatures` → first 60 lines + note. Output over 20 K chars → head/tail + archive id.
+  unknown language for `map`/`signatures` → first 60 lines + note. Output over 20 K chars → head/tail + an 8-char archive id (`expand` resolves it, T908).
   `density:X` (0 < X ≤ 1, T670) keeps the most informative lines, by word rarity in the file, until about X of the bytes remain; line numbers are kept, `… N lines omitted` marks gaps (fetch them with `lines`).
   `diff` is the edit → verify form of the automatic delta below.
 - `search(pattern, path, max=50)` — regex over files respecting `.gitignore`;
