@@ -476,15 +476,60 @@ fn mcp_accepts_sibling_worktrees_and_every_client_root() {
     let _ = std::fs::remove_dir_all(&base);
 }
 
-/// Launched outside any repository (here `/`, the same unwalkable class as `$HOME`),
-/// `worktree_list` and a pathless `search` use the `roots/list` root that lies inside one.
-/// The first root is the launch cwd so the chdir keeps the process outside a repo.
+/// Filesystem root that contains `anchor`: `/` on Unix, `C:\` on Windows.
+/// `Url::from_directory_path` rejects a bare `/` on Windows because it is not a disk
+/// prefix, and that root is the unwalkable directory T263 must chdir to.
+fn filesystem_root(anchor: &Path) -> std::path::PathBuf {
+    let mut root = std::path::PathBuf::new();
+    for c in anchor.components() {
+        match c {
+            std::path::Component::Prefix(_) | std::path::Component::RootDir => root.push(c),
+            _ => break,
+        }
+    }
+    if root.as_os_str().is_empty() {
+        std::path::PathBuf::from("/")
+    } else {
+        root
+    }
+}
+
+/// `worktree_list` is JSON. A Windows path's `\` is escaped there, so compare the parsed
+/// strings with the directory, folding separators (and ASCII case on Windows).
+fn json_lists_dir(text: &str, path: &Path) -> bool {
+    let want = path.to_string_lossy().replace('\\', "/");
+    let Ok(v) = serde_json::from_str::<serde_json::Value>(text) else {
+        return false;
+    };
+    fn walk(v: &serde_json::Value, want: &str) -> bool {
+        match v {
+            serde_json::Value::String(s) => {
+                let got = s.replace('\\', "/");
+                if cfg!(windows) {
+                    got.eq_ignore_ascii_case(want)
+                } else {
+                    got == want
+                }
+            }
+            serde_json::Value::Array(xs) => xs.iter().any(|x| walk(x, want)),
+            serde_json::Value::Object(map) => map.values().any(|x| walk(x, want)),
+            _ => false,
+        }
+    }
+    walk(&v, &want)
+}
+
+/// Launched outside any repository (the filesystem root, the same unwalkable class as
+/// `$HOME`), `worktree_list` and a pathless `search` use the `roots/list` root that lies
+/// inside one. The first root is that filesystem root so the chdir keeps the process
+/// outside a repo.
 #[test]
 fn mcp_home_cwd_worktree_list_and_search_use_the_client_root() {
     let base = std::env::temp_dir().join(format!("rtok-mcp-t526-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&base);
     std::fs::create_dir_all(&base).unwrap();
     let base = fs_kit::path::canonicalize(&base).unwrap();
+    let root = filesystem_root(&base);
     let repo = base.join("repo");
     let wt = base.join("wt");
     std::fs::create_dir_all(&repo).unwrap();
@@ -516,7 +561,7 @@ fn mcp_home_cwd_worktree_list_and_search_use_the_client_root() {
     let mut child = Command::new(env!("CARGO_BIN_EXE_rtok"))
         .arg("mcp")
         .env("RTOK_HOME", &home)
-        .current_dir("/")
+        .current_dir(&root)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -530,10 +575,10 @@ fn mcp_home_cwd_worktree_list_and_search_use_the_client_root() {
     send(r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#.into());
     lines.next_line(); // our roots/list request
     let uri = |p: &Path| url::Url::from_directory_path(p).unwrap();
-    // First root is `/`: the chdir keeps the process where it was launched.
+    // First root is the filesystem root: the chdir keeps the process outside the repo.
     send(format!(
         r#"{{"jsonrpc":"2.0","id":"rtok-roots","result":{{"roots":[{{"uri":"{}"}},{{"uri":"{}"}}]}}}}"#,
-        uri(Path::new("/")),
+        uri(&root),
         uri(&repo)
     ));
     let mut call = |name: &str, args: serde_json::Value| -> (bool, String) {
@@ -552,8 +597,8 @@ fn mcp_home_cwd_worktree_list_and_search_use_the_client_root() {
     let (err, text) = call("worktree_list", serde_json::json!({}));
     assert!(!err, "worktree_list: {text}");
     // Rows name the checkout and its linked worktree, not the launch cwd.
-    assert!(text.contains(&repo.display().to_string()), "{text}");
-    assert!(text.contains(&wt.display().to_string()), "{text}");
+    assert!(json_lists_dir(&text, &repo), "{text}");
+    assert!(json_lists_dir(&text, &wt), "{text}");
 
     let (err, text) = call("search", serde_json::json!({"pattern": "needle"}));
     assert!(!err, "search: {text}");
