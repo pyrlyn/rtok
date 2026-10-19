@@ -15451,3 +15451,12 @@ Execution plan: establish existing completion tests; extract the clap generator 
 Validation: 23 focused tests passed; all six generated scripts are byte-identical to the pre-extraction baseline. Formatting and production clippy passed. `just check` passed workspace clippy and 2779 tests before unrelated cli_trycmd logging snapshots failed (completion snapshots passed; 8 skipped, 1261 not run by fail-fast).
 
 Reused `clap_complete` and the existing rtok Clink generator. No replacement library or custom generator was introduced. Local path dependencies resolve in the standard apps/packages layout.
+
+### T907. Print the short archive id on a capped graph answer
+
+T672 shortened the command trailer and the read-cache follow-up is T906. A capped `graph` answer still printed the full 64-character id on `N more, expand <id>` and on a definition body past the line budget (`… N more lines, expand <id>`). `expand` already resolves an 8-character prefix. The measurement `ref_id` stays the full id.
+
+Check: `five_hundred_hits_are_capped_with_archive_id` — the printed id is 8 hex chars, the ledger `ref_id` is the full id, and `get_archive` of the resolved id returns the uncapped text. The same prefix is what `long_body_archives_the_uncut_span` and `a_long_answer_is_cut_with_an_id_that_pages_the_rest` look up.
+
+Status: done 2026-10-19
+Model: Cursor / grok 4.7

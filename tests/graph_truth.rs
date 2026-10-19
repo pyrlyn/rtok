@@ -487,7 +487,7 @@ fn main_impact_text(rows: &[(u32, String, String)], ambiguous: bool) -> String {
     format!("1 names ambiguous (?): narrow with path or kind, or backend = \"lsp\"\n{marked}")
 }
 
-/// Byte length of `cap`: same char budget and 64-hex archive id, without writing one.
+/// Byte length of `cap`: same char budget and 8-char archive prefix, without writing one.
 fn capped_len(cx: &Ctx, text: &str) -> usize {
     let max = cx.plugin_config::<rtok::config::Graph>("graph").max_tokens;
     let est = cx.estimate(text, rtok::plugin::Class::Code);
@@ -507,7 +507,8 @@ fn capped_len(cx: &Ctx, text: &str) -> usize {
         head.push('\n');
         shown += 1;
     }
-    let id = "0".repeat(64);
+    // Same length `names::short_id` prints (`MIN_PREFIX`). An integration test cannot see that const.
+    let id = "0".repeat(8);
     format!("{head}{} more, expand {id}", total - shown).len()
 }
 

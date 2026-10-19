@@ -12,7 +12,7 @@
 //! directory (unchanged files are skipped by sha256, so a call costs one directory walk),
 //! then answers from the `symbols` table. Every response is capped at
 //! `plugins.graph.max_tokens`: the head lines that fit, then `N more, expand <id>` with the
-//! full text archived. A `cap` measurement records capped vs uncapped estimate only when
+//! full text archived. The printed id is the 8-character prefix (T672, T907). A `cap` measurement records capped vs uncapped estimate only when
 //! the answer was actually shortened; an unchanged answer writes no row (T181).
 
 use std::collections::{BTreeSet, HashMap, HashSet};
@@ -903,7 +903,8 @@ pub(crate) fn body_lines(
         let uncut = src.as_bytes().get(start..end).unwrap_or(b"");
         let extra = body.len() - budget;
         if let Some(id) = archive(uncut) {
-            out.push_str(&format!("  … {extra} more lines, expand {id}\n"));
+            let shown = crate::names::short_id(&id);
+            out.push_str(&format!("  … {extra} more lines, expand {shown}\n"));
         } else {
             out.push_str(&format!("  … {extra} more lines\n"));
         }
@@ -2125,8 +2126,8 @@ fn cap_kind(cx: &Ctx, text: String, before_bytes: u64, kind: &'static str) -> Re
         (text, None)
     } else {
         let id = cx.put_archive(text.as_bytes())?;
-        // The estimator is linear in chars, so the char budget scales the same way;
-        // leave room for the trailer line (count + a 64-hex archive id).
+        // The estimator is linear in chars, so the char budget scales the same way.
+        // 120 leaves room for the trailer (`N more, expand ` plus the printed prefix).
         let text_chars = text.chars().count();
         let budget_chars = (text_chars * max as usize / est as usize).saturating_sub(120);
         let total = text.lines().count();
@@ -2141,7 +2142,11 @@ fn cap_kind(cx: &Ctx, text: String, before_bytes: u64, kind: &'static str) -> Re
             shown += 1;
         }
         (
-            format!("{head}{} more, expand {id}", total - shown),
+            format!(
+                "{head}{} more, expand {}",
+                total - shown,
+                crate::names::short_id(&id)
+            ),
             Some(id),
         )
     };
@@ -2250,6 +2255,14 @@ mod tests {
         let _ = fs::remove_dir_all(dir);
     }
 
+    /// The printed expand id is the 8-char prefix (T907). The archive row keeps the full id.
+    fn printed_archive_id(cx: &crate::plugin::Runtime, shown: &str) -> String {
+        assert_eq!(shown.len(), crate::names::MIN_PREFIX, "{shown}");
+        let id = crate::expand::resolve_id(cx, shown).unwrap();
+        assert!(id.starts_with(shown), "{id} {shown}");
+        id
+    }
+
     /// T8.6: bodies make `symbol` far larger than v0.1, so the cap and the archive matter
     /// more, not less. 500 one-line definitions of the same name must still fit the budget.
     #[test]
@@ -2262,8 +2275,8 @@ mod tests {
         let out = symbol(&Ctx::new(&cx), &dir, "dup").unwrap();
         let trailer = out.lines().last().unwrap();
         assert!(trailer.contains(" more, expand "), "{trailer}");
-        let id = trailer.rsplit(' ').next().unwrap();
-        let full = String::from_utf8(cx.store.get_archive(id, None).unwrap().unwrap()).unwrap();
+        let id = printed_archive_id(&cx, trailer.rsplit(' ').next().unwrap());
+        let full = String::from_utf8(cx.store.get_archive(&id, None).unwrap().unwrap()).unwrap();
         assert_eq!(
             full.lines().filter(|l| l.starts_with("fn dup()")).count(),
             500,
@@ -2345,10 +2358,11 @@ mod tests {
         let out = callers(&Ctx::new(&cx), &dir, "zeta").unwrap();
         let trailer = out.lines().last().unwrap();
         assert!(trailer.contains(" more, expand "), "{trailer}");
-        let id = trailer.rsplit(' ').next().unwrap();
+        let shown = trailer.rsplit(' ').next().unwrap();
+        let id = printed_archive_id(&cx, shown);
         let full = cx
             .store
-            .get_archive(id, None)
+            .get_archive(&id, None)
             .unwrap()
             .expect("archived full text");
         assert_eq!(String::from_utf8(full).unwrap().lines().count(), 500);
@@ -2363,7 +2377,7 @@ mod tests {
         assert_eq!(row.after_bytes, out.len() as i64);
         assert!(row.after_bytes < row.before_bytes, "{row:?}");
         assert!(row.est_after < row.est_before, "{row:?}");
-        assert_eq!(row.ref_id.as_deref(), Some(id));
+        assert_eq!(row.ref_id.as_deref(), Some(id.as_str()));
         let _ = fs::remove_dir_all(dir);
     }
 
@@ -3350,12 +3364,13 @@ mod tests {
         let out = symbol(&ctx, &dir, "long").unwrap();
         assert!(out.contains("expand "), "{out}");
         assert!(!out.contains("let v49"), "the head must stay cut: {out}");
-        let id = out
+        let shown = out
             .lines()
             .find_map(|l| l.split("expand ").nth(1))
             .unwrap()
             .trim();
-        let archived = cx.store.get_archive(id, None).unwrap().unwrap();
+        let id = printed_archive_id(&cx, shown);
+        let archived = cx.store.get_archive(&id, None).unwrap().unwrap();
         let span = ctx
             .symbol_span(&index::canon(&dir), "long.rs", "long", "function", 1)
             .unwrap()
