@@ -916,3 +916,5 @@ Check: a test shows a dropped `Runtime::in_memory` leaves no directory behind, a
 ## Beat sqz, lean-ctx, token-optimizer and caveman per category (T672–T686)
 
 Source: `docs/research/competitors-techniques.md` (techniques, licenses, links). Every card: keep 100 % of hashes, paths and WARN/ERROR lines, never more tokens than raw, stderr and exit line kept on failure.
+
+T905 (idea I-133): `podman ps` uses the `docker ps` formatter. Done (`done.md`).
