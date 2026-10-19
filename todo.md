@@ -8,7 +8,6 @@
 - T275.1. `rtok mcp ping <agent>`: prove the agent's rtok MCP server is alive and answering
 - T276. Spinner audit: every place rtok runs an external command and the user waits for its output
 - T276.3. Shared agent helpers on `ProgressRunner`: `run_cli`, `spawn_cli`, `app_version`, doctor MCP probe
-- T276.6. Retire the point indicators, turn on the `Command::new` ban, docs and changelog
 - T277. Move rtok's MCP core into its own crate `crates/rtok-mcp`
 - T278. `rtok agents info <agent>` reports the real MCP state, not "mcp installed" by assumption
 - T279. One plugin version scheme for every install source (GitHub, local, marketplace), and `agents update` that skips an up-to-date plugin

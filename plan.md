@@ -119,7 +119,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T275.1 | in progress | P2 | 3 | 80% | Cursor / grok 4.7 |
 | T276 | in progress | P2 | 5 | 30% | Claude Code / sonnet-5.5 |
 | T276.3 | in progress | P2 | 4 | 0% | Claude Code / sonnet-5.5 |
-| T276.6 | in progress | P2 | 3 | 0% | Claude Code / sonnet-5.5 |
 | T277 | in progress | P2 | 5 | 30% | Claude Code / sonnet-5.5 |
 | T278 | in progress | P1 | 3 | 90% | Claude Code / claude-opus-5-5 |
 | T279 | in progress | P1 | 5 | 90% | Claude Code / claude-opus-5-5 |
@@ -458,12 +457,6 @@ Each PR listed here becomes a subtask (`Tn.m`, D16) when it is claimed; this car
 Split from T276 (migration plan step 2, 2026-10-11, D16): `agents/mod.rs::run_cli` / `spawn_cli` / `app_version` and `doctor.rs::spawn_mcp` / `mcp_command` go through `ProgressRunner`; `proc::suspend` replaces the T81 `interactive` switch so `rtok agents install/update/remove` shows step loaders and the plugin question stays readable; `probing MCP server <name>…` with a bar when more than one server. Starts after T275, T277 and T279 land (same spawn helpers). Unblocks T436.4. Depends on T276.1, T276.2.
 
 Check: the T276 card's Check lines for items 1 and 2; a non-TTY test asserts no spinner bytes; `just check`.
-
-### T276.6. Retire the point indicators, turn on the `Command::new` ban, docs and changelog
-
-Split from T276 (migration plan steps 4-6, 2026-10-11, D16): delete `with_loader` and the T81 switch in `cli.rs`, `render::loader` / `render::spinner` (`graph index` moves to a `Batch` over files), drop `indicatif` from the root crate, add `disallowed-methods = ["std::process::Command::new"]` to `clippy.toml` with an `#[allow]` only inside `crates/rtok-sys`, update the contributor notes in `docs/` and `CHANGELOG.md`. Closes T276. Depends on T276.2 to T276.5.
-
-Check: `just check` fails on a stray `Command::new` outside `crates/rtok-sys`.
 
 ### T277. Move rtok's MCP core into its own crate `crates/rtok-mcp`
 
