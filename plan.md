@@ -139,9 +139,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T414.7 | in progress | P3 | 1 | 0% | MiMo / mimo |
 | T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
 | T428 | in progress | P2 | 3 | 85% | Claude Code / sonnet-5.5 |
-| T653 | in progress | P2 | 2 | 55% | Claude Code / sonnet-5.5 |
-| T654 | in progress | P2 | 2 | 65% | Claude Code / sonnet-5.5 |
-| T656 | in progress | P2 | 2 | 60% | Claude Code / sonnet-5.5 |
 | T436.4 | todo | P3 | 2 | 90% | |
 | T522 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T523 | in progress | P2 | 2 | 0% | MiMo / mimo |
@@ -156,35 +153,8 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 
 
 
-### T653. Exclude semantic-cache hits from provider-billed OTel usage
 
-Evidence baseline: `eb7d980af235f0ccb3d8ff58471d24b8267af35d`. Where: [`cache_response`](src/proxy/mod.rs#L1205) and its `Recorded::usage` call (L1237–1243); metric label [`metrics.rs`](src/otel/metrics.rs#L81-L84); aggregate [`otel_token_totals`](crates/rtok-store/src/otel.rs#L128-L162). Impact/trigger: whenever semantic cache serves a response with parseable usage, OTel labels that request's counters as provider-billed even though no provider request occurred. Evidence level: actual Store in-memory harness inserted two ordinary usage rows matching the source-traced live and cache paths and aggregated input 200/output 50 from two input-100 rows; no proxy HTTP run. T326 fixes cached slices within provider counters, not duplicate accounting of a cached response.
 
-1. Preserve per-request usage if needed for call analytics, but separate provider-billed totals from cache-served usage or exclude hits from that metric with an explicit persisted marker.
-2. Add a regression that serves a live response then its semantic-cache hit; assert the hit's request usage remains visible while provider-billed OTel totals count only the upstream request.
-3. Document the metric's semantics and run focused proxy/store tests plus `just check`.
-
-Check: a hit keeps its request usage but does not increase provider-billed totals; a live response still does.
-
-### T654. Re-read graph files after an unreadable index attempt
-
-Evidence baseline: `eb7d980af235f0ccb3d8ff58471d24b8267af35d`. Where: [`index.rs`](src/plugins/graph/index.rs#L159-L165) stat skip and unreadable staging (L346-L349). Impact/trigger: index a supported file while unreadable, then restore read permission without changing bytes, size, or mtime; the next index skips it and keeps the empty state. T542–T546 cover fingerprint, dry-run, filters and rank refresh, not this recovery path. Evidence level: executed chmod/stat fixture confirmed mtime and size stayed unchanged; full graph invocation was source-traced, not executed.
-
-1. Do not commit a reusable stat-only skip key for unreadable files; force a read on the next index run or persist an explicit unreadable state that invalidates when readability changes.
-2. Add a Unix regression: index an unreadable supported file, restore permissions without changing bytes/mtime, rerun, and assert real symbols replace the empty state. Keep a readable unchanged control.
-3. Run focused graph index tests and `just check`.
-
-Check: a file that becomes readable is re-parsed even when mtime and size are unchanged.
-
-### T656. Keep worktrees and caches when their age cannot be established
-
-Evidence baseline: `eb7d980af235f0ccb3d8ff58471d24b8267af35d`. Where: [`gc::decide`](src/worktree/gc.rs#L87-L120), [`clean::kept_because`](src/worktree/clean.rs#L31-L37), and [`list::walk`](src/worktree/list.rs#L86-L129). Impact/trigger: a merged unlocked non-current worktree with no age evidence is eligible for gc; a tagged cache with no mtime is eligible for clean. Walk errors can also hide newer files, so even `Some(old)` can be incomplete. T342's deadline-capped walk is conservative, but does not cover errors. Evidence level: source-only decision-path review; no filesystem deletion or executed decision probe.
-
-1. Treat unavailable or incomplete mtime evidence as unknown and keep the worktree/cache with an explanatory reason.
-2. Add pure-function controls for fresh Some→Keep, old Some→Remove, and None→Keep in both policies; make incomplete walks distinguishable where the walk API can report it.
-3. Run focused worktree gc/clean tests and `just check`.
-
-Check: missing age never authorizes removal; established fresh/old ages retain their policy. Do not validate by deleting real worktrees or caches.
 
 ### T666.2. Provider-backed memory extractor (blocked on the creator)
 
@@ -946,3 +916,5 @@ Check: a test shows a dropped `Runtime::in_memory` leaves no directory behind, a
 ## Beat sqz, lean-ctx, token-optimizer and caveman per category (T672–T686)
 
 Source: `docs/research/competitors-techniques.md` (techniques, licenses, links). Every card: keep 100 % of hashes, paths and WARN/ERROR lines, never more tokens than raw, stderr and exit line kept on failure.
+
+T905 (idea I-133): `podman ps` uses the `docker ps` formatter. Done (`done.md`).
