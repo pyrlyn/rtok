@@ -1,5 +1,17 @@
 # rtok — completed tasks
 
+### T657. Match compressor credentials to the internal provider
+
+The compressor speaks Anthropic Messages. It used to forward whatever `Authorization` the agent request carried, so an OpenAI bearer could be sent with that body. `Auth::from_headers` now returns a credential only when the request's wire provider is `anthropic`. An OpenAI or Gemini turn offers nothing, and the summary is skipped rather than authenticated as the wrong provider.
+
+Landed in `9b33846e` (#1052). This card records that the check already holds on main.
+
+Check: an OpenAI bearer is never presented as an Anthropic credential by default; valid configured internal provider requests continue to work.
+
+Check result: `an_openai_credential_is_never_sent_to_the_anthropic_compressor` sends three OpenAI turns with `Bearer sk-openai-test` and the fake compressor sees zero calls. `an_anthropic_bearer_credential_still_reaches_the_compressor` still delivers `Bearer oauth-test` to `/v1/messages` and stores the summary.
+
+Status: done 2026-10-19
+
 ### T616. Audit remaining module coverage
 
 Inventory and audit remaining Rust and production non-Rust modules across `src/`, `crates/`, `web/`, `plugins/`, and project scripts, using prior T530-and-newer audit records to avoid treating a filename mention as full coverage. Work from grouped subsystem inventories, inspect uncovered call paths and invariants, and report only confirmed findings with evidence and explicit limits.
