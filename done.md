@@ -14490,7 +14490,7 @@ Check: #1076 harness (`bench/c14`) shows ≥ 93 % on `cat` source; re-read ≥ 9
 
 Plan: for `cat <source>` without a range, emit signatures with elided bodies and line spans (reuse the tree-sitter outline already used by `rtok read`); for `sed -n a,bp f` keep the numbered range and, on a repeat in one session, print `unchanged since <id>` or a unified diff of the range (content hash kept in the archive store, no new table unless Diesel schema needs it). Tests: golden for cat source, session re-read unit tests. Stay under the bounded-passthrough rules in `bounded.rs`.
 
-Result: Measured with tests/bench_fixtures.rs (the #1076 bench/c14 harness is not on main): cat_rust 72.7% -> 87.1% (floor raised 68 -> 85). `cat` of a source file over 80 lines prints its definitions as start-end spans plus the signature (outline from the tree-sitter tags the read plugin uses); data files (toml/json/yaml/md/...) keep the `cat` rule. `cat`/`sed -n a,bp` of a file seen before in the session goes through the read cache: unchanged is a pointer, changed is a unified diff (src/plugins/cmd/catfile.rs, run.rs). An unchanged identical re-read is already covered by `identical_result`. Follow-up: ids in plugins/read/cache.rs are still full length; shorten after T672 lands. Local gate: nextest 3873/3874, the failure is cli_trycmd report-md (shared target dir, environmental).
+Result: Measured with tests/bench_fixtures.rs (the #1076 bench/c14 harness is not on main): cat_rust 72.7% -> 87.1% (floor raised 68 -> 85). `cat` of a source file over 80 lines prints its definitions as start-end spans plus the signature (outline from the tree-sitter tags the read plugin uses); data files (toml/json/yaml/md/...) keep the `cat` rule. `cat`/`sed -n a,bp` of a file seen before in the session goes through the read cache: unchanged is a pointer, changed is a unified diff (src/plugins/cmd/catfile.rs, run.rs). An unchanged identical re-read is already covered by `identical_result`. Follow-up: ids in plugins/read/cache.rs were still full length after T672; T906 prints the 8-char prefix. Local gate: nextest 3873/3874, the failure is cli_trycmd report-md (shared target dir, environmental).
 
 Status: done 2026-10-15
 Model: Claude Code / claude-sonnet-5-5
@@ -15419,3 +15419,16 @@ Execution plan: establish existing completion tests; extract the clap generator 
 Validation: 23 focused tests passed; all six generated scripts are byte-identical to the pre-extraction baseline. Formatting and production clippy passed. `just check` passed workspace clippy and 2779 tests before unrelated cli_trycmd logging snapshots failed (completion snapshots passed; 8 skipped, 1261 not run by fail-fast).
 
 Reused `clap_complete` and the existing rtok Clink generator. No replacement library or custom generator was introduced. Local path dependencies resolve in the standard apps/packages layout.
+
+### T906. Print the short archive id on a read re-read
+
+T672 made `expand` resolve an 8-character prefix and switched the other pointers to `names::short_id`. The read cache still printed the full 64-character id (`unchanged id …`, and `previous` / `expand` on a delta). T674 left that until T672 landed. T531 had required the full id because expand was an exact primary-key lookup; that constraint is gone.
+
+The lines now print `short_id`. The measurement `ref_id` stays the full id. `expand` of the printed prefix returns the archived bytes.
+
+Check: `dedup_reference_expands_to_the_archived_bytes` — the printed id is 8 hex chars, CLI and MCP expand return the file, and the ledger `ref_id` is the 64-char id.
+
+Result: `dedup_line` and the delta pointer in `src/plugins/read/cache.rs` use `names::short_id`. The read plugin README matches.
+
+Status: done 2026-10-19
+Model: Cursor / grok 4.7
