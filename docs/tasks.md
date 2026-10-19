@@ -23,6 +23,47 @@ rtok keeps one numbered plan per project. Every checkout, worktree and agent of 
 - A parent with active subtasks cannot be finished. Setting it to `done` or `closed` is refused and the error lists the subtasks, unless `--force` is given.
 - The parser also takes the words agents reach for: `todo` and `pending` for `open`, `completed` for `done`, `wontdo`, `won't-do` and `not-planned` for `closed`. Underscores work in place of hyphens, so `in_progress` is accepted.
 
+## Creating a task
+
+A task is work that one agent can finish, check and hand in as one change. Write it so that another agent can take it without asking you anything.
+
+1. **Look first.** Run `rtok task list --all`. If a task already covers the work, extend that task or add a subtask to it. Do not add a duplicate.
+2. **Title.** One line that names the outcome, in the imperative: `Cache parsed configs`, not `Config stuff`.
+3. **Description.** Say why the task exists and what done means: the behavior that changes, the files or area it touches, and the check that proves it, such as a test or a command. A long description can come from a file with `--body-file <path>`, or from stdin with `--body-file -`.
+4. **Split.** Work that is more than one change, or that has parts that can run alone, becomes a parent task with subtasks: `rtok task create "<part>" --parent A12`. Subtasks cannot have subtasks of their own.
+5. **Order.** Use `rtok task dep <id> <blocker>` when a task needs another task's result. Use `rtok task conflict <id> <other>` when two tasks touch the same files. Use `rtok task parallel <id>` when a task is safe to run beside any other task.
+6. **Priority.** Use `rtok task priority <id> <0-4>` only when the task is more or less urgent than the default, `2`.
+7. **Use the id rtok returns.** `create` prints the new id. Use it in branches, worktrees (`rtok worktree add A12`) and commit messages. Never choose an id yourself.
+
+Example:
+
+```bash
+rtok task create "Cache parsed configs" \
+  -d "Every hook call parses config.toml again. Done: a second call in one process reuses the parse; a test proves it."
+# A12
+rtok task create "Drop the cache when config.toml changes" --parent A12 \
+  -d "Done: an edit to the file is seen on the next call; a test proves it."
+# A12.1
+rtok task dep A12 A9
+```
+
+From MCP, `task_create` takes `title`, `description` and `parent`. `task_dep` (`id`, `blocker`), `task_conflict` (`id`, `other`), `task_parallel` (`id`) and `task_priority` (`id`, `level`) do what the commands do.
+
+## Creating tasks with a model
+
+A coding agent, such as Claude Code, Codex or Cursor, can write the tasks for you. It calls the same MCP tools, so rtok still hands out the ids and the model never makes one up. rtok itself does not call a model to plan.
+
+1. **Set up once.** Run `rtok agents install <host>`. It adds the `rtok mcp` server to the host and, on hosts that read skills, the `rtok-tasks` skill. The skill carries the steps of [Creating a task](#creating-a-task) for the model. If the project has no `[tasks]` section yet, run `rtok task init` first.
+2. **Ask for tasks, not code.** Name the goal, the files or area, and what done means, and say that you want rtok tasks. For example:
+   - "Plan the config cache as rtok tasks: one parent, a subtask per change, record the dependencies. Do not write code yet."
+   - "Split A12 into subtasks, and mark the ones that touch the same files as conflicts."
+   - "Turn the TODO comments in src/config/ into rtok tasks, each with a done check."
+3. **Review first, if you want to.** Ask the model to show the titles and descriptions before it creates anything. It creates them after you agree.
+4. **What the model does.** It calls `task_list` to look for existing work, then `task_create` for each task (with `parent` for a subtask), then `task_dep`, `task_conflict`, `task_parallel` and `task_priority`. It reports the ids that rtok returned. A host without MCP can do the same in its shell with `rtok task create --json`.
+5. **Check the result.** Use `rtok task list`, `rtok task show <id>`, or the [task board](#task-board). There is no edit command: close a wrong task with `rtok task status <id> closed` and create a new one. Do not edit the task files by hand.
+
+The model knows only what is in its context. Name the files and the done check yourself rather than asking it to guess.
+
 ## The disk adapter
 
 The `disk` adapter is the default. Each task is one Markdown file in the `tasks` directory at the root of the checkout:

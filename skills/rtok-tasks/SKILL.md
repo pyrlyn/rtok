@@ -5,16 +5,18 @@ description: Plan and track work as rtok tasks (task_create, task_list, task_nex
 
 # rtok-tasks
 
-To plan, split or track work, keep the tasks in rtok, not in a TODO file or a hand-numbered
-list, unless `AGENTS.md` or the user names another tracker. rtok hands out the ids, one
-counter per project, so parallel agents never collide.
+To plan, split or track work, keep the tasks in rtok, not a TODO file or a hand-numbered
+list, unless `AGENTS.md` or the user names another tracker. rtok hands out the ids from one
+counter, so parallel agents never collide.
 
-Tools (MCP; the CLI takes `--json` for the same shapes):
+Writing a task: read `creating.md` beside this file.
+
+Tools (MCP; CLI `--json` gives the same shapes):
 
 - `task_create` (`rtok task create "<title>" -d "<why, and what done means>"`): add a task;
   `parent` (`--parent R2`) makes a subtask `R2.1`. Quote the returned id, never invent one.
-- `task_list` (`rtok task list`): the plan; `all` adds finished tasks.
-- `task_get` (`rtok task show <id>`): one task with its description and subtasks.
+- `task_list` (`rtok task list`): the plan; `all` adds finished ones.
+- `task_get` (`rtok task show <id>`): one task, its description and subtasks.
 - `task_status` (`rtok task status <id> in-progress|done|closed`): no status only reads.
   Set `in-progress` when you start, `done` when finished and checked.
 - `task_next` (`rtok task next`): the first ready task.
@@ -24,8 +26,8 @@ Tools (MCP; the CLI takes `--json` for the same shapes):
 - `task_release` (`rtok task release <id>`): give it back. Only the holder, unless `--force`.
 - `task_dep` (`rtok task dep <id> <blocker>`): `id` waits for `blocker`.
 - `task_conflict` (`rtok task conflict <id> <other> [--remove]`): same files, not at once;
-  `task_ready` flags it while the partner runs. Disk only.
-- `task_parallel` (`rtok task parallel <id> [--off]`): safe beside any task. Disk only.
+  `task_ready` flags it while the partner runs.
+- `task_parallel` (`rtok task parallel <id> [--off]`): safe beside any task.
 - `task_priority` (`rtok task priority <id> <0-4>`): 0 is highest, 2 the default.
 
 CLI only:
