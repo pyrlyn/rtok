@@ -9,6 +9,11 @@ Found 2026-10-10 in `~/.rtok/errors.log` and the `logs` table, 2026-10-03 throug
 Check: unit tests in `src/expand.rs` for the 25 logged strings; `just check`.
 
 Check result: `parse_range_accepts_the_logged_spellings` covers the 25 strings (n = 5000). `parse_range_trailing_br_is_one_line_not_to_end` checks `52` still runs to the end while `52<br>`, `52<br/>` and `52<br><br>` are one line, and `52-70<br>` / `490<br>-800` stay ranges. `parse_range_still_rejects_non_lines` rejects `abc`, `1-two`, `1-2-3`, empty, `[]`, `<br>`, `,,,`, `a b` and `1"2`. Existing bare-start, quote, comma, zero and reverse cases stay green.
+### T524. Worktree `--idle` accepts `30m` and `0s`
+`worktree gc --idle` / `--stale-lock` and `worktree clean --idle` parsed durations with `parse_since` (bare number means days, plus `d` and `h`). Agents copy `[agents] idle`'s humantime values (`30m`, `0s`, `1m`, `1s`), and the error named `--since` for a flag that is not `--since`.
+`parse_idle_from` in `rtok-store` is the one humantime parser for `[agents] idle` and those flags. `idle_secs` calls it. The worktree commands pass `--idle` or `--stale-lock` as the error source. `--since` stays on the days grammar, so `30m` is still rejected there. Flag help cites `30m` next to `24h` and `7d`.
+Check: unit tests `parse_idle_from_accepts_the_agents_idle_grammar` (`30m`, `0s`, `24h`, `7d`, `1m`, `1s`, `15m`, `10m`) and `parse_idle_from_names_the_passed_flag` (`5x` names `--idle`, `--stale-lock` and `[agents] idle`, never `--since`); `just check`.
+Check result: `cargo test -p rtok-store parse_idle_from` passed. `rtok worktree gc --idle 30m --dry-run` and `rtok worktree clean --idle 0s --dry-run` exited 0. `gc --idle 5x` reports `bad --idle "5x"`. `gc --stale-lock 5x` reports `bad --stale-lock "5x"`. `stats --since 5x` and `stats --since 30m` still report `bad --since unit`.
 
 ### T259. Docs flip planned→today + acceptance
 
@@ -14582,7 +14587,7 @@ Check: #1076 harness (`bench/c14`) shows ≥ 93 % on `cat` source; re-read ≥ 9
 
 Plan: for `cat <source>` without a range, emit signatures with elided bodies and line spans (reuse the tree-sitter outline already used by `rtok read`); for `sed -n a,bp f` keep the numbered range and, on a repeat in one session, print `unchanged since <id>` or a unified diff of the range (content hash kept in the archive store, no new table unless Diesel schema needs it). Tests: golden for cat source, session re-read unit tests. Stay under the bounded-passthrough rules in `bounded.rs`.
 
-Result: Measured with tests/bench_fixtures.rs (the #1076 bench/c14 harness is not on main): cat_rust 72.7% -> 87.1% (floor raised 68 -> 85). `cat` of a source file over 80 lines prints its definitions as start-end spans plus the signature (outline from the tree-sitter tags the read plugin uses); data files (toml/json/yaml/md/...) keep the `cat` rule. `cat`/`sed -n a,bp` of a file seen before in the session goes through the read cache: unchanged is a pointer, changed is a unified diff (src/plugins/cmd/catfile.rs, run.rs). An unchanged identical re-read is already covered by `identical_result`. Follow-up: ids in plugins/read/cache.rs are still full length; shorten after T672 lands. Local gate: nextest 3873/3874, the failure is cli_trycmd report-md (shared target dir, environmental).
+Result: Measured with tests/bench_fixtures.rs (the #1076 bench/c14 harness is not on main): cat_rust 72.7% -> 87.1% (floor raised 68 -> 85). `cat` of a source file over 80 lines prints its definitions as start-end spans plus the signature (outline from the tree-sitter tags the read plugin uses); data files (toml/json/yaml/md/...) keep the `cat` rule. `cat`/`sed -n a,bp` of a file seen before in the session goes through the read cache: unchanged is a pointer, changed is a unified diff (src/plugins/cmd/catfile.rs, run.rs). An unchanged identical re-read is already covered by `identical_result`. Follow-up: ids in plugins/read/cache.rs were still full length after T672; T906 prints the 8-char prefix. Local gate: nextest 3873/3874, the failure is cli_trycmd report-md (shared target dir, environmental).
 
 Status: done 2026-10-15
 Model: Claude Code / claude-sonnet-5-5
@@ -15520,6 +15525,16 @@ Check: `five_hundred_hits_are_capped_with_archive_id` — the printed id is 8 he
 
 Status: done 2026-10-19
 Model: Cursor / grok 4.7
+
+### T906. Print the short archive id on a read re-read
+
+T672 made `expand` resolve an 8-character prefix and switched the other pointers to `names::short_id`. The read cache still printed the full 64-character id (`unchanged id …`, and `previous` / `expand` on a delta). T674 left that until T672 landed. T531 had required the full id because expand was an exact primary-key lookup; that constraint is gone.
+
+The lines now print `short_id`. The measurement `ref_id` stays the full id. `expand` of the printed prefix returns the archived bytes.
+
+Check: `dedup_reference_expands_to_the_archived_bytes` — the printed id is 8 hex chars, CLI and MCP expand return the file, and the ledger `ref_id` is the 64-char id.
+
+Result: `dedup_line` and the delta pointer in `src/plugins/read/cache.rs` use `names::short_id`. The read plugin README matches.
 
 ### T905. Format `podman ps` with the `docker ps` table
 
