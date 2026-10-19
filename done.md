@@ -1,5 +1,17 @@
 # rtok — completed tasks
 
+### T654. Re-read graph files after an unreadable index attempt
+
+An index of a supported file that could not be read stored a stat the next run trusted, so restoring read permission without changing bytes, size, or mtime left the file empty. An unreadable file is now staged with stat `(0, 0)`, which the stat gate never treats as unchanged, so the next index reads it again.
+
+Landed in `845af7ed` (#1054). This card only records that the check already holds on main.
+
+Check: a file that becomes readable is re-parsed even when mtime and size are unchanged.
+
+Check result: `a_file_unreadable_at_index_time_is_read_once_access_returns` indexes `locked.rs` at mode `000`, restores `0644` without moving mtime or size, and the second index parses `hidden_until_readable`.
+
+Status: done 2026-10-19
+
 ### T616. Audit remaining module coverage
 
 Inventory and audit remaining Rust and production non-Rust modules across `src/`, `crates/`, `web/`, `plugins/`, and project scripts, using prior T530-and-newer audit records to avoid treating a filename mention as full coverage. Work from grouped subsystem inventories, inspect uncovered call paths and invariants, and report only confirmed findings with evidence and explicit limits.

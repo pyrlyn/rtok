@@ -40,7 +40,6 @@
 - T527. A worktree claim does not stay held by an agent idle for days
 - T652. Refuse to replace an unreadable MCP host config
 - T653. Exclude semantic-cache hits from provider-billed OTel usage
-- T654. Re-read graph files after an unreadable index attempt
 - T655. Make compressor in-flight admission atomic
 - T656. Keep worktrees and caches when their age cannot be established
 - T657. Match compressor credentials to the internal provider
