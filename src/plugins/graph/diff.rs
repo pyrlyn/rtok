@@ -1612,8 +1612,10 @@ mod tests {
             out.starts_with("graph diff HEAD -> working (tags)\n0 changed · 1500 added"),
             "{out}"
         );
-        let (_, id) = out.rsplit_once("more, expand ").expect(&out);
-        let full = Ctx::new(&cx).get_archive(id.trim()).unwrap().unwrap();
+        let (_, shown) = out.rsplit_once("more, expand ").expect(&out);
+        let id = crate::expand::resolve_id(&cx, shown.trim()).unwrap();
+        assert_eq!(shown.trim().len(), crate::names::MIN_PREFIX, "{out}");
+        let full = Ctx::new(&cx).get_archive(&id).unwrap().unwrap();
         assert!(
             String::from_utf8(full)
                 .unwrap()
