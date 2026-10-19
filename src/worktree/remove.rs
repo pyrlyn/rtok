@@ -71,16 +71,29 @@ impl Removed {
 }
 
 /// Remove the worktree at `target` (a path, else a task id) for `who`. Refuses a dirty
-/// worktree, anyone else's lock on one that is not [`super::Entry::done`], the one holding
-/// `cwd`, and an unmerged branch unless `keep_branch`.
-pub fn run(cwd: &Path, target: &str, who: &Caller, keep_branch: bool) -> Result<Removed> {
-    remove_or_preview(cwd, target, who, keep_branch, false)
+/// worktree, anyone else's lock on one that is not [`super::Entry::done`] and whose holder
+/// is still within gc's `--stale-lock` (T527), the one holding `cwd`, and an unmerged
+/// branch unless `keep_branch`.
+pub fn run(
+    cwd: &Path,
+    target: &str,
+    who: &Caller,
+    keep_branch: bool,
+    store: Option<&Store>,
+) -> Result<Removed> {
+    remove_or_preview(cwd, target, who, keep_branch, false, store)
 }
 
 /// [`run`] with every refusal and none of the effects: reports the size and file count the
 /// removal would free and what happens to the branch.
-pub fn preview(cwd: &Path, target: &str, who: &Caller, keep_branch: bool) -> Result<Removed> {
-    remove_or_preview(cwd, target, who, keep_branch, true)
+pub fn preview(
+    cwd: &Path,
+    target: &str,
+    who: &Caller,
+    keep_branch: bool,
+    store: Option<&Store>,
+) -> Result<Removed> {
+    remove_or_preview(cwd, target, who, keep_branch, true, store)
 }
 
 fn remove_or_preview(
@@ -89,6 +102,7 @@ fn remove_or_preview(
     who: &Caller,
     keep_branch: bool,
     dry_run: bool,
+    store: Option<&Store>,
 ) -> Result<Removed> {
     let real = |p: &Path| crate::fs::canon(p);
     let as_path = cwd.join(target);
@@ -129,17 +143,17 @@ fn remove_or_preview(
     if real(cwd).starts_with(&path) {
         bail!("{shown} holds the current directory; run from the main checkout");
     }
-    // An unknown caller holds no lock: "" is never a parsed owner or agent.
-    let held =
-        (!record.claimable_by(who.owner.unwrap_or(""), who.agent.unwrap_or(""))).then(|| {
-            record
-                .owner()
-                .map_or("an unknown owner".into(), |o| o.reason())
-        });
+    // An unknown caller holds no lock: "" is never a parsed owner or agent. A claim whose
+    // holder has ended, or gone idle past gc's `stale_lock`, holds nothing either (T527).
+    let held = claim::held_against(
+        record,
+        (who.owner.unwrap_or(""), who.agent.unwrap_or("")),
+        store,
+    );
     // A finished task has nothing left to protect, and its owner often cannot name itself
     // (T453: no `RTOK_AGENT_ID` in the desktop app's shell), so its lock does not hold.
-    if let Some(held) = held.as_ref().filter(|_| !entry.done) {
-        bail!("{shown} is locked by {held}; not removed");
+    if let Some(held) = held.as_ref().filter(|h| h.holds && !entry.done) {
+        bail!("{shown} is {}; not removed", held.locked());
     }
     match (entry.state, &record.branch) {
         (State::Stale, _) => bail!("{shown} is gone; `rtok worktree gc --yes` drops its record"),
@@ -171,8 +185,11 @@ fn remove_or_preview(
         });
     }
     let mut note = detach(main, record, drop_branch)?;
-    if let Some(held) = held {
-        note.push_str(&format!("; finished, so the lock by {held} was opened"));
+    if let Some(held) = held.as_ref().filter(|_| entry.done) {
+        note.push_str(&format!(
+            "; finished, so the lock by {} was opened",
+            held.by
+        ));
     }
     Ok(Removed {
         path: path.display().to_string(),
@@ -199,7 +216,7 @@ pub fn for_agent(
         agent: agent.map(|a| a.id.as_str()),
         owner: owner.as_deref(),
     };
-    let done = run(cwd, target, &who, keep_branch)?;
+    let done = run(cwd, target, &who, keep_branch, store)?;
     if let Some(Err(e)) = store.map(|s| s.release_worktree_claim(&done.path)) {
         crate::log::stderr_ln(&format!("warning: claim not released: {e:#}"));
     }
@@ -230,7 +247,7 @@ pub fn preview_for_agent(
         agent: agent.map(|a| a.id.as_str()),
         owner: owner.as_deref(),
     };
-    preview(cwd, target, &who, keep_branch)
+    preview(cwd, target, &who, keep_branch, store)
 }
 
 /// A task id names the lock's task or the branch `<task>[-<slug>]`, case aside.
