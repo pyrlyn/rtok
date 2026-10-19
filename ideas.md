@@ -237,6 +237,7 @@ Scope by version (Open / Later) first; this list is only for ideas that will nev
 | I-35 | T48.1 | The linked `~/.pi/agent/extensions/rtok/` has no `index.ts`; pi documents loading `extensions/*.ts` and `extensions/*/in | 2026-09-17 |
 | I-36 | T48.2 | `extensions/rtok.ts` sends the ketch hint with `pi.appendEntry`, which pi documents as "does NOT participate in LLM cont | 2026-09-17 |
 | I-37 | T48.3 | `plugins/cursor/mcp.json` spawns `rtok mcp` directly, so `scripts/mcp.sh` / `mcp.cmd` (the ketch hint) never run; the sp | 2026-09-17 |
+| I-133 | T905 | `podman ps` prints the same table as `docker ps`, but the formatter matched only `docker` (`docs/research/competitors-techniques.md`, sqz coverage). | 2026-10-19 |
 
 | ID | Became | Date |
 |----|--------|------|

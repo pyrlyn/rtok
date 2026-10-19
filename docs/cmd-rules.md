@@ -114,10 +114,11 @@ Measured on the golden fixtures in `tests/cmd_golden/` (`rtok filter --stdin`, `
 Measured on the same golden bodies (`formatters::compress`, `Measurement.kind = formatter`
 vs `Rule::default()` on the same fixture; est tokens = bytes/4). Each formatter keeps one
 row per object and returns `None` on unrecognized output so the rule path stays the fallback.
+`podman ps` uses the `docker ps` formatter (T905); the row is that fixture, not a second measurement.
 
 | Family | keeps | before B | rule after B | formatter after B | est saved vs rule |
 | --- | --- | ---: | ---: | ---: | ---: |
-| `docker ps` | one row per container | 3147 | 1311 | 1190 | 30 |
+| `docker ps`, `podman ps` | one row per container | 3147 | 1311 | 1190 | 30 |
 | `kubectl get` | one row per object (`NAME READY STATUS IP`) | 4542 | 1770 | 1731 | 9 |
 | `ps aux` | one row per process | 2341 | 990 | 870 | 30 |
 
@@ -149,7 +150,7 @@ A body that `serde_json` parses as an object or array is rewritten after groupin
 before the head/tail cut: null / empty-string / empty-container fields dropped, arrays
 beyond `json_items` shown as `… +K more`, object keys kept, strings longer than
 `json_string` cut with their length, one line per top-level key. Unparseable bodies are
-untouched. Table formatters (`kubectl get`, `docker ps`) stand down when the body is JSON
+untouched. Table formatters (`kubectl get`, `docker ps`, `podman ps`) stand down when the body is JSON
 so `kubectl get -o json` reaches this pass. `toon` stays off the hook path. Raw bytes stay
 in the archive; a shortened result still carries the expand trailer.
 

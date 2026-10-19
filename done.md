@@ -1,5 +1,55 @@
 # rtok — completed tasks
 
+### T259. Docs flip planned→today + acceptance
+
+Batch, Flex and model routing already shipped as T385.1, T385.4, T385.5, T385.10 and T385.12.1–T385.12.2. `docs/batch-flex.md` (and `docs/ru`, `docs/uk`), `architecture.md` §12 and `src/plugins/proxy/AGENTS.md` still described observe, result usage, Flex injection and the semantic-cache skip as planned, and the config sketch listed keys the binary does not load (`enabled`, `observe`, `sticky`).
+
+Do: describe the shipped behaviour. Batch paths stay off every `Wire`, keep their bytes, and are tagged `api_request:batch`; `[proxy.batch] parse_results` writes usage after the forward. Flex is `[proxy.lanes.<lane>] flex` plus `[proxy.flex]`. The batch lane leaves `semantic_cache` false. The loaded keys replace the sketch. `sticky` stays planned and is not a key. `docs/config.md` already documented the loaded keys, so it did not change. The roadmap acceptance boxes for the shipped behaviour are checked. The Mac CI box stays open until this change's macOS check is green. Epic T250 stays in `roadmap.md` (even id; its overview still says the tables are unloaded).
+
+Check: docs prose matches behaviour; `just check`; no sync→Batch.
+
+Result: the three language copies, the architecture table and the proxy agent notes match the code. No product code changed.
+
+Status: done 2026-10-19
+
+### T653. Exclude semantic-cache hits from provider-billed OTel usage
+
+A semantic-cache hit kept a `usage` row, and `otel_token_totals` added it to the provider-billed counters even though no upstream request was made. Totals now skip a call that carries a `semantic_cache_hit` measurement. The hit's own usage row stays, so per-request analytics still see it. `docs/otel.md` (and `docs/ru`, `docs/uk`) say the provider totals omit those hits.
+
+Landed in `b1c2d7fb` (#1050). This card records that the check already holds on main.
+
+Check: a hit keeps its request usage but does not increase provider-billed totals; a live response still does.
+
+Check result: `token_totals_count_the_upstream_request_not_the_cache_hit_served_after_it` inserts two usage rows of input 100 / output 25 and counts only the live call. `proxy_cache_hit_records_usage_and_request_bytes` keeps both usage rows and asserts provider-billed totals are `(10, 2)`, the upstream request alone.
+
+Status: done 2026-10-19
+
+
+### T654. Re-read graph files after an unreadable index attempt
+
+An index of a supported file that could not be read stored a stat the next run trusted, so restoring read permission without changing bytes, size, or mtime left the file empty. An unreadable file is now staged with stat `(0, 0)`, which the stat gate never treats as unchanged, so the next index reads it again.
+
+Landed in `845af7ed` (#1054). This card only records that the check already holds on main.
+
+Check: a file that becomes readable is re-parsed even when mtime and size are unchanged.
+
+Check result: `a_file_unreadable_at_index_time_is_read_once_access_returns` indexes `locked.rs` at mode `000`, restores `0644` without moving mtime or size, and the second index parses `hidden_until_readable`.
+
+Status: done 2026-10-19
+
+
+### T656. Keep worktrees and caches when their age cannot be established
+
+A merged unlocked worktree with no mtime, and a cache whose age could not be read, used to be eligible for removal. `gc` and `clean` now keep them with the reason `age unknown: a file or its mtime could not be read`. An established old age still removes; a fresh age still keeps.
+
+Landed in `edc6c621` (#1055). This card only records that the check already holds on main. No real worktree or cache was deleted.
+
+Check: missing age never authorizes removal; established fresh/old ages retain their policy. Do not validate by deleting real worktrees or caches.
+
+Check result: `an_unknown_age_keeps_a_merged_worktree` keeps `None`, removes `Some(0)`, and keeps a fresh mtime inside the idle window. `only_an_idle_cache_outside_the_current_worktree_goes` keeps a cache with no mtime (`AGE_UNKNOWN`) and a cache modified inside the window, and lets an idle cache outside the current worktree go.
+
+Status: done 2026-10-19
+
 ### T276. Spinner audit: every place rtok runs an external command and the user waits for its output
 
 Every external program goes through `rtok_sys::proc::ProgressRunner`. A terminal gets a spinner or a bar from the moment the process starts; a pipe, `--json`, MCP and hooks get nothing. `graph index`, `worktree gc/clean`, `bench`, `doctor` and `agents install/update` use a `Batch` when the total is known. The installer question hides the live bar while it is on screen.
@@ -8842,7 +8892,7 @@ Check: a coverage table vs sqz in `docs/comparison/rtok-vs-sqz.md`; at least the
 
 Plan: read `docs/comparison/rtok-vs-sqz.md`; build the coverage table sqz-formatter → rtok rule; add rules (in `rules/default.toml` through the existing rule engine, no new engine) for the top missing families, each with a fixture and a no-worse-than-raw test. `rtok discover` (T661) is not on main: pick families by the sqz list and say so in the card.
 
-Outcome: `parse_diag` reads `path:line[:col]: CODE msg` (ruff), `path:line: error: msg  [code]` (mypy), `path:line:col: C: Cop/Name: msg` (rubocop) and `path:line:col: msg (linter)` (golangci-lint), so new `[ruff]`, `[mypy]`, `[rubocop]` and `[golangci-lint]` rules fold them with `group = "diag"`: 96 %, 77 %, 88 % and 91 % on the goldens against 72 %, 55 %, 82 % and 53 % for `Rule::default()`. yarn, bun, rspec, terraform and xcodebuild already win on the default rule, so they got goldens only. The sqz coverage table is in `docs/research/competitors-techniques.md`; podman (the `docker ps` formatter matches only `docker`) is left open. `rtok discover` (T661) and the #1076 harness are not on main, so families came from sqz's list and savings from the repo goldens.
+Outcome: `parse_diag` reads `path:line[:col]: CODE msg` (ruff), `path:line: error: msg  [code]` (mypy), `path:line:col: C: Cop/Name: msg` (rubocop) and `path:line:col: msg (linter)` (golangci-lint), so new `[ruff]`, `[mypy]`, `[rubocop]` and `[golangci-lint]` rules fold them with `group = "diag"`: 96 %, 77 %, 88 % and 91 % on the goldens against 72 %, 55 %, 82 % and 53 % for `Rule::default()`. yarn, bun, rspec, terraform and xcodebuild already win on the default rule, so they got goldens only. The sqz coverage table is in `docs/research/competitors-techniques.md`; podman (the `docker ps` formatter matches only `docker`) was left open here and closed by T905. `rtok discover` (T661) and the #1076 harness are not on main, so families came from sqz's list and savings from the repo goldens.
 
 ### T685. find 33
 
@@ -15466,6 +15516,16 @@ Model: Cursor / grok 4.7
 T672 made `expand` resolve an 8-character prefix. A fresh read, `search`, or `tree` cut by `plugins.read.max_chars` still printed the full 64-character id inside `… archived <id> …`. The dedup and delta lines are T906; this is the cap marker. The measurement `ref_id` stays the full id. `plugins.read.max_chars` still has to be at least 100.
 
 Check: `a_capped_fresh_read_records_one_row` — the printed id is 8 hex chars, it is a prefix of the ledger `ref_id`, and `expand` of the prefix returns the uncapped text. `cap_includes_marker_in_max_chars` looks the same prefix up.
+
+### T905. Format `podman ps` with the `docker ps` table
+
+`docs/research/competitors-techniques.md` (sqz coverage) left `podman` open: the `docker ps` formatter matched only `docker`, so `podman ps` fell through to the default head/tail rule. Idea I-133.
+
+`podman ps` takes the same arm as `docker ps`. Unrecognized output still returns `None` and stays on the rule path. The golden is the `docker ps` fixture with the argv changed, so the saving is that measurement (59 %), not a new corpus.
+
+Check: `podman_ps` golden matches `docker_ps` and clears `min_saving: 59`; a non-table `podman ps` body is not `kind = formatter`.
+
+Result: `format` matches `("docker" | "podman", "ps")`. `tests/cmd_golden/podman_ps.in` is the docker fixture. Docs name both families on the T58.5 row (`docs/cmd-rules.md` and `docs/ru`, `docs/uk`).
 
 Status: done 2026-10-19
 Model: Cursor / grok 4.7
