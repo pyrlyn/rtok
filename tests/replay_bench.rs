@@ -9,7 +9,7 @@
 //! `Store::list_measurements` actually recorded — no number here is invented.
 //!
 //! Known bug, not this task's to fix (`src/plugins/cmd/run.rs` `emit_filtered`): its
-//! `[rtok <id12> · N lines]` trailer is not counted in `after_bytes`, so the `cmd`
+//! `[rtok <id8> · N lines]` trailer is not counted in `after_bytes`, so the `cmd`
 //! row (and this bench's `cmd` share) is an upper bound until that fix lands.
 
 #![allow(clippy::print_stdout, clippy::print_stderr)]

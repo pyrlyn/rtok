@@ -1,5 +1,16 @@
 # rtok — completed tasks
 
+### T912. Docs name the 8-character trailer id
+
+T672 prints 8 hex chars on the `[rtok …]` trailer. The guides, the cmd README and the file `rtok config init` writes still said `<id12>`.
+
+They now say `<id8>`. `rtok expand` resolves that prefix. The Russian and Ukrainian copies of `docs/config.md` and `docs/cmd-rules.md` match. Older done cards keep the wording they shipped with.
+
+Check: `tests/trycmd/config-init.toml` matches `crates/rtok-config/default.toml` on the trailer comment; `docs/config.md`, `docs/cmd-rules.md` and `src/plugins/cmd/README.md` say `<id8>`, and so do `docs/ru` and `docs/uk`.
+
+Status: done 2026-10-19
+Model: Cursor / grok 4.7
+
 ### T524. Worktree `--idle` accepts `30m` and `0s`
 
 `worktree gc --idle` / `--stale-lock` and `worktree clean --idle` parsed durations with `parse_since` (bare number means days, plus `d` and `h`). Agents copy `[agents] idle`'s humantime values (`30m`, `0s`, `1m`, `1s`), and the error named `--since` for a flag that is not `--since`.

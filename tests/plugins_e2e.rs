@@ -450,7 +450,7 @@ async fn compress_summary_row_visible_in_stats() {
 /// *is* what `PostToolUse` would see. So this test confirms the rewrite, then runs it.
 ///
 /// Default config: 200 lines pass `trailer_min_lines`, so stdout ends with the
-/// `[rtok <id12> · N lines]` trailer, which `after` must count too (T247).
+/// `[rtok <id8> · N lines]` trailer, which `after` must count too (T247).
 #[test]
 fn cmd_hook_measurement_matches_returned_bytes() {
     let home = tmp("cmd-bytes");

@@ -518,8 +518,8 @@ rewrite  = true                       # PreToolUse(Bash) → `rtok run -- …`
 shell    = ""                         # "" = $SHELL
 rules    = "~/.rtok/rules.toml"       # додаткові правила фільтрування; якщо немає → вбудований rules/default.toml
 rules_dir = "~/.rtok/rules.d"         # drop-in-файли: кожен *.toml об'єднується після rules у порядку назв (T50.2)
-trailer  = true                       # друкувати `[rtok <id12> · N lines]` після скорочення; false = `--no-ref`
-trailer_min_lines = 40                # додавати `[rtok <id12> · N lines]` понад це
+trailer  = true                       # друкувати `[rtok <id8> · N lines]` після скорочення; false = `--no-ref`
+trailer_min_lines = 40                # додавати `[rtok <id8> · N lines]` понад це
 fail_tail_lines   = 80                # ненульовий код виходу → останні N рядків дослівно
 never_wrap = ["rtok", "sudo"]         # список заборонених перших слів; heredoc, `&`, -i завжди пропускаються
 
