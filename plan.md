@@ -150,7 +150,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T656 | in progress | P2 | 2 | 60% | Claude Code / sonnet-5.5 |
 | T657 | in progress | P1 | 2 | 55% | Claude Code / sonnet-5.5 |
 | T436.4 | todo | P3 | 2 | 90% | |
-| T522 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T523 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T524 | in progress | P2 | 1 | 0% | MiMo / mimo |
 | T525 | in progress | P2 | 3 | 0% | MiMo / mimo |
@@ -623,14 +622,6 @@ Check: adopt e2e in a scratch repo with a worktree under a fake `~/.cursor/workt
 Execution (2026-10-03, Claude Code / sonnet-5): split into four PRs, each at most about 300 LOC, stacked on T288 step 4. Design decisions the card left open:
 - `adopt` is `claim` with three differences: the path defaults to the caller's worktree (cwd), `--task` names the task when the branch cannot (a detached HEAD such as Codex's `thread-N`; the directory name is the last fallback), and a worktree in a pool whose host evicts by itself (Cursor, Windsurf/Devin, Codex) gets **no git lock**, only the claim row. Reason: the card says to confirm per host whether a locked worktree breaks the host's eviction, and that needs a live run on each host (the creator's probe, like T281); until it is confirmed, a lock could stop Cursor's cap of 25 from evicting, so the safe choice is the store-only claim. `worktree list` and `gc` already read an unlocked worktree's claim row (T285), so a live agent's adopted worktree is still never collected. Flip the pool table once a host is confirmed.
 - The origin of a worktree is derived from its path (`~/.cursor/worktrees/`, `~/.windsurf/worktrees/`, `<repo>/.claude/worktrees/`, `<repo>/.kilo/worktrees/`, `$CODEX_HOME/worktrees`, `~/conductor/workspaces/`; else `rtok` under `[worktree] root`, else `other`), so no migration. The `worktree list` table already has a `source` column (source bytes), so the new field is named `origin` in the table and in `--json`.
-
-### T522. `read` and `expand` accept the line ranges agents sent this week
-
-Found 2026-10-10 in `~/.rtok/errors.log` and the `logs` table, 2026-10-03 through 2026-10-10: 25 `invalid line range` failures, each a different spelling. `parse_range` (`src/expand.rs`) already strips one pair of surrounding quotes (T172) and reads `a, b` as `a-b` (T353). It still rejects a space around `-` (`420 - 640`, five of the 25), a colon (`580:650`), brackets (`[1, 50]`), two numbers separated by a space (`610 614`), an HTML break (`95<br>`, `490<br>-800`), quotes in the middle (`235"-"270`) and an underscore (`1860_1960`).
-
-Done when: each of those 25 strings parses to the two line numbers in it. A trailing `<br>` with no second number is that one line. A value that is not one or two positive lines still fails with `invalid line range`.
-
-Check: unit tests in `src/expand.rs` for the 25 logged strings; `just check`.
 
 ### T523. `worktree add` takes `T504 read-hook-same-path` as an id plus a slug
 

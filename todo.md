@@ -32,7 +32,6 @@
 - T416. Shared `change-preview` crate for dry-run output
 - T428. SessionStart hook back under the 10 ms budget
 - T436.4. Spinner on `agents install/update` through T276's `ProgressRunner`
-- T522. `read` and `expand` accept the line ranges agents sent this week
 - T523. `worktree add` takes `T504 read-hook-same-path` as an id plus a slug
 - T524. Worktree `--idle` accepts `30m` and `0s`
 - T525. SubagentStart and PreCompact under the 10 ms hook budget
