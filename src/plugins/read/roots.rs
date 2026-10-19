@@ -49,7 +49,8 @@ pub(crate) fn secrets_denied() -> bool {
 }
 
 /// A file that usually holds credentials: `.env` and its variants (templates excepted),
-/// private keys, `.git/config`, and the package-manager and netrc credential files.
+/// private keys and Java keystores, `.git/config` and `.git-credentials`, direnv's `.envrc`,
+/// and the package-manager, netrc and pgpass credential files.
 pub(crate) fn is_secret(path: &Path) -> bool {
     let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
         return false;
@@ -62,7 +63,10 @@ pub(crate) fn is_secret(path: &Path) -> bool {
         return !matches!(rest, "example" | "sample" | "template" | "dist");
     }
     let ext = Path::new(&name).extension().and_then(|e| e.to_str());
-    if matches!(ext, Some("pem" | "key" | "p12" | "pfx")) {
+    if matches!(
+        ext,
+        Some("pem" | "key" | "p12" | "pfx" | "jks" | "keystore")
+    ) {
         return true;
     }
     if matches!(
@@ -71,9 +75,14 @@ pub(crate) fn is_secret(path: &Path) -> bool {
             | "id_dsa"
             | "id_ecdsa"
             | "id_ed25519"
+            | "id_ecdsa_sk"
+            | "id_ed25519_sk"
             | ".netrc"
             | ".npmrc"
             | ".pypirc"
+            | ".pgpass"
+            | ".git-credentials"
+            | ".envrc"
             | "credentials"
     ) {
         return true;
@@ -135,6 +144,12 @@ mod tests {
             ".git/config",
             "r/.npmrc",
             ".aws/credentials",
+            "h/.git-credentials",
+            "p/.envrc",
+            "h/.pgpass",
+            "h/.ssh/id_ed25519_sk",
+            "android/release.jks",
+            "app.keystore",
         ] {
             assert!(is_secret(Path::new(p)), "{p}");
         }
