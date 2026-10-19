@@ -139,7 +139,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T414.7 | in progress | P3 | 1 | 0% | MiMo / mimo |
 | T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
 | T428 | in progress | P2 | 3 | 85% | Claude Code / sonnet-5.5 |
-| T653 | in progress | P2 | 2 | 55% | Claude Code / sonnet-5.5 |
 | T436.4 | todo | P3 | 2 | 90% | |
 | T523 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T524 | in progress | P2 | 1 | 0% | MiMo / mimo |
@@ -153,15 +152,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 
 
 
-### T653. Exclude semantic-cache hits from provider-billed OTel usage
-
-Evidence baseline: `eb7d980af235f0ccb3d8ff58471d24b8267af35d`. Where: [`cache_response`](src/proxy/mod.rs#L1205) and its `Recorded::usage` call (L1237–1243); metric label [`metrics.rs`](src/otel/metrics.rs#L81-L84); aggregate [`otel_token_totals`](crates/rtok-store/src/otel.rs#L128-L162). Impact/trigger: whenever semantic cache serves a response with parseable usage, OTel labels that request's counters as provider-billed even though no provider request occurred. Evidence level: actual Store in-memory harness inserted two ordinary usage rows matching the source-traced live and cache paths and aggregated input 200/output 50 from two input-100 rows; no proxy HTTP run. T326 fixes cached slices within provider counters, not duplicate accounting of a cached response.
-
-1. Preserve per-request usage if needed for call analytics, but separate provider-billed totals from cache-served usage or exclude hits from that metric with an explicit persisted marker.
-2. Add a regression that serves a live response then its semantic-cache hit; assert the hit's request usage remains visible while provider-billed OTel totals count only the upstream request.
-3. Document the metric's semantics and run focused proxy/store tests plus `just check`.
-
-Check: a hit keeps its request usage but does not increase provider-billed totals; a live response still does.
 
 
 
