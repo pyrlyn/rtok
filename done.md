@@ -12,6 +12,18 @@ Check result: `cargo test -p rtok-store parse_idle_from` passed. `rtok worktree 
 
 Status: done 2026-10-19
 
+### T657. Match compressor credentials to the internal provider
+
+The compressor speaks Anthropic Messages. It used to forward whatever `Authorization` the agent request carried, so an OpenAI bearer could be sent with that body. `Auth::from_headers` now returns a credential only when the request's wire provider is `anthropic`. An OpenAI or Gemini turn offers nothing, and the summary is skipped rather than authenticated as the wrong provider.
+
+Landed in `9b33846e` (#1052). This card records that the check already holds on main.
+
+Check: an OpenAI bearer is never presented as an Anthropic credential by default; valid configured internal provider requests continue to work.
+
+Check result: `an_openai_credential_is_never_sent_to_the_anthropic_compressor` sends three OpenAI turns with `Bearer sk-openai-test` and the fake compressor sees zero calls. `an_anthropic_bearer_credential_still_reaches_the_compressor` still delivers `Bearer oauth-test` to `/v1/messages` and stores the summary.
+
+Status: done 2026-10-19
+
 ### T652. Refuse to replace an unreadable MCP host config
 
 Installing or updating rtok with backup disabled used to treat an unreadable host config as missing and replace it, dropping every other MCP server. The disk reader now returns the read error before any edit. A missing file can still be created, and a readable foreign entry is kept.
@@ -601,6 +613,7 @@ Result: default-off plugin; three MCP tools (descriptions ≤ 60 tokens); `docs_
 Status: done 2026-10-08
 
 Model: Cursor / composer
+
 ### T454. Borrow host-capped savings, wrapper peel, symbol batch, stale HEAD, worktree symbol copy
 
 From the repowise comparison (2026-10-08). Five algorithms, no new plugin.
@@ -614,6 +627,7 @@ From the repowise comparison (2026-10-08). Five algorithms, no new plugin.
 Check: `cargo nextest run -p rtok -E 'test(host_visible) | test(emit_filtered) | test(family_names) | test(copy_symbol_rows) | test(stale_head) | binary(graph_contract) | binary(graph_scope)'` — 23 passed. Formatter, bounded, surface, and worktree tests — 94 passed. `cargo clippy -p rtok --all-targets -- -D warnings` clean. `cargo fmt --check` clean. `tests/trycmd/mcp.toml` and `report-md.toml` re-blessed for the shorter `symbol` description (`~798` desc tokens) and the `names` schema.
 
 Result: 2026-10-08. No new dependency. No saving claim beyond the corrected `Measurement` rows.
+
 ### T454. `read` map of `llms.txt` lists its links
 
 `llms.txt` is a markdown link index with a `.txt` name, so `read` mode `map` used to fall through to the unknown-language line scan and drop the `- [title](url)` rows. `outline::llms_links` parses those rows (fenced blocks skipped) and `render` appends `link <title> <url>` after the heading map for `llms.txt` and `llms-full.txt` only. URLs are not fetched. A normal `.md` file is unchanged.
@@ -1473,6 +1487,7 @@ Found in the 2026-09-22 audit: `graph/cap` wrote 17 `Measurement` rows with 8 75
 Do (2026-09-23): the 17 rows total 8 759 B (~515 B per call), far under `plugins.graph.max_tokens = 2000`, so the cap was simply never reached on real sessions while `cap_kind` (`src/plugins/graph/mod.rs`) recorded a row unconditionally — `before == after`, `ref_id = None`, a 0 % "saving". The threshold stays; `cap_kind` now records only when something was shortened: `ref_id` set (truncated) or `after_bytes < before_bytes` (`explore`, whose `before` is the calls it replaced) — the same rule `read::cap` already follows. An unchanged answer writes no row. Tests: `five_hundred_hits_are_capped_with_archive_id` reads the row back through `Store::list_measurements` and asserts `after_bytes < before_bytes`, `est_after < est_before` and `ref_id == <archive id>`; `symbol_returns_the_definition_body` asserts zero `graph` rows for an answer under the cap; `tests/plugins_e2e.rs::graph_outline_caps_with_measurement` no longer accepts a `cap` row for a one-line outline — it asserts none, then an 800-definition outline through `rtok mcp` that ends in `N more, expand <id>` and owes exactly one `cap` row.
 
 Check result (2026-09-23): `plugins::graph::tests` 34/34 green; `plugins_e2e::graph_outline_caps_with_measurement` and `graph_contract` green; clippy `-D warnings` and `cargo fmt --check` clean; full `just check` in CI.
+
 ### T225.1. `rtok logs` through tailspin
 
 Follow-up to T225, creator request 2026-09-23. `rtok logs` coloured lines itself (`log::screen`, T24.2) and tailspin was reachable only as `just logs` or a pipe. Now `rtok logs` and `rtok logs watch` hand their rows to `tspin --print` (print mode: no pager, rtok keeps the numbering and the stream shape) under `[log] tspin`: `auto` (default) when stdout is a terminal and `tspin` is on `PATH`, `always` on a pipe too, `off` never; `RTOK_LOG_TSPIN` through the env layer. No `tspin`, or one that will not start, means the builtin rendering, unchanged (fail open). `rtok logs export` and `--json` never go through it. `log::Tspin` owns the child (start / sink / print / finish); `log::numbered` is the uncoloured half of `screen`, shared by both. `rtok config validate` rejects any other `log.tspin` value.
@@ -2197,6 +2212,7 @@ Check: dark and light screenshots sent to the creator, and the creator's approva
 Approval (2026-10-05): the creator approved the dark and light screenshots ("yes").
 
 Result (2026-10-05, Claude Code / opus-5.5): `app.css` imports `@brand/dist/tokens.css`; the `@theme` block maps type, leading, tracking, radii, easing and control sizes to `var(--pyr-*)` and the brand colours to `--rtok-brand-*`; `Orb` and `orbGl` read `--pyr-accent-rgb` / `--pyr-delta-rgb`. Shell: brand mark + RTOK wordmark with the coral Δ in the sidebar, a link-state `Pill` (`live` / `connecting` / `closed`) and an icon theme switch in the header. Overview: a savings hero (`BudgetGrid`, the logo's 4×4 bitset with the cut share in coral; Δ saved tok; Δtok %; est before / after bars) above a six-KPI grid. e2e expects the `live` label. `spa-typecheck`, `spa-test` (170), `spa-e2e` (17), `just js` and `just check` (2443) green; `spa-stories` 121/123 under host load 15, the two `GraphOverview` WebGL stories pass 7/7 alone (known flake, T414.1).
+
 ### T414.15. Chart layer: library-agnostic specs, canvas renderer on ECharts, hover tooltips
 
 Pages describe a chart, they never call a chart library. `web/src/charts/` holds the whole layer: `spec.ts` (a plain `ChartSpec`: kind, x ticks, optional tooltip titles, series with a brand tone, an a11y label, axes, failure dots, a sync group), `renderer.ts` (the one seam a backend implements, loaded lazily), `echarts.ts` (the only file importing ECharts), `hover.ts` (hovered index per sync group), `Tooltip.tsx` and `Chart.tsx`. `CallsChart`, `Sparkline` and `MiniBars` migrated with the same data and look.
@@ -7811,6 +7827,7 @@ Status: done 2026-09-22
 Check result: `agents::cline` 3 passed; `agents_doc`, `host_docs`, `config_coverage`, `cline_plugin`, `cli_trycmd` green; lib 910 passed (1 pre-existing `list_prints` hang skipped — `codex --version` hangs on this machine, also on main); fmt + clippy clean.
 Model: Muse Spark / rtok
 Re-land (2026-09-24, Claude Code / claude-opus-5-5 + claude-sonnet-5): #172 was auto-reverted (e3fa1b44) because main had gained `HostPlugin.default_install` (T164) meanwhile. Re-applied on current main: `default_install: false`; MCP removal through `unregister_ours` (T246.2); `hooks_path` moved from `files()` to `markers()` (a directory cannot be backed up); `files()` per variant; the hook script takes the T174/T250 resolver (PATH, `~/.ketch/bin`, silent `{}`, one hint on `TaskStart`); `tests/singleton.rs` knows the Cline plugin carries no MCP; `cline` listed as unsupported in `tools/publish_marketplace`. `just check` green (1745 passed).
+
 ### T164. Host plugins that only install by local link go in by default, idempotently
 
 Assigned as T162, but that id was already taken by a concurrent session's task before this one registered — max open id on `origin/main` was T163, so this landed as T164 instead.
@@ -8059,6 +8076,7 @@ Check result (2026-09-22): before the fix, `shorten_result_records_archive_mcp_a
 
 Status: done 2026-09-22
 Model: Claude Code / claude-opus-5-5
+
 ### T86. `rtok agents install kimi` offers the plugin, and the plugin is the singleton
 
 After T85. Precondition, by the creator on a live Kimi (agents cannot drive its TUI): `/plugins install <repo>/plugins/kimi`, `/reload`, then call the rtok MCP `tree` tool with no path — it must list the session project, not `plugins/managed/rtok/`. If it lists the plugin copy, Kimi starts plugin MCP servers in the plugin root and the singleton rule below must keep `mcp.json` and strip only the hooks. `support("plugin")` stops saying "no": install prints the exact `/plugins install <resolved plugins/kimi path>` line (dry-run and apply alike; rtok never writes `plugins/managed/` or `installed.json` — that format is Kimi's and undocumented). `installed()` reports `plugin` when `<kimi home>/plugins/managed/rtok/kimi.plugin.json` exists. D21 singleton: while the plugin is installed, setup strips rtok's own `[[hooks]]` tables and `mcpServers.rtok` from `config.toml` / `mcp.json` instead of adding them (Cursor's `plugin_is_mcp` rule, for hooks too), so no event fires twice and one `rtok mcp` serves the store. A `Desktop` variant (`Kimi Code.app`) joins `VARIANTS` with the same files. `src/agents/kimi/README.md` module table, `docs/agents.md` (bless), `research.md` §15 sentence listing Kimi among hosts without a plugin directory.
@@ -8400,6 +8418,7 @@ Check: none of the listed functions or tests hold `sql_query`; `rtok stats` unch
 Do (Claude Code / claude-opus-5-5 supervising claude-sonnet-5, 2026-09-23): `memory_note_aggs`, `memory_recall_totals`, `memory_mcp_calls`, `insert_usage`, `insert_provider_tokens`, `usage_sessions`, `usage_rows`, `usage_by_api`, `usage_by_model`, `model_slug_of_call` and the `session_totals_sums_each_session_exactly` ts helpers moved to the typed DSL. Two typed SQL functions: `length` and `sum_bigint` (`SUM` declared as `Nullable<BigInt>`, since Diesel's `sum()` widens integers to `Numeric` and rtok has no `bigdecimal`); CASE counts via `case_when`. `usage_by_model` groups on the raw column and folds `NULL` and `"unknown"` into one row in Rust, as `GROUP BY COALESCE(model, 'unknown')` did (new test `usage_by_model_merges_null_and_literal_unknown`). `memory_note_aggs` is one statement with a bound boolean for the optional project. `usage_ctt`, `session_totals`/`recent_session_totals` and `recent_calls` use window functions and CTEs the DSL cannot express — split off as T163.9.
 
 Check result: `cargo test --lib store::` 43 passed, `cargo test --lib stats` 22 passed; clippy `-D warnings` and `fmt --check` clean; `rtok memory status --json --since 36500d` byte-identical before/after on an APFS clone of the real `rtok.db`; the clone's `usage` table is empty, so `usage_by_api`/`usage_by_model` rest on their unit tests. `sql_query|sql::<|batch_execute` in `mod.rs` 70 → 57. Full `just check` in CI.
+
 ### T234. Skills have one source: host plugins never bundle a copy
 
 `plugins/pi/skills/` carried copies of hub skills: `worktrees` byte for byte (kept equal only by `tests/pi_plugin.rs`) and `rtok` as a pi-flavoured variant. Every hub edit had to be repeated by hand (PR #226 did it for `worktrees`), and a missed copy drifted silently. Rule (in `AGENTS.md`): a skill lives only in `skills/<name>/`; installers copy it into the host's skill root, plugins never bundle one.
@@ -8412,6 +8431,7 @@ Model: Claude Code / claude-opus-5-5
 ### T236. Clean up target dirs with dunnage after tests
 
 `just test` and `just test-changed` now end with `just dunnage` (a just post-dependency; `just check` gets it through `test`). `dunnage run target` compresses and dedupes `./target` losslessly — it never deletes and keeps mtimes, so nothing rebuilds. Exit code 2 (a build held the lock) counts as success; a checkout with no `target/` yet or a machine without `dunnage` is a no-op with an install hint. dunnage is installed with `ketch install dunnage`; `toolchain.md` lists ketch and dunnage and gains a `ketch` package table.
+
 ### T301. `just test-cov`: the test suite under coverage, `just test` stays without
 
 Creator request (2026-09-27): a separate command for tests with coverage; the plain one without. Coverage lived only inline in `.github/workflows/sonarcloud.yml`, with `cargo-llvm-cov` installed by a CI action, so it could not be run the same way locally.
@@ -8525,6 +8545,7 @@ Split into three stacked PRs to stay within ≤200 LOC/≤10 files each: PR #207
 Check result: `mise exec -- pytest tools/tests` — 11 passed (registry vs every `plugins/` dir, `verify_local` against the real `.claude-plugin/marketplace.json`/`.agents/plugins/marketplace.json` plus one synthetic failure case, unknown/unsupported-host refusal, dry-run fires nothing, `trigger` builds the exact `gh workflow run`/`gh run list` commands against a fake runner). The `marketplace.yml` verify step was run locally as the same `python3 -c` one-liner against both real catalogs and printed `claude: ok`/`codex: ok`. CI status and PR URLs reported separately once pushed.
 
 Status: done 2026-09-23
+
 ### T163.1. `src/store/symbols.rs` without raw SQL
 
 First slice of T163: the 15 `sql_query` sites in `symbols.rs` (`symbol_stale`, `extractor`, symbol lookups) moved to the Diesel DSL over `schema.rs` — `INSERT OR IGNORE` as `insert_or_ignore_into`, upserts via `on_conflict`, self-joins via `diesel::alias!`, and correlated subqueries/anti-joins via `.single_value()`/`exists()`/`not()`. `schema.rs` gained `extractor` and `symbol_stale` `table!` entries (both existed only as raw SQL before). Two shapes the typed DSL cannot express landed in the new `src/store/sql_ext.rs` — a hand-written `QueryFragment` bound through the public `AstPass::push_bind_param`, never `sql_query`/`sql::<>`/`batch_execute`: the two `WITH RECURSIVE` walks (`symbol_impact`, `symbol_paths`), and `symbol_callees`'s self-join `GROUP BY` — Diesel's `alias!` self-join fields (`AliasedField`) have no `IsContainedInGroupBy` bridge in diesel 2.3.13, only `ValidGrouping<()>` (i.e. no `GROUP BY` at all), so a self-join `GROUP BY` across two aliases has no DSL form to fall back to.
@@ -9107,6 +9128,7 @@ Result: lib memory 57 passed; integration targets green; clippy and fmt clean. #
 Status: done 2026-10-08
 
 Model: Claude Code / claude-sonnet-5-5
+
 ### T413.1. `rtok agents install roo` — Roo Code
 
 VS Code extension forked from Cline. Landed on main in `46e7139b` (feat) with host registration fixed in #760 (`376e1645`).
@@ -9136,6 +9158,7 @@ Goose (Block, now under the Agentic AI Foundation), CLI and desktop. MCP-native,
 Done: `src/agents/goose/` writes `extensions.rtok` (stdio: `name`, `type`, `cmd`, `args`, `enabled`) into `config.yaml` as a text-level block edit validated with the existing `serde-saphyr`, so comments and every other byte stay; keys Goose adds on re-save are not an edit; `[setup.goose] config_path`; variants Goose CLI and Goose (Desktop). Hooks (Open Plugins, no adapter), proxy (env var only) and plugin report a factual reason. Research in `research.md` §32.6.
 
 Check: unit tests for the block edit (add, replace, remove, CRLF, foreign YAML, resave defaults), the real-config round trip, `agents_doc`, `host_docs`, trycmd snapshots; `just check`.
+
 ### T413.3. `rtok agents install droid` — Factory Droid
 
 `rtok agents usage` already lists Droid as `unsupported` (`research.md` §30.4). This adds the installer: MCP, and hooks or plugins if Factory documents them.
@@ -11368,6 +11391,7 @@ Plan: store inline bodies as BLOB (or base64 in the TEXT column) with the sha of
 Check: extend `inline_sha256_matches_stored_text` (src/store/mod.rs:3048-3095) — `call_io_request` returns the exact input bytes for the `[…0xff, 0xfe…]` fixture and the sha matches the raw bytes (fails today); `just test` green.
 
 Result: Migration 0022 adds call_io raw BLOB columns; bodies that are not valid UTF-8 are stored byte-exact and read back unchanged, so expand is lossless. Merged in #278 (f7e702d4); this entry restores the bookkeeping lost in that PR's rebase.
+
 ### T157. Probe: is `worktree.useRelativePaths` safe for every tool that opens this repository?
 
 No product code. The 18 GB orphan came from absolute worktree links breaking when the repository moved; git ≥ 2.48 can write relative links, but doing so sets `extensions.relativeWorktrees`, and a tool that does not know the extension refuses to open the repository (`research.md` §18.2).
@@ -11377,6 +11401,7 @@ Plan: in a scratch clone, enable `worktree.useRelativePaths`, add a worktree, th
 Check: `research.md` §18.2 gains a dated compatibility table; if every reader passes, the `worktrees` skill (T155) and `AGENTS.md` gain the one-line setting; if any fails, the finding is recorded and the setting stays off.
 
 Result: research.md §18.2 gains a dated probe table: git 2.54, cargo 1.97.1 (VCS dirty check) and gh 2.101 all open a relative-link worktree (extensions.relativeWorktrees, format v1); moving the common parent keeps relative links working without repair while the absolute control breaks. Editors are untested (interactive), so the setting stays off and the worktrees skill/AGENTS.md are unchanged.
+
 ### T199. `ideas.md`: I-86 both open and rejected, I-87 twice, broken Promoted table
 
 Found 2026-09-22 in the docs pass: I-86 sits in the Open table and in Rejected at once (the Rejected entry already carries T125's dated gate result while T125 is still `in progress`); I-87 appears twice in Open with contradictory states (unpromoted and "promoted T135"); the Promoted section is a headerless four-column pseudo-table whose `| ID | Became | Date |` header appears only at the bottom with three columns, and the I-28 row is truncated mid-word ("under the `inje"); the Open table also splits on a blank line. Breaks "an idea must not appear twice, or in both Open and Rejected".
@@ -11386,6 +11411,7 @@ Plan: drop the Open I-86 row (Rejected carries the evidence) or revert the Rejec
 Check: `ideas_ids_unique_and_disjoint` — every `I-NN` occurs in exactly one of Open/Later/Rejected/Promoted and every pipe-table has a header + separator before its rows; `just site` builds.
 
 Result: I-87 duplicate, Promoted header and I-28 were already fixed by #239; this drops the Open I-86 row (Rejected keeps T125's evidence) and the duplicate I-17 (pi only) Promoted row (the I-17 row already records T10.6). New tests/ideas_md.rs: every I-NN has exactly one defining row across Open/Later/Rejected/Promoted and every pipe-table has header+separator; fails on a re-added I-86 or a doubled I-87.
+
 ### T221. Wrong and uncited public numbers (41 targets, ±15 %, 39 %) plus a number lint
 
 Found 2026-09-22 in the docs pass: `README.md:399` and `Cargo.toml:157` claim "41 integration targets" — `ls tests/*.rs` is 64; `README.md:269, 385` cite an "±15 % error margin" that appears nowhere in `research.md`; `docs/comparison.md:130` cites "39 % on Fable/Mythos 5.1", likewise untraceable; `docs/comparison.md:180` ("18.9 MiB") and :215 ("+0.81 ms p95") match `research.md` rows but cite nothing. Two are vendor-style claims, two are staleness-undetectable — breaking "every number in `README.md`, `docs/` or the site cites a measured row, `research.md`, or a dated command".
@@ -11395,6 +11421,7 @@ Plan: cite each figure inline (`research.md §2 row …, <date>`) in the style o
 Check: a `just readme-check` number lint — any `N %` / `N MiB` / `N ms` figure in `README.md`/`docs/**` sits within a few words of `research.md`, a test name or a date, and the README target count equals `ls tests/*.rs | wc -l` at run time (fails on `main` today); `just check` green.
 
 Result: Dropped the untraceable ±15 % (README, docs/config.md, tokens.rs, lib.rs, plugin.rs, measure AGENTS.md) for 'uncalibrated heuristic'; cited 18.9 MiB / 98.1 % / +0.81 ms p95 inline to research.md with dates; README/Cargo.toml state the one-binary-per-tests/*.rs rule instead of '41 targets'. New tests/public_numbers.rs: every N %/MiB/ms figure in README/docs needs research.md, a date, a test name or an attribution word in its block ('10 ms' fail-open budget exempt by text); a stated README target count must equal tests/*.rs. Fails on the old docs (5 figures + 41≠73), passes now.
+
 ### T224. Tracked build/report artifacts: `report.html`, `report/`, `dump/`
 
 Found 2026-09-22 in the docs pass: `report.html` and `report/jscpd-report.json` are stale jscpd outputs (`.jscpd.json` now sets `reporters: ["console"]`, so they are unreproducible) and `dump/` holds nine captured stdout/stderr files — all in the tree; `.gitignore` covers `rtok.db`/`/~/` but not `/report.html` or `/dump/`. The `.rtok/`/`~`/`rtok.db` half of the cleanup is T184; this is the other half of "an artifact that is not reproducible from a command should not be in the repo".
@@ -11462,6 +11489,7 @@ Plan: one funnel helper for the four loops matching the `Err`, extracting the pa
 Check: `a_panicking_plugin_is_logged_and_the_rest_survives` — a registry with one panicking and one returning plugin: stdout keeps the good plugin's context and the store holds one `level = "error"` log row naming the plugin; `just test` green.
 
 Result: The four per-plugin `catch_unwind` loops in `src/hooks/mod.rs` (PreCompact, PreToolUse, PostToolUse, the inject events) route an `Err` through one `log_panic` helper: it takes the `&str`/`String` payload (else "non-string panic payload") and writes one `cx.log("error", "plugin", <id>, "<event> panicked: …")` before dropping that plugin's output. The non-panic path is unchanged. There is no `catch_unwind` outside hooks. Test: `a_panicking_plugin_is_logged_and_the_rest_survives`.
+
 ### T322. Guard: no false "duplicate" deny for compound writers, `git branch -D`, awk writers, Read slices
 
 Found by a bug-hunt pass over `src/plugins/guard/**`. The guard denies a repeat of a keyed (read-only) call as `duplicate; rtok expand <id>`. Four ways a mutating or different call was keyed, so its repeat was denied and never ran:
@@ -12475,6 +12503,7 @@ Result: 0.44 % cache-safe (paths 0.26 %, identifiers 0.18 %), 2.05 % ceiling; `j
 Status: done 2026-10-08
 
 Model: Claude Code / claude-sonnet-5-5
+
 ### T399. Re-check host docs for three open host questions
 
 Re-checked the three open host questions in `research.md` against primary sources (2026-10-08). Skills (§10.1, §10.6): Cursor documents `disable-model-invocation`; OpenCode, Copilot, Gemini and the Agent Skills spec do not; Codex uses `agents/openai.yaml` `allow_implicit_invocation: false`. Subagent-start hooks (§23): Grok and Antigravity still document no output schema and no subagent-start context hook, so the verdicts stay. Hook ancestry (§26): Devin and Command Code document no parent process, still unverified. Cline (§26) has been a hook host since 2026-09-24 (`src/agents/cline`), so the ancestor rule applies to it, and its hooks docs name no parent process or session id (checked 2026-10-08, https://docs.cline.bot/customization/hooks), so it stays unverified. Windows: the no-ancestor limit is written in `docs/agents-and-worktrees.md`. No code changed; `doctor` cites no `disable-model-invocation` advice today, so the card's doctor premise was stale.

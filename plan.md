@@ -147,7 +147,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T654 | in progress | P2 | 2 | 65% | Claude Code / sonnet-5.5 |
 | T655 | in progress | P2 | 2 | 60% | Claude Code / sonnet-5.5 |
 | T656 | in progress | P2 | 2 | 60% | Claude Code / sonnet-5.5 |
-| T657 | in progress | P1 | 2 | 55% | Claude Code / sonnet-5.5 |
 | T436.4 | todo | P3 | 2 | 90% | |
 | T522 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T523 | in progress | P2 | 2 | 0% | MiMo / mimo |
@@ -213,16 +212,6 @@ Evidence baseline: `eb7d980af235f0ccb3d8ff58471d24b8267af35d`. Where: [`gc::deci
 3. Run focused worktree gc/clean tests and `just check`.
 
 Check: missing age never authorizes removal; established fresh/old ages retain their policy. Do not validate by deleting real worktrees or caches.
-
-### T657. Match compressor credentials to the internal provider
-
-Evidence baseline: `eb7d980af235f0ccb3d8ff58471d24b8267af35d`. Where: [`Auth::from_headers`](src/plugins/compress/llm.rs#L58-L76) accepts arbitrary Authorization credentials; [`shape_request`](src/proxy/mod.rs#L691-L697) supplies those credentials for all wires; [`Compressor::new`](src/plugins/compress/llm.rs#L111-L127) defaults an empty URL to the local proxy and appends `/v1/messages`; [`try_run`](src/plugins/compress/llm.rs#L161-L185) applies text-size, code and span guards; [`ask`](src/plugins/compress/llm.rs#L204-L238) sends an Anthropic-shaped body and forwards the credential; [`upstream_for`](src/proxy/mod.rs#L221-L239) routes by the request wire or an explicit lane upstream. Impact/trigger: with `plugins.compress.llm.enabled=true` (off by default), proxy mode `compress`, and an offered eligible non-code archived text block, an OpenAI bearer credential can cross the credential-destination boundary and be sent with an Anthropic Messages body to the default Anthropic upstream. The mismatched request can fail authentication/protocol and the summary is skipped. An explicit internal-lane upstream can change the destination, but no provider-format conversion occurs. Evidence level: source-derived call-path review; no HTTP call or credential was used.
-
-1. Bind compressor credentials and request format to the configured internal provider, or use dedicated compressor credentials; never forward a credential from an incompatible agent wire.
-2. Add a fake-upstream test for OpenAI and Anthropic caller credentials that checks destination, headers and body format without contacting a provider.
-3. Run focused compressor/proxy tests and `just check`.
-
-Check: an OpenAI bearer is never presented as an Anthropic credential by default; valid configured internal provider requests continue to work.
 
 ### T666.2. Provider-backed memory extractor (blocked on the creator)
 
