@@ -140,7 +140,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
 | T428 | in progress | P2 | 3 | 85% | Claude Code / sonnet-5.5 |
 | T653 | in progress | P2 | 2 | 55% | Claude Code / sonnet-5.5 |
-| T654 | in progress | P2 | 2 | 65% | Claude Code / sonnet-5.5 |
 | T436.4 | todo | P3 | 2 | 90% | |
 | T522 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T523 | in progress | P2 | 2 | 0% | MiMo / mimo |
@@ -164,15 +163,6 @@ Evidence baseline: `eb7d980af235f0ccb3d8ff58471d24b8267af35d`. Where: [`cache_re
 
 Check: a hit keeps its request usage but does not increase provider-billed totals; a live response still does.
 
-### T654. Re-read graph files after an unreadable index attempt
-
-Evidence baseline: `eb7d980af235f0ccb3d8ff58471d24b8267af35d`. Where: [`index.rs`](src/plugins/graph/index.rs#L159-L165) stat skip and unreadable staging (L346-L349). Impact/trigger: index a supported file while unreadable, then restore read permission without changing bytes, size, or mtime; the next index skips it and keeps the empty state. T542–T546 cover fingerprint, dry-run, filters and rank refresh, not this recovery path. Evidence level: executed chmod/stat fixture confirmed mtime and size stayed unchanged; full graph invocation was source-traced, not executed.
-
-1. Do not commit a reusable stat-only skip key for unreadable files; force a read on the next index run or persist an explicit unreadable state that invalidates when readability changes.
-2. Add a Unix regression: index an unreadable supported file, restore permissions without changing bytes/mtime, rerun, and assert real symbols replace the empty state. Keep a readable unchanged control.
-3. Run focused graph index tests and `just check`.
-
-Check: a file that becomes readable is re-parsed even when mtime and size are unchanged.
 
 
 ### T666.2. Provider-backed memory extractor (blocked on the creator)
