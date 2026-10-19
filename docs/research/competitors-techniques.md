@@ -136,7 +136,7 @@ checked 2026-10-15. `rtok discover` (T661) is not on main, so families are taken
 | terraform / tf | default | 74 % |
 | xcodebuild | default | 90 % |
 | biome, rake/rails, bundle, wget, logcat | default, no golden | not measured |
-| podman | gap: the `docker ps` formatter matches only `docker` | open |
+| podman | `docker ps` formatter also matches `podman ps` (T905) | same golden as `docker ps` |
 
 What made the four new rows win is not a rule but a parser: `parse_diag` now reads `path:line[:col]: CODE msg`
 (ruff, flake8), `path:line: error: msg  [code]` (mypy), `path:line:col: C: Cop/Name: msg` (rubocop) and

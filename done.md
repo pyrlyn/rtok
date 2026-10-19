@@ -8813,7 +8813,7 @@ Check: a coverage table vs sqz in `docs/comparison/rtok-vs-sqz.md`; at least the
 
 Plan: read `docs/comparison/rtok-vs-sqz.md`; build the coverage table sqz-formatter → rtok rule; add rules (in `rules/default.toml` through the existing rule engine, no new engine) for the top missing families, each with a fixture and a no-worse-than-raw test. `rtok discover` (T661) is not on main: pick families by the sqz list and say so in the card.
 
-Outcome: `parse_diag` reads `path:line[:col]: CODE msg` (ruff), `path:line: error: msg  [code]` (mypy), `path:line:col: C: Cop/Name: msg` (rubocop) and `path:line:col: msg (linter)` (golangci-lint), so new `[ruff]`, `[mypy]`, `[rubocop]` and `[golangci-lint]` rules fold them with `group = "diag"`: 96 %, 77 %, 88 % and 91 % on the goldens against 72 %, 55 %, 82 % and 53 % for `Rule::default()`. yarn, bun, rspec, terraform and xcodebuild already win on the default rule, so they got goldens only. The sqz coverage table is in `docs/research/competitors-techniques.md`; podman (the `docker ps` formatter matches only `docker`) is left open. `rtok discover` (T661) and the #1076 harness are not on main, so families came from sqz's list and savings from the repo goldens.
+Outcome: `parse_diag` reads `path:line[:col]: CODE msg` (ruff), `path:line: error: msg  [code]` (mypy), `path:line:col: C: Cop/Name: msg` (rubocop) and `path:line:col: msg (linter)` (golangci-lint), so new `[ruff]`, `[mypy]`, `[rubocop]` and `[golangci-lint]` rules fold them with `group = "diag"`: 96 %, 77 %, 88 % and 91 % on the goldens against 72 %, 55 %, 82 % and 53 % for `Rule::default()`. yarn, bun, rspec, terraform and xcodebuild already win on the default rule, so they got goldens only. The sqz coverage table is in `docs/research/competitors-techniques.md`; podman (the `docker ps` formatter matches only `docker`) was left open here and closed by T905. `rtok discover` (T661) and the #1076 harness are not on main, so families came from sqz's list and savings from the repo goldens.
 
 ### T685. find 33
 
@@ -15419,3 +15419,16 @@ Execution plan: establish existing completion tests; extract the clap generator 
 Validation: 23 focused tests passed; all six generated scripts are byte-identical to the pre-extraction baseline. Formatting and production clippy passed. `just check` passed workspace clippy and 2779 tests before unrelated cli_trycmd logging snapshots failed (completion snapshots passed; 8 skipped, 1261 not run by fail-fast).
 
 Reused `clap_complete` and the existing rtok Clink generator. No replacement library or custom generator was introduced. Local path dependencies resolve in the standard apps/packages layout.
+
+### T905. Format `podman ps` with the `docker ps` table
+
+`docs/research/competitors-techniques.md` (sqz coverage) left `podman` open: the `docker ps` formatter matched only `docker`, so `podman ps` fell through to the default head/tail rule. Idea I-133.
+
+`podman ps` takes the same arm as `docker ps`. Unrecognized output still returns `None` and stays on the rule path. The golden is the `docker ps` fixture with the argv changed, so the saving is that measurement (59 %), not a new corpus.
+
+Check: `podman_ps` golden matches `docker_ps` and clears `min_saving: 59`; a non-table `podman ps` body is not `kind = formatter`.
+
+Result: `format` matches `("docker" | "podman", "ps")`. `tests/cmd_golden/podman_ps.in` is the docker fixture. Docs name both families on the T58.5 row (`docs/cmd-rules.md` and `docs/ru`, `docs/uk`).
+
+Status: done 2026-10-19
+Model: Cursor / grok 4.7
