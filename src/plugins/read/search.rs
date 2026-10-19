@@ -96,11 +96,18 @@ pub(crate) fn text_files(
 pub fn search(cx: &Ctx, pattern: &str, path: &str, max: Option<u32>) -> Result<String> {
     let cfg = cx.plugin_config::<crate::config::Read>("read");
     let cwd = std::env::current_dir()?;
-    let root = resolve(
-        &cwd,
-        Path::new(if path.is_empty() { "." } else { path }),
-        &cfg.allow_paths,
-    )?;
+    // A pathless search from `$HOME` or `/` (those roots are refused) searches the client
+    // root that lies in a repository, instead of failing on the launch cwd.
+    let no_path = path.is_empty() || path == ".";
+    let root = if no_path && crate::fs::is_unwalkable_root(&cwd, std::env::home_dir().as_deref()) {
+        crate::project::project_dir(&cwd, &super::roots::client_roots())?
+    } else {
+        resolve(
+            &cwd,
+            Path::new(if path.is_empty() { "." } else { path }),
+            &cfg.allow_paths,
+        )?
+    };
     // T263: the resolved root, so an explicit `path` still works from `/`.
     super::walk_root_ok(&root)?;
     let cap = max.unwrap_or(cfg.search_max).max(1) as usize;
