@@ -97,7 +97,7 @@ every full/abbreviated hash, every path, every line matching `WARN|ERROR|error|f
 Also shorten the trailing link line (today ~90 tokens with two 64-hex ids) to one 8–12 hex id:
 that alone is 70+ tokens on every compressed call and dominates small outputs.
 The command trailer has printed that id since T672. The hook budget marker, skill deny,
-handoff brief and MCP wrap trailer do too (T910). A stored measurement keeps the full id.
+handoff brief, MCP wrap trailer and the expand omitted-line marker do too (T910). A stored measurement keeps the full id.
 
 | # | Category (uses) | Best rival | rtok design (better, not copied) | Target |
 |---|---|---|---|---|

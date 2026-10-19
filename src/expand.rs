@@ -222,7 +222,14 @@ pub(crate) fn render_lines(
         if !rendered.is_empty() {
             rendered.push('\n');
         }
-        rendered.push_str(&format!("… {omitted} lines omitted (expand {id})"));
+        // A full sha in the caller's id prints as 8 hex chars. A longer prefix they
+        // already sent (an ambiguous 8) stays, so the marker does not re-ambiguate it.
+        let shown = if id.len() >= 64 {
+            crate::names::short_id(id)
+        } else {
+            id
+        };
+        rendered.push_str(&format!("… {omitted} lines omitted (expand {shown})"));
     }
     Ok(rendered)
 }
@@ -636,6 +643,19 @@ mod tests {
             5
         );
         assert!(out.contains("8 lines omitted (expand arc123)"), "{out}");
+    }
+
+    #[test]
+    fn a_full_archive_id_in_the_omitted_marker_prints_eight_hex_chars() {
+        let id = "ab".repeat(32);
+        let text = (1..=20)
+            .map(|n| format!("l{n}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let out = render_lines(&text, &id, None, None, 0, 5).unwrap();
+        let short = crate::names::short_id(&id);
+        assert!(out.contains(&format!("expand {short}")), "{out}");
+        assert!(!out.contains(&id), "{out}");
     }
 
     #[test]
