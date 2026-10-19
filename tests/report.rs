@@ -194,7 +194,12 @@ fn fixture_numbers_are_traceable_to_rows() {
 
     // Expand: 1 of 3 decisions frozen, the id the measurement names.
     assert!(out.contains("`rtok expand` froze 1 of 3 live-zone pointers (33.3%)"));
-    assert!(out.contains(&format!("Expanded: {first_id}.")));
+    let shown = rtok::names::short_id(&first_id);
+    assert!(out.contains(&format!("Expanded: {shown}.")));
+    assert!(
+        !out.contains(&first_id),
+        "the report prints the prefix, not the sha"
+    );
 
     // Config: the report's own keys. Init no longer pins them, so the origin is the default.
     assert!(out.contains("| report.since | 30d | default |"));

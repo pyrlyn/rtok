@@ -891,3 +891,5 @@ Check: a test shows a dropped `Runtime::in_memory` leaves no directory behind, a
 Source: `docs/research/competitors-techniques.md` (techniques, licenses, links). Every card: keep 100 % of hashes, paths and WARN/ERROR lines, never more tokens than raw, stderr and exit line kept on failure.
 
 T905 (idea I-133): `podman ps` uses the `docker ps` formatter. Done (`done.md`).
+
+T913: the report Expand list prints the 8-char archive id. Done (`done.md`).

@@ -1,5 +1,16 @@
 # rtok — completed tasks
 
+### T913. The report prints the 8-character archive id
+
+T672 prints 8 hex chars on a compressed command. `rtok report` still listed each frozen archive as the full 64-character sha in the Expand section (markdown, HTML, PDF and `--ai`). That text is what an agent reads back.
+
+The four renderers now print the 8-character prefix when the stored id is a full hex sha. `rtok expand` resolves it. A shorter id, and text that is not hex, stays as stored, so a prefix already chosen and the hostile-text fixture are not cut. The ledger `ref_id` and the document's `expanded_ids` stay the full sha.
+
+Check: `tests/report.rs` finds the 8-character prefix and not the sha; the markdown and HTML one-row snapshots show `ffffffff`; a full sha is absent from the PDF bytes.
+
+Status: done 2026-10-19
+Model: Cursor / grok 4.7
+
 ### T526. `worktree_list` and `search` when `rtok mcp` was started in the home directory
 
 T356 stops the graph from indexing `$HOME`. `worktree_list` and a pathless `search` still ran against the launch cwd, so a server started in the home directory failed with git's `fatal: not a git repository` or `no project root` until the client sent `roots/list` or the caller passed a path.
