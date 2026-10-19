@@ -133,8 +133,14 @@ fn rank(level: &str) -> usize {
         .unwrap_or(0)
 }
 
+/// A new log file is the owner's only (`0600` on Unix): lines carry error text, paths and
+/// command lines, and the umask default (`0644`) let every local account read them.
 fn open_append(path: &Path) -> io::Result<fs::File> {
-    OpenOptions::new().create(true).append(true).open(path)
+    let mut o = OpenOptions::new();
+    o.create(true).append(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut o, 0o600);
+    o.open(path)
 }
 
 fn over(log: &FileLog<'_>, incoming: u64) -> bool {
@@ -199,6 +205,19 @@ mod tests {
             files,
             level: "debug",
         }
+    }
+
+    /// Audit 2026-10-19: logs were created with the umask mode, readable by every account.
+    #[cfg(unix)]
+    #[test]
+    fn a_new_log_file_is_owner_only() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tmp("mode");
+        let path = dir.join("rtok.log");
+        write_line(&log(&path, 1 << 20, 1), "x").unwrap();
+        let mode = fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
