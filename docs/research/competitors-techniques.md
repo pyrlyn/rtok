@@ -118,7 +118,7 @@ that alone is 70+ tokens on every compressed call and dominates small outputs.
 ## sqz formatter coverage (T662)
 
 Source: [sqz `cmd_formatters/mod.rs`](https://github.com/ojuschugh1/sqz/blob/cf2b03c8072729f366e48a8a4933a421bd2a1e79/sqz_engine/src/cmd_formatters/mod.rs#L120-L180),
-checked 2026-10-15. `rtok discover` (T661) is not on main, so families are taken from sqz's list, not from real traffic.
+checked 2026-10-15. `rtok discover` is on main (T688). This table still uses sqz's list from that date, not a live `discover` ranking.
 "Saving" is est tokens on the new `tests/cmd_golden/*` fixtures (synthetic, shaped like each tool's output); "default" means
 `Rule::default()` already wins and a dedicated rule would not beat it.
 
