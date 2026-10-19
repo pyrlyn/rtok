@@ -139,7 +139,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T414.7 | in progress | P3 | 1 | 0% | MiMo / mimo |
 | T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
 | T428 | in progress | P2 | 3 | 85% | Claude Code / sonnet-5.5 |
-| T651 | in progress | P2 | 2 | 35% | Claude Code / sonnet-5.5 |
 | T653 | in progress | P2 | 2 | 55% | Claude Code / sonnet-5.5 |
 | T654 | in progress | P2 | 2 | 65% | Claude Code / sonnet-5.5 |
 | T656 | in progress | P2 | 2 | 60% | Claude Code / sonnet-5.5 |
@@ -156,18 +155,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 
 
 
-
-### T651. Honor ProgressRunner timeouts with inherited output
-
-Evidence baseline: `eb7d980af235f0ccb3d8ff58471d24b8267af35d`. Where: [`ProgressRunner::run_capped`](crates/rtok-sys/src/proc/mod.rs#L141-L151), wait/timeout handling (L205, L320). Impact/trigger: any caller selecting `Output::Inherit` with `.timeout()` can block past the deadline. Evidence level: actual `rtok-sys` path-dependency harness; `exec sleep 0.25` with 30 ms returned success after 267 ms under Inherit; Capture returned `TimedOut` after 44 ms.
-
-Execution plan:
-1. Add a focused regression using a synthetic slow child with `Output::Inherit`; assert `TimedOut` near the configured deadline. Keep a successful inherited child control and retain the Capture/Stream timeout behavior.
-2. Apply the timeout to the inherited child wait while preserving inherited stdin/stdout/stderr and direct-child kill/reap behavior.
-3. Cover zero/short timeout, an early successful exit and spawn errors without relying on a real host or agent.
-4. Run the focused `rtok-sys` process tests and `just check`.
-
-Check: the inherited slow-child regression fails before the fix and passes after it; inherited streams remain inherited; Capture and Stream timeout behavior stays intact; `just check` passes. Probe command: temporary Cargo harness at `/tmp/rtok-t650-harness`, path dependency on this checkout's `crates/rtok-sys`, `ProgressRunner::new("probe", "sh", ["-c", "exec sleep 0.25"]).progress(Progress::Off).output(Output::Inherit).timeout(Duration::from_millis(30)).run()`.
 
 ### T653. Exclude semantic-cache hits from provider-billed OTel usage
 
