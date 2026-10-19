@@ -38,7 +38,6 @@
 - T525. SubagentStart and PreCompact under the 10 ms hook budget
 - T526. `worktree_list` and `search` when `rtok mcp` was started in the home directory
 - T527. A worktree claim does not stay held by an agent idle for days
-- T652. Refuse to replace an unreadable MCP host config
 - T653. Exclude semantic-cache hits from provider-billed OTel usage
 - T654. Re-read graph files after an unreadable index attempt
 - T655. Make compressor in-flight admission atomic
