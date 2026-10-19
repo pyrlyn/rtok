@@ -41,7 +41,6 @@
 - T653. Exclude semantic-cache hits from provider-billed OTel usage
 - T655. Make compressor in-flight admission atomic
 - T656. Keep worktrees and caches when their age cannot be established
-- T657. Match compressor credentials to the internal provider
 - T651. Honor ProgressRunner timeouts with inherited output
 - T666.2. Provider-backed memory extractor (blocked on the creator)
 - T687. Hooks: PreToolUse/PostToolUse p50 to 10 ms
