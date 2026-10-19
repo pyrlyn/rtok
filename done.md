@@ -12,6 +12,18 @@ Check result: `token_totals_count_the_upstream_request_not_the_cache_hit_served_
 
 Status: done 2026-10-19
 
+### T276. Spinner audit: every place rtok runs an external command and the user waits for its output
+
+Every external program goes through `rtok_sys::proc::ProgressRunner`. A terminal gets a spinner or a bar from the moment the process starts; a pipe, `--json`, MCP and hooks get nothing. `graph index`, `worktree gc/clean`, `bench`, `doctor` and `agents install/update` use a `Batch` when the total is known. The installer question hides the live bar while it is on screen.
+
+The subtasks landed as T276.1 (`dec4ea2`, #990), T276.2 (`5d826555`, #996), T276.4 (`1f9ebe5`, #1016), T276.5 (done 2026-10-12), and T276.3/T276.6 (`7067aab3`, #1057). This card only records that the epic's check already holds on main.
+
+Check: on a TTY, each of items 1-5 shows its message from the moment the process starts until output appears; `rtok agents update claude` in a terminal shows step loaders and the plugin question is readable; `rtok doctor 2>/dev/null` and `--json` output are unchanged; a Vfs or snapshot test asserts no spinner bytes on non-TTY stderr; every operation with a known total shows a progress bar with its count and a spinner appears only on unmeasurable waits; `just check`.
+
+Check result: `doctor_probing_mcp_servers_writes_no_bar_to_a_pipe`, `install_and_update_draw_no_bar_on_a_pipe` and the `ui_style` pipe runs write no bar bytes. `apply_all_steps_the_bar_once_per_host` steps once per host. `the_lint_gate_bans_command_new_outside_rtok_sys` keeps the `Command::new` ban on libraries and binaries. A manual TTY pass was not re-run here; the messages and the non-TTY behaviour are what #1057 landed.
+
+Status: done 2026-10-19
+
 ### T651. Honor ProgressRunner timeouts with inherited output
 
 `Output::Inherit` used to wait with `Command::status`, which cannot take a deadline, so a 30 ms timeout on `sleep 0.25` returned success after 267 ms. Inherit now spawns and uses the same bounded wait as Capture and Stream: the child is killed at the deadline and the run returns `TimedOut`.
@@ -15451,3 +15463,12 @@ Execution plan: establish existing completion tests; extract the clap generator 
 Validation: 23 focused tests passed; all six generated scripts are byte-identical to the pre-extraction baseline. Formatting and production clippy passed. `just check` passed workspace clippy and 2779 tests before unrelated cli_trycmd logging snapshots failed (completion snapshots passed; 8 skipped, 1261 not run by fail-fast).
 
 Reused `clap_complete` and the existing rtok Clink generator. No replacement library or custom generator was introduced. Local path dependencies resolve in the standard apps/packages layout.
+
+### T907. Print the short archive id on a capped graph answer
+
+T672 shortened the command trailer and the read-cache follow-up is T906. A capped `graph` answer still printed the full 64-character id on `N more, expand <id>` and on a definition body past the line budget (`… N more lines, expand <id>`). `expand` already resolves an 8-character prefix. The measurement `ref_id` stays the full id.
+
+Check: `five_hundred_hits_are_capped_with_archive_id` — the printed id is 8 hex chars, the ledger `ref_id` is the full id, and `get_archive` of the resolved id returns the uncapped text. The same prefix is what `long_body_archives_the_uncut_span` and `a_long_answer_is_cut_with_an_id_that_pages_the_rest` look up.
+
+Status: done 2026-10-19
+Model: Cursor / grok 4.7
