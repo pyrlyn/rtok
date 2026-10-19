@@ -1470,13 +1470,21 @@ fn fold_repeat(row: &mut RepeatRow, parsed: &Parsed) {
 /// T176: walk tool uses in order. A result naming an archive id (`(expand <id>)`,
 /// `expand: rtok expand <id>`) makes it shown; a later `rtok expand <id>` Bash call or MCP
 /// `expand` of a shown id is a re-expand — the bytes the cut made the agent fetch again.
+/// `<id>` is the printed prefix ([`crate::names::MIN_PREFIX`] hex chars, T672) or any longer one.
 fn fold_expand_after(row: &mut ExpandAfterRow, parsed: &Parsed) {
     static NAMED: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
-        regex::Regex::new(r"(?:expand:? (?:rtok expand )?|\[rtok )([0-9a-f]{12,64})\b")
-            .expect("static regex")
+        regex::Regex::new(&format!(
+            r"(?:expand:? (?:rtok expand )?|\[rtok )([0-9a-f]{{{min},64}})\b",
+            min = crate::names::MIN_PREFIX
+        ))
+        .expect("static regex")
     });
     static CALLED: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
-        regex::Regex::new(r"rtok expand ([0-9a-f]{12,64})").expect("static regex")
+        regex::Regex::new(&format!(
+            r"rtok expand ([0-9a-f]{{{min},64}})",
+            min = crate::names::MIN_PREFIX
+        ))
+        .expect("static regex")
     });
     let results: BTreeMap<&str, &str> = parsed
         .tool_results
@@ -1498,9 +1506,10 @@ fn fold_expand_after(row: &mut ExpandAfterRow, parsed: &Parsed) {
         } else {
             None
         };
-        // T661: the trailer names a 12-char prefix; key every id by it so a full-id
-        // expand still matches a prefix-shown result and vice versa.
-        let key = |id: &str| id[..id.len().min(12)].to_string();
+        // Pointers print `names::MIN_PREFIX` hex chars (T672). Key every id by that
+        // prefix so a full-id expand still matches a short id in the result, and the
+        // other way around. A 12-char prefix from an older transcript still matches.
+        let key = |id: &str| id[..id.len().min(crate::names::MIN_PREFIX)].to_string();
         if let Some(seen) = asked.and_then(|id| shown.get_mut(&key(id))) {
             row.calls += 1;
             row.bytes += content.len() as u64;
@@ -2800,6 +2809,46 @@ mod tests {
                 "expand right after  calls 2  bytes 15  shown bytes {want}"
             )),
             "{table}"
+        );
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    /// T911: T672 prints 8 hex chars. The counter used to require 12, so a pointer
+    /// the agent actually sees was invisible, and a later full-id expand did not match it.
+    #[test]
+    fn expand_right_after_counts_the_eight_char_id_pointers_print() {
+        let dir = tempfile_dir();
+        let full = "ab".repeat(32);
+        let short = crate::names::short_id(&full);
+        assert_eq!(short.len(), crate::names::MIN_PREFIX);
+        let other = "cd".repeat(32);
+        let tiny = "abc1234";
+        assert!(tiny.len() < crate::names::MIN_PREFIX);
+        let shown = format!("[rtok {short} · 9 lines]");
+        let tiny_body = format!("… 1 lines omitted (expand {tiny})");
+        let lines = [
+            json!({"type":"assistant","message":{"id":"m1","content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"ls"}}]}}),
+            json!({"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":shown}]}}),
+            json!({"type":"assistant","message":{"id":"m2","content":[{"type":"tool_use","id":"t2","name":"Bash","input":{"command":format!("rtok expand {short}")}}]}}),
+            json!({"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t2","content":"restored"}]}}),
+            json!({"type":"assistant","message":{"id":"m3","content":[{"type":"tool_use","id":"t3","name":"mcp__rtok__expand","input":{"id":full}}]}}),
+            json!({"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t3","content":"more"}]}}),
+            json!({"type":"assistant","message":{"id":"m4","content":[{"type":"tool_use","id":"t4","name":"Bash","input":{"command":"cat f"}}]}}),
+            json!({"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t4","content":tiny_body}]}}),
+            json!({"type":"assistant","message":{"id":"m5","content":[{"type":"tool_use","id":"t5","name":"Bash","input":{"command":format!("rtok expand {tiny}")}}]}}),
+            json!({"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t5","content":"too-short"}]}}),
+            json!({"type":"assistant","message":{"id":"m6","content":[{"type":"tool_use","id":"t6","name":"mcp__rtok__expand","input":{"id":other}}]}}),
+            json!({"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t6","content":"other"}]}}),
+        ];
+        let r = write_and_collect(&dir, "e.jsonl", &lines);
+        let d = &r.expand_after;
+        assert_eq!(
+            (d.calls, d.bytes, d.shown_bytes),
+            (
+                2,
+                "restored".len() as u64 + "more".len() as u64,
+                shown.len() as u64
+            )
         );
         fs::remove_dir_all(&dir).ok();
     }
