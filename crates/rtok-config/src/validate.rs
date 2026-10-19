@@ -771,8 +771,8 @@ fn check_leaf(
             "tui.tick_secs" if n < 1 => {
                 errors.push(format!("{at}: {dotted} must be ≥ 1"));
             }
-            // `read` never trims the `… archived <id> …` marker (79 chars): the id is what keeps
-            // a cut lossless. A smaller cap passed validation and was then silently exceeded.
+            // The cut keeps `… archived <id> …`. The printed id is 8 hex chars (T908).
+            // The floor stays 100 so a configured cap cannot drop that marker.
             "plugins.read.max_chars" if n < 100 => {
                 errors.push(format!("{at}: {dotted} must be ≥ 100"));
             }

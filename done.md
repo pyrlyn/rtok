@@ -15419,3 +15419,12 @@ Execution plan: establish existing completion tests; extract the clap generator 
 Validation: 23 focused tests passed; all six generated scripts are byte-identical to the pre-extraction baseline. Formatting and production clippy passed. `just check` passed workspace clippy and 2779 tests before unrelated cli_trycmd logging snapshots failed (completion snapshots passed; 8 skipped, 1261 not run by fail-fast).
 
 Reused `clap_complete` and the existing rtok Clink generator. No replacement library or custom generator was introduced. Local path dependencies resolve in the standard apps/packages layout.
+
+### T908. Print the short archive id on a capped read
+
+T672 made `expand` resolve an 8-character prefix. A fresh read, `search`, or `tree` cut by `plugins.read.max_chars` still printed the full 64-character id inside `… archived <id> …`. The dedup and delta lines are T906; this is the cap marker. The measurement `ref_id` stays the full id. `plugins.read.max_chars` still has to be at least 100.
+
+Check: `a_capped_fresh_read_records_one_row` — the printed id is 8 hex chars, it is a prefix of the ledger `ref_id`, and `expand` of the prefix returns the uncapped text. `cap_includes_marker_in_max_chars` looks the same prefix up.
+
+Status: done 2026-10-19
+Model: Cursor / grok 4.7
