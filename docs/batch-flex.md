@@ -33,23 +33,24 @@ The proxy pipeline for a non-plain request (`src/proxy/mod.rs` `shape_request`):
 1. **record** — `calls` / `call_io` rows (fail-open)
 2. **compress** — only when `proxy.mode = "compress"`; runs `Plugin::proxy_filter`
 3. **tools_rewrite** — opt-in `[proxy.tools_rewrite]`
-4. **prepare** — wire-specific request shaping (today: OpenAI
-   `stream_options.include_usage`; Anthropic context-management beta when armed)
+4. **prepare** — wire-specific request shaping: OpenAI
+   `stream_options.include_usage`, the Anthropic context-management beta when armed,
+   and OpenAI `service_tier` on a lane with `flex`
 5. forward upstream; tee the response for usage parsing when a `Wire` matches
 
 Unknown paths still hit the axum **fallback** and are forwarded byte-identical
 to the provider upstream. `Wire::matches` is exact for sync chat shapes
 (`/v1/messages`, `/v1/chat/completions`, `/v1/responses`, Gemini
-`:generateContent`) — Batch paths do **not** match a wire today, so they skip
-compress / prepare / usage parsing and behave as a plain reverse hop with a
-`calls` row when bookkeeping is on.
+`:generateContent`). Batch paths do **not** match a wire, so they skip
+compress, prepare and the sync usage parser. They are still classified
+(`calls.kind = api_request:batch`) and forwarded unchanged.
 
-| Path class | Today | Intended |
-|------------|-------|----------|
-| Sync chat wires | record + optional compress/prepare + usage | unchanged |
-| Batch endpoints | fallback forward; no `Wire`; no usage row | **planned**: observe batch lifecycle + result usage |
-| Flex (`service_tier`) | client may set it | `prepare` sets it on opted-in lanes only and never overwrites a client value unless `[proxy.flex] force` |
-| Model routing | single upstream URL; model left as client sent | `internal` and opted-in `bulk` calls only, by an operator rule under `[proxy.routing]`; the `agent` lane is never routed |
+| Path class | Behaviour |
+|------------|-----------|
+| Sync chat wires | record + optional compress/prepare + usage |
+| Batch endpoints | fallback forward; no `Wire`; body unchanged; tagged `api_request:batch`. `[proxy.batch] parse_results` writes `usage` from a forwarded results file |
+| Flex (`service_tier`) | a client value is kept; `prepare` sets `flex` on opted-in lanes and overwrites it only when `[proxy.flex] force` |
+| Model routing | `[proxy.routing]` rewrites `model` on `internal` and opted-in `bulk` only; the `agent` lane is never routed |
 
 ## Batch API endpoints
 
@@ -86,8 +87,8 @@ Anthropic `Wire` adapter — no `proxy_filter`, no context-management injection.
 ### What Batch is **not**
 
 - Not a substitute for Flex on a live agent turn.
-- Not automatic: rtok will not enqueue sync traffic into Batch (**planned**
-  policy remains “never”, unless an explicit opt-in tool/CLI is designed later).
+- Not automatic: rtok never enqueues a live agent turn into Batch. `rtok batch`
+  is a separate client for the provider Batch APIs, not a converter.
 - Not visible to hooks/MCP.
 
 ### CLI (opt-in)
@@ -151,7 +152,7 @@ See also [prompt-cache.md](prompt-cache.md).
 |-----------|-------|------|-------|
 | Provider **prompt cache** (prefix-exact) | Provider-dependent; OpenAI documents Flex + cache stacking; Batch JSONL lines are separate requests | Same prefix rules as sync; sticky upstream still matters | rtok must not churn `system` / `tools` / live turns — already true for sync compress |
 | rtok **archive** live-zone rewrite | N/A on Batch create (no Messages `Wire`) | Same as sync when Flex rides Chat/Responses | Batch member bodies inside a file are not rewritten |
-| **Semantic** response cache (P31) | Must stay off for Batch create/poll (**planned** guard) | Same eligibility rules as sync | A hit is still a wrong answer for agents |
+| **Semantic** response cache (P31) | Off for Batch create/poll: the batch lane's policy leaves `semantic_cache` false and the lane passes through | Same eligibility rules as sync | A hit is still a wrong answer for agents |
 
 Sticky routing (pin the same upstream pod/region for a session) is about
 **prompt-cache hits**, not Batch vs Flex. Batch jobs are async and usually
@@ -164,7 +165,8 @@ bytes.
 **Today (sync wires):** each proxied request can write `calls`, `call_io`,
 `tokens`, and `usage` (four counters). `rtok stats` / `rtok stats --price`
 read those rows. Paths without a `Wire` (Batch, `/v1/models`, …) record the
-call when bookkeeping is on but skip usage parsing (`src/proxy/mod.rs`).
+call when bookkeeping is on but skip the sync usage parser (`src/proxy/mod.rs`).
+A Batch results file is the exception when `[proxy.batch] parse_results` is on, below.
 
 **Lanes (T385.1):** every request is classified into a lane (`src/proxy/lane.rs`) and its
 `calls.kind` records it: `api_request` for `agent`, `api_request:<lane>` for `bulk`,
@@ -173,47 +175,43 @@ embeddings and meta; `x-rtok-lane` or a `/lane/<name>/` prefix picks `bulk` or `
 a sync chat call. Both are stripped before forwarding. See `[proxy.lanes]` in
 [config.md](config.md).
 
-**Planned for Batch:**
+**Batch ledger:**
 
-- ~~tag `calls.kind` so Batch create/poll/results are distinguishable from sync
-  `api_request`~~ — done by the lane tag (T385.1)
-- ~~when results are fetched, parse per-line usage into `usage` rows~~ — `[proxy.batch]
-  parse_results` (T385.4); `rtok stats --price` costs that usage at the `<model>@batch` row of
-  `[stats.prices]` (T385.12.1)
-- ~~surface Batch vs sync vs Flex in `rtok report` / stats breakdowns~~ — the `lane/tier` table
-  of `rtok stats` and the Cache section of `rtok report` (T385.12.2)
+- `calls.kind` tags Batch create/poll/results as `api_request:batch`, distinct from sync
+  `api_request` (T385.1)
+- `[proxy.batch] parse_results` writes per-line `usage` from a forwarded results file (T385.4);
+  `rtok stats --price` costs that usage at the `<model>@batch` row of `[stats.prices]` (T385.12.1)
+- `rtok stats` prints a `lane/tier` table and `rtok report` lists the same rows in its Cache
+  section (T385.12.2)
 
-**Flex:**
+**Flex ledger:**
 
-- ~~record the effective `service_tier` on the `calls` row~~ — `calls.service_tier`, read from
-  the response, not the request (T385.12.2)
-- ~~price Flex tokens with the `<model>@flex` rows~~ — `stats --price` lists tier `flex` usage
-  under `<model>@flex` (OpenAI lists Flex at the Batch rates)
+- `calls.service_tier` is the tier the response names, not the request (T385.12.2)
+- `stats --price` lists tier `flex` usage under `<model>@flex` (OpenAI lists Flex at the Batch rates)
 
-Until those land, treat Batch/Flex savings as provider-console numbers, not
-rtok ledger numbers.
+A saving still needs a `Measurement` row. These ledger rows are the counts and the priced usage;
+they are not a claim that Flex or Batch saved tokens on a given session.
 
 ## Configuration
 
-Keys below are documented for the design; they are **not** loaded by the
-binary yet — the three tables exist but are empty, so any key fails `rtok config validate`. See [config.md](config.md).
+The keys below are loaded. Defaults, ranges and validation are in [config.md](config.md).
+`sticky` is not a key: prompt-cache affinity (I-84) is still planned.
 
 ```toml
-# Planned — not parsed today
 [proxy.batch]
-enabled = true          # forward Batch paths (always true via fallback today)
-observe = true          # record create/poll/results into the ledger
-parse_results = false   # when true, expand result files into usage rows
+parse_results = false   # usage rows from a forwarded results file; the body stays byte-identical
 
-[proxy.flex]            # live, unlike the rest of this sketch
+[proxy.lanes.bulk]
+flex = true             # which lanes may set service_tier; agent, batch and files have no flex switch
+
+[proxy.flex]
 force = false           # overwrite a client service_tier
-on_429 = "none"        # none | backoff | default
+on_429 = "none"         # none | backoff | default
 retries = 3             # backoff only
 backoff_ms = 1000       # backoff only
 
-[proxy.routing]         # live (rules per lane, see config.md), unlike `sticky` below
-enabled = false         # model routing (D9) of internal / bulk calls; off by default
-sticky = true           # planned: prefer one upstream for prompt-cache affinity (I-84)
+[proxy.routing]
+enabled = false         # model routing of internal / bulk calls; off by default
 ```
 
 

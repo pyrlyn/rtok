@@ -1,5 +1,17 @@
 # rtok — completed tasks
 
+### T259. Docs flip planned→today + acceptance
+
+Batch, Flex and model routing already shipped as T385.1, T385.4, T385.5, T385.10 and T385.12.1–T385.12.2. `docs/batch-flex.md` (and `docs/ru`, `docs/uk`), `architecture.md` §12 and `src/plugins/proxy/AGENTS.md` still described observe, result usage, Flex injection and the semantic-cache skip as planned, and the config sketch listed keys the binary does not load (`enabled`, `observe`, `sticky`).
+
+Do: describe the shipped behaviour. Batch paths stay off every `Wire`, keep their bytes, and are tagged `api_request:batch`; `[proxy.batch] parse_results` writes usage after the forward. Flex is `[proxy.lanes.<lane>] flex` plus `[proxy.flex]`. The batch lane leaves `semantic_cache` false. The loaded keys replace the sketch. `sticky` stays planned and is not a key. `docs/config.md` already documented the loaded keys, so it did not change. The roadmap acceptance boxes for the shipped behaviour are checked. The Mac CI box stays open until this change's macOS check is green. Epic T250 stays in `roadmap.md` (even id; its overview still says the tables are unloaded).
+
+Check: docs prose matches behaviour; `just check`; no sync→Batch.
+
+Result: the three language copies, the architecture table and the proxy agent notes match the code. No product code changed.
+
+Status: done 2026-10-19
+
 ### T653. Exclude semantic-cache hits from provider-billed OTel usage
 
 A semantic-cache hit kept a `usage` row, and `otel_token_totals` added it to the provider-billed counters even though no upstream request was made. Totals now skip a call that carries a `semantic_cache_hit` measurement. The hit's own usage row stays, so per-request analytics still see it. `docs/otel.md` (and `docs/ru`, `docs/uk`) say the provider totals omit those hits.
@@ -11,6 +23,7 @@ Check: a hit keeps its request usage but does not increase provider-billed total
 Check result: `token_totals_count_the_upstream_request_not_the_cache_hit_served_after_it` inserts two usage rows of input 100 / output 25 and counts only the live call. `proxy_cache_hit_records_usage_and_request_bytes` keeps both usage rows and asserts provider-billed totals are `(10, 2)`, the upstream request alone.
 
 Status: done 2026-10-19
+
 
 ### T654. Re-read graph files after an unreadable index attempt
 
