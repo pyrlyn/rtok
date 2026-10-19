@@ -11,14 +11,19 @@ Check: `tests/trycmd/config-init.toml` matches `crates/rtok-config/default.toml`
 Status: done 2026-10-19
 Model: Cursor / grok 4.7
 
+### T522. `read` and `expand` accept the line ranges agents sent this week
+
+Found 2026-10-10 in `~/.rtok/errors.log` and the `logs` table, 2026-10-03 through 2026-10-10: 25 `invalid line range` failures, each a different spelling. `parse_range` (`src/expand.rs`) already stripped one pair of surrounding quotes (T172) and read `a, b` as `a-b` (T353). It still rejected a space around `-` (`420 - 640`), a colon (`580:650`), brackets (`[1, 50]`), two numbers separated by a space (`610 614`), an HTML break (`95<br>`, `490<br>-800`), quotes in the middle (`235"-"270`) and an underscore (`1860_1960`).
+
+`normalize_range` folds those spellings into `a-b` before the existing checks. A trailing `<br>` with no second number is that one line. A value that is not one or two positive lines still fails with `invalid line range`, and the error keeps the caller's spelling.
+
+Check: unit tests in `src/expand.rs` for the 25 logged strings; `just check`.
+
+Check result: `parse_range_accepts_the_logged_spellings` covers the 25 strings (n = 5000). `parse_range_trailing_br_is_one_line_not_to_end` checks `52` still runs to the end while `52<br>`, `52<br/>` and `52<br><br>` are one line, and `52-70<br>` / `490<br>-800` stay ranges. `parse_range_still_rejects_non_lines` rejects `abc`, `1-two`, `1-2-3`, empty, `[]`, `<br>`, `,,,`, `a b` and `1"2`. Existing bare-start, quote, comma, zero and reverse cases stay green.
 ### T524. Worktree `--idle` accepts `30m` and `0s`
-
 `worktree gc --idle` / `--stale-lock` and `worktree clean --idle` parsed durations with `parse_since` (bare number means days, plus `d` and `h`). Agents copy `[agents] idle`'s humantime values (`30m`, `0s`, `1m`, `1s`), and the error named `--since` for a flag that is not `--since`.
-
 `parse_idle_from` in `rtok-store` is the one humantime parser for `[agents] idle` and those flags. `idle_secs` calls it. The worktree commands pass `--idle` or `--stale-lock` as the error source. `--since` stays on the days grammar, so `30m` is still rejected there. Flag help cites `30m` next to `24h` and `7d`.
-
 Check: unit tests `parse_idle_from_accepts_the_agents_idle_grammar` (`30m`, `0s`, `24h`, `7d`, `1m`, `1s`, `15m`, `10m`) and `parse_idle_from_names_the_passed_flag` (`5x` names `--idle`, `--stale-lock` and `[agents] idle`, never `--since`); `just check`.
-
 Check result: `cargo test -p rtok-store parse_idle_from` passed. `rtok worktree gc --idle 30m --dry-run` and `rtok worktree clean --idle 0s --dry-run` exited 0. `gc --idle 5x` reports `bad --idle "5x"`. `gc --stale-lock 5x` reports `bad --stale-lock "5x"`. `stats --since 5x` and `stats --since 30m` still report `bad --since unit`.
 
 ### T259. Docs flip planned→today + acceptance
@@ -15532,14 +15537,15 @@ Check: `five_hundred_hits_are_capped_with_archive_id` — the printed id is 8 he
 Status: done 2026-10-19
 Model: Cursor / grok 4.7
 
+### T908. Print the short archive id on a capped read
+
+T672 made `expand` resolve an 8-character prefix. A fresh read, `search`, or `tree` cut by `plugins.read.max_chars` still printed the full 64-character id inside `… archived <id> …`. The dedup and delta lines are T906; this is the cap marker. The measurement `ref_id` stays the full id. `plugins.read.max_chars` still has to be at least 100.
+
+Check: `a_capped_fresh_read_records_one_row` — the printed id is 8 hex chars, it is a prefix of the ledger `ref_id`, and `expand` of the prefix returns the uncapped text. `cap_includes_marker_in_max_chars` looks the same prefix up.
 ### T906. Print the short archive id on a read re-read
-
 T672 made `expand` resolve an 8-character prefix and switched the other pointers to `names::short_id`. The read cache still printed the full 64-character id (`unchanged id …`, and `previous` / `expand` on a delta). T674 left that until T672 landed. T531 had required the full id because expand was an exact primary-key lookup; that constraint is gone.
-
 The lines now print `short_id`. The measurement `ref_id` stays the full id. `expand` of the printed prefix returns the archived bytes.
-
 Check: `dedup_reference_expands_to_the_archived_bytes` — the printed id is 8 hex chars, CLI and MCP expand return the file, and the ledger `ref_id` is the 64-char id.
-
 Result: `dedup_line` and the delta pointer in `src/plugins/read/cache.rs` use `names::short_id`. The read plugin README matches.
 
 ### T905. Format `podman ps` with the `docker ps` table
