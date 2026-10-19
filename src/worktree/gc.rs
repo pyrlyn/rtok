@@ -23,7 +23,7 @@ pub const STALE_LOCK_DEFAULT: &str = "7d";
 
 /// [`STALE_LOCK_DEFAULT`] as a duration, for the callers with no `--stale-lock` flag (T527).
 pub fn stale_lock() -> Duration {
-    crate::measure::stats::parse_since(STALE_LOCK_DEFAULT).expect("7d is a stale-lock window")
+    crate::since::parse_since(STALE_LOCK_DEFAULT).expect("7d is a stale-lock window")
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
