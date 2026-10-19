@@ -34,6 +34,5 @@
 - T524. Worktree `--idle` accepts `30m` and `0s`
 - T525. SubagentStart and PreCompact under the 10 ms hook budget
 - T526. `worktree_list` and `search` when `rtok mcp` was started in the home directory
-- T653. Exclude semantic-cache hits from provider-billed OTel usage
 - T666.2. Provider-backed memory extractor (blocked on the creator)
 - T687. Hooks: PreToolUse/PostToolUse p50 to 10 ms
