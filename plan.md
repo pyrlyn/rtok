@@ -142,7 +142,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T414.7 | in progress | P3 | 1 | 0% | MiMo / mimo |
 | T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
 | T428 | in progress | P2 | 3 | 85% | Claude Code / sonnet-5.5 |
-| T652 | in progress | P1 | 2 | 60% | Claude Code / sonnet-5.5 |
 | T653 | in progress | P2 | 2 | 55% | Claude Code / sonnet-5.5 |
 | T654 | in progress | P2 | 2 | 65% | Claude Code / sonnet-5.5 |
 | T655 | in progress | P2 | 2 | 60% | Claude Code / sonnet-5.5 |
@@ -161,18 +160,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 
 
 
-
-### T652. Refuse to replace an unreadable MCP host config
-
-Evidence baseline: `eb7d980af235f0ccb3d8ff58471d24b8267af35d`. Where: [`Disk::read` and `Writer::read`](src/agents/mcp.rs#L385-L405), [`write_entry`](crates/rtok-mcp/src/config.rs#L122-L145), atomic writer in `crates/rtok-agent-sdk/src/lib.rs`. Impact/trigger: installing/updating rtok with backup disabled while a valid host JSON config is unreadable silently replaces the file and drops unrelated entries. Evidence level: actual `rtok-mcp::config::write_entry` plus actual SDK writer through synthetic disk Fs/Writer; fixture was JSON `{"mcp_servers":{"other":{"command":"keep"}}}`, mode 000, backup false. The call succeeded; after permissions were restored, `other` was gone and only rtok remained. T79 concerns JSONC rejection; T277 extracted the MCP writer.
-
-Execution plan:
-1. Make the disk-backed MCP reader distinguish a missing path from a read error and propagate the latter before any edit or write; preserve the missing-file creation path.
-2. Keep the existing `rtok_agent_sdk::write` atomic swap and backup behavior; a disabled backup must not permit replacing data that could not be read.
-3. Add a Unix regression using a scratch host file at mode `000`, with backup disabled, asserting install/update returns an error and the original bytes remain after permissions are restored. Add controls for a genuinely absent file and an ordinary readable foreign entry.
-4. Run the MCP/config tests, `just check`, and the applicable config/host documentation checks.
-
-Check: an unreadable existing config never gets replaced or reported as installed, including when `[setup].backup = false`; a missing config can still be created; readable unrelated entries survive; `just check` passes.
 
 ### T653. Exclude semantic-cache hits from provider-billed OTel usage
 
