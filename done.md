@@ -11,6 +11,17 @@ Check: an MCP test with cwd = a non-repo and a `roots/list` root; the no-root er
 Check result: `project_dir_prefers_cwd_then_extra_and_never_git_fatal` checks cwd, then a client root, then the refusal. `mcp_home_cwd_worktree_list_and_search_use_the_client_root` launches in `/` with a first root of `/` and a second root inside a repository: `worktree_list` names that checkout and its linked worktree, and a pathless `search` finds `needle.txt`. `mcp_home_cwd_without_a_root_says_pass_a_path_or_open_a_project` refuses both tools with `no project root` and `pass a path or open a project`, and the text does not contain `fatal:`.
 
 Status: done 2026-10-19
+
+### T522. `read` and `expand` accept the line ranges agents sent this week
+
+Found 2026-10-10 in `~/.rtok/errors.log` and the `logs` table, 2026-10-03 through 2026-10-10: 25 `invalid line range` failures, each a different spelling. `parse_range` (`src/expand.rs`) already stripped one pair of surrounding quotes (T172) and read `a, b` as `a-b` (T353). It still rejected a space around `-` (`420 - 640`), a colon (`580:650`), brackets (`[1, 50]`), two numbers separated by a space (`610 614`), an HTML break (`95<br>`, `490<br>-800`), quotes in the middle (`235"-"270`) and an underscore (`1860_1960`).
+
+`normalize_range` folds those spellings into `a-b` before the existing checks. A trailing `<br>` with no second number is that one line. A value that is not one or two positive lines still fails with `invalid line range`, and the error keeps the caller's spelling.
+
+Check: unit tests in `src/expand.rs` for the 25 logged strings; `just check`.
+
+Check result: `parse_range_accepts_the_logged_spellings` covers the 25 strings (n = 5000). `parse_range_trailing_br_is_one_line_not_to_end` checks `52` still runs to the end while `52<br>`, `52<br/>` and `52<br><br>` are one line, and `52-70<br>` / `490<br>-800` stay ranges. `parse_range_still_rejects_non_lines` rejects `abc`, `1-two`, `1-2-3`, empty, `[]`, `<br>`, `,,,`, `a b` and `1"2`. Existing bare-start, quote, comma, zero and reverse cases stay green.
+
 ### T524. Worktree `--idle` accepts `30m` and `0s`
 `worktree gc --idle` / `--stale-lock` and `worktree clean --idle` parsed durations with `parse_since` (bare number means days, plus `d` and `h`). Agents copy `[agents] idle`'s humantime values (`30m`, `0s`, `1m`, `1s`), and the error named `--since` for a flag that is not `--since`.
 `parse_idle_from` in `rtok-store` is the one humantime parser for `[agents] idle` and those flags. `idle_secs` calls it. The worktree commands pass `--idle` or `--stale-lock` as the error source. `--since` stays on the days grammar, so `30m` is still rejected there. Flag help cites `30m` next to `24h` and `7d`.
@@ -29,7 +40,6 @@ Result: the three language copies, the architecture table and the proxy agent no
 
 Status: done 2026-10-19
 
-
 ### T653. Exclude semantic-cache hits from provider-billed OTel usage
 
 A semantic-cache hit kept a `usage` row, and `otel_token_totals` added it to the provider-billed counters even though no upstream request was made. Totals now skip a call that carries a `semantic_cache_hit` measurement. The hit's own usage row stays, so per-request analytics still see it. `docs/otel.md` (and `docs/ru`, `docs/uk`) say the provider totals omit those hits.
@@ -42,7 +52,6 @@ Check result: `token_totals_count_the_upstream_request_not_the_cache_hit_served_
 
 Status: done 2026-10-19
 
-
 ### T654. Re-read graph files after an unreadable index attempt
 
 An index of a supported file that could not be read stored a stat the next run trusted, so restoring read permission without changing bytes, size, or mtime left the file empty. An unreadable file is now staged with stat `(0, 0)`, which the stat gate never treats as unchanged, so the next index reads it again.
@@ -54,7 +63,6 @@ Check: a file that becomes readable is re-parsed even when mtime and size are un
 Check result: `a_file_unreadable_at_index_time_is_read_once_access_returns` indexes `locked.rs` at mode `000`, restores `0644` without moving mtime or size, and the second index parses `hidden_until_readable`.
 
 Status: done 2026-10-19
-
 
 ### T656. Keep worktrees and caches when their age cannot be established
 
