@@ -281,18 +281,108 @@ fn strip_quotes(spec: &str) -> &str {
     spec
 }
 
+/// End index (exclusive) of an HTML break tag at `s[start..]`: `<br>`, `<br/>`, `<br />`.
+fn br_tag_end(s: &str, start: usize) -> Option<usize> {
+    let b = s.as_bytes();
+    let mut i = start + 1;
+    if i + 1 >= b.len()
+        || !b[i].eq_ignore_ascii_case(&b'b')
+        || !b[i + 1].eq_ignore_ascii_case(&b'r')
+    {
+        return None;
+    }
+    i += 2;
+    while i < b.len() && b[i].is_ascii_whitespace() {
+        i += 1;
+    }
+    if i < b.len() && b[i] == b'/' {
+        i += 1;
+        while i < b.len() && b[i].is_ascii_whitespace() {
+            i += 1;
+        }
+    }
+    if i < b.len() && b[i] == b'>' {
+        Some(i + 1)
+    } else {
+        None
+    }
+}
+
+fn strip_trailing_br(s: &str) -> Option<&str> {
+    let t = s.trim_end();
+    let start = t.rfind('<')?;
+    let end = br_tag_end(t, start)?;
+    (end == t.len()).then(|| &t[..start])
+}
+
+fn is_range_sep(c: char) -> bool {
+    matches!(c, '-' | ',' | ':' | '_') || c.is_whitespace()
+}
+
+/// Fold the range spellings agents actually send (T522) into the `a[-b]` form:
+/// surrounding `[…]`, spaces around `-`, `:`/`_`/`,` as the pair separator, a quoted
+/// separator (`235"-"270`), and HTML `<br>` breaks. `lone` marks a trailing `<br>`
+/// with no second number — that is one line (`52<br>`), not `52..end`.
+fn normalize_range(raw: &str) -> (String, bool) {
+    let mut s = raw;
+    if s.len() >= 2 && s.starts_with('[') && s.ends_with(']') {
+        s = s[1..s.len() - 1].trim();
+    }
+    let mut lone = false;
+    while let Some(rest) = strip_trailing_br(s) {
+        lone = true;
+        s = rest.trim_end();
+    }
+    let mut out = String::with_capacity(s.len());
+    let mut pending_sep = false;
+    let mut idx = 0;
+    while idx < s.len() {
+        if s.as_bytes()[idx] == b'<'
+            && let Some(end) = br_tag_end(s, idx)
+        {
+            idx = end;
+            pending_sep = true;
+            continue;
+        }
+        let c = s[idx..].chars().next().expect("idx < len");
+        let next = s[idx + c.len_utf8()..].chars().next();
+        // Interior quotes around a separator (`235"-"270`) are noise; a quote that
+        // opens or closes the value stays, so a half-quoted spec still fails.
+        if matches!(c, '"' | '\'') && idx > 0 && next.is_some() {
+            let prev_sep = pending_sep || out.chars().next_back().is_some_and(is_range_sep);
+            if prev_sep || next.is_some_and(is_range_sep) {
+                idx += c.len_utf8();
+                continue;
+            }
+        }
+        if is_range_sep(c) {
+            pending_sep = true;
+            idx += c.len_utf8();
+            continue;
+        }
+        if pending_sep {
+            out.push('-');
+            pending_sep = false;
+        }
+        out.push(c);
+        idx += c.len_utf8();
+    }
+    if pending_sep {
+        out.push('-');
+    }
+    (out, lone)
+}
+
 pub(crate) fn parse_range(spec: &str, n: usize) -> Result<(usize, usize)> {
     let spec = strip_quotes(spec.trim()).trim();
     if spec.is_empty() {
         bail!("invalid line range `{spec}`: expected a positive line or a-b");
     }
-    // `a,b` / `a, b` read as `a-b` (T353): models write the range the way they would a pair.
-    // The error text keeps the caller's spelling.
-    let norm = if spec.contains(',') {
-        spec.replacen(',', "-", 1).replace(' ', "")
-    } else {
-        spec.to_string()
-    };
+    // The error text keeps the caller's spelling (after the T172 quote strip).
+    let (norm, lone) = normalize_range(spec);
+    if !norm.bytes().any(|b| b.is_ascii_digit()) {
+        bail!("invalid line range `{spec}`: expected a positive line or a-b");
+    }
     let mut parts = norm.splitn(2, '-');
     let start = parts.next().unwrap_or_default();
     let end = parts.next();
@@ -319,6 +409,9 @@ pub(crate) fn parse_range(spec: &str, n: usize) -> Result<(usize, usize)> {
     // with exit 0; fail loudly instead so the caller knows the range is wrong.
     if a > n {
         bail!("invalid line range `{spec}`: start exceeds line count {n}");
+    }
+    if lone && requested_b.is_none() {
+        return Ok((a, a));
     }
     Ok((a, requested_b.unwrap_or(n).min(n)))
 }
@@ -713,6 +806,64 @@ mod tests {
             );
         }
         assert_eq!(parse_range("8-100", 10).unwrap(), (8, 10));
+    }
+
+    /// T522: the 25 `invalid line range` strings agents sent 2026-10-03..10
+    /// (`~/.rtok/errors.log`), each to the two line numbers in it.
+    #[test]
+    fn parse_range_accepts_the_logged_spellings() {
+        let cases = [
+            ("36<br/>-60", (36, 60)),
+            ("320 - 360", (320, 360)),
+            ("10:45", (10, 45)),
+            ("[1, 50]", (1, 50)),
+            ("[200, 260]", (200, 260)),
+            ("[242, 300]", (242, 300)),
+            ("[317, 390]", (317, 390)),
+            ("560 650", (560, 650)),
+            ("12 - 100", (12, 100)),
+            ("580:650", (580, 650)),
+            ("200 - 380", (200, 380)),
+            ("1860_1960", (1860, 1960)),
+            ("283 350", (283, 350)),
+            ("1 40", (1, 40)),
+            ("136\"-\"215", (136, 215)),
+            ("610 614", (610, 614)),
+            ("490<br>-800", (490, 800)),
+            ("12 - 70", (12, 70)),
+            ("215\"-\"460", (215, 460)),
+            ("235\"-\"270", (235, 270)),
+            ("52<br>", (52, 52)),
+            ("60<br>", (60, 60)),
+            ("410<br>", (410, 410)),
+            ("95<br>", (95, 95)),
+            ("420 - 640", (420, 640)),
+        ];
+        assert_eq!(cases.len(), 25);
+        for (spec, want) in cases {
+            assert_eq!(parse_range(spec, 5000).unwrap(), want, "{spec}");
+        }
+    }
+
+    #[test]
+    fn parse_range_trailing_br_is_one_line_not_to_end() {
+        assert_eq!(parse_range("52", 100).unwrap(), (52, 100));
+        assert_eq!(parse_range("52<br>", 100).unwrap(), (52, 52));
+        assert_eq!(parse_range("52<br/>", 100).unwrap(), (52, 52));
+        assert_eq!(parse_range("52<br><br>", 100).unwrap(), (52, 52));
+        // A second number is still a range; the trailing break is noise.
+        assert_eq!(parse_range("52-70<br>", 100).unwrap(), (52, 70));
+        assert_eq!(parse_range("490<br>-800", 1000).unwrap(), (490, 800));
+    }
+
+    #[test]
+    fn parse_range_still_rejects_non_lines() {
+        for spec in [
+            "abc", "1-two", "1-2-3", "", "[]", "<br>", ",,,", "a b", "1\"2",
+        ] {
+            let err = parse_range(spec, 20).unwrap_err().to_string();
+            assert!(err.contains("invalid line range"), "{spec}: {err}");
+        }
     }
 
     #[rstest]
