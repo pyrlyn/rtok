@@ -10,6 +10,16 @@ Check: unit tests `parse_idle_from_accepts_the_agents_idle_grammar` (`30m`, `0s`
 
 Check result: `cargo test -p rtok-store parse_idle_from` passed. `rtok worktree gc --idle 30m --dry-run` and `rtok worktree clean --idle 0s --dry-run` exited 0. `gc --idle 5x` reports `bad --idle "5x"`. `gc --stale-lock 5x` reports `bad --stale-lock "5x"`. `stats --since 5x` and `stats --since 30m` still report `bad --since unit`.
 
+### T259. Docs flip planned→today + acceptance
+
+Batch, Flex and model routing already shipped as T385.1, T385.4, T385.5, T385.10 and T385.12.1–T385.12.2. `docs/batch-flex.md` (and `docs/ru`, `docs/uk`), `architecture.md` §12 and `src/plugins/proxy/AGENTS.md` still described observe, result usage, Flex injection and the semantic-cache skip as planned, and the config sketch listed keys the binary does not load (`enabled`, `observe`, `sticky`).
+
+Do: describe the shipped behaviour. Batch paths stay off every `Wire`, keep their bytes, and are tagged `api_request:batch`; `[proxy.batch] parse_results` writes usage after the forward. Flex is `[proxy.lanes.<lane>] flex` plus `[proxy.flex]`. The batch lane leaves `semantic_cache` false. The loaded keys replace the sketch. `sticky` stays planned and is not a key. `docs/config.md` already documented the loaded keys, so it did not change. The roadmap acceptance boxes for the shipped behaviour are checked. The Mac CI box stays open until this change's macOS check is green. Epic T250 stays in `roadmap.md` (even id; its overview still says the tables are unloaded).
+
+Check: docs prose matches behaviour; `just check`; no sync→Batch.
+
+Result: the three language copies, the architecture table and the proxy agent notes match the code. No product code changed.
+
 Status: done 2026-10-19
 
 ### T653. Exclude semantic-cache hits from provider-billed OTel usage
@@ -8892,7 +8902,7 @@ Check: a coverage table vs sqz in `docs/comparison/rtok-vs-sqz.md`; at least the
 
 Plan: read `docs/comparison/rtok-vs-sqz.md`; build the coverage table sqz-formatter → rtok rule; add rules (in `rules/default.toml` through the existing rule engine, no new engine) for the top missing families, each with a fixture and a no-worse-than-raw test. `rtok discover` (T661) is not on main: pick families by the sqz list and say so in the card.
 
-Outcome: `parse_diag` reads `path:line[:col]: CODE msg` (ruff), `path:line: error: msg  [code]` (mypy), `path:line:col: C: Cop/Name: msg` (rubocop) and `path:line:col: msg (linter)` (golangci-lint), so new `[ruff]`, `[mypy]`, `[rubocop]` and `[golangci-lint]` rules fold them with `group = "diag"`: 96 %, 77 %, 88 % and 91 % on the goldens against 72 %, 55 %, 82 % and 53 % for `Rule::default()`. yarn, bun, rspec, terraform and xcodebuild already win on the default rule, so they got goldens only. The sqz coverage table is in `docs/research/competitors-techniques.md`; podman (the `docker ps` formatter matches only `docker`) is left open. `rtok discover` (T661) and the #1076 harness are not on main, so families came from sqz's list and savings from the repo goldens.
+Outcome: `parse_diag` reads `path:line[:col]: CODE msg` (ruff), `path:line: error: msg  [code]` (mypy), `path:line:col: C: Cop/Name: msg` (rubocop) and `path:line:col: msg (linter)` (golangci-lint), so new `[ruff]`, `[mypy]`, `[rubocop]` and `[golangci-lint]` rules fold them with `group = "diag"`: 96 %, 77 %, 88 % and 91 % on the goldens against 72 %, 55 %, 82 % and 53 % for `Rule::default()`. yarn, bun, rspec, terraform and xcodebuild already win on the default rule, so they got goldens only. The sqz coverage table is in `docs/research/competitors-techniques.md`; podman (the `docker ps` formatter matches only `docker`) was left open here and closed by T905. `rtok discover` (T661) and the #1076 harness are not on main, so families came from sqz's list and savings from the repo goldens.
 
 ### T685. find 33
 
@@ -15507,6 +15517,19 @@ Reused `clap_complete` and the existing rtok Clink generator. No replacement lib
 T672 shortened the command trailer and the read-cache follow-up is T906. A capped `graph` answer still printed the full 64-character id on `N more, expand <id>` and on a definition body past the line budget (`… N more lines, expand <id>`). `expand` already resolves an 8-character prefix. The measurement `ref_id` stays the full id.
 
 Check: `five_hundred_hits_are_capped_with_archive_id` — the printed id is 8 hex chars, the ledger `ref_id` is the full id, and `get_archive` of the resolved id returns the uncapped text. The same prefix is what `long_body_archives_the_uncut_span` and `a_long_answer_is_cut_with_an_id_that_pages_the_rest` look up.
+
+Status: done 2026-10-19
+Model: Cursor / grok 4.7
+
+### T905. Format `podman ps` with the `docker ps` table
+
+`docs/research/competitors-techniques.md` (sqz coverage) left `podman` open: the `docker ps` formatter matched only `docker`, so `podman ps` fell through to the default head/tail rule. Idea I-133.
+
+`podman ps` takes the same arm as `docker ps`. Unrecognized output still returns `None` and stays on the rule path. The golden is the `docker ps` fixture with the argv changed, so the saving is that measurement (59 %), not a new corpus.
+
+Check: `podman_ps` golden matches `docker_ps` and clears `min_saving: 59`; a non-table `podman ps` body is not `kind = formatter`.
+
+Result: `format` matches `("docker" | "podman", "ps")`. `tests/cmd_golden/podman_ps.in` is the docker fixture. Docs name both families on the T58.5 row (`docs/cmd-rules.md` and `docs/ru`, `docs/uk`).
 
 Status: done 2026-10-19
 Model: Cursor / grok 4.7
