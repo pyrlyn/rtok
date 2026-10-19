@@ -143,12 +143,9 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
 | T428 | in progress | P2 | 3 | 85% | Claude Code / sonnet-5.5 |
 | T651 | in progress | P2 | 2 | 35% | Claude Code / sonnet-5.5 |
-| T652 | in progress | P1 | 2 | 60% | Claude Code / sonnet-5.5 |
 | T653 | in progress | P2 | 2 | 55% | Claude Code / sonnet-5.5 |
 | T654 | in progress | P2 | 2 | 65% | Claude Code / sonnet-5.5 |
-| T655 | in progress | P2 | 2 | 60% | Claude Code / sonnet-5.5 |
 | T656 | in progress | P2 | 2 | 60% | Claude Code / sonnet-5.5 |
-| T657 | in progress | P1 | 2 | 55% | Claude Code / sonnet-5.5 |
 | T436.4 | todo | P3 | 2 | 90% | |
 | T522 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T523 | in progress | P2 | 2 | 0% | MiMo / mimo |
@@ -175,18 +172,6 @@ Execution plan:
 
 Check: the inherited slow-child regression fails before the fix and passes after it; inherited streams remain inherited; Capture and Stream timeout behavior stays intact; `just check` passes. Probe command: temporary Cargo harness at `/tmp/rtok-t650-harness`, path dependency on this checkout's `crates/rtok-sys`, `ProgressRunner::new("probe", "sh", ["-c", "exec sleep 0.25"]).progress(Progress::Off).output(Output::Inherit).timeout(Duration::from_millis(30)).run()`.
 
-### T652. Refuse to replace an unreadable MCP host config
-
-Evidence baseline: `eb7d980af235f0ccb3d8ff58471d24b8267af35d`. Where: [`Disk::read` and `Writer::read`](src/agents/mcp.rs#L385-L405), [`write_entry`](crates/rtok-mcp/src/config.rs#L122-L145), atomic writer in `crates/rtok-agent-sdk/src/lib.rs`. Impact/trigger: installing/updating rtok with backup disabled while a valid host JSON config is unreadable silently replaces the file and drops unrelated entries. Evidence level: actual `rtok-mcp::config::write_entry` plus actual SDK writer through synthetic disk Fs/Writer; fixture was JSON `{"mcp_servers":{"other":{"command":"keep"}}}`, mode 000, backup false. The call succeeded; after permissions were restored, `other` was gone and only rtok remained. T79 concerns JSONC rejection; T277 extracted the MCP writer.
-
-Execution plan:
-1. Make the disk-backed MCP reader distinguish a missing path from a read error and propagate the latter before any edit or write; preserve the missing-file creation path.
-2. Keep the existing `rtok_agent_sdk::write` atomic swap and backup behavior; a disabled backup must not permit replacing data that could not be read.
-3. Add a Unix regression using a scratch host file at mode `000`, with backup disabled, asserting install/update returns an error and the original bytes remain after permissions are restored. Add controls for a genuinely absent file and an ordinary readable foreign entry.
-4. Run the MCP/config tests, `just check`, and the applicable config/host documentation checks.
-
-Check: an unreadable existing config never gets replaced or reported as installed, including when `[setup].backup = false`; a missing config can still be created; readable unrelated entries survive; `just check` passes.
-
 ### T653. Exclude semantic-cache hits from provider-billed OTel usage
 
 Evidence baseline: `eb7d980af235f0ccb3d8ff58471d24b8267af35d`. Where: [`cache_response`](src/proxy/mod.rs#L1205) and its `Recorded::usage` call (L1237–1243); metric label [`metrics.rs`](src/otel/metrics.rs#L81-L84); aggregate [`otel_token_totals`](crates/rtok-store/src/otel.rs#L128-L162). Impact/trigger: whenever semantic cache serves a response with parseable usage, OTel labels that request's counters as provider-billed even though no provider request occurred. Evidence level: actual Store in-memory harness inserted two ordinary usage rows matching the source-traced live and cache paths and aggregated input 200/output 50 from two input-100 rows; no proxy HTTP run. T326 fixes cached slices within provider counters, not duplicate accounting of a cached response.
@@ -207,17 +192,6 @@ Evidence baseline: `eb7d980af235f0ccb3d8ff58471d24b8267af35d`. Where: [`index.rs
 
 Check: a file that becomes readable is re-parsed even when mtime and size are unchanged.
 
-### T655. Make compressor in-flight admission atomic
-
-Evidence baseline: `eb7d980af235f0ccb3d8ff58471d24b8267af35d`. Where: [`queue.rs`](src/plugins/compress/queue.rs#L58-L79), cap check separated from increment. Impact/trigger: concurrent `submit` calls can exceed `max_in_flight`, spawning more compressor jobs than configured. Evidence level: deterministic extracted schedule synchronized after the load and before increment; cap 1 accepted two (`/tmp/rtok-t650-queue-probe.rs`). T385.9 documents a cap but not concurrent admission.
-
-1. Reserve capacity atomically before inserting a new ID into `seen`; if capacity is full, leave the ID retryable. If it is a duplicate or the seen lock fails, release the reservation.
-2. Release the slot on every spawn/task completion path.
-3. Add a barrier-controlled distinct-ID concurrency regression for cap 1, plus duplicate, saturation/retry and completion/release controls.
-4. Run compressor queue and live-compression tests plus `just check`.
-
-Check: no concurrent schedule admits more than `max_in_flight`, and every completion/error path releases its reservation.
-
 ### T656. Keep worktrees and caches when their age cannot be established
 
 Evidence baseline: `eb7d980af235f0ccb3d8ff58471d24b8267af35d`. Where: [`gc::decide`](src/worktree/gc.rs#L87-L120), [`clean::kept_because`](src/worktree/clean.rs#L31-L37), and [`list::walk`](src/worktree/list.rs#L86-L129). Impact/trigger: a merged unlocked non-current worktree with no age evidence is eligible for gc; a tagged cache with no mtime is eligible for clean. Walk errors can also hide newer files, so even `Some(old)` can be incomplete. T342's deadline-capped walk is conservative, but does not cover errors. Evidence level: source-only decision-path review; no filesystem deletion or executed decision probe.
@@ -227,16 +201,6 @@ Evidence baseline: `eb7d980af235f0ccb3d8ff58471d24b8267af35d`. Where: [`gc::deci
 3. Run focused worktree gc/clean tests and `just check`.
 
 Check: missing age never authorizes removal; established fresh/old ages retain their policy. Do not validate by deleting real worktrees or caches.
-
-### T657. Match compressor credentials to the internal provider
-
-Evidence baseline: `eb7d980af235f0ccb3d8ff58471d24b8267af35d`. Where: [`Auth::from_headers`](src/plugins/compress/llm.rs#L58-L76) accepts arbitrary Authorization credentials; [`shape_request`](src/proxy/mod.rs#L691-L697) supplies those credentials for all wires; [`Compressor::new`](src/plugins/compress/llm.rs#L111-L127) defaults an empty URL to the local proxy and appends `/v1/messages`; [`try_run`](src/plugins/compress/llm.rs#L161-L185) applies text-size, code and span guards; [`ask`](src/plugins/compress/llm.rs#L204-L238) sends an Anthropic-shaped body and forwards the credential; [`upstream_for`](src/proxy/mod.rs#L221-L239) routes by the request wire or an explicit lane upstream. Impact/trigger: with `plugins.compress.llm.enabled=true` (off by default), proxy mode `compress`, and an offered eligible non-code archived text block, an OpenAI bearer credential can cross the credential-destination boundary and be sent with an Anthropic Messages body to the default Anthropic upstream. The mismatched request can fail authentication/protocol and the summary is skipped. An explicit internal-lane upstream can change the destination, but no provider-format conversion occurs. Evidence level: source-derived call-path review; no HTTP call or credential was used.
-
-1. Bind compressor credentials and request format to the configured internal provider, or use dedicated compressor credentials; never forward a credential from an incompatible agent wire.
-2. Add a fake-upstream test for OpenAI and Anthropic caller credentials that checks destination, headers and body format without contacting a provider.
-3. Run focused compressor/proxy tests and `just check`.
-
-Check: an OpenAI bearer is never presented as an Anthropic credential by default; valid configured internal provider requests continue to work.
 
 ### T666.2. Provider-backed memory extractor (blocked on the creator)
 

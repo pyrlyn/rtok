@@ -12,6 +12,42 @@ Result: the three language copies, the architecture table and the proxy agent no
 
 Status: done 2026-10-19
 
+### T655. Make compressor in-flight admission atomic
+
+`Queue::submit` used to check `in_flight` and then increment, so two concurrent admits could both pass a cap of 1. Admission is now one compare-and-swap that reserves the slot before the id is marked seen. A full queue leaves the id unmarked, so a later request can retry it. A duplicate and a poisoned `seen` lock drop the reservation. `Slot`'s drop releases the slot when the job ends or panics.
+
+Landed in `628825f7` (#1056). This card records that the check already holds on main.
+
+Check: no concurrent schedule admits more than `max_in_flight`, and every completion/error path releases its reservation.
+
+Check result: `concurrent_distinct_ids_never_exceed_the_cap` runs 32 threads over 20 rounds at cap 1 and admits at most one, then sees `in_flight == 0`. `an_id_refused_at_the_cap_is_retried_once_a_slot_frees` retries an id that was not marked seen. `a_duplicate_hands_its_reservation_back` keeps a single slot for the running job.
+
+Status: done 2026-10-19
+
+### T657. Match compressor credentials to the internal provider
+
+The compressor speaks Anthropic Messages. It used to forward whatever `Authorization` the agent request carried, so an OpenAI bearer could be sent with that body. `Auth::from_headers` now returns a credential only when the request's wire provider is `anthropic`. An OpenAI or Gemini turn offers nothing, and the summary is skipped rather than authenticated as the wrong provider.
+
+Landed in `9b33846e` (#1052). This card records that the check already holds on main.
+
+Check: an OpenAI bearer is never presented as an Anthropic credential by default; valid configured internal provider requests continue to work.
+
+Check result: `an_openai_credential_is_never_sent_to_the_anthropic_compressor` sends three OpenAI turns with `Bearer sk-openai-test` and the fake compressor sees zero calls. `an_anthropic_bearer_credential_still_reaches_the_compressor` still delivers `Bearer oauth-test` to `/v1/messages` and stores the summary.
+
+Status: done 2026-10-19
+
+### T652. Refuse to replace an unreadable MCP host config
+
+Installing or updating rtok with backup disabled used to treat an unreadable host config as missing and replace it, dropping every other MCP server. The disk reader now returns the read error before any edit. A missing file can still be created, and a readable foreign entry is kept.
+
+Landed in `3c5c790d` (#1048). This card only records that the check already holds on main.
+
+Check: an unreadable existing config never gets replaced or reported as installed, including when `[setup].backup = false`; a missing config can still be created; readable unrelated entries survive; `just check` passes.
+
+Check result: `unreadable_host_config_is_never_replaced` (mode `000`, not root) returns an error and the original bytes are unchanged after permissions are restored. `absent_host_config_is_created_and_readable_foreign_entries_survive` creates a missing file and keeps the `other` server next to `rtok`.
+
+Status: done 2026-10-19
+
 ### T616. Audit remaining module coverage
 
 Inventory and audit remaining Rust and production non-Rust modules across `src/`, `crates/`, `web/`, `plugins/`, and project scripts, using prior T530-and-newer audit records to avoid treating a filename mention as full coverage. Work from grouped subsystem inventories, inspect uncovered call paths and invariants, and report only confirmed findings with evidence and explicit limits.
