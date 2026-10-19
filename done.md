@@ -1,5 +1,14 @@
 # rtok — completed tasks
 
+### T910. Print the short archive id on the remaining expand pointers
+
+T672 shortened the command trailer. The hook budget marker, the skill deny, the guard duplicate line, the handoff brief and the MCP wrap trailer still printed the full 64-character id. `expand` already resolves an 8-character prefix. The measurement `ref_id` stays the full id. The hook marker is priced with an 8-character placeholder, the same length as the id it will print.
+
+Check: `cap_budget_gives_back_lines_so_the_marker_fits` — the printed id is 8 hex chars and `expand` of that prefix rebuilds the dropped lines. `oversized_body_is_denied_with_map_and_pointer_under_budget` resolves the printed prefix to the archived skill body. `shorten_result_records_archive_mcp_above_threshold` prints 8 chars and keeps the full id in `ref_id`.
+
+Status: done 2026-10-19
+Model: Cursor / grok 4.7
+
 ### T524. Worktree `--idle` accepts `30m` and `0s`
 
 `worktree gc --idle` / `--stale-lock` and `worktree clean --idle` parsed durations with `parse_since` (bare number means days, plus `d` and `h`). Agents copy `[agents] idle`'s humantime values (`30m`, `0s`, `1m`, `1s`), and the error named `--since` for a flag that is not `--since`.
