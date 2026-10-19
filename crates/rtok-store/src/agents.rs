@@ -9,6 +9,8 @@
 //! (`HookInput::agent_id`, `research.md` §17.2); `parent_id` is the resolved rtok id of a
 //! sub-agent's parent row.
 
+use std::time::Duration;
+
 use crate::Result;
 use diesel::prelude::*;
 use serde::Serialize;
@@ -166,10 +168,16 @@ macro_rules! agent_details {
     };
 }
 
+/// humantime window (`30m`, `0s`, `24h`, `7d`) shared by `[agents] idle` and the worktree
+/// `--idle` / `--stale-lock` flags: one grammar, not the `--since` days grammar. `source`
+/// names the flag or key in the error, so a bad `--idle` is never blamed on `--since`.
+pub fn parse_idle_from(idle: &str, source: &str) -> anyhow::Result<Duration> {
+    humantime::parse_duration(idle).map_err(|e| anyhow::anyhow!("bad {source} {idle:?}: {e}"))
+}
+
 /// `[agents] idle` (e.g. `"30m"`) in whole seconds, the one parser of that key.
 pub fn idle_secs(idle: &str) -> Result<i64> {
-    humantime::parse_duration(idle)
-        .map_err(|e| anyhow::anyhow!("bad [agents] idle {idle:?}: {e}"))?
+    parse_idle_from(idle, "[agents] idle")?
         .as_secs()
         .try_into()
         .map_err(|_| anyhow::anyhow!("[agents] idle {idle:?} is out of range"))
@@ -609,6 +617,51 @@ mod tests {
         // A later hook under a restarted host replaces the chain.
         store.set_agent_ancestors(&id, &[400, 200]).unwrap();
         assert_eq!(store.agent_row(&id).unwrap().unwrap().ancestors, [400, 200]);
+    }
+
+    /// `--idle` / `--stale-lock` share `[agents] idle`'s humantime grammar (`30m`, `0s`,
+    /// `24h`, `7d`) rather than `--since`'s bare-days one.
+    #[test]
+    fn parse_idle_from_accepts_the_agents_idle_grammar() {
+        assert_eq!(
+            parse_idle_from("30m", "--idle").unwrap(),
+            Duration::from_secs(30 * 60)
+        );
+        assert_eq!(parse_idle_from("0s", "--idle").unwrap(), Duration::ZERO);
+        assert_eq!(
+            parse_idle_from("24h", "--idle").unwrap(),
+            Duration::from_secs(24 * 3600)
+        );
+        assert_eq!(
+            parse_idle_from("7d", "--stale-lock").unwrap(),
+            Duration::from_secs(7 * 86400)
+        );
+        assert_eq!(
+            parse_idle_from("1m", "--idle").unwrap(),
+            Duration::from_secs(60)
+        );
+        assert_eq!(
+            parse_idle_from("1s", "--stale-lock").unwrap(),
+            Duration::from_secs(1)
+        );
+        assert_eq!(
+            parse_idle_from("15m", "--idle").unwrap(),
+            Duration::from_secs(15 * 60)
+        );
+        assert_eq!(
+            parse_idle_from("10m", "--idle").unwrap(),
+            Duration::from_secs(10 * 60)
+        );
+    }
+
+    /// A bad unit names the flag that was passed, never `--since`.
+    #[test]
+    fn parse_idle_from_names_the_passed_flag() {
+        for flag in ["--idle", "--stale-lock", "[agents] idle"] {
+            let err = parse_idle_from("5x", flag).unwrap_err().to_string();
+            assert!(err.contains(flag), "{err}");
+            assert!(!err.contains("--since"), "{err}");
+        }
     }
 
     #[test]

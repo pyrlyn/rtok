@@ -40,10 +40,13 @@ pub fn hit(cx: &Ctx, key: &str, path: &str, body: &[u8], force_delta: bool) -> O
         return None;
     }
     let new_id = remember(cx, key, body).ok()?;
-    let mut msg = format!("{diff}previous {id}\nexpand {new_id}");
+    // Pointers print the 8-char prefix (T672). `expand` resolves it; the ledger keeps the full id.
+    let prev_shown = crate::names::short_id(&id);
+    let new_shown = crate::names::short_id(&new_id);
+    let mut msg = format!("{diff}previous {prev_shown}\nexpand {new_shown}");
     let max = cfg.max_chars as usize;
     if msg.chars().count() > max {
-        msg = crate::expand::cut(&msg, &format!("\n… archived {new_id} …\n"), max);
+        msg = crate::expand::cut(&msg, &format!("\n… archived {new_shown} …\n"), max);
     }
     let _ = cx.record(&Measurement {
         plugin: "read",
@@ -58,10 +61,10 @@ pub fn hit(cx: &Ctx, key: &str, path: &str, body: &[u8], force_delta: bool) -> O
     Some(msg)
 }
 
-/// The whole 64-character id, because `expand` looks an id up exactly. "unchanged id " + id is
-/// 77 bytes; the line count did not fit beside it and the agent has it from the first read.
+/// The 8-character prefix every other pointer prints (T672, T906). `expand` resolves it.
+/// The measurement `ref_id` stays the full id.
 fn dedup_line(cx: &Ctx, id: &str, body: &[u8]) -> String {
-    let msg = format!("{DEDUP_PREFIX}{id}");
+    let msg = format!("{DEDUP_PREFIX}{}", crate::names::short_id(id));
     let _ = cx.record(&Measurement {
         plugin: "read",
         kind: "dedup",
@@ -293,14 +296,16 @@ mod tests {
         let second =
             read_with(&Ctx::new(&cx), &vfs, Path::new("ws"), "a.txt", "full", None).unwrap();
         assert!(second.contains("+chg3"), "{second}");
-        let id = second
+        let shown = second
             .rsplit("expand ")
             .next()
             .unwrap()
             .split_whitespace()
             .next()
             .unwrap();
-        let archived = cx.store.get_archive(id, None).unwrap().unwrap();
+        assert_eq!(shown.len(), crate::names::MIN_PREFIX, "{second}");
+        let id = crate::expand::resolve_id(&cx, shown).unwrap();
+        let archived = cx.store.get_archive(&id, None).unwrap().unwrap();
         assert_eq!(archived, new.as_bytes());
         let third =
             read_with(&Ctx::new(&cx), &vfs, Path::new("ws"), "a.txt", "full", None).unwrap();
@@ -314,8 +319,8 @@ mod tests {
         let _ = fs::remove_dir_all(dir);
     }
 
-    /// T531: the id the dedup line prints is the one `expand` looks up — the lookup is an exact
-    /// primary-key match, so an eight-character prefix pointed at no row.
+    /// T906: the dedup line prints the 8-char prefix (T672), and `expand` still returns the bytes.
+    /// The ledger row keeps the full id.
     #[test]
     fn dedup_reference_expands_to_the_archived_bytes() {
         let (cx, dir) = cx("dedup-ref");
@@ -327,12 +332,19 @@ mod tests {
         let second = read(&Ctx::new(&cx), path, "full", None).unwrap();
         assert!(second.len() < 80, "{second}");
         let id = second.split_whitespace().last().unwrap();
-        assert_eq!(id.len(), 64, "{second}");
+        assert_eq!(id.len(), crate::names::MIN_PREFIX, "{second}");
         let cli = crate::expand::run(&cx.config, id, None, None, 0).unwrap();
         assert_eq!(cli, text.as_bytes());
         let mcp = crate::expand::fetch(&cx, id).unwrap();
         assert_eq!(mcp.as_deref(), Some(text.as_bytes()));
         assert_eq!(cx.store.measurement_count("read").unwrap(), 1);
+        let stored = cx
+            .store
+            .last_measurement_ref(&cx.session, "read", "dedup")
+            .unwrap()
+            .unwrap();
+        assert_eq!(stored.len(), 64, "{stored}");
+        assert!(stored.starts_with(id), "{stored} {id}");
         let _ = fs::remove_dir_all(dir);
     }
 

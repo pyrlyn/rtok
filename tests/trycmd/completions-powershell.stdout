@@ -246,8 +246,8 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
         }
         'rtok;worktree;gc' {
             [CompletionResult]::new('--owner', '--owner', [CompletionResultType]::ParameterName, 'Open locks whose reason starts with this owner; any other lock holds until `--stale-lock`')
-            [CompletionResult]::new('--idle', '--idle', [CompletionResultType]::ParameterName, 'Keep worktrees modified within this window (`24h`, `7d`)')
-            [CompletionResult]::new('--stale-lock', '--stale-lock', [CompletionResultType]::ParameterName, 'Treat someone else''s lock as abandoned once its merged, clean worktree is untouched this long')
+            [CompletionResult]::new('--idle', '--idle', [CompletionResultType]::ParameterName, 'Keep worktrees modified within this window (`30m`, `24h`, `7d`)')
+            [CompletionResult]::new('--stale-lock', '--stale-lock', [CompletionResultType]::ParameterName, 'Treat someone else''s lock as abandoned once its merged, clean worktree is untouched this long (`30m`, `7d`)')
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
             [CompletionResult]::new('--yes', '--yes', [CompletionResultType]::ParameterName, 'Apply; without it this is a dry run that changes nothing')
             [CompletionResult]::new('--dry-run', '--dry-run', [CompletionResultType]::ParameterName, 'Say the dry run out loud: print what would go and change nothing (the default)')
@@ -258,7 +258,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             break
         }
         'rtok;worktree;clean' {
-            [CompletionResult]::new('--idle', '--idle', [CompletionResultType]::ParameterName, 'Keep caches modified within this window (`24h`, `7d`)')
+            [CompletionResult]::new('--idle', '--idle', [CompletionResultType]::ParameterName, 'Keep caches modified within this window (`30m`, `24h`, `7d`)')
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
             [CompletionResult]::new('--yes', '--yes', [CompletionResultType]::ParameterName, 'Apply; without it this is a dry run that changes nothing')
             [CompletionResult]::new('--dry-run', '--dry-run', [CompletionResultType]::ParameterName, 'Say the dry run out loud: print what would go and change nothing (the default)')

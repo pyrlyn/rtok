@@ -142,7 +142,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T436.4 | todo | P3 | 2 | 90% | |
 | T522 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T523 | in progress | P2 | 2 | 0% | MiMo / mimo |
-| T524 | in progress | P2 | 1 | 0% | MiMo / mimo |
 | T525 | in progress | P2 | 3 | 0% | MiMo / mimo |
 | T526 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T666.2 | todo | P2 | 3 | 0% | |
@@ -483,14 +482,6 @@ Found 2026-10-10: 27 `task id must match [a-z0-9]…` errors since 2026-10-06. E
 Done when: one argument `T504 read-hook-same-path` plans task `t504` and branch `t504-read-hook-same-path`; spaces in the slug become dashes; a bare id is unchanged. `add` of a path whose branch is already that task returns the existing plan instead of failing. A string that is not an id after the split still fails the existing check.
 
 Check: `plan` tests for the logged `T504 read-hook-same-path`, `M16.5 test toml` and `M16.3 push.rs through the config module`, and for an existing path of the same task; `just check`.
-
-### T524. Worktree `--idle` accepts `30m` and `0s`
-
-`[agents] idle` defaults to `30m` and is parsed with humantime (`idle_secs` in `crates/rtok-store/src/agents.rs`). `rtok worktree gc --idle` and `clean --idle` go through `parse_since` (`crates/rtok-config/src/since.rs`), which allows only a bare number (days), `d` and `h`. Since 2026-10-04 the log has 19 failures: `1m` (7), `0s` (5), `30m` (3), `1s` (2), `15m`, `10m`. The flag help cites `24h` and `7d`, and agents copy the `30m` they see on agents. The error says `bad --since unit` for a flag that is not `--since`.
-
-Done when: `--idle` and `--stale-lock` accept the same durations as `[agents] idle` (`30m`, `0s`, `24h`, `7d`). `5x` still errors. The error names the flag that was passed.
-
-Check: a unit test for `30m`, `0s` and `5x`; `just check`.
 
 ### T525. SubagentStart and PreCompact under the 10 ms hook budget
 
