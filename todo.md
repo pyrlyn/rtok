@@ -34,7 +34,6 @@
 - T436.4. Spinner on `agents install/update` through T276's `ProgressRunner`
 - T522. `read` and `expand` accept the line ranges agents sent this week
 - T523. `worktree add` takes `T504 read-hook-same-path` as an id plus a slug
-- T524. Worktree `--idle` accepts `30m` and `0s`
 - T525. SubagentStart and PreCompact under the 10 ms hook budget
 - T526. `worktree_list` and `search` when `rtok mcp` was started in the home directory
 - T527. A worktree claim does not stay held by an agent idle for days
