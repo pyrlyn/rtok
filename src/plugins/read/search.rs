@@ -75,6 +75,12 @@ pub(crate) fn skip_git(e: &ignore::DirEntry) -> bool {
     !worktree
 }
 
+/// [`skip_git`], and with credential files refused in this process (`rtok mcp --http`, S4) no
+/// credential file either: `read` refuses `.env`, so `search` must not print its lines.
+pub(crate) fn walk_filter(deny_secrets: bool) -> impl Fn(&ignore::DirEntry) -> bool + Send + Sync {
+    move |e| skip_git(e) && !(deny_secrets && super::roots::is_secret(e.path()))
+}
+
 /// The regular files a walk reaches whose bytes are valid UTF-8 text, as `(path, text)`, read one
 /// at a time. T55.5: a file over `max_bytes` is skipped before it is read, so a multi-GB blob
 /// cannot spike MCP memory. Shared by `search` and the graph text backend (T329.10).
@@ -110,7 +116,8 @@ pub fn search(cx: &Ctx, pattern: &str, path: &str, max: Option<u32>) -> Result<S
     let base = canonical_base(&cwd);
     let mut hits = Vec::new();
     let mut walk = WalkBuilder::new(&root);
-    walk.hidden(false).filter_entry(skip_git);
+    walk.hidden(false)
+        .filter_entry(walk_filter(super::roots::secrets_denied()));
     let mut files = text_files(walk.build().filter_map(Result::ok), cfg.search_max_bytes);
     // Checked before the next file is read, so a full result set never costs another read.
     while hits.len() < cap {
@@ -185,6 +192,34 @@ mod tests {
         assert!(out.contains("src/main.rs"), "{out}");
         let n = out.lines().count();
         assert!(n <= cx.config.plugins.read.search_max as usize, "{n}");
+    }
+
+    /// Audit 2026-10-19: over HTTP `read` refuses `.env`; a directory `search` used to print
+    /// its lines anyway. The filter drops credential files only when they are refused.
+    #[test]
+    fn walk_filter_drops_credential_files_only_when_denied() {
+        let dir = crate::testutil::tmp_dir("search-secrets");
+        fs::create_dir_all(dir.join("k")).unwrap();
+        fs::write(dir.join(".env"), "API_TOKEN=x\n").unwrap();
+        fs::write(dir.join("k/server.pem"), "API_TOKEN=x\n").unwrap();
+        fs::write(dir.join("a.txt"), "API_TOKEN=x\n").unwrap();
+        let names = |deny: bool| {
+            let mut walk = WalkBuilder::new(&dir);
+            walk.hidden(false).filter_entry(walk_filter(deny));
+            let mut got: Vec<String> = text_files(walk.build().filter_map(Result::ok), 1 << 20)
+                .map(|(p, _)| {
+                    p.strip_prefix(&dir)
+                        .unwrap()
+                        .to_string_lossy()
+                        .replace('\\', "/")
+                })
+                .collect();
+            got.sort();
+            got
+        };
+        assert_eq!(names(true), ["a.txt"]);
+        assert_eq!(names(false), [".env", "a.txt", "k/server.pem"]);
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
