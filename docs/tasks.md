@@ -49,6 +49,21 @@ rtok task dep A12 A9
 
 From MCP, `task_create` takes `title`, `description` and `parent`. `task_dep` (`id`, `blocker`), `task_conflict` (`id`, `other`), `task_parallel` (`id`) and `task_priority` (`id`, `level`) do what the commands do.
 
+## Creating tasks with a model
+
+A coding agent, such as Claude Code, Codex or Cursor, can write the tasks for you. It calls the same MCP tools, so rtok still hands out the ids and the model never makes one up. rtok itself does not call a model to plan.
+
+1. **Set up once.** Run `rtok agents install <host>`. It adds the `rtok mcp` server to the host and, on hosts that read skills, the `rtok-tasks` skill. The skill carries the steps of [Creating a task](#creating-a-task) for the model. If the project has no `[tasks]` section yet, run `rtok task init` first.
+2. **Ask for tasks, not code.** Name the goal, the files or area, and what done means, and say that you want rtok tasks. For example:
+   - "Plan the config cache as rtok tasks: one parent, a subtask per change, record the dependencies. Do not write code yet."
+   - "Split A12 into subtasks, and mark the ones that touch the same files as conflicts."
+   - "Turn the TODO comments in src/config/ into rtok tasks, each with a done check."
+3. **Review first, if you want to.** Ask the model to show the titles and descriptions before it creates anything. It creates them after you agree.
+4. **What the model does.** It calls `task_list` to look for existing work, then `task_create` for each task (with `parent` for a subtask), then `task_dep`, `task_conflict`, `task_parallel` and `task_priority`. It reports the ids that rtok returned. A host without MCP can do the same in its shell with `rtok task create --json`.
+5. **Check the result.** Use `rtok task list`, `rtok task show <id>`, or the [task board](#task-board). There is no edit command: close a wrong task with `rtok task status <id> closed` and create a new one. Do not edit the task files by hand.
+
+The model knows only what is in its context. Name the files and the done check yourself rather than asking it to guess.
+
 ## The disk adapter
 
 The `disk` adapter is the default. Each task is one Markdown file in the `tasks` directory at the root of the checkout:

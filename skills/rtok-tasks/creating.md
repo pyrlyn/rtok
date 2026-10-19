@@ -20,5 +20,8 @@ agent can take it without asking you anything.
 7. Quote the id `task_create` returns in the branch, the worktree and the commits. Never
    choose an id yourself.
 
+Asked to plan: write tasks, not code. Show the titles first when the user asks to see them,
+then report the ids and the order rtok returned.
+
 Before you start one: `task_claim`, then `task_status` `in-progress`; `done` once it is
 checked.

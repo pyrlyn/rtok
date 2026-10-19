@@ -143,6 +143,49 @@ fn tasks_skill_links_a_creating_guide_with_only_real_commands() {
     assert!(guide.contains("--parent"), "creating.md must show subtasks");
 }
 
+/// T904: the user guide to planning with a model may name only real `rtok task` commands and
+/// only the task tools the skill teaches (themselves pinned to the server's list), and the
+/// translations carry the section too.
+#[test]
+fn docs_on_creating_tasks_with_a_model_name_only_real_commands_and_tools() {
+    let docs = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("docs");
+    let read = |rel: &str| fs::read_to_string(docs.join(rel)).expect(rel);
+    let doc = read("tasks.md");
+    let start = doc
+        .find("## Creating tasks with a model\n")
+        .expect("docs/tasks.md has the section");
+    let rest = &doc[start..];
+    let section = &rest[..rest[3..].find("\n## ").map_or(rest.len(), |i| i + 3)];
+    let seen = rtok_task_commands(section);
+    for sub in ["init", "list", "show", "status", "create"] {
+        assert!(
+            seen.contains(&sub),
+            "the section must show `rtok task {sub}`"
+        );
+    }
+    let skill = hub_skill("rtok-tasks");
+    let tools: Vec<&str> = section
+        .split('`')
+        .skip(1)
+        .step_by(2)
+        .filter(|s| s.starts_with("task_"))
+        .collect();
+    assert!(tools.contains(&"task_create"), "{tools:?}");
+    for tool in tools {
+        assert!(
+            skill.contains(&format!("`{tool}`")),
+            "`{tool}` is not a task tool"
+        );
+    }
+    assert!(section.contains("`rtok agents install <host>`"));
+    for (rel, heading) in [
+        ("ru/tasks.md", "## Создание задач с помощью модели\n"),
+        ("uk/tasks.md", "## Створення завдань за допомогою моделі\n"),
+    ] {
+        assert!(read(rel).contains(heading), "docs/{rel} lacks the section");
+    }
+}
+
 /// Every `rtok task …` code span in `text` names a real subcommand and only its real long
 /// flags; returns the subcommands in order.
 fn rtok_task_commands(text: &str) -> Vec<&str> {
