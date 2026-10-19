@@ -208,13 +208,16 @@ impl CachePrompt {
 }
 
 /// Request headers that identify the caller or change the response for the same body.
-const CALLER_HEADERS: [&str; 6] = [
+/// `openai-project` picks the project a key bills and whose data controls apply, so two
+/// projects sharing an org key must not share answers.
+const CALLER_HEADERS: [&str; 7] = [
     "x-api-key",
     "authorization",
     "x-goog-api-key",
     "anthropic-version",
     "anthropic-beta",
     "openai-organization",
+    "openai-project",
 ];
 
 /// sha256 over the [`CALLER_HEADERS`] values (T323): the raw secret never reaches the
@@ -663,6 +666,19 @@ fn hex8(hash: &[u8; 32]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Audit 2026-10-19: one org key used from two OpenAI projects shared cached answers.
+    #[test]
+    fn openai_project_is_part_of_the_caller() {
+        let with = |project: &str| {
+            let mut h = axum::http::HeaderMap::new();
+            h.insert("authorization", "Bearer sk-org".parse().unwrap());
+            h.insert("openai-project", project.parse().unwrap());
+            caller_identity(&h)
+        };
+        assert_ne!(with("proj_a"), with("proj_b"));
+        assert_eq!(with("proj_a"), with("proj_a"));
+    }
     use std::path::PathBuf;
 
     /// T55.14: tool_result text is part of the key — two requests whose results differ
