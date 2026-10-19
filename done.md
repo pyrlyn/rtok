@@ -1,11 +1,5 @@
 # rtok — completed tasks
 
-### T908. Print the short archive id on a capped read
-
-T672 made `expand` resolve an 8-character prefix. A fresh read, `search`, or `tree` cut by `plugins.read.max_chars` still printed the full 64-character id inside `… archived <id> …`. The dedup and delta lines are T906; this is the cap marker. The measurement `ref_id` stays the full id. `plugins.read.max_chars` still has to be at least 100.
-
-Check: `a_capped_fresh_read_records_one_row` — the printed id is 8 hex chars, it is a prefix of the ledger `ref_id`, and `expand` of the prefix returns the uncapped text. `cap_includes_marker_in_max_chars` looks the same prefix up.
-
 ### T276. Spinner audit: every place rtok runs an external command and the user waits for its output
 
 Every external program goes through `rtok_sys::proc::ProgressRunner`. A terminal gets a spinner or a bar from the moment the process starts; a pipe, `--json`, MCP and hooks get nothing. `graph index`, `worktree gc/clean`, `bench`, `doctor` and `agents install/update` use a `Batch` when the total is known. The installer question hides the live bar while it is on screen.
@@ -15463,6 +15457,15 @@ Reused `clap_complete` and the existing rtok Clink generator. No replacement lib
 T672 shortened the command trailer and the read-cache follow-up is T906. A capped `graph` answer still printed the full 64-character id on `N more, expand <id>` and on a definition body past the line budget (`… N more lines, expand <id>`). `expand` already resolves an 8-character prefix. The measurement `ref_id` stays the full id.
 
 Check: `five_hundred_hits_are_capped_with_archive_id` — the printed id is 8 hex chars, the ledger `ref_id` is the full id, and `get_archive` of the resolved id returns the uncapped text. The same prefix is what `long_body_archives_the_uncut_span` and `a_long_answer_is_cut_with_an_id_that_pages_the_rest` look up.
+
+Status: done 2026-10-19
+Model: Cursor / grok 4.7
+
+### T908. Print the short archive id on a capped read
+
+T672 made `expand` resolve an 8-character prefix. A fresh read, `search`, or `tree` cut by `plugins.read.max_chars` still printed the full 64-character id inside `… archived <id> …`. The dedup and delta lines are T906; this is the cap marker. The measurement `ref_id` stays the full id. `plugins.read.max_chars` still has to be at least 100.
+
+Check: `a_capped_fresh_read_records_one_row` — the printed id is 8 hex chars, it is a prefix of the ledger `ref_id`, and `expand` of the prefix returns the uncapped text. `cap_includes_marker_in_max_chars` looks the same prefix up.
 
 Status: done 2026-10-19
 Model: Cursor / grok 4.7
