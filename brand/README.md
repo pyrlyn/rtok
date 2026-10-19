@@ -129,16 +129,15 @@ Brand constants: `--rtok-brand-cyan` `#5CE1FF` · `--rtok-brand-coral` `#FF6B4A`
 
 ## Checked against the product
 
-- `site/static/logo.svg`, `web/assets/logo.svg` = `logo/rtok-mark.svg`; `site/static/favicon.svg` =
+- `site/static/logo.svg` = `logo/rtok-mark.svg`; `site/static/favicon.svg` =
   `logo/rtok-favicon.svg`; `site/static/logo-wordmark.svg` = `logo/rtok-wordmark.svg` (byte-identical).
-- `web/assets/fonts/*.woff2` = the base IBM Plex Mono files; the 9 shared `web/assets/icons/` = base UI icons.
-- `web/src/styles/tokens.css` = `dist/legacy/tokens.css` (same values, only the header line differs).
+- The web admin imports this pack at build time (`web/src/styles/app.css` → `@brand/dist/tokens.css`
+  and `@brand/node_modules/@pyrlyn/brand/...`); `web/src/brandSources.test.ts` fails on any byte-identical copy under `web/`.
 
 ## Known gaps
 
-- Nothing in rtok imports this folder yet: the web admin still ships its own copies
-  (`web/src/styles/tokens.css`, `web/assets/`), the docs site its `site/static/` files. Rewiring them is
-  a follow-up (see `PROVENANCE.md`, "Adopting in each surface").
+- The docs site still ships its `site/static/` files. Rewiring it is a follow-up
+  (see `PROVENANCE.md`, "Adopting in each surface").
 - The provenance snapshots (`sources/`, `screenshots/`) live only in pyrlyn/brand v0.3.0 and are not
   refreshed (e.g. `sources/rtok/docs/site.md` there still has the old listepo URLs). Only `tokens.json`
   and `dist/` are authoritative.
