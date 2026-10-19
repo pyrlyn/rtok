@@ -141,7 +141,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T428 | in progress | P2 | 3 | 85% | Claude Code / sonnet-5.5 |
 | T653 | in progress | P2 | 2 | 55% | Claude Code / sonnet-5.5 |
 | T654 | in progress | P2 | 2 | 65% | Claude Code / sonnet-5.5 |
-| T656 | in progress | P2 | 2 | 60% | Claude Code / sonnet-5.5 |
 | T436.4 | todo | P3 | 2 | 90% | |
 | T523 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T524 | in progress | P2 | 1 | 0% | MiMo / mimo |
@@ -175,15 +174,6 @@ Evidence baseline: `eb7d980af235f0ccb3d8ff58471d24b8267af35d`. Where: [`index.rs
 
 Check: a file that becomes readable is re-parsed even when mtime and size are unchanged.
 
-### T656. Keep worktrees and caches when their age cannot be established
-
-Evidence baseline: `eb7d980af235f0ccb3d8ff58471d24b8267af35d`. Where: [`gc::decide`](src/worktree/gc.rs#L87-L120), [`clean::kept_because`](src/worktree/clean.rs#L31-L37), and [`list::walk`](src/worktree/list.rs#L86-L129). Impact/trigger: a merged unlocked non-current worktree with no age evidence is eligible for gc; a tagged cache with no mtime is eligible for clean. Walk errors can also hide newer files, so even `Some(old)` can be incomplete. T342's deadline-capped walk is conservative, but does not cover errors. Evidence level: source-only decision-path review; no filesystem deletion or executed decision probe.
-
-1. Treat unavailable or incomplete mtime evidence as unknown and keep the worktree/cache with an explanatory reason.
-2. Add pure-function controls for fresh Some→Keep, old Some→Remove, and None→Keep in both policies; make incomplete walks distinguishable where the walk API can report it.
-3. Run focused worktree gc/clean tests and `just check`.
-
-Check: missing age never authorizes removal; established fresh/old ages retain their policy. Do not validate by deleting real worktrees or caches.
 
 ### T666.2. Provider-backed memory extractor (blocked on the creator)
 
