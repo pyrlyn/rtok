@@ -21,14 +21,17 @@
 **Batch / Flex / routing** (see `docs/batch-flex.md`)
 - Batch ≠ Flex ≠ model routing. Never auto-convert sync agent turns into Batch jobs.
 - Batch paths (`/v1/batches`, `/v1/messages/batches`, …) miss every `Wire::matches` (exact
-  sync paths only) and ride the axum fallback: byte-forward today; observe + result usage
-  parsing are **planned** under `[proxy.batch]`.
-- Flex is OpenAI `service_tier` on sync Chat/Responses wires — inject/override in `prepare`
-  (**planned**, `[proxy.flex]`), not a separate HTTP API.
+  sync paths only) and ride the axum fallback byte-for-byte. The lane tag records them as
+  `api_request:batch`. `[proxy.batch] parse_results` (default off) writes `usage` from a
+  forwarded results file (`src/proxy/batch_results.rs`) and does not change the response.
+- Flex is OpenAI `service_tier` on sync Chat/Responses wires. `src/proxy/flex.rs` sets it in
+  `prepare` for a lane with `flex` (`[proxy.flex]` chooses force and the 429 policy). It is
+  not a separate HTTP API, and the `agent` lane never sets it.
 - Model routing (D9, T385.10) swaps `model` for `internal` and `bulk` calls only
   (`src/proxy/route.rs`, `Lane::route`), opt-in per lane rule with a named quality `gate` (I-101);
   the `agent` lane is never routed. Sticky upstream (I-84) is still **planned**. Hooks/MCP never
   see this traffic.
-- Extension points: new `Wire` / path matchers in `src/proxy/` for Batch observe; `prepare`
-  for Flex; routing rules in `src/proxy/route.rs`, applied first in `shape_request`. Do not teach hooks or MCP about LLM HTTP.
+- Extension points: Batch observe is the lane classifier plus `src/proxy/batch_results.rs`;
+  Flex is `src/proxy/flex.rs`; routing rules are `src/proxy/route.rs`, applied first in
+  `shape_request`. Do not teach hooks or MCP about LLM HTTP.
 
