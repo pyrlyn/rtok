@@ -35,6 +35,5 @@
 - T525. SubagentStart and PreCompact under the 10 ms hook budget
 - T527. A worktree claim does not stay held by an agent idle for days
 - T653. Exclude semantic-cache hits from provider-billed OTel usage
-- T654. Re-read graph files after an unreadable index attempt
 - T666.2. Provider-backed memory extractor (blocked on the creator)
 - T687. Hooks: PreToolUse/PostToolUse p50 to 10 ms
