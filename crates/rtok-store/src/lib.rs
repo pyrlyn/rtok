@@ -30,7 +30,7 @@ pub use task_id::{MAX_DEPTH, MAX_PREFIX, TaskId, check_prefix};
 
 // Agent registry (T282, D34): one row per host session rtok sees, one per sub-agent.
 mod agents;
-pub use agents::{AgentDetail, AgentRow, idle_secs};
+pub use agents::{AgentDetail, AgentRow, idle_secs, parse_idle_from};
 // T385.9.1: the P28 compressor's summaries.
 mod archive_summaries;
 // Graph call events the web page streams (T329.15).
