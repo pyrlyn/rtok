@@ -16,7 +16,11 @@ use std::fs;
 use std::path::PathBuf;
 
 fn hub_skill(name: &str) -> String {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("skills/{name}/SKILL.md"));
+    hub_file(name, "SKILL.md")
+}
+
+fn hub_file(name: &str, file: &str) -> String {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("skills/{name}/{file}"));
     fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
 }
 
@@ -107,12 +111,45 @@ fn worktrees_skill_names_only_commands_rtok_worktree_has() {
 /// exist, and it must teach every subcommand an agent needs to plan and track work.
 #[test]
 fn tasks_skill_names_only_commands_rtok_task_has() {
-    let cli = Cli::command();
-    let task = cli.find_subcommand("task").expect("rtok task");
     let content = hub_skill("rtok-tasks");
     let (_, body) = split_frontmatter(&content);
+    let seen = rtok_task_commands(body);
+    for sub in [
+        "create", "list", "show", "status", "next", "init", "sync", "export",
+    ] {
+        assert!(seen.contains(&sub), "the skill must show `rtok task {sub}`");
+    }
+}
+
+/// T904: the guide to writing a task sits beside the skill, which is at its size cap; the skill
+/// must point at it, it may show only real `rtok task` commands and flags, and it must teach
+/// splitting and ordering, not just creating.
+#[test]
+fn tasks_skill_links_a_creating_guide_with_only_real_commands() {
+    let content = hub_skill("rtok-tasks");
+    let (_, body) = split_frontmatter(&content);
+    assert!(
+        body.contains("`creating.md`"),
+        "SKILL.md must link creating.md"
+    );
+    let guide = hub_file("rtok-tasks", "creating.md");
+    let seen = rtok_task_commands(&guide);
+    for sub in ["list", "create", "dep", "conflict", "parallel", "priority"] {
+        assert!(
+            seen.contains(&sub),
+            "creating.md must show `rtok task {sub}`"
+        );
+    }
+    assert!(guide.contains("--parent"), "creating.md must show subtasks");
+}
+
+/// Every `rtok task …` code span in `text` names a real subcommand and only its real long
+/// flags; returns the subcommands in order.
+fn rtok_task_commands(text: &str) -> Vec<&str> {
+    let cli = Cli::command();
+    let task = cli.find_subcommand("task").expect("rtok task");
     let mut seen = Vec::new();
-    for span in body.split('`').skip(1).step_by(2) {
+    for span in text.split('`').skip(1).step_by(2) {
         let Some(rest) = span.strip_prefix("rtok task ") else {
             continue;
         };
@@ -129,11 +166,7 @@ fn tasks_skill_names_only_commands_rtok_task_has() {
         }
         seen.push(sub);
     }
-    for sub in [
-        "create", "list", "show", "status", "next", "init", "sync", "export",
-    ] {
-        assert!(seen.contains(&sub), "the skill must show `rtok task {sub}`");
-    }
+    seen
 }
 
 /// T441.10: installing the task skill changes nothing but its own directory; a user's own
@@ -151,6 +184,11 @@ fn install_adds_the_tasks_skill_and_leaves_a_users_own_skill_alone() {
     assert_eq!(
         fs::read_to_string(root.join("rtok-tasks/SKILL.md")).unwrap(),
         hub_skill("rtok-tasks"),
+        "{out}"
+    );
+    assert_eq!(
+        fs::read_to_string(root.join("rtok-tasks/creating.md")).unwrap(),
+        hub_file("rtok-tasks", "creating.md"),
         "{out}"
     );
     let again = rtok(&["agents", "install", "codex"], &cfg, &home);
