@@ -176,7 +176,7 @@ pub(crate) use crate::names::cmd_stem;
 /// Stems with a Rust formatter (any subcommand). `rtok stats` labels the whole stem.
 const FORMATTER_STEMS: &[&str] = &[
     "cargo", "git", "gh", "pytest", "python", "python3", "py", "jest", "vitest", "tree", "go",
-    "docker", "kubectl", "ps", "df", "sqlite3", "wc", "mise", "for", "while", "until",
+    "docker", "podman", "kubectl", "ps", "df", "sqlite3", "wc", "mise", "for", "while", "until",
 ];
 
 /// T50.1: how `rtok stats` labels a Bash family — `formatter`, named `rule`, or `default`.
@@ -666,7 +666,8 @@ fn format(argv: &[String], output: &str) -> Option<String> {
         ("wc", _) => Some(wc_table(output)),
         ("for" | "while" | "until", _) => super::loops::collapse(output),
         ("tree", _) => Some(output.lines().take(40).collect::<Vec<_>>().join("\n")),
-        ("docker", "ps") => docker_ps(output),
+        // `podman ps` prints the same table (T905). Other podman subcommands stay on the rule path.
+        ("docker" | "podman", "ps") => docker_ps(output),
         ("kubectl", "get") => kubectl_get(output),
         ("ps", "aux") => ps_aux(output),
         ("df", _) => df_table(output),
@@ -914,7 +915,7 @@ fn is_porcelain(line: &str) -> bool {
     b.len() > 3 && column(b[0]) && column(b[1]) && b[2] == b' '
 }
 
-/// `docker ps`: one compact row per container. Padding, bind-all, container-side
+/// `docker ps` and `podman ps`: one compact row per container. Padding, bind-all, container-side
 /// port/proto, registry host and `N days`/`N hours` units are alignment noise; the
 /// name, status, host port and image tag are the objects the rule's head/tail cut drops.
 fn docker_ps(output: &str) -> Option<String> {
@@ -1609,6 +1610,7 @@ mod tests {
         let dir = goldens();
         for (file, argv0, prefix) in [
             ("docker_ps.in", ["docker", "ps"], "web-"),
+            ("podman_ps.in", ["podman", "ps"], "web-"),
             ("kubectl_get.in", ["kubectl", "get"], "web-deploy-"),
             ("ps_aux.in", ["ps", "aux"], "worker-"),
         ] {
@@ -1649,6 +1651,15 @@ mod tests {
             &settings,
             &argv(&["docker", "ps"]),
             "Cannot connect to the Docker daemon\n",
+            0,
+            "deadbeef",
+        );
+        assert_ne!(kind, "formatter", "{got}");
+        assert!(got.contains("Cannot connect"), "{got}");
+        let (got, kind) = compress(
+            &settings,
+            &argv(&["podman", "ps"]),
+            "Cannot connect to the Podman daemon\n",
             0,
             "deadbeef",
         );
@@ -1855,6 +1866,7 @@ mod tests {
             ("go", "test"),
             ("tree", ""),
             ("docker", "ps"),
+            ("podman", "ps"),
             ("kubectl", "get"),
             ("ps", "aux"),
             ("df", ""),
