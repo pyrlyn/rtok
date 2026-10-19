@@ -272,7 +272,7 @@ client ──POST /v1/…──► axum fallback
 | Traffic | Wire match today | Behaviour |
 |---------|------------------|-----------|
 | Sync chat (`/v1/messages`, `/v1/chat/completions`, `/v1/responses`, Gemini generate) | yes | record + optional compress/prepare + usage |
-| Batch (`/v1/batches`, `/v1/messages/batches`, …) | no (exact path match) | fallback pass-through; call row without usage parsing; observe/result parsing **planned** |
+| Batch (`/v1/batches`, `/v1/messages/batches`, …) | no (exact path match) | fallback pass-through; body unchanged; `calls.kind = api_request:batch`. `[proxy.batch] parse_results` writes `usage` from a forwarded results file (`src/proxy/batch_results.rs`) |
 | Flex | same sync wires | `[proxy.lanes.<lane>] flex` sets `service_tier` in `prepare` (`src/proxy/flex.rs`); the tier the response names is stored on `calls.service_tier` and priced at the `<model>@flex` row (T385.12.2) |
 | Model routing (D9) | `internal` and opted-in `bulk` calls on the JSON-body wires; never the `agent` lane | `[proxy.routing.<lane>]` swaps `model` before the call is recorded (`src/proxy/route.rs`, T385.10), so `calls`/`usage` name the serving model; the quality gate (I-101) is the operator's bench, named in `gate` |
 
