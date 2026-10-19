@@ -36,31 +36,62 @@ const IDS: [&str; 8] = [
     "recommendations",
 ];
 
-/// Render the whole document under `cfg.report.budget_tokens`. Sections that do not fit
-/// are dropped whole and named in `dropped:`; recommendations still close the document.
+/// Render the whole document under `cfg.report.budget_tokens`, counting the complete
+/// serialized text (title, range and store path, `dropped:` line, anchors) with the
+/// configured estimator. Sections that do not fit are dropped whole, in order, and named
+/// in `dropped:`. When not even the header and a full `dropped:` list fit, the output
+/// shrinks to the title and that list, and to nothing when that is still over the cap:
+/// a cap is never exceeded silently.
 pub fn render(doc: &Document, cfg: &Config) -> String {
-    use std::fmt::Write as _;
-    let mut budget = cfg.report.budget_tokens;
-    let mut kept = Vec::with_capacity(IDS.len());
-    let mut dropped = Vec::new();
+    let budget = cfg.report.budget_tokens;
+    let fits = |s: &str| tokens::estimate(s, Class::Prose, &cfg.estimator) <= budget;
+    let mut kept: Vec<(&str, String)> = Vec::with_capacity(IDS.len());
     for id in IDS {
-        let body = section(id, doc);
-        let cost = tokens::estimate(&body, Class::Prose, &cfg.estimator);
-        if cost <= budget {
-            budget -= cost;
-            kept.push((id, body));
-        } else {
-            dropped.push(id);
+        kept.push((id, section(id, doc)));
+        if !fits(&assemble(doc, &kept, Header::Full)) {
+            kept.pop();
         }
     }
-    let w = &doc.ledgers.window;
-    let mut s = String::new();
-    let _ = writeln!(s, "rtok-report ai");
-    let _ = writeln!(
-        s,
-        "range {}..{} window={} store={}",
-        w.from_date, w.to_date, w.since, w.db_path
-    );
+    // The `dropped:` line grew with every later rejection, which the optimistic
+    // admission above could not see; give back sections until the final text fits.
+    loop {
+        let full = assemble(doc, &kept, Header::Full);
+        if fits(&full) {
+            return full;
+        }
+        if kept.pop().is_none() {
+            break;
+        }
+    }
+    let minimal = assemble(doc, &kept, Header::Minimal);
+    if fits(&minimal) {
+        minimal
+    } else {
+        String::new()
+    }
+}
+
+#[derive(Clone, Copy)]
+enum Header {
+    Full,
+    Minimal,
+}
+
+fn assemble(doc: &Document, kept: &[(&str, String)], header: Header) -> String {
+    use std::fmt::Write as _;
+    let dropped: Vec<&str> = IDS
+        .into_iter()
+        .filter(|id| kept.iter().all(|(k, _)| k != id))
+        .collect();
+    let mut s = String::from("rtok-report ai\n");
+    if matches!(header, Header::Full) {
+        let w = &doc.ledgers.window;
+        let _ = writeln!(
+            s,
+            "range {}..{} window={} store={}",
+            w.from_date, w.to_date, w.since, w.db_path
+        );
+    }
     let _ = writeln!(
         s,
         "dropped: {}",
@@ -72,7 +103,7 @@ pub fn render(doc: &Document, cfg: &Config) -> String {
     );
     for (id, body) in kept {
         let _ = writeln!(s, "#{id}");
-        s.push_str(&body);
+        s.push_str(body);
     }
     s
 }
@@ -256,11 +287,26 @@ fn config(doc: &Document) -> String {
     s
 }
 
+/// The doctor page with the agents block cut to the host variants where rtok has at least one
+/// module installed. The full list names every supported host (over 30 variants on macOS, each
+/// with four reasoned rows) and alone outgrew the default budget, so `--ai` dropped the whole
+/// section on an empty store; the rest is counted, and `rtok doctor` still prints it all.
 fn doctor(doc: &Document) -> String {
+    use crate::agents::ModuleState;
+    let mut report = doc.doctor.clone();
+    let total = report.agents.len();
+    report
+        .agents
+        .retain(|a| a.modules.iter().any(|m| m.state == ModuleState::Installed));
+    let hidden = total - report.agents.len();
     let mut s = String::from("units: live probes, not store rows\n");
-    s.push_str(&doc.doctor.to_text());
+    s.push_str(&report.to_compact_text());
     if !s.ends_with('\n') {
         s.push('\n');
+    }
+    if hidden > 0 {
+        use std::fmt::Write as _;
+        let _ = writeln!(s, "agents without rtok: {hidden} (rtok doctor lists them)");
     }
     s
 }
@@ -451,6 +497,40 @@ mod tests {
         }
     }
 
+    fn agent(host: &'static str, state: crate::agents::ModuleState) -> crate::doctor::AgentModules {
+        crate::doctor::AgentModules {
+            host,
+            kind: "cli",
+            modules: vec![crate::agents::ModuleRow {
+                name: "hooks",
+                state,
+                note: String::new(),
+            }],
+        }
+    }
+
+    /// Only host variants with rtok installed are listed; the rest are counted, so a machine
+    /// with many supported hosts does not push the doctor section past the budget.
+    #[test]
+    fn doctor_lists_only_hosts_with_rtok_installed() {
+        use crate::agents::ModuleState;
+        let mut d = doc();
+        d.doctor.agents = vec![
+            agent("claude", ModuleState::Installed),
+            agent("zed", ModuleState::NotSupported),
+            agent("kimi", ModuleState::NotInstalled),
+        ];
+        let out = doctor(&d);
+        assert!(out.contains("  claude (cli)"), "{out}");
+        assert!(
+            !out.contains("zed (cli)") && !out.contains("kimi (cli)"),
+            "{out}"
+        );
+        assert!(out.contains("agents without rtok: 2"), "{out}");
+        d.doctor.agents.truncate(1);
+        assert!(!doctor(&d).contains("agents without rtok"));
+    }
+
     fn cfg_with_budget(budget: u32) -> Config {
         let mut cfg = Config::default();
         cfg.report.budget_tokens = budget;
@@ -542,6 +622,41 @@ mod tests {
         assert!(out.contains("units:"));
     }
 
+    /// T664: one line per host variant, no per-module reasons — those repeated across
+    /// every T413 host and pushed `#doctor` past the default budget.
+    #[test]
+    fn doctor_agents_are_one_line_per_host_variant() {
+        use crate::agents::{ModuleRow, ModuleState};
+        let row = |name, state, note: &str| ModuleRow {
+            name,
+            state,
+            note: note.into(),
+        };
+        let mut d = doc();
+        d.doctor.agents = vec![crate::doctor::AgentModules {
+            host: "claude",
+            kind: "desktop",
+            modules: vec![
+                row("hooks", ModuleState::NotSupported, ": no hook events"),
+                row("mcp", ModuleState::Installed, ""),
+                row("proxy", ModuleState::NotInstalled, " (--proxy)"),
+            ],
+        }];
+        let out = render(&d, &cfg_with_budget(8000));
+        assert!(
+            out.contains("\n  claude (desktop) hooks=n/a mcp=yes proxy=no\n"),
+            "{out}"
+        );
+        assert!(
+            !out.contains("no hook events"),
+            "reasons stay in rtok doctor: {out}"
+        );
+        assert!(
+            d.doctor.to_text().contains("no hook events"),
+            "full text unchanged"
+        );
+    }
+
     /// T105 Check, same as markdown.rs/html.rs (T302): a non-finite `rate` (a
     /// corrupted/legacy DB row) must never leak `NaN`/`inf` into the `--ai` rendering —
     /// this surface is read by a model/parser downstream.
@@ -558,5 +673,73 @@ mod tests {
         let out = render(&d, &cfg_with_budget(8000));
         assert!(!out.contains("NaN"), "no NaN: {out}");
         assert!(!out.to_lowercase().contains("inf"), "no inf: {out}");
+    }
+
+    fn tokens_of(out: &str, cfg: &Config) -> u32 {
+        tokens::estimate(out, Class::Prose, &cfg.estimator)
+    }
+
+    /// T580: the complete text, not just the bodies, stays under the cap, and the
+    /// `dropped:` line names exactly the sections that are missing.
+    #[test]
+    fn whole_output_stays_within_the_budget() {
+        let mut long = doc();
+        long.ledgers.window.db_path = "/very/long/store/path/".repeat(30);
+        let mut unicode = doc();
+        unicode.ledgers.window.db_path = "/хранилище/数据库/".repeat(10);
+        let mut coarse = cfg_with_budget(0);
+        coarse.estimator.prose = 1.0;
+        for d in [doc(), long, unicode] {
+            for rates in [Config::default(), coarse.clone()] {
+                for budget in (0..1500).step_by(7) {
+                    let mut cfg = rates.clone();
+                    cfg.report.budget_tokens = budget;
+                    let out = render(&d, &cfg);
+                    assert!(tokens_of(&out, &cfg) <= budget, "{budget}: {out}");
+                    if out.is_empty() {
+                        continue;
+                    }
+                    let named: Vec<&str> = out
+                        .lines()
+                        .find_map(|l| l.strip_prefix("dropped: "))
+                        .map(|l| {
+                            if l == "none" {
+                                vec![]
+                            } else {
+                                l.split(',').collect()
+                            }
+                        })
+                        .expect("dropped line");
+                    for id in IDS {
+                        let present = out.contains(&format!("#{id}\n"));
+                        assert_eq!(present, !named.contains(&id), "{id} at {budget}: {out}");
+                    }
+                }
+            }
+        }
+    }
+
+    /// T580: admission is exact at the boundary: the full report fits its own size and
+    /// loses a section one token below it.
+    #[test]
+    fn budget_boundary_is_exact() {
+        let cfg = cfg_with_budget(8000);
+        let full = render(&doc(), &cfg);
+        let size = tokens_of(&full, &cfg);
+        assert_eq!(render(&doc(), &cfg_with_budget(size)), full);
+        let below = render(&doc(), &cfg_with_budget(size - 1));
+        assert!(!below.contains("dropped: none"), "{below}");
+    }
+
+    /// T580: when not even the header fits, the output shrinks to the title and the
+    /// dropped list, then to nothing, instead of exceeding the cap.
+    #[test]
+    fn a_budget_below_the_header_degrades_explicitly() {
+        let mut d = doc();
+        d.ledgers.window.db_path = "/p".repeat(400);
+        let minimal = "rtok-report ai\ndropped: window,savings,calls,cache,expand,config,doctor,recommendations\n";
+        let cfg = cfg_with_budget(tokens_of(minimal, &Config::default()));
+        assert_eq!(render(&d, &cfg), minimal);
+        assert_eq!(render(&d, &cfg_with_budget(0)), "");
     }
 }

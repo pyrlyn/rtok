@@ -25,7 +25,7 @@ Files:
   `scripts/hook.sh` only when PATH has neither.
 - `scripts/hook.sh` — resolves `rtok` from PATH or the ketch store; a missing `rtok` fails the hook
   open (exit 0), printing `ketch install pyrlyn/rtok` once on SessionStart.
-- `.mcp.json` — `mcpServers.rtok` → `rtok mcp --host codebuddy`.
+- No `.mcp.json` (D33): MCP is the `mcpServers.rtok` entry `rtok agents install codebuddy` writes into the host's own MCP file, so the plugin never adds a second rtok server.
 - `.rtok-plugin-version` — the version stamp `tools/plugin-versions.sh` keeps equal to `Cargo.toml`.
 
 `--host codebuddy` changes only the output: stdin is Claude's shape, but CodeBuddy's PreToolUse

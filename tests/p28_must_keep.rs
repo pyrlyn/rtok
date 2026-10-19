@@ -17,10 +17,11 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
+use rtok::plugins::compress::must_keep::{self, KINDS};
+
 /// The shipped `plugins.archive` pointer shows this many leading and trailing lines.
 const HEAD: usize = 8;
 const TAIL: usize = 4;
-const KINDS: [&str; 6] = ["path", "identifier", "error", "number", "command", "id"];
 
 struct Span {
     kind: String,
@@ -208,4 +209,117 @@ fn pointer_view_keeps_only_edge_spans_and_expand_recovers_all() {
         kept < total,
         "the pointer already keeps every span: fixture too easy"
     );
+}
+
+/// Default `[plugins.compress.llm] max_spans`; a fixture body denser than this would never be
+/// sent to the compressor.
+const MAX_SPANS: usize = 64;
+
+/// Measured on the fixture when T385.9.1 landed; the extractor may only get better.
+const COVERAGE_FLOOR_PERCENT: usize = 95;
+
+/// T385.9.1: the guard's extractor against the fixture. An annotated span is covered when the
+/// extractor finds a span inside it or around it, so a summary that loses the annotated text
+/// loses a span the guard checks. The share covered is the guard's reach over what Phase 1
+/// judged must-keep. No model runs.
+#[test]
+fn the_guard_reaches_the_annotated_spans_of_the_fixture() {
+    let (mut covered, mut total) = (0, 0);
+    let mut missed = Vec::new();
+    for b in bodies() {
+        let spans = must_keep::spans(&b.text);
+        assert!(spans.len() <= MAX_SPANS, "{}: {} spans", b.id, spans.len());
+        assert!(must_keep::dropped(&spans, &b.text).is_empty(), "{}", b.id);
+        for s in &b.keep {
+            total += 1;
+            if spans
+                .iter()
+                .any(|e| s.text.contains(&e.text) || e.text.contains(&s.text))
+            {
+                covered += 1;
+            } else {
+                missed.push(format!("{}: {}", b.id, s.text));
+            }
+        }
+    }
+    eprintln!("p28 guard: reaches {covered} of {total} annotated spans; missed: {missed:#?}");
+    assert!(
+        covered * 100 >= total * COVERAGE_FLOOR_PERCENT,
+        "{covered} of {total}: {missed:#?}"
+    );
+}
+
+/// Every fixture body goes through the client end to end against a mock upstream whose
+/// summary keeps all its spans: none is skipped as too dense, all are stored (diffs once
+/// `code` is on), and the same summary minus one span is rejected.
+#[tokio::test]
+async fn every_fixture_body_passes_the_compressor_client_and_a_lossy_summary_does_not() {
+    use httpmock::prelude::*;
+    use rtok::config::Config;
+    use rtok::plugins::compress::llm::{Auth, Compressor, Outcome};
+    use rtok::store::Store;
+
+    let dir = tmp("client");
+    let auth = Auth::new(vec![("x-api-key".into(), "test".into())]).unwrap();
+    let store = Store::open_in_memory().unwrap();
+    for b in bodies() {
+        let spans = must_keep::spans(&b.text);
+        // A span no other span contains, so leaving it out really drops it.
+        let lost = spans
+            .iter()
+            .find(|s| {
+                spans
+                    .iter()
+                    .all(|o| o.text == s.text || !o.text.contains(&s.text))
+            })
+            .expect("a free-standing span")
+            .text
+            .clone();
+        let summary = |skip: Option<&str>| {
+            let kept: Vec<&str> = spans
+                .iter()
+                .map(|s| s.text.as_str())
+                .filter(|t| Some(*t) != skip)
+                .collect();
+            serde_json::json!({"content": [{"type": "text", "text": kept.join("; ")}],
+                               "stop_reason": "end_turn"})
+        };
+        let up = MockServer::start();
+        let mut cfg = Config::load_from(&dir).unwrap();
+        cfg.core.archive_dir = dir.join("archive");
+        cfg.plugins.compress.llm.enabled = true;
+        cfg.plugins.compress.llm.url = up.base_url();
+        let id = store
+            .put_archive("s", b.text.as_bytes(), &cfg.core.archive_dir)
+            .unwrap();
+        let mut lossy = up.mock(|when, then| {
+            when.method(POST).path("/v1/messages");
+            then.status(200).json_body(summary(Some(&lost)));
+        });
+
+        // Diffs and grep hits on source wait for `code = true`; the rest is asked at once.
+        let c = Compressor::new(&cfg).unwrap().unwrap();
+        let first = c.run(&store, &auth, &id).await;
+        if first == Outcome::Skipped("diff or source") {
+            assert!(
+                b.id == "git-diff-hunks" || b.id == "grep-records",
+                "{}",
+                b.id
+            );
+            cfg.plugins.compress.llm.code = true;
+        }
+        let c = Compressor::new(&cfg).unwrap().unwrap();
+        assert_eq!(
+            c.run(&store, &auth, &id).await,
+            Outcome::Rejected(vec![lost.clone()]),
+            "{}",
+            b.id
+        );
+        lossy.delete();
+        up.mock(|when, then| {
+            when.method(POST).path("/v1/messages");
+            then.status(200).json_body(summary(None));
+        });
+        assert_eq!(c.run(&store, &auth, &id).await, Outcome::Stored, "{}", b.id);
+    }
 }

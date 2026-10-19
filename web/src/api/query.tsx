@@ -54,7 +54,21 @@ export interface Imported {
     export: Export;
 }
 
-type Answer = Plan | Fixed | Cleared | DrillGraph | DiffReport | ExportFile | Imported;
+/** What removing a project would drop, in the words of `graph projects remove --dry-run` (T329.54). */
+export interface ProjectPlan {
+    project: string;
+    plan: string;
+}
+
+type Answer =
+    | Plan
+    | Fixed
+    | Cleared
+    | DrillGraph
+    | DiffReport
+    | ExportFile
+    | Imported
+    | ProjectPlan;
 
 export interface Api {
     open(): void;
@@ -65,8 +79,11 @@ export interface Api {
     expand(id: string): Promise<string>;
     set(request: SetRequest): Promise<void>;
     project(request: ProjectRequest): Promise<void>;
+    /** The dry run of removing a project; nothing is removed until a confirmed `project` request. */
+    projectPlan(project: string): Promise<ProjectPlan>;
     doctorPlan(selection: Selection): Promise<Plan>;
-    doctorApply(selection: Selection): Promise<Fixed>;
+    // `confirmed` is the token of the plan the user saw; the server writes only that preview.
+    doctorApply(selection: Selection, confirmed: string): Promise<Fixed>;
     junkPlan(): Promise<Cleared>;
     junkApply(paths: string[]): Promise<Cleared>;
     drill(request: DrillRequest): Promise<DrillGraph>;
@@ -93,21 +110,22 @@ interface PendingExpand {
     reject(error: Error): void;
 }
 
-// The server answers doctor requests in the order it received them, on one socket, so the
-// queue is matched by the kind of frame it waits for. A graph frame names its project and
-// not the request, and the server answers those off the executor, so `key` (the project)
-// is what ties it back; within one project the order holds.
+// Each doctor-style request carries a fresh `req` and the server echoes it on its answer, so a
+// reply is matched to the request it answers and to nothing else: one that arrives after its
+// request timed out (or after a reconnect) finds no entry and is dropped, instead of settling a
+// newer request for the same project or kind (T623). `kind` is the frame the answer must be.
 interface PendingDoctor {
+    req: number;
     kind:
         | "doctorplan"
         | "doctorfixed"
         | "junkplan"
         | "junkcleared"
+        | "projectplan"
         | "graph"
         | "diff"
         | "export"
         | "imported";
-    key?: string;
     resolve(frame: Answer): void;
     reject(error: Error): void;
 }
@@ -121,6 +139,8 @@ export function createApi(
     let pending: PendingExpand[] = [];
     let pendingDoctor: PendingDoctor[] = [];
     let pendingWrites: PendingWrite[] = [];
+    // Never reset, so an id is not reused on this page even across reconnects.
+    let nextReq = 0;
     // While paused the socket keeps reading, but frames fold into `held` and the cache keeps the
     // snapshot on screen, so `dataUpdatedAt` stays the age of what the reader sees.
     let paused = false;
@@ -150,6 +170,13 @@ export function createApi(
         for (const p of failedWrites) p.reject(new Error(reason));
     };
 
+    const rejectDoctor = (req: number, reason: string) => {
+        const i = pendingDoctor.findIndex((p) => p.req === req);
+        if (i < 0) return;
+        const [entry] = pendingDoctor.splice(i, 1);
+        entry?.reject(new Error(reason));
+    };
+
     const write = (message: ClientMessage) =>
         new Promise<void>((resolve, reject) => {
             const settle = (done: () => void) => () => {
@@ -177,8 +204,8 @@ export function createApi(
         for (const p of done) p.resolve();
     };
 
-    const settleDoctor = (kind: PendingDoctor["kind"], frame: Answer, key?: string) => {
-        const i = pendingDoctor.findIndex((p) => p.kind === kind && p.key === key);
+    const settleDoctor = (kind: PendingDoctor["kind"], frame: Answer, req?: number) => {
+        const i = pendingDoctor.findIndex((p) => p.req === req && p.kind === kind);
         if (i < 0) return;
         const [entry] = pendingDoctor.splice(i, 1);
         entry?.resolve(frame);
@@ -187,13 +214,13 @@ export function createApi(
     const askDoctor = <T extends Answer>(
         kind: PendingDoctor["kind"],
         message: ClientMessage,
-        key?: string,
         timeoutMs = DOCTOR_TIMEOUT_MS,
     ) =>
         new Promise<T>((resolve, reject) => {
+            nextReq += 1;
             const entry: PendingDoctor = {
+                req: nextReq,
                 kind,
-                key,
                 resolve: (frame) => {
                     clearTimeout(timer);
                     resolve(frame as T);
@@ -208,7 +235,7 @@ export function createApi(
                 reject(new Error(`${kind} timed out`));
             }, timeoutMs);
             pendingDoctor.push(entry);
-            if (!connection?.send(message)) {
+            if (!connection?.send({ ...message, req: entry.req })) {
                 pendingDoctor = pendingDoctor.filter((p) => p !== entry);
                 entry.reject(new Error("not connected"));
             }
@@ -233,36 +260,45 @@ export function createApi(
                 return;
             }
             case "doctorplan":
-                settleDoctor("doctorplan", frame.plan);
+                settleDoctor("doctorplan", frame.plan, frame.req);
                 return;
             case "doctorfixed":
-                settleDoctor("doctorfixed", frame.fixed);
+                settleDoctor("doctorfixed", frame.fixed, frame.req);
+                return;
+            case "projectplan":
+                settleDoctor(
+                    "projectplan",
+                    { project: frame.project, plan: frame.plan },
+                    frame.req,
+                );
                 return;
             case "junkplan":
-                settleDoctor("junkplan", frame.plan);
+                settleDoctor("junkplan", frame.plan, frame.req);
                 return;
             case "junkcleared":
-                settleDoctor("junkcleared", frame.cleared);
+                settleDoctor("junkcleared", frame.cleared, frame.req);
                 return;
             case "graph":
-                settleDoctor("graph", frame.graph, String(frame.graph.project));
+                settleDoctor("graph", frame.graph, frame.req);
                 return;
             case "diff":
-                settleDoctor("diff", frame.diff, frame.project);
+                settleDoctor("diff", frame.diff, frame.req);
                 return;
             case "export":
-                settleDoctor("export", frame.file);
+                settleDoctor("export", frame.file, frame.req);
                 return;
             case "imported":
-                settleDoctor("imported", { name: frame.name, export: frame.export });
+                settleDoctor("imported", { name: frame.name, export: frame.export }, frame.req);
                 return;
             case "calls":
                 for (const listener of callListeners) listener(frame.calls);
                 return;
             case "message":
-                // The server's refusals do not name the request they answer, so a message fails
-                // every request in flight instead of leaving it to the timeout.
-                rejectAll(frame.text);
+                // A refusal names its request when it had an id: only that one fails. One without
+                // (a write, or a message the server could not tie to a request) fails every request
+                // in flight instead of leaving them to the timeout.
+                if (frame.req === undefined) rejectAll(frame.text);
+                else rejectDoctor(frame.req, frame.text);
         }
     };
 
@@ -323,27 +359,34 @@ export function createApi(
         },
         set: (request) => write({ set: request }),
         project: (request) => write({ project: request }),
+        projectPlan: (project) =>
+            askDoctor<ProjectPlan>(
+                "projectplan",
+                { project: { action: "remove", project, confirmed: false } },
+                WRITE_TIMEOUT_MS,
+            ),
         doctorPlan: (selection) =>
-            askDoctor<Plan>("doctorplan", { doctor: { action: "plan", selection } }),
-        doctorApply: (selection) =>
-            askDoctor<Fixed>("doctorfixed", { doctor: { action: "apply", selection } }),
+            askDoctor<Plan>("doctorplan", {
+                doctor: { action: "plan", selection, confirmed: null },
+            }),
+        doctorApply: (selection, confirmed) =>
+            askDoctor<Fixed>("doctorfixed", {
+                doctor: { action: "apply", selection, confirmed },
+            }),
         junkPlan: () =>
             askDoctor<Cleared>(
                 "junkplan",
                 { junk: { action: "plan", paths: [] } },
-                undefined,
                 JUNK_TIMEOUT_MS,
             ),
         junkApply: (paths) =>
             askDoctor<Cleared>(
                 "junkcleared",
                 { junk: { action: "apply", paths } },
-                undefined,
                 JUNK_TIMEOUT_MS,
             ),
-        // `request.project` is the registry id as text, which is what the frame carries back.
-        drill: (request) => askDoctor<DrillGraph>("graph", { graph: request }, request.project),
-        diff: (request) => askDoctor<DiffReport>("diff", { diff: request }, request.project),
+        drill: (request) => askDoctor<DrillGraph>("graph", { graph: request }),
+        diff: (request) => askDoctor<DiffReport>("diff", { diff: request }),
         exportGraph: (request) => askDoctor<ExportFile>("export", { export: request }),
         importGraph: (request) => askDoctor<Imported>("imported", { import: request }),
         calls(listener) {
@@ -420,6 +463,10 @@ export function useSetMutation() {
 export function useProjectMutation() {
     const api = useApi();
     return useWrite<ProjectRequest>("project", (request) => api.project(request));
+}
+
+export function useProjectPlan(): Pick<Api, "projectPlan"> {
+    return useApi();
 }
 
 export function useDoctorApi(): Pick<Api, "doctorPlan" | "doctorApply"> {

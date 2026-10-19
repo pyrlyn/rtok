@@ -8,7 +8,7 @@
 //! `bench --dry-run` reads only the `--config` fixture plus `bench/tasks.toml`, and
 //! `config show` reads the same `--config` fixture with a cleared env (`[env]
 //! inherit = false`), so ambient `RTOK_*` never leaks into the layering. An agent
-//! session's own env ([`SESSION_ENV`]) is stripped from every case (T406).
+//! session's own env and ambient logging ([`SNAPSHOT_ENV`]) are stripped from every case.
 //! Insta stays out of here: it covers structured renderings
 //! (`tests/compress_snapshot.rs`), trycmd covers the binary's stdout.
 
@@ -23,28 +23,47 @@ use std::path::Path;
 /// `CLAUDE_ENV_FILE` (T283). Inherited by the binary under test, it turns the "not inside an
 /// agent session" cases into the caller's own inbox, and a `hook` case could append to the
 /// live session's env file (T406). `CLAUDE_CODE_SESSION_ID` names the caller too (T473).
-const SESSION_ENV: [&str; 4] = [
+// Ambient logging adds timestamps to snapshots; dedicated logging tests set it explicitly.
+const SNAPSHOT_ENV: [&str; 5] = [
     "RTOK_AGENT_ID",
     "RTOK_CONFIG",
     "CLAUDE_ENV_FILE",
     "CLAUDE_CODE_SESSION_ID",
+    "RUST_LOG",
 ];
+
+// Both subprocess paths must run the same fixture entry point.
+fn cli_process() -> std::process::Command {
+    let mut child = std::process::Command::new(std::env::current_exe().unwrap());
+    child.args(["cli", "--exact", "--nocapture"]);
+    child
+}
+
+#[test]
+fn cli_snapshots_ignore_ambient_rust_log() {
+    let status = cli_process()
+        .env("RUST_LOG", "warn")
+        .status()
+        .expect("run snapshots with ambient logging");
+    assert!(status.success(), "ambient RUST_LOG leaked into snapshots");
+}
 
 #[test]
 fn cli() {
     // trycmd 1.2.1 cannot remove a var for every case, its `TestCases::env` default would
     // override a case's own `[env.add]`, and `unsafe_code = "forbid"` rules out `remove_var`:
-    // rerun this test in a child of the test binary without the session env instead (T406).
-    if SESSION_ENV.iter().any(|k| std::env::var_os(k).is_some()) {
-        let mut child = std::process::Command::new(std::env::current_exe().unwrap());
-        child.args(["cli", "--exact", "--nocapture"]);
-        for key in SESSION_ENV {
+    // rerun this test in a child of the test binary without ambient session and logging env instead.
+    if SNAPSHOT_ENV.iter().any(|k| std::env::var_os(k).is_some()) {
+        let mut child = cli_process();
+        for key in SNAPSHOT_ENV {
             child.env_remove(key);
         }
-        let status = child.status().expect("rerun `cli` without the session env");
+        let status = child
+            .status()
+            .expect("rerun `cli` without ambient session and logging env");
         assert!(
             status.success(),
-            "trycmd cases failed without the session env: {status}"
+            "trycmd cases failed without ambient session and logging env: {status}"
         );
         return;
     }

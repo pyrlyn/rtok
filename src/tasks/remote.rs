@@ -7,13 +7,13 @@
 //! limits (`research.md` §35.4).
 
 use std::cell::Cell;
-use std::process::Command;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, bail};
 use reqwest::Method;
 use reqwest::blocking::{Client, RequestBuilder, Response};
 use reqwest::header::{CONTENT_TYPE, HeaderMap};
+use rtok_sys::proc::ProgressRunner;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 
@@ -77,11 +77,16 @@ pub fn max_with_prefix(ids: impl IntoIterator<Item = TaskId>, prefix: &str) -> O
 /// (`gh auth token`), the order the providers' own CLIs use.
 pub fn token(adapter: &str, vars: &[&str], cli: &[&str]) -> Result<String> {
     token_with(|v| std::env::var(v).ok(), vars, cli).with_context(|| {
-        format!(
-            "{adapter}: no token; set {} or run `{}`",
-            vars.join(" or "),
-            cli.join(" ")
-        )
+        // A provider with no CLI (Linear) has only the variable to offer.
+        if cli.is_empty() {
+            format!("{adapter}: no token; set {}", vars.join(" or "))
+        } else {
+            format!(
+                "{adapter}: no token; set {} or run `{}`",
+                vars.join(" or "),
+                cli.join(" ")
+            )
+        }
     })
 }
 
@@ -97,7 +102,7 @@ fn token_with(env: impl Fn(&str) -> Option<String>, vars: &[&str], cli: &[&str])
     let Some((program, args)) = cli.split_first() else {
         bail!("no token in the environment");
     };
-    let out = Command::new(program).args(args).output()?;
+    let out = ProgressRunner::quiet(program, args).run()?;
     let t = String::from_utf8_lossy(&out.stdout).trim().to_string();
     if !out.status.success() || t.is_empty() {
         bail!("`{}` printed no token", cli.join(" "));
@@ -208,7 +213,13 @@ impl Http {
             let text = res.text().unwrap_or_default();
             let msg = serde_json::from_str::<Value>(&text)
                 .ok()
-                .and_then(|v| v.get("message")?.as_str().map(String::from))
+                // GraphQL (Linear) puts the reason in `errors[0].message`, even for a 400.
+                .and_then(|v| {
+                    v.get("message")
+                        .or_else(|| v.pointer("/errors/0/message"))?
+                        .as_str()
+                        .map(String::from)
+                })
                 .unwrap_or_else(|| text.chars().take(300).collect());
             bail!("{}: {method} {url}: {status}: {msg}", self.adapter);
         }

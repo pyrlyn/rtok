@@ -4,6 +4,7 @@
 
 //! PreCompact checkpoint + compact restore (plan T2.5).
 
+use super::memory::redact_private;
 use rtok_plugin_sdk::{Class, Ctx, Injection, Measurement};
 use serde_json::Value;
 use std::collections::{BTreeMap, HashMap, VecDeque};
@@ -212,7 +213,9 @@ fn extract_lines_with<I: Iterator<Item = std::io::Result<String>>>(
                 if errors.len() == 8 {
                     errors.pop_front();
                 }
-                errors.push_back(s.chars().take(200).collect());
+                // Redact before the cut: a closing tag past the 200th char would leave the
+                // opening one, and the text after it, in the stored note.
+                errors.push_back(redact_private(s).chars().take(200).collect());
             }
         });
         files.track(&v);
@@ -246,15 +249,19 @@ fn extract_lines_with<I: Iterator<Item = std::io::Result<String>>>(
 /// A raw JSONL line that cannot contribute anything [`extract_lines_with`] keeps.
 ///
 /// `file_path` and the three error spellings survive JSON string escaping unchanged, so
-/// checking for them is a safe superset of what the tree walk would find. A `"type":"user"`
-/// record is only interesting through [`user_prompt`]/[`skill_body`], and both read only
-/// through [`user_text`]: a bare string `message.content`, or an array with a
-/// `"type":"text"` block. Neither reads a `tool_result` block (marked by `"tool_use_id"`),
-/// which is the shape that dominates a real transcript's bytes — a large Bash/Read result is
-/// echoed back as a `user` turn, not typed by anyone — so that is the one case this filter
-/// excludes. `skill_body` also needs `"isMeta":true` and `"sourceToolUseID"`, both specific
-/// enough that a false hit in ordinary transcript text is effectively impossible, so a line
-/// carrying both is always let through.
+/// checking for them is a safe superset of what the tree walk would find. A `user` record
+/// is only interesting through [`user_prompt`]/[`skill_body`], and both read only through
+/// [`user_text`]: a bare string `message.content`, or an array with a `text` block. The one
+/// shape that is provably neither is a bare tool-result echo — a `tool_result` block marked
+/// by `"tool_use_id"`, with no `text` block and no string `content` beside it — and it dominates a real transcript's bytes (a
+/// large Bash/Read result is echoed back as a `user` turn, not typed by anyone), so that is
+/// the one case this filter excludes. `skill_body` also needs `"isMeta":true` and
+/// `"sourceToolUseID"`, so a line carrying both is always let through.
+///
+/// Every marker is matched as a key/value pair with optional JSON whitespace between, in
+/// any key order, and a line that escapes an ASCII letter (`\u0065`) is always let through:
+/// a field name or value could be spelled that way, and the filter must never be the reason
+/// a valid record loses its content. Ambiguity goes to the structural parser.
 ///
 /// `prefilter_is_a_true_superset_on_fixtures_and_a_large_transcript` (below) checks this
 /// claim empirically — with the filter on and off — rather than trusting it to this comment.
@@ -263,24 +270,47 @@ fn worth_parsing(line: &str) -> bool {
         || line.contains("error")
         || line.contains("Error")
         || line.contains("ERROR")
+        || escapes_a_letter(line)
     {
         return true;
     }
     // T375: a `rm` in a Bash call names no `file_path`, and a Write result is what tells a
     // created file from an overwritten one.
-    if line.contains("\"type\":\"create\"")
+    if has_pair(line, "\"type\"", "\"create\"")
         || line.contains("File created successfully")
-        || (line.contains("\"name\":\"Bash\"") && line.contains("rm"))
+        || (has_pair(line, "\"name\"", "\"Bash\"") && line.contains("rm"))
     {
         return true;
     }
-    if !line.contains("\"type\":\"user\"") {
+    if !has_pair(line, "\"type\"", "\"user\"") {
         return false;
     }
-    if line.contains("\"isMeta\":true") && line.contains("\"sourceToolUseID\"") {
+    if has_pair(line, "\"isMeta\"", "true") && line.contains("\"sourceToolUseID\"") {
         return true;
     }
     !line.contains("\"tool_use_id\"")
+        || !has_pair(line, "\"type\"", "\"tool_result\"")
+        || has_pair(line, "\"type\"", "\"text\"")
+}
+
+/// `key` followed by `:` and `value`, with JSON whitespace allowed around the colon.
+fn has_pair(line: &str, key: &str, value: &str) -> bool {
+    line.match_indices(key).any(|(i, _)| {
+        line[i + key.len()..]
+            .trim_start()
+            .strip_prefix(':')
+            .is_some_and(|rest| rest.trim_start().starts_with(value))
+    })
+}
+
+/// A `\u00XX` escape of an ASCII letter or `_`: no writer emits one, but a parser decodes
+/// it, so it can hide any token [`worth_parsing`] looks for. ANSI `\u001b` is not one.
+fn escapes_a_letter(line: &str) -> bool {
+    line.match_indices("\\u00").any(|(i, _)| {
+        line.as_bytes()
+            .get(i + 4)
+            .is_some_and(|d| matches!(d, b'4'..=b'7'))
+    })
 }
 
 /// A skill body the host injected: a `user` record flagged `isMeta` with a
@@ -321,7 +351,7 @@ fn user_prompt(v: &Value) -> Option<UserText> {
     if host_injected(v) {
         return Some(UserText::Host);
     }
-    let t = strip_reminders(&raw);
+    let t = strip_reminders(&redact_private(&raw));
     let t = t.trim();
     if t.is_empty() || HOST_OPENERS.iter().any(|o| t.starts_with(o)) {
         Some(UserText::Host)
@@ -734,8 +764,19 @@ pub fn prompt_counts(rows: &[(String, String)]) -> (u64, u64) {
     })
 }
 
+/// The same project identity ordinary memory and session attribution use (T133), so a
+/// linked worktree and its main checkout share one handoff.
 fn project_of_cx(cx: &Ctx) -> Option<String> {
-    crate::config::layers::git_root(Path::new(cx.cwd()?))?
+    crate::project::project_name(Path::new(cx.cwd()?))
+}
+
+/// What handoffs were filed under before T553: the git root's basename. Only a lookup
+/// fallback for rows an older build wrote; never a place to save.
+fn legacy_project_of_cx(cx: &Ctx) -> Option<String> {
+    // `checkout`, not `main`: older builds filed a worktree's handoff under the worktree's own
+    // directory name, so that is the row to look for.
+    rtok_config::root::ProjectRoot::find(Path::new(cx.cwd()?))?
+        .checkout
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
 }
@@ -774,10 +815,12 @@ pub fn offer(cx: &Ctx) -> Option<Injection> {
 /// Newest `session:*` note of the hook cwd's project, same render and budget as [`offer`].
 /// Reads through the hook `Runtime`'s own store (T203) instead of opening a third one.
 pub fn offer_session(cx: &Ctx) -> Option<Injection> {
-    let raw = cx
-        .latest_session_note(project_of_cx(cx).as_deref())
-        .ok()
-        .flatten()?;
+    let project = project_of_cx(cx);
+    let latest = |p: Option<&str>| cx.latest_session_note(p).ok().flatten();
+    let raw = latest(project.as_deref()).or_else(|| {
+        let legacy = legacy_project_of_cx(cx).filter(|l| Some(l) != project.as_ref())?;
+        latest(Some(&legacy))
+    })?;
     let inj = render_offer(cx, raw.clone())?;
     let _ = cx.record(&Measurement {
         plugin: "memory",
@@ -794,6 +837,8 @@ pub fn offer_session(cx: &Ctx) -> Option<Injection> {
 
 fn render_offer(cx: &Ctx, text: String) -> Option<Injection> {
     let cap = checkpoint_cap(cx);
+    // Notes written before T548 may still hold a tag; the restore must not hand it back.
+    let text = redact_private(&text).into_owned();
     let text = crate::plugin::fit_budget(cx, &text, Class::Prose, cap);
     (!text.is_empty()).then_some(Injection {
         plugin: "inject",
@@ -1232,6 +1277,48 @@ mod tests {
         let _ = std::fs::remove_dir_all(dir);
     }
 
+    /// T552: the same record spelled with JSON whitespace, reordered keys, a typed text block
+    /// next to a tool result, or an escaped field name extracts exactly what the compact
+    /// form does; the prefilter only skips what it can prove is a bare tool-result echo.
+    #[test]
+    fn prefilter_is_formatting_independent() {
+        let spellings = [
+            r#"{"type":"user","message":{"content":"ship the patch"}}"#,
+            r#"{"type": "user", "message": {"content": "ship the patch"}}"#,
+            r#"{"message":{"content":"ship the patch"},"type" : "user"}"#,
+            r#"{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"ok"},{"type":"text","text":"ship the patch"}]}}"#,
+            r#"{"type": "user", "message": {"content": [{"tool_use_id": "t1", "type": "tool_result", "content": "ok"}, {"text": "ship the patch", "type": "text"}]}}"#,
+            r#"{"typ\u0065":"user","message":{"content":"ship the patch"}}"#,
+            r#"{"type":"user","message":{"content":"ship the patch"},"tool_use_id":"t1"}"#,
+        ];
+        for line in spellings {
+            let filtered = extract_lines_with(line.as_bytes().lines(), true);
+            assert_eq!(filtered.prompts, ["ship the patch"], "{line}");
+            assert_eq!(
+                filtered,
+                extract_lines_with(line.as_bytes().lines(), false),
+                "{line}"
+            );
+        }
+        let changes = [
+            r#"{"type": "assistant", "cwd": "/r", "message": {"content": [{"type": "tool_use", "id": "t6", "name": "Bash", "input": {"command": "rm src/gone.rs"}}]}}"#,
+            r#"{"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "t4", "content": "File created successfully at: /r/src/new.rs"}]}, "toolUseResult": {"type": "create"}}"#,
+        ];
+        for line in changes {
+            assert!(worth_parsing(line), "{line}");
+        }
+        // Host-written text stays excluded however it is spelled.
+        let host = r#"{"type": "user", "isMeta": true, "message": {"content": "Your response above was cut off."}}"#;
+        assert!(extract(host).prompts.is_empty());
+        // The point of the filter: a bare tool-result echo is still skipped, spaced or not.
+        for echo in [
+            r#"{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t","content":"ls output"}]}}"#,
+            r#"{"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "t", "content": "ls output"}]}}"#,
+        ] {
+            assert!(!worth_parsing(echo), "{echo}");
+        }
+    }
+
     /// T375: the change lines the prefilter must keep are the same ones the full parse reads.
     #[test]
     fn prefilter_keeps_the_action_lines() {
@@ -1433,6 +1520,184 @@ mod tests {
             .filter(|r| r.kind == "handoff")
             .count();
         assert_eq!(handoffs, 2, "one measurement per startup restore");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// T548: a `<private>` block in a typed prompt or a captured error line is cut before
+    /// the checkpoint stores or restores it, even when its closing tag sits past the
+    /// 300/200-char truncation and so could not be matched afterwards.
+    #[test]
+    fn private_text_never_reaches_a_stored_or_restored_checkpoint() {
+        let long = "z".repeat(400);
+        let lines = [
+            serde_json::json!({"type":"user","message":{"content":"use <private>PRIVATE_SENTINEL</private> briefly"}}),
+            serde_json::json!({"type":"user","message":{"content":"mixed <PrIvAtE>\nPRIVATE_SENTINEL\nmultiline</pRiVaTe> case"}}),
+            serde_json::json!({"type":"user","message":{"content":format!("long <private>{long} PRIVATE_SENTINEL</private> tail")}}),
+            serde_json::json!({"type":"assistant","message":{"content":[{"type":"tool_result","content":format!("error: <private>{long} PRIVATE_SENTINEL</private>")}]}}),
+            serde_json::json!({"type":"user","message":{"content":"plain prompt stays"}}),
+        ]
+        .map(|v| v.to_string())
+        .join("\n");
+        let cp = extract(&lines);
+        assert!(!cp.render().contains("PRIVATE_SENTINEL"), "{}", cp.render());
+        assert!(
+            cp.render().contains("plain prompt stays"),
+            "{}",
+            cp.render()
+        );
+
+        let dir = std::env::temp_dir().join("rtok-t548-private-checkpoint");
+        let _ = std::fs::remove_dir_all(&dir);
+        let repo = dir.join("privproj");
+        std::fs::create_dir_all(repo.join(".git")).unwrap();
+        std::fs::write(repo.join("t.jsonl"), &lines).unwrap();
+        let cfg = crate::testutil::config_in(&dir);
+        let transcript = repo.join("t.jsonl");
+        let cwd = repo.display().to_string();
+        let run = |event: &str, input: serde_json::Value| {
+            let mut out = Vec::new();
+            crate::hooks::run(event, input.to_string().as_bytes(), &mut out, &cfg);
+            String::from_utf8(out).unwrap()
+        };
+        run(
+            "PreCompact",
+            serde_json::json!({"hook_event_name":"PreCompact","session_id":"t548","transcript_path":transcript,"cwd":cwd,"trigger":"auto"}),
+        );
+        run(
+            "SessionEnd",
+            serde_json::json!({"hook_event_name":"SessionEnd","session_id":"t548","transcript_path":transcript,"cwd":cwd,"reason":"clear"}),
+        );
+        let store = crate::store::Store::open(&cfg.core.db_path).unwrap();
+        for note in [
+            store
+                .latest_note("checkpoint:t548")
+                .unwrap()
+                .expect("checkpoint"),
+            store
+                .latest_session_note(Some("privproj"))
+                .unwrap()
+                .expect("session"),
+        ] {
+            assert!(!note.contains("PRIVATE_SENTINEL"), "{note}");
+            assert!(note.contains("plain prompt stays"), "{note}");
+        }
+        // A row an older build stored with the tag intact is still not restored.
+        let ctx_rt = crate::plugin::Runtime::in_memory("t548-legacy").unwrap();
+        let ctx = Ctx::new(&ctx_rt);
+        ctx.upsert_note(
+            Some("rtok"),
+            &kind(&ctx),
+            "compact",
+            "checkpoint\n- a <private>PRIVATE_SENTINEL</private> b\n",
+        )
+        .unwrap();
+        let text = offer(&ctx).expect("injection").text;
+        assert!(!text.contains("PRIVATE_SENTINEL"), "{text}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// T660.2: one project name from the main checkout and from its linked worktree; only the
+    /// legacy lookup keeps the per-checkout directory name older builds filed under.
+    #[test]
+    fn handoff_project_is_one_name_across_worktrees_and_legacy_is_per_checkout() {
+        let dir = crate::testutil::tmp_dir("t660-handoff-name");
+        let (main, wt) = crate::testutil::worktree_layout(&dir);
+        let name_at = |cwd: &Path| {
+            let mut rt = crate::plugin::Runtime::in_memory("t660-name").unwrap();
+            rt.cwd = Some(cwd.to_string_lossy().into_owned());
+            let cx = Ctx::new(&rt);
+            (project_of_cx(&cx), legacy_project_of_cx(&cx))
+        };
+        let (from_main, from_wt) = (name_at(&main), name_at(&wt));
+        assert_eq!(from_main.0, from_wt.0);
+        assert_eq!(from_main.0.as_deref(), Some("repo"));
+        assert_eq!(from_main.1.as_deref(), Some("repo"));
+        assert_eq!(from_wt.1.as_deref(), Some("repo-t1"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// T553: a session ended in the main checkout is handed off to a session started in its
+    /// linked worktree and back, under the shared project name (origin repo name, not the
+    /// checkout's basename); an unrelated project and a legacy basename-scoped row behave.
+    #[test]
+    fn session_handoff_follows_the_shared_project_across_worktrees() {
+        let dir = std::env::temp_dir().join("rtok-t553-handoff-worktrees");
+        let _ = std::fs::remove_dir_all(&dir);
+        let main = dir.join("repo");
+        let linked = dir.join("repo-fix");
+        let admin = main.join(".git/worktrees/repo-fix");
+        std::fs::create_dir_all(&admin).unwrap();
+        std::fs::create_dir_all(linked.join("src")).unwrap();
+        std::fs::write(
+            main.join(".git/config"),
+            "[remote \"origin\"]\n\turl = git@github.com:o/shared-name.git\n",
+        )
+        .unwrap();
+        std::fs::write(admin.join("commondir"), "../..\n").unwrap();
+        std::fs::write(
+            linked.join(".git"),
+            format!("gitdir: {}\n", admin.display()),
+        )
+        .unwrap();
+        let other = dir.join("other");
+        std::fs::create_dir_all(other.join(".git")).unwrap();
+        let scratch = dir.join("scratch");
+        std::fs::create_dir_all(&scratch).unwrap();
+
+        let cfg = crate::testutil::config_in(&dir);
+        let run = |event: &str, input: serde_json::Value| {
+            let mut out = Vec::new();
+            crate::hooks::run(event, input.to_string().as_bytes(), &mut out, &cfg);
+            serde_json::from_slice::<serde_json::Value>(&out).unwrap()["hookSpecificOutput"]
+                ["additionalContext"]
+                .as_str()
+                .unwrap_or("")
+                .to_string()
+        };
+        let end = |session: &str, cwd: &Path, prompt: &str| {
+            let t = dir.join(format!("{session}.jsonl"));
+            let line = serde_json::json!({"type":"user","message":{"content":prompt}});
+            std::fs::write(&t, line.to_string()).unwrap();
+            run(
+                "SessionEnd",
+                serde_json::json!({"hook_event_name":"SessionEnd","session_id":session,"transcript_path":t,"cwd":cwd,"reason":"clear"}),
+            );
+        };
+        let start = |session: &str, cwd: &Path| {
+            run(
+                "SessionStart",
+                serde_json::json!({"hook_event_name":"SessionStart","session_id":session,"source":"startup","cwd":cwd}),
+            )
+        };
+
+        end("s-main", &main.join("src"), "from the main checkout");
+        end("s-other", &other, "from an unrelated project");
+        assert!(start("n1", &linked.join("src")).contains("from the main checkout"));
+        assert!(!start("n1b", &linked).contains("unrelated"));
+        end("s-linked", &linked.join("src"), "from the linked worktree");
+        assert!(start("n2", &main).contains("from the linked worktree"));
+        assert!(start("n3", &other).contains("from an unrelated project"));
+        assert!(!start("n4", &scratch).contains("handoff"), "non-git cwd");
+        assert!(!start("n4", &scratch).contains("from the"));
+
+        // A row filed under the checkout basename by an older build is still found.
+        let store = crate::store::Store::open(&cfg.core.db_path).unwrap();
+        store
+            .upsert_note(
+                Some("legacy-name"),
+                "session:old",
+                "compact",
+                "checkpoint\n- legacy row\n",
+            )
+            .unwrap();
+        let legacy = dir.join("legacy-name");
+        std::fs::create_dir_all(legacy.join(".git")).unwrap();
+        std::fs::write(
+            legacy.join(".git/config"),
+            "[remote \"origin\"]\n\turl = git@github.com:o/renamed.git\n",
+        )
+        .unwrap();
+        assert!(start("n5", &legacy).contains("legacy row"));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

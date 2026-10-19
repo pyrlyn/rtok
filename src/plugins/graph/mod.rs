@@ -22,6 +22,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use anyhow::Result;
+use rtok_sys::proc::ProgressRunner;
 use serde_json::{Value, json};
 
 use rtok_plugin_sdk::{
@@ -40,6 +41,7 @@ pub mod export;
 pub mod follow;
 pub mod health;
 pub mod index;
+pub mod jobs;
 pub mod lsp;
 pub mod projects;
 pub mod rank;
@@ -99,8 +101,8 @@ impl Plugin for Graph {
             },
             ToolDef {
                 name: "callers",
-                description: "Which definitions reference a symbol: path, calling definition, count. Optional path substring keeps one subtree.",
-                input_schema: json!({"type":"object","properties":{"name":{"type":"string"},"path":{"type":"string"},"project":{"type":"string"}},"required":["name"]}),
+                description: "Which definitions reference a symbol: path, caller, count. Optional path keeps one subtree. No name: unreferenced.",
+                input_schema: json!({"type":"object","properties":{"name":{"type":"string"},"path":{"type":"string"},"kind":{"type":"string"},"project":{"type":"string"}}}),
             },
             ToolDef {
                 name: "impact",
@@ -109,8 +111,8 @@ impl Plugin for Graph {
             },
             ToolDef {
                 name: "outline",
-                description: "Definitions in one file (read mode=map).",
-                input_schema: json!({"type":"object","properties":{"path":{"type":"string"},"project":{"type":"string"}},"required":["path"]}),
+                description: "Definitions in one file (read mode=map); kind filters.",
+                input_schema: json!({"type":"object","properties":{"path":{"type":"string"},"kind":{"type":"string"},"project":{"type":"string"}},"required":["path"]}),
             },
             ToolDef {
                 name: "explore",
@@ -480,6 +482,7 @@ pub fn call(cx: &Ctx, name: &str, args: &Value, scope: &[scope::Member]) -> Resu
                 scope::symbols(cx, scope, &names, &filter)?
             }
         }
+        "callers" if arg("name").is_empty() => scope::dead_filtered(cx, scope, &filter)?,
         "callers" => scope::callers(cx, scope, arg("name"), &filter)?,
         "impact" => {
             let name = arg("name");
@@ -497,11 +500,30 @@ pub fn call(cx: &Ctx, name: &str, args: &Value, scope: &[scope::Member]) -> Resu
                 )?
             }
         }
-        "outline" => return scope::outline(cx, scope, arg("path")),
+        "outline" => {
+            let text = scope::outline(cx, scope, arg("path"))?;
+            return Ok(outline_of_kind(&text, arg("path"), &filter.kind));
+        }
         "explore" => scope::explore(cx, scope, arg("query"), &filter)?,
         _ => anyhow::bail!("unknown tool: {name}"),
     };
     Ok(format!("{}{text}", head_stale_prefix(cx, scope)))
+}
+
+/// T665: `outline` narrowed to one kind of definition (`fn`, `struct`, …) — the word the map
+/// prints after any `pub…` marker. A whole-file answer (no `kind`) stays byte-exact.
+fn outline_of_kind(text: &str, path: &str, kind: &str) -> String {
+    if kind.is_empty() {
+        return text.to_string();
+    }
+    let kept: Vec<&str> = text
+        .lines()
+        .filter(|l| l.split_whitespace().find(|w| !w.starts_with("pub")) == Some(kind))
+        .collect();
+    if kept.is_empty() {
+        return format!("no {kind} in {path}");
+    }
+    kept.join("\n")
 }
 
 /// `name`, or `names` when the caller asks for several. One name stays the old call.
@@ -1322,8 +1344,8 @@ fn rel_of(root: &Path, path: &str) -> String {
     let path = path.replace('\\', "/");
     let path = path.strip_prefix("./").unwrap_or(&path);
     match (
-        dunce::canonicalize(root.join(path)),
-        dunce::canonicalize(root),
+        fs_kit::path::canonicalize(root.join(path)),
+        fs_kit::path::canonicalize(root),
     ) {
         (Ok(abs), Ok(root)) => abs
             .strip_prefix(root)
@@ -1480,11 +1502,11 @@ fn defs_in_path(cx: &Ctx, root: &Path, key: &str, rel: &str) -> Result<Vec<Strin
 /// Stdout of `git -C root <args>`. Failure text starts with `git diff failed`
 /// so a review can tell a broken git from an empty diff.
 pub(crate) fn git_stdout_result(root: &Path, args: &[&str]) -> Result<Vec<u8>> {
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(root)
-        .args(args)
-        .output()
+    let argv = [OsStr::new("-C"), root.as_os_str()]
+        .into_iter()
+        .chain(args.iter().map(OsStr::new));
+    let out = ProgressRunner::quiet("git", argv)
+        .run()
         .map_err(|e| anyhow::anyhow!("git diff failed: {e}"))?;
     if out.status.success() {
         return Ok(out.stdout);
@@ -1613,36 +1635,76 @@ pub(crate) fn impact_walk_roots(
     depth: u32,
     follow_imports: bool,
 ) -> Result<Vec<(usize, u32, String, String)>> {
+    impact_walk_memo(
+        cx,
+        roots,
+        name,
+        depth,
+        follow_imports,
+        &mut WalkMemo::default(),
+    )
+}
+
+/// Store answers for one `(root, name)`, kept across walks over an index that does not change
+/// meanwhile. `review` walks hundreds of definitions whose callers overlap; asking again for
+/// each walk was most of its time (T646).
+#[derive(Default)]
+pub(crate) struct WalkMemo {
+    ranked: HashMap<RootName, resolve::Hit>,
+    refs: HashMap<RootName, Vec<RefGroup>>,
+    follows: HashMap<RootName, Vec<(String, String)>>,
+}
+
+type RootName = (String, String);
+/// One `symbol_ref_groups` row: path, scope, count, first line.
+type RefGroup = (String, String, i64, i32);
+
+pub(crate) fn impact_walk_memo(
+    cx: &Ctx,
+    roots: &[&str],
+    name: &str,
+    depth: u32,
+    follow_imports: bool,
+    memo: &mut WalkMemo,
+) -> Result<Vec<(usize, u32, String, String)>> {
     let mut seen: HashSet<String> = HashSet::from([name.to_string()]);
     let mut frontier = vec![name.to_string()];
     let mut out = Vec::new();
-    // Resolved once per root and name: an ambiguous callee only follows the winning definition (T368).
-    let mut ranked: HashMap<(usize, String), resolve::Hit> = HashMap::new();
     for d in 1..=depth.clamp(1, 4) {
         let mut next = Vec::new();
         for from in &frontier {
             for (i, root) in roots.iter().enumerate() {
-                let key = (i, from.clone());
-                if !ranked.contains_key(&key) {
-                    ranked.insert(key.clone(), resolve::rank_name(cx, root, from)?);
+                let key = (root.to_string(), from.clone());
+                // Resolved once per root and name: an ambiguous callee only follows the winning definition (T368).
+                if !memo.ranked.contains_key(&key) {
+                    memo.ranked
+                        .insert(key.clone(), resolve::rank_name(cx, root, from)?);
                 }
-                let allow = &ranked[&key];
-                for (path, scope, ..) in cx.symbol_ref_groups(root, from)? {
-                    if !allow.allows(&path) {
+                if !memo.refs.contains_key(&key) {
+                    memo.refs
+                        .insert(key.clone(), cx.symbol_ref_groups(root, from)?);
+                }
+                let allow = &memo.ranked[&key];
+                for (path, scope, ..) in &memo.refs[&key] {
+                    if !allow.allows(path) {
                         continue;
                     }
                     if scope.is_empty() {
-                        out.push((i, d, path, String::new()));
+                        out.push((i, d, path.clone(), String::new()));
                     } else if seen.insert(scope.clone()) {
-                        out.push((i, d, path, scope.clone()));
-                        next.push(scope);
+                        out.push((i, d, path.clone(), scope.clone()));
+                        next.push(scope.clone());
                     }
                 }
                 if follow_imports {
-                    for (path, def) in cx.symbol_import_follow(root, from)? {
+                    if !memo.follows.contains_key(&key) {
+                        memo.follows
+                            .insert(key.clone(), cx.symbol_import_follow(root, from)?);
+                    }
+                    for (path, def) in &memo.follows[&key] {
                         if seen.insert(def.clone()) {
-                            out.push((i, d, path, def.clone()));
-                            next.push(def);
+                            out.push((i, d, path.clone(), def.clone()));
+                            next.push(def.clone());
                         }
                     }
                 }
@@ -2438,6 +2500,34 @@ mod tests {
         bfs.sort();
         assert!(!cte.is_empty(), "fan-out-10 must reach sink");
         assert_eq!(cte, bfs, "query vs BFS");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T646: walks sharing one `WalkMemo` return what fresh walks return, and a name already
+    /// visited by an earlier walk is answered from the memo, not the store.
+    #[test]
+    fn shared_walk_memo_keeps_rows_and_reuses_visited_names() {
+        let (cx, dir) = cx("walk-memo");
+        let mut src = String::from("fn sink() {}\n");
+        for i in 0..4 {
+            src.push_str(&format!("fn a{i}() {{ sink(); }}\n"));
+            src.push_str(&format!("fn b{i}() {{ a{i}(); }}\n"));
+            src.push_str(&format!("fn c{i}() {{ b{i}(); }}\n"));
+        }
+        fs::write(dir.join("fan.rs"), src).unwrap();
+        let ctx = Ctx::new(&cx);
+        index::run(&ctx, &dir, false).unwrap();
+        let key = index::canon(&dir);
+        let mut memo = WalkMemo::default();
+        for name in ["sink", "a1", "b2", "sink"] {
+            let shared = impact_walk_memo(&ctx, &[&key], name, 3, true, &mut memo).unwrap();
+            let fresh = impact_walk_roots(&ctx, &[&key], name, 3, true).unwrap();
+            assert_eq!(shared, fresh, "{name}");
+        }
+        let asked = memo.refs.len();
+        assert!(asked > 1, "{asked}");
+        impact_walk_memo(&ctx, &[&key], "a2", 3, true, &mut memo).unwrap();
+        assert_eq!(memo.refs.len(), asked, "a2 was reached from sink");
         let _ = fs::remove_dir_all(dir);
     }
 

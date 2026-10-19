@@ -10,14 +10,15 @@
 #![forbid(unsafe_code)]
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 use std::io::{self, Read, Write};
 use std::path::PathBuf;
-use std::process::{Command, ExitCode, Stdio};
+use std::process::{ExitCode, Stdio};
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::time::Duration;
 
 use rtok_hook::Request;
+use rtok_sys::proc::{Output, ProgressRunner};
 
 const TIMEOUT: Duration = Duration::from_millis(50);
 
@@ -98,10 +99,13 @@ fn rtok_exe() -> PathBuf {
 /// `rtok hook <args>` with its exit code. `stdin` is the payload when this process already read
 /// some of it; otherwise `rtok` reads the host's stdin itself.
 fn rtok(args: &[OsString], stdin: Option<Box<dyn Read>>) -> ExitCode {
-    let mut cmd = Command::new(rtok_exe());
-    cmd.arg("hook").args(args);
+    let mut cmd = ProgressRunner::quiet(
+        rtok_exe(),
+        std::iter::once(OsStr::new("hook")).chain(args.iter().map(OsString::as_os_str)),
+    )
+    .output(Output::Inherit);
     if stdin.is_some() {
-        cmd.stdin(Stdio::piped());
+        cmd = cmd.stdin(Stdio::piped());
     }
     let Ok(mut child) = cmd.spawn() else {
         return fail_open();

@@ -4,7 +4,7 @@
 
 //! Tree-sitter-tags symbol index (plan T8.1).
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -13,6 +13,7 @@ use anyhow::Result;
 use crate::plugins::read::outline;
 use crate::store;
 use rtok_plugin_sdk::{Ctx, SymbolRow};
+use rtok_sys::proc::{Batch, Unit};
 
 #[derive(Debug, Default)]
 pub struct Report {
@@ -49,11 +50,11 @@ fn changed_abs(root: &Path, event_path: &Path) -> PathBuf {
     } else {
         root.join(event_path)
     };
-    dunce::canonicalize(&raw).unwrap_or_else(|_| {
+    fs_kit::path::canonicalize(&raw).unwrap_or_else(|_| {
         let name = event_path.file_name();
         event_path
             .parent()
-            .and_then(|p| dunce::canonicalize(p).ok())
+            .and_then(|p| fs_kit::path::canonicalize(p).ok())
             .and_then(|p| name.map(|n| p.join(n)))
             .unwrap_or(raw)
     })
@@ -77,18 +78,18 @@ pub use crate::store::canon_root as canon;
 /// `dry_run` walks and parses exactly as a real run does but writes no rows, so the report
 /// says what the index would gain without touching the store.
 pub fn run(cx: &Ctx, root: &Path, dry_run: bool) -> Result<Report> {
-    run_with(cx, root, dry_run, &indicatif::ProgressBar::hidden())
+    run_with(cx, root, dry_run, |n| Batch::hidden(n, Unit::Items))
 }
 
 /// Index only `changed` event paths (T35.4). Vanished or unsupported paths drop their rows;
 /// never calls `delete_symbols_missing`.
 pub fn run_changed(cx: &Ctx, root: &Path, changed: &HashSet<PathBuf>) -> Result<Report> {
-    run_changed_with(cx, root, changed, false, &indicatif::ProgressBar::hidden())
+    run_changed_with(cx, root, changed, false)
 }
 
-/// [`run`] reporting each source file it reaches to `pb`. Only `rtok graph index` passes a real
-/// bar; the MCP tool and the background watcher pass `ProgressBar::hidden()`, because neither
-/// owns the terminal it would be drawing on.
+/// [`run`] stepping a bar over the files that pass the stat gate: `bar` gets their count once the
+/// walk is done. Only `rtok graph index` draws one; the MCP tool and the background watcher pass
+/// [`Batch::hidden`], because neither owns the terminal it would be drawing on.
 ///
 /// The walk and the stat gate run here. The files that pass the gate are read, hashed and parsed
 /// on one worker per core (T35.2); every write stays on this thread (D18), in walk order.
@@ -102,28 +103,34 @@ pub fn run_with(
     cx: &Ctx,
     root: &Path,
     dry_run: bool,
-    pb: &indicatif::ProgressBar,
+    bar: impl FnOnce(u64) -> Batch,
 ) -> Result<Report> {
     // T356: the one choke point for the CLI, the MCP tools, the watcher and `ensure`.
     crate::plugins::read::walk_root_ok(root)?;
-    let root = dunce::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
+    let root = fs_kit::path::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
     let rk = canon(&root);
-    let current_fp = extractor_fingerprint();
+    let graph_cfg = cx.plugin_config::<crate::config::Graph>("graph");
+    let current_fp = extractor_fingerprint(&graph_cfg.extensions);
     let stored_fp = cx.extractor_fingerprint(&rk)?;
     let fp_stale = stored_fp.as_deref() != Some(current_fp.as_str());
     if fp_stale && !dry_run {
         let _ = cx.delete_symbols_missing(&rk, &HashSet::new());
     }
-    let stats = cx.symbol_stats(&rk)?;
+    // A stale root is indexed cold, dry run included: its stored stats and shas belong to the
+    // old extractor, and a dry run must not skip files the real run is about to parse.
+    let stats = if fp_stale {
+        HashMap::new()
+    } else {
+        cx.symbol_stats(&rk)?
+    };
     let mut report = Report::default();
+    // Whether any file's rows were replaced; a replacement by zero rows inserts nothing but
+    // still changes what the rank document must say.
+    let mut replaced = false;
     let mut keep = HashSet::new();
     let mut jobs = Vec::new();
-    let graph_cfg = cx.plugin_config::<crate::config::Graph>("graph");
     let matcher = super::walk::Matcher::new(&root, &graph_cfg);
-    for entry in matcher.walk_builder(&root).build() {
-        let Ok(entry) = entry else {
-            continue;
-        };
+    for entry in matcher.walk() {
         if !entry.file_type().is_some_and(|t| t.is_file()) {
             continue;
         }
@@ -155,7 +162,6 @@ pub fn run_with(
         // Same mtime and size: git's rule for "unchanged". Nothing is opened.
         if known.as_ref().is_some_and(|(_, m, s)| (*m, *s) == stat) && stat != (0, 0) {
             report.skipped += 1;
-            pb.inc(1);
             continue;
         }
         jobs.push(Job {
@@ -168,11 +174,13 @@ pub fn run_with(
     }
     let mut pending = Vec::new();
     let mut touches = Vec::new();
+    let mut bar = bar(jobs.len() as u64);
     each_parsed(&jobs, |job, parsed| {
-        pb.inc(1);
+        bar.step(&job.rel);
         stage_parsed(job, parsed, &mut report, &mut pending, &mut touches);
         if !dry_run && pending.len() >= SYMBOL_BATCH_FILES {
             report.inserted += cx.replace_symbol_files(&rk, &pending)?;
+            replaced = true;
             pending.clear();
         }
         Ok(())
@@ -183,6 +191,7 @@ pub fn run_with(
     } else {
         if !pending.is_empty() {
             report.inserted += cx.replace_symbol_files(&rk, &pending)?;
+            replaced = true;
         }
         for (path, stat) in touches {
             cx.touch_symbols(&rk, &path, stat.0, stat.1)?;
@@ -202,11 +211,11 @@ pub fn run_with(
         // One pass over names so callers can rank without scanning `symbols` again (T368).
         cx.rebuild_symbol_idf(&rk)?;
         // A failed rebuild leaves the previous graph; the map falls back, indexing still succeeds.
-        if report.inserted > 0 || removed > 0 || super::rank::missing(cx, &rk) {
+        if replaced || fp_stale || removed > 0 || super::rank::missing(cx, &rk) {
             let _ = super::rank::refresh(cx, &rk);
         }
     }
-    pb.finish_and_clear();
+    bar.finish();
     Ok(report)
 }
 
@@ -215,14 +224,20 @@ fn run_changed_with(
     root: &Path,
     changed: &HashSet<PathBuf>,
     dry_run: bool,
-    pb: &indicatif::ProgressBar,
 ) -> Result<Report> {
     crate::plugins::read::walk_root_ok(root)?;
-    let root = dunce::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
+    let root = fs_kit::path::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
     let rk = canon(&root);
     let mut report = Report::default();
-    let matcher =
-        super::walk::Matcher::new(&root, &cx.plugin_config::<crate::config::Graph>("graph"));
+    let graph_cfg = cx.plugin_config::<crate::config::Graph>("graph");
+    let matcher = super::walk::Matcher::new(&root, &graph_cfg);
+    // Same rule as the full run: rows of a stale extractor are not evidence that a file is
+    // unchanged. The root keeps its stored fingerprint, so the next full run still goes cold.
+    let fp_stale = cx.extractor_fingerprint(&rk)?.as_deref()
+        != Some(extractor_fingerprint(&graph_cfg.extensions).as_str());
+    // A removal or an emptied file inserts no rows, but the rank document still lists what
+    // was there.
+    let mut dropped = false;
     let mut jobs = Vec::new();
     for event_path in changed {
         let abs = changed_abs(&root, event_path);
@@ -237,6 +252,7 @@ fn run_changed_with(
         };
         if !abs.exists() || !matcher.indexable(&abs) {
             if !dry_run {
+                dropped |= cx.symbol_stat(&rk, &rel)?.is_some();
                 let _ = cx.mark_symbols_stale(&canon(&abs));
             }
             continue;
@@ -245,10 +261,13 @@ fn run_changed_with(
             .as_ref()
             .map(stat_key)
             .unwrap_or((0, 0));
-        let known = cx.symbol_stat(&rk, &rel)?;
+        let known = if fp_stale {
+            None
+        } else {
+            cx.symbol_stat(&rk, &rel)?
+        };
         if known.as_ref().is_some_and(|(_, m, s)| (*m, *s) == stat) && stat != (0, 0) {
             report.skipped += 1;
-            pb.inc(1);
             continue;
         }
         jobs.push(Job {
@@ -260,9 +279,8 @@ fn run_changed_with(
         });
     }
     each_parsed(&jobs, |job, parsed| {
-        pb.inc(1);
         match parsed {
-            Parsed::Unreadable => {}
+            Parsed::Unreadable | Parsed::NotText => {}
             Parsed::Unparsed => report.read += 1,
             Parsed::Same => {
                 report.read += 1;
@@ -274,6 +292,7 @@ fn run_changed_with(
             Parsed::Rows(sha, rows) => {
                 report.read += 1;
                 report.indexed += 1;
+                dropped |= !dry_run;
                 report.inserted += if dry_run {
                     rows.len()
                 } else {
@@ -287,10 +306,9 @@ fn run_changed_with(
         // One pass over names so callers can rank without scanning `symbols` again (T368).
         cx.rebuild_symbol_idf(&rk)?;
     }
-    if !dry_run && report.inserted > 0 {
+    if !dry_run && (report.inserted > 0 || dropped) {
         let _ = super::rank::refresh(cx, &rk);
     }
-    pb.finish_and_clear();
     Ok(report)
 }
 
@@ -305,7 +323,10 @@ struct Job {
 
 /// What a worker made of a [`Job`]; the calling thread turns it into store writes.
 enum Parsed {
+    /// The read itself failed (permissions, I/O); the bytes may be fine next time.
     Unreadable,
+    /// Read, but not UTF-8; stays so until the bytes change.
+    NotText,
     /// Read, but the grammar returned an error.
     Unparsed,
     /// Same bytes as the stored sha.
@@ -323,7 +344,12 @@ fn stage_parsed(
     touches: &mut Vec<(String, (i64, i64))>,
 ) {
     match parsed {
+        // T654: the unknown stat (0, 0) never matches the stat gate, so the file is read again
+        // once it is readable, even when restoring access left its mtime and size unchanged.
         Parsed::Unreadable => {
+            pending.push((job.rel.clone(), EMPTY_SHA.to_string(), (0, 0), Vec::new()))
+        }
+        Parsed::NotText => {
             pending.push((job.rel.clone(), EMPTY_SHA.to_string(), job.stat, Vec::new()))
         }
         Parsed::Unparsed => {
@@ -344,8 +370,11 @@ fn stage_parsed(
 }
 
 fn parse(job: &Job) -> Parsed {
-    let Ok(src) = std::fs::read_to_string(&job.path) else {
+    let Ok(bytes) = std::fs::read(&job.path) else {
         return Parsed::Unreadable;
+    };
+    let Ok(src) = String::from_utf8(bytes) else {
+        return Parsed::NotText;
     };
     let sha = store::hex_sha256(src.as_bytes());
     if job.known.as_deref() == Some(sha.as_str()) {
@@ -410,11 +439,12 @@ fn each_parsed(jobs: &[Job], mut write: impl FnMut(&Job, Parsed) -> Result<()>) 
 /// Bump when [`scoped`] changes (T35.5). T474's byte span, hash, and doc rewrite version-4 roots once.
 const INDEX_VERSION: u32 = 5;
 
-/// Hex sha256 of `INDEX_VERSION` and every query string [`outline::tags`] compiles —
-/// tags **and** locals, because a language whose locals query changed produces different
-/// rows. The TypeScript pair was hashed twice, which hid a `LOCALS_QUERY` bump for
-/// ts/tsx/js/dart behind an unchanged fingerprint.
-fn extractor_fingerprint() -> String {
+/// Hex sha256 of `INDEX_VERSION`, every query string [`outline::tags`] compiles — tags
+/// **and** locals, because a language whose locals query changed produces different rows —
+/// and the configured suffix → grammar map (T542), which picks the grammar of a file whose
+/// bytes did not change. The TypeScript pair was hashed twice, which hid a `LOCALS_QUERY`
+/// bump for ts/tsx/js/dart behind an unchanged fingerprint.
+fn extractor_fingerprint(extensions: &HashMap<String, String>) -> String {
     let mut bytes = INDEX_VERSION.to_le_bytes().to_vec();
     #[cfg(feature = "lang-c")]
     bytes.extend_from_slice(tree_sitter_c::TAGS_QUERY.as_bytes());
@@ -469,6 +499,12 @@ fn extractor_fingerprint() -> String {
     }
     #[cfg(feature = "lang-php")]
     bytes.extend_from_slice(tree_sitter_php::TAGS_QUERY.as_bytes());
+    // Sorted, and absent when empty, so map order and an unconfigured root keep their hash.
+    let mut mapped: Vec<_> = extensions.iter().collect();
+    mapped.sort_unstable();
+    for (ext, grammar) in mapped {
+        bytes.extend_from_slice(format!("\0ext:{ext}={grammar}").as_bytes());
+    }
     store::hex_sha256(&bytes)
 }
 
@@ -634,7 +670,10 @@ pub(crate) mod tests {
         fs::write(b.join("lib.rs"), src).unwrap();
         let ctx = Ctx::new(&cx);
         assert!(run(&ctx, &a, false).unwrap().indexed >= 1);
-        let n = cx.store.copy_symbol_rows(&canon(&a), &canon(&b)).unwrap();
+        let n = cx
+            .store
+            .copy_symbol_rows(&canon(&a), &canon(&b), &[])
+            .unwrap();
         assert!(n >= 1, "copied {n} rows");
         let later = std::time::SystemTime::now() + std::time::Duration::from_secs(5);
         fs::File::options()
@@ -744,6 +783,150 @@ pub(crate) mod tests {
         let _ = fs::remove_dir_all(dir);
     }
 
+    fn map_of(pairs: &[(&str, &str)]) -> std::collections::HashMap<String, String> {
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
+    }
+
+    /// T542: remapping a suffix re-extracts a file whose bytes and stat did not change, with or
+    /// without a touch, instead of keeping the old grammar's rows behind the SHA gate.
+    #[rstest]
+    #[case::untouched(false)]
+    #[case::touched(true)]
+    fn remapping_an_extension_drops_the_old_grammars_rows(#[case] touch: bool) {
+        let (mut cx, dir) = cx("t542-remap");
+        cx.config.plugins.graph.extensions = map_of(&[("tpl", "rust")]);
+        let file = dir.join("sample.tpl");
+        fs::write(&file, "fn old() {}\n").unwrap();
+        let k = canon(&dir);
+        run(&Ctx::new(&cx), &dir, false).unwrap();
+        assert!(cx.store.has_symbol_def(&k, "old").unwrap());
+        assert_eq!(run(&Ctx::new(&cx), &dir, false).unwrap().read, 0, "warm");
+        cx.config.plugins.graph.extensions = map_of(&[("tpl", "py")]);
+        if touch {
+            let later = std::time::SystemTime::now() + std::time::Duration::from_secs(5);
+            fs::File::options()
+                .write(true)
+                .open(&file)
+                .unwrap()
+                .set_modified(later)
+                .unwrap();
+        }
+        run(&Ctx::new(&cx), &dir, false).unwrap();
+        assert!(
+            !cx.store.has_symbol_def(&k, "old").unwrap(),
+            "the rust definition survived the remap"
+        );
+        assert_eq!(
+            run(&Ctx::new(&cx), &dir, false).unwrap().read,
+            0,
+            "unchanged configuration skips again"
+        );
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T542: the fingerprint is a function of the mapping's content, not of its order.
+    #[test]
+    fn the_fingerprint_follows_the_mapping_content() {
+        let ab = map_of(&[("a", "rust"), ("b", "py")]);
+        let ba = map_of(&[("b", "py"), ("a", "rust")]);
+        assert_eq!(extractor_fingerprint(&ab), extractor_fingerprint(&ba));
+        assert_ne!(
+            extractor_fingerprint(&ab),
+            extractor_fingerprint(&map_of(&[("a", "rust"), ("b", "go")]))
+        );
+        assert_ne!(
+            extractor_fingerprint(&ab),
+            extractor_fingerprint(&map_of(&[]))
+        );
+    }
+
+    /// T542: an event path of a file the mapping change left stale is parsed again rather than
+    /// matched against its old sha.
+    #[test]
+    fn an_event_after_a_remap_reparses_the_file() {
+        let (mut cx, dir) = cx("t542-event");
+        cx.config.plugins.graph.extensions = map_of(&[("tpl", "rust")]);
+        let file = dir.join("sample.tpl");
+        fs::write(&file, "fn old() {}\n").unwrap();
+        let k = canon(&dir);
+        run(&Ctx::new(&cx), &dir, false).unwrap();
+        cx.config.plugins.graph.extensions = map_of(&[("tpl", "py")]);
+        run_changed(&Ctx::new(&cx), &dir, &HashSet::from([file])).unwrap();
+        assert!(!cx.store.has_symbol_def(&k, "old").unwrap());
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T543: a dry run over a stale fingerprint reports what the cold reindex then does, and
+    /// leaves rows, fingerprint, timestamp and rank document as they were.
+    #[test]
+    fn a_stale_fingerprint_dry_run_predicts_the_cold_reindex() {
+        let (cx, dir) = cx("t543-dry");
+        for i in 0..3 {
+            fs::write(dir.join(format!("f{i}.rs")), format!("fn f{i}() {{}}\n")).unwrap();
+        }
+        let ctx = Ctx::new(&cx);
+        let k = canon(&dir);
+        run(&ctx, &dir, false).unwrap();
+        assert_eq!(run(&ctx, &dir, true).unwrap().indexed, 0, "warm dry run");
+        cx.store.set_extractor_fingerprint(&k, "deadbeef").unwrap();
+        let seen = |cx: &crate::plugin::Runtime| {
+            (
+                cx.store.symbol_count(&k).unwrap(),
+                cx.store.symbol_indexed_at(&k).unwrap(),
+                cx.store.extractor_fingerprint(&k).unwrap(),
+                cx.store.file_rank_get(&k).unwrap(),
+            )
+        };
+        let before = seen(&cx);
+        let predicted = run(&ctx, &dir, true).unwrap();
+        assert_eq!(seen(&cx), before, "a dry run wrote");
+        let actual = run(&ctx, &dir, false).unwrap();
+        assert_eq!(predicted.indexed, 3, "{predicted:?}");
+        assert_eq!(
+            (predicted.indexed, predicted.inserted, predicted.read),
+            (actual.indexed, actual.inserted, actual.read)
+        );
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T546: deleting a file, or emptying it, refreshes the stored rank document even though
+    /// the run inserted no rows; the map stops listing the removed definition.
+    #[rstest]
+    #[case::deleted_event(true, false)]
+    #[case::emptied_event(false, true)]
+    #[case::emptied_full_run(false, false)]
+    fn rank_document_drops_removed_definitions(#[case] delete: bool, #[case] event: bool) {
+        let (cx, dir) = cx("t546-rank");
+        let ctx = Ctx::new(&cx);
+        let k = canon(&dir);
+        fs::write(dir.join("a.rs"), "pub fn alpha() {}\n").unwrap();
+        fs::write(dir.join("b.rs"), "pub fn beta() { alpha(); }\n").unwrap();
+        run(&ctx, &dir, false).unwrap();
+        let map = |ctx: &Ctx| super::super::rank::map(ctx, &k, 500, &[], i64::MAX);
+        assert!(map(&ctx).unwrap().contains("beta"));
+        if delete {
+            fs::remove_file(dir.join("b.rs")).unwrap();
+        } else {
+            fs::write(dir.join("b.rs"), "").unwrap();
+        }
+        let report = if delete || event {
+            run_changed(&ctx, &dir, &HashSet::from([dir.join("b.rs")])).unwrap()
+        } else {
+            run(&ctx, &dir, false).unwrap()
+        };
+        assert_eq!(report.inserted, 0, "{report:?}");
+        assert!(!cx.store.has_symbol_def(&k, "beta").unwrap());
+        let shown = map(&ctx).unwrap_or_default();
+        assert!(!shown.contains("beta"), "{shown}");
+        if delete {
+            assert!(!super::super::rank::ranks(&ctx, &k).contains_key("b.rs"));
+        }
+        let _ = fs::remove_dir_all(dir);
+    }
+
     /// T8.4: a warm run over an untouched tree opens no file; rewriting identical bytes
     /// costs one read and no rows. The 3 000-file wall time is a release measurement
     /// (`done.md`); at this size the cold run batches SYMBOL_BATCH_FILES files per transaction and would put
@@ -791,19 +974,68 @@ pub(crate) mod tests {
         let _ = fs::remove_dir_all(dir);
     }
 
-    /// T21.2: the bar counts the source files the walk reached — one tick per indexed or
-    /// skipped file, and none for the noise the walker filtered out.
+    /// T654: restoring read access changes neither bytes, size nor mtime, so a file indexed
+    /// while unreadable must not leave a stat the gate trusts.
+    #[cfg(unix)]
     #[test]
-    fn the_progress_bar_counts_the_files_the_walk_reached() {
+    fn a_file_unreadable_at_index_time_is_read_once_access_returns() {
+        use std::os::unix::fs::PermissionsExt;
+        let (cx, dir) = cx("t654-unreadable");
+        let file = dir.join("locked.rs");
+        fs::write(&file, "fn hidden_until_readable() {}\n").unwrap();
+        fs::set_permissions(&file, fs::Permissions::from_mode(0o000)).unwrap();
+        let unreadable = fs::read(&file).is_err(); // root ignores the mode bits
+        let ctx = Ctx::new(&cx);
+        run(&ctx, &dir, false).unwrap();
+        let before = fs::metadata(&file).unwrap();
+        fs::set_permissions(&file, fs::Permissions::from_mode(0o644)).unwrap();
+        let after = fs::metadata(&file).unwrap();
+        assert_eq!(
+            stat_key(&before),
+            stat_key(&after),
+            "chmod moved mtime or size"
+        );
+        if unreadable {
+            assert!(
+                !cx.store
+                    .has_symbol_def(&canon(&dir), "hidden_until_readable")
+                    .unwrap()
+            );
+        }
+        let again = run(&ctx, &dir, false).unwrap();
+        assert_eq!(again.indexed, 1, "{again:?}");
+        assert!(
+            cx.store
+                .has_symbol_def(&canon(&dir), "hidden_until_readable")
+                .unwrap()
+        );
+        // Control: once read, the unchanged file is skipped again.
+        let warm = run(&ctx, &dir, false).unwrap();
+        assert_eq!((warm.read, warm.skipped), (0, 1), "{warm:?}");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T276.6: the bar spans the source files that pass the stat gate — the ones the run reads —
+    /// and none of the noise the walker filtered out or the files a warm run skips.
+    #[test]
+    fn the_progress_bar_spans_the_files_the_run_reads() {
         let (cx, dir) = cx("progress");
         for i in 0..7 {
             fs::write(dir.join(format!("f{i}.rs")), format!("fn f{i}() {{}}\n")).unwrap();
         }
         fs::write(dir.join("notes.md"), "not a source file\n").unwrap();
-        let pb = indicatif::ProgressBar::hidden();
-        let r = run_with(&Ctx::new(&cx), &dir, false, &pb).unwrap();
-        assert_eq!(r.indexed, 7);
-        assert_eq!(pb.position(), 7, "the bar and the report must agree");
+        let mut spans = Vec::new();
+        let mut index = || {
+            run_with(&Ctx::new(&cx), &dir, false, |n| {
+                spans.push(n);
+                Batch::hidden(n, Unit::Items)
+            })
+            .unwrap()
+        };
+        assert_eq!(index().indexed, 7);
+        fs::write(dir.join("f0.rs"), "fn changed() {}\n").unwrap();
+        assert_eq!(index().indexed, 1);
+        assert_eq!(spans, [7, 1], "the bar and the report must agree");
         let _ = fs::remove_dir_all(dir);
     }
 

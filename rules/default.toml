@@ -208,6 +208,39 @@ keep = ["error[|error:|warning:"]
 group = "diag"
 dedupe = true
 
+# T662: one `path:line:col: CODE msg` family (ruff, mypy, rubocop, golangci-lint) folds to
+# `CODE ×N: msg (locations…)`, repeating the message once and naming the first locations (the rest is in `expand`).
+[ruff]
+max_lines = 40
+head = 8
+tail = 16
+keep = ["Found \\d+ error|All checks passed"]
+group = "diag"
+dedupe = true
+
+[mypy]
+max_lines = 40
+head = 8
+tail = 16
+keep = ["Found \\d+ error|Success"]
+group = "diag"
+dedupe = true
+
+[rubocop]
+max_lines = 40
+head = 8
+tail = 16
+keep = ["offenses? detected"]
+group = "diag"
+dedupe = true
+
+[golangci-lint]
+max_lines = 40
+head = 8
+tail = 16
+group = "diag"
+dedupe = true
+
 # T386: path-shaped awk output folds like `ls`. Do not tighten this past a golden that loses to `Rule::default()`.
 [awk]
 max_lines = 24

@@ -6,6 +6,7 @@ use crate::config::Config;
 use crate::ui::style;
 use anyhow::Result;
 use clap::Subcommand;
+use rtok_sys::proc::{ProgressRunner, Unit};
 use std::path::PathBuf;
 
 /// T329.4.2: which project a graph subcommand answers for, instead of a `path` or the cwd.
@@ -192,11 +193,22 @@ pub(super) enum ProjectsCmd {
         /// Also remove the link the other way
         #[arg(long)]
         both: bool,
+        /// Show the links that would go; remove nothing
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Re-read a project's files into its index (the page's "Index now")
+    Reindex {
+        /// Project id or directory
+        project: String,
     },
     /// Drop a project and its index rows; its files are never touched
     Remove {
         /// Project id or directory
         project: String,
+        /// Show the index rows and links that would go; remove nothing
+        #[arg(long)]
+        dry_run: bool,
     },
 }
 
@@ -210,12 +222,11 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: GraphCmd) -> Result<()>
             dry_run,
         } => {
             let root = crate::plugins::graph::cli_root_for(&cx.store, path, project.project)?;
-            let pb = crate::render::spinner("indexing");
             let r = crate::plugins::graph::index::run_with(
                 &crate::plugin::Ctx::new(&cx),
                 &root,
                 dry_run,
-                &pb,
+                |n| ProgressRunner::batch("indexing", n, Unit::Items),
             )?;
             let summary = format!(
                 "indexed {} files · {} rows · {} skipped · {} read · exclude {} · include {} · mapped {}",
@@ -260,12 +271,20 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: GraphCmd) -> Result<()>
             crate::plugins::graph::status::run(&cfg, Some(root), json)?;
         }
         GraphCmd::Projects { action, json } => {
-            use crate::plugins::graph::projects::{Action, run};
+            use crate::plugins::graph::projects::{Action, preview, run};
+            let dry_run = matches!(
+                action,
+                Some(
+                    ProjectsCmd::Remove { dry_run: true, .. }
+                        | ProjectsCmd::Unlink { dry_run: true, .. }
+                )
+            );
             let action = match action {
                 None => Action::List,
                 Some(ProjectsCmd::Add { path }) => Action::Add(path),
                 Some(ProjectsCmd::Select { project }) => Action::Select(project),
-                Some(ProjectsCmd::Remove { project }) => Action::Remove(project),
+                Some(ProjectsCmd::Reindex { project }) => Action::Reindex(project),
+                Some(ProjectsCmd::Remove { project, .. }) => Action::Remove(project),
                 Some(ProjectsCmd::Link {
                     project,
                     from,
@@ -281,13 +300,19 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: GraphCmd) -> Result<()>
                     project,
                     from,
                     both,
+                    ..
                 }) => Action::Unlink {
                     to: project,
                     from,
                     both,
                 },
             };
-            print!("{}", run(&cx, action, json)?);
+            let out = if dry_run {
+                preview(&cx, action, json)?
+            } else {
+                run(&cx, action, json)?
+            };
+            print!("{out}");
         }
         GraphCmd::Impact {
             name,

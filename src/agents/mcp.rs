@@ -14,8 +14,9 @@
 use std::path::{Path, PathBuf};
 
 use rtok_mcp::config::Fs;
+use rtok_mcp::ops::{self, Mode as McpMode};
 use rtok_mcp::registry::RTOK;
-use rtok_mcp::spec::{Client, DuplicateName, EntryShape, Format, McpSpec};
+use rtok_mcp::spec::{Client, DuplicateName, EntryShape, Format, Launch, McpSpec};
 use rtok_mcp::status::Entry;
 use serde_json::Value;
 use toml_edit::{DocumentMut, Item};
@@ -103,6 +104,10 @@ fn toml_value_to_json(v: &toml_edit::Value) -> Value {
 
 /// The server key most hosts keep their MCP servers under.
 const SERVERS: &str = "mcpServers";
+
+/// Amp's servers table: one flat top-level key that happens to contain a dot, not a nested
+/// `amp` object, so [`surface`] keeps it as a single path segment.
+pub(crate) const AMP_SERVERS: &str = "amp.mcpServers";
 
 /// One MCP surface of a host variant (T278): the [`McpSpec`] [`rtok_mcp::status`] checks, and
 /// what else serves `"rtok"` there once installed (a plugin, Grok's Claude import). Built per
@@ -211,11 +216,14 @@ pub(crate) fn surfaces(agent: &dyn super::Agent, cfg: &Config, kind: Kind) -> Ve
             .into();
     }
     let (file, key) = match host {
+        "amp" => (super::amp::settings_path(cfg), AMP_SERVERS),
         "claude" if desktop => (claude::desktop_path(), SERVERS),
         "claude" => (cfg.doctor.claude_json.clone(), SERVERS),
         "cline" if desktop => (cline::ext_mcp_path(cfg), SERVERS),
         "cline" => (s.cline.mcp_path.clone(), SERVERS),
+        "codebuddy" => (super::codebuddy::mcp_path(cfg, kind), SERVERS),
         "codewhale" => (codewhale::mcp_path(cfg), SERVERS),
+        "commandcode" => (super::commandcode::mcp_path(cfg), SERVERS),
         "codex" => (s.codex.config_path.clone(), "mcp_servers"),
         "copilot" => (copilot::mcp_path(cfg), SERVERS),
         "cursor" => (cursor::mcp_path(cfg), SERVERS),
@@ -227,6 +235,7 @@ pub(crate) fn surfaces(agent: &dyn super::Agent, cfg: &Config, kind: Kind) -> Ve
             grok_row.plugin = grok_row.plugin.or(import);
             return vec![grok_row];
         }
+        "junie" => (super::junie::mcp_path(cfg), SERVERS),
         "kilo" => (s.kilo.config_path.clone(), "mcp"),
         "kimi" => (kimi::mcp_path(cfg), SERVERS),
         "mimo" => (super::mimo::config_path(cfg), "mcp"),
@@ -235,6 +244,12 @@ pub(crate) fn surfaces(agent: &dyn super::Agent, cfg: &Config, kind: Kind) -> Ve
         "opencode" => (s.opencode.config_path.clone(), "mcp"),
         "qwen" => (super::qwen::settings_path(cfg), SERVERS),
         "roo" => (super::roo::mcp_path(cfg), SERVERS),
+        "droid" => (super::droid::mcp_path(cfg), SERVERS),
+        "kiro" => (super::kiro::mcp_path(cfg), SERVERS),
+        "warp" => (super::warp::mcp_path(cfg), SERVERS),
+        "crush" => (super::crush::config_path(cfg), super::crush::MCP_KEY),
+        "openhands" => (super::openhands::mcp_path(cfg), SERVERS),
+        "augment" => (super::augment::settings_path(cfg), SERVERS),
         "windsurf" => (s.windsurf.config_path.clone(), SERVERS),
         "zcode" => (s.zcode.config_path.clone(), "mcp.servers"),
         "zed" => (s.zed.config_path.clone(), "context_servers"),
@@ -264,8 +279,13 @@ fn surface(
         },
         config_path: file,
         format,
-        key_path: McpSpec::key_path(key),
+        key_path: if key == AMP_SERVERS {
+            vec![key.to_string()]
+        } else {
+            McpSpec::key_path(key)
+        },
         server: RTOK,
+        launch: Launch::default(),
         entry_shape: EntryShape::Command,
         duplicate_name: DuplicateName::ShowsBoth,
         plugin_serves: plugin.map(|_| RTOK.name),
@@ -383,6 +403,36 @@ impl Fs for Disk {
     fn write(&mut self, path: &Path, _: Vec<u8>) -> anyhow::Result<()> {
         anyhow::bail!("{}: MCP status is read-only", path.display())
     }
+}
+
+/// The disk [`run`] writes through: [`rtok_agent_sdk::write`] gives the atomic swap, the
+/// `_backup` copy and the dry run that every other host installer already has, so this crate's
+/// `Fs::backup` stays the no-op default.
+struct Writer<'a>(&'a rtok_agent_sdk::Apply);
+
+impl Fs for Writer<'_> {
+    fn read(&self, path: &Path) -> Option<Vec<u8>> {
+        Disk.read(path)
+    }
+    fn try_read(&self, path: &Path) -> anyhow::Result<Option<Vec<u8>>> {
+        match std::fs::read(path) {
+            Ok(bytes) => Ok(Some(bytes)),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(anyhow::Error::new(e).context(format!("{}: unreadable", path.display()))),
+        }
+    }
+    fn write(&mut self, path: &Path, bytes: Vec<u8>) -> anyhow::Result<()> {
+        let body = String::from_utf8(bytes)?;
+        rtok_agent_sdk::write(self.0, path, &body, "mcp entry")
+    }
+}
+
+/// Install, update or remove rtok's MCP entry for `spec` on the real disk: the one entry
+/// point a migrated host's `apply` calls (T277.1), returning the line it reports.
+pub(crate) fn run(cfg: &Config, spec: &McpSpec, mode: McpMode) -> anyhow::Result<String> {
+    let ctx = super::apply(cfg);
+    let report = ops::apply(spec, mode, &ctx, &mut Writer(&ctx), super::is_rtok_bin)?;
+    Ok(report.line())
 }
 
 /// `None` when `have` runs `rtok mcp` for `host` (any path to the rtok binary; argv as `command`
@@ -699,6 +749,7 @@ mod tests {
         let mut c = Config::default();
         let root = Path::new("/nonexistent/rtok-t278");
         c.setup.gemini.dir = root.join("gemini");
+        c.setup.commandcode.dir = root.join("commandcode");
         c.setup.grok.config_path = root.join("grok/config.toml");
         c.setup.claude.settings_path = root.join("claude/settings.json");
         c.doctor.claude_json = root.join("claude.json");
@@ -778,6 +829,26 @@ mod tests {
             }
         }
         assert!(seen >= 20, "{seen} surfaces");
+    }
+
+    /// T275.2: Command Code is a host with MCP of its own, so it has a surface (and a doctor line).
+    #[test]
+    fn commandcode_has_an_mcp_surface() {
+        let cfg = vfs_cfg();
+        let host = super::super::host("commandcode").unwrap();
+        let rows = surfaces(host, &cfg, Kind::Cli);
+        assert_eq!(rows.len(), 1);
+        assert!(rows[0].spec.config_path.ends_with("commandcode/mcp.json"));
+        assert_eq!(rows[0].spec.key_path, ["mcpServers"]);
+    }
+
+    /// Amp's `"amp.mcpServers"` is one flat key; split on the dot, status would look under an
+    /// `amp` object that Amp's settings file does not have and report the entry missing.
+    #[test]
+    fn amp_servers_key_stays_one_path_segment() {
+        let host = super::super::host("amp").unwrap();
+        let rows = surfaces(host, &vfs_cfg(), Kind::Cli);
+        assert_eq!(rows[0].spec.key_path, ["amp.mcpServers"]);
     }
 
     /// Before T275 the Code plugin made Desktop read as installed; with it installed and a
@@ -915,5 +986,73 @@ mod tests {
             toml_item_to_json(doc.as_item()),
             serde_json::json!({"hooks": [{"event": "Stop"}, {"event": "Start"}]})
         );
+    }
+
+    fn disk_spec(path: &Path) -> McpSpec {
+        McpSpec {
+            host: "test",
+            client: Client::Cli,
+            config_path: path.to_path_buf(),
+            format: Format::Json,
+            key_path: McpSpec::key_path("mcp_servers"),
+            server: RTOK,
+            launch: Launch::default(),
+            entry_shape: EntryShape::TypedCommand,
+            duplicate_name: DuplicateName::ShowsBoth,
+            plugin_serves: None,
+        }
+    }
+
+    fn install_on_disk(path: &Path) -> anyhow::Result<String> {
+        let ctx = rtok_agent_sdk::Apply::default();
+        let report = ops::apply(
+            &disk_spec(path),
+            McpMode::Install,
+            &ctx,
+            &mut Writer(&ctx),
+            |s| s == "rtok",
+        )?;
+        Ok(report.line())
+    }
+
+    /// T652: a config that exists but cannot be read must not be treated as absent, or the
+    /// install replaces it and drops every other server (backup is off, so no copy survives).
+    #[cfg(unix)]
+    #[test]
+    fn unreadable_host_config_is_never_replaced() {
+        use std::os::unix::fs::PermissionsExt;
+        let original = r#"{"mcp_servers":{"other":{"command":"keep"}}}"#;
+        let path = tmp_file("unreadable", original);
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o000)).unwrap();
+        let unreadable = fs::read(&path).is_err(); // root ignores the mode bits
+        let result = install_on_disk(&path);
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
+        let kept = fs::read_to_string(&path).unwrap();
+        fs::remove_dir_all(path.parent().unwrap()).unwrap();
+        if !unreadable {
+            return;
+        }
+        assert!(
+            result.is_err(),
+            "installed over an unreadable file: {result:?}"
+        );
+        assert_eq!(kept, original);
+    }
+
+    #[test]
+    fn absent_host_config_is_created_and_readable_foreign_entries_survive() {
+        let dir = std::env::temp_dir().join(format!("rtok-t652-controls-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let fresh = dir.join("fresh.json");
+        install_on_disk(&fresh).unwrap();
+        assert!(has_entry(&fresh, "mcp_servers", "rtok"));
+
+        let shared = dir.join("shared.json");
+        fs::write(&shared, r#"{"mcp_servers":{"other":{"command":"keep"}}}"#).unwrap();
+        install_on_disk(&shared).unwrap();
+        assert!(has_entry(&shared, "mcp_servers", "rtok"));
+        assert!(has_entry(&shared, "mcp_servers", "other"));
+        fs::remove_dir_all(&dir).unwrap();
     }
 }

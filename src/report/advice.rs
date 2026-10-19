@@ -252,10 +252,7 @@ fn archive_window(ledgers: &ReportLedgers, cfg: &Config, push: Push<'_>) {
 /// doc comment: "ordered by the tokens it would recover").
 fn top_sinks(ledgers: &ReportLedgers, cfg: &Config, push: Push<'_>) {
     for s in &ledgers.sinks.rows {
-        // Only the classes `sink_switch` can name a switch for (docs/report.md): an
-        // `archive` or `inject` row is already shortened, so ranking it reads as advice
-        // with no action attached.
-        if s.before_bytes < 1 || !matches!(s.class.as_str(), "read" | "cmd" | "mcp") {
+        if s.before_bytes < 1 || !crate::model::is_actionable_sink(&s.class) {
             continue;
         }
         let est_tokens = ((s.before_bytes as f64) / f64::from(cfg.estimator.code.max(0.1)))

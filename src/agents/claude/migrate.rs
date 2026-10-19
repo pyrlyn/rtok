@@ -18,6 +18,8 @@ const LEGACY: &[&str] = &[
     "caveman shrink-hook",
     "python-launcher.sh",
 ];
+/// The ports `rtok proxy` listened on before it moved to its current default.
+const LEGACY_PORTS: [u16; 2] = [8788, 8787];
 const DROP_MCP: &[&str] = &["lean-ctx", "code-review-graph"];
 
 /// Apply `--replace` to Claude settings (and `~/.claude.json` MCP map when present).
@@ -27,7 +29,7 @@ pub fn run(cfg: &Config) -> Result<String> {
     }
     let path = &cfg.setup.claude.settings_path;
     let mut root = read_json(path)?;
-    let mut diff = rewrite(&mut root);
+    let mut diff = rewrite(&mut root, &crate::agents::anthropic_proxy_url(cfg));
     let claude_json = &cfg.doctor.claude_json;
     if claude_json.exists() && claude_json != path {
         let mut mcp_root = read_json(claude_json)?;
@@ -44,10 +46,10 @@ pub fn run(cfg: &Config) -> Result<String> {
     Ok(diff)
 }
 
-fn rewrite(root: &mut Value) -> String {
+fn rewrite(root: &mut Value, proxy_url: &str) -> String {
     let mut lines = Vec::new();
     lines.extend(strip_hooks(root));
-    if let Some(line) = retarget_proxy(root) {
+    if let Some(line) = retarget_proxy(root, proxy_url) {
         lines.push(line);
     }
     let mcp = strip_mcp(root);
@@ -91,15 +93,21 @@ fn is_legacy_cmd(cmd: &str) -> bool {
     LEGACY.iter().any(|p| cmd.contains(p))
 }
 
-fn retarget_proxy(root: &mut Value) -> Option<String> {
+/// Point a legacy loopback `ANTHROPIC_BASE_URL` (an old rtok proxy port) at `proxy_url`, the
+/// configured destination. Only the scheme and authority are replaced, so a path or query
+/// stays; a foreign URL that merely contains the old digits is left alone.
+fn retarget_proxy(root: &mut Value, proxy_url: &str) -> Option<String> {
     let url = root
         .pointer("/env/ANTHROPIC_BASE_URL")?
         .as_str()?
         .to_string();
-    if !url.contains("8788") && !url.contains("8787") {
+    if !crate::agents::loopback_port(&url).is_some_and(|p| LEGACY_PORTS.contains(&p)) {
         return None;
     }
-    let next = url.replace("8788", "8790").replace("8787", "8790");
+    // `loopback_port` parsed it, so `://` is there; the authority ends at the first `/?#`.
+    let after = &url[url.find("://")? + 3..];
+    let tail = &after[after.find(['/', '?', '#']).unwrap_or(after.len())..];
+    let next = format!("{proxy_url}{tail}");
     root["env"]["ANTHROPIC_BASE_URL"] = json!(next.clone());
     Some(format!("ANTHROPIC_BASE_URL {url} -> {next}"))
 }
@@ -142,6 +150,8 @@ fn count_rtok(root: &Value) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const PROXY: &str = "http://127.0.0.1:8790";
 
     fn today() -> Value {
         json!({
@@ -186,7 +196,7 @@ mod tests {
     #[test]
     fn dry_run_keeps_eight_rtok_and_non_token_hooks() {
         let mut root = today();
-        let report = rewrite(&mut root);
+        let report = rewrite(&mut root, PROXY);
         assert!(report.contains("remaining rtok hooks: 8"), "{report}");
         assert_eq!(count_rtok(&root), 8);
         let raw = serde_json::to_string(&root).unwrap();
@@ -207,6 +217,56 @@ mod tests {
         assert!(!raw.contains("\"lean-ctx\""));
         assert!(!raw.contains("code-review-graph"));
         assert_eq!(root["env"]["ANTHROPIC_BASE_URL"], "http://127.0.0.1:8790");
+    }
+
+    /// T636: only a loopback URL on a legacy port is retargeted, to the configured destination;
+    /// a foreign URL that merely contains the old digits is not.
+    #[test]
+    fn only_legacy_loopback_endpoints_are_retargeted() {
+        let url = |u: &str, to: &str| {
+            let mut root = json!({"env": {"ANTHROPIC_BASE_URL": u}});
+            let line = retarget_proxy(&mut root, to);
+            (
+                root["env"]["ANTHROPIC_BASE_URL"]
+                    .as_str()
+                    .unwrap()
+                    .to_string(),
+                line.is_some(),
+            )
+        };
+        for (old, new) in [
+            ("http://127.0.0.1:8788", "http://127.0.0.1:8790"),
+            (
+                "http://localhost:8787/w/claude?x=1",
+                "http://127.0.0.1:8790/w/claude?x=1",
+            ),
+            ("http://[::1]:8788/", "http://127.0.0.1:8790/"),
+        ] {
+            assert_eq!(url(old, PROXY), (new.to_string(), true), "{old}");
+        }
+        assert_eq!(
+            url("http://127.0.0.1:8788", "http://127.0.0.1:9001").0,
+            "http://127.0.0.1:9001"
+        );
+        for foreign in [
+            "https://api.example/v1/8788",
+            "https://api.example:8788/v1",
+            "https://api.example/?p=8787",
+            "https://127.0.0.1:8788@api.example/v1",
+            "https://8788.example/v1",
+            "http://127.0.0.1:18788",
+            "http://127.0.0.1:8790",
+            "not a url 8788",
+        ] {
+            assert_eq!(
+                url(foreign, PROXY),
+                (foreign.to_string(), false),
+                "{foreign}"
+            );
+        }
+        let mut root = json!({"env": {"ANTHROPIC_BASE_URL": "http://127.0.0.1:8788"}});
+        assert!(retarget_proxy(&mut root, PROXY).is_some());
+        assert!(retarget_proxy(&mut root, PROXY).is_none(), "idempotent");
     }
 
     #[test]

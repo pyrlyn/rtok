@@ -80,7 +80,7 @@ pub fn sums(store: &Store, now_ns: u64) -> Result<Vec<Sum>> {
         sum(
             "rtok.tokens",
             "{token}",
-            "Tokens billed by the provider, from the proxy's usage ledger",
+            "Tokens billed by the provider, from the proxy's usage ledger (semantic-cache hits excluded)",
             true,
             tokens,
         ),

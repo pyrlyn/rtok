@@ -38,16 +38,21 @@ entry gains the key once; a value you set yourself is kept.
 Files:
 
 - `.codex-plugin/plugin.json` — manifest (name, version, metadata, `hooks` path).
-- `hooks/hooks.json` — `PreCompact` and `PostCompact`, each `timeout: 5`, resolving `rtok` from
-  `PATH` then `~/.ketch/bin/rtok` (`commandWindows` bare for `cmd.exe`): the same events
-  `rtok agents install codex` registers. Checked by `tests/codex_plugin.rs`.
+- `hooks/hooks.json` — `PreToolUse` (matcher `Bash|apply_patch`), `PostToolUse` (`*`), `PreCompact`,
+  `PostCompact` and `SubagentStart`, each `timeout: 5` and `rtok hook <event> --host codex`, resolving `rtok` from
+  `PATH` then `~/.ketch/bin/rtok` (`commandWindows` bare for `cmd.exe`): the `codex` rows of
+  `src/agents/hook_events.rs`, the same events `rtok agents install codex` registers. Checked by
+  `tests/codex_plugin.rs` and `tests/hook_manifests.rs`.
 - `.agents/plugins/marketplace.json` — the local marketplace that lists this folder.
 
 Known limits:
 
-- Only the compaction hooks. Codex's `PreToolUse` can rewrite a Bash command (`updatedInput`) and
-  `PostToolUse` can add context, but rtok's handling of Codex's tool payloads has not been checked
-  on a live session, so those events stay off here and in the installer until it is.
+- `PreToolUse` runs on `Bash` (the rewrite) and `apply_patch` (T262.3: its patch text feeds the
+  spawn-brief ledger, never a rewrite); Codex has no `Read` or `Skill` tool. `SubagentStart`
+  answers `additionalContext`, the brief of the files the session edited. A rewrite reaches Codex as `permissionDecision: "allow"` plus
+  `updatedInput` (`rtok hook --host codex` adds the decision; Codex ignores a bare
+  `updatedInput`). Payloads and the live run: `research.md` section 40. Not verified: whether
+  that `allow` also skips Codex's own approval prompt.
 - Verified on codex-cli 0.155.1 in a scratch `CODEX_HOME` (2026-09-21): `marketplace add` accepts
   the `./` entry and `plugin add` copies the tree to `plugins/cache/rtok/rtok/0.0.1/` and enables
   it. Not verified: the hooks firing in a live session (trust prompt).

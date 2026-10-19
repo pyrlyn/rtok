@@ -1,0 +1,381 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "file": ".github/actions/rustup-toolchain-cache/action.yml",
+      "rule": "unpinned-uses",
+      "fingerprint": "01efb9c01af9485f",
+      "context": "3a0a4826a0d32dfb",
+      "occurrence": 0,
+      "message": "action \"actions/cache/restore@v6\" must be pinned to a full-length commit SHA like \"{owner}/{repo}@{sha}\" because the \"unpinned-uses\" rule is enabled"
+    },
+    {
+      "file": ".github/actions/sccache/action.yml",
+      "rule": "github-env",
+      "fingerprint": "6ebb8edf133d7bdf",
+      "context": "4d666b1998904fe9",
+      "occurrence": 0,
+      "message": "untrusted input from the variable BUCKET (inputs.bucket) is written to $GITHUB_ENV. an attacker who controls the value can set LD_PRELOAD or NODE_OPTIONS (a newline adds another variable) and run code in the next steps. do not write input that an outsider controls to $GITHUB_ENV; validate it first or pass it to the next step with $GITHUB_OUTPUT"
+    },
+    {
+      "file": ".github/workflows/ci.yml",
+      "rule": "missing-timeout",
+      "fingerprint": "06758cf8ea2bda15",
+      "context": "11263bccd9d6dfbc",
+      "occurrence": 0,
+      "message": "\"timeout-minutes\" is not set at this job. Set it to avoid wasting runner minutes when the job hangs"
+    },
+    {
+      "file": ".github/workflows/ci.yml",
+      "rule": "unpinned-uses",
+      "fingerprint": "4d721c41642403d9",
+      "context": "7142076791232c36",
+      "occurrence": 0,
+      "message": "action \"actions/checkout@v7\" must be pinned to a full-length commit SHA like \"{owner}/{repo}@{sha}\" because the \"unpinned-uses\" rule is enabled"
+    },
+    {
+      "file": ".github/workflows/ci.yml",
+      "rule": "artipacked",
+      "fingerprint": "3d76bb77bff7a0ad",
+      "context": "226b2ece10e49867",
+      "occurrence": 0,
+      "message": "actions/checkout leaves the GITHUB_TOKEN in the git config of the workspace, where a later step such as an artifact upload can publish it. set \"persist-credentials: false\" under \"with:\" unless a later step needs to push"
+    },
+    {
+      "file": ".github/workflows/ci.yml",
+      "rule": "unpinned-uses",
+      "fingerprint": "cd0dc91d214bb3d5",
+      "context": "45ff2f45ab4caf6b",
+      "occurrence": 0,
+      "message": "action \"actions/cache/save@v6\" must be pinned to a full-length commit SHA like \"{owner}/{repo}@{sha}\" because the \"unpinned-uses\" rule is enabled"
+    },
+    {
+      "file": ".github/workflows/ci.yml",
+      "rule": "missing-timeout",
+      "fingerprint": "9389603ab7b47164",
+      "context": "e11a2c4eeca938fb",
+      "occurrence": 0,
+      "message": "\"timeout-minutes\" is not set at this job. Set it to avoid wasting runner minutes when the job hangs"
+    },
+    {
+      "file": ".github/workflows/ci.yml",
+      "rule": "unpinned-uses",
+      "fingerprint": "d73760dd8c4e09b3",
+      "context": "ab1cbe0685be61c3",
+      "occurrence": 0,
+      "message": "action \"actions/checkout@v7\" must be pinned to a full-length commit SHA like \"{owner}/{repo}@{sha}\" because the \"unpinned-uses\" rule is enabled"
+    },
+    {
+      "file": ".github/workflows/ci.yml",
+      "rule": "artipacked",
+      "fingerprint": "2c33088062e3e12c",
+      "context": "8cfca4c2f6f3ac63",
+      "occurrence": 0,
+      "message": "actions/checkout leaves the GITHUB_TOKEN in the git config of the workspace, where a later step such as an artifact upload can publish it. set \"persist-credentials: false\" under \"with:\" unless a later step needs to push"
+    },
+    {
+      "file": ".github/workflows/ci.yml",
+      "rule": "unpinned-uses",
+      "fingerprint": "5bed8bee1e995411",
+      "context": "d91a82302aa2c89e",
+      "occurrence": 0,
+      "message": "action \"actions/cache/save@v6\" must be pinned to a full-length commit SHA like \"{owner}/{repo}@{sha}\" because the \"unpinned-uses\" rule is enabled"
+    },
+    {
+      "file": ".github/workflows/ci.yml",
+      "rule": "unpinned-uses",
+      "fingerprint": "66d420e340344c96",
+      "context": "f2af7648710722e3",
+      "occurrence": 0,
+      "message": "action \"actions/checkout@v7\" must be pinned to a full-length commit SHA like \"{owner}/{repo}@{sha}\" because the \"unpinned-uses\" rule is enabled"
+    },
+    {
+      "file": ".github/workflows/ci.yml",
+      "rule": "artipacked",
+      "fingerprint": "f6948dd3d324c6f9",
+      "context": "e53668488ca6da47",
+      "occurrence": 0,
+      "message": "actions/checkout leaves the GITHUB_TOKEN in the git config of the workspace, where a later step such as an artifact upload can publish it. set \"persist-credentials: false\" under \"with:\" unless a later step needs to push"
+    },
+    {
+      "file": ".github/workflows/ci.yml",
+      "rule": "unpinned-uses",
+      "fingerprint": "cabdf4298dda6525",
+      "context": "5adc00be07a43123",
+      "occurrence": 0,
+      "message": "action \"actions/cache/save@v6\" must be pinned to a full-length commit SHA like \"{owner}/{repo}@{sha}\" because the \"unpinned-uses\" rule is enabled"
+    },
+    {
+      "file": ".github/workflows/ci.yml",
+      "rule": "unpinned-uses",
+      "fingerprint": "1bc9ed804df58443",
+      "context": "71e38ccebfa1d6bf",
+      "occurrence": 0,
+      "message": "action \"actions/upload-artifact@v7\" must be pinned to a full-length commit SHA like \"{owner}/{repo}@{sha}\" because the \"unpinned-uses\" rule is enabled"
+    },
+    {
+      "file": ".github/workflows/ci.yml",
+      "rule": "unpinned-uses",
+      "fingerprint": "2db964e40be976cc",
+      "context": "91d21f291cd4daeb",
+      "occurrence": 0,
+      "message": "action \"actions/checkout@v7\" must be pinned to a full-length commit SHA like \"{owner}/{repo}@{sha}\" because the \"unpinned-uses\" rule is enabled"
+    },
+    {
+      "file": ".github/workflows/ci.yml",
+      "rule": "artipacked",
+      "fingerprint": "38f8ad6d85050c5b",
+      "context": "3f9ecc9be05dd1be",
+      "occurrence": 0,
+      "message": "actions/checkout leaves the GITHUB_TOKEN in the git config of the workspace, where a later step such as an artifact upload can publish it. set \"persist-credentials: false\" under \"with:\" unless a later step needs to push"
+    },
+    {
+      "file": ".github/workflows/ci.yml",
+      "rule": "unpinned-uses",
+      "fingerprint": "92affd8c80c74730",
+      "context": "4f2b092a5b67dcc2",
+      "occurrence": 0,
+      "message": "action \"actions/cache/save@v6\" must be pinned to a full-length commit SHA like \"{owner}/{repo}@{sha}\" because the \"unpinned-uses\" rule is enabled"
+    },
+    {
+      "file": ".github/workflows/ci.yml",
+      "rule": "unpinned-uses",
+      "fingerprint": "7fe32270b5b67c54",
+      "context": "60384bd1e949d472",
+      "occurrence": 0,
+      "message": "action \"actions/download-artifact@v8\" must be pinned to a full-length commit SHA like \"{owner}/{repo}@{sha}\" because the \"unpinned-uses\" rule is enabled"
+    },
+    {
+      "file": ".github/workflows/ci.yml",
+      "rule": "unpinned-uses",
+      "fingerprint": "f2600bafc419cc2d",
+      "context": "76281ea5fa631b41",
+      "occurrence": 0,
+      "message": "action \"actions/checkout@v7\" must be pinned to a full-length commit SHA like \"{owner}/{repo}@{sha}\" because the \"unpinned-uses\" rule is enabled"
+    },
+    {
+      "file": ".github/workflows/ci.yml",
+      "rule": "artipacked",
+      "fingerprint": "7a89912672186286",
+      "context": "6a2823128a2599db",
+      "occurrence": 0,
+      "message": "actions/checkout leaves the GITHUB_TOKEN in the git config of the workspace, where a later step such as an artifact upload can publish it. set \"persist-credentials: false\" under \"with:\" unless a later step needs to push"
+    },
+    {
+      "file": ".github/workflows/ci.yml",
+      "rule": "unpinned-uses",
+      "fingerprint": "35f92d6d51ecf504",
+      "context": "08e844a8edd810fe",
+      "occurrence": 0,
+      "message": "action \"actions/cache/save@v6\" must be pinned to a full-length commit SHA like \"{owner}/{repo}@{sha}\" because the \"unpinned-uses\" rule is enabled"
+    },
+    {
+      "file": ".github/workflows/ci.yml",
+      "rule": "unpinned-uses",
+      "fingerprint": "b571d24e5ee18463",
+      "context": "1a425accaef8379a",
+      "occurrence": 0,
+      "message": "action \"actions/upload-artifact@v7\" must be pinned to a full-length commit SHA like \"{owner}/{repo}@{sha}\" because the \"unpinned-uses\" rule is enabled"
+    },
+    {
+      "file": ".github/workflows/ci.yml",
+      "rule": "unpinned-uses",
+      "fingerprint": "1bf05405cfb249e1",
+      "context": "a37337332e906f4c",
+      "occurrence": 0,
+      "message": "action \"actions/checkout@v7\" must be pinned to a full-length commit SHA like \"{owner}/{repo}@{sha}\" because the \"unpinned-uses\" rule is enabled"
+    },
+    {
+      "file": ".github/workflows/ci.yml",
+      "rule": "artipacked",
+      "fingerprint": "7ecfe4a050c20adf",
+      "context": "fa0ae25e25255f08",
+      "occurrence": 0,
+      "message": "actions/checkout leaves the GITHUB_TOKEN in the git config of the workspace, where a later step such as an artifact upload can publish it. set \"persist-credentials: false\" under \"with:\" unless a later step needs to push"
+    },
+    {
+      "file": ".github/workflows/ci.yml",
+      "rule": "unpinned-uses",
+      "fingerprint": "a3429d10e6f99d76",
+      "context": "c1f4778ac64d5c6a",
+      "occurrence": 0,
+      "message": "action \"actions/cache/save@v6\" must be pinned to a full-length commit SHA like \"{owner}/{repo}@{sha}\" because the \"unpinned-uses\" rule is enabled"
+    },
+    {
+      "file": ".github/workflows/ci.yml",
+      "rule": "unpinned-uses",
+      "fingerprint": "13418f49a0ac08fe",
+      "context": "33642b6cf7c17de7",
+      "occurrence": 0,
+      "message": "action \"actions/download-artifact@v8\" must be pinned to a full-length commit SHA like \"{owner}/{repo}@{sha}\" because the \"unpinned-uses\" rule is enabled"
+    },
+    {
+      "file": ".github/workflows/ci.yml",
+      "rule": "artipacked",
+      "fingerprint": "3bcc34370e859e4e",
+      "context": "e415b0f70bbe0155",
+      "occurrence": 0,
+      "message": "actions/checkout leaves the GITHUB_TOKEN in the git config of the workspace, where a later step such as an artifact upload can publish it. set \"persist-credentials: false\" under \"with:\" unless a later step needs to push"
+    },
+    {
+      "file": ".github/workflows/ci.yml",
+      "rule": "artipacked",
+      "fingerprint": "337020cd20e7f689",
+      "context": "9d6fa501bd500b23",
+      "occurrence": 0,
+      "message": "actions/checkout leaves the GITHUB_TOKEN in the git config of the workspace, where a later step such as an artifact upload can publish it. set \"persist-credentials: false\" under \"with:\" unless a later step needs to push"
+    },
+    {
+      "file": ".github/workflows/ci.yml",
+      "rule": "unpinned-uses",
+      "fingerprint": "c0f448d67b20d63f",
+      "context": "e17d1fd791ac8aff",
+      "occurrence": 0,
+      "message": "action \"actions/cache/save@v6\" must be pinned to a full-length commit SHA like \"{owner}/{repo}@{sha}\" because the \"unpinned-uses\" rule is enabled"
+    },
+    {
+      "file": ".github/workflows/competitor-bench.yml",
+      "rule": "unpinned-uses",
+      "fingerprint": "c63faebe3d4b3de9",
+      "context": "64a7c95b399f8b27",
+      "occurrence": 0,
+      "message": "action \"actions/checkout@v4\" must be pinned to a full-length commit SHA like \"{owner}/{repo}@{sha}\" because the \"unpinned-uses\" rule is enabled"
+    },
+    {
+      "file": ".github/workflows/competitor-bench.yml",
+      "rule": "artipacked",
+      "fingerprint": "e941c884afcd68dd",
+      "context": "5daafa57dbdb2b94",
+      "occurrence": 0,
+      "message": "actions/checkout leaves the GITHUB_TOKEN in the git config of the workspace, where a later step such as an artifact upload can publish it. set \"persist-credentials: false\" under \"with:\" unless a later step needs to push"
+    },
+    {
+      "file": ".github/workflows/competitor-bench.yml",
+      "rule": "unpinned-uses",
+      "fingerprint": "9acf03a5e1c97111",
+      "context": "2858864698f02f2a",
+      "occurrence": 0,
+      "message": "action \"actions/setup-python@v5\" must be pinned to a full-length commit SHA like \"{owner}/{repo}@{sha}\" because the \"unpinned-uses\" rule is enabled"
+    },
+    {
+      "file": ".github/workflows/competitor-bench.yml",
+      "rule": "unpinned-uses",
+      "fingerprint": "d20e8be84cd4a942",
+      "context": "287303de6a294874",
+      "occurrence": 0,
+      "message": "action \"actions/upload-artifact@v4\" must be pinned to a full-length commit SHA like \"{owner}/{repo}@{sha}\" because the \"unpinned-uses\" rule is enabled"
+    },
+    {
+      "file": ".github/workflows/graph-review-comment.yml",
+      "rule": "concurrency-limits",
+      "fingerprint": "48c2d6b5885070b9",
+      "context": "081b2e27040f94d3",
+      "occurrence": 0,
+      "message": "workflow has no \"concurrency:\", so every run of it executes at the same time even when a newer run supersedes the older ones. add a top-level \"concurrency:\" with a \"group:\" and \"cancel-in-progress: true\""
+    },
+    {
+      "file": ".github/workflows/graph-review-comment.yml",
+      "rule": "dangerous-triggers",
+      "fingerprint": "e1b416090046774f",
+      "context": "36b936d1654e3276",
+      "occurrence": 0,
+      "message": "trigger \"workflow_run\" is dangerous: it runs in the context of the default branch with a write token and secrets, but processes artifacts and metadata produced by a run that a fork may control. consider a reusable workflow called with \"workflow_call\" instead, and never trust the artifacts or the event payload"
+    },
+    {
+      "file": ".github/workflows/graph-review-comment.yml",
+      "rule": "excessive-permissions",
+      "fingerprint": "6e06d785c9817c8d",
+      "context": "b853991f6f9c84a0",
+      "occurrence": 0,
+      "message": "\"pull-requests: write\" lets the job create and modify pull requests, comments and reviews, and the workflow runs on \"workflow_run\" which people without write access can trigger. check that the job needs it and cannot run untrusted code"
+    },
+    {
+      "file": ".github/workflows/graph-review-comment.yml",
+      "rule": "missing-timeout",
+      "fingerprint": "8e6693efe2ea59c0",
+      "context": "36685cf0d7a19e75",
+      "occurrence": 0,
+      "message": "\"timeout-minutes\" is not set at this job. Set it to avoid wasting runner minutes when the job hangs"
+    },
+    {
+      "file": ".github/workflows/graph-review-comment.yml",
+      "rule": "unpinned-uses",
+      "fingerprint": "eba4a3397f86bf7d",
+      "context": "5d46c654ba7c2670",
+      "occurrence": 0,
+      "message": "action \"actions/download-artifact@v8\" must be pinned to a full-length commit SHA like \"{owner}/{repo}@{sha}\" because the \"unpinned-uses\" rule is enabled"
+    },
+    {
+      "file": ".github/workflows/graph-review.yml",
+      "rule": "unpinned-uses",
+      "fingerprint": "163d99748bcb5abd",
+      "context": "7c916bee096be8e2",
+      "occurrence": 0,
+      "message": "action \"actions/checkout@v7\" must be pinned to a full-length commit SHA like \"{owner}/{repo}@{sha}\" because the \"unpinned-uses\" rule is enabled"
+    },
+    {
+      "file": ".github/workflows/graph-review.yml",
+      "rule": "artipacked",
+      "fingerprint": "e316ee81adfa42bb",
+      "context": "5f1e8516df8fde4a",
+      "occurrence": 0,
+      "message": "actions/checkout leaves the GITHUB_TOKEN in the git config of the workspace, where a later step such as an artifact upload can publish it. set \"persist-credentials: false\" under \"with:\" unless a later step needs to push"
+    },
+    {
+      "file": ".github/workflows/graph-review.yml",
+      "rule": "unpinned-uses",
+      "fingerprint": "87b16976848dc46b",
+      "context": "b78817ab0d3e987b",
+      "occurrence": 0,
+      "message": "action \"actions/cache/save@v6\" must be pinned to a full-length commit SHA like \"{owner}/{repo}@{sha}\" because the \"unpinned-uses\" rule is enabled"
+    },
+    {
+      "file": ".github/workflows/graph-review.yml",
+      "rule": "unpinned-uses",
+      "fingerprint": "b0fa5b699c7754bb",
+      "context": "27a9f67a2cd8e534",
+      "occurrence": 0,
+      "message": "action \"actions/upload-artifact@v7\" must be pinned to a full-length commit SHA like \"{owner}/{repo}@{sha}\" because the \"unpinned-uses\" rule is enabled"
+    },
+    {
+      "file": ".github/workflows/marketplace.yml",
+      "rule": "missing-timeout",
+      "fingerprint": "c9cf052a0948a014",
+      "context": "ec0ab2e76b324a03",
+      "occurrence": 0,
+      "message": "\"timeout-minutes\" is not set at this job. Set it to avoid wasting runner minutes when the job hangs"
+    },
+    {
+      "file": ".github/workflows/marketplace.yml",
+      "rule": "unpinned-uses",
+      "fingerprint": "efd653bfa0f4386e",
+      "context": "4f034354546568e2",
+      "occurrence": 0,
+      "message": "action \"actions/checkout@v7\" must be pinned to a full-length commit SHA like \"{owner}/{repo}@{sha}\" because the \"unpinned-uses\" rule is enabled"
+    },
+    {
+      "file": ".github/workflows/marketplace.yml",
+      "rule": "artipacked",
+      "fingerprint": "9983dd8efb00b1f6",
+      "context": "7f9d08df077c35d6",
+      "occurrence": 0,
+      "message": "actions/checkout leaves the GITHUB_TOKEN in the git config of the workspace, where a later step such as an artifact upload can publish it. set \"persist-credentials: false\" under \"with:\" unless a later step needs to push"
+    },
+    {
+      "file": ".github/workflows/pipeline.yml",
+      "rule": "missing-timeout",
+      "fingerprint": "3251edda7fcea613",
+      "context": "8a8120cc08f341df",
+      "occurrence": 0,
+      "message": "\"timeout-minutes\" is not set at this job. Set it to avoid wasting runner minutes when the job hangs"
+    },
+    {
+      "file": ".github/workflows/release-guard.yml",
+      "rule": "concurrency-limits",
+      "fingerprint": "48c2d6b5885070b9",
+      "context": "081b2e27040f94d3",
+      "occurrence": 0,
+      "message": "workflow has no \"concurrency:\", so every run of it executes at the same time even when a newer run supersedes the older ones. add a top-level \"concurrency:\" with a \"group:\" and \"cancel-in-progress: true\""
+    }
+  ]
+}

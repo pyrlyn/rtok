@@ -118,7 +118,13 @@ fn plugin_root(manifest: &Path, plugin: &str, cwd: Option<&Path>) -> Option<Path
             only(&|i| i.get("projectPath").and_then(|p| p.as_str()).map(Path::new) == Some(c))
         })
         .or_else(|| only(&|i| i.get("scope").and_then(|s| s.as_str()) == Some("user")))
-        .or_else(|| (installs.len() == 1).then(|| &installs[0]))?;
+        // Only a record with no scope or project metadata is a legacy one; an explicit
+        // `project`/`local` entry that did not match `cwd` belongs to another project.
+        .or_else(|| {
+            installs.iter().next().filter(|i| {
+                installs.len() == 1 && i.get("scope").is_none() && i.get("projectPath").is_none()
+            })
+        })?;
     Some(PathBuf::from(chosen.get("installPath")?.as_str()?))
 }
 
@@ -153,18 +159,20 @@ fn decide(cx: &Ctx, name: &str, body: &str, cap: u64) -> Option<PreToolDecision>
     Some(PreToolDecision::Deny { reason })
 }
 
-/// True when the YAML frontmatter names a key the host applies at invocation.
+/// True when the YAML frontmatter names a key the host applies at invocation. The mapping is
+/// parsed, so `"model":` and `'allowed-tools':` count like the bare spelling; frontmatter
+/// that does not parse as a plain string-keyed mapping is treated as exempt (fail open).
 fn host_keys(body: &str) -> bool {
     let Some(rest) = body.strip_prefix("---") else {
         return false;
     };
     let end = rest.find("\n---").unwrap_or(rest.len());
-    rest[..end].lines().any(|l| {
-        HOST_KEYS.iter().any(|k| {
-            l.strip_prefix(k)
-                .is_some_and(|r| r.trim_start().starts_with(':'))
-        })
-    })
+    let yaml = &rest[..end];
+    if yaml.trim().is_empty() {
+        return false;
+    }
+    serde_saphyr::from_str::<std::collections::HashMap<String, serde::de::IgnoredAny>>(yaml)
+        .map_or(true, |m| HOST_KEYS.iter().any(|k| m.contains_key(*k)))
 }
 
 /// Cut at a char boundary with an ellipsis.
@@ -229,6 +237,55 @@ mod tests {
         assert!(decide(&cx, "s", &keyed, 8192).is_none());
         assert!(!host_keys(&body(1)));
         assert!(host_keys("---\nmodel:  haiku\n---\n# x"));
+    }
+
+    /// T559: the exemption is about the frontmatter mapping's keys, not their YAML spelling,
+    /// and an unreadable frontmatter is never digested.
+    #[test]
+    fn host_keys_are_recognised_whatever_their_yaml_spelling() {
+        let cx = crate::testutil::runtime("skill-yaml").0;
+        let cx = Ctx::new(&cx);
+        let filler = body(300);
+        let filler = filler
+            .split_once("---\n")
+            .unwrap()
+            .1
+            .split_once("---\n")
+            .unwrap()
+            .1;
+        for fm in [
+            "model: haiku",
+            "\"model\": haiku",
+            "'allowed-tools': Bash",
+            "\"context\": fork",
+            "'agent': Explore",
+            "name: x\r\nmodel: haiku\r\n",
+            "name: x\nallowed-tools:\n  - Bash\n",
+            "name: x\n\"model\" :   haiku",
+            "{model: haiku}",
+            "name: [unclosed",
+            "name: a\nname: b",
+            "- just\n- a list",
+        ] {
+            let skill = format!("---\n{fm}\n---\n{filler}");
+            assert!(skill.len() > 8192);
+            assert!(host_keys(&skill), "{fm}");
+            assert!(decide(&cx, "s", &skill, 8192).is_none(), "{fm}");
+        }
+        for fm in [
+            "name: x",
+            "name: x\ndescription: \"pick the model and allowed-tools: later\"",
+            "name: x\nmetadata:\n  model: nested\n",
+            "\"name\": x\n'description': y",
+            "",
+        ] {
+            let skill = format!("---\n{fm}\n---\n{filler}");
+            assert!(!host_keys(&skill), "{fm}");
+            assert!(decide(&cx, "s", &skill, 8192).is_some(), "{fm}");
+        }
+        // Prose that merely mentions a host key, and no frontmatter at all.
+        let prose = format!("# Notes\nmodel: not frontmatter\n{filler}");
+        assert!(!host_keys(&prose));
     }
 
     #[test]
@@ -349,6 +406,38 @@ mod tests {
         let two_users = r#"{"version":2,"plugins":{"pony@a":[
             {"scope":"user","installPath":"/cache/1"},{"scope":"user","installPath":"/cache/2"}]}}"#;
         assert_eq!(root_of(two_users, "pony", None), None);
+    }
+
+    /// T558: the only install on file belongs to another project, so it must not supply the
+    /// body of a skill invoked here — not even a large one the guard would archive and deny.
+    #[test]
+    fn a_sole_install_scoped_to_another_project_falls_open() {
+        let home = crate::testutil::tmp_dir("skill-foreign");
+        let plugin = home.join("private-a");
+        let skill = plugin.join("skills/big/SKILL.md");
+        std::fs::create_dir_all(skill.parent().unwrap()).unwrap();
+        std::fs::write(&skill, "x".repeat(200_000)).unwrap();
+        std::fs::create_dir_all(home.join(".claude/plugins")).unwrap();
+        let manifest = |entry: &str| {
+            let m = format!(r#"{{"version":2,"plugins":{{"pony@a":[{entry}]}}}}"#);
+            std::fs::write(home.join(".claude/plugins/installed_plugins.json"), m).unwrap();
+        };
+        // A Windows path holds backslashes, which JSON text must escape.
+        let path = plugin.display().to_string().replace('\\', "\\\\");
+        let cwd = Some(Path::new("/B"));
+        for foreign in [
+            format!(r#"{{"scope":"project","projectPath":"/A","installPath":"{path}"}}"#),
+            format!(r#"{{"scope":"local","projectPath":"/A","installPath":"{path}"}}"#),
+            format!(r#"{{"scope":"project","installPath":"{path}"}}"#),
+            format!(r#"{{"projectPath":"/A","installPath":"{path}"}}"#),
+        ] {
+            manifest(&foreign);
+            assert_eq!(resolve("pony:big", cwd, &home), None, "{foreign}");
+        }
+        manifest(&format!(
+            r#"{{"scope":"project","projectPath":"/B","installPath":"{path}"}}"#
+        ));
+        assert_eq!(resolve("pony:big", cwd, &home), Some(skill));
     }
 
     #[test]

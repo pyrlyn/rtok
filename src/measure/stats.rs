@@ -389,6 +389,19 @@ pub struct CostReport {
     pub unknown: Vec<String>,
     pub total_cost: f64,
     pub total_saved: f64,
+    /// T385.10: USD per proxy lane, each lane costed at the models that served it. Empty — and
+    /// absent from JSON — while every request ran on the agent lane.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub lanes: BTreeMap<String, LaneCost>,
+}
+
+/// One lane's USD (`rtok stats --price`, T385.10).
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+pub struct LaneCost {
+    /// USD over the lane's priced models.
+    pub cost: f64,
+    /// True when some model on the lane has no `[stats.prices]` row, so `cost` is a floor.
+    pub partial: bool,
 }
 
 /// The config knobs the fold needs, so `collect` stays usable without a `Config`: the
@@ -1041,6 +1054,28 @@ pub fn attach_costs(
     costs.unknown.sort();
     costs.unknown.dedup();
     let round = |v: f64| (v * 1e6).round() / 1e6;
+    // Same rule as the lane counters: a store of agent turns alone prints what it always did.
+    let lane_rows = store.usage_by_lane_model_tier()?;
+    let lane_of = |kind: &Option<String>| {
+        kind.as_deref()
+            .map_or("agent", crate::lane::lane_of_kind)
+            .to_string()
+    };
+    if lane_rows.iter().any(|r| lane_of(&r.kind) != "agent") {
+        for row in &lane_rows {
+            let lane = costs.lanes.entry(lane_of(&row.kind)).or_default();
+            let u = &row.usage;
+            match prices.get(&u.model) {
+                Some(price) => {
+                    lane.cost += row_cost(u.input, u.cache_create, u.cache_read, u.output, price).0;
+                }
+                None => lane.partial = true,
+            }
+        }
+        for lane in costs.lanes.values_mut() {
+            lane.cost = round(lane.cost);
+        }
+    }
     costs.total_cost = round(costs.total_cost);
     costs.total_saved = round(costs.total_saved);
     report.cost = Some(costs);
@@ -1091,6 +1126,13 @@ impl CostReport {
             self.total_saved,
             self.unknown.len()
         ));
+        if !self.lanes.is_empty() {
+            s.push_str("cost by lane (USD; `*` = excludes models without a price)\n");
+            for (lane, c) in &self.lanes {
+                let star = if c.partial { "*" } else { "" };
+                s.push_str(&format!("  {lane:<12} {:>10.2}{star}\n", c.cost));
+            }
+        }
         s
     }
 }
@@ -1430,10 +1472,11 @@ fn fold_repeat(row: &mut RepeatRow, parsed: &Parsed) {
 /// `expand` of a shown id is a re-expand — the bytes the cut made the agent fetch again.
 fn fold_expand_after(row: &mut ExpandAfterRow, parsed: &Parsed) {
     static NAMED: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
-        regex::Regex::new(r"expand:? (?:rtok expand )?([0-9a-f]{64})").expect("static regex")
+        regex::Regex::new(r"(?:expand:? (?:rtok expand )?|\[rtok )([0-9a-f]{12,64})\b")
+            .expect("static regex")
     });
     static CALLED: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
-        regex::Regex::new(r"rtok expand ([0-9a-f]{64})").expect("static regex")
+        regex::Regex::new(r"rtok expand ([0-9a-f]{12,64})").expect("static regex")
     });
     let results: BTreeMap<&str, &str> = parsed
         .tool_results
@@ -1455,7 +1498,10 @@ fn fold_expand_after(row: &mut ExpandAfterRow, parsed: &Parsed) {
         } else {
             None
         };
-        if let Some(seen) = asked.and_then(|id| shown.get_mut(id)) {
+        // T661: the trailer names a 12-char prefix; key every id by it so a full-id
+        // expand still matches a prefix-shown result and vice versa.
+        let key = |id: &str| id[..id.len().min(12)].to_string();
+        if let Some(seen) = asked.and_then(|id| shown.get_mut(&key(id))) {
             row.calls += 1;
             row.bytes += content.len() as u64;
             row.shown_bytes += seen.take().unwrap_or(0);
@@ -1463,7 +1509,7 @@ fn fold_expand_after(row: &mut ExpandAfterRow, parsed: &Parsed) {
         }
         for c in NAMED.captures_iter(content) {
             shown
-                .entry(c[1].to_string())
+                .entry(key(&c[1]))
                 .or_insert(Some(content.len() as u64));
         }
     }
@@ -1624,7 +1670,7 @@ fn has_outline(_path: &str) -> bool {
 #[cfg(feature = "read")]
 fn has_rtok_marker(content: &str) -> bool {
     is_read_deny(content)
-        || content.contains("unchanged since ")
+        || content.contains(crate::plugins::read::cache::DEDUP_PREFIX)
         || content.starts_with("[archived ")
         || content.contains("[rtok ")
 }

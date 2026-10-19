@@ -3,10 +3,10 @@
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
 use crate::config::Config;
-use crate::render::with_loader;
 use crate::ui::style;
 use anyhow::Result;
 use clap::Subcommand;
+use rtok_sys::proc::ProgressRunner;
 use std::io;
 use std::path::PathBuf;
 
@@ -26,6 +26,12 @@ pub(super) enum MemoryCmd {
         #[arg(long)]
         project: Option<String>,
     },
+    // T666.1
+    /// Save notes an external program extracts from a transcript (off by default)
+    Extract {
+        /// Claude Code transcript (`.jsonl`)
+        transcript: std::path::PathBuf,
+    },
     // T69.1
     /// Retire a note: a tombstone — never recalled or searched, body kept
     Retire {
@@ -33,6 +39,19 @@ pub(super) enum MemoryCmd {
         /// The replacement note id this one is superseded by
         #[arg(long)]
         superseded_by: Option<i32>,
+    },
+    // T669
+    /// Retire notes nobody read for a long time (a dry run unless `--apply`)
+    Forget {
+        /// Only this project
+        #[arg(long)]
+        project: Option<String>,
+        /// Idle days; default `[plugins.memory] forget_after_days`
+        #[arg(long)]
+        days: Option<u32>,
+        /// Retire the notes; without it nothing is written
+        #[arg(long)]
+        apply: bool,
     },
     // T69.1
     /// Pin a note so it leads SessionStart recall
@@ -66,6 +85,10 @@ pub(super) enum MemoryCmd {
         /// Print the unified diff and write nothing
         #[arg(long)]
         dry_run: bool,
+        // T416.3
+        /// With --dry-run: stat lines and totals instead of the diff
+        #[arg(long, requires = "dry_run")]
+        stat: bool,
         /// Delete the managed block and nothing else
         #[arg(long)]
         remove: bool,
@@ -101,11 +124,29 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: MemoryCmd) -> Result<()
             let mut out = io::stdout().lock();
             crate::plugins::memory::export::run(&cfg, project.as_deref(), &mut out)?;
         }
+        MemoryCmd::Extract { transcript } => {
+            let cx = crate::plugin::Runtime::open(cfg, "memory")?;
+            println!(
+                "{}",
+                crate::plugins::memory::extract::run_configured(&cx, &transcript)?
+            );
+        }
         MemoryCmd::Retire { id, superseded_by } => {
             let cx = crate::plugin::Runtime::open(cfg, "memory")?;
             println!(
                 "{}",
                 crate::plugins::memory::mem_update(&cx, id, true, superseded_by, None)?
+            );
+        }
+        MemoryCmd::Forget {
+            project,
+            days,
+            apply,
+        } => {
+            let cx = crate::plugin::Runtime::open(cfg, "memory")?;
+            println!(
+                "{}",
+                crate::plugins::memory::mem_forget(&cx, project.as_deref(), days, apply)?
             );
         }
         MemoryCmd::Pin { id } => {
@@ -143,9 +184,11 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: MemoryCmd) -> Result<()
             file,
             budget,
             dry_run,
+            stat,
             remove,
             force,
-        } => with_loader("syncing memory", || {
+        } => ProgressRunner::wait("syncing memory…", || {
+            crate::stat_preview::set(stat);
             crate::plugins::memory::sync::run(&cfg, file, budget, dry_run, remove, force)
         })?,
         MemoryCmd::Status {

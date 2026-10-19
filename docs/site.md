@@ -9,7 +9,7 @@ install_alternatives:
   - 'brew install pyrlyn/tap/rtok'
   - 'npm i -g rtok-cli'
   - 'uv tool install rtok-cli'
-version: "0.10.0"
+version: "0.16.0"
 accent: "#5CE1FF"
 accent2: "#FF6B4A"
 accentLight: "#0B7FA0"
@@ -20,8 +20,8 @@ order: 1
 <!-- Website copy for the pyrlyn project site. The sync-docs workflow copies this file to
 pyrlyn/landing (main) as content/projects/rtok.md on every change to main and on every v*
 tag; front matter follows CONTENT_CONTRACT.md in that repository.
-Sources (checked 2026-09-27): README.md and the clap CLI in src/cli.rs; version from the latest
-GitHub release (v0.10.0); accent from site/assets/css/custom.css (--rtok-accent). -->
+Sources (checked 2026-10-14): README.md and the clap CLI in src/cli.rs; version from the latest
+GitHub release (v0.16.0); accent from site/assets/css/custom.css (--rtok-accent). -->
 
 ## Overview
 

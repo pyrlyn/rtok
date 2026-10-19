@@ -17,7 +17,9 @@ use serde_json::{Value, json};
 
 use rtok_plugin_sdk::Ctx;
 
-use super::{git_diff_args, git_stdout_result, impact_bfs, index, index_for, is_test_path};
+use super::{
+    WalkMemo, git_diff_args, git_stdout_result, impact_walk_memo, index, index_for, is_test_path,
+};
 
 /// Shared source lines for one review (`tools/review.py` `_MAX_REVIEW_SOURCE_LINES`).
 pub const SOURCE_BUDGET: u32 = 800;
@@ -36,7 +38,7 @@ pub const MAX_RISK_NODES_PER_FILE: usize = 8;
 /// Defs scored across the whole diff.
 pub const MAX_RISK_SCORED_NODES: usize = 400;
 
-const SCORED_KINDS: &[&str] = &["function", "method", "class"];
+pub(super) const SCORED_KINDS: &[&str] = &["function", "method", "class"];
 
 /// Whole-token keywords. Substring matches (`sign` inside `assign`) are not hits.
 const SECURITY: &[&str] = &[
@@ -344,14 +346,20 @@ fn scored_names(defs: &[(String, String, i32, i32)]) -> Vec<String> {
         .collect()
 }
 
-fn score_file(cx: &Ctx, key: &str, path: &str, names: &[String]) -> Result<(f64, Vec<String>)> {
+fn score_file(
+    cx: &Ctx,
+    key: &str,
+    path: &str,
+    names: &[String],
+    memo: &mut WalkMemo,
+) -> Result<(f64, Vec<String>)> {
     let mut score: f64 = 0.0;
     let mut untested = Vec::new();
     let in_test = is_test_path(path);
     for name in names {
-        let rows = impact_bfs(cx, key, name, 3)?;
-        let callers = rows.iter().filter(|(depth, _, _)| *depth == 1).count() as u32;
-        let tested = in_test || rows.iter().any(|(_, p, _)| is_test_path(p));
+        let rows = impact_walk_memo(cx, &[key], name, 3, true, memo)?;
+        let callers = rows.iter().filter(|(_, depth, ..)| *depth == 1).count() as u32;
+        let tested = in_test || rows.iter().any(|(_, _, p, _)| is_test_path(p));
         let security = security_token(name);
         score = score.max(risk_score(callers, tested, security));
         if !tested {
@@ -428,6 +436,8 @@ pub fn review(
     let key = index::canon(root);
     let hunks = hunks_of(root, since, staged)?;
     let mut remaining = MAX_RISK_SCORED_NODES;
+    // The index is not written again before `review` returns, so every walk may share answers.
+    let mut memo = WalkMemo::default();
     let mut files = Vec::with_capacity(paths.len());
     for path in &paths {
         let stored = cx.symbol_file_defs(&key, path).unwrap_or_default();
@@ -439,7 +449,7 @@ pub fn review(
         let (score, untested) = if names.is_empty() {
             (0.0, Vec::new())
         } else {
-            score_file(cx, &key, path, &names)?
+            score_file(cx, &key, path, &names, &mut memo)?
         };
         let regions = widen(hunks.get(path).map(Vec::as_slice).unwrap_or(&[]), &stored);
         files.push(FileReview {

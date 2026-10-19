@@ -24,6 +24,7 @@ use super::health;
 use super::theme::{self, ACCENT, ERR, OK, WARN};
 use crate::model::{self, PluginPage};
 use crate::store::CallRow;
+use crate::web::calls_store::{ScopeRow, scope_names};
 
 /// One screen: header · [alert] · framed body with the tabs in its top border · footer,
 /// with the `?` overlay on top when it is open (T60.8). The alert row stays up for the
@@ -202,6 +203,7 @@ fn render_page(frame: &mut Frame, app: &App, area: Rect) {
         "services" => frame.render_widget(services_page(app), area),
         "worktrees" => frame.render_widget(worktrees_page(app), area),
         "usage" => frame.render_widget(usage_page(app), area),
+        "tasks" => frame.render_widget(tasks_page(app), area),
         page => unreachable!("page `{page}` has no TUI body — surface_parity holds the list"),
     }
 }
@@ -470,21 +472,46 @@ fn render_graph(frame: &mut Frame, app: &App, area: Rect) {
     let live = (area.height / 2).min(18);
     let [area, calls] =
         Layout::vertical([Constraint::Min(0), Constraint::Length(live)]).areas(area);
-    app.live().render(frame, calls);
     let (rows, state) = app.projects();
+    let scope_rows: Vec<_> = rows
+        .iter()
+        .map(|r| ScopeRow {
+            id: r.id,
+            name: &r.name,
+            selected: r.selected,
+            links: r.links.iter().map(|l| l.0).collect(),
+        })
+        .collect();
+    let drill = app.drill();
+    app.live().render(
+        frame,
+        calls,
+        scope_names(&scope_rows, drill.project()).as_ref(),
+        drill.drawn(),
+    );
     if rows.is_empty() {
         return frame.render_widget(graph_page(app), area);
     }
     // Seven rows and the header: the table scrolls to the cursor beyond that.
     let height = (rows.len() as u16 + 1).min(8);
     let detail = health::detail(&rows[state.cursor(&rows)]);
-    // Three hint lines: the project keys (T476), the live pane's (T480) and compare's (T485)
-    // overflow two at 128 columns.
+    // The key hints and a remove's plan wrap, so their rows are counted, not guessed: at 140
+    // columns the hints fit three lines, at 100 they need more.
+    let hints_text = Paragraph::new(status_line("graph", "")).wrap(Wrap { trim: true });
+    let plan = state.note(&rows);
+    let plan = if plan.is_empty() {
+        drill.note().to_owned()
+    } else {
+        plan
+    };
+    let note_text =
+        Paragraph::new(Line::styled(plan, Style::new().fg(WARN))).wrap(Wrap { trim: true });
+    let rows_for = |p: &Paragraph, most: usize| p.line_count(area.width).clamp(1, most) as u16;
     let [table, breakdown, note, hints, text] = Layout::vertical([
         Constraint::Length(height),
         Constraint::Length(detail.len() as u16),
-        Constraint::Length(1),
-        Constraint::Length(3),
+        Constraint::Length(rows_for(&note_text, 3)),
+        Constraint::Length(rows_for(&hints_text, 6)),
         Constraint::Min(0),
     ])
     .areas(area);
@@ -519,14 +546,8 @@ fn render_graph(frame: &mut Frame, app: &App, area: Rect) {
         &mut cursor,
     );
     frame.render_widget(Paragraph::new(detail), breakdown);
-    frame.render_widget(
-        Paragraph::new(Line::styled(state.note(&rows), Style::new().fg(WARN))),
-        note,
-    );
-    frame.render_widget(
-        Paragraph::new(status_line("graph", "")).wrap(Wrap { trim: true }),
-        hints,
-    );
+    frame.render_widget(note_text, note);
+    frame.render_widget(hints_text, hints);
     frame.render_widget(graph_page(app), text);
 }
 
@@ -595,6 +616,12 @@ fn usage_page(app: &App) -> Paragraph<'static> {
     Paragraph::new(app.snapshot().agent_usage.text.clone())
 }
 
+/// The model's Tasks page (T441.13.7): `rtok task list --all`'s table, verbatim, or the line
+/// that says why there is none (no `[tasks]` section, a failed adapter, still reading).
+fn tasks_page(app: &App) -> Paragraph<'static> {
+    Paragraph::new(app.snapshot().tasks.text.clone())
+}
+
 /// The model's Calls page (T15.5): the ledger's recent rows, newest first — surface,
 /// kind, session, latency and the linked usage tokens — with `Enter`/`z` expanding the
 /// selected row's full fields below the list. Every value is the snapshot's row (D23),
@@ -632,7 +659,7 @@ fn render_calls(frame: &mut Frame, app: &App, area: Rect) {
         (false, false) => (area, None, None),
     };
     let selected = app.calls_selected();
-    frame.render_widget(calls_table(rows, selected), list);
+    frame.render_widget(calls_table(rows, selected, list.height), list);
     if let Some(area) = detail {
         frame.render_widget(call_detail(&rows[selected], app), area);
     }
@@ -643,26 +670,36 @@ fn render_calls(frame: &mut Frame, app: &App, area: Rect) {
 
 /// The list: one row per call, the selected one as the cursor row, a failed call in
 /// red. Tokens are the linked usage row's four counters summed; a dash says the ledger
-/// carries none there.
-fn calls_table(rows: &[CallRow], selected: usize) -> Table<'static> {
-    let table_rows = rows.iter().enumerate().map(|(i, c)| {
-        let row = Row::new([
-            time_of(c.ts),
-            c.surface.clone(),
-            c.kind.clone(),
-            c.name.clone().unwrap_or_else(|| "-".into()),
-            c.session.clone(),
-            c.ms.map_or_else(|| "-".into(), |ms| format!("{ms:.1}")),
-            model::call_size_label(c),
-        ]);
-        if i == selected {
-            row.style(theme::selected())
-        } else if c.ok == 0 {
-            row.style(Style::new().fg(ERR))
-        } else {
-            row
-        }
-    });
+/// carries none there. `height` is the area's: the table scrolls to the smallest offset that
+/// keeps the cursor row on screen (the Sessions page's rule, T60.10), so a pane that shrinks
+/// the list never hides the cursor (T639).
+fn calls_table(rows: &[CallRow], selected: usize, height: u16) -> Table<'static> {
+    // Borders and the header line take three rows.
+    let visible = usize::from(height.saturating_sub(3)).max(1);
+    let offset = selected.saturating_sub(visible - 1);
+    let table_rows = rows
+        .iter()
+        .enumerate()
+        .skip(offset)
+        .take(visible)
+        .map(|(i, c)| {
+            let row = Row::new([
+                time_of(c.ts),
+                c.surface.clone(),
+                c.kind.clone(),
+                c.name.clone().unwrap_or_else(|| "-".into()),
+                c.session.clone(),
+                c.ms.map_or_else(|| "-".into(), |ms| format!("{ms:.1}")),
+                model::call_size_label(c),
+            ]);
+            if i == selected {
+                row.style(theme::selected())
+            } else if c.ok == 0 {
+                row.style(Style::new().fg(ERR))
+            } else {
+                row
+            }
+        });
     let live = rows.iter().filter(|c| c.kind == "live_passthrough").count();
     let title = if live > 0 {
         format!(
@@ -1064,8 +1101,9 @@ pub(super) mod tests {
     /// page too.
     pub(in crate::tui) fn screen(app: &App) -> String {
         // T228 widened the tab bar to 11 tabs, T229/T232 to 13 — narrower widths clip the
-        // last one off the pane's border before its text ever hits the buffer.
-        let mut terminal = ratatui::Terminal::new(TestBackend::new(128, 24)).unwrap();
+        // last one off the pane's border before its text ever hits the buffer; the tasks tab
+        // (T441.13.7) made it 15.
+        let mut terminal = ratatui::Terminal::new(TestBackend::new(140, 24)).unwrap();
         terminal.draw(|frame| draw(frame, app)).unwrap();
         terminal
             .backend()
@@ -1216,6 +1254,20 @@ pub(super) mod tests {
         let screen = screen(&app);
         assert!(screen.contains("logs from 2 agents"), "{screen}");
         assert!(screen.contains("1.2M tokens"), "{screen}");
+    }
+
+    /// T441.13.7: the Tasks tab shows the snapshot's `tasks.text`, the CLI's own list.
+    #[test]
+    fn tasks_tab_renders_the_task_list() {
+        let cfg = config();
+        let mut app = App::new(&cfg);
+        while app.page() != "tasks" {
+            app.key(KeyCode::Right, KeyModifiers::NONE);
+        }
+        let mut snap = crate::model::snapshot(&cfg);
+        snap.tasks.text = "R1  open  Ship the board\n".into();
+        app.refresh(snap);
+        assert!(screen(&app).contains("Ship the board"));
     }
 
     /// The bar's guards: nothing saved is no bar.
@@ -1559,6 +1611,68 @@ pub(super) mod tests {
     }
 
     /// An empty ledger is an empty page, and its keys do nothing — not a panic.
+    /// T639: the Calls cursor stays on screen walking down and back up a long ledger, with
+    /// and without the detail pane that shortens the list.
+    #[test]
+    fn calls_tab_scrolls_to_keep_the_cursor_visible() {
+        let cfg = config();
+        let mut app = App::new(&cfg);
+        select(&mut app, "calls");
+        app.refresh({
+            let mut snap = model::snapshot(&cfg);
+            snap.calls = (0..40)
+                .map(|n| CallRow {
+                    name: Some(format!("nm{n:03}")),
+                    ..call_row()
+                })
+                .collect();
+            snap
+        });
+        let walk = |app: &mut App, code, n| {
+            for _ in 0..n {
+                app.key(code, KeyModifiers::NONE);
+            }
+        };
+        assert!(screen(&app).contains("nm000"));
+        walk(&mut app, KeyCode::Down, 30);
+        let walked = screen(&app);
+        assert!(walked.contains("nm030"), "the cursor row is on screen");
+        assert!(!walked.contains("nm000"), "the top scrolled off");
+        app.key(KeyCode::Enter, KeyModifiers::NONE);
+        assert!(
+            screen(&app).contains("nm030"),
+            "still visible with the detail pane open"
+        );
+        walk(&mut app, KeyCode::Up, 30);
+        let top = screen(&app);
+        assert!(top.contains("nm000"), "walking back up scrolls back");
+        assert!(!top.contains("nm030"));
+    }
+
+    fn call_row() -> CallRow {
+        CallRow {
+            id: 0,
+            ts: 0,
+            session: "s".into(),
+            surface: "hook".into(),
+            kind: "hook".into(),
+            plugin: None,
+            name: None,
+            parent_id: None,
+            ms: None,
+            ok: 1,
+            error: None,
+            host: None,
+            provider: None,
+            model: None,
+            api: None,
+            input: None,
+            cache_create: None,
+            cache_read: None,
+            output: None,
+        }
+    }
+
     #[test]
     fn calls_keys_do_nothing_on_an_empty_ledger() {
         let mut app = App::new(&config());

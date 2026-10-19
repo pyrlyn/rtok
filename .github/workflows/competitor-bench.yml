@@ -1,0 +1,59 @@
+# Manual competitor benches. Not required, not on push/PR.
+# Same docker CPU/memory limits as the local Colima profile (4 / 8g).
+name: competitor-bench
+
+on:
+  workflow_dispatch:
+    inputs:
+      slugs:
+        description: "Space-separated competitor slugs (empty = all measurable)"
+        required: false
+        default: "rtk"
+      runs:
+        description: "Hyperfine runs per case"
+        required: false
+        default: "5"
+
+permissions:
+  contents: read
+
+jobs:
+  bench:
+    name: competitor bench
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install host requirements
+        run: python3 -m pip install --upgrade pip && python3 -m pip install -r bench/competitors/requirements.txt
+
+      - name: Compile bench Python
+        run: python3 -m py_compile bench/competitors/run_all.py bench/competitors/_lib/*.py bench/competitors/rtk/*.py
+
+      - name: Run competitor benches
+        env:
+          RUNS: ${{ inputs.runs }}
+          BASE_TAG: rust:1.98.1-bookworm
+          SLUGS: ${{ inputs.slugs }}
+        run: |
+          set -euo pipefail
+          if [ -n "$SLUGS" ]; then
+            # SLUGS is a space-separated list from workflow_dispatch.
+            # shellcheck disable=SC2086
+            python3 bench/competitors/run_all.py $SLUGS
+          else
+            python3 bench/competitors/run_all.py
+          fi
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: competitor-bench-results
+          path: bench/competitors/*/results/**
+          if-no-files-found: warn

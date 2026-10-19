@@ -13,7 +13,7 @@ import { richSnapshot } from "../../fixtures";
 import { mount, wire } from "../../testHelpers";
 import { VIEW_KEY } from "../ProjectsOverview";
 import { done, LABELS, running, view, windowOf } from "./callsFixtures";
-import { FOCUS_MS } from "./lit";
+import { FOCUS_MS, LABEL_MS } from "./lit";
 import { HIDE_KEY, SPLIT_KEY } from "./Split";
 
 const snap: Snapshot = {
@@ -24,6 +24,12 @@ const snap: Snapshot = {
 beforeEach(() => {
     localStorage.clear();
     localStorage.setItem(VIEW_KEY, "list");
+    // The cards' numbers jump under reduced motion (T329.53), so a test reads the total at once.
+    vi.stubGlobal("matchMedia", (q: string) => ({
+        matches: q.includes("reduce"),
+        addEventListener: () => {},
+        removeEventListener: () => {},
+    }));
 });
 afterEach(() => {
     cleanup();
@@ -31,13 +37,6 @@ afterEach(() => {
     vi.restoreAllMocks();
 });
 const noop = () => {};
-
-/** Accessible text of a card: CountUp draws its frames aria-hidden and the total in sr-only. */
-const accessible = (root: HTMLElement) => {
-    const clone = root.cloneNode(true) as HTMLElement;
-    clone.querySelectorAll('[aria-hidden="true"]').forEach((el) => el.remove());
-    return clone.textContent;
-};
 
 const canvas = () => screen.findByTestId("graph-live");
 const calls = (sent: unknown[]) =>
@@ -89,7 +88,7 @@ describe("live graph", () => {
             }),
         );
         const card = async (label: string) =>
-            accessible((await screen.findByText(label)).parentElement!);
+            (await screen.findByText(label)).parentElement?.textContent;
         await waitFor(async () => expect(await card("latency p50")).toContain("40 ms"));
         expect(await card("latency p50")).toContain("p95 1.5 s");
         expect(await card("symbols returned")).toContain("2 of 3");
@@ -308,7 +307,7 @@ describe("live graph", () => {
         const card = () =>
             screen
                 .getAllByText("calls")
-                .map((e) => accessible(e.parentElement!))
+                .map((e) => e.parentElement?.textContent)
                 .find((t) => t?.includes("failed"));
         for (const [i, label] of LABELS.entries()) {
             fireEvent.click(screen.getByRole("button", { name: label }));
@@ -402,6 +401,44 @@ describe("split", () => {
         act(() => push({ type: "calls", calls: view({ running: [hidden] }) }));
         const list = await screen.findByRole("list", { name: "folded calls" });
         expect(within(list).getByText(/^\+\d+ more · 1 folded$/)).toBeTruthy();
+    });
+
+    test("a running call gets a label with its tool and a counter, which fades once the call ends", async () => {
+        const w = wire(snap);
+        mount(w.connect, "/graph");
+        await canvas();
+        act(() => w.frame({ type: "calls", calls: view({ running: [running("a")] }) }));
+        const label = await screen.findByTestId("run-label");
+        expect(label.textContent).toMatch(/^callers \d+s$/);
+        expect(label.getAttribute("data-state")).toBe("running");
+
+        act(() =>
+            w.frame({ type: "calls", calls: view({ feed: [done("a", 10, 4, { ms: 250 })] }) }),
+        );
+        await waitFor(() =>
+            expect(screen.getByTestId("run-label").textContent).toBe("callers 250 ms"),
+        );
+        // The next one-second tick finds the call older than the label's life.
+        const real = Date.now();
+        vi.spyOn(Date, "now").mockReturnValue(real + LABEL_MS + 2000);
+        await waitFor(() => expect(screen.queryByTestId("run-label")).toBeNull(), {
+            timeout: 3000,
+        });
+    });
+
+    test("a call outside the scope gets no label, though the running list still shows it", async () => {
+        const w = wire(snap);
+        mount(w.connect, "/graph");
+        await canvas();
+        act(() =>
+            w.frame({
+                type: "calls",
+                calls: view({ running: [running("a", { project: "ketch" })] }),
+            }),
+        );
+        const list = await screen.findByRole("list", { name: "running calls" });
+        expect(within(list).getByText("callers")).toBeTruthy();
+        expect(screen.queryByTestId("run-label")).toBeNull();
     });
 
     test("the live graph follows the drilled project", async () => {

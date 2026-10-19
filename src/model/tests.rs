@@ -754,3 +754,19 @@ fn skills_from_joins_listing_and_resident_without_stats_rows() {
     assert!(empty.rows.is_empty());
     assert!(empty.header.starts_with("0 skills"));
 }
+
+/// T630: the Config page shows the values and provenance of the file the process loaded.
+#[test]
+fn config_page_reads_the_selected_config_file() {
+    let home = crate::testutil::tmp_dir("config-page");
+    let custom = home.join("custom.toml");
+    std::fs::write(&custom, "[tasks]\nprefix = \"Z\"\n").unwrap();
+    std::fs::write(home.join("config.toml"), "[tasks]\nprefix = \"A\"\n").unwrap();
+    let cfg = crate::config::layers::load(&home, Some(&custom), None).unwrap();
+    let text = config_page_text(&cfg).unwrap();
+    let line = text
+        .lines()
+        .find(|l| l.starts_with("tasks.prefix = "))
+        .unwrap_or_else(|| panic!("no tasks.prefix row: {text}"));
+    assert!(line.contains('Z') && !line.contains('A'), "{line}");
+}

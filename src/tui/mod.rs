@@ -14,6 +14,7 @@
 mod app;
 mod compare;
 mod doctor_fix;
+mod drill;
 mod exporter;
 mod health;
 mod junk_clear;

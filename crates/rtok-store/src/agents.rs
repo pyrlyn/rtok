@@ -195,7 +195,10 @@ impl Store {
     /// exists and is fresh; returns its rtok id (existing on repeat, else a freshly minted
     /// UUIDv4). One indexed upsert on the hot path (`parent_key: None`); a sub-agent first
     /// resolves its parent's id with one extra indexed read, so `parent_id` is set from the
-    /// row's very first insert. `activity` follows [`Store::touch_agent`]'s rule: `None`
+    /// row's very first insert when the main row is already there. When it is not (the
+    /// sub-agent's event came first), the main row's registration adopts every unparented
+    /// sub-agent of its session, and a sub-agent's own repeat fills a missing parent (T613).
+    /// `activity` follows [`Store::touch_agent`]'s rule: `None`
     /// leaves whatever is already stored untouched (`register_agent` never blanks a hook
     /// event's activity when a later event, e.g. `SessionEnd`, only needs the id back).
     /// A repeat also clears `ended_at`, so a resumed session is live again (T324).
@@ -209,37 +212,58 @@ impl Store {
     ) -> Result<String> {
         let mut conn = self.lock()?;
         let key = parent_key.unwrap_or("");
-        let parent_id: Option<String> = if key.is_empty() {
-            None
-        } else {
-            main_agent_id(&mut conn, host_id, host_session)?
-        };
-        let id = uuid::Uuid::new_v4().to_string();
-        let row_id: String = diesel::insert_into(agents::table)
-            .values((
-                agents::id.eq(&id),
-                agents::host_id.eq(host_id),
-                agents::host_session_id.eq(host_session),
-                agents::parent_key.eq(key),
-                agents::parent_id.eq(parent_id.as_deref()),
-                agents::cwd.eq(cwd),
-                agents::activity.eq(activity),
-            ))
-            .on_conflict((agents::host_id, agents::host_session_id, agents::parent_key))
-            .do_update()
-            .set((
-                agents::last_seen.eq(unixepoch().assume_not_null()),
-                // A registering event is proof of life: a resumed session revives its row.
-                agents::ended_at.eq(None::<i64>),
-                agents::cwd.eq(coalesce(diesel::upsert::excluded(agents::cwd), agents::cwd)),
-                agents::activity.eq(coalesce(
-                    diesel::upsert::excluded(agents::activity),
-                    agents::activity,
-                )),
-            ))
-            .returning(agents::id)
-            .get_result(&mut *conn)?;
-        Ok(row_id)
+        // One write transaction, so a sub-agent and its main row registered by two hook
+        // processes at once cannot interleave into an unparented child (T613).
+        conn.immediate_transaction(|conn| {
+            let parent_id = match key.is_empty() {
+                true => None,
+                false => main_agent_id(conn, host_id, host_session)?,
+            };
+            let id = uuid::Uuid::new_v4().to_string();
+            let row_id: String = diesel::insert_into(agents::table)
+                .values((
+                    agents::id.eq(&id),
+                    agents::host_id.eq(host_id),
+                    agents::host_session_id.eq(host_session),
+                    agents::parent_key.eq(key),
+                    agents::parent_id.eq(parent_id.as_deref()),
+                    agents::cwd.eq(cwd),
+                    agents::activity.eq(activity),
+                ))
+                .on_conflict((agents::host_id, agents::host_session_id, agents::parent_key))
+                .do_update()
+                .set((
+                    agents::last_seen.eq(unixepoch().assume_not_null()),
+                    // A registering event is proof of life: a resumed session revives its row.
+                    agents::ended_at.eq(None::<i64>),
+                    // Repairs a row an older build left unparented; a parent already set stays.
+                    agents::parent_id.eq(coalesce(
+                        agents::parent_id,
+                        diesel::upsert::excluded(agents::parent_id),
+                    )),
+                    agents::cwd.eq(coalesce(diesel::upsert::excluded(agents::cwd), agents::cwd)),
+                    agents::activity.eq(coalesce(
+                        diesel::upsert::excluded(agents::activity),
+                        agents::activity,
+                    )),
+                ))
+                .returning(agents::id)
+                .get_result(conn)?;
+            if key.is_empty() {
+                // The main row's own event adopts the session's unparented sub-agents (rows an
+                // older build wrote before this main row existed); a no-op once none are left.
+                diesel::update(
+                    agents::table
+                        .filter(agents::host_id.eq(host_id))
+                        .filter(agents::host_session_id.eq(host_session))
+                        .filter(agents::parent_key.ne(""))
+                        .filter(agents::parent_id.is_null()),
+                )
+                .set(agents::parent_id.eq(&row_id))
+                .execute(conn)?;
+            }
+            Ok(row_id)
+        })
     }
 
     /// The main (non-sub-agent) row of one host session, without touching it — T473's lookup
@@ -626,5 +650,120 @@ mod tests {
             .unwrap();
         assert_eq!(again, id);
         assert!(store.live_agents("30m").unwrap().iter().any(|r| r.id == id));
+    }
+
+    /// T613: whichever of a session's main and sub-agent rows arrives first, the sub-agent
+    /// ends up under the one main row, ids stay stable, and nothing is registered twice.
+    #[test]
+    fn a_sub_agent_registered_before_its_main_is_attached_to_it() {
+        let store = Store::open_in_memory().unwrap();
+        let claude = store.host_id("claude").unwrap().unwrap();
+        let child = store
+            .register_agent(claude, "late-main", Some("sub-1"), None, Some("Bash: ls"))
+            .unwrap();
+        let main = store
+            .register_agent(claude, "late-main", None, Some("/r"), None)
+            .unwrap();
+        let again = store
+            .register_agent(claude, "late-main", Some("sub-1"), None, None)
+            .unwrap();
+        assert_eq!(
+            store.agent_row(&child).unwrap().unwrap().parent_id,
+            Some(main.clone()),
+            "the main row's arrival adopted it"
+        );
+        assert_eq!(again, child, "same sub-agent id");
+        assert_eq!(
+            store.main_agent(claude, "late-main").unwrap(),
+            Some(main.clone())
+        );
+        let row = store.agent_row(&child).unwrap().unwrap();
+        assert_eq!(row.parent_id.as_deref(), Some(main.as_str()));
+        assert_eq!(row.activity.as_deref(), Some("Bash: ls"), "activity kept");
+        let kids = store.agent_children(&main).unwrap();
+        assert_eq!(
+            kids.iter().map(|k| k.id.as_str()).collect::<Vec<_>>(),
+            [child.as_str()]
+        );
+        let rows = store
+            .agents_of_sessions(&["late-main".to_string()])
+            .unwrap();
+        assert_eq!(rows.len(), 2, "one main row and one sub-agent row");
+        assert_eq!(rows.iter().filter(|r| r.parent_id.is_none()).count(), 1);
+        // Another session's sub-agent is not adopted.
+        let other = store
+            .register_agent(claude, "elsewhere", Some("sub-1"), None, None)
+            .unwrap();
+        assert_ne!(
+            store
+                .agent_row(&other)
+                .unwrap()
+                .unwrap()
+                .parent_id
+                .as_deref(),
+            Some(main.as_str())
+        );
+    }
+
+    /// T613: a row an older build left unparented is repaired in place, by the main row's
+    /// next registration or by its own, and a parent already set is never replaced.
+    #[test]
+    fn existing_orphan_sub_agents_are_repaired_in_place() {
+        let store = Store::open_in_memory().unwrap();
+        let claude = store.host_id("claude").unwrap().unwrap();
+        let orphan = |session: &str, key: &str| {
+            let id = uuid::Uuid::new_v4().to_string();
+            diesel::insert_into(agents::table)
+                .values((
+                    agents::id.eq(&id),
+                    agents::host_id.eq(claude),
+                    agents::host_session_id.eq(session),
+                    agents::parent_key.eq(key),
+                ))
+                .execute(&mut *store.lock().unwrap())
+                .unwrap();
+            id
+        };
+        let a = orphan("legacy", "sub-a");
+        let b = orphan("legacy", "sub-b");
+        let main = store
+            .register_agent(claude, "legacy", None, None, None)
+            .unwrap();
+        for id in [&a, &b] {
+            let row = store.agent_row(id).unwrap().unwrap();
+            assert_eq!(row.parent_id.as_deref(), Some(main.as_str()), "{id}");
+        }
+
+        let c = orphan("legacy-2", "sub-c");
+        let main2 = store
+            .register_agent(claude, "legacy-2", None, None, None)
+            .unwrap();
+        diesel::update(agents::table.filter(agents::id.eq(&c)))
+            .set(agents::parent_id.eq(None::<String>))
+            .execute(&mut *store.lock().unwrap())
+            .unwrap();
+        let again = store
+            .register_agent(claude, "legacy-2", Some("sub-c"), None, None)
+            .unwrap();
+        assert_eq!(again, c);
+        assert_eq!(
+            store.agent_row(&c).unwrap().unwrap().parent_id.as_deref(),
+            Some(main2.as_str())
+        );
+        // A parent that is already set stays, whoever registers.
+        diesel::update(agents::table.filter(agents::id.eq(&c)))
+            .set(agents::parent_id.eq(&a))
+            .execute(&mut *store.lock().unwrap())
+            .unwrap();
+        store
+            .register_agent(claude, "legacy-2", Some("sub-c"), None, None)
+            .unwrap();
+        store
+            .register_agent(claude, "legacy-2", None, None, None)
+            .unwrap();
+        assert_eq!(
+            store.agent_row(&c).unwrap().unwrap().parent_id.as_deref(),
+            Some(a.as_str())
+        );
     }
 }

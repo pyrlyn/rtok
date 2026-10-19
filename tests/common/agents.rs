@@ -65,6 +65,19 @@ pub fn write_cfg(home: &Path) -> PathBuf {
         "devin",
         "Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings",
         ".qwen",
+        ".junie/mcp",
+        ".codebuddy",
+        ".workbuddy",
+        ".config/goose",
+        ".factory",
+        ".kiro/settings",
+        ".config/amp",
+        ".warp",
+        ".continue",
+        ".config/crush",
+        ".openhands",
+        ".augment",
+        ".reasonix",
     ] {
         fs::create_dir_all(home.join(sub)).unwrap();
     }
@@ -101,7 +114,19 @@ pub fn write_cfg(home: &Path) -> PathBuf {
               cli_plugins_path = \"{h}/.gemini/antigravity-cli/plugins\"\n\
               [setup.devin]\nconfig_path = \"{h}/devin/config.json\"\n\
               [setup.roo]\nmcp_path = \"{h}/Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json\"\n\
-              [setup.qwen]\ndir = \"{h}/.qwen\"\n"
+              [setup.junie]\nmcp_path = \"{h}/.junie/mcp/mcp.json\"\n\
+              [setup.qwen]\ndir = \"{h}/.qwen\"\n\
+              [setup.codebuddy]\ndir = \"{h}/.codebuddy\"\nworkbuddy_dir = \"{h}/.workbuddy\"\n\
+              [setup.goose]\nconfig_path = \"{h}/.config/goose/config.yaml\"\n\
+              [setup.droid]\nmcp_path = \"{h}/.factory/mcp.json\"\n\
+              [setup.kiro]\nmcp_path = \"{h}/.kiro/settings/mcp.json\"\n\
+              [setup.amp]\nsettings_path = \"{h}/.config/amp/settings.json\"\n\
+              [setup.warp]\nmcp_path = \"{h}/.warp/.mcp.json\"\n\
+              [setup.continue]\nconfig_path = \"{h}/.continue/config.yaml\"\n\
+              [setup.crush]\nconfig_path = \"{h}/.config/crush/crush.json\"\n\
+              [setup.openhands]\nmcp_path = \"{h}/.openhands/mcp.json\"\n\
+              [setup.augment]\nsettings_path = \"{h}/.augment/settings.json\"\n\
+              [setup.reasonix]\ndir = \"{h}/.reasonix\"\n"
         ),
     )
     .unwrap();

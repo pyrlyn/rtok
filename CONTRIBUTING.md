@@ -13,6 +13,16 @@ just example
 just readme-check
 ```
 
+jactionlint and hk are pinned in `mise.toml`. `.github/jactionlint.yaml` applies the default
+profile and the baseline `.github/jactionlint-baseline.json` and skips the dist-generated
+`release.yml`. `hk.pkl` runs jactionlint as a pre-push hook:
+
+```bash
+mise x -- jactionlint                  # lint workflows, composite actions, dependabot.yml
+mise x -- jactionlint --baseline-write # refresh the baseline after fixing findings
+mise x -- hk install --mise            # install the pre-push hook once per clone
+```
+
 SonarCloud OSS (main-branch analysis): [`docs/sonarcloud-setup.md`](docs/sonarcloud-setup.md).
 
 Do not invent metrics or A/B wins in docs. Numbers in the README and
@@ -38,6 +48,11 @@ form of this rule (its 350-token budget is enforced by `tests/host_docs.rs`).
 - No new dependency without a one-line justification in the commit message.
 - Code style: `cargo fmt`, `cargo clippy -D warnings`,
   `cargo nextest run` green before every Check.
+- External programs run through `rtok_sys::proc::ProgressRunner`, and an
+  in-process wait goes behind `ProgressRunner::wait` or a `Batch`: they draw
+  a spinner or a bar on a terminal and nothing on a pipe (T276).
+  `clippy.toml` bans `std::process::Command::new` in libraries and binaries
+  outside `crates/rtok-sys`; tests may spawn their fixtures directly.
 - Every new CLI flag gets a key in `config/default.toml` and a row in
   `docs/config.md` in the same commit (D12).
 - No plugin shells out to, links, imports from, or reads the data of a

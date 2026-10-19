@@ -30,6 +30,10 @@ function scripted() {
   return { connect, sent, server: () => handlers, setOpen: (v: boolean) => (open = v) };
 }
 
+// The id the page put on its `i`th request: the server echoes it on the answer (T623).
+const reqOf = (s: { sent: unknown[] }, i: number) => (s.sent[i] as { req: number }).req;
+const tag = (frame: Frame, req: number): Frame => ({ ...frame, req });
+
 let queryClient: QueryClient;
 beforeEach(() => {
   queryClient = new QueryClient();
@@ -285,22 +289,24 @@ describe("?sample source", () => {
 
 describe("doctor requests", () => {
   const selection = { keep: [], toggled: [{ source: "/p", path: "hooks.Stop[0]" }] };
-  const plan = { items: [], diff: "", refused: [] };
+  const plan = { items: [], diff: "", refused: [], token: "t1" };
 
   test("a plan and an apply each wait for their own frame, in the order asked", async () => {
     const s = scripted();
     const api = createApi(queryClient, s.connect);
     api.open();
     const planned = api.doctorPlan(selection);
-    const applied = api.doctorApply(selection);
+    const applied = api.doctorApply(selection, "t1");
     expect(s.sent).toEqual([
-      { doctor: { action: "plan", selection } },
-      { doctor: { action: "apply", selection } },
+      { req: 1, doctor: { action: "plan", selection, confirmed: null } },
+      { req: 2, doctor: { action: "apply", selection, confirmed: "t1" } },
     ]);
-    s.server().onFrame({ type: "doctorfixed", fixed: { text: "done", code: 0 } });
-    s.server().onFrame({ type: "doctorplan", plan });
+    s.server().onFrame(
+      tag({ type: "doctorfixed", fixed: { text: "done", code: 0, replan: null } }, 2),
+    );
+    s.server().onFrame(tag({ type: "doctorplan", plan }, 1));
     await expect(planned).resolves.toEqual(plan);
-    await expect(applied).resolves.toEqual({ text: "done", code: 0 });
+    await expect(applied).resolves.toEqual({ text: "done", code: 0, replan: null });
   });
 
   test("a refusal, a closed link and a missing link fail the request", async () => {
@@ -308,9 +314,11 @@ describe("doctor requests", () => {
     const api = createApi(queryClient, s.connect);
     api.open();
     const refused = api.doctorPlan(selection);
-    s.server().onFrame({ type: "message", text: "doctor needs an action and a selection" });
+    s.server().onFrame(
+      tag({ type: "message", text: "doctor needs an action and a selection" }, reqOf(s, 0)),
+    );
     await expect(refused).rejects.toThrow("doctor needs");
-    const dropped = api.doctorApply(selection);
+    const dropped = api.doctorApply(selection, "t1");
     s.server().onState("closed");
     await expect(dropped).rejects.toThrow("connection closed");
     s.setOpen(false);
@@ -332,38 +340,56 @@ describe("doctor requests", () => {
       toggled: [{ source: "/work/app/.claude/settings.json", path: "hooks.Stop[0].hooks[0]" }],
     });
     expect(flipped.diff).toContain("/work/app");
-    const done = await api.doctorApply({ keep: [], toggled: [] });
+    const done = await api.doctorApply({ keep: [], toggled: [] }, first.token);
     expect(done).toMatchObject({ code: 0 });
     expect(done.text).toContain("2 entries removed");
+  });
+
+  test("the sample machine writes nothing for a confirmation of another preview", async () => {
+    const api = createApi(queryClient, connectSample);
+    api.open();
+    const none = { keep: [], toggled: [] };
+    const first = await api.doctorPlan(none);
+    const flipped = {
+      keep: [],
+      toggled: [{ source: "/work/app/.claude/settings.json", path: "hooks.Stop[0].hooks[0]" }],
+    };
+    const refused = await api.doctorApply(flipped, first.token);
+    expect(refused).toMatchObject({ code: 1 });
+    expect(refused.replan?.diff).toContain("/work/app");
+    expect(refused.text).not.toContain("removed");
+    await expect(api.doctorApply(none, "")).resolves.toMatchObject({ code: 1 });
   });
 });
 
 describe("drill requests", () => {
   const request = { project: "1", expand: [], focus: null, depth: null, limit: null, query: "" };
-  const frame = (project: number) =>
-    ({ type: "graph", graph: { project, nodes: [], edges: [] } }) as unknown as Frame;
+  const frame = (project: number, req: number) =>
+    tag({ type: "graph", graph: { project, nodes: [], edges: [] } } as unknown as Frame, req);
 
-  test("a frame settles the request of its own project, whatever the order", async () => {
+  test("a frame settles the request it answers, whatever the order", async () => {
     const s = scripted();
     const api = createApi(queryClient, s.connect);
     api.open();
     const one = api.drill(request);
     const two = api.drill({ ...request, project: "2" });
     expect(s.sent).toHaveLength(2);
-    s.server().onFrame(frame(2));
-    s.server().onFrame(frame(1));
+    s.server().onFrame(frame(2, reqOf(s, 1)));
+    s.server().onFrame(frame(1, reqOf(s, 0)));
     await expect(two).resolves.toMatchObject({ project: 2 });
     await expect(one).resolves.toMatchObject({ project: 1 });
   });
 
-  test("two requests for one project are answered in the order asked", async () => {
+  test("two requests for one project are told apart by their id, not their order", async () => {
     const s = scripted();
     const api = createApi(queryClient, s.connect);
     api.open();
     const first = api.drill(request);
     const second = api.drill({ ...request, limit: 1000 });
-    s.server().onFrame({ type: "graph", graph: { project: 1, more: 7 } } as unknown as Frame);
-    s.server().onFrame({ type: "graph", graph: { project: 1, more: 0 } } as unknown as Frame);
+    const graph = (more: number, req: number) =>
+      tag({ type: "graph", graph: { project: 1, more } } as unknown as Frame, req);
+    s.server().onFrame(graph(0, reqOf(s, 1)));
+    s.server().onFrame(graph(7, reqOf(s, 0)));
     await expect(first).resolves.toMatchObject({ more: 7 });
     await expect(second).resolves.toMatchObject({ more: 0 });
   });
@@ -373,7 +399,7 @@ describe("drill requests", () => {
     const api = createApi(queryClient, s.connect);
     api.open();
     const refused = api.drill(request);
-    s.server().onFrame({ type: "message", text: "unknown project 1" });
+    s.server().onFrame(tag({ type: "message", text: "unknown project 1" }, reqOf(s, 0)));
     await expect(refused).rejects.toThrow("unknown project");
     s.setOpen(false);
     await expect(api.drill(request)).rejects.toThrow("not connected");
@@ -392,18 +418,21 @@ describe("drill requests", () => {
 
 describe("diff requests", () => {
   const request = { project: "1", from: [], to: null, export: null };
-  const frame = (project: string, from: string) =>
-    ({ type: "diff", project, diff: { from, to: "working", projects: [] } }) as unknown as Frame;
+  const frame = (project: string, from: string, req: number) =>
+    tag(
+      { type: "diff", project, diff: { from, to: "working", projects: [] } } as unknown as Frame,
+      req,
+    );
 
-  test("a frame settles the request of its own project", async () => {
+  test("a frame settles the request it answers", async () => {
     const s = scripted();
     const api = createApi(queryClient, s.connect);
     api.open();
     const one = api.diff(request);
     const two = api.diff({ ...request, project: "2" });
-    expect(s.sent[0]).toEqual({ diff: request });
-    s.server().onFrame(frame("2", "v2"));
-    s.server().onFrame(frame("1", "v1"));
+    expect(s.sent[0]).toEqual({ req: reqOf(s, 0), diff: request });
+    s.server().onFrame(frame("2", "v2", reqOf(s, 1)));
+    s.server().onFrame(frame("1", "v1", reqOf(s, 0)));
     await expect(two).resolves.toMatchObject({ from: "v2" });
     await expect(one).resolves.toMatchObject({ from: "v1" });
   });
@@ -413,12 +442,116 @@ describe("diff requests", () => {
     const api = createApi(queryClient, s.connect);
     api.open();
     const refused = api.diff(request);
-    s.server().onFrame({
-      type: "graph",
-      graph: { project: 1, nodes: [], edges: [] },
-    } as unknown as Frame);
-    s.server().onFrame({ type: "message", text: "1 is not a git repository" });
+    s.server().onFrame(
+      tag(
+        { type: "graph", graph: { project: 1, nodes: [], edges: [] } } as unknown as Frame,
+        reqOf(s, 0),
+      ),
+    );
+    s.server().onFrame(tag({ type: "message", text: "1 is not a git repository" }, reqOf(s, 0)));
     await expect(refused).rejects.toThrow("not a git repository");
+  });
+});
+
+describe("reply correlation (T623)", () => {
+  const selection = { keep: [], toggled: [] };
+  const plan = (token: string) => ({ items: [], diff: "", refused: [], token });
+
+  test("a late reply for a timed-out request does not settle the retry of the same kind", async () => {
+    vi.useFakeTimers();
+    const s = scripted();
+    const api = createApi(queryClient, s.connect);
+    api.open();
+    const a = expect(api.doctorPlan(selection)).rejects.toThrow("doctorplan timed out");
+    await vi.advanceTimersByTimeAsync(DOCTOR_TIMEOUT_MS);
+    await a;
+    const b = api.doctorPlan(selection);
+    expect(reqOf(s, 1)).not.toBe(reqOf(s, 0));
+
+    s.server().onFrame(tag({ type: "doctorplan", plan: plan("A") }, reqOf(s, 0)));
+    let settled = false;
+    void b.then(() => (settled = true));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(settled).toBe(false);
+
+    s.server().onFrame(tag({ type: "doctorplan", plan: plan("B") }, reqOf(s, 1)));
+    await expect(b).resolves.toMatchObject({ token: "B" });
+  });
+
+  test("a reply without an id settles no request", async () => {
+    vi.useFakeTimers();
+    const s = scripted();
+    const api = createApi(queryClient, s.connect);
+    api.open();
+    const asked = expect(api.doctorPlan(selection)).rejects.toThrow("timed out");
+    s.server().onFrame({ type: "doctorplan", plan: plan("bare") });
+    await vi.advanceTimersByTimeAsync(DOCTOR_TIMEOUT_MS);
+    await asked;
+  });
+
+  test("a reply of the wrong kind under a live id settles nothing", async () => {
+    vi.useFakeTimers();
+    const s = scripted();
+    const api = createApi(queryClient, s.connect);
+    api.open();
+    const asked = expect(api.doctorPlan(selection)).rejects.toThrow("timed out");
+    s.server().onFrame(
+      tag({ type: "doctorfixed", fixed: { text: "", code: 0, replan: null } }, reqOf(s, 0)),
+    );
+    await vi.advanceTimersByTimeAsync(DOCTOR_TIMEOUT_MS);
+    await asked;
+  });
+
+  test("a refusal that names a request fails only that one; one that names none fails all", async () => {
+    const s = scripted();
+    const api = createApi(queryClient, s.connect);
+    api.open();
+    const a = api.doctorPlan(selection);
+    const b = api.doctorPlan(selection);
+    s.server().onFrame(tag({ type: "message", text: "no" }, reqOf(s, 1)));
+    await expect(b).rejects.toThrow("no");
+    s.server().onFrame(tag({ type: "doctorplan", plan: plan("A") }, reqOf(s, 0)));
+    await expect(a).resolves.toMatchObject({ token: "A" });
+
+    const c = api.doctorPlan(selection);
+    const d = api.doctorPlan(selection);
+    s.server().onFrame({ type: "message", text: "everything" });
+    await expect(c).rejects.toThrow("everything");
+    await expect(d).rejects.toThrow("everything");
+    // A refusal for a request that is gone changes nothing.
+    s.server().onFrame(tag({ type: "message", text: "stale" }, reqOf(s, 0)));
+  });
+
+  test("ids are not reused after a reconnect, so an old socket's late reply finds nothing", async () => {
+    vi.useFakeTimers();
+    const s = scripted();
+    const api = createApi(queryClient, s.connect);
+    api.open();
+    const old = expect(api.doctorPlan(selection)).rejects.toThrow("connection closed");
+    s.server().onState("closed");
+    await old;
+    s.server().onState("open");
+    const fresh = api.doctorPlan(selection);
+    expect(reqOf(s, 1)).toBeGreaterThan(reqOf(s, 0));
+    s.server().onFrame(tag({ type: "doctorplan", plan: plan("old") }, reqOf(s, 0)));
+    s.server().onFrame(tag({ type: "doctorplan", plan: plan("new") }, reqOf(s, 1)));
+    await expect(fresh).resolves.toMatchObject({ token: "new" });
+  });
+
+  test("export and import requests in flight together each get their own answer", async () => {
+    const s = scripted();
+    const api = createApi(queryClient, s.connect);
+    api.open();
+    const file = { name: "g.json", mime: "application/json", data: "{}" };
+    const out = api.exportGraph({ project: "1", format: "json" } as never);
+    const doc = { schema: 1, projects: [], nodes: [], edges: [] };
+    const inn = api.importGraph({ name: "g.json", text: "{}" } as never);
+    s.server().onFrame(
+      tag({ type: "imported", name: "g.json", export: doc } as unknown as Frame, reqOf(s, 1)),
+    );
+    s.server().onFrame(tag({ type: "export", file } as unknown as Frame, reqOf(s, 0)));
+    await expect(out).resolves.toEqual(file);
+    await expect(inn).resolves.toMatchObject({ name: "g.json" });
   });
 });
 

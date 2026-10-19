@@ -19,7 +19,7 @@ fn fixture(name: &str) -> PathBuf {
         "pub fn caller() {\n    callee();\n}\n\npub fn callee() {}\n\npub struct Holder;\n",
     )
     .unwrap();
-    dunce::canonicalize(&dir).unwrap()
+    fs_kit::path::canonicalize(&dir).unwrap()
 }
 
 fn run(home: &Path, args: &[&str]) -> Output {

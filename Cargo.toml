@@ -1,7 +1,7 @@
 # The binary crate is the workspace root (T23.1, D25). `rtok-plugin-sdk` is the published
 # plugin contract; `fuzz` is the nightly-only cargo-fuzz crate and stays out of `cargo test`.
 [workspace]
-members = ["crates/rtok-agent-sdk", "crates/rtok-config", "crates/rtok-hook", "crates/rtok-log", "crates/rtok-mcp", "crates/rtok-plugin-sdk", "crates/rtok-store", "crates/rtok-sys", "crates/rtok-wasm-demo-guest"]
+members = ["crates/rtok-agent-sdk", "crates/rtok-config", "crates/rtok-hook", "crates/rtok-log", "crates/rtok-mcp", "crates/rtok-plugin-sdk", "crates/rtok-store", "crates/rtok-sys", "crates/rtok-wasm-demo-guest", "workspace-hack"]
 exclude = ["fuzz"]
 
 [workspace.package]
@@ -23,14 +23,15 @@ toml_edit = "0.25" # in-place TOML: `config set` and rtok-mcp
 diesel = { version = "2.2", features = ["sqlite", "returning_clauses_for_sqlite_3_35"] }
 rstest = "0.27.0" # parameterized tests in the binary and rtok-agent-sdk
 sha2 = "0.11" # checksums: the store, the proxy cache, and otel
-dunce = "1" # canonicalize without Windows UNC prefixes (store index keys + the host)
+fs-kit = "0.1.0" # one entry point for paths, atomic writes, trees
 regex = "1" # request-body noise (store) and search/bench patterns (binary)
 schemars = "1.2.2" # JSON Schema: store project rows and the /ws protocol
 humantime = "2.4" # idle duration: the store and `rtok agents`
 uuid = { version = "1.26", features = ["v4"] } # agent ids in the store; already transitive elsewhere
 thiserror = "2.0" # public error enums: rtok-store and rtok-config
 figment = { version = "0.10", features = ["toml", "env"] } # config layering; the CLI builds flag dicts
-similar = "3.2" # unified diffs: config dry-run and the binary's file diff
+change-preview = "0.1.0" # config and file-edit previews, byte sizes (replaces the in-tree diff and bytes renderers)
+operation-icons = "0.1.0" # verb icons and the icon gutter, shared with ketch (T436.3)
 globset = "0.4" # junk globs and config validation of agents.junk.exclude
 url = "2.5" # file:// MCP roots and http(s) checks in config
 
@@ -58,7 +59,7 @@ print_stderr = "warn"
 
 [package]
 name = "rtok"
-version = "0.17.0"
+version = "0.17.0-alpha.2"
 edition.workspace = true
 rust-version.workspace = true
 repository.workspace = true
@@ -138,7 +139,7 @@ rtok-config = { version = "0.0.1", path = "crates/rtok-config" } # figment layer
 rtok-agent-sdk = { version = "0.0.1", path = "crates/rtok-agent-sdk" }   # the agent-host contract (D28)
 rtok-mcp = { version = "0.0.1", path = "crates/rtok-mcp" } # per-surface MCP status (T278) from the one lookup T277 owns
 clap = { version = "4.5", features = ["derive", "wrap_help"] }
-clap_complete = "4.6" # `rtok completions` (T53.2)
+shell-completions = "0.1.0" # shared shell generators
 clap_mangen = "0.3" # `rtok man` (T53.2)
 figment = { workspace = true } # config layering + per-key provenance (D14)
 rtok-log = { version = "0.0.1", path = "crates/rtok-log" } # rotating text log, reusable outside this binary
@@ -149,31 +150,32 @@ serde_json = { workspace = true }
 schemars = { workspace = true } # JSON Schema of the /ws protocol, TS types generated from it (T310.2)
 shlex = "2.0.1" # POSIX word splitting of a hook command, to find the file it runs (T331.1)
 sha2 = { workspace = true } # call_io archive checksums (T13.3); the store crate owns the writer
-similar = { workspace = true } # unified diff for `--dry-run` output (T12.6)
+change-preview = { workspace = true } # unified diff, colour and byte sizes for `--dry-run` output
+operation-icons = { workspace = true } # verb icons and the icon gutter of status lines, shared with ketch (T436.3)
 wasmi = { version = "2.0", optional = true } # pure-Rust WASM interpreter for optional out-of-tree plugin host (P32)
 toml_edit = { workspace = true } # `config set` (T12.3) edits in place, preserving comments
 toml = "0.8" # Cargo.lock [[package]] parse for docs_resolve (already in the lock via figment)
-zstd = "0.13" # decode docs.rs crate rustdoc JSON (.json.zst) for `rtok docs fetch`
-dunce = { workspace = true } # canonicalize without Windows UNC prefixes (graph index keys + file:// URIs)
+zstd = "0.14" # decode docs.rs crate rustdoc JSON (.json.zst) for `rtok docs fetch`
+fs-kit = { workspace = true } # paths without Windows UNC prefixes, atomic writes, tree usage and copy
 pathdiff = "0.2" # relative path of a file under a repo root (graph LSP + index)
 rmcp = { version = "3.2", features = ["transport-streamable-http-server"] } # stdio MCP types + JSON-RPC (T4.1); the SDK's Streamable HTTP server for `rtok mcp --http` (T401)
 subtle = "2.6" # constant-time bearer-token compare for `rtok mcp --http` (T401); already in the tree via rustls
 url = { workspace = true } # file:// MCP roots → path (T263)
 ignore = "0.4" # gitignore-aware walk for search/tree (T4.5)
+same-file = "1.0" # T589: `logs watch` tells a rotated log file from the one it was reading by file identity, not by its text; already in the tree through `ignore`
 globset = { workspace = true } # workspace member globs of project references (T329.7)
 serde-saphyr = "1.3.0" # `pnpm-workspace.yaml` of project references (T329.7); maintained, serde_yaml is deprecated
 notify = "9.0.0-rc.5" # recursive file watching for the graph background indexer (T8.16); 9 drops windows-sys 0.60 (T223)
-indicatif = "0.18" # progress for `graph index` (T21.2); `ProgressBar::hidden()` keeps it off the MCP path
 owo-colors = { version = "4", features = ["supports-colors"] } # ANSI + the tty/NO_COLOR/CLICOLOR/TERM=dumb question in one call (T20.2)
-unicode-width = "0.2" # measure each operation icon so its column pads to one width, as ketch does (T436); already in the tree through indicatif
 printpdf = "0.12.8" # paged-PDF renderer for `rtok report --format pdf` (T22.0 survey choice, T22.3)
 regex = { workspace = true } # search pattern (T4.5)
 tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "net", "time", "fs"] }
 axum = { version = "0.8.9", features = ["ws"] } # dashboard WebSocket (P19); proxy HTTP unchanged
 rust-embed = { version = "8.12", default-features = false, features = ["debug-embed", "interpolate-folder-path"] } # the React SPA inside the binary, every profile (T310.9)
 mime_guess = "2" # Content-Type for the SPA's files, embedded or read from RTOK_WEB_DIST
+percent-encoding = "2" # decode SPA asset URL paths (T574); already in the lock via url/reqwest
 futures-util = "0.3.34"
-ratatui = "0.30.2" # `rtok tui`, the terminal rendering of the D23 model (T15.1); default backend is crossterm
+ratatui = { version = "0.30.2", features = ["unstable-rendered-line-info"] } # `rtok tui`, the terminal rendering of the D23 model (T15.1); default backend is crossterm; the feature gives Paragraph::line_count, the exact wrapped-row count the panel scroll range needs (T619)
 inquire = { version = "0.9", default-features = false, features = ["crossterm"] } # `rtok completions` shell picker (T408): maintained (0.9.4, 2026-02), most-used prompt crate; shares the crossterm 0.29 copy below, no fuzzy/macros
 crossterm = "0.29" # key and tick events for the TUI loop (T15.1); same major as ratatui 0.30's backend, so one copy links
 reqwest = { version = "0.13.4", default-features = false, features = ["stream", "rustls", "blocking"] } # blocking: the sync task adapters (T441.7)
@@ -194,7 +196,7 @@ tree-sitter-kotlin-ng = { version = "1.1.0", optional = true } # lang-kotlin tag
 tree-sitter-swift = { version = "0.7.3", optional = true } # lang-swift tags (T52.2)
 tree-sitter-c-sharp = { version = "0.23.5", optional = true } # lang-csharp tags (T52.2)
 tree-sitter-ruby = { version = "0.23.1", optional = true } # lang-ruby tags (T52.2)
-tree-sitter-php = { version = "0.24.2", optional = true } # lang-php tags (T52.2)
+tree-sitter-php = { version = "0.25.1", optional = true } # lang-php tags (T52.2)
 jsonc-parser = { workspace = true, features = ["serde"] } # JSONC (comments + trailing commas) parse of Zed settings (T222)
 log = "0.4.34" # T225: logging facade; env_logger drains it, every D26 line is mirrored into it
 env_logger = "0.11.11" # T225: `RUST_LOG` debug log on stderr; the filter defaults to `off`, not `error`
@@ -205,8 +207,10 @@ trash = { version = "5.2.9", default-features = false, features = ["coinit_apart
 jiff = "0.2" # T358: IANA time zones with DST for `rtok agents usage` day and month buckets (`--tz`); already in the lock as a transitive dep of env_logger
 resvg = { version = "0.48.1", default-features = false, features = ["text", "system-fonts"], optional = true } # T329.31: `rtok graph export --format png` rasterises the drawn SVG; pure Rust, no raster-images/memmap-fonts
 base64 = { version = "0.23.1", optional = true } # T329.40: the graph page receives a PNG export inside a text frame; already in the lock
+workspace-hack = { version = "0.1", path = "workspace-hack" }
 
 [dev-dependencies]
+unicode-width = "0.2" # style tests: every icon measures the same width (T436); already in the tree through indicatif
 rtok-store = { path = "crates/rtok-store", features = ["test-util"] } # store test helpers; off the library build
 assert_cmd = "2" # CLI e2e through `Command::cargo_bin` (plan Working agreement)
 divan = "0.1" # divan benches in benches/ (default harness for new benches)
@@ -219,6 +223,7 @@ rstest = { workspace = true } # parameterized unit tests; #[rstest] instead of #
 trycmd = "1.2.1" # full CLI command-output fixtures in tests/trycmd/
 pulldown-cmark = { version = "0.13", default-features = false } # CommonMark parse of README/docs in tests/docs_structure.rs (T359): unclosed fences, skipped heading levels
 tokio-tungstenite = "0.30" # real WebSocket client for the `rtok web` e2e (tests/web_e2e.rs); already in the tree via axum "ws"
+tiktoken-rs = "0.12.1" # o200k_base token counts in tests/bench_fixtures.rs (rtok#1071 harness tokenizer)
 # T17.1. No profile may set `panic = "abort"`: `hooks::dispatch` fails open through five
 # `catch_unwind` sites, and aborting would break the rule that a hook exits 0 on error.
 [profile.dev]

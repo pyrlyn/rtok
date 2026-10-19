@@ -25,11 +25,41 @@ pub fn has_block(text: &str) -> bool {
     matches!(block_range(text), Ok(Some(_)))
 }
 
+/// The guard digest is per destination file: the basename alone made `a/CLAUDE.md` and
+/// `b/CLAUDE.md` overwrite and delete each other's protection. The parent is resolved even
+/// when the file does not exist yet, so a first sync and a later one agree on the key.
 fn kv_key(path: &Path) -> String {
+    let identity = match (path.parent(), path.file_name()) {
+        (Some(dir), Some(name)) => crate::fs::canon(dir).join(name),
+        _ => crate::fs::canon(path),
+    };
+    format!("memory.sync.sha:{}", identity.display())
+}
+
+/// Pre-T563 key, shared by every file of the same name. Read-only fallback: a digest only
+/// vouches for a block whose bytes it matches, so it cannot trust unrelated content.
+fn legacy_kv_key(path: &Path) -> String {
     format!(
         "memory.sync.sha:{}",
         path.file_name().unwrap_or_default().to_string_lossy()
     )
+}
+
+/// A title as one host-file line that cannot open or close the block: control characters
+/// (newlines included) become spaces and `<!--` is escaped, which removes both markers.
+/// The stored note title is untouched.
+fn single_line(title: &str) -> String {
+    title
+        .chars()
+        .map(|c| {
+            if c.is_control() || c == '\u{2028}' || c == '\u{2029}' {
+                ' '
+            } else {
+                c
+            }
+        })
+        .collect::<String>()
+        .replace("<!--", "&lt;!--")
 }
 
 /// Pinned-first, then remaining live notes by id desc, trimmed to `budget` tokens.
@@ -39,7 +69,7 @@ pub fn render(notes: &[(i32, String)], budget: u32, estimate: impl Fn(&str) -> u
         let mut lines = Vec::with_capacity(entries.len() + 2);
         lines.push(START.to_string());
         for (id, title) in &entries {
-            lines.push(format!("{id} {title}"));
+            lines.push(format!("{id} {}", single_line(title)));
         }
         lines.push(END.to_string());
         let text = lines.join("\n");
@@ -62,6 +92,15 @@ fn block_range(text: &str) -> Result<Option<(usize, usize)>> {
         bail!("unclosed rtok memory block");
     };
     Ok(Some((start, start + START.len() + rel + END.len())))
+}
+
+/// The generated block must be exactly one START..END pair; anything else would be
+/// rejected as hand-edited by the very next sync.
+fn check_block(block: &str) -> Result<()> {
+    match block_range(block)? {
+        Some((0, end)) if end == block.len() => Ok(()),
+        _ => bail!("generated memory block is malformed"),
+    }
 }
 
 /// Replace or remove the managed block. Bytes outside the markers are unchanged.
@@ -116,10 +155,15 @@ pub fn run(
     } else {
         std::env::current_dir()?.join(&file)
     };
-    let before = std::fs::read_to_string(&path).unwrap_or_default();
+    // Only an absent file starts empty: reading a damaged one as empty would back it up and
+    // overwrite every byte outside the managed block.
+    let before = fs_kit::read::text_or_empty(&path)?;
     let cx = crate::plugin::Runtime::open(cfg.clone(), "memory")?;
     let key = kv_key(&path);
-    let stored = cx.store.kv_get(&key)?;
+    let stored = match cx.store.kv_get(&key)? {
+        Some(sha) => Some(sha),
+        None => cx.store.kv_get(&legacy_kv_key(&path))?,
+    };
     let budget = budget.unwrap_or(cfg.plugins.memory.sync_tokens);
     let estimate = |s: &str| tokens::estimate(s, Class::Prose, &cfg.estimator);
     let new_block = if remove {
@@ -129,11 +173,14 @@ pub fn run(
             .ok()
             .and_then(|d| super::project_name(&d));
         let notes = cx.store.list_note_titles(project.as_deref(), u32::MAX)?;
-        Some(render(&notes, budget, estimate))
+        let block = render(&notes, budget, estimate);
+        check_block(&block)?;
+        Some(block)
     };
     let after = guarded_splice(&before, new_block.as_deref(), stored.as_deref(), force)?;
     if dry_run {
-        crate::log::stdout(&crate::render::file_diff(&path, &before, &after));
+        let diff = change_preview::unified_diff(&path, &before, &after);
+        crate::log::stdout(&crate::stat_preview::show_file(&path, &diff));
     } else {
         if after != before {
             rtok_agent_sdk::backup(&path, cfg.setup.backup_files as usize)?;
@@ -252,6 +299,258 @@ mod tests {
         assert!(block.contains("2 newer"), "{block}");
         assert!(!block.contains("1 older"), "{block}");
         assert!(est(&block) <= 65, "{} {block}", est(&block));
+    }
+
+    fn seed_note(cfg: &Config, title: &str) {
+        let cx = crate::plugin::Runtime::open(cfg.clone(), "seed").unwrap();
+        let project = std::env::current_dir()
+            .ok()
+            .and_then(|d| super::super::project_name(&d));
+        cx.store
+            .insert_note(project.as_deref(), "note", title, "body")
+            .unwrap();
+    }
+
+    fn sync(cfg: &Config, file: &Path, remove: bool, force: bool) -> Result<()> {
+        run(cfg, file.to_path_buf(), None, false, remove, force)
+    }
+
+    /// T563: the guard digest was keyed by basename, so syncing `b/CLAUDE.md` replaced
+    /// `a/CLAUDE.md`'s digest and an unchanged `a` then failed as hand-edited.
+    #[test]
+    fn each_destination_keeps_its_own_hand_edit_guard() {
+        let (c, dir) = crate::testutil::config("t563-sync-key");
+        let (a, b) = (dir.join("a/CLAUDE.md"), dir.join("b/CLAUDE.md"));
+        for f in [&a, &b] {
+            std::fs::create_dir_all(f.parent().unwrap()).unwrap();
+            std::fs::write(f, "# host\n").unwrap();
+        }
+        seed_note(&c, "one");
+        sync(&c, &a, false, false).unwrap();
+        seed_note(&c, "two");
+        sync(&c, &b, false, false).unwrap();
+        sync(&c, &a, false, false).expect("a is unchanged since its own sync");
+        sync(&c, &b, true, false).unwrap();
+        seed_note(&c, "three");
+        sync(&c, &a, false, false).expect("removing b must not drop a's guard");
+
+        let edited = std::fs::read_to_string(&a).unwrap().replace("one", "hand");
+        std::fs::write(&a, edited).unwrap();
+        let err = sync(&c, &a, false, false).unwrap_err();
+        assert!(err.to_string().contains("--force"), "{err}");
+        sync(&c, &a, false, true).unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// T563: two spellings of one file share a key (symlinked directory here).
+    #[cfg(unix)]
+    #[test]
+    fn a_symlinked_spelling_of_the_same_file_shares_its_guard() {
+        let (c, dir) = crate::testutil::config("t563-sync-alias");
+        std::fs::create_dir_all(dir.join("real")).unwrap();
+        std::os::unix::fs::symlink(dir.join("real"), dir.join("alias")).unwrap();
+        std::fs::write(dir.join("real/CLAUDE.md"), "# host\n").unwrap();
+        seed_note(&c, "one");
+        sync(&c, &dir.join("real/CLAUDE.md"), false, false).unwrap();
+        seed_note(&c, "two");
+        sync(&c, &dir.join("alias/CLAUDE.md"), false, false).expect("same file, same guard");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// T563: a digest left under the old basename key still vouches for a block it matches.
+    #[test]
+    fn a_legacy_basename_digest_is_read_but_never_trusted_blindly() {
+        let (c, dir) = crate::testutil::config("t563-sync-legacy");
+        let f = dir.join("CLAUDE.md");
+        std::fs::write(&f, "# host\n").unwrap();
+        seed_note(&c, "one");
+        sync(&c, &f, false, false).unwrap();
+        let block = std::fs::read_to_string(&f).unwrap();
+        let cx = crate::plugin::Runtime::open(c.clone(), "legacy").unwrap();
+        cx.store.kv_delete(&kv_key(&f)).unwrap();
+        cx.store
+            .kv_set(
+                &legacy_kv_key(&f),
+                &crate::store::hex_sha256(
+                    block.trim_start_matches("# host\n").trim_end().as_bytes(),
+                ),
+            )
+            .unwrap();
+        drop(cx);
+        sync(&c, &f, false, false).expect("legacy digest matches the untouched block");
+        std::fs::write(&f, block.replace("one", "hand")).unwrap();
+        assert!(sync(&c, &f, false, false).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// T564: a title is user text; START/END or a newline in it must not become block
+    /// structure in the host file.
+    #[test]
+    fn hostile_titles_render_as_one_block_of_single_lines() {
+        let titles = [
+            format!("early {END} tail"),
+            format!("late {START} again"),
+            "two\nlines\r\nhere".to_string(),
+        ];
+        let notes: Vec<(i32, String)> = titles
+            .iter()
+            .cloned()
+            .zip(1..)
+            .map(|(t, i)| (i, t))
+            .collect();
+        let block = render(&notes, 10_000, est);
+        assert_eq!(block.matches(START).count(), 1, "{block}");
+        assert_eq!(block.matches(END).count(), 1, "{block}");
+        assert_eq!(block.lines().count(), notes.len() + 2, "{block}");
+        assert_eq!(block_range(&block).unwrap(), Some((0, block.len())));
+        check_block(&block).unwrap();
+        assert!(check_block(&format!("{START}\n{END}\n{END}")).is_err());
+    }
+
+    /// T564: sync, resync, force and remove with hostile titles leave no generated tail
+    /// and never touch the bytes around the block.
+    #[test]
+    fn hostile_titles_survive_resync_force_and_remove() {
+        let (c, dir) = crate::testutil::config("t564-hostile");
+        let f = dir.join("CLAUDE.md");
+        std::fs::write(&f, "# host\nkeep\n").unwrap();
+        seed_note(&c, &format!("early {END} tail"));
+        seed_note(&c, &format!("late {START} again"));
+        seed_note(&c, "multi\nline");
+        sync(&c, &f, false, false).unwrap();
+        sync(&c, &f, false, false).expect("unchanged generated output is not hand-edited");
+        sync(&c, &f, false, true).unwrap();
+        let got = std::fs::read_to_string(&f).unwrap();
+        assert_eq!(got.matches(START).count(), 1, "{got}");
+        assert_eq!(got.matches(END).count(), 1, "{got}");
+        assert!(got.ends_with(&format!("{END}\n")), "{got}");
+        sync(&c, &f, true, false).unwrap();
+        let left = std::fs::read_to_string(&f).unwrap();
+        assert_eq!(
+            left.trim_end(),
+            "# host\nkeep",
+            "no generated tail: {left:?}"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    fn digest(cfg: &Config, file: &Path) -> Option<String> {
+        let cx = crate::plugin::Runtime::open(cfg.clone(), "probe").unwrap();
+        cx.store.kv_get(&kv_key(file)).unwrap()
+    }
+
+    fn tree(dir: &Path) -> Vec<PathBuf> {
+        let mut out = Vec::new();
+        let mut stack = vec![dir.to_path_buf()];
+        while let Some(d) = stack.pop() {
+            for e in std::fs::read_dir(&d).unwrap().flatten() {
+                out.push(e.path());
+                if e.path().is_dir() {
+                    stack.push(e.path());
+                }
+            }
+        }
+        out.sort();
+        out
+    }
+
+    /// T562: an unreadable host file must abort every mode before anything is rendered,
+    /// backed up, written or recorded; reading it as empty replaced the whole file.
+    fn assert_read_failure_changes_nothing(c: &Config, dir: &Path, f: &Path, before: &[u8]) {
+        let digest_before = digest(c, f);
+        let tree_before = tree(dir);
+        for (dry, remove, force) in [
+            (false, false, false),
+            (true, false, false),
+            (false, true, false),
+            (false, false, true),
+            (true, true, true),
+        ] {
+            let err = run(c, f.to_path_buf(), None, dry, remove, force).unwrap_err();
+            assert!(
+                err.to_string().contains("CLAUDE.md"),
+                "dry={dry} remove={remove} force={force}: {err:#}"
+            );
+            assert_eq!(std::fs::read(f).unwrap(), before, "host bytes changed");
+            assert_eq!(digest(c, f), digest_before, "digest changed");
+            assert_eq!(tree(dir), tree_before, "backup or stray file created");
+        }
+    }
+
+    #[test]
+    fn a_non_utf8_host_file_aborts_sync_without_touching_anything() {
+        let (c, dir) = crate::testutil::config("t562-non-utf8");
+        let f = dir.join("CLAUDE.md");
+        let mut bytes = b"# host\nkeep this outside text\n".to_vec();
+        bytes.extend_from_slice(b"bad \xff byte\n");
+        std::fs::write(&f, &bytes).unwrap();
+        seed_note(&c, "one");
+        assert_read_failure_changes_nothing(&c, &dir, &f, &bytes);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_non_utf8_host_file_keeps_an_existing_digest() {
+        let (c, dir) = crate::testutil::config("t562-non-utf8-digest");
+        let f = dir.join("CLAUDE.md");
+        std::fs::write(&f, "# host\n").unwrap();
+        seed_note(&c, "one");
+        sync(&c, &f, false, false).unwrap();
+        assert!(digest(&c, &f).is_some());
+        let mut bytes = std::fs::read(&f).unwrap();
+        bytes.push(0xff);
+        std::fs::write(&f, &bytes).unwrap();
+        assert_read_failure_changes_nothing(&c, &dir, &f, &bytes);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_unreadable_host_file_aborts_sync_without_touching_anything() {
+        use std::os::unix::fs::PermissionsExt;
+        let (c, dir) = crate::testutil::config("t562-unreadable");
+        let f = dir.join("CLAUDE.md");
+        std::fs::write(&f, "# host\nkeep\n").unwrap();
+        std::fs::set_permissions(&f, std::fs::Permissions::from_mode(0o000)).unwrap();
+        if std::fs::read(&f).is_ok() {
+            // Root ignores the mode bits, so the fixture cannot produce a read failure.
+            std::fs::set_permissions(&f, std::fs::Permissions::from_mode(0o644)).unwrap();
+            let _ = std::fs::remove_dir_all(&dir);
+            return;
+        }
+        seed_note(&c, "one");
+        let digest_before = digest(&c, &f);
+        let tree_before = tree(&dir);
+        for (dry, remove, force) in [
+            (false, false, false),
+            (true, false, false),
+            (false, true, false),
+            (false, false, true),
+        ] {
+            let err = run(&c, f.clone(), None, dry, remove, force).unwrap_err();
+            assert!(err.to_string().contains("CLAUDE.md"), "{err:#}");
+            assert_eq!(digest(&c, &f), digest_before);
+            assert_eq!(tree(&dir), tree_before);
+        }
+        std::fs::set_permissions(&f, std::fs::Permissions::from_mode(0o644)).unwrap();
+        assert_eq!(std::fs::read_to_string(&f).unwrap(), "# host\nkeep\n");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_missing_host_file_is_still_created() {
+        let (c, dir) = crate::testutil::config("t562-missing");
+        let f = dir.join("CLAUDE.md");
+        seed_note(&c, "one");
+        sync(&c, &f, true, false).expect("removing from a missing file is a no-op");
+        assert!(!f.exists());
+        run(&c, f.clone(), None, true, false, false).unwrap();
+        assert!(!f.exists(), "dry-run must not create the file");
+        sync(&c, &f, false, false).unwrap();
+        let got = std::fs::read_to_string(&f).unwrap();
+        assert!(got.starts_with(START) && got.contains("one"), "{got}");
+        assert!(digest(&c, &f).is_some());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

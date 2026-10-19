@@ -40,7 +40,7 @@ fn scene(name: &str) -> Scene {
         ],
     );
     // The store keeps paths without the Windows `\\?\` prefix that std adds.
-    let made = dunce::canonicalize(&made).unwrap();
+    let made = fs_kit::path::canonicalize(&made).unwrap();
     Scene {
         home,
         work,
@@ -195,7 +195,7 @@ fn gc_keeps_a_pending_worktree_that_it_would_otherwise_remove() {
             .find(|r| {
                 r["path"]
                     .as_str()
-                    .and_then(|p| dunce::canonicalize(p).ok())
+                    .and_then(|p| fs_kit::path::canonicalize(p).ok())
                     .is_some_and(|p| p == s.made)
             })
             .expect("the worktree is listed");

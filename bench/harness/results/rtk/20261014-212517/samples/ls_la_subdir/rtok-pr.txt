@@ -1,0 +1,11 @@
+AGENTS.md 3.0K
+PLAN.md 1.8K
+README.md 2.1K
+bounded.rs 15.2K
+filter.rs 5.5K
+formatters.rs 60.5K
+hook.rs 21.1K
+mod.rs 1.1K
+rules.rs 74.4K
+run.rs 40.9K
+[rtok 980e676464e039f0ecd7c842b463bf9e09edaa47e12a59be43bf2a28fab524cb · 13 lines · expand: rtok expand 980e676464e039f0ecd7c842b463bf9e09edaa47e12a59be43bf2a28fab524cb]

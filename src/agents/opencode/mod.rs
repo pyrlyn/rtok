@@ -76,17 +76,7 @@ pub(crate) fn for_kind(cfg: &Config, kind: Kind) -> Config {
 }
 
 impl Agent for OpenCode {
-    fn id(&self) -> &'static str {
-        "opencode"
-    }
-
-    fn variants(&self) -> &'static [Variant] {
-        &VARIANTS
-    }
-
-    fn readme(&self) -> &'static str {
-        include_str!("README.md")
-    }
+    super::agent_identity!("opencode");
 
     fn support(&self, _kind: Kind, module: &str) -> Support {
         match module {

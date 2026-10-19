@@ -25,8 +25,14 @@
 //! (T520): MiMo loads every `{plugin,plugins}/*.{ts,js}` there, `@mimo-ai/plugin` has the same
 //! `tool.execute.before`/`after` hooks as OpenCode's, and the file imports only `node:` modules.
 //! MiMo has no shell hook events, so `hooks` stays `Support::No`. Proxy is `Support::No`: no
-//! base-URL override is documented anywhere in the config or env-var reference. MiMo Desktop
-//! (early access) documents no config path, so no Desktop variant ships (T521).
+//! base-URL override is documented anywhere in the config or env-var reference.
+//!
+//! MiMo Desktop (T521, `Xiaomi MiMo AI.app`, bundle id `com.xiaomi.mimo.desktop-ai`) documents no
+//! config path of its own, but the shipped app resolves its config dir exactly as the CLI does
+//! (`MIMOCODE_HOME/config`, else `XDG_CONFIG_HOME/mimocode`, else `~/.config/mimocode`, files
+//! `mimocode.jsonc`, `mimocode.json`, `config.json`; `app.asar` of 26.1010.101546, read 2026-10-11,
+//! `research.md` section 15). Like Kilo, the Desktop variant is therefore detection only: both
+//! variants install the same files.
 
 use std::path::{Path, PathBuf};
 
@@ -39,24 +45,34 @@ use super::{
 };
 use crate::config::Config;
 
-/// MiMo Code: one CLI binary, no documented Desktop config path yet.
+/// MiMo Code (`mimo` on PATH) and MiMo Desktop, which share `~/.config/mimocode/`.
 pub struct Mimo;
 
-static VARIANTS: [Variant; 1] = [Variant {
-    kind: Kind::Cli,
-    name: "MiMo Code",
-    bins: &["mimo"],
-    apps: &[],
-}];
+// The Windows install folder of the Desktop app is unverified, so only macOS paths are probed.
+static VARIANTS: [Variant; 2] = [
+    Variant {
+        kind: Kind::Cli,
+        name: "MiMo Code",
+        bins: &["mimo"],
+        apps: &[],
+    },
+    Variant {
+        kind: Kind::Desktop,
+        name: "MiMo Desktop",
+        bins: &[],
+        apps: &[
+            "/Applications/Xiaomi MiMo AI.app",
+            "~/Applications/Xiaomi MiMo AI.app",
+        ],
+    },
+];
 
 /// The file `mcp.rtok` goes into: `[setup.mimo] config_path`, or its `.jsonc` sibling when
 /// that is the only one MiMo has (module doc).
 pub(crate) fn config_path(cfg: &Config) -> PathBuf {
     let json = &cfg.setup.mimo.config_path;
-    let sibling = json.with_extension("jsonc");
-    if json.file_name().is_some_and(|n| n == "mimocode.json") && !json.exists() && sibling.exists()
-    {
-        sibling
+    if json.file_name().is_some_and(|n| n == "mimocode.json") {
+        jsonc::lone_sibling(json)
     } else {
         json.clone()
     }
@@ -110,16 +126,11 @@ pub fn plugin_dest(cfg: &Config) -> PathBuf {
 }
 
 impl Agent for Mimo {
-    fn id(&self) -> &'static str {
-        "mimo"
-    }
+    super::agent_identity!("mimo");
 
-    fn variants(&self) -> &'static [Variant] {
-        &VARIANTS
-    }
-
-    fn readme(&self) -> &'static str {
-        include_str!("README.md")
+    /// Both variants read `~/.config/mimocode/`, so one apply covers them.
+    fn shared(&self) -> bool {
+        true
     }
 
     fn support(&self, _kind: Kind, module: &str) -> Support {
@@ -299,6 +310,27 @@ mod tests {
         fs::write(mine.with_extension("jsonc"), STARTER).unwrap();
         c.setup.mimo.config_path = mine.clone();
         assert_eq!(config_path(&c), mine);
+        let _ = fs::remove_dir_all(dir_of(&path));
+    }
+
+    #[test]
+    fn the_desktop_variant_is_detected_from_its_app_and_installs_the_cli_files() {
+        let v = &Mimo.variants()[1];
+        assert_eq!((v.kind, v.name), (Kind::Desktop, "MiMo Desktop"));
+        assert!(v.bins.is_empty());
+        assert!(v.apps.contains(&"/Applications/Xiaomi MiMo AI.app"));
+
+        let (c, path) = cfg("desktop", false);
+        assert_eq!(Mimo.files(&c, Kind::Desktop), Mimo.files(&c, Kind::Cli));
+        let lines = Mimo.apply(&c, Kind::Desktop, Mode::Install).unwrap();
+        assert!(lines[0].starts_with("mcp.rtok: "), "{lines:?}");
+        assert!(path.exists());
+        assert_eq!(Mimo.installed(&c, Kind::Desktop), ["mcp", "plugin"]);
+        let again = Mimo.apply(&c, Kind::Cli, Mode::Install).unwrap();
+        assert!(again.iter().all(|l| l == NO_CHANGES), "{again:?}");
+        Mimo.apply(&c, Kind::Desktop, Mode::Remove).unwrap();
+        assert!(Mimo.installed(&c, Kind::Cli).is_empty());
+        assert!(matches!(Mimo.support(Kind::Desktop, "mcp"), Support::Yes));
         let _ = fs::remove_dir_all(dir_of(&path));
     }
 

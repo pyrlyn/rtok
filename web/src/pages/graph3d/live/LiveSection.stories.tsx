@@ -156,6 +156,40 @@ export const Live3d: Story = {
     },
 };
 
+/** The label is placed by the frame loop once the view can project its node. */
+const labelShown = async (canvasElement: HTMLElement) => {
+    const label = await within(canvasElement).findByTestId("run-label", undefined, READY);
+    expect(label.textContent).toMatch(/^callers \d+s$/);
+    await waitFor(
+        () => expect(getComputedStyle(label.parentElement!).visibility).toBe("visible"),
+        READY,
+    );
+    const box = canvasElement.querySelector("[data-testid=run-labels]")!.getBoundingClientRect();
+    const at = label.getBoundingClientRect();
+    expect(at.left).toBeGreaterThanOrEqual(box.left);
+    expect(at.right).toBeLessThanOrEqual(box.right + 1);
+};
+
+/** A running call carries a floating label with its tool and a counter, next to its node (T329.50). */
+export const RunningLabel2d: Story = {
+    decorators: [withData(streaming(runningFrames())), viewing("2d")],
+    play: async ({ canvasElement }) => labelShown(canvasElement),
+};
+export const RunningLabel2dLight: Story = { ...RunningLabel2d, globals: { theme: "light" } };
+
+/** 375 px: the label stays inside the narrow canvas. */
+export const RunningLabelPhone: Story = {
+    ...RunningLabel2d,
+    globals: { viewport: { value: "mobile1", isRotated: false } },
+};
+
+/** The same label over the Three.js canvas, placed through the camera's projection. */
+export const RunningLabel3d: Story = {
+    decorators: [withData(streaming(runningFrames(), 1500)), viewing("3d")],
+    play: async ({ canvasElement }) => labelShown(canvasElement),
+};
+export const RunningLabel3dLight: Story = { ...RunningLabel3d, globals: { theme: "light" } };
+
 export const Live3dLight: Story = { ...Live3d, globals: { theme: "light" } };
 
 const outside = (): Frame[] => {

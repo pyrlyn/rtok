@@ -80,7 +80,7 @@ type Rule = { reply?: string; hold?: boolean };
 async function interceptSocket(page: Page, rule: (request: unknown) => Rule | undefined) {
   let release = () => {};
   const gate = new Promise<void>((open) => (release = open));
-  await page.routeWebSocket(/\/ws$/, (ws) => {
+  await page.routeWebSocket(/\/ws(\?.*)?$/, (ws) => {
     const server = ws.connectToServer();
     ws.onMessage((message) => {
       const { reply, hold } = rule(JSON.parse(String(message))) ?? {};
@@ -120,15 +120,28 @@ test("the plugin switch spins in its old position until the server answers", asy
 
 test("doctor apply keeps its spinner until the answer and drops it after", async ({ page }) => {
   const machine = mockMachine();
-  const frame = (type: string, key: string, body: unknown) => JSON.stringify({ type, [key]: body });
+  // The server echoes the request id on its answer and the page drops an answer without it.
+  const frame = (req: unknown, type: string, key: string, body: unknown) =>
+    JSON.stringify({ req, type, [key]: body });
   // The e2e store has nothing to fix, so the mocked machine supplies the plan; only the apply
   // is held.
   const release = await interceptSocket(page, (request) => {
-    const doctor = (request as { doctor?: { action: string; selection: Selection } }).doctor;
+    const { req, doctor } = request as {
+      req?: number;
+      doctor?: { action: string; selection: Selection; confirmed: string | null };
+    };
     if (doctor?.action === "plan")
-      return { reply: frame("doctorplan", "plan", machine.plan(doctor.selection)) };
+      return { reply: frame(req, "doctorplan", "plan", machine.plan(doctor.selection)) };
     if (doctor?.action === "apply")
-      return { reply: frame("doctorfixed", "fixed", machine.apply(doctor.selection)), hold: true };
+      return {
+        reply: frame(
+          req,
+          "doctorfixed",
+          "fixed",
+          machine.apply(doctor.selection, doctor.confirmed ?? ""),
+        ),
+        hold: true,
+      };
     return undefined;
   });
   await page.goto("/#/doctor");
@@ -151,7 +164,7 @@ test("clear safe junk plans without deleting and deletes only on the confirmed m
   rtok,
 }) => {
   const sent: { junk?: { action: string; paths: string[] } }[] = [];
-  await page.routeWebSocket(/\/ws$/, (ws) => {
+  await page.routeWebSocket(/\/ws(\?.*)?$/, (ws) => {
     const server = ws.connectToServer();
     ws.onMessage((message) => {
       sent.push(JSON.parse(String(message)));
@@ -178,7 +191,8 @@ test("clear safe junk plans without deleting and deletes only on the confirmed m
   await junk.getByRole("button", { name: "Clear safe junk" }).click();
   await junk.getByRole("button", { name: "Clear 2 items" }).click();
   await junk.getByRole("button", { name: "Confirm" }).click();
-  await expect(junk.getByRole("status")).toContainText("Freed");
+  // The section reloads after the apply, so its loading status can sit beside the result.
+  await expect(junk.getByRole("status").filter({ hasText: "Freed" })).toBeVisible();
   expect(stale.some((p) => existsSync(p))).toBe(false);
   const applies = sent.filter((m) => m.junk?.action === "apply");
   expect(applies).toHaveLength(1);
@@ -255,6 +269,8 @@ test("offline takes the whole screen when the server stops; Reconnect brings it 
   await expect(reconnect).toBeEnabled();
 
   await rtok.start();
+  // A restart issues a new token (S2); the open tab is handed it as a reload with it would be.
+  await page.evaluate((t) => globalThis.sessionStorage.setItem("rtok.web.token", t), rtok.token);
   // Reconnect skips the client's backoff (capped at 10 s, web/src/api/ws.ts). An automatic retry
   // that lands first hides the button, so the click may never happen; both paths end live.
   void reconnect.click().catch(() => {});
@@ -375,6 +391,42 @@ test("the 3D live canvas takes no input and its camera holds a call from another
   await expect(live).not.toHaveAttribute("data-framed", /.+/, { timeout: 15_000 });
 });
 
+test("a graph call from another process shows its label on the 2D node, which fades after the call", async ({
+  page,
+  rtok,
+}) => {
+  await viewing(page, "2d");
+  rtok.addProject();
+  await page.goto("/#/graph");
+  const label = page.getByTestId("run-label");
+  // The call has usually ended before a frame shows it running: the label then carries its duration.
+  await expect(async () => {
+    callers(rtok);
+    await expect(label.first()).toBeVisible({ timeout: 1000 });
+  }).toPass({ timeout: 20_000 });
+  await expect(label.first()).toHaveText(/^callers( \d+(\.\d)? ?(ms|s))?$/);
+  await expect(label).toHaveCount(0, { timeout: 15_000 });
+});
+
+test("a graph call from another process shows its label on the 3D node", async ({ page, rtok }) => {
+  await viewing(page, "3d");
+  rtok.addProject();
+  await page.goto("/#/graph");
+  await expect(
+    page.getByTestId("graph-live-3d").or(page.getByText(/3D unavailable/)),
+  ).toBeVisible();
+  test.skip(
+    (await page.getByText(/3D unavailable/).count()) > 0,
+    "WebGL is not available in this browser",
+  );
+  const label = page.getByTestId("run-label");
+  await expect(async () => {
+    callers(rtok);
+    await expect(label.first()).toBeVisible({ timeout: 1000 });
+  }).toPass({ timeout: 20_000 });
+  await expect(label).toHaveCount(0, { timeout: 15_000 });
+});
+
 test("the splitter keeps its place and the hidden state across a reload and stops the stream", async ({
   page,
   rtok,
@@ -420,6 +472,31 @@ test("under 900 px the two parts stack and there is no splitter", async ({ page,
   await page.goto("/#/graph");
   await expect(page.getByTestId("graph-live")).toBeVisible();
   await expect(page.getByRole("separator")).toBeHidden();
+});
+
+test("each part of the graph page maximises to fill the page and Escape restores", async ({
+  page,
+  rtok,
+}) => {
+  await viewing(page, "2d");
+  rtok.addProject();
+  await page.goto("/#/graph");
+  const live = page.getByTestId("graph-live");
+  await expect(live).toBeVisible();
+
+  await page.getByRole("button", { name: "Maximise live graph" }).click();
+  // The section, not the picture inside it: the section pads the picture on its own.
+  const fill = await page.getByRole("region", { name: "live graph" }).boundingBox();
+  const view = page.viewportSize();
+  expect(fill?.width).toBeGreaterThan((view?.width ?? 0) - 40);
+  await expect(live).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("button", { name: "Maximise live graph" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Maximise explorer" }).click();
+  await expect(live).toHaveCount(0);
+  await page.getByRole("button", { name: "Restore explorer" }).click();
+  await expect(live).toBeVisible();
 });
 
 test("a 500-call burst leaves the page responsive", async ({ page, rtok }) => {
@@ -533,4 +610,66 @@ test("Export downloads the JSON the CLI writes, and the page opens it back read-
   await expect(page.getByTestId("graph-live")).toHaveCount(0);
   await page.getByRole("button", { name: "Close export" }).click();
   await expect(page.getByText(/viewing export from/)).toHaveCount(0);
+});
+
+test("a project with tasks shows them on the board, a subtask under its parent, and writes nothing", async ({
+  page,
+  rtok,
+}) => {
+  // The server reads the project again on its own schedule, so the page is opened after the
+  // tasks exist and given a few refreshes to catch up.
+  const [parent, child, finished] = rtok.addTasks(["Ship it", "Write the docs", "Cut the release"]);
+  await page.goto("/#/tasks");
+
+  const open = page.getByRole("region", { name: "open" });
+  await expect(open.getByText("Ship it")).toBeVisible({ timeout: 20_000 });
+  await expect(open.getByText("Write the docs")).toBeVisible();
+  await expect(open.getByText(`in ${parent}`)).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "done" }).getByText("Cut the release"),
+  ).toBeVisible();
+  expect([parent, child, finished]).toEqual(["E1", "E1.1", "E2"]);
+
+  await page.getByRole("button", { name: "list" }).click();
+  const row = page
+    .getByRole("table", { name: "tasks" })
+    .getByRole("row", { name: /Write the docs/ });
+  await row.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("region", { name: child! })).toBeVisible();
+  // Read-only: nothing on the page is a form control that could change a task.
+  await expect(page.getByRole("main").getByRole("switch")).toHaveCount(0);
+});
+
+test("the node menu re-indexes a project and removes it only after the plan is confirmed", async ({
+  page,
+  rtok,
+}) => {
+  await viewing(page, "2d");
+  rtok.addGitProject("lib.rs", "fn kept() {}\nfn caller() {\n    kept();\n}\n");
+  expect(rtok.projects().map((p) => p.state)).toEqual(["not indexed"]);
+  await page.goto("/#/graph");
+  const node = (label: RegExp) => page.locator("[data-testid=node-2d]").and(page.getByLabel(label));
+  await expect(node(/^proj, not indexed/)).toBeVisible();
+
+  await node(/^proj/).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Re-index" }).click();
+  await expect(node(/^proj, ok/)).toBeVisible({ timeout: 20_000 });
+  expect(rtok.projects().map((p) => p.state)).toEqual(["ok"]);
+
+  await node(/^proj/).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Remove…" }).click();
+  const plan = page.getByRole("region", { name: "remove proj" });
+  await expect(plan.getByText(/files untouched/)).toBeVisible();
+  await plan.getByRole("button", { name: "Cancel" }).click();
+  expect(rtok.projects()).toHaveLength(1);
+
+  await node(/^proj/).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Remove…" }).click();
+  await page
+    .getByRole("region", { name: "remove proj" })
+    .getByRole("button", { name: /^Remove proj/ })
+    .click();
+  await expect(node(/^proj/)).toHaveCount(0);
+  expect(rtok.projects()).toHaveLength(0);
 });

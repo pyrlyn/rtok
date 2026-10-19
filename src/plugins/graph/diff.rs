@@ -12,10 +12,11 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fmt::Write as _;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 
 use anyhow::{Context as _, Result, anyhow, bail};
 use rtok_plugin_sdk::Ctx;
+use rtok_sys::proc::{Output, ProgressRunner};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -24,7 +25,7 @@ use super::export::{self, Export};
 use super::projects;
 use super::scope::{Member, fan_out, walkable};
 use super::walk::Matcher;
-use super::{git_stdout_result, impact_walk_roots, index, index_for};
+use super::{git_stdout_result, impact_walk_roots, index, index_for, is_test_path};
 use crate::plugin::Runtime;
 use crate::store::{DefRow, RefGroup};
 
@@ -227,10 +228,9 @@ fn each_blob(
     if entries.is_empty() {
         return Ok(());
     }
-    let mut child = Command::new("git")
-        .arg("-C")
-        .arg(root)
-        .args(["cat-file", "--batch"])
+    let mut child = ProgressRunner::quiet("git", ["cat-file", "--batch"])
+        .cwd(root)
+        .output(Output::Inherit)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
@@ -795,6 +795,14 @@ fn render_part(out: &mut String, p: &Part, tag: &str) {
             let _ = writeln!(out, "    {l}");
         }
     }
+    let untested: Vec<&str> = changed
+        .iter()
+        .filter(|c| untested(&c.new, callers(&c.new.name)))
+        .map(|c| c.new.name.as_str())
+        .collect();
+    if !untested.is_empty() {
+        let _ = writeln!(out, "untested: {}", untested.join(", "));
+    }
     listed(out, "removed", &d.removed, |r| {
         format!("{}  {} callers", def_text(r), callers(&r.name).len())
     });
@@ -813,6 +821,23 @@ fn render_part(out: &mut String, p: &Part, tag: &str) {
         &d.not_analysed,
         |(path, why)| format!("{path}  ({why})"),
     );
+}
+
+/// T664: a changed function, method or class that no test reaches within `CALLER_DEPTH` callers
+/// (the `untested` of `graph review`, read off the caller rows already gathered). A definition
+/// in a test file is a test, not a gap.
+fn untested(d: &DefRow, callers: &[String]) -> bool {
+    super::review::SCORED_KINDS.contains(&d.kind.as_str())
+        && !is_test_path(&d.path)
+        && !callers.iter().any(|row| is_test_path(caller_path(row)))
+}
+
+/// The path in a `[project] path scope dN` caller row.
+fn caller_path(row: &str) -> &str {
+    let row = row
+        .strip_prefix('[')
+        .map_or(row, |r| r.split_once("] ").map_or(r, |(_, rest)| rest));
+    row.split_whitespace().next().unwrap_or("")
 }
 
 fn link_text((from, to, kind): &LinkKey) -> String {
@@ -1256,6 +1281,7 @@ mod tests {
     use crate::store::{LinkKind, Origin};
     use serde_json::json;
     use std::fs;
+    use std::process::Command;
 
     fn git(dir: &Path, args: &[&str]) {
         let ok = Command::new("git")
@@ -1356,6 +1382,37 @@ mod tests {
         }
         out.sort();
         out
+    }
+
+    /// T664: a changed definition no test reaches is named on one `untested:` line, the
+    /// test-gap answer `graph review` gives, without a second call.
+    #[test]
+    fn changed_definitions_without_a_test_caller_are_listed_as_untested() {
+        let (rt, dir) = cx("t664-untested");
+        let root = project(
+            &dir,
+            "p",
+            &[
+                ("lib.rs", "pub fn covered() {}\npub fn bare() {}\n"),
+                ("tests/t.rs", "fn t() {\n    covered();\n}\n"),
+            ],
+        );
+        fs::write(
+            root.join("lib.rs"),
+            "pub fn covered() { let _ = 1; }\npub fn bare() { let _ = 2; }\n",
+        )
+        .unwrap();
+        let out = ask(&rt, &solo(&root), "HEAD", None).unwrap();
+        assert!(out.contains("untested: bare\n"), "{out}");
+        assert!(!out.contains("covered\n"), "{out}");
+        fs::write(
+            root.join("lib.rs"),
+            "pub fn covered() { let _ = 1; }\npub fn bare() {}\n",
+        )
+        .unwrap();
+        let out = ask(&rt, &solo(&root), "HEAD", None).unwrap();
+        assert!(!out.contains("untested:"), "{out}");
+        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]

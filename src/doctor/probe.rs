@@ -52,7 +52,7 @@ pub struct RealWhich;
 
 impl Fs for RealFs {
     fn canonical(&self, path: &Path) -> PathBuf {
-        dunce::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
+        fs_kit::path::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
     }
 
     fn read(&self, path: &Path) -> io::Result<String> {
@@ -129,6 +129,6 @@ impl Writer for RealWriter {
     }
 
     fn write(&self, path: &Path, body: &str) -> io::Result<()> {
-        rtok_agent_sdk::write_atomic(path, body).map_err(io::Error::other)
+        fs_kit::write::atomic(path, body)
     }
 }

@@ -197,7 +197,11 @@ fn absorb_event(
     pending: &mut HashSet<PathBuf>,
     rescan: &mut bool,
 ) -> bool {
-    if git_path(&p) || ig.matched_path_or_any_parents(&p, p.is_dir()).is_ignore() {
+    // An explicit `include` revives an ignored path in the full walk, so it must here too.
+    if git_path(&p)
+        || matcher.in_linked_worktree(&p)
+        || (ig.matched_path_or_any_parents(&p, p.is_dir()).is_ignore() && !matcher.is_included(&p))
+    {
         return false;
     }
     if relevant(&p, matcher) {
@@ -236,6 +240,44 @@ mod tests {
 
     fn test_matcher(dir: &Path) -> crate::plugins::graph::walk::Matcher {
         crate::plugins::graph::walk::Matcher::new(dir, &Graph::default())
+    }
+
+    /// T660.3: events from a linked worktree nested in the root (one under `.rtok/worktrees`)
+    /// belong to another index: neither a pending file nor a rescan, though no ignore names it.
+    /// A submodule's events are still this index's.
+    #[test]
+    fn events_inside_a_nested_linked_worktree_are_ignored() {
+        let dir = crate::testutil::tmp_dir("watch-nested");
+        let nested = crate::testutil::linked_worktree(&dir, ".rtok/worktrees/x");
+        let sub = crate::testutil::submodule(&dir, "mods/sub");
+        fs::create_dir_all(nested.join("src")).unwrap();
+        fs::write(nested.join("src/n.rs"), "fn n() {}\n").unwrap();
+        fs::write(sub.join("s.rs"), "fn s() {}\n").unwrap();
+        fs::write(dir.join("own.rs"), "fn own() {}\n").unwrap();
+        let (ig, matcher) = (gitignore(&dir), test_matcher(&dir));
+        for p in [nested.join("src/n.rs"), nested.join("src"), nested.clone()] {
+            let (mut pending, mut rescan) = (HashSet::new(), false);
+            assert!(!absorb_event(
+                p.clone(),
+                &ig,
+                &matcher,
+                &mut pending,
+                &mut rescan
+            ));
+            assert!(pending.is_empty() && !rescan, "{}", p.display());
+        }
+        for p in [dir.join("own.rs"), sub.join("s.rs")] {
+            let (mut pending, mut rescan) = (HashSet::new(), false);
+            assert!(absorb_event(
+                p.clone(),
+                &ig,
+                &matcher,
+                &mut pending,
+                &mut rescan
+            ));
+            assert_eq!(pending.len(), 1, "{}", p.display());
+        }
+        let _ = fs::remove_dir_all(dir);
     }
 
     fn arm(cx: &mut crate::plugin::Runtime, watch: &str) {
@@ -498,6 +540,49 @@ mod tests {
             &mut rescan
         ));
         assert_eq!(pending.len(), 1);
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T545: events answer to the rules the full walk applies. A file included out of a
+    /// gitignored subtree is delivered, one a glob exclude covers is not, and an ignored file
+    /// nobody included stays out.
+    #[test]
+    fn events_follow_the_walks_include_and_exclude_rules() {
+        let (_rt, dir) = mk("watch-eligibility");
+        fs::create_dir_all(dir.join(".git")).unwrap();
+        fs::write(dir.join(".gitignore"), "wanted/\nunwanted/\n").unwrap();
+        let cases = [
+            ("wanted/a.rs", true),
+            ("wanted/generated/g.rs", false),
+            ("unwanted/a.rs", false),
+            ("src/generated/g.rs", false),
+            ("src/lib.rs", true),
+        ];
+        for (path, _) in cases {
+            fs::create_dir_all(dir.join(path).parent().unwrap()).unwrap();
+            fs::write(dir.join(path), "fn f() {}\n").unwrap();
+        }
+        let matcher = crate::plugins::graph::walk::Matcher::new(
+            &dir,
+            &Graph {
+                include: vec!["wanted/".into()],
+                exclude: vec!["**/generated/**".into()],
+                ..Default::default()
+            },
+        );
+        let ig = gitignore(&dir);
+        let walked: HashSet<PathBuf> = matcher
+            .walk()
+            .map(|e| e.into_path())
+            .filter(|p| p.is_file() && matcher.indexable(p))
+            .collect();
+        for (path, want) in cases {
+            let (mut pending, mut rescan) = (HashSet::new(), false);
+            let path = dir.join(path);
+            let taken = absorb_event(path.clone(), &ig, &matcher, &mut pending, &mut rescan);
+            assert_eq!((taken, pending.contains(&path)), (want, want), "{path:?}");
+            assert_eq!(walked.contains(&path), want, "walk disagrees on {path:?}");
+        }
         let _ = fs::remove_dir_all(dir);
     }
 

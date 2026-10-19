@@ -281,6 +281,12 @@ fn report_savings(store: &Store) -> Result<ReportSavingsSection> {
     })
 }
 
+/// The classes `sink_switch` can name a switch for (docs/report.md): an `archive` or
+/// `inject` row is already shortened, so ranking it reads as advice with no action.
+pub(crate) fn is_actionable_sink(class: &str) -> bool {
+    matches!(class, "read" | "cmd" | "mcp")
+}
+
 fn report_sinks(store: &Store, cfg: &Config) -> Result<ReportSinksSection> {
     let mut by: BTreeMap<(String, String), (i64, u64)> = BTreeMap::new();
     for (plugin, _) in crate::config::CATALOGUE {
@@ -289,6 +295,11 @@ fn report_sinks(store: &Store, cfg: &Config) -> Result<ReportSinksSection> {
                 continue;
             }
             let (class, sink) = sink_label(plugin, &m.kind, m.ref_id.as_deref());
+            // Filtered before the top-ten cut so larger non-actionable rows cannot
+            // displace an eligible sink.
+            if !is_actionable_sink(&class) {
+                continue;
+            }
             let e = by.entry((class, sink)).or_insert((0, 0));
             e.0 += m.before_bytes;
             e.1 += 1;

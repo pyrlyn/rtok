@@ -1,0 +1,8 @@
+dirs: cmd/ read/
+Makefile 8.6K
+latest -> cmd/v0.1
+dotfiles: .gitignore 412B, .env.example 61B, .editorconfig 230B
+*.rs (28): plugin_01 1.1K, plugin_02 1.2K, plugin_03 1.4K, plugin_04 1.5K, plugin_05 1.6K, plugin_06 1.8K, plugin_07 1.9K, plugin_08 2.0K, plugin_09 2.2K, plugin_10 2.3K, plugin_11 2.4K, plugin_12 2.6K, plugin_13 2.7K, plugin_14 2.8K, plugin_15 3.0K, plugin_16 3.1K, plugin_17 3.3K, plugin_18 3.4K, plugin_19 3.5K, plugin_20 3.7K, plugin_21 3.8K, plugin_22 3.9K, plugin_23 4.1K, plugin_24 4.2K, plugin_25 4.3K, plugin_26 4.5K, plugin_27 4.6K, plugin_28 4.7K
+*.md (6): notes_1 231B, notes_2 262B, notes_3 293B, notes_4 324B, notes_5 355B, notes_6 386B
+*.toml (2): Cargo 3.3K, mod 2.2K
+build.sh* 1.7K

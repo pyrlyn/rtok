@@ -1,0 +1,29 @@
+WARN NEGATIVE: wc rtok 0.0% vs rtk 27.3%
+WARN NEGATIVE: tree rtok -21.0% vs rtk 3.8%
+WARN NEGATIVE: rg rtok 0.0% vs rtk 3.4%
+WARN NEGATIVE: git diff rtok 9.5% vs rtk 17.6%
+WARN NEGATIVE: git status rtok 5.6% vs rtk 62.5%
+WARN NEGATIVE: ls -la rtok 63.6% vs rtk 72.0%
+WARN NEGATIVE: find rtok 76.9% vs rtk 90.0%
+WARN NEGATIVE: cargo build rtok 14.4% vs rtk 35.6%
+WARN NEGATIVE: cargo test rtok 92.4% vs rtk 95.7%
+WARN NEGATIVE: cargo test [cargo_test_pass] rtok 94.3% vs rtk 99.1%
+WARN NEGATIVE: cargo test [cargo_test_fail] rtok 90.4% vs rtk 92.2%
+WARN NEGATIVE: cargo build [cargo_build_noop] rtok 0.0% vs rtk 33.3%
+WARN NEGATIVE: cargo build [cargo_build_incremental] rtok 0.0% vs rtk 33.3%
+WARN NEGATIVE: cargo build [cargo_build_warning] rtok 32.9% vs rtk 38.3%
+WARN NEGATIVE: cargo build [cargo_build_error] rtok 0.8% vs rtk 33.8%
+WARN NEGATIVE: find [find_rs] rtok 84.1% vs rtk 94.9%
+WARN NEGATIVE: find [find_src_files] rtok 55.0% vs rtk 78.8%
+WARN NEGATIVE: find [find_cargo_toml] rtok 0.0% vs rtk 25.2%
+WARN NEGATIVE: find [find_dirs] rtok 58.6% vs rtk 72.8%
+WARN NEGATIVE: ls -la [ls_la_root] rtok 70.0% vs rtk 73.2%
+WARN NEGATIVE: ls -la [ls_la_subdir] rtok 41.8% vs rtk 60.7%
+WARN NEGATIVE: ls -la [ls_la_crates] rtok 48.9% vs rtk 77.0%
+WARN NEGATIVE: git status [git_status_clean] rtok 0.0% vs rtk 5.9%
+WARN NEGATIVE: git status [git_status_dirty] rtok 6.3% vs rtk 70.1%
+WARN NEGATIVE: git diff [git_diff] rtok 10.9% vs rtk 20.2%
+WARN NEGATIVE: rg [rg_files_with] rtok 0.0% vs rtk 15.3%
+WARN NEGATIVE: tree [tree_plugins] rtok 0.0% vs rtk 10.8%
+WARN NEGATIVE: tree [tree_crates_l2] rtok -25.5% vs rtk 2.3%
+WARN NEGATIVE: wc [wc_l] rtok 0.0% vs rtk 27.3%

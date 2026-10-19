@@ -1,0 +1,4 @@
+test bench_fail::bench_fails ... FAILED
+thread 'bench_fail::bench_fails' (1481) panicked at crates/rtok-config/src/lib.rs:2640:9:
+test result: FAILED. 93 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+[rtok 3aa94a0c9e9af0763765277dd6c21a7f09c4315bc176fcb463f5f38e68fc6e9a · 117 lines · expand: rtok expand 3aa94a0c9e9af0763765277dd6c21a7f09c4315bc176fcb463f5f38e68fc6e9a]

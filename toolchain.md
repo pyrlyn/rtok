@@ -6,14 +6,19 @@ Project programs and direct packages from the manifests.
 
 | Program | How to install | Why here | Source |
 | --- | --- | --- | --- |
+| sccache | mise (`sccache`, Linux and macOS; `mise.toml` `[env]` makes it the rustc wrapper where installed) | Compiler cache; CI uses a Cloudflare R2 bucket when the `R2_*` secrets exist | https://github.com/mozilla/sccache |
 | mise | brew / curl, then `mise install` | Pinned tool versions | https://github.com/jdx/mise |
 | cargo-cache | mise | `just cache` / `just cache-autoclean` (T17.2); the shared cargo home fills up | https://github.com/matthiaskrgr/cargo-cache |
 | cargo-nextest | global (cargo install) | Parallel test runner | https://github.com/nextest-rs/nextest |
+| cargo-hakari | mise (`cargo:cargo-hakari`) | Keeps the `workspace-hack` crate unified so shared dependencies build once; CI runs `cargo hakari verify` | https://github.com/guppy-rs/guppy |
 | cargo-llvm-cov | mise | `just test-cov` (T301): coverage over the nextest suite; lcov for SonarCloud | https://github.com/taiki-e/cargo-llvm-cov |
 | cargo-fuzz | global (`cargo install cargo-fuzz`) + `rustup toolchain install nightly` | `just fuzz` / `fuzz/README.md`: libFuzzer targets; nightly only for the fuzz build, the pinned toolchain is untouched | https://github.com/rust-fuzz/cargo-fuzz |
 | codeql | mise | `just codeql` (T119): local run of the code scanning in `.github/workflows/codeql.yml` | https://github.com/github/codeql-cli-binaries |
 | git-cliff | mise | Changelog | https://github.com/orhun/git-cliff |
 | just | mise | Command recipes | https://github.com/casey/just |
+| jactionlint | mise (`mise.toml` pins `github:jdx/jactionlint` 2.0.2) | Lint the workflows and composite actions (the pre-push hook and `mise x -- jactionlint`); CI lints through pyrlyn/ci | https://github.com/jdx/jactionlint |
+| hk | mise (`mise.toml` pins 2.5.0) | Runs jactionlint as a pre-push hook (`hk.pkl`) | https://github.com/jdx/hk |
+| shellcheck | mise (`mise.toml` pins 0.11.0) | Checks `run:` scripts inside jactionlint | https://github.com/koalaman/shellcheck |
 | ketch | see its README | Installs swarfr | https://github.com/pyrlyn/ketch |
 | swarfr | ketch | `just test` / `just test-changed` end with a lossless cleanup of `target/` (T236) | https://github.com/listepo/swarfr |
 | tailspin | mise (`ubi:bensadeh/tailspin`) | `just logs` (T225): `tspin` highlights `~/.rtok/logs/rtok.log` and the `RUST_LOG` stderr stream; a viewer, not a logger | https://github.com/bensadeh/tailspin |
@@ -90,23 +95,25 @@ Project programs and direct packages from the manifests.
 | assert_cmd | local | https://crates.io/crates/assert_cmd | CLI e2e tests |
 | axum | local | https://crates.io/crates/axum | Rust dependency |
 | base64 | local | https://crates.io/crates/base64 | T329.40: the graph page receives a PNG export inside a text frame |
+| change-preview | local | https://crates.io/crates/change-preview | Shared dry-run diff, colour and byte-size rendering (T416.1) |
 | clap | local | https://crates.io/crates/clap | CLI |
-| clap_complete | local | https://crates.io/crates/clap_complete | `rtok completions` shell scripts (T53.2) |
+| shell-completions | local | https://crates.io/crates/shell-completions | Shared clap shell scripts and Clink generator; published dependency |
 | clap_mangen | local | https://crates.io/crates/clap_mangen | `rtok man` roff page (T53.2) |
 | crossterm | local | https://crates.io/crates/crossterm | Terminal |
 | diesel | local | https://crates.io/crates/diesel | SQLite ORM |
 | diesel_migrations | local | https://crates.io/crates/diesel_migrations | Embedded SQLite migrations (T163.4) |
 | divan | local | https://crates.io/crates/divan | Divan benches in benches/ |
 | dotenvy | local | https://crates.io/crates/dotenvy | Rust dependency |
-| dunce | local | https://crates.io/crates/dunce | Canonicalize without Windows UNC prefixes |
+| fs-kit | local | https://github.com/pyrlyn/crates | One entry point for file work: paths without Windows UNC prefixes, atomic writes, tree usage and copy |
 | env_logger | local | https://crates.io/crates/env_logger | T225: `RUST_LOG` debug log on stderr, off by default |
 | figment | local | https://crates.io/crates/figment | Config |
 | futures-util | local | https://crates.io/crates/futures-util | Rust dependency |
 | globset | local | https://crates.io/crates/globset | T329.7: workspace member globs of project references; already in the tree through `ignore` |
+| same-file | local | https://crates.io/crates/same-file | T589: `logs watch` tells a rotated log from the file it was reading by file identity (inode / Windows file index); already in the tree through `ignore` |
 | httpmock | local | https://crates.io/crates/httpmock | Rust dependency |
 | humantime | local | https://crates.io/crates/humantime | T282: `[agents] idle` duration parsing; already in the lock as a transitive dep |
 | ignore | local | https://crates.io/crates/ignore | Rust dependency |
-| indicatif | local | https://crates.io/crates/indicatif | Rust dependency |
+| indicatif | local | https://crates.io/crates/indicatif | Spinner and progress bar behind `proc::ProgressRunner` in `crates/rtok-sys`; the root crate draws only through it (T276.6) |
 | inquire | local | https://crates.io/crates/inquire | `rtok completions` shell picker (multi-select, crossterm backend only) |
 | insta | local | https://crates.io/crates/insta | Snapshot tests for stable text output |
 | jiff | local | https://crates.io/crates/jiff | T358: IANA time zones with DST for `rtok agents usage` day and month buckets (`--tz`); already in the lock as a transitive dep of env_logger |
@@ -118,8 +125,10 @@ Project programs and direct packages from the manifests.
 | log | local | https://crates.io/crates/log | T225: logging facade env_logger drains; D26 lines are mirrored into it |
 | mime_guess | local | https://crates.io/crates/mime_guess | Content-Type for the SPA files `rtok web` serves |
 | notify | local | https://crates.io/crates/notify | Rust dependency |
+| operation-icons | local | https://crates.io/crates/operation-icons | T436.3: verb icons and the icon gutter of status lines, shared with ketch |
 | owo-colors | local | https://crates.io/crates/owo-colors | Rust dependency |
 | pathdiff | local | https://crates.io/crates/pathdiff | Relative path between two paths |
+| percent-encoding | local | https://crates.io/crates/percent-encoding | T574: decode percent-escaped SPA asset URL paths |
 | printpdf | local | https://crates.io/crates/printpdf | Rust dependency |
 | proptest | local | https://crates.io/crates/proptest | T331.5: property test that `doctor --fix` leaves every byte outside the removed hook unchanged |
 | portable-pty | local | https://crates.io/crates/portable-pty | T331.7: pseudo-terminal for the `doctor --fix` checklist test (dev-dependency) |
@@ -140,9 +149,9 @@ Project programs and direct packages from the manifests.
 | serde_json | local | https://crates.io/crates/serde_json | JSON |
 | serde-saphyr | local | https://crates.io/crates/serde-saphyr | T329.7: `pnpm-workspace.yaml` of project references; maintained (serde_yaml is deprecated) |
 | sha2 | local | https://crates.io/crates/sha2 | Rust dependency |
-| similar | local | https://crates.io/crates/similar | Rust dependency |
 | subtle | local | https://github.com/dalek-cryptography/subtle | Constant-time bearer-token compare for `rtok mcp --http` (T401) |
 | thiserror | local | https://crates.io/crates/thiserror | public error enums for `rtok-store` and `rtok-config` |
+| tiktoken-rs | local | https://crates.io/crates/tiktoken-rs | dev-dependency: o200k_base token counts in tests/bench_fixtures.rs |
 | tokio | local | https://crates.io/crates/tokio | Async runtime |
 | toml_edit | local | https://crates.io/crates/toml_edit | Rust dependency |
 | trash | local | https://crates.io/crates/trash | T330.4: `agents junk clear --trash` to the macOS Trash, freedesktop trash and Recycle Bin |
@@ -165,7 +174,7 @@ Project programs and direct packages from the manifests.
 | pulldown-cmark | local (dev) | https://crates.io/crates/pulldown-cmark | CommonMark parse of README and docs in tests/docs_structure.rs: unclosed fences, skipped heading levels (T359) |
 | tokio-tungstenite | local | https://crates.io/crates/tokio-tungstenite | WebSocket client for the `rtok web` e2e (tests/web_e2e.rs) |
 | toml | local | https://crates.io/crates/toml | Cargo.lock `[[package]]` parse for `docs_resolve` (already in the lock via figment) |
-| unicode-width | local | https://crates.io/crates/unicode-width | T436: measures each operation icon so its gutter pads to one column width; already in the lock as a transitive dep |
+| unicode-width | local (dev) | https://crates.io/crates/unicode-width | T436: style tests measure that every icon fills one gutter width; already in the lock as a transitive dep |
 | url | local | https://crates.io/crates/url | `file://` MCP roots → path (T263) |
 | uuid | local | https://crates.io/crates/uuid | T282: random UUIDv4 rtok agent id (D34); already in the lock as a transitive dep |
 | wasmi | local | https://crates.io/crates/wasmi | Rust dependency |

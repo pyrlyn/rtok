@@ -261,3 +261,63 @@ fn symbol_fts_ranks_a_name_token_above_a_doc_hit() {
     let names: Vec<_> = hits.iter().map(|h| h.1.as_str()).collect();
     assert_eq!(names, ["body_lines", "mid", "other"], "{names:?}");
 }
+
+// SQLite's own statistics table, read through Diesel like any other.
+diesel::table! {
+    sqlite_stat1 (tbl, idx) {
+        tbl -> Text,
+        idx -> Text,
+        stat -> Text,
+    }
+}
+
+/// T646: an index pass leaves planner statistics for both `symbols` indexes. Without them
+/// `symbol_defs`, `symbol_ref_groups` and `symbol_import_follow` scanned the whole root on
+/// every call, and `graph review` ran past the CI limit.
+#[test]
+fn rebuild_symbol_idf_leaves_planner_statistics_for_symbols() {
+    let store = Store::open_in_memory().unwrap();
+    for (path, name) in [("a.rs", "parse"), ("b.rs", "emit")] {
+        store
+            .replace_symbols("/r", path, "s", (0, 0), &[row(name, 1, true)])
+            .unwrap();
+    }
+    store.rebuild_symbol_idf("/r").unwrap();
+    let mut conn = store.lock().unwrap();
+    let mut idx: Vec<String> = sqlite_stat1::table
+        .filter(sqlite_stat1::tbl.eq("symbols"))
+        .select(sqlite_stat1::idx)
+        .load(&mut *conn)
+        .unwrap();
+    idx.sort();
+    assert!(
+        idx.contains(&"symbols_root_name".to_string())
+            && idx.contains(&"symbols_root_path".to_string()),
+        "{idx:?}"
+    );
+}
+
+/// T646: the parsed IDF cache is reused between calls but follows a rebuild, including one
+/// written through another handle on the same file.
+#[test]
+fn name_freq_follows_a_rebuilt_idf_cache() {
+    let dir = std::env::temp_dir().join(format!("rtok-t646-idf-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let db = dir.join("rtok.db");
+    let (reader, writer) = (Store::open(&db).unwrap(), Store::open(&db).unwrap());
+    writer
+        .replace_symbols("/r", "a.rs", "s", (0, 0), &[row("parse", 1, false)])
+        .unwrap();
+    writer.rebuild_symbol_idf("/r").unwrap();
+    assert_eq!(reader.symbol_name_freq("/r", "parse").unwrap(), (1, 1));
+    assert_eq!(reader.symbol_name_freq("/r", "emit").unwrap(), (0, 1));
+    writer
+        .replace_symbols("/r", "b.rs", "s", (0, 0), &[row("parse", 1, false)])
+        .unwrap();
+    writer.rebuild_symbol_idf("/r").unwrap();
+    assert_eq!(reader.symbol_name_freq("/r", "parse").unwrap(), (2, 2));
+    assert_eq!(reader.symbol_name_freq("/other", "parse").unwrap(), (0, 0));
+    drop((reader, writer));
+    let _ = std::fs::remove_dir_all(&dir);
+}

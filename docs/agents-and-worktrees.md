@@ -17,8 +17,8 @@ Every agent session that works through rtok gets one **rtok agent id**, and ever
 | `rtok agents sessions [--all]` | `agents_list` | every agent with host, state (`live`, `idle`, `ended`), activity, status, claimed worktrees and unread count; `--all` adds ended ones |
 | `rtok agents show <id>` | `agent_show` | one agent: host, model, ids, parent and sub-agents, cwd, claimed worktrees, status, unread |
 | `rtok agents status <text>` | `agent_status_set` | what this agent is busy with (at most 120 characters); an empty text clears it |
-| `rtok agents send <id> <text>` | `agent_send` | a message to one live agent (size-capped); `--all-live` sends to every live agent of the sender's project |
-| `rtok agents inbox [<id>]` | `agent_inbox` | your own messages, oldest first, marked read; with an id, that agent's queue, marking nothing |
+| `rtok agents send <id> <text>` | `agent_send` | a message to one live agent (size-capped); `--all-live` sends to every live agent of the sender's project; `--task <id>` (`task` for MCP) tags it with the task it is about, such as `A12` |
+| `rtok agents inbox [<id>]` | `agent_inbox` | your own messages, oldest first, marked read; with an id, that agent's queue, marking nothing; `--task <id>` (`task` for MCP) reads one task's thread and leaves the rest unread |
 
 `[agents] idle` (default 30 minutes) decides who is live. `[agents] enabled = false` stops registration and the push.
 
@@ -39,8 +39,9 @@ Raw `git worktree` records no owner, age or size. `rtok worktree` gives each wor
 | `rtok worktree list` | `worktree_list` | every worktree of the repository with owner, bound agent and its state, `origin`, size; plus orphans git no longer lists |
 | `rtok worktree remove <path\|task>` | `worktree_remove` | removes your own clean worktree and its merged branch; refuses a dirty one, an unmerged branch, the one you stand in, and someone else's lock unless the task is finished (merged, clean, with commits of its own); never forces |
 | `rtok worktree gc`, `clean` | — | sweep finished worktrees, delete idle build caches; dry runs until `--yes`; a live agent's worktree is kept, unless its task is finished and idle past `--idle`, which opens any lock too; someone else's lock on a merged, clean worktree untouched for `--stale-lock` (`7d`) counts as abandoned |
+| `rtok worktree migrate` | — | moves this repository's worktrees that live outside the root to `<root>/<repo>-<task>` (a worktree without a lock keeps its directory name) with `git worktree move`; lock and claim follow; a dry run until `--yes`; skips main, the worktree you stand in, one locked or claimed by another agent or used by another live session, one with submodules, and a taken target |
 
-The owner is `<host> / <model>` of the agent unless a CLI call passes `--owner`; an MCP call never does. The root is `[worktree] root`, `~/.rtok/worktrees` by default. With `[worktree] enabled = false` rtok leaves worktrees alone: every `rtok worktree` command (`list` too) says they are not enabled, MCP lists no `worktree_*` tool, and Claude's `WorktreeCreate`/`WorktreeRemove` hooks do what Claude does without rtok.
+The owner is `<host> / <model>` of the agent unless a CLI call passes `--owner`; an MCP call never does. The root is `[worktree] root`, `.rtok/worktrees` by default: a relative root is under the main checkout (from inside a worktree too), and before the first worktree lands there rtok makes git ignore `.rtok/`, in `.gitignore` when the project has one, else in `.git/info/exclude`. A relative root that climbs out of the project is refused; `~` and absolute roots keep their meaning, and worktrees made elsewhere keep working. With `[worktree] enabled = false` rtok leaves worktrees alone: every `rtok worktree` command (`list` too) says they are not enabled, MCP lists no `worktree_*` tool, and Claude's `WorktreeCreate`/`WorktreeRemove` hooks do what Claude does without rtok.
 
 ### Worktrees a host makes itself
 
@@ -79,12 +80,24 @@ The `rtok-worktrees` skill tells the agent all of this: use `worktree_add` for n
 | `gemini` | yes | hooks | none found | `worktree_add` |
 | `cline` | yes | hooks | none (checkpoints, not worktrees) | `worktree_add` |
 | `roo` | no | MCP | not checked yet | `worktree_add` |
+| `droid` | no | MCP | not checked yet | `worktree_add` |
+| `kiro` | no | MCP | not checked yet | `worktree_add` |
+| `junie` | no | MCP | not checked yet | `worktree_add` |
+| `amp` | no | MCP | not checked yet | `worktree_add` |
+| `warp` | no | MCP | not checked yet | `worktree_add` |
+| `crush` | no | MCP | not checked yet | `worktree_add` |
+| `openhands` | no | MCP | not checked yet | `worktree_add` |
+| `augment` | no | MCP | not checked yet | `worktree_add` |
+| `reasonix` | no | MCP | not checked yet | `worktree_add` |
 | `qwen` | yes | hooks | not checked yet | `worktree_add` |
+| `codebuddy` | yes | hooks | not checked yet | `worktree_add` |
+| `goose` | no | MCP | not checked yet | `worktree_add` |
+| `continue` | no | MCP | not checked yet | `worktree_add` |
 | `codewhale` | yes | hooks | none documented | `worktree_add` |
 | `aider` | no | none | none | CLI only |
 | `zed` | no | MCP | threads can point at a worktree you make | `worktree_adopt` |
 
-Every host can create worktrees with `worktree_add` (MCP) or `rtok worktree add` (CLI); a host with no agent row passes `--owner` on the CLI. A worktree whose path matches none of the pools above is listed with origin `other` and adopted the same way.
+Every host can create worktrees with `worktree_add` (MCP) or `rtok worktree add` (CLI); a host with no agent row passes `--owner` on the CLI. A worktree whose path matches none of the pools above is listed with origin `other` and adopted the same way. `worktree add` (CLI and MCP `worktree_add`) also sets `env.CLAUDE_CODE_TASK_LIST_ID` to `<project>-<task>` in the new worktree's `.claude/settings.local.json`, so Claude Code sessions there share one task list; only that key is written, the rest of the file stays as it was, a file that is not valid JSON or already sets the id is left alone with a warning, and `.claude/` is git-ignored.
 
 ### Windows
 

@@ -201,10 +201,10 @@ fn walk(host: &str) -> Result<Shape, String> {
     }
     Ok(Shape {
         // The root comes from `$HOME` as spelled (`/var/…` on macOS, not `/private/var/…`);
-        // dunce: the server reports paths without the `\\?\` prefix std adds on Windows.
+        // fs-kit: the server reports paths without the `\\?\` prefix std adds on Windows.
         path: path
             .strip_prefix(&tmp)
-            .or_else(|_| path.strip_prefix(dunce::canonicalize(&tmp).unwrap()))
+            .or_else(|_| path.strip_prefix(fs_kit::path::canonicalize(&tmp).unwrap()))
             .unwrap()
             .display()
             .to_string()
@@ -242,7 +242,8 @@ fn every_host_gets_the_same_worktree_rule_lock_and_row() {
     for (host, shape) in &shapes[1..] {
         assert_eq!(shape.as_ref().unwrap(), want, "{host} differs from {first}");
     }
-    assert_eq!(want.path, ".rtok/worktrees/rtok-t1");
+    // T660.4: under the main checkout (`<tmp>/rtok`), not under `$HOME`.
+    assert_eq!(want.path, "rtok/.rtok/worktrees/rtok-t1");
     assert_eq!(want.branch, "t1-x");
 }
 

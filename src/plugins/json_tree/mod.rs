@@ -160,7 +160,7 @@ pub fn fold_json_with(value: &Value, identity: &[&str]) -> Option<Folded> {
     let elements = assign_ids("EL-", &bodies, 2);
     stamp(&mut pieces, &elements);
 
-    let referenced = referenced_vars(&pieces, &vars);
+    let referenced = referenced_vars(&pieces);
     let text = render(&vars, &elements, &referenced, &pieces);
     if text.is_empty() {
         return None;
@@ -262,7 +262,7 @@ struct ObjNode {
     bracket: Option<String>,
     id_text: Option<String>,
     extras: BTreeMap<String, String>,
-    body: Value,
+    body: Body,
     children: Vec<Piece>,
     template: Option<String>,
 }
@@ -270,6 +270,17 @@ struct ObjNode {
 enum Piece {
     Node(ObjNode),
     Atom(String),
+}
+
+/// A node's own fields, sorted by key.
+type Body = BTreeMap<String, Field>;
+
+/// A body field is either the source value or a reference to a hoisted `V-` value. Keeping
+/// them apart in the type, instead of storing the id as a string, is what stops a source
+/// string spelled like an id from being read as that reference.
+enum Field {
+    Ref(String),
+    Lit(Value),
 }
 
 fn build_node(
@@ -284,7 +295,7 @@ fn build_node(
         .map_or_else(|| "object".to_string(), scalar_text);
     let id_text = obj.get("id").map(scalar_text);
     let mut extras = BTreeMap::new();
-    let mut body = Map::new();
+    let mut body = Body::new();
     let mut children = Vec::new();
     let id_is_identity = identity.contains(&"id");
     for (key, val) in obj {
@@ -314,26 +325,21 @@ fn build_node(
         bracket,
         id_text,
         extras,
-        body: Value::Object(body),
+        body,
         children,
         template: None,
     }
 }
 
-fn insert_field(
-    body: &mut Map<String, Value>,
-    key: &str,
-    val: &Value,
-    vars: &BTreeMap<String, String>,
-) {
+fn insert_field(body: &mut Body, key: &str, val: &Value, vars: &BTreeMap<String, String>) {
     if val.is_object() || val.is_array() {
         let canon = canonical(val);
         if let Some(id) = vars.get(&canon) {
-            body.insert(key.to_string(), Value::String(id.clone()));
+            body.insert(key.to_string(), Field::Ref(id.clone()));
             return;
         }
     }
-    body.insert(key.to_string(), val.clone());
+    body.insert(key.to_string(), Field::Lit(val.clone()));
 }
 
 fn bracket_key(obj: &Map<String, Value>) -> Option<String> {
@@ -353,16 +359,31 @@ fn scalar_text(value: &Value) -> String {
     }
 }
 
-fn type_only(body: &Value) -> bool {
-    body.as_object()
-        .is_none_or(|map| map.keys().all(|key| key == "type" || key == "kind"))
+fn type_only(body: &Body) -> bool {
+    body.keys().all(|key| key == "type" || key == "kind")
+}
+
+/// Template key and `ELEMENTS` text of a body. A reference is written as a bare id and a
+/// string always as a quoted JSON string, so the two never read alike.
+fn canonical_body(body: &Body) -> String {
+    let fields: Vec<String> = body
+        .iter()
+        .map(|(key, field)| {
+            let key = serde_json::to_string(key).unwrap_or_else(|_| "\"\"".to_string());
+            match field {
+                Field::Ref(id) => format!("{key}:{id}"),
+                Field::Lit(value) => format!("{key}:{}", canonical(value)),
+            }
+        })
+        .collect();
+    format!("{{{}}}", fields.join(","))
 }
 
 fn collect_bodies(pieces: &[Piece], counts: &mut BTreeMap<String, usize>) {
     for piece in pieces {
         if let Piece::Node(node) = piece {
             if !type_only(&node.body) {
-                *counts.entry(canonical(&node.body)).or_default() += 1;
+                *counts.entry(canonical_body(&node.body)).or_default() += 1;
             }
             collect_bodies(&node.children, counts);
         }
@@ -372,8 +393,7 @@ fn collect_bodies(pieces: &[Piece], counts: &mut BTreeMap<String, usize>) {
 fn stamp(pieces: &mut [Piece], elements: &BTreeMap<String, String>) {
     for piece in pieces {
         if let Piece::Node(node) = piece {
-            let canon = canonical(&node.body);
-            if let Some(id) = elements.get(&canon) {
+            if let Some(id) = elements.get(&canonical_body(&node.body)) {
                 node.template = Some(id.clone());
             }
             stamp(&mut node.children, elements);
@@ -381,11 +401,14 @@ fn stamp(pieces: &mut [Piece], elements: &BTreeMap<String, String>) {
     }
 }
 
-fn referenced_vars(pieces: &[Piece], vars: &BTreeMap<String, String>) -> BTreeSet<String> {
-    let ids: BTreeSet<&str> = vars.values().map(String::as_str).collect();
+fn referenced_vars(pieces: &[Piece]) -> BTreeSet<String> {
     let mut out = BTreeSet::new();
     walk_nodes(pieces, &mut |node| {
-        mark_ids(&node.body, &ids, &mut out);
+        for field in node.body.values() {
+            if let Field::Ref(id) = field {
+                out.insert(id.clone());
+            }
+        }
     });
     out
 }
@@ -396,25 +419,6 @@ fn walk_nodes(pieces: &[Piece], visit: &mut dyn FnMut(&ObjNode)) {
             visit(node);
             walk_nodes(&node.children, visit);
         }
-    }
-}
-
-fn mark_ids(value: &Value, ids: &BTreeSet<&str>, out: &mut BTreeSet<String>) {
-    match value {
-        Value::String(text) if ids.contains(text.as_str()) => {
-            out.insert(text.clone());
-        }
-        Value::Array(items) => {
-            for item in items {
-                mark_ids(item, ids, out);
-            }
-        }
-        Value::Object(map) => {
-            for child in map.values() {
-                mark_ids(child, ids, out);
-            }
-        }
-        _ => {}
     }
 }
 
@@ -499,17 +503,18 @@ fn render_node(node: &ObjNode, depth: usize, out: &mut String) {
     if let Some(template) = &node.template {
         out.push_str(" template=");
         out.push_str(template);
-    } else if let Some(map) = node.body.as_object() {
-        let mut keys: Vec<&String> = map.keys().collect();
-        keys.sort();
-        for key in keys {
+    } else {
+        for (key, field) in &node.body {
             if node.bracket.as_ref() == Some(key) {
                 continue;
             }
             out.push(' ');
             out.push_str(&render_token(key));
             out.push('=');
-            out.push_str(&render_value(&map[key]));
+            match field {
+                Field::Ref(id) => out.push_str(id),
+                Field::Lit(value) => out.push_str(&render_value(value)),
+            }
         }
     }
     out.push('\n');
@@ -545,11 +550,21 @@ fn render_token(text: &str) -> String {
     }
 }
 
+/// A bare token is what a reference prints as, so text shaped like a generated id is quoted
+/// even though its characters are all bare-safe.
 fn bare(text: &str) -> bool {
     !text.is_empty()
         && text.chars().all(|c| {
             c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.' | '/' | ':' | '+' | '@')
         })
+        && !reference_shaped(text)
+}
+
+fn reference_shaped(text: &str) -> bool {
+    ["V-", "EL-"].iter().any(|prefix| {
+        text.strip_prefix(prefix)
+            .is_some_and(|hex| hex.len() >= 8 && hex.bytes().all(|b| b.is_ascii_hexdigit()))
+    })
 }
 
 fn canonical(value: &Value) -> String {
@@ -802,6 +817,136 @@ mod tests {
         assert!(fold_json(&table).is_none(), "toon keeps the table");
     }
 
+    /// `V-` id the fold gives `shared` when two nodes hold it.
+    fn var_id(shared: &Value) -> String {
+        content_id("V-", &canonical(shared), &mut BTreeMap::new())
+    }
+
+    fn shared_object() -> Value {
+        json!({"top": 4, "right": 8, "bottom": 4, "left": 8, "unit": "px", "mode": "fixed"})
+    }
+
+    /// Two nodes hold `shared_object()`; a third holds `literal`. Padding keeps the tree over
+    /// the fold threshold.
+    fn collision(literal: &str) -> Value {
+        let mut root = json!({
+            "type": "FRAME",
+            "children": [
+                {"type": "ITEM", "value": shared_object()},
+                {"type": "ITEM", "value": shared_object()},
+                {"type": "ITEM", "value": literal},
+            ],
+        });
+        let mut note = String::new();
+        while serde_json::to_vec(&root).unwrap().len() < MIN_BYTES {
+            note.push_str("screen-note-");
+            root["note"] = Value::String(note.clone());
+        }
+        root
+    }
+
+    /// A string equal to a generated id used to share the element template of the nodes that
+    /// really reference that id, and printed exactly like the reference.
+    #[test]
+    fn a_literal_equal_to_a_var_id_stays_distinct_from_the_reference() {
+        let id = var_id(&shared_object());
+        let folded = fold_json(&collision(&id)).expect("folds");
+        let control = fold_json(&collision("ordinary-literal")).expect("folds");
+        assert_eq!(control.templates, 1);
+        assert_eq!(
+            folded.templates, 1,
+            "the literal is not a third occurrence:\n{}",
+            folded.text
+        );
+        assert_eq!(
+            folded.text.matches("template=").count(),
+            2,
+            "{}",
+            folded.text
+        );
+        let literal_line = folded
+            .text
+            .lines()
+            .find(|l| !l.contains("template=") && l.contains("[ITEM]"))
+            .unwrap();
+        assert!(
+            literal_line.contains(&format!("value=\"{id}\"")),
+            "{literal_line}"
+        );
+        let element = folded.text.lines().find(|l| l.starts_with("EL-")).unwrap();
+        assert!(
+            element.contains(&format!("\"value\":{id}}}")),
+            "reference is bare: {element}"
+        );
+        assert_eq!(folded.text.matches("VARS:").count(), 1, "{}", folded.text);
+        assert_eq!(folded.text, fold_json(&collision(&id)).unwrap().text);
+        assert_eq!(
+            folded.text,
+            fold_json(&reverse_keys(&collision(&id))).unwrap().text
+        );
+    }
+
+    /// With no real reference in the tree, a reference-shaped literal must not make the encoder
+    /// print a `VARS:` entry it never used.
+    #[test]
+    fn a_reference_shaped_literal_does_not_mark_a_var_used() {
+        let inner = json!({"a": "alpha", "b": "beta", "c": "gamma-gamma"});
+        let outer = json!({"p": inner, "q": inner, "r": "keep-this-outer"});
+        let id = var_id(&inner);
+        let mut root = json!({
+            "type": "FRAME",
+            "children": [
+                {"type": "ITEM", "value": outer},
+                {"type": "ITEM", "value": id},
+            ],
+        });
+        let mut note = String::new();
+        while serde_json::to_vec(&root).unwrap().len() < MIN_BYTES {
+            note.push_str("screen-note-");
+            root["note"] = Value::String(note.clone());
+        }
+        let folded = fold_json(&root).expect("folds");
+        assert!(!folded.text.contains("VARS:"), "{}", folded.text);
+        assert!(
+            folded.text.contains(&format!("value=\"{id}\"")),
+            "{}",
+            folded.text
+        );
+    }
+
+    #[test]
+    fn the_proxy_folds_the_collision_and_expand_returns_the_original() {
+        let cx = cx("collision");
+        let id = var_id(&shared_object());
+        let mut value = collision(&id);
+        for i in 0..8 {
+            value["children"]
+                .as_array_mut()
+                .unwrap()
+                .push(json!({"type": "ITEM", "value": shared_object(), "n": i}));
+        }
+        let original = serde_json::to_string_pretty(&value).unwrap();
+        let mut body = tool_req(&value);
+        let ms = filter(&mut body, &Ctx::new(&cx));
+        assert_eq!(ms.len(), 1);
+        assert!(ms[0].est_after < ms[0].est_before);
+        let text = body["messages"][0]["content"][0]["content"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        assert!(text.contains(&format!("value=\"{id}\"")), "{text}");
+        let mut second = tool_req(&value);
+        filter(&mut second, &Ctx::new(&cx));
+        assert_eq!(
+            second["messages"][0]["content"][0]["content"].as_str(),
+            Some(text.as_str())
+        );
+        let expanded = expand::fetch(&cx, ms[0].ref_id.as_deref().unwrap())
+            .unwrap()
+            .unwrap();
+        assert_eq!(expanded, original.as_bytes());
+    }
+
     use proptest::prelude::*;
 
     fn json_leaf() -> impl Strategy<Value = serde_json::Value> {
@@ -1010,6 +1155,40 @@ mod tests {
             let cut = blocked["content"][0]["text"].as_str().unwrap();
             assert!(!cut.contains(PREFIX), "{tool} must not fold: {cut}");
         }
+    }
+
+    #[cfg(feature = "cmd")]
+    #[test]
+    fn mcp_fold_keeps_a_reference_shaped_literal_distinct() {
+        use crate::mcp::wrap::shorten_result;
+        use crate::plugins::cmd::rules::Settings;
+
+        let cx = cx("mcp-collision");
+        let settings = Settings::from_config(&cx.config);
+        let id = var_id(&shared_object());
+        let mut value = collision(&id);
+        for i in 0..50 {
+            value[format!("pad{i:02}")] = Value::String(format!("pad-value-{i:02}"));
+        }
+        let text = serde_json::to_string_pretty(&value).unwrap();
+        let mut result = json!({"content":[{"type":"text","text": text}]});
+        assert!(shorten_result(
+            &cx,
+            &settings,
+            "figma",
+            "get_design",
+            &mut result,
+            "cmd",
+            "wrap"
+        ));
+        let printed = result["content"][0]["text"].as_str().unwrap();
+        assert!(printed.contains(&format!("value=\"{id}\"")), "{printed}");
+        let rows = cx.store.list_measurements("json_tree").unwrap();
+        assert_eq!(rows.len(), 1);
+        let expanded = expand::fetch(&cx, rows[0].ref_id.as_deref().unwrap())
+            .unwrap()
+            .unwrap();
+        assert_eq!(expanded, text.as_bytes());
     }
 
     #[cfg(feature = "cmd")]

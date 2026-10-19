@@ -148,8 +148,18 @@ Every effective key with its origin — the `config show --sources` page.
 | plugins.cmd.rules | ~/.rtok/rules.toml | default |
 | plugins.cmd.rules_dir | ~/.rtok/rules.d | default |
 | plugins.cmd.shell |  | default |
+| plugins.cmd.trailer | true | default |
 | plugins.cmd.trailer_min_lines | 40 | default |
 | plugins.compress.enabled | true | default |
+| plugins.compress.llm.code | false | default |
+| plugins.compress.llm.enabled | false | default |
+| plugins.compress.llm.max_in_flight | 2 | default |
+| plugins.compress.llm.max_input_bytes | 65536 | default |
+| plugins.compress.llm.max_output_tokens | 512 | default |
+| plugins.compress.llm.max_spans | 64 | default |
+| plugins.compress.llm.model | claude-haiku-4-5 | default |
+| plugins.compress.llm.timeout_s | 60 | default |
+| plugins.compress.llm.url |  | default |
 | plugins.docs.enabled | false | default |
 | plugins.docs.max_tokens | 800 | default |
 | plugins.docs.query_limit | 5 | default |
@@ -187,13 +197,24 @@ Every effective key with its origin — the `config show --sources` page.
 | plugins.inject.modes_dir | ~/.rtok/modes | default |
 | plugins.json_tree.enabled | false | default |
 | plugins.measure.enabled | true | default |
+| plugins.memory.admit | true | default |
+| plugins.memory.admit_min_chars | 5 | default |
+| plugins.memory.admit_similarity | 85 | default |
 | plugins.memory.checkpoint_tokens | 400 | default |
+| plugins.memory.embed.api_key_env |  | default |
 | plugins.memory.embed.dimensions | 384 | default |
 | plugins.memory.embed.enabled | false | default |
 | plugins.memory.embed.hybrid | true | default |
+| plugins.memory.embed.max_chars | 8000 | default |
 | plugins.memory.embed.model | all-MiniLM-L6-v2 | default |
 | plugins.memory.embed.provider | local | default |
+| plugins.memory.embed.url |  | default |
 | plugins.memory.enabled | true | default |
+| plugins.memory.extract.command | [] | default |
+| plugins.memory.extract.enabled | false | default |
+| plugins.memory.extract.max_input_bytes | 60000 | default |
+| plugins.memory.extract.max_notes | 5 | default |
+| plugins.memory.forget_after_days | 90 | default |
 | plugins.memory.handoff | true | default |
 | plugins.memory.prompt_recall | 5 | default |
 | plugins.memory.recall_titles | 5 | default |
@@ -284,8 +305,18 @@ Every effective key with its origin — the `config show --sources` page.
 | proxy.mode | passthrough | default |
 | proxy.openai_upstream | https://api.openai.com | default |
 | proxy.port | 8790 | default |
+| proxy.routing.bulk.from | [] | default |
+| proxy.routing.bulk.gate |  | default |
+| proxy.routing.bulk.provider |  | default |
+| proxy.routing.bulk.to |  | default |
+| proxy.routing.enabled | false | default |
+| proxy.routing.internal.from | [] | default |
+| proxy.routing.internal.gate |  | default |
+| proxy.routing.internal.provider |  | default |
+| proxy.routing.internal.to |  | default |
 | proxy.timeout_s | 600 | default |
 | proxy.tools_rewrite.allow | [] | default |
+| proxy.tools_rewrite.compact_schema | false | default |
 | proxy.tools_rewrite.deny | [] | default |
 | proxy.tools_rewrite.enabled | false | default |
 | proxy.tools_rewrite.max_description_tokens | 60 | default |
@@ -296,40 +327,53 @@ Every effective key with its origin — the `config show --sources` page.
 | report.out |  | default |
 | report.since | 30d | default |
 | setup.aider.config_path | ~/.aider.conf.yml | default |
+| setup.amp.settings_path | ~/.config/amp/settings.json | default |
 | setup.antigravity.cli_plugins_path | ~/.gemini/antigravity-cli/plugins | default |
 | setup.antigravity.plugins_path | ~/.gemini/config/plugins | default |
+| setup.augment.settings_path | ~/.augment/settings.json | default |
 | setup.backup | true | default |
 | setup.backup_files | 5 | default |
 | setup.claude.settings_path | ~/.claude/settings.json | default |
 | setup.cline.hooks_path | ~/Documents/Cline/Hooks | default |
 | setup.cline.mcp_path | ~/.cline/data/settings/cline_mcp_settings.json | default |
+| setup.codebuddy.dir | ~/.codebuddy | default |
+| setup.codebuddy.workbuddy_dir | ~/.workbuddy | default |
 | setup.codewhale.dir | ~/.codewhale | default |
 | setup.codex.config_path | ~/.codex/config.toml | default |
 | setup.commandcode.dir | ~/.commandcode | default |
+| setup.continue.config_path | ~/.continue/config.yaml | default |
 | setup.copilot.dir | ~/.copilot | default |
+| setup.crush.config_path | ~/.config/crush/crush.json | default |
 | setup.cursor.hooks_path | ~/.cursor/hooks.json | default |
 | setup.devin.config_path | ~/.config/devin/config.json | default |
+| setup.droid.mcp_path | ~/.factory/mcp.json | default |
 | setup.dry_run | false | default |
 | setup.force | false | default |
 | setup.gemini.dir | ~/.gemini | default |
+| setup.goose.config_path | ~/.config/goose/config.yaml | default |
 | setup.grok.config_path | ~/.grok/config.toml | default |
 | setup.hook_timeout_s | 5 | default |
+| setup.junie.mcp_path |  | default |
 | setup.kilo.config_path | ~/.config/kilo/kilo.json | default |
 | setup.kimi.config_path | ~/.kimi-code/config.toml | default |
+| setup.kiro.mcp_path | ~/.kiro/settings/mcp.json | default |
 | setup.mcp | true | default |
 | setup.mimo.config_path | ~/.config/mimocode/mimocode.json | default |
 | setup.modes | [] | default |
 | setup.omp.extensions_path | ~/.omp/agent/extensions | default |
 | setup.omp.mcp_path | ~/.omp/agent/mcp.json | default |
 | setup.opencode.config_path | ~/.config/opencode/opencode.json | default |
+| setup.openhands.mcp_path | ~/.openhands/mcp.json | default |
 | setup.pi.extensions_path | ~/.pi/agent/extensions | default |
 | setup.pi.tools | false | default |
 | setup.proxy | false | default |
 | setup.qwen.dir | ~/.qwen | default |
+| setup.reasonix.dir | ~/.reasonix | default |
 | setup.roo.mcp_path |  | default |
 | setup.source |  | default |
 | setup.vscode.code_user_dir |  | default |
 | setup.vscode.insiders_user_dir |  | default |
+| setup.warp.mcp_path | ~/.warp/.mcp.json | default |
 | setup.windsurf.config_path | ~/.codeium/windsurf/mcp_config.json | default |
 | setup.yes | false | default |
 | setup.zcode.config_path | ~/.zcode/cli/config.json | default |
@@ -408,6 +452,8 @@ Every effective key with its origin — the `config show --sources` page.
 | stats.transcripts_dir | tests/trycmd/input/stats-price-tx | user |
 | tasks.adapter | disk | default |
 | tasks.disk.dir | tasks | default |
+| tasks.export.github.repo |  | default |
+| tasks.export.linear.team |  | default |
 | tasks.github.project | 0 | default |
 | tasks.github.repo |  | default |
 | tasks.gitlab.project |  | default |
@@ -420,9 +466,9 @@ Every effective key with its origin — the `config show --sources` page.
 | web.host | 127.0.0.1 | default |
 | web.port | 3333 | default |
 | worktree.enabled | true | default |
-| worktree.root | ~/.rtok/worktrees | default |
+| worktree.root | .rtok/worktrees | default |
 
-376 keys.
+422 keys.
 
 ## Doctor
 
@@ -434,7 +480,7 @@ hooks check none found
 duplicate hooks none found
 duplicate mcp servers none found
 mcp
-  rtok (38 tools, ~977 desc tokens) [CWD]/target/[..]
+  rtok (40 tools, ~1043 desc tokens) [CWD]/target/[..]
 proxy 
 proxy openai 
 BASH_MAX_OUTPUT_LENGTH (unset)
@@ -586,6 +632,11 @@ agents
     mcp     not installed
     proxy   not supported: MiMo Code has no documented base-URL override; MIMOCODE_HOME/MIMOCODE_CONFIG relocate config, not the model endpoint
     plugin  not installed
+  mimo (desktop)
+    hooks   not supported: MiMo Code has no shell hook events; the linked plugin filters bash output instead
+    mcp     not installed
+    proxy   not supported: MiMo Code has no documented base-URL override; MIMOCODE_HOME/MIMOCODE_CONFIG relocate config, not the model endpoint
+    plugin  not installed
   antigravity (cli)
     hooks   not supported: Antigravity's PreToolUse cannot rewrite tool input and PostToolUse cannot add context
     mcp     not supported: rtok's MCP ships inside the plugin, the only install path
@@ -616,6 +667,86 @@ agents
     mcp     not installed
     proxy   not supported: Qwen Code's model.baseUrl is written by the model picker; modelProviders entries carry their own baseUrl, which setup does not edit
     plugin  not installed (--yes)
+  codebuddy (cli)
+    hooks   not installed
+    mcp     not installed
+    proxy   not supported: CodeBuddy Code takes its endpoint from the CODEBUDDY_BASE_URL environment variable; there is no config file to point at the proxy
+    plugin  not installed (--yes)
+  codebuddy (desktop)
+    hooks   not installed
+    mcp     not installed
+    proxy   not supported: CodeBuddy Code takes its endpoint from the CODEBUDDY_BASE_URL environment variable; there is no config file to point at the proxy
+    plugin  not installed (--yes)
+  goose (cli)
+    hooks   not supported: Goose runs hooks from Open Plugins directories with its own event names, tool names and decision shape; rtok has no adapter for that payload yet
+    mcp     not installed
+    proxy   not supported: Goose documents its provider endpoint as the GOOSE_PROVIDER__HOST environment variable only; there is no file to point at the proxy
+    plugin  not supported: Goose plugins are Open Plugins directories (plugin.json, hooks/hooks.json); rtok ships no bundle in that format yet
+  goose (desktop)
+    hooks   not supported: Goose runs hooks from Open Plugins directories with its own event names, tool names and decision shape; rtok has no adapter for that payload yet
+    mcp     not installed
+    proxy   not supported: Goose documents its provider endpoint as the GOOSE_PROVIDER__HOST environment variable only; there is no file to point at the proxy
+    plugin  not supported: Goose plugins are Open Plugins directories (plugin.json, hooks/hooks.json); rtok ships no bundle in that format yet
+  droid (cli)
+    hooks   not supported: Droid documents hooks, but rtok has no checked mapping of its tool names and PreToolUse output yet
+    mcp     not installed
+    proxy   not supported: Droid has no single model base-URL setting; each customModels entry carries its own baseUrl
+    plugin  not supported: Droid plugins install into its own cache through `droid plugin install`; rtok ships no Droid plugin
+  kiro (cli)
+    hooks   not supported: Kiro's hooks page does not state the exit-code or output-to-context rules of command hooks
+    mcp     not installed
+    proxy   not supported: Kiro documents no model base-URL setting
+    plugin  not supported: Kiro documents no local plugin directory to link
+  kiro (desktop)
+    hooks   not supported: Kiro's hooks page does not state the exit-code or output-to-context rules of command hooks
+    mcp     not installed
+    proxy   not supported: Kiro documents no model base-URL setting
+    plugin  not supported: Kiro documents no local plugin directory to link
+  junie (cli)
+    hooks   not supported: Junie documents only a SessionStart hook, and rtok's hooks need tool-use events
+    mcp     not installed
+    proxy   not supported: Junie has no documented model base-URL file
+    plugin  not supported: Junie has no documented local plugin directory to link
+  amp (cli)
+    hooks   not supported: Amp has no shell hook events; its plugin events (tool.call, tool.result) are TypeScript handlers
+    mcp     not installed
+    proxy   not supported: amp.url is Amp's own server URL, not a model-provider base URL
+    plugin  not supported: Amp loads .ts and .js plugins from its plugins directory, but rtok ships no plugin for its API yet
+  warp (desktop)
+    hooks   not supported: Warp documents no hook surface
+    mcp     not installed
+    proxy   not supported: Warp documents no setting that points its agent at another endpoint
+    plugin  not supported: Warp documents no plugin format; rtok ships no Warp plugin
+  continue (cli)
+    hooks   not supported: Continue's docs describe config.yaml, mcpServers and rules, not shell hook events
+    mcp     not installed
+    proxy   not supported: Continue sets a model's apiBase per model in config.yaml; there is no single endpoint file to point at the proxy
+    plugin  not supported: Continue has no documented local plugin directory to link; blocks and rules live in config.yaml and .continue/
+  continue (desktop)
+    hooks   not supported: Continue's docs describe config.yaml, mcpServers and rules, not shell hook events
+    mcp     not installed
+    proxy   not supported: Continue sets a model's apiBase per model in config.yaml; there is no single endpoint file to point at the proxy
+    plugin  not supported: Continue has no documented local plugin directory to link; blocks and rules live in config.yaml and .continue/
+  crush (cli)
+    hooks   not supported: Crush documents only a PreToolUse hook, and rtok has no checked mapping of its tool names
+    mcp     not installed
+    proxy   not supported: Crush takes provider base URLs per provider entry; rtok has no checked single endpoint to point at the proxy
+    plugin  not supported: Crush has no documented local plugin directory to link; it loads skills, not plugins
+  openhands (cli)
+    hooks   not supported: OpenHands documents hooks only as a project `.openhands/hooks.json`; no user-level file is documented
+    mcp     not installed
+    proxy   not supported: rtok has not checked OpenHands's LLM base-URL setting, so it writes none
+    plugin  not supported: rtok ships no OpenHands plugin
+  augment (cli)
+    hooks   not supported: Augment hooks must be script files and PreToolUse can only deny (no updatedInput), so rtok cannot rewrite a call through them
+    mcp     not installed
+    proxy   not supported: Augment documents no model endpoint setting or bring-your-own key to point at the proxy
+    plugin  not supported: Auggie plugins come from marketplaces through `auggie plugin install`; rtok ships no Augment plugin
+  reasonix (cli)
+    hooks   not supported: Reasonix hooks (settings.json) use their own event payload and tool names, which rtok has no checked mapping for
+    mcp     not installed
+    proxy   not supported: Reasonix has no single endpoint setting; each [[providers]] entry carries its own base_url
+    plugin  not supported: Reasonix plugin packages are its own format; rtok ships no Reasonix plugin
 skills (1 listed, 154 desc bytes ≈ 38 tokens per request)
   descriptions over 120 chars: 1 skills, ≈ 8 tokens/request recoverable
   dry-refactoring project desc 154c body 2772B calls - WARN desc>120 WARN never invoked

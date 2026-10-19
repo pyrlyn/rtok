@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   guard:
-    uses: pyrlyn/ci/.github/workflows/release-guard.yml@b4d700f3c6780284ff1558a7c516de0d520f9d6d # feat/release-guard (pyrlyn/ci#69); repin to its merge commit
+    uses: pyrlyn/ci/.github/workflows/release-guard.yml@main
     permissions:
       contents: write # tag, Release, revert branch
       actions: write # dispatch release.yml

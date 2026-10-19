@@ -101,7 +101,7 @@ fn deny(cx: &Ctx, reason: String) -> PreToolDecision {
 
 /// Archive id of the last MCP `read` of this path (`mode=full`), if still cached.
 fn last_read_id(cx: &Ctx, path: &str) -> Option<String> {
-    let abs = dunce::canonicalize(path).ok()?;
+    let abs = fs_kit::path::canonicalize(path).ok()?;
     let key = super::cache::key(abs.to_string_lossy().as_ref(), "full", None);
     cx.get_read_cache(&key).ok().flatten()?.0
 }
@@ -200,7 +200,7 @@ mod tests {
         let p = dir.join("delta.txt");
         fs::write(&p, "x".repeat(100 * 1024)).unwrap();
         let path = p.to_str().unwrap();
-        let abs = dunce::canonicalize(&p).unwrap();
+        let abs = fs_kit::path::canonicalize(&p).unwrap();
         let key = crate::plugins::read::cache::key(abs.to_str().unwrap(), "full", None);
         let ctx = Ctx::new(&cx);
         let id = ctx.put_archive(b"previous body").unwrap();
@@ -302,7 +302,7 @@ mod tests {
             other => panic!("{other:?}"),
         };
         let first = reason(&json!({"file_path": path}));
-        let abs = dunce::canonicalize(&p).unwrap();
+        let abs = fs_kit::path::canonicalize(&p).unwrap();
         let key = crate::plugins::read::cache::key(abs.to_str().unwrap(), "full", None);
         let id = Ctx::new(&cx).put_archive(b"previous body").unwrap();
         Ctx::new(&cx).put_read_cache(&key, "h", Some(&id)).unwrap();
@@ -400,7 +400,7 @@ mod tests {
         assert_eq!(m.est_before, 0);
         assert!(m.est_after > 0);
 
-        let abs = dunce::canonicalize(&p).unwrap();
+        let abs = fs_kit::path::canonicalize(&p).unwrap();
         let key = crate::plugins::read::cache::key(abs.to_str().unwrap(), "full", None);
         let id = Ctx::new(&cx).put_archive(b"previous body").unwrap();
         Ctx::new(&cx).put_read_cache(&key, "h", Some(&id)).unwrap();

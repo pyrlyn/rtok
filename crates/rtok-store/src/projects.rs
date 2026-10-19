@@ -19,7 +19,7 @@ use super::unixepoch;
 /// Canonical absolute path as one string: the index key of a root, and the match key of a
 /// file for `mark_symbols_stale` (T8.3). Rows are scoped to it so one store holds many repos.
 pub fn canon_root(p: &Path) -> String {
-    dunce::canonicalize(p)
+    fs_kit::path::canonicalize(p)
         .unwrap_or_else(|_| p.to_path_buf())
         .to_string_lossy()
         .replace('\\', "/")

@@ -12,8 +12,14 @@ MiMo accepts `mimocode.json` and `mimocode.jsonc` in its global dir and merges t
 `.jsonc` last. MiMo itself writes a starter `mimocode.jsonc`, so when `mimocode.json` is absent
 and `mimocode.jsonc` is there, setup edits the `.jsonc`: one entry is added or removed in place
 and every comment and other byte stays (T520). When both exist, `mimocode.json` stays the
-target. A `config_path` with another file name is used as it is. No Desktop variant: MiMo
-Desktop exists (early access) but no config path for it is documented (T521).
+target. A `config_path` with another file name is used as it is.
+
+MiMo Desktop (`Xiaomi MiMo AI.app`, early access) is a second variant, detected from the app on
+macOS (`/Applications`, `~/Applications`). Its docs name no config path, but the shipped app
+resolves its config dir exactly as the CLI does (`MIMOCODE_HOME/config`, else
+`XDG_CONFIG_HOME/mimocode`, else `~/.config/mimocode`; `mimocode.jsonc`, `mimocode.json`,
+`config.json`), so both variants install the same files (T521). Windows and Linux install paths
+of the app are unverified, so they are not probed.
 
 ## Modules
 

@@ -14,7 +14,12 @@ use std::path::{Path, PathBuf};
 
 fn cmd(args: &[&str], home: &Path) -> AssertCmd {
     let mut c = AssertCmd::cargo_bin("rtok").unwrap();
-    c.args(args).env("RTOK_HOME", home).env("HOME", home);
+    // The checkout as cwd would make `doctor`'s junk section walk the repository's real
+    // worktrees (T666).
+    c.args(args)
+        .env("RTOK_HOME", home)
+        .env("HOME", home)
+        .current_dir(home);
     c
 }
 
@@ -230,6 +235,33 @@ fn run_long_output_then_expand_round_trips() {
     let _ = fs::remove_dir_all(&home);
 }
 
+/// T683: a logfmt log is cut with its shared pairs stated once, and `expand` still returns
+/// every raw line, shared pairs included.
+#[test]
+fn run_logfmt_output_states_shared_pairs_once_and_expands_raw() {
+    let home = tmp("logfmt");
+    let script = "BEGIN{for(i=1;i<=120;i++)print \"level=info svc=api msg=ok n=\" i}";
+    let out = ok(&["run", "awk", script], &home);
+    assert!(
+        out.contains("[every record: level=info svc=api msg=ok]"),
+        "{out}"
+    );
+    assert!(
+        out.contains("varying: n=") && out.contains("n=120"),
+        "{out}"
+    );
+    assert!(!out.contains("level=info svc=api msg=ok n=120"), "{out}");
+    let id = out
+        .lines()
+        .find(|l| l.starts_with("[rtok "))
+        .and_then(|t| t.split_whitespace().nth(1))
+        .expect("{out}");
+    let full = ok(&["expand", id], &home);
+    assert_eq!(full.lines().count(), 120, "{full}");
+    assert!(full.contains("level=info svc=api msg=ok n=57"), "{full}");
+    let _ = fs::remove_dir_all(&home);
+}
+
 #[test]
 fn plugins_lists_the_catalogue() {
     let home = tmp("plugins");
@@ -290,11 +322,50 @@ fn bench_dry_run_lists_the_schedule() {
     let _ = fs::remove_dir_all(&home);
 }
 
+/// T666: every command here runs in its temp home, not the checkout. From the checkout,
+/// `doctor`'s junk section walked every real worktree of the repository and blew nextest's
+/// 180 s limit on a machine with many large worktrees.
+#[cfg(unix)] // `pwd`
+#[test]
+fn commands_run_in_the_temp_home_not_the_checkout() {
+    let home = tmp("cwd");
+    let out = ok(&["run", "pwd", "-P"], &home);
+    assert_eq!(
+        PathBuf::from(out.trim()),
+        fs::canonicalize(&home).unwrap(),
+        "{out}"
+    );
+    let _ = fs::remove_dir_all(&home);
+}
+
 #[test]
 fn doctor_reports_the_chain() {
     let home = tmp("doctor");
     let out = ok(&["doctor"], &home);
     assert!(out.contains("hooks ") && out.contains("proxy "), "{out}");
+    let _ = fs::remove_dir_all(&home);
+}
+
+/// T276.3: the MCP probe draws a bar on a terminal only; a piped stderr gets no bar bytes.
+#[cfg(unix)] // POSIX command path
+#[test]
+fn doctor_probing_mcp_servers_writes_no_bar_to_a_pipe() {
+    let home = tmp("doctor-bar");
+    let servers = r#"{"mcpServers":{"fake":{"command":"/bin/sh","args":["-c","exit 0"]}}}"#;
+    fs::write(home.join(".claude.json"), servers).unwrap();
+    // Outside any repository, so doctor does not size every worktree of the checkout.
+    let out = cmd(&["doctor"], &home)
+        .current_dir(&home)
+        .assert()
+        .success()
+        .get_output()
+        .clone();
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(String::from_utf8_lossy(&out.stdout).contains("fake"));
+    assert!(
+        !err.contains("probing") && !err.contains('\u{1b}') && !err.contains('\r'),
+        "{err:?}"
+    );
     let _ = fs::remove_dir_all(&home);
 }
 
@@ -436,11 +507,7 @@ fn doctor_fix_removes_only_the_broken_hook_after_a_backup() {
         home.display()
     );
     fs::write(&settings, &raw).unwrap();
-    let run = |args: &[&str]| {
-        let mut c = cmd(args, &home);
-        c.current_dir(&home);
-        c.assert().get_output().clone()
-    };
+    let run = |args: &[&str]| cmd(args, &home).assert().get_output().clone();
 
     let dry = run(&["doctor", "--fix"]);
     assert_eq!(dry.status.code(), Some(0));
@@ -477,12 +544,13 @@ fn doctor_fix_removes_an_extra_mcp_copy_and_nothing_else() {
     let json = home.join(".claude.json");
     let before = "{\n  \"theme\": \"dark\",\n  \"mcpServers\": {\n    \"a\": {\"command\": \"/bin/tool\"},\n    \"b\": {\"command\": \"/bin/tool\"}\n  }\n}\n";
     fs::write(&json, before).unwrap();
-    let mut c = cmd(
+    let out = cmd(
         &["doctor", "--fix", "--yes", "--only", "duplicate-mcp"],
         &home,
-    );
-    c.current_dir(&home);
-    let out = c.assert().get_output().clone();
+    )
+    .assert()
+    .get_output()
+    .clone();
     let text = String::from_utf8_lossy(&out.stdout);
     assert_eq!(out.status.code(), Some(0), "{text}");
     assert!(text.contains("1 entry removed, 0 left"), "{text}");

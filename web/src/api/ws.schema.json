@@ -7,6 +7,12 @@
     "client": {
       "$ref": "#/$defs/ClientMessage"
     },
+    "reply": {
+      "$ref": "#/$defs/Reply"
+    },
+    "request": {
+      "$ref": "#/$defs/Request"
+    },
     "server": {
       "$ref": "#/$defs/ServerFrame"
     },
@@ -17,7 +23,9 @@
   "required": [
     "snapshot",
     "server",
-    "client"
+    "client",
+    "reply",
+    "request"
   ],
   "$defs": {
     "Agent": {
@@ -959,6 +967,14 @@
         "action": {
           "$ref": "#/$defs/DoctorAction"
         },
+        "confirmed": {
+          "description": "For `apply`: the `token` of the plan the user confirmed. Without the plan's token, or with\none the files no longer produce, nothing is written and a fresh plan comes back.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
         "selection": {
           "$ref": "#/$defs/Selection",
           "default": {
@@ -969,7 +985,8 @@
       },
       "required": [
         "action",
-        "selection"
+        "selection",
+        "confirmed"
       ]
     },
     "DrillEdge": {
@@ -1467,13 +1484,25 @@
           "type": "integer",
           "format": "int32"
         },
+        "replan": {
+          "description": "Set when nothing was written because the files no longer match the confirmed preview:\nthe fresh preview, which needs its own confirmation.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Plan"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "text": {
           "type": "string"
         }
       },
       "required": [
         "text",
-        "code"
+        "code",
+        "replan"
       ]
     },
     "Format": {
@@ -2105,12 +2134,17 @@
           "items": {
             "type": "string"
           }
+        },
+        "token": {
+          "description": "Names this preview (its selected entries and their diff): `apply` writes only when the\ntoken it is given is the one the fresh rescan produces.",
+          "type": "string"
         }
       },
       "required": [
         "items",
         "diff",
-        "refused"
+        "refused",
+        "token"
       ]
     },
     "Planned": {
@@ -2132,6 +2166,12 @@
         "failed": {
           "description": "Planned and not removed: the re-check refused it or the removal failed.",
           "type": "boolean"
+        },
+        "files": {
+          "description": "Files in it, counted for a planned item before anything is removed.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
         },
         "kind": {
           "type": "string"
@@ -2164,6 +2204,7 @@
         "kind",
         "path",
         "bytes",
+        "files",
         "last_used",
         "reason",
         "planned",
@@ -2472,6 +2513,45 @@
             "to",
             "both"
           ]
+        },
+        {
+          "description": "Re-read the project's files (T329.54). Answered at once; the row reads `indexing` until\nthe worker ends, then `ok` or `failed` with the error.",
+          "type": "object",
+          "properties": {
+            "action": {
+              "type": "string",
+              "const": "reindex"
+            },
+            "project": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "action",
+            "project"
+          ]
+        },
+        {
+          "description": "Drop the project from the registry with its index rows; its files are never touched.\nWithout `confirmed` nothing is written and the dry run comes back as a\n[`ServerFrame::ProjectPlan`].",
+          "type": "object",
+          "properties": {
+            "action": {
+              "type": "string",
+              "const": "remove"
+            },
+            "confirmed": {
+              "type": "boolean",
+              "default": false
+            },
+            "project": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "action",
+            "project",
+            "confirmed"
+          ]
         }
       ]
     },
@@ -2500,6 +2580,13 @@
         "created_at": {
           "type": "integer",
           "format": "int64"
+        },
+        "error": {
+          "description": "Why the last re-index failed, while `state` is `failed` (T329.54).",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "health": {
           "description": "The 0 to 100 health score with its components, reasons and fixes (T329.19).",
@@ -2638,6 +2725,242 @@
       "required": [
         "source",
         "path"
+      ]
+    },
+    "Reply": {
+      "description": "A frame as it goes out for a request that carried `req`: the same fields plus the id, on\nsuccess and on failure (a `message` notice) alike.",
+      "type": "object",
+      "properties": {
+        "req": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "oneOf": [
+        {
+          "description": "A one-line notice for the operator (refused key, failed `set`, unknown archive id).",
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "message"
+            }
+          },
+          "required": [
+            "type",
+            "text"
+          ]
+        },
+        {
+          "description": "The archived payload a client asked for with [`ClientMessage::Expand`].",
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "expand"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "text"
+          ]
+        },
+        {
+          "description": "What removing a project would drop (T329.54): the dry run `graph projects remove\n--dry-run` prints. Nothing was removed; the page asks the user before it sends the\nconfirmed request.",
+          "type": "object",
+          "properties": {
+            "plan": {
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "projectplan"
+            }
+          },
+          "required": [
+            "type",
+            "project",
+            "plan"
+          ]
+        },
+        {
+          "description": "The checklist of `rtok doctor --fix` and the diff of the selection (T331.12).",
+          "type": "object",
+          "properties": {
+            "plan": {
+              "$ref": "#/$defs/Plan"
+            },
+            "type": {
+              "type": "string",
+              "const": "doctorplan"
+            }
+          },
+          "required": [
+            "type",
+            "plan"
+          ]
+        },
+        {
+          "description": "What a confirmed `doctor` apply did.",
+          "type": "object",
+          "properties": {
+            "fixed": {
+              "$ref": "#/$defs/Fixed"
+            },
+            "type": {
+              "type": "string",
+              "const": "doctorfixed"
+            }
+          },
+          "required": [
+            "type",
+            "fixed"
+          ]
+        },
+        {
+          "description": "The dry run of \"clear safe junk\" (T330.7): what `agents junk clear` would remove for every\nagent; nothing was removed.",
+          "type": "object",
+          "properties": {
+            "plan": {
+              "$ref": "#/$defs/Cleared"
+            },
+            "type": {
+              "type": "string",
+              "const": "junkplan"
+            }
+          },
+          "required": [
+            "type",
+            "plan"
+          ]
+        },
+        {
+          "description": "What a confirmed junk apply removed.",
+          "type": "object",
+          "properties": {
+            "cleared": {
+              "$ref": "#/$defs/Cleared"
+            },
+            "type": {
+              "type": "string",
+              "const": "junkcleared"
+            }
+          },
+          "required": [
+            "type",
+            "cleared"
+          ]
+        },
+        {
+          "description": "The answer to [`ClientMessage::Graph`]: one project's nodes and edges (T329.14).",
+          "type": "object",
+          "properties": {
+            "graph": {
+              "$ref": "#/$defs/DrillGraph"
+            },
+            "type": {
+              "type": "string",
+              "const": "graph"
+            }
+          },
+          "required": [
+            "type",
+            "graph"
+          ]
+        },
+        {
+          "description": "The answer to [`ClientMessage::Diff`] (T329.35); `project` echoes the request's, which is\nhow the page matches a reply to its question.",
+          "type": "object",
+          "properties": {
+            "diff": {
+              "$ref": "#/$defs/DiffReport"
+            },
+            "project": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "diff"
+            }
+          },
+          "required": [
+            "type",
+            "project",
+            "diff"
+          ]
+        },
+        {
+          "description": "The answer to [`ClientMessage::Export`] (T329.40): the file the CLI would write.",
+          "type": "object",
+          "properties": {
+            "file": {
+              "$ref": "#/$defs/ExportFile"
+            },
+            "type": {
+              "type": "string",
+              "const": "export"
+            }
+          },
+          "required": [
+            "type",
+            "file"
+          ]
+        },
+        {
+          "description": "The answer to [`ClientMessage::Import`]: the saved export, parsed and checked against the\nschema; the page shows it read-only.",
+          "type": "object",
+          "properties": {
+            "export": {
+              "$ref": "#/$defs/Export"
+            },
+            "name": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "imported"
+            }
+          },
+          "required": [
+            "type",
+            "name",
+            "export"
+          ]
+        },
+        {
+          "description": "The live calls panel's whole state (T329.15, T484): running calls, the feed and the totals\nof every window. Sent after [`ClientMessage::Calls`] subscribed, first at once and then\nwhen something in it changed, at most four times a second.",
+          "type": "object",
+          "properties": {
+            "calls": {
+              "$ref": "#/$defs/CallsView"
+            },
+            "type": {
+              "type": "string",
+              "const": "calls"
+            }
+          },
+          "required": [
+            "type",
+            "calls"
+          ]
+        }
       ]
     },
     "Report": {
@@ -2854,6 +3177,143 @@
         "skipped"
       ]
     },
+    "Request": {
+      "description": "A request with the id its answer comes back under (T623). The server reads `req` off any\nmessage, so [`ClientMessage`] itself stays the bare shape; this is the wire form a client with\nmore than one request in flight sends.",
+      "type": "object",
+      "properties": {
+        "req": {
+          "description": "Chosen by the client, never reused on one page: a reply for a request that timed out\nstill carries its own id, so it cannot be taken for the answer to a later one.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "anyOf": [
+        {
+          "description": "Ask for the archived payload behind an archive id.",
+          "type": "object",
+          "properties": {
+            "expand": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "expand"
+          ]
+        },
+        {
+          "description": "Flip an allowlisted boolean key (`plugins.<id>.enabled`).",
+          "type": "object",
+          "properties": {
+            "set": {
+              "$ref": "#/$defs/SetRequest"
+            }
+          },
+          "required": [
+            "set"
+          ]
+        },
+        {
+          "description": "Change the project registry (T329.12, T329.20): select a project, or link two of them.",
+          "type": "object",
+          "properties": {
+            "project": {
+              "$ref": "#/$defs/ProjectRequest"
+            }
+          },
+          "required": [
+            "project"
+          ]
+        },
+        {
+          "description": "The `doctor --fix` checklist: plan it, or write it once the user confirmed.",
+          "type": "object",
+          "properties": {
+            "doctor": {
+              "$ref": "#/$defs/DoctorRequest"
+            }
+          },
+          "required": [
+            "doctor"
+          ]
+        },
+        {
+          "description": "\"Clear safe junk\" on the Hosts page: plan it, or remove once the user confirmed.",
+          "type": "object",
+          "properties": {
+            "junk": {
+              "$ref": "#/$defs/JunkRequest"
+            }
+          },
+          "required": [
+            "junk"
+          ]
+        },
+        {
+          "description": "The inside of one project for the graph page's level 2 (T329.14); read-only.",
+          "type": "object",
+          "properties": {
+            "graph": {
+              "$ref": "#/$defs/DrillRequest"
+            }
+          },
+          "required": [
+            "graph"
+          ]
+        },
+        {
+          "description": "What a change did to one project's graph, for Compare mode (T329.35); read-only.",
+          "type": "object",
+          "properties": {
+            "diff": {
+              "$ref": "#/$defs/DiffRequest"
+            }
+          },
+          "required": [
+            "diff"
+          ]
+        },
+        {
+          "description": "Download the graph as JSON, SVG or PNG (T329.40); read-only.",
+          "type": "object",
+          "properties": {
+            "export": {
+              "$ref": "#/$defs/ExportRequest"
+            }
+          },
+          "required": [
+            "export"
+          ]
+        },
+        {
+          "description": "Open a saved JSON export, sent as text, for the page's read-only view (T329.40).",
+          "type": "object",
+          "properties": {
+            "import": {
+              "$ref": "#/$defs/ImportRequest"
+            }
+          },
+          "required": [
+            "import"
+          ]
+        },
+        {
+          "description": "Start or stop the graph call events (T329.15); the page subscribes while the live\ngraph is visible, so a hidden one costs nothing.",
+          "type": "object",
+          "properties": {
+            "calls": {
+              "$ref": "#/$defs/CallsRequest"
+            }
+          },
+          "required": [
+            "calls"
+          ]
+        }
+      ]
+    },
     "Running": {
       "type": "object",
       "properties": {
@@ -3033,6 +3493,27 @@
             "type",
             "id",
             "text"
+          ]
+        },
+        {
+          "description": "What removing a project would drop (T329.54): the dry run `graph projects remove\n--dry-run` prints. Nothing was removed; the page asks the user before it sends the\nconfirmed request.",
+          "type": "object",
+          "properties": {
+            "plan": {
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "projectplan"
+            }
+          },
+          "required": [
+            "type",
+            "project",
+            "plan"
           ]
         },
         {
@@ -3690,6 +4171,10 @@
             "null"
           ]
         },
+        "tasks": {
+          "description": "Tasks page (T441.13.7): the project's `rtok task list --all` as a board, through\n[`tasks::page`]. Read-only; the slow adapters are read off the tick.",
+          "$ref": "#/$defs/TasksPage"
+        },
         "type": {
           "type": "string"
         },
@@ -3723,7 +4208,8 @@
         "config",
         "services",
         "worktrees",
-        "agent_usage"
+        "agent_usage",
+        "tasks"
       ]
     },
     "Spark": {
@@ -3799,6 +4285,197 @@
         "est_before",
         "est_after",
         "rows"
+      ]
+    },
+    "TaskBoard": {
+      "type": "object",
+      "properties": {
+        "adapter": {
+          "description": "`disk`, `github` or `gitlab`.",
+          "type": "string"
+        },
+        "hidden": {
+          "description": "Finished tasks left off `tasks`.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "tasks": {
+          "description": "Every active task, and the newest [`FINISHED_SHOWN`] of each finished status, by id.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TaskCard"
+          }
+        }
+      },
+      "required": [
+        "adapter",
+        "tasks",
+        "hidden"
+      ]
+    },
+    "TaskCard": {
+      "description": "One task as the board draws it: the fields of `rtok task list --json` except the description,\nwhich can be pages long and has no place on a card (`rtok task show` has it).",
+      "type": "object",
+      "properties": {
+        "assignee": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "blocked_by": {
+          "description": "The tasks this one waits for (`task_dep`), shown as \"needs\".",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "conflicts_with": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "external": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TaskLink"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "parallel": {
+          "type": "boolean"
+        },
+        "parent": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "priority": {
+          "description": "`0` is highest. Unlike the CLI's JSON, the default is carried too: a card always has one.",
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "status": {
+          "$ref": "#/$defs/TaskColumn"
+        },
+        "title": {
+          "type": "string"
+        },
+        "updated_at": {
+          "description": "Unix seconds.",
+          "type": "integer",
+          "format": "int64"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "status",
+        "parent",
+        "priority",
+        "assignee",
+        "blocked_by",
+        "conflicts_with",
+        "parallel",
+        "external",
+        "updated_at"
+      ]
+    },
+    "TaskColumn": {
+      "description": "The board's columns, the four statuses of [`Status`] under their `rtok task` names.",
+      "type": "string",
+      "enum": [
+        "open",
+        "in-progress",
+        "done",
+        "closed"
+      ]
+    },
+    "TaskLink": {
+      "description": "The issue a task lives in on GitHub or GitLab.",
+      "type": "object",
+      "properties": {
+        "adapter": {
+          "type": "string"
+        },
+        "number": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "url": {
+          "description": "Always `http(s)`: an issue host's reply is untrusted, and the page turns this into a link.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "adapter",
+        "number",
+        "url"
+      ]
+    },
+    "TasksPage": {
+      "description": "The Tasks page. `text` is the `rtok task list` screen for the tui and the SPA's status line;\n`board` is the same rows as data for the SPA. Both come from one list.",
+      "type": "object",
+      "properties": {
+        "board": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TaskBoard"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "state": {
+          "$ref": "#/$defs/TasksState"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "state",
+        "text",
+        "board"
+      ]
+    },
+    "TasksState": {
+      "description": "Where the Tasks page stands. `Unconfigured` is an ordinary case (the project never ran\n`rtok task init`), not a failure, so the page shows how to start instead of an error.",
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "ready"
+          ]
+        },
+        {
+          "description": "The first read has not landed yet.",
+          "type": "string",
+          "const": "reading"
+        },
+        {
+          "description": "No `[tasks]` key in any config layer.",
+          "type": "string",
+          "const": "unconfigured"
+        },
+        {
+          "description": "The adapter would not open or list; [`TasksPage::text`] says why.",
+          "type": "string",
+          "const": "failed"
+        }
       ]
     },
     "ToolSearch": {

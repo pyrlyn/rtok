@@ -174,11 +174,6 @@ fn leaf_value(root: &Dict, dotted: &str) -> Option<Value> {
     None
 }
 
-/// Walk up from `start` looking for a `.git` entry (no subprocess). `None` outside a repo.
-pub fn git_root(start: &Path) -> Option<PathBuf> {
-    find_up(start, ".git", Path::exists)
-}
-
 /// The nearest directory at or above `start` whose `name` entry satisfies `is_match`.
 fn find_up(start: &Path, name: &str, is_match: fn(&Path) -> bool) -> Option<PathBuf> {
     let mut dir = start.to_path_buf();
@@ -449,8 +444,12 @@ fn assemble(
     let mut fig = Figment::from(Named(Serialized::defaults(Config::default()), "default"))
         .merge(Named(Toml::file(&user_path), "user"));
 
-    if let Some(root) = cwd.and_then(git_root) {
-        fig = fig.merge(Named(Toml::file(root.join(".rtok.toml")), "project"));
+    // `checkout`, not `main`: a worktree is a different branch, so it reads its own checked-out file.
+    if let Some(root) = cwd.and_then(crate::root::ProjectRoot::find) {
+        fig = fig.merge(Named(
+            Toml::file(root.checkout.join(".rtok.toml")),
+            "project",
+        ));
     }
 
     let legacy_base = fig.clone();
@@ -993,6 +992,45 @@ mod tests {
         assert_eq!(key.2, "project");
         let _ = std::fs::remove_dir_all(&home);
         let _ = std::fs::remove_dir_all(&repo);
+    }
+
+    /// T660.2: a linked worktree reads the `.rtok.toml` checked out in it, not the main checkout's.
+    #[test]
+    fn linked_worktree_reads_its_own_project_file() {
+        let home = tmp("wt-home");
+        let base = tmp("wt-repo");
+        let (main, wt) = (base.join("main"), base.join("wt"));
+        let admin = main.join(".git/worktrees/wt");
+        std::fs::create_dir_all(&admin).unwrap();
+        std::fs::create_dir_all(wt.join("src")).unwrap();
+        std::fs::write(admin.join("commondir"), "../..\n").unwrap();
+        std::fs::write(wt.join(".git"), format!("gitdir: {}\n", admin.display())).unwrap();
+        std::fs::write(
+            main.join(".rtok.toml"),
+            "[plugins.read]\nallow_paths = [\"/main\"]\n",
+        )
+        .unwrap();
+        std::fs::write(
+            wt.join(".rtok.toml"),
+            "[plugins.read]\nallow_paths = [\"/wt\"]\n",
+        )
+        .unwrap();
+        let figment = assemble(
+            &home,
+            Some(&Config::path_for(&home)),
+            None,
+            RtokEnv::from_pairs(&[]),
+            Some(&wt.join("src")),
+            RtokEnv::from_dotenv_pairs(&[]),
+        );
+        let rows = entries(&figment);
+        let key = rows
+            .iter()
+            .find(|(k, ..)| k == "plugins.read.allow_paths")
+            .unwrap();
+        assert_eq!(key.1, "[/wt]");
+        let _ = std::fs::remove_dir_all(&home);
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[rstest]

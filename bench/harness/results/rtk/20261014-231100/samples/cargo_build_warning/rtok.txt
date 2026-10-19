@@ -1,0 +1,5 @@
+warning: unused variable: `unused`
+   --> crates/rtok-log/src/lib.rs:321:23
+warning: `rtok-log` (lib) generated 1 warning (run `cargo fix --lib -p rtok-log` to apply 1 suggestion)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.00s
+[rtok ec03d61337403036ceeb406eaa89ac5a3e52bce47ba9522a88d2d69ab7353ce1 · 11 lines · expand: rtok expand ec03d61337403036ceeb406eaa89ac5a3e52bce47ba9522a88d2d69ab7353ce1]

@@ -1,12 +1,38 @@
 {
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|apply_patch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command -v rtok >/dev/null 2>&1 && exec rtok hook PreToolUse --host codex; [ -x \"$HOME/.ketch/bin/rtok\" ] && exec \"$HOME/.ketch/bin/rtok\" hook PreToolUse --host codex; exit 0",
+            "commandWindows": "rtok hook PreToolUse --host codex",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command -v rtok >/dev/null 2>&1 && exec rtok hook PostToolUse --host codex; [ -x \"$HOME/.ketch/bin/rtok\" ] && exec \"$HOME/.ketch/bin/rtok\" hook PostToolUse --host codex; exit 0",
+            "commandWindows": "rtok hook PostToolUse --host codex",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
     "PreCompact": [
       {
         "hooks": [
           {
             "type": "command",
-            "command": "command -v rtok >/dev/null 2>&1 && exec rtok hook PreCompact; [ -x \"$HOME/.ketch/bin/rtok\" ] && exec \"$HOME/.ketch/bin/rtok\" hook PreCompact; exit 0",
-            "commandWindows": "rtok hook PreCompact",
+            "command": "command -v rtok >/dev/null 2>&1 && exec rtok hook PreCompact --host codex; [ -x \"$HOME/.ketch/bin/rtok\" ] && exec \"$HOME/.ketch/bin/rtok\" hook PreCompact --host codex; exit 0",
+            "commandWindows": "rtok hook PreCompact --host codex",
             "timeout": 5
           }
         ]
@@ -17,8 +43,20 @@
         "hooks": [
           {
             "type": "command",
-            "command": "command -v rtok >/dev/null 2>&1 && exec rtok hook PostCompact; [ -x \"$HOME/.ketch/bin/rtok\" ] && exec \"$HOME/.ketch/bin/rtok\" hook PostCompact; exit 0",
-            "commandWindows": "rtok hook PostCompact",
+            "command": "command -v rtok >/dev/null 2>&1 && exec rtok hook PostCompact --host codex; [ -x \"$HOME/.ketch/bin/rtok\" ] && exec \"$HOME/.ketch/bin/rtok\" hook PostCompact --host codex; exit 0",
+            "commandWindows": "rtok hook PostCompact --host codex",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command -v rtok >/dev/null 2>&1 && exec rtok hook SubagentStart --host codex; [ -x \"$HOME/.ketch/bin/rtok\" ] && exec \"$HOME/.ketch/bin/rtok\" hook SubagentStart --host codex; exit 0",
+            "commandWindows": "rtok hook SubagentStart --host codex",
             "timeout": 5
           }
         ]

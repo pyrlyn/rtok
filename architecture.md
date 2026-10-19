@@ -181,6 +181,21 @@ an applied migration is forbidden; add the next directory.
 
 Raw payloads live on disk under `archive_dir/<id>`; the DB holds size, sha256 and path.
 
+### Project root
+
+`rtok_config::root::ProjectRoot::find(cwd)` is the one way to find the project a directory
+belongs to: a lexical walk (no git subprocess, so the hook budget holds) over `.git` files and
+`commondir`. It returns two roots, which differ only inside a linked worktree:
+
+| Root | Is | Wanted by |
+|------|----|-----------|
+| `checkout` | the directory holding the nearest `.git` entry; a worktree's own directory | per-checkout files each worktree owns: `.rtok.toml` |
+| `main` | the main checkout, the parent of the common `.git` (`git_dir`) | per-project identity (name, key, notes, tasks) and where worktrees are placed |
+
+A submodule is its own project, so there `main == checkout`. `rtok_config::root::contain(root,
+path)` is the one guard for a path rtok builds from untrusted input: it normalizes, follows
+symlinks through the deepest existing ancestor, and refuses a result outside `root`.
+
 ## 8. Measurement is the product
 
 The metric is **context-token-turns**: a tool result of T tokens produced at turn t of an
@@ -259,9 +274,9 @@ client ──POST /v1/…──► axum fallback
 | Sync chat (`/v1/messages`, `/v1/chat/completions`, `/v1/responses`, Gemini generate) | yes | record + optional compress/prepare + usage |
 | Batch (`/v1/batches`, `/v1/messages/batches`, …) | no (exact path match) | fallback pass-through; call row without usage parsing; observe/result parsing **planned** |
 | Flex | same sync wires | `[proxy.lanes.<lane>] flex` sets `service_tier` in `prepare` (`src/proxy/flex.rs`); the tier the response names is stored on `calls.service_tier` and priced at the `<model>@flex` row (T385.12.2) |
-| Model routing (D9) | sync wires | **planned** rewrite under `[proxy.routing]` |
+| Model routing (D9) | `internal` and opted-in `bulk` calls on the JSON-body wires; never the `agent` lane | `[proxy.routing.<lane>]` swaps `model` before the call is recorded (`src/proxy/route.rs`, T385.10), so `calls`/`usage` name the serving model; the quality gate (I-101) is the operator's bench, named in `gate` |
 
 No transparent sync→Batch conversion: agents need the reply on the same HTTP request.
 Config keys `[proxy.batch]`, `[proxy.flex]`, `[proxy.routing]` are documented in
-`docs/config.md` but not loaded until the `Config` fields ship.
+`docs/config.md`.
 

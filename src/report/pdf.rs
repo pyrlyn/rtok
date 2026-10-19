@@ -27,8 +27,17 @@ const LEFT: f32 = 15.0;
 const LEAD: f32 = 4.6;
 const BODY: f32 = 9.5;
 const WIDTH: usize = 100;
-/// Body lines per page; headings and charts reserve whole lines (never split).
-const LINES: usize = ((TOP - BOTTOM) / LEAD) as usize;
+/// Vertical space of one content page, in the same millimetres the pages are drawn in:
+/// paging by line counts let charts (a wider row step) run past the bottom margin.
+const AVAIL: f32 = TOP - BOTTOM;
+/// Heading: the gap above plus the gap below its baseline (see `content_page`).
+const HEADING_H: f32 = 9.0;
+/// Chart title advance, bar row step and trailing gap (see `content_page`, `bars`).
+const CHART_TITLE_H: f32 = 6.0;
+const BAR_STEP: f32 = 5.2;
+const CHART_TAIL: f32 = 2.0;
+/// The tallest chart that fits an empty page; longer ones continue on the next.
+const MAX_BARS: usize = ((AVAIL - CHART_TITLE_H - CHART_TAIL) / BAR_STEP) as usize;
 
 /// One P22 section: the fixed title plus its content blocks. Titles are the
 /// same strings as the HTML `<h2>`s, in the same order — the parity test pins
@@ -55,7 +64,7 @@ pub fn render(doc: &Document) -> Vec<u8> {
     let mut doc_pdf = PdfDocument::new("rtok report");
     doc_pdf.add_bookmark("rtok report", 0);
     for (sec, start) in secs.iter().zip(&starts) {
-        doc_pdf.add_bookmark(sec.title, start + 2);
+        doc_pdf.add_bookmark(sec.title, physical_page(*start));
     }
     let toc = toc_page(doc, &secs, &starts);
     let mut out = vec![toc];
@@ -70,6 +79,12 @@ pub fn render(doc: &Document) -> Vec<u8> {
         },
         &mut warnings,
     )
+}
+
+/// The 1-based page number of a section's first content page: the contents page comes first.
+/// Both the printed contents and printpdf's 1-based bookmarks use it.
+fn physical_page(content_index: usize) -> usize {
+    content_index + 2
 }
 
 /// Paginate first so the contents page knows every section's page number: each section's
@@ -90,7 +105,7 @@ fn paginate(secs: &[Sec]) -> (Vec<usize>, Vec<Vec<PageItem>>) {
                 // on every fresh page and this loop added pages forever. Past one page it
                 // continues as a second chart under the same title.
                 Block::Chart { title, pairs } => {
-                    let mut parts: Vec<_> = pairs.chunks(LINES - 2).map(<[_]>::to_vec).collect();
+                    let mut parts: Vec<_> = pairs.chunks(MAX_BARS).map(<[_]>::to_vec).collect();
                     if parts.is_empty() {
                         parts.push(Vec::new()); // an empty chart still shows its title
                     }
@@ -104,10 +119,10 @@ fn paginate(secs: &[Sec]) -> (Vec<usize>, Vec<Vec<PageItem>>) {
         let mut iter: std::collections::VecDeque<PageItem> = items.into_iter().collect();
         let mut recorded = false;
         while !iter.is_empty() {
-            // Cost, not item count: a 58-line chart counted as one line, and the next chart
+            // Cost, not item count: a tall chart counted as one line, and the next chart
             // was drawn past the bottom margin of the same page.
-            let used: usize = pages.last().expect("page").iter().map(PageItem::cost).sum();
-            let rest = LINES.saturating_sub(used);
+            let used: f32 = pages.last().expect("page").iter().map(PageItem::cost).sum();
+            let rest = (AVAIL - used).max(0.0);
             let take = chunk(&mut iter, rest);
             if take.is_empty() {
                 pages.push(Vec::new());
@@ -123,20 +138,20 @@ fn paginate(secs: &[Sec]) -> (Vec<usize>, Vec<Vec<PageItem>>) {
     (starts, pages)
 }
 
-/// Take up to `rest` line-costs of blocks; a chart is atomic (never split). Every item fits
-/// an empty page (`rest == LINES`), so an empty result always means "next page" and the
+/// Take up to `rest` millimetres of blocks; a chart is atomic (never split). Every item fits
+/// an empty page (`rest == AVAIL`), so an empty result always means "next page" and the
 /// next call makes progress. The queue belongs to the caller, so the orphan-heading rule
 /// can put a heading back (T167): it used to be consumed from a `Peekable` and then dropped
 /// with the returned `take`, and the section silently lost its heading.
-fn chunk(iter: &mut std::collections::VecDeque<PageItem>, rest: usize) -> Vec<PageItem> {
+fn chunk(iter: &mut std::collections::VecDeque<PageItem>, rest: f32) -> Vec<PageItem> {
     let mut take = Vec::new();
-    let mut cost = 0;
+    let mut cost = 0.0;
     while let Some(c) = iter.front().map(PageItem::cost) {
         if cost + c > rest {
             // An orphan heading moves with the block it introduces, unless the page is
             // empty: a heading plus a full-page chart fit no page, and moving them on
             // forever was the other endless loop.
-            if take.len() == 1 && matches!(take[0], PageItem::Heading(_)) && rest < LINES {
+            if take.len() == 1 && matches!(take[0], PageItem::Heading(_)) && rest < AVAIL {
                 iter.push_front(take.pop().expect("one heading"));
             }
             break;
@@ -158,11 +173,13 @@ enum PageItem {
 }
 
 impl PageItem {
-    fn cost(&self) -> usize {
+    fn cost(&self) -> f32 {
         match self {
-            PageItem::Heading(_) => 3,
-            PageItem::Line(_) => 1,
-            PageItem::Chart { pairs, .. } => pairs.len() + 2,
+            PageItem::Heading(_) => HEADING_H,
+            PageItem::Line(_) => LEAD,
+            PageItem::Chart { pairs, .. } => {
+                CHART_TITLE_H + pairs.len() as f32 * BAR_STEP + CHART_TAIL
+            }
         }
     }
 }
@@ -206,7 +223,7 @@ fn toc_page(doc: &Document, secs: &[Sec], starts: &[usize]) -> PdfPage {
             y,
             BuiltinFont::Helvetica,
             BODY,
-            &format!("{}  {}", sec.title, start + 1),
+            &format!("{}  {}", sec.title, physical_page(*start)),
         );
         y -= LEAD;
     }
@@ -222,7 +239,7 @@ fn content_page(items: Vec<PageItem>) -> PdfPage {
             PageItem::Heading(t) => {
                 y -= 2.0;
                 show(&mut ops, LEFT, y, BuiltinFont::HelveticaBold, 13.0, t);
-                y -= 7.0;
+                y -= HEADING_H - 2.0;
             }
             PageItem::Line(l) => {
                 show(&mut ops, LEFT, y, BuiltinFont::Helvetica, BODY, &l);
@@ -230,7 +247,7 @@ fn content_page(items: Vec<PageItem>) -> PdfPage {
             }
             PageItem::Chart { title, pairs } => {
                 show(&mut ops, LEFT, y, BuiltinFont::HelveticaBold, 10.0, &title);
-                y -= 6.0;
+                y -= CHART_TITLE_H;
                 y = bars(&mut ops, y, &pairs);
             }
         }
@@ -271,9 +288,9 @@ fn bars(ops: &mut Vec<Op>, mut y: f32, pairs: &[(String, i64)]) -> f32 {
             8.0,
             &v.to_string(),
         );
-        y -= 5.2;
+        y -= BAR_STEP;
     }
-    y -= 2.0;
+    y -= CHART_TAIL;
     y
 }
 
@@ -575,7 +592,7 @@ mod tests {
     /// Pagination used to loop forever on a chart taller than a page, and on a heading
     /// followed by a chart that fills a page by itself.
     #[rstest]
-    #[case(LINES - 2)]
+    #[case(MAX_BARS)]
     #[case(150)]
     fn a_chart_of_any_height_paginates(#[case] n: usize) {
         let pairs: Vec<(String, i64)> = (0..n).map(|i| (format!("p{i}"), i as i64)).collect();
@@ -600,8 +617,46 @@ mod tests {
         assert!(
             pages
                 .iter()
-                .all(|p| p.iter().map(PageItem::cost).sum::<usize>() <= LINES)
+                .all(|p| p.iter().map(PageItem::cost).sum::<f32>() <= AVAIL)
         );
+    }
+
+    /// T632: a chart was budgeted at `LEAD` per row but drawn at a larger step, so a
+    /// near-full-page chart ran below the bottom margin. Every emitted baseline must stay
+    /// inside the content area, with and without text before the chart.
+    #[rstest]
+    #[case(56, 0)]
+    #[case(56, 12)]
+    #[case(150, 5)]
+    #[case(30, 40)]
+    fn chart_rows_stay_above_the_bottom_margin(#[case] bars: usize, #[case] paras: usize) {
+        let pairs: Vec<(String, i64)> =
+            (0..bars).map(|i| (format!("p{i}"), 1 + i as i64)).collect();
+        let mut blocks: Vec<Block> = (0..paras)
+            .map(|i| Block::Para(format!("line {i}")))
+            .collect();
+        blocks.push(Block::Chart {
+            title: "t".into(),
+            pairs,
+        });
+        let (_, pages) = paginate(&[Sec {
+            title: "Savings",
+            blocks,
+        }]);
+        for page in pages {
+            let page = content_page(page);
+            for op in &page.ops {
+                let y = match op {
+                    Op::SetTextCursor { pos } => pos.y.0,
+                    Op::DrawRectangle { rectangle } => rectangle.y.0,
+                    _ => continue,
+                };
+                assert!(
+                    y >= mm(BOTTOM) - 0.01,
+                    "y {y} pt is below the bottom margin"
+                );
+            }
+        }
     }
 
     #[rstest]
@@ -750,7 +805,7 @@ mod tests {
     fn an_orphan_heading_moves_with_its_block_instead_of_vanishing() {
         let items = vec![PageItem::Heading("Orphan"), PageItem::Line("body".into())];
         let mut iter: std::collections::VecDeque<PageItem> = items.into_iter().collect();
-        let take = chunk(&mut iter, 3);
+        let take = chunk(&mut iter, HEADING_H);
         assert!(take.is_empty(), "the heading moves with its block");
         assert_eq!(iter.len(), 2, "nothing is consumed on the way out");
     }
@@ -850,7 +905,7 @@ mod tests {
         }
     }
 
-    /// T36.13: contents page numbers and outline destinations land on the page
+    /// T36.13, T633: contents page numbers and outline destinations land on the page
     /// that actually carries the section heading, including after a page break.
     #[rstest]
     fn section_page_numbers_match_heading_pages() {
@@ -870,8 +925,14 @@ mod tests {
             let toc = toc_page_num(&pdf, title);
             let body = body_heading_page(&pdf, title);
             let bookmark = bookmark_page(&pdf, title);
-            assert_eq!(toc, body, "{title}: toc {toc} != body {body}");
-            assert_eq!(bookmark, toc, "{title}: outline {bookmark} != toc {toc}");
+            // Printed numbers are 1-based; `body` and `bookmark` are 0-based page positions.
+            assert_eq!(
+                toc,
+                body + 1,
+                "{title}: toc {toc} != physical page {}",
+                body + 1
+            );
+            assert_eq!(bookmark, body, "{title}: outline {bookmark} != body {body}");
         }
     }
 }

@@ -14,6 +14,9 @@ pub use agents::{
     AgentState, AgentView, SessionView, agent_sessions, agent_show, session_views, set_status,
 };
 
+mod tasks;
+pub use tasks::{TaskBoard, TaskCard, TaskColumn, TaskLink, TasksPage, TasksState};
+
 use anyhow::Result;
 use jiff::civil::Date;
 use jiff::tz::TimeZone;
@@ -111,6 +114,9 @@ pub struct Snapshot {
     /// overview's own `usage` key is the proxy's totals, so this one carries the page's name
     /// in its own words.
     pub agent_usage: UsagePage,
+    /// Tasks page (T441.13.7): the project's `rtok task list --all` as a board, through
+    /// [`tasks::page`]. Read-only; the slow adapters are read off the tick.
+    pub tasks: TasksPage,
 }
 
 /// The Usage page: one [`usage::Report`] — the call `rtok agents usage` makes — read once and
@@ -410,6 +416,7 @@ pub fn pages() -> &'static [(&'static str, &'static str)] {
         ("services", "services"),
         ("worktrees", "worktrees"),
         ("usage", "agent_usage"),
+        ("tasks", "tasks"),
     ]
 }
 
@@ -509,6 +516,27 @@ pub fn plugin_stats(cfg: &Config, plugin: &str) -> Result<Value> {
     Ok(out)
 }
 
+/// The `rtok discover` page (T688): shell commands with no rule or formatter, ranked by the
+/// output the agent read. The store is required, like `plugin_stats`: an unreadable store is
+/// an error, not an empty ranking. At most 50 000 of the newest `PostToolUse` rows
+/// are read, so a long history costs a bounded scan.
+#[cfg(feature = "cmd")]
+pub fn discover(
+    cfg: &Config,
+    since: std::time::Duration,
+    limit: usize,
+) -> Result<crate::measure::discover::Discovery> {
+    const DISCOVER_SCAN_ROWS: i64 = 50_000;
+    let store = Store::open(&cfg.core.db_path)?;
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs());
+    let floor = i64::try_from(now.saturating_sub(since.as_secs())).unwrap_or(0);
+    let bodies = store.hook_inputs_since("PostToolUse", floor, DISCOVER_SCAN_ROWS)?;
+    let settings = crate::plugins::cmd::rules::Settings::from_config(cfg);
+    Ok(crate::measure::discover::rank(&bodies, &settings, limit))
+}
+
 /// The `rtok stats --cache` page: per-session prompt-cache health from the proxy's
 /// `usage` rows.
 pub fn cache_health(cfg: &Config) -> Result<Vec<cache::SessionHealth>> {
@@ -605,7 +633,7 @@ pub fn otel_status(cfg: &Config) -> Result<OtelStatus> {
         calls_pending,
         logs_mark: store.otel_mark("logs")?,
         logs_pending,
-        sessions_mark: store.otel_mark("sessions")?,
+        sessions_mark: store.otel_mark("sessions_seq")?,
         last,
     })
 }
@@ -1009,7 +1037,7 @@ fn junk_page(cfg: &Config) -> Option<(String, JunkCard)> {
 /// snapshot reading that home, never the real one. Read-only: unlike `config show`, a
 /// snapshot tick never runs `ensure_user_file` — a page view must not create files.
 fn config_page_text(cfg: &Config) -> Option<String> {
-    let fig = layers::figment(&cfg.home, None, None);
+    let fig = layers::figment(&cfg.home, cfg.loaded_from.0.as_deref(), None);
     let mut out = String::new();
     for (key, value, source) in layers::entries(&fig) {
         out.push_str(&format!("{key} = {value} ({source})\n"));
@@ -1209,6 +1237,8 @@ impl<'a> Model<'a> {
             worktrees: worktrees_page_text(),
             // T358.5: logs are read off the tick — see `usage_page`.
             agent_usage: usage_page(self.cfg),
+            // T441.13.7: read off the tick — see `tasks::page`.
+            tasks: tasks::page(self.cfg),
         }
     }
 

@@ -110,6 +110,15 @@ fn hosts(home: &Path) -> Vec<(&'static str, Vec<&'static str>, Option<PathBuf>)>
         // Desktop links the plugin on `--yes` (no `default_install`); nothing file-backed.
         ("antigravity", vec!["--yes"], None),
         ("devin", vec!["--yes"], Some(home.join("devin/config.json"))),
+        ("droid", vec![], Some(home.join(".factory/mcp.json"))),
+        ("kiro", vec![], Some(home.join(".kiro/settings/mcp.json"))),
+        ("junie", vec![], Some(home.join(".junie/mcp/mcp.json"))),
+        ("amp", vec![], Some(home.join(".config/amp/settings.json"))),
+        ("warp", vec![], Some(home.join(".warp/.mcp.json"))),
+        ("crush", vec![], Some(home.join(".config/crush/crush.json"))),
+        ("openhands", vec![], Some(home.join(".openhands/mcp.json"))),
+        ("augment", vec![], Some(home.join(".augment/settings.json"))),
+        ("reasonix", vec![], Some(home.join(".reasonix/config.toml"))),
     ]
 }
 
@@ -271,6 +280,25 @@ fn list_reports_installed_modules_per_host() {
     }
 }
 
+/// T416.3: the default dry run ends with the totals line; `--stat` swaps the step lines for the
+/// stat row and the same totals.
+#[test]
+fn dry_run_ends_with_totals_and_stat_replaces_the_steps() {
+    let home = tmp("dry-stat");
+    let cfg = write_cfg(&home);
+    let mut args = setup_args("codex", &[]);
+    args.push("--dry-run");
+    let plain = rtok(&args, &cfg, &home);
+    assert!(plain.contains("+ [mcp_servers.rtok]"), "{plain}");
+    assert!(plain.contains(" changed, "), "no totals line:\n{plain}");
+    args.push("--stat");
+    let stat = rtok(&args, &cfg, &home);
+    assert!(!stat.contains("+ [mcp_servers.rtok]"), "{stat}");
+    assert!(stat.contains(" | "), "no stat row:\n{stat}");
+    assert!(stat.contains(" changed, "), "no totals line:\n{stat}");
+    assert!(!home.join(".codex/config.toml").exists());
+}
+
 #[test]
 fn dry_run_setup_creates_nothing_and_copies_nothing() {
     let home = tmp("dry");
@@ -339,6 +367,24 @@ fn cli_and_desktop_flags_pick_the_block() {
     assert!(only.contains("Desktop: OpenCode Desktop"), "{only}");
     assert!(!only.contains("CLI: OpenCode"), "{only}");
     assert!(!home.join(".config/opencode/opencode.json").exists());
+}
+
+/// T521: MiMo Desktop reads the CLI's `~/.config/mimocode/`, so its block writes those files and
+/// a plain install lists it as the CLI's sibling instead of editing twice.
+#[test]
+fn mimo_desktop_installs_the_cli_files() {
+    let home = tmp("mimo-desktop");
+    let cfg = write_cfg(&home);
+    let out = rtok(&["agents", "install", "mimo", "--desktop"], &cfg, &home);
+    assert!(out.contains("Desktop: MiMo Desktop"), "{out}");
+    assert!(!out.contains("CLI: MiMo Code"), "{out}");
+    let file = fs::read_to_string(home.join(".config/mimocode/mimocode.json")).unwrap();
+    assert!(file.contains("\"rtok\""), "{file}");
+    let both = rtok(&["agents", "install", "mimo"], &cfg, &home);
+    assert!(
+        both.contains("Desktop: MiMo Desktop — same files as above"),
+        "{both}"
+    );
 }
 
 #[test]

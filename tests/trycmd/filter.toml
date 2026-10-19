@@ -3,12 +3,23 @@ args = "filter --cmd \"git status\""
 stdin = """
 On branch main
 Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
 	modified:   src/lib.rs
+	modified:   src/main.rs
+	modified:   src/plugins/cmd/run.rs
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	notes.txt
+
+no changes added to commit (use "git add" and/or "git commit -a")
 """
 stdout = """
 On branch main
-modified:   src/lib.rs
-[rtok c6a9698fdee17f8f72bd106dc8a69ce4d5661e6913fadb2c41c24371cf8d1506 · 3 lines · expand: rtok expand c6a9698fdee17f8f72bd106dc8a69ce4d5661e6913fadb2c41c24371cf8d1506]
+ M src/{lib.rs,main.rs} src/plugins/cmd/run.rs
+?? notes.txt
+[rtok 59cc4b71 · 13 lines]
 """
 
 # Hermetic by construction: isolated HOME/RTOK_HOME, inherit = false.

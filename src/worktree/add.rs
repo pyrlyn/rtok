@@ -6,9 +6,10 @@
 //! owner. [`plan`] decides everything from paths and strings; [`run`] is one fetch and
 //! one `git worktree add`.
 
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use anyhow::{Context, Result, bail, ensure};
+use rtok_config::root::{ProjectRoot, contain, resolved};
 
 use super::{Owner, git};
 
@@ -38,17 +39,21 @@ fn ident(what: &str, raw: &str) -> Result<String> {
     Ok(id)
 }
 
-/// Symlinks resolved through the deepest ancestor that exists, the rest appended: a root
-/// that does not exist yet still has to be judged by where it would land.
-fn resolved(path: &Path) -> PathBuf {
-    // `dunce`: std canonicalize's `\\?\` prefix makes `starts_with` miss the temp dir.
-    let real = |a: &Path| {
-        let canon = dunce::canonicalize(a).ok()?;
-        let rel = path.strip_prefix(a).ok()?;
-        Some(canon.join(rel))
-    };
-    let landed = path.ancestors().find_map(real);
-    landed.unwrap_or_else(|| crate::fs::canon(path))
+/// The directory `root` names for the repository whose main checkout is `main`. A relative
+/// root is under `main`, never the process cwd: a worktree added from inside another one still
+/// lands beside its siblings. `~` was expanded when the config loaded.
+pub fn landing(main: &Path, root: &Path) -> PathBuf {
+    if in_project(root) {
+        main.join(root)
+    } else {
+        root.to_path_buf()
+    }
+}
+
+/// Whether `root` names a place inside the project. Not `is_relative`: on Windows `\x` has no
+/// drive, so it is "relative", yet it names the drive root, not a directory of the project.
+fn in_project(root: &Path) -> bool {
+    !root.has_root() && !matches!(root.components().next(), Some(Component::Prefix(_)))
 }
 
 /// `temp` lists the directories the OS may purge; a worktree under one of them loses
@@ -81,9 +86,10 @@ pub fn plan(
     );
     ensure!(
         !root.as_os_str().is_empty(),
-        "`[worktree] root` is empty; set it or drop the key for ~/.rtok/worktrees"
+        "`[worktree] root` is empty; set it or drop the key for .rtok/worktrees"
     );
-    let (landing, checkout) = (resolved(root), resolved(main));
+    let base = landing(main, root);
+    let (landing, checkout) = (resolved(&base), resolved(main));
     // A repository that itself lives under the temp directory (a test fixture, a scratch
     // clone) is no worse off with its worktrees beside it.
     let purgeable = |t: &PathBuf| {
@@ -99,7 +105,18 @@ pub fn plan(
     let repo = main
         .file_name()
         .context("the main checkout has no directory name")?;
-    let path = root.join(format!("{}-{task}", repo.to_string_lossy()));
+    let name = format!("{}-{task}", repo.to_string_lossy());
+    let path = base.join(&name);
+    if in_project(root) {
+        // A relative root is a promise to stay in the project; `../x` would break it.
+        contain(main, &root.join(&name)).with_context(|| {
+            format!(
+                "worktree path {} is outside the main checkout {}; use an absolute `[worktree] root`",
+                path.display(),
+                main.display()
+            )
+        })?;
+    }
     ensure!(
         !path.exists(),
         "{} already exists: one worktree per task",
@@ -111,6 +128,43 @@ pub fn plan(
         task,
         reason,
     })
+}
+
+/// The rule [`ensure_ignored`] adds.
+const IGNORE_RULE: &str = ".rtok/";
+
+/// Makes git ignore `<main>/.rtok/`, so worktrees inside it never show as untracked files of
+/// main. A rule already in effect is left alone; else `.gitignore` gets it when the project
+/// has one (the rest kept byte-for-byte), else the clone-local `info/exclude`.
+pub fn ensure_ignored(main: &Path) -> Result<()> {
+    if git::is_ignored(main, IGNORE_RULE) {
+        return Ok(());
+    }
+    let gitignore = main.join(".gitignore");
+    let file = if gitignore.is_file() {
+        gitignore
+    } else {
+        let git_dir = ProjectRoot::find(main).map_or_else(|| main.join(".git"), |r| r.git_dir);
+        let info = git_dir.join("info");
+        std::fs::create_dir_all(&info)
+            .with_context(|| format!("cannot create {}", info.display()))?;
+        info.join("exclude")
+    };
+    append_rule(&file)
+}
+
+fn append_rule(file: &Path) -> Result<()> {
+    let mut bytes = match std::fs::read(file) {
+        Ok(bytes) => bytes,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+        Err(e) => return Err(e).with_context(|| format!("cannot read {}", file.display())),
+    };
+    if bytes.last().is_some_and(|b| *b != b'\n') {
+        bytes.push(b'\n');
+    }
+    bytes.extend_from_slice(IGNORE_RULE.as_bytes());
+    bytes.push(b'\n');
+    std::fs::write(file, bytes).with_context(|| format!("cannot write {}", file.display()))
 }
 
 /// `YYYY-MM-DD`, UTC: the lock reason's date.
@@ -133,6 +187,9 @@ pub fn run(
     let plan = plan(main, root, &temp, id, owner, &today()?)?;
     let base = git::default_base(main);
     git::fetch(main, &base)?;
+    if crate::fs::path_starts_with(&resolved(&plan.path), &resolved(main)) {
+        ensure_ignored(main)?;
+    }
     if let Some(root) = plan.path.parent() {
         std::fs::create_dir_all(root)
             .with_context(|| format!("cannot create {}", root.display()))?;
@@ -187,10 +244,49 @@ mod tests {
         assert!(empty.to_string().contains("is empty"), "{empty}");
     }
 
+    /// T660.4: the default root is inside the project; relative roots start at the main
+    /// checkout, absolute ones stay; a relative root may not climb out of the project.
     #[test]
-    fn the_default_root_is_under_the_rtok_home() {
+    fn a_relative_root_is_under_the_main_checkout_and_may_not_leave_it() {
         let root = crate::config::Config::default().worktree.root;
-        assert_eq!(root, Path::new("~/.rtok/worktrees"));
+        assert_eq!(root, Path::new(".rtok/worktrees"));
+        let dir = tmp_dir("wt-add-relative");
+        let main = dir.join("apps/rtok");
+        std::fs::create_dir_all(&main).unwrap();
+        let at = |root: &str| plan_in(&main, Path::new(root), ("t1", None), OWNER);
+        assert_eq!(
+            at(".rtok/worktrees").unwrap().path,
+            main.join(".rtok/worktrees/rtok-t1")
+        );
+        assert_eq!(at("wt").unwrap().path, main.join("wt/rtok-t1"));
+        let abs = dir.join("elsewhere");
+        let abs_plan = plan_in(&main, &abs, ("t1", None), OWNER).unwrap();
+        assert_eq!(abs_plan.path, abs.join("rtok-t1"));
+        for escaping in ["../x", "a/../../x"] {
+            let err = at(escaping).unwrap_err();
+            assert!(
+                format!("{err:#}").contains("outside the main checkout"),
+                "{err:#}"
+            );
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A root with no drive (`\x`, `/x` on Windows) names the drive root, not the project.
+    #[test]
+    fn a_rooted_root_is_never_inside_the_project() {
+        assert!(in_project(Path::new(".rtok/worktrees")) && in_project(Path::new("../x")));
+        assert!(!in_project(Path::new("/r/_w")));
+        assert_eq!(
+            landing(Path::new("/r/rtok"), Path::new("/r/_w")),
+            Path::new("/r/_w")
+        );
+        #[cfg(windows)]
+        {
+            assert!(!in_project(Path::new(r"\r\_w")));
+            assert!(!in_project(Path::new(r"C:\r\_w")));
+            assert!(!in_project(Path::new("C:x")));
+        }
     }
 
     #[test]

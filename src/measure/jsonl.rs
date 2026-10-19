@@ -10,7 +10,6 @@
 
 use serde_json::Value;
 use std::collections::HashSet;
-use std::ffi::OsStr;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 
@@ -118,33 +117,22 @@ pub fn parse_path(path: &Path) -> std::io::Result<Parsed> {
 }
 
 /// Walk `dir` recursively for `*.jsonl`. Used to assert 0 parse failures on real logs.
+/// Shares the transcript walk, so an alias cannot make a file count twice.
 pub fn parse_dir(dir: &Path) -> std::io::Result<Parsed> {
     let mut acc = Parsed::default();
-    let mut stack = vec![dir.to_path_buf()];
-    while let Some(d) = stack.pop() {
-        let rd = match std::fs::read_dir(&d) {
-            Ok(rd) => rd,
-            Err(_) => continue,
-        };
-        for e in rd.flatten() {
-            let p = e.path();
-            if p.is_dir() {
-                stack.push(p);
-            } else if p.extension().and_then(OsStr::to_str) == Some("jsonl") {
-                let one = parse_path(&p)?;
-                acc.lines += one.lines;
-                acc.malformed += one.malformed;
-                acc.duplicates += one.duplicates;
-                acc.turns += one.turns;
-                acc.tool_uses.extend(one.tool_uses);
-                acc.tool_results.extend(one.tool_results);
-                acc.injected.extend(one.injected);
-                acc.assistant_texts.extend(one.assistant_texts);
-                acc.usages.extend(one.usages);
-                acc.thinking.extend(one.thinking);
-                acc.images.extend(one.images);
-            }
-        }
+    for p in super::codex::jsonl_paths(dir, std::time::SystemTime::UNIX_EPOCH) {
+        let one = parse_path(&p)?;
+        acc.lines += one.lines;
+        acc.malformed += one.malformed;
+        acc.duplicates += one.duplicates;
+        acc.turns += one.turns;
+        acc.tool_uses.extend(one.tool_uses);
+        acc.tool_results.extend(one.tool_results);
+        acc.injected.extend(one.injected);
+        acc.assistant_texts.extend(one.assistant_texts);
+        acc.usages.extend(one.usages);
+        acc.thinking.extend(one.thinking);
+        acc.images.extend(one.images);
     }
     Ok(acc)
 }

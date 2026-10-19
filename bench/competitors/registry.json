@@ -1,0 +1,412 @@
+{
+  "rtk": {
+    "category": "command-output-filters",
+    "measurable": true,
+    "title": "rtk",
+    "repo": "https://github.com/rtk-ai/rtk",
+    "ahead": "filter coverage (~100+ filters vs rtok's 28 rule families)",
+    "plan": "T661",
+    "harness": "bench/harness (python3 bench/harness/run.py rtk)"
+  },
+  "sqz": {
+    "category": "command-output-filters",
+    "measurable": false,
+    "title": "sqz",
+    "repo": "https://github.com/ojuschugh1/sqz",
+    "ahead": "richer formatter set (45+) and stack-trace safe mode",
+    "plan": "T662",
+    "skip_reason": "no installable CLI: `cargo install sqz` fails (crate sqz v0.1.0 has no binaries)"
+  },
+  "lean-ctx": {
+    "category": "read-search-shell",
+    "measurable": false,
+    "title": "lean-ctx",
+    "repo": "https://github.com/yvgude/lean-ctx",
+    "ahead": "more read modes and a learned mode predictor",
+    "plan": "T670",
+    "skip_reason": "harness not implemented: image has no real install of the tool and the light bench only tokenizes its --help/stub output, so numbers would be meaningless"
+  },
+  "token-optimizer": {
+    "category": "read-search-shell",
+    "measurable": false,
+    "title": "token-optimizer",
+    "repo": null,
+    "ahead": null,
+    "plan": null,
+    "skip_reason": "harness not implemented: image has no real install of the tool and the light bench only tokenizes its --help/stub output, so numbers would be meaningless"
+  },
+  "token-optimizer-mcp": {
+    "category": "read-search-shell",
+    "measurable": false,
+    "skip_reason": "Needs a live MCP client plus LLM turns; no shared offline corpus.",
+    "title": "token-optimizer-mcp",
+    "repo": "https://github.com/ooples/token-optimizer-mcp",
+    "ahead": null,
+    "plan": null
+  },
+  "headroom": {
+    "category": "compressing-proxies",
+    "measurable": false,
+    "skip_reason": "Hosted/proxy product; fair token bills need paid API keys.",
+    "title": "headroom",
+    "repo": "https://github.com/headroomlabs-ai/headroom",
+    "ahead": null,
+    "plan": null
+  },
+  "caveman": {
+    "category": "compressing-proxies",
+    "measurable": false,
+    "title": "caveman",
+    "repo": "https://github.com/JuliusBrussee/caveman",
+    "ahead": null,
+    "plan": null,
+    "skip_reason": "harness not implemented: image has no real install of the tool and the light bench only tokenizes its --help/stub output, so numbers would be meaningless"
+  },
+  "bifrost": {
+    "category": "gateways",
+    "measurable": false,
+    "skip_reason": "Gateway/semantic-cache product; not a local token-reduction tool on a fixed corpus.",
+    "not_competitor": "bifrost is not a competitor of rtok because it is an LLM gateway with semantic cache, not a local agent token-reduction stack.",
+    "title": "bifrost",
+    "repo": null,
+    "ahead": null,
+    "plan": null
+  },
+  "mcpproxy-go": {
+    "category": "compressing-proxies",
+    "measurable": false,
+    "title": "mcpproxy-go",
+    "repo": "https://github.com/smart-mcp-proxy/mcpproxy-go",
+    "ahead": null,
+    "plan": null,
+    "skip_reason": "harness not implemented: image has no real install of the tool and the light bench only tokenizes its --help/stub output, so numbers would be meaningless"
+  },
+  "serena": {
+    "category": "code-graphs",
+    "measurable": false,
+    "title": "serena",
+    "repo": "https://github.com/oraios/serena",
+    "ahead": "LSP-grade symbol/reference precision",
+    "plan": "T663",
+    "skip_reason": "harness not implemented: image has no real install of the tool and the light bench only tokenizes its --help/stub output, so numbers would be meaningless"
+  },
+  "codegraph": {
+    "category": "code-graphs",
+    "measurable": false,
+    "title": "codegraph",
+    "repo": null,
+    "ahead": null,
+    "plan": null,
+    "skip_reason": "harness not implemented: image has no real install of the tool and the light bench only tokenizes its --help/stub output, so numbers would be meaningless"
+  },
+  "code-review-graph": {
+    "category": "code-graphs",
+    "measurable": false,
+    "title": "code-review-graph",
+    "repo": null,
+    "ahead": "richer review/blast-radius features (~30 MCP tools)",
+    "plan": "T664",
+    "skip_reason": "harness not implemented: image has no real install of the tool and the light bench only tokenizes its --help/stub output, so numbers would be meaningless"
+  },
+  "codebase-memory-mcp": {
+    "category": "code-graphs",
+    "measurable": false,
+    "title": "codebase-memory-mcp",
+    "repo": "https://github.com/DeusData/codebase-memory-mcp",
+    "ahead": "broader Cypher-style graph queries",
+    "plan": "T665",
+    "skip_reason": "harness not implemented: image has no real install of the tool and the light bench only tokenizes its --help/stub output, so numbers would be meaningless"
+  },
+  "graphify": {
+    "category": "code-graphs",
+    "measurable": false,
+    "skip_reason": "Uses LLM calls to build maps; not fairly measurable offline.",
+    "not_competitor": "graphify is not a competitor of rtok because it builds LLM-assisted code maps, not a measured agent token-reduction loop.",
+    "title": "graphify",
+    "repo": null,
+    "ahead": null,
+    "plan": null
+  },
+  "aider-repo-map": {
+    "category": "code-graphs",
+    "measurable": false,
+    "title": "aider-repo-map",
+    "repo": null,
+    "ahead": null,
+    "plan": null,
+    "skip_reason": "harness not implemented: image has no real install of the tool and the light bench only tokenizes its --help/stub output, so numbers would be meaningless"
+  },
+  "universal-ctags": {
+    "category": "code-graphs",
+    "measurable": false,
+    "title": "universal-ctags",
+    "repo": null,
+    "ahead": null,
+    "plan": null,
+    "skip_reason": "harness not implemented: image has no real install of the tool and the light bench only tokenizes its --help/stub output, so numbers would be meaningless"
+  },
+  "claude-mem": {
+    "category": "memory",
+    "measurable": false,
+    "skip_reason": "LLM extraction + vector store; needs paid API keys.",
+    "ahead": "automatic LLM-extracted memory",
+    "plan": "T666",
+    "title": "claude-mem",
+    "repo": "https://github.com/thedotmack/claude-mem"
+  },
+  "engram": {
+    "category": "memory",
+    "measurable": false,
+    "title": "engram",
+    "repo": "https://github.com/Gentleman-Programming/engram",
+    "ahead": "richer agent-written memory features (HTTP + MCP)",
+    "plan": "T667",
+    "skip_reason": "harness not implemented: image has no real install of the tool and the light bench only tokenizes its --help/stub output, so numbers would be meaningless"
+  },
+  "mem0": {
+    "category": "memory",
+    "measurable": false,
+    "skip_reason": "Vector/LLM memory stack; typically needs Docker + Qdrant + API keys.",
+    "ahead": "semantic/vector memory",
+    "plan": "T668",
+    "title": "mem0",
+    "repo": "https://github.com/mem0ai/mem0"
+  },
+  "graymatter": {
+    "category": "memory",
+    "measurable": false,
+    "title": "graymatter",
+    "repo": "https://github.com/angelnicolasc/graymatter",
+    "ahead": "hybrid ranking and forgetting",
+    "plan": "T669",
+    "skip_reason": "harness not implemented: image has no real install of the tool and the light bench only tokenizes its --help/stub output, so numbers would be meaningless"
+  },
+  "openviking": {
+    "category": "memory",
+    "measurable": false,
+    "skip_reason": "Multi-level context DB with session compression; no shared offline metric.",
+    "not_competitor": "openviking is not a competitor of rtok because it is a multi-level context database, not a local agent hook/MCP/proxy token-reduction stack.",
+    "title": "openviking",
+    "repo": null,
+    "ahead": null,
+    "plan": null
+  },
+  "mempalace": {
+    "category": "memory",
+    "measurable": false,
+    "skip_reason": "Embedding-based admission; needs model/API.",
+    "ahead": "memory admission gate with embedding dedup",
+    "plan": "T671",
+    "title": "MemPalace",
+    "repo": "https://github.com/MemPalace/mempalace"
+  },
+  "openhuman": {
+    "category": "memory",
+    "measurable": false,
+    "skip_reason": "Memory admission ideas; no shared offline metric.",
+    "not_competitor": "openhuman / tinymemory is not a competitor of rtok because the docs treat it as an idea source for memory admission, not a head-to-head token tool.",
+    "title": "openhuman",
+    "repo": "https://github.com/tinyhumansai/openhuman",
+    "ahead": null,
+    "plan": null
+  },
+  "ponytail": {
+    "category": "prompt-level",
+    "measurable": false,
+    "skip_reason": "Prompt-only; live bill needs a model.",
+    "title": "ponytail",
+    "repo": null,
+    "ahead": null,
+    "plan": null
+  },
+  "toon": {
+    "category": "formats",
+    "measurable": false,
+    "title": "TOON",
+    "repo": "https://github.com/toon-format/toon",
+    "ahead": null,
+    "plan": null,
+    "not_competitor": "TOON is not a competitor of rtok because rtok already applies the TOON format where it wins; it is a dependency/format, not an alternative stack.",
+    "skip_reason": "harness not implemented: image has no real install of the tool and the light bench only tokenizes its --help/stub output, so numbers would be meaningless"
+  },
+  "llmlingua-2": {
+    "category": "formats",
+    "measurable": false,
+    "skip_reason": "Small-model compression; needs model weights/API; risky on code.",
+    "not_competitor": "LLMLingua-2 is not a competitor of rtok because rtok declines lossy model compression for code until a measured gain exists.",
+    "title": "LLMLingua-2",
+    "repo": null,
+    "ahead": null,
+    "plan": null
+  },
+  "portkey": {
+    "category": "gateways",
+    "measurable": false,
+    "skip_reason": "Hosted LLM gateway.",
+    "not_competitor": "Portkey is not a competitor of rtok because it is an LLM gateway (keys, routing, fallbacks), not a local token-reduction agent stack.",
+    "title": "Portkey",
+    "repo": null,
+    "ahead": null,
+    "plan": null
+  },
+  "litellm": {
+    "category": "gateways",
+    "measurable": false,
+    "skip_reason": "LLM gateway/router.",
+    "not_competitor": "LiteLLM is not a competitor of rtok because it is an LLM gateway with model aliases/routing, not a local token-reduction agent stack.",
+    "title": "LiteLLM",
+    "repo": null,
+    "ahead": null,
+    "plan": null
+  },
+  "anthropic-native": {
+    "category": "platform",
+    "measurable": false,
+    "skip_reason": "Platform features of the host; not a third-party tool to bench locally.",
+    "not_competitor": "Anthropic native features are not a competitor of rtok because they are host platform capabilities (prompt cache, context editing, memory tool) that rtok is designed to work with.",
+    "title": "Anthropic native",
+    "repo": null,
+    "ahead": null,
+    "plan": null
+  },
+  "beads": {
+    "category": "tasks-session-sync",
+    "measurable": false,
+    "skip_reason": "Coordination/session tool; no shared token-reduction metric under this suite's rules.",
+    "not_competitor": "beads is not a competitor of rtok because it is a task/session coordination tool, not a token-reduction hook/MCP/proxy stack; rtok's docs treat it as an idea source (`research.md` §28).",
+    "title": "beads",
+    "repo": "https://github.com/gastownhall/beads",
+    "ahead": null,
+    "plan": null
+  },
+  "gas-town": {
+    "category": "tasks-session-sync",
+    "measurable": false,
+    "skip_reason": "Coordination/session tool; no shared token-reduction metric under this suite's rules.",
+    "not_competitor": "Gas Town is not a competitor of rtok because it is a task/session coordination tool, not a token-reduction hook/MCP/proxy stack; rtok's docs treat it as an idea source (`research.md` §28).",
+    "title": "Gas Town",
+    "repo": "https://github.com/gastownhall/gastown",
+    "ahead": null,
+    "plan": null
+  },
+  "backlog-md": {
+    "category": "tasks-session-sync",
+    "measurable": false,
+    "skip_reason": "Coordination/session tool; no shared token-reduction metric under this suite's rules.",
+    "not_competitor": "Backlog.md is not a competitor of rtok because it is a task/session coordination tool, not a token-reduction hook/MCP/proxy stack; rtok's docs treat it as an idea source (`research.md` §28).",
+    "title": "Backlog.md",
+    "repo": "https://github.com/MrLesk/Backlog.md",
+    "ahead": null,
+    "plan": null
+  },
+  "task-master": {
+    "category": "tasks-session-sync",
+    "measurable": false,
+    "skip_reason": "Coordination/session tool; no shared token-reduction metric under this suite's rules.",
+    "not_competitor": "Task Master is not a competitor of rtok because it is a task/session coordination tool, not a token-reduction hook/MCP/proxy stack; rtok's docs treat it as an idea source (`research.md` §28).",
+    "title": "Task Master",
+    "repo": "https://github.com/eyaltoledano/claude-task-master",
+    "ahead": null,
+    "plan": null
+  },
+  "mcp-agent-mail": {
+    "category": "tasks-session-sync",
+    "measurable": false,
+    "skip_reason": "Coordination/session tool; no shared token-reduction metric under this suite's rules.",
+    "not_competitor": "MCP Agent Mail is not a competitor of rtok because it is a task/session coordination tool, not a token-reduction hook/MCP/proxy stack; rtok's docs treat it as an idea source (`research.md` §28).",
+    "title": "MCP Agent Mail",
+    "repo": "https://github.com/Dicklesworthstone/mcp_agent_mail",
+    "ahead": null,
+    "plan": null
+  },
+  "spec-kit": {
+    "category": "tasks-session-sync",
+    "measurable": false,
+    "skip_reason": "Coordination/session tool; no shared token-reduction metric under this suite's rules.",
+    "not_competitor": "Spec Kit is not a competitor of rtok because it is a task/session coordination tool, not a token-reduction hook/MCP/proxy stack; rtok's docs treat it as an idea source (`research.md` §28).",
+    "title": "Spec Kit",
+    "repo": "https://github.com/github/spec-kit",
+    "ahead": null,
+    "plan": null
+  },
+  "ccpm": {
+    "category": "tasks-session-sync",
+    "measurable": false,
+    "skip_reason": "Coordination/session tool; no shared token-reduction metric under this suite's rules.",
+    "not_competitor": "CCPM is not a competitor of rtok because it is a task/session coordination tool, not a token-reduction hook/MCP/proxy stack; rtok's docs treat it as an idea source (`research.md` §28).",
+    "title": "CCPM",
+    "repo": "https://github.com/automazeio/ccpm",
+    "ahead": null,
+    "plan": null
+  },
+  "git-bug": {
+    "category": "tasks-session-sync",
+    "measurable": false,
+    "skip_reason": "Coordination/session tool; no shared token-reduction metric under this suite's rules.",
+    "not_competitor": "git-bug is not a competitor of rtok because it is a task/session coordination tool, not a token-reduction hook/MCP/proxy stack; rtok's docs treat it as an idea source (`research.md` §28).",
+    "title": "git-bug",
+    "repo": "https://github.com/git-bug/git-bug",
+    "ahead": null,
+    "plan": null
+  },
+  "vibe-kanban": {
+    "category": "tasks-session-sync",
+    "measurable": false,
+    "skip_reason": "Coordination/session tool; no shared token-reduction metric under this suite's rules.",
+    "not_competitor": "Vibe Kanban is not a competitor of rtok because it is a task/session coordination tool, not a token-reduction hook/MCP/proxy stack; rtok's docs treat it as an idea source (`research.md` §28).",
+    "title": "Vibe Kanban",
+    "repo": "https://github.com/BloopAI/vibe-kanban",
+    "ahead": null,
+    "plan": null
+  },
+  "casr": {
+    "category": "tasks-session-sync",
+    "measurable": false,
+    "skip_reason": "Coordination/session tool; no shared token-reduction metric under this suite's rules.",
+    "not_competitor": "casr is not a competitor of rtok because it is a task/session coordination tool, not a token-reduction hook/MCP/proxy stack; rtok's docs treat it as an idea source (`research.md` §28).",
+    "title": "casr",
+    "repo": "https://github.com/Dicklesworthstone/cross_agent_session_resumer",
+    "ahead": null,
+    "plan": null
+  },
+  "continues": {
+    "category": "tasks-session-sync",
+    "measurable": false,
+    "skip_reason": "Coordination/session tool; no shared token-reduction metric under this suite's rules.",
+    "not_competitor": "continues is not a competitor of rtok because it is a task/session coordination tool, not a token-reduction hook/MCP/proxy stack; rtok's docs treat it as an idea source (`research.md` §28).",
+    "title": "continues",
+    "repo": "https://github.com/yigitkonur/cli-continues",
+    "ahead": null,
+    "plan": null
+  },
+  "session-porter": {
+    "category": "tasks-session-sync",
+    "measurable": false,
+    "skip_reason": "Coordination/session tool; no shared token-reduction metric under this suite's rules.",
+    "not_competitor": "session-porter is not a competitor of rtok because it is a task/session coordination tool, not a token-reduction hook/MCP/proxy stack; rtok's docs treat it as an idea source (`research.md` §28).",
+    "title": "session-porter",
+    "repo": "https://github.com/liwala/session-porter",
+    "ahead": null,
+    "plan": null
+  },
+  "cass": {
+    "category": "tasks-session-sync",
+    "measurable": false,
+    "skip_reason": "Coordination/session tool; no shared token-reduction metric under this suite's rules.",
+    "not_competitor": "cass is not a competitor of rtok because it is a task/session coordination tool, not a token-reduction hook/MCP/proxy stack; rtok's docs treat it as an idea source (`research.md` §28).",
+    "title": "cass",
+    "repo": "https://github.com/Dicklesworthstone/coding_agent_session_search",
+    "ahead": null,
+    "plan": null
+  },
+  "specstory": {
+    "category": "tasks-session-sync",
+    "measurable": false,
+    "skip_reason": "Coordination/session tool; no shared token-reduction metric under this suite's rules.",
+    "not_competitor": "SpecStory is not a competitor of rtok because it is a task/session coordination tool, not a token-reduction hook/MCP/proxy stack; rtok's docs treat it as an idea source (`research.md` §28).",
+    "title": "SpecStory",
+    "repo": "https://github.com/specstoryai/getspecstory",
+    "ahead": null,
+    "plan": null
+  }
+}

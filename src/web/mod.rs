@@ -16,17 +16,18 @@ pub mod calls_view;
 pub mod live;
 pub mod protocol;
 pub mod spa;
+pub mod token;
 
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use axum::Json;
 use axum::Router;
 use axum::extract::State;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
-use axum::http::{HeaderMap, StatusCode};
+use axum::http::{HeaderMap, StatusCode, Uri};
 use axum::response::IntoResponse;
 use axum::routing::get;
 use serde::Deserialize;
@@ -56,6 +57,9 @@ pub struct DashState {
     build_fn: BuildFn,
     /// The graph call events every subscribed socket shares (T329.15).
     live: Arc<live::LiveCalls>,
+    /// S2: the token `/ws` requires. `None` only for in-process tests that skip auth; `serve`
+    /// always sets one.
+    token: Option<Arc<str>>,
 }
 
 impl DashState {
@@ -72,7 +76,15 @@ impl DashState {
             build: Mutex::new(BuildSlot::Idle),
             build_fn,
             live,
+            token: None,
         }
+    }
+
+    /// Require `token` on `/ws` (S2).
+    #[must_use]
+    pub fn with_token(mut self, token: &str) -> Self {
+        self.token = Some(Arc::from(token));
+        self
     }
 
     /// One inbound `/ws` text frame (T60.5 / T60.4). `None` means ignore, or an
@@ -154,6 +166,29 @@ impl DashState {
     }
 }
 
+/// Opt-in for a dashboard bound beyond loopback: `RTOK_WEB_ALLOW_REMOTE=1`.
+pub const ALLOW_REMOTE_ENV: &str = "RTOK_WEB_ALLOW_REMOTE";
+
+/// The dashboard socket can change config, apply `doctor --fix` and clear junk. `/ws` needs the
+/// local token file (S2), but a non-loopback `web.host` would still expose the page and the
+/// socket to every host on the network, so it needs the explicit opt-in. `localhost` and loopback IPs always pass.
+fn remote_bind_allowed(host: &str, opted_in: bool) -> Result<()> {
+    let loopback = host.eq_ignore_ascii_case("localhost")
+        || host
+            .trim_start_matches('[')
+            .trim_end_matches(']')
+            .parse::<std::net::IpAddr>()
+            .is_ok_and(|ip| ip.is_loopback());
+    if loopback || opted_in {
+        return Ok(());
+    }
+    bail!(
+        "rtok web: refusing to bind {host}: the dashboard has no authentication and would let \
+         anyone on the network change config and delete files. Bind 127.0.0.1, or set \
+         {ALLOW_REMOTE_ENV}=1 if the network is trusted"
+    )
+}
+
 /// `rtok web`: bind `host:port` and serve until killed.
 pub fn serve_blocking(cfg: Config) -> Result<()> {
     let rt = tokio::runtime::Builder::new_multi_thread()
@@ -163,14 +198,29 @@ pub fn serve_blocking(cfg: Config) -> Result<()> {
     rt.block_on(serve(cfg))
 }
 
-pub async fn serve(cfg: Config) -> Result<()> {
+pub async fn serve(mut cfg: Config) -> Result<()> {
+    remote_bind_allowed(
+        &cfg.web.host,
+        std::env::var_os(ALLOW_REMOTE_ENV).is_some_and(|v| v == "1"),
+    )?;
     let addr: SocketAddr = format!("{}:{}", cfg.web.host, cfg.web.port)
         .parse()
         .with_context(|| format!("dashboard bind {}:{}", cfg.web.host, cfg.web.port))?;
     let listener = TcpListener::bind(addr)
         .await
         .with_context(|| format!("bind {addr}"))?;
+    // T641: with port 0 the kernel picks the port, and only the bound address tells a caller
+    // (the e2e helpers) where to connect, so the startup line and `/health` name that one.
+    let addr = listener.local_addr().context("bound address")?;
+    cfg.web.port = addr.port();
+    // S2: a fresh token per start; the old one stops working. Written before the startup line,
+    // so a client that waits for the line finds the file.
+    let token = token::issue(&cfg.home)?;
     eprintln!("rtok web http://{addr}  (ws://{addr}/ws)");
+    eprintln!(
+        "rtok web: /ws needs the token in {}",
+        token::token_path(&cfg.home).display()
+    );
     crate::log::append(
         &cfg,
         "info",
@@ -187,7 +237,7 @@ pub async fn serve(cfg: Config) -> Result<()> {
     let health = health_check(&cfg);
     let served = axum::serve(
         listener,
-        app_with_assets(Arc::new(DashState::new(cfg)), assets),
+        app_with_assets(Arc::new(DashState::new(cfg).with_token(&token)), assets),
     )
     .await
     .context("dashboard server");
@@ -237,9 +287,17 @@ async fn health(State(state): State<Arc<DashState>>) -> Json<Value> {
 
 async fn ws_upgrade(
     headers: HeaderMap,
+    uri: Uri,
     ws: WebSocketUpgrade,
     State(state): State<Arc<DashState>>,
 ) -> impl IntoResponse {
+    if let Some(expected) = &state.token {
+        let ok = token::presented(&headers, uri.query())
+            .is_some_and(|got| token::matches(expected, &got));
+        if !ok {
+            return StatusCode::UNAUTHORIZED.into_response();
+        }
+    }
     if !origin_allowed(&headers) {
         return StatusCode::FORBIDDEN.into_response();
     }
@@ -295,8 +353,10 @@ fn origin_authority(origin: &str) -> Option<&str> {
 }
 
 fn host_authority(host: &str) -> Option<&str> {
-    let host = host.split(',').next_back()?.trim();
-    if host.is_empty() {
+    // A comma means several `Host` values joined; picking one could pass the equality with a
+    // crafted `Origin`, so the request is refused instead.
+    let host = host.trim();
+    if host.is_empty() || host.contains(',') {
         return None;
     }
     host.split('@').next_back()
@@ -417,9 +477,17 @@ fn calls_subscription(text: &str) -> Option<bool> {
     }
 }
 
+/// The answer to one client message, if it has one. A request that carries `req` gets it back on
+/// whatever answers it, a refusal included, so a page with several requests in flight (or one that
+/// gave up on a slow request) never reads a late answer as the reply to a newer one (T623).
 fn inbound(state: &DashState, text: &str) -> Option<String> {
     let v: Value = serde_json::from_str(text).ok()?;
-    let set = match ClientMessage::deserialize(&v) {
+    let req = v.get("req").and_then(Value::as_u64);
+    answer(state, &v).map(|reply| protocol::tag_reply(reply, req))
+}
+
+fn answer(state: &DashState, v: &Value) -> Option<String> {
+    let set = match ClientMessage::deserialize(v) {
         Ok(ClientMessage::Expand { expand: id }) => {
             let cfg = state
                 .cfg
@@ -437,9 +505,7 @@ fn inbound(state: &DashState, text: &str) -> Option<String> {
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner)
                 .clone();
-            return project_write(&cfg, project)
-                .err()
-                .map(|e| message_frame(&format!("{e:#}")));
+            return project_reply(&cfg, project);
         }
         Ok(ClientMessage::Set { set }) => set,
         // Handled by the socket loop, which owns the subscription; a stray one here is a no-op.
@@ -518,6 +584,23 @@ fn inbound(state: &DashState, text: &str) -> Option<String> {
     }
 }
 
+/// The reply to a registry write: nothing on success (the next snapshot shows it), a notice when
+/// it is refused, and the dry run for a `remove` the user has not confirmed yet.
+fn project_reply(cfg: &Config, req: protocol::ProjectRequest) -> Option<String> {
+    let plan_for = match &req {
+        protocol::ProjectRequest::Remove {
+            project,
+            confirmed: false,
+        } => Some(project.clone()),
+        _ => None,
+    };
+    match (project_write(cfg, req), plan_for) {
+        (Ok(plan), Some(project)) => Some(ServerFrame::ProjectPlan { project, plan }.to_json()),
+        (Ok(_), None) => None,
+        (Err(e), _) => Some(message_frame(&format!("{e:#}"))),
+    }
+}
+
 #[cfg(feature = "graph")]
 pub(crate) fn project_write(cfg: &Config, req: protocol::ProjectRequest) -> Result<String> {
     use crate::plugins::graph::projects::{Action, run};
@@ -536,6 +619,14 @@ pub(crate) fn project_write(cfg: &Config, req: protocol::ProjectRequest) -> Resu
             from: Some(from),
             both,
         },
+        // The worker is the surface's own: the socket must keep answering while it indexes.
+        R::Reindex { project } => return crate::plugins::graph::jobs::start(&rt, &project),
+        // The unconfirmed request is the dry run, so the guard is here and not in each surface.
+        R::Remove {
+            project,
+            confirmed: false,
+        } => return crate::plugins::graph::projects::preview(&rt, Action::Remove(project), false),
+        R::Remove { project, .. } => Action::Remove(project),
     };
     run(&rt, action, false)
 }
@@ -628,7 +719,11 @@ fn doctor_reply(state: &DashState, r: &DoctorRequest) -> String {
             plan: crate::doctor::web::plan_here(&cfg, &r.selection),
         },
         DoctorAction::Apply => ServerFrame::DoctorFixed {
-            fixed: crate::doctor::web::apply_here(&cfg, &r.selection),
+            fixed: crate::doctor::web::apply_here(
+                &cfg,
+                &r.selection,
+                r.confirmed.as_deref().unwrap_or_default(),
+            ),
         },
     }
     .to_json()
@@ -713,6 +808,29 @@ mod tests {
                 "{origin} {host}"
             );
         }
+    }
+
+    /// S2: a dashboard bound beyond loopback needs the explicit opt-in.
+    #[test]
+    fn remote_bind_needs_opt_in() {
+        for host in ["127.0.0.1", "localhost", "::1", "[::1]"] {
+            assert!(remote_bind_allowed(host, false).is_ok(), "{host}");
+        }
+        for host in ["0.0.0.0", "::", "192.168.1.5", "example.com"] {
+            assert!(remote_bind_allowed(host, false).is_err(), "{host}");
+            assert!(remote_bind_allowed(host, true).is_ok(), "{host}");
+        }
+    }
+
+    /// S6: several `Host` values joined by a comma are refused, not resolved to one.
+    #[test]
+    fn comma_joined_host_is_refused() {
+        assert_eq!(host_authority("127.0.0.1:4444"), Some("127.0.0.1:4444"));
+        assert_eq!(host_authority("evil.example, 127.0.0.1:4444"), None);
+        assert!(!origin_allowed(&headers(
+            Some("http://127.0.0.1:4444"),
+            "evil.example,127.0.0.1:4444"
+        )));
     }
 
     /// The port is part of the origin: a page served by another local app

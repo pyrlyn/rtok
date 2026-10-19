@@ -6,9 +6,9 @@
 //!
 //! Codex reads MCP servers from `~/.codex/config.toml` as `[mcp_servers.<name>]`
 //! tables with `command` and `args`, and lifecycle hooks from `hooks.json` (or
-//! inline `[hooks]`). Compaction events `PreCompact`/`PostCompact` (T58.2) plus
-//! MCP and proxy wiring (T11.5) are the install. Edits go through `toml_edit` so
-//! the user's comments and other servers survive.
+//! inline `[hooks]`). The `codex` rows of `hook_events` (Bash `PreToolUse`, `PostToolUse`,
+//! `PreCompact`/`PostCompact`; T58.2, T645) plus MCP and proxy wiring (T11.5) are the
+//! install. Edits go through `toml_edit` so the user's comments and other servers survive.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -18,7 +18,8 @@ use rtok_agent_sdk::{Apply, KETCH_INSTALL, NO_CHANGES, edit_json, object_at};
 use serde_json::json;
 use toml_edit::{Array, DocumentMut, Item, Table, value};
 
-use super::{Agent, Kind, Mode, Support, Variant, apply};
+use super::claude::HookForm;
+use super::{Agent, Kind, Mode, Support, Variant, apply, hook_events};
 use crate::config::Config;
 
 const NAME: &str = "rtok";
@@ -33,7 +34,7 @@ const NAME: &str = "rtok";
 const APPROVAL_KEY: &str = "default_tools_approval_mode";
 const APPROVAL: &str = "writes";
 
-const COMPACT: &[(&str, &str)] = &[("PreCompact", ""), ("PostCompact", "")];
+const HOST: &str = "codex";
 
 /// The plugin tree (T121) and its id in the one-plugin marketplace `pyrlyn/rtok` also is.
 const PLUGIN_SRC: &str = "plugins/codex";
@@ -55,22 +56,35 @@ pub fn hooks_path(cfg: &Config) -> std::path::PathBuf {
     cfg.setup.codex.config_path.with_file_name("hooks.json")
 }
 
-/// Register `PreCompact` → `pre_compact` and `PostCompact` → `session_start` source=compact.
+/// `rtok hook <event> --host codex`, so the store attributes the call to Codex and
+/// `hooks::codex_output` shapes the answer (T645).
+fn hook_command(bin: &str, event: &str) -> String {
+    super::claude::command_for(HOST, bin, event)
+}
+
+/// Both spellings count as ours: the compaction hooks were written without `--host` before
+/// T645, and an upgrade must rewrite them in place instead of adding a second copy.
+fn hook_is_ours(cmd: &str, event: &str) -> bool {
+    super::claude::is_ours_for(HOST, cmd, event) || super::claude::is_ours(cmd, event)
+}
+
+const FORM: HookForm = HookForm {
+    command: hook_command,
+    is_ours: hook_is_ours,
+};
+
+/// Register the `codex` rows of [`hook_events`] in `hooks.json`: the Bash rewrite, tool
+/// context and the compaction pair.
 pub fn run_hooks(cfg: &Config, remove: bool) -> Result<String> {
     let (a, path) = (apply(cfg), hooks_path(cfg));
+    let (entries, timeout) = (hook_events::entries(HOST), cfg.setup.hook_timeout_s);
     edit_json(&a, &path, |root| {
         if remove {
             let hooks = root.get_mut("hooks");
-            let timeout = cfg.setup.hook_timeout_s;
-            super::claude::strip_ours(&a, &path, hooks, COMPACT, "timeout", timeout)
+            super::claude::strip_ours_as(&FORM, &a, &path, hooks, &entries, "timeout", timeout)
         } else {
-            super::claude::insert_ours(
-                object_at(root, "hooks"),
-                COMPACT,
-                &super::rtok_hook_bin(),
-                "timeout",
-                cfg.setup.hook_timeout_s,
-            )
+            let (hooks, bin) = (object_at(root, "hooks"), super::rtok_hook_bin());
+            super::claude::insert_ours_as(&FORM, hooks, &entries, &bin, "timeout", timeout)
         }
     })
 }
@@ -284,17 +298,7 @@ static VARIANTS: [Variant; 1] = [Variant {
 }];
 
 impl Agent for Codex {
-    fn id(&self) -> &'static str {
-        "codex"
-    }
-
-    fn variants(&self) -> &'static [Variant] {
-        &VARIANTS
-    }
-
-    fn readme(&self) -> &'static str {
-        include_str!("README.md")
-    }
+    super::agent_identity!("codex");
 
     fn support(&self, _kind: Kind, module: &str) -> Support {
         match module {
@@ -857,6 +861,65 @@ mod tests {
             "model_provider = \"openai\"\n"
         );
         let _ = fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn hooks_json_carries_the_codex_rows_and_upgrades_the_old_spelling() {
+        let (mut c, _) = cfg("rows", false);
+        let hooks = hooks_path(&c);
+        fs::create_dir_all(hooks.parent().unwrap()).unwrap();
+        // What the T58.2 build wrote, beside a hook that is not ours.
+        let old = serde_json::json!({"hooks": {
+            "PreCompact": [{"hooks": [
+                {"type": "command", "command": "rtok hook PreCompact", "timeout": 10},
+                {"type": "command", "command": "notify-send hi", "timeout": 5},
+            ]}],
+            "PostCompact": [{"hooks": [
+                {"type": "command", "command": "rtok hook PostCompact", "timeout": 10}
+            ]}],
+        }});
+        fs::write(&hooks, old.to_string()).unwrap();
+        let report = run_hooks(&c, false).unwrap();
+        assert!(report.contains("+ PreToolUse Bash"), "{report}");
+        assert!(report.contains("+ PostToolUse *"), "{report}");
+        assert!(report.contains("~ PreCompact"), "{report}");
+        let v: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&hooks).unwrap()).unwrap();
+        for (event, matcher) in hook_events::entries(HOST) {
+            let ours: Vec<_> = v["hooks"][event]
+                .as_array()
+                .unwrap()
+                .iter()
+                .flat_map(|e| e["hooks"].as_array().unwrap())
+                .filter(|h| h["command"].as_str().unwrap().contains("rtok"))
+                .collect();
+            assert_eq!(ours.len(), 1, "{event}: {v}");
+            assert!(
+                ours[0]["command"]
+                    .as_str()
+                    .unwrap()
+                    .contains(&format!("hook {event} --host codex")),
+                "{event}: {v}"
+            );
+            let entry = &v["hooks"][event][0];
+            assert_eq!(entry["matcher"].as_str().unwrap_or(""), matcher, "{event}");
+        }
+        assert_eq!(
+            v["hooks"]["PreCompact"][0]["hooks"][1]["command"],
+            "notify-send hi"
+        );
+        assert_eq!(run_hooks(&c, false).unwrap(), NO_CHANGES);
+
+        c.setup.yes = true;
+        run_hooks(&c, true).unwrap();
+        let after: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&hooks).unwrap()).unwrap();
+        assert_eq!(
+            after,
+            serde_json::json!({"hooks": {"PreCompact": [{"hooks": [
+                {"type": "command", "command": "notify-send hi", "timeout": 5}
+            ]}]}})
+        );
     }
 
     #[test]

@@ -21,8 +21,8 @@ lang: uk
 | `rtok agents sessions [--all]` | `agents_list` | кожен агент із хостом, станом (`live`, `idle`, `ended`), активністю, статусом, заявленими worktree і кількістю непрочитаних; `--all` додає завершених |
 | `rtok agents show <id>` | `agent_show` | один агент: хост, модель, id, батько й субагенти, cwd, заявлені worktree, статус, непрочитані |
 | `rtok agents status <text>` | `agent_status_set` | чим зайнятий цей агент (не більше 120 символів); порожній текст очищає його |
-| `rtok agents send <id> <text>` | `agent_send` | повідомлення одному живому агенту (з обмеженням розміру); `--all-live` надсилає кожному живому агенту проєкту відправника |
-| `rtok agents inbox [<id>]` | `agent_inbox` | ваші власні повідомлення, від найстаріших, позначаються прочитаними; з id — черга цього агента, нічого не позначається |
+| `rtok agents send <id> <text>` | `agent_send` | повідомлення одному живому агенту (з обмеженням розміру); `--all-live` надсилає кожному живому агенту проєкту відправника; `--task <id>` (`task` у MCP) позначає повідомлення завданням, про яке воно, наприклад `A12` |
+| `rtok agents inbox [<id>]` | `agent_inbox` | ваші власні повідомлення, від найстаріших, позначаються прочитаними; з id — черга цього агента, нічого не позначається; `--task <id>` (`task` у MCP) читає листування за одним завданням, решта лишається непрочитаною |
 
 `[agents] idle` (типово 30 хвилин) визначає, хто живий. `[agents] enabled = false` зупиняє реєстрацію та надсилання.
 
@@ -43,8 +43,9 @@ lang: uk
 | `rtok worktree list` | `worktree_list` | кожен worktree репозиторію з власником, прив'язаним агентом і його станом, `origin`, розміром; а також осиротілі, яких git більше не показує |
 | `rtok worktree remove <path\|task>` | `worktree_remove` | видаляє ваш власний чистий worktree і його злиту гілку; відмовляє для брудного, незлитої гілки, того, у якому ви стоїте, і чужого блокування, якщо задачу не завершено (злита, чиста, з власними комітами); ніколи не примушує |
 | `rtok worktree gc`, `clean` | — | прибирають завершені worktree, видаляють неактивні кеші збірки; пробні запуски, доки немає `--yes`; worktree живого агента зберігається, а якщо його задачу завершено й він простоює довше за `--idle`, його видаляють за будь-якого блокування; чуже блокування на злитому чистому worktree, якого не торкалися `--stale-lock` (`7d`), вважається покинутим |
+| `rtok worktree migrate` | — | переносить worktree репозиторію, що лежать поза коренем, у `<root>/<repo>-<task>` (worktree без блокування зберігає назву каталогу) через `git worktree move`; блокування та claim переїжджають разом із ним; без `--yes` це пробний прогін; пропускає основний checkout, worktree, у якому ви стоїте, worktree з блокуванням чи claim іншого агента або з іншою живою сесією, worktree з підмодулями та зайнятий цільовий шлях |
 
-Власник — це `<host> / <model>` агента, доки виклик CLI не передасть `--owner`; виклик MCP ніколи цього не робить. Корінь — це `[worktree] root`, типово `~/.rtok/worktrees`. З `[worktree] enabled = false` rtok не чіпає worktree: кожна команда `rtok worktree` (і `list` теж) каже, що вони не ввімкнені, MCP не показує жодного інструмента `worktree_*`, а хуки Claude `WorktreeCreate`/`WorktreeRemove` роблять те, що Claude робить без rtok.
+Власник — це `<host> / <model>` агента, доки виклик CLI не передасть `--owner`; виклик MCP ніколи цього не робить. Корінь — це `[worktree] root`, типово `.rtok/worktrees`: відносний корінь відлічується від основного checkout (і зсередини worktree теж), а перед першим worktree там rtok робить так, щоб git ігнорував `.rtok/`: у `.gitignore`, якщо він є в проєкті, інакше в `.git/info/exclude`. Відносний корінь, що виходить за межі проєкту, відхиляється; `~` і абсолютні корені означають те саме, що й раніше, а worktree, створені деінде, далі працюють. З `[worktree] enabled = false` rtok не чіпає worktree: кожна команда `rtok worktree` (і `list` теж) каже, що вони не ввімкнені, MCP не показує жодного інструмента `worktree_*`, а хуки Claude `WorktreeCreate`/`WorktreeRemove` роблять те, що Claude робить без rtok.
 
 ### Worktree, які хост створює сам
 
@@ -83,12 +84,24 @@ Skill `worktrees` розповідає агентові все це: `worktree_a
 | `gemini` | так | хуки | не знайдено | `worktree_add` |
 | `cline` | так | хуки | немає (checkpoints, не worktree) | `worktree_add` |
 | `roo` | ні | MCP | ще не перевірено | `worktree_add` |
+| `junie` | ні | MCP | ще не перевірено | `worktree_add` |
+| `droid` | ні | MCP | ще не перевірено | `worktree_add` |
+| `kiro` | ні | MCP | ще не перевірено | `worktree_add` |
+| `amp` | ні | MCP | ще не перевірено | `worktree_add` |
+| `warp` | ні | MCP | ще не перевірено | `worktree_add` |
+| `crush` | ні | MCP | ще не перевірено | `worktree_add` |
+| `openhands` | ні | MCP | ще не перевірено | `worktree_add` |
+| `augment` | ні | MCP | ще не перевірено | `worktree_add` |
+| `reasonix` | ні | MCP | ще не перевірено | `worktree_add` |
 | `qwen` | так | хуки | ще не перевірено | `worktree_add` |
+| `codebuddy` | так | хуки | ще не перевірено | `worktree_add` |
+| `goose` | ні | MCP | ще не перевірено | `worktree_add` |
+| `continue` | ні | MCP | ще не перевірено | `worktree_add` |
 | `codewhale` | так | хуки | не задокументовано | `worktree_add` |
 | `aider` | ні | немає | немає | лише CLI |
 | `zed` | ні | MCP | треди можуть вказувати на worktree, який ви створили | `worktree_adopt` |
 
-Кожен хост може створювати worktree через `worktree_add` (MCP) або `rtok worktree add` (CLI); хост без рядка агента передає `--owner` у CLI. Worktree, чий шлях не збігається з жодним із пулів вище, показується з origin `other` і приймається так само.
+Кожен хост може створювати worktree через `worktree_add` (MCP) або `rtok worktree add` (CLI); хост без рядка агента передає `--owner` у CLI. Worktree, чий шлях не збігається з жодним із пулів вище, показується з origin `other` і приймається так само. `worktree add` також записує `env.CLAUDE_CODE_TASK_LIST_ID` = `<project>-<task>` у `.claude/settings.local.json` нового worktree, щоб сесії Claude Code там ділили один список завдань; записується лише цей ключ, решта файлу не змінюється, файл, що не є коректним JSON або вже задає цей id, лишається недоторканим із попередженням, а `.claude/` ігнорується git.
 
 ### Десктопний застосунок Claude
 

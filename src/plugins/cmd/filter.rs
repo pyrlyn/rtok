@@ -28,7 +28,8 @@ pub fn run_with_store(cfg: &Config, cmd: &str, input: &str) -> String {
     };
     // The id is the body's sha256, so the filter can name it before any store write.
     let id = crate::store::hex_sha256(input.as_bytes());
-    let (filtered, kind) = formatters::compress(&settings, &argv, input, 0, &id);
+    let (filtered, kind) =
+        formatters::compress(&settings, &argv, input, 0, crate::names::short_id(&id));
     let lines = if input.is_empty() {
         0
     } else {
@@ -38,16 +39,20 @@ pub fn run_with_store(cfg: &Config, cmd: &str, input: &str) -> String {
     // nothing references the id, so the archive row is skipped too. An inline
     // `expand <id>` marker already is the pointer and suppresses the trailer, but the
     // archive it names must exist.
-    let named = super::run::names_the_id(&filtered, &id);
-    let pointer = super::run::needs_pointer(
-        lines,
-        cfg.plugins.cmd.trailer_min_lines,
-        input.as_bytes(),
-        &filtered,
-        named,
-    );
-    if (pointer || named) && cx.put_archive(input.as_bytes()).is_err() {
-        return compress_only(&settings, cmd, input);
+    let named = super::run::names_the_id(&filtered, crate::names::short_id(&id));
+    let pointer = cfg.plugins.cmd.trailer
+        && super::run::needs_pointer(
+            lines,
+            cfg.plugins.cmd.trailer_min_lines,
+            input.as_bytes(),
+            &filtered,
+            named,
+        );
+    // T661: never worse than raw, the same guard as `rtok run`.
+    if lines <= cfg.plugins.cmd.trailer_min_lines
+        && filtered.trim_end().len() >= input.trim_end().len()
+    {
+        return input.to_string();
     }
     let mut out = filtered;
     if pointer {
@@ -56,6 +61,13 @@ pub fn run_with_store(cfg: &Config, cmd: &str, input: &str) -> String {
         }
         out.push_str(&super::run::trailer(&id, lines));
         out.push('\n');
+    }
+    // Never worse than raw above `trailer_min_lines` either (same as `rtok run`).
+    if out.len() >= input.len() {
+        return input.to_string();
+    }
+    if (pointer || named) && cx.put_archive(input.as_bytes()).is_err() {
+        return compress_only(&settings, cmd, input);
     }
     let family = formatters::family_of(&settings, &argv, input);
     let _ = cx.record(&Measurement {
@@ -90,7 +102,7 @@ Changes not staged for commit:
 ";
         let out = run("git status", raw);
         assert!(out.contains("On branch main"), "{out}");
-        assert!(out.contains("modified:   src/lib.rs"), "{out}");
+        assert!(out.contains(" M src/lib.rs"), "{out}");
         assert!(!out.contains("Changes not staged"), "{out}");
     }
 
@@ -106,8 +118,8 @@ Changes not staged for commit:
         let (cfg, _dir) = crate::testutil::config("filter-read");
         let raw = eighty_lines();
         let out = run_with_store(&cfg, "read src/lib.rs", &raw);
-        assert!(out.contains("expand"), "{out}");
-        assert!(out.contains("rtok expand"), "{out}");
+        assert!(out.contains("[rtok "), "{out}");
+        assert!(out.contains(" lines]"), "{out}");
         assert!(out.len() < raw.len(), "shortened:\n{out}");
         let cx = crate::plugin::Runtime::open(cfg, "filter").unwrap();
         let rows = cx.store.list_measurements("cmd").unwrap();

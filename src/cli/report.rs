@@ -4,9 +4,9 @@
 
 use super::util::emit;
 use crate::config::Config;
-use crate::render::with_loader;
 use anyhow::{Result, bail};
 use clap::ValueEnum;
+use rtok_sys::proc::ProgressRunner;
 use std::path::PathBuf;
 
 /// `--format` for `rtok report` (D14: a `ValueEnum`, like `demon`'s `Service`, so clap
@@ -28,19 +28,20 @@ impl ReportFormat {
     }
 }
 
-/// The `[report]` flag layer (D12): `--format md` is the default, so it sets nothing.
+/// The `[report]` flag layer (D12): only flags the user typed set a key, so an explicit
+/// `--format md` still beats `report.format = "html"` while an omitted one sets nothing.
 fn report_flags(
-    format: ReportFormat,
+    format: Option<ReportFormat>,
     out: Option<PathBuf>,
     since: Option<String>,
     ai: bool,
 ) -> Option<figment::value::Dict> {
-    if format == ReportFormat::Md && out.is_none() && since.is_none() && !ai {
+    if format.is_none() && out.is_none() && since.is_none() && !ai {
         return None;
     }
     use figment::value::{Dict, Value};
     let mut report = Dict::new();
-    if format != ReportFormat::Md {
+    if let Some(format) = format {
         report.insert("format".into(), Value::from(format.as_str()));
     }
     if let Some(o) = out {
@@ -60,8 +61,8 @@ fn report_flags(
 #[derive(clap::Args)]
 pub(super) struct Args {
     /// Output format
-    #[arg(long, value_enum, default_value = "md")]
-    pub(super) format: ReportFormat,
+    #[arg(long, value_enum)]
+    pub(super) format: Option<ReportFormat>,
     /// Write to this path instead of stdout
     #[arg(long, value_name = "PATH")]
     pub(super) out: Option<PathBuf>,
@@ -90,7 +91,7 @@ pub(super) fn run(config_file: &Option<PathBuf>, args: Args) -> Result<()> {
     // D24: the command picks the renderer and the sink; every number was already
     // computed by the model (`src/report/` touches nothing else).
     let home = Config::home_dir();
-    let doc = with_loader("building the report", || {
+    let doc = ProgressRunner::wait("building the report…", || {
         crate::report::document(&cfg, &home, config_file.as_deref())
     })?;
     if cfg.report.ai {

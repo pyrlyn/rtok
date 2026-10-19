@@ -107,11 +107,17 @@ pub fn remove(
     agent: Option<&str>,
     owner: Option<String>,
     keep_branch: bool,
+    dry_run: bool,
 ) -> Result<Removed> {
     let store = opened(cfg);
     let agent = claim::caller(store.as_ref(), agent)?;
     let cwd = std::env::current_dir()?;
-    super::remove::for_agent(
+    let run = if dry_run {
+        super::remove::preview_for_agent
+    } else {
+        super::remove::for_agent
+    };
+    run(
         store.as_ref(),
         &cwd,
         target,
@@ -132,6 +138,39 @@ pub fn list(cfg: &Config, cwd: &Path) -> Result<Vec<Row>> {
     let store = opened(cfg);
     super::list::attribute_with_store(&mut rows, store.as_ref(), &cfg.agents.idle);
     Ok(rows)
+}
+
+/// `rtok worktree migrate` (T660.5), with what the store says holds worktrees. No store: only
+/// the locks hold.
+pub fn migrate(
+    cfg: &Config,
+    cwd: &Path,
+    owner: Option<&str>,
+    yes: bool,
+) -> Result<Vec<super::migrate::Outcome>> {
+    use super::migrate::{Held, Me};
+    let store = opened(cfg);
+    let agent = claim::caller(store.as_ref(), None)?;
+    let live = store
+        .as_ref()
+        .and_then(|s| s.live_agents(&cfg.agents.idle).ok())
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|a| Some((a.id, std::path::PathBuf::from(a.cwd?))))
+        .collect();
+    let held = Held {
+        claims: store
+            .as_ref()
+            .and_then(|s| s.open_worktree_claims().ok())
+            .unwrap_or_default(),
+        pending: pending_paths(cfg),
+        live,
+    };
+    let me = Me {
+        agent: agent.as_ref().map(|a| a.id.as_str()),
+        owner,
+    };
+    super::migrate::run(cwd, &cfg.worktree.root, &me, &held, store.as_ref(), yes)
 }
 
 /// Live agent ids for `worktree gc`. No store means no live agents (T285).

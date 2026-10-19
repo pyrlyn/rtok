@@ -6,7 +6,7 @@ import { describe, expect, test } from "vitest";
 import { project } from "../../../api/sampleRows";
 import { buildScene, type Scene } from "../scene";
 import { done, NOW, running, view } from "./callsFixtures";
-import { accentOf, FOCUS_MS, foldedCounters, liveState, MAX_ACCENTS } from "./lit";
+import { accentOf, FOCUS_MS, foldedCounters, LABEL_MS, liveState, MAX_ACCENTS } from "./lit";
 
 const overview = buildScene([project(1, "rtok"), project(2, "ketch")], {
   query: "",
@@ -168,5 +168,72 @@ describe("calls on folded nodes", () => {
       { label: "main.rs", calls: 1 },
     ]);
     expect(liveState(drilled, ended(...rows), NOW + 300_001, { more: 2 }).group).toBe(0);
+  });
+});
+
+describe("call labels", () => {
+  const labels = (s: ReturnType<typeof view>, now = NOW, o = {}) =>
+    liveState(overview, s, now, o).labels;
+
+  test("a running call is labelled on its node with its accent and no end", () => {
+    const [l] = labels(live(running("a", { at: NOW - 3000 })));
+    expect(l).toMatchObject({
+      call: "a",
+      node: idOf("rtok"),
+      tool: "callers",
+      at: NOW - 3000,
+      endedAt: null,
+      accent: 0,
+    });
+  });
+
+  test("a finished call keeps its label for a few seconds, then loses it", () => {
+    const s = ended(done("a", 10, 4, { ms: 250 }));
+    expect(labels(s, NOW + LABEL_MS)[0]).toMatchObject({ ms: 250, endedAt: NOW, at: NOW - 250 });
+    expect(labels(s, NOW + LABEL_MS + 1)).toEqual([]);
+  });
+
+  test("running labels come before finished ones, in slot order", () => {
+    const s = view({
+      running: [running("a"), running("b", { project: "ketch" })],
+      feed: [done("c", 1, 1)],
+    });
+    expect(labels(s).map((l) => l.call)).toEqual(["a", "b", "c"]);
+  });
+
+  test("calls beyond the accents get no label, they are the busy count", () => {
+    const many = Array.from({ length: MAX_ACCENTS + 2 }, (_, i) => running(`c${i}`));
+    expect(labels(live(...many))).toHaveLength(MAX_ACCENTS);
+  });
+
+  test("a call outside the scope, an interrupted one and one nothing draws get no label", () => {
+    const scope = new Set(["rtok"]);
+    expect(labels(live(running("a", { project: "ketch" })), NOW, { scope })).toEqual([]);
+    expect(labels(ended(done("a", 1, 1, { project: "ketch" })), NOW, { scope })).toEqual([]);
+    expect(labels(ended(done("a", 1, 1, { interrupted: true })))).toEqual([]);
+    expect(labels(live(running("a", { project: "elsewhere" })))).toEqual([]);
+  });
+
+  test("a call folded into +N more labels the node that holds the count", () => {
+    const drilled: Scene = {
+      ...overview,
+      label: "symbols of rtok",
+      nodes: overview.nodes.map((n, i) => ({
+        ...n,
+        label: i ? "store.rs" : "main.rs",
+        root: i ? "src/store.rs" : "src/main.rs",
+      })),
+    };
+    const folded = liveState(drilled, live(running("a", { target: "src/store.rs/open" })), NOW, {
+      more: 5,
+    }).labels;
+    expect(folded).toMatchObject([{ node: drilled.nodes[1]!.id, folded: true }]);
+    // Nothing holds this one, so only the group counter below the canvas speaks for it.
+    expect(
+      liveState(drilled, live(running("a", { target: "hidden_fn" })), NOW, { more: 5 }).labels,
+    ).toEqual([]);
+    expect(
+      liveState(drilled, live(running("a", { target: "main.rs" })), NOW, { more: 5 }).labels,
+    ).toMatchObject([{ node: drilled.nodes[0]!.id, folded: false }]);
   });
 });

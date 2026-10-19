@@ -374,11 +374,12 @@ impl Store {
             .collect())
     }
 
-    /// Copy one root's symbol rows onto another, skipping paths `to` already has.
+    /// Copy one root's symbol rows onto another, skipping paths `to` already has and paths in
+    /// a directory of `skip_under` (relative, no trailing slash).
     /// `id` is omitted so SQLite assigns it. The extractor fingerprint is copied when
     /// `to` has none, so the next index does not treat the root as a new extractor and
     /// delete the rows. One `BEGIN IMMEDIATE`.
-    pub fn copy_symbol_rows(&self, from: &str, to: &str) -> Result<usize> {
+    pub fn copy_symbol_rows(&self, from: &str, to: &str, skip_under: &[&str]) -> Result<usize> {
         if from == to {
             return Ok(0);
         }
@@ -408,7 +409,13 @@ impl Store {
                     .load(conn)?;
                 let rows: Vec<_> = rows
                     .into_iter()
-                    .filter(|row| !have.contains(&row.0))
+                    .filter(|row| {
+                        let skipped = skip_under.iter().any(|dir| {
+                            let rest = row.0.strip_prefix(dir);
+                            rest.is_some_and(|r| r.starts_with('/'))
+                        });
+                        !skipped && !have.contains(&row.0)
+                    })
                     .collect();
                 let inserted = rows.len();
                 for chunk in rows.chunks(INSERT_CHUNK) {
@@ -1323,15 +1330,18 @@ impl Store {
             );
         }
         drop(conn);
+        // T646: split each definition path and each specifier once, not once per pair.
+        let keys: Vec<(&String, Vec<String>)> = defs.iter().map(|d| (d, file_key(d))).collect();
         let mut out = Vec::new();
         let mut seen = HashSet::new();
         for (ref_file, spec) in imports {
-            if spec.is_empty() {
+            let Some(imp) = import_path_segs(&spec) else {
                 continue;
-            }
-            for def in &defs {
-                if import_matches_file(&spec, def) && seen.insert((ref_file.clone(), def.clone())) {
-                    out.push((ref_file.clone(), def.clone()));
+            };
+            for (def, key) in &keys {
+                if key_prefixes_import(key, &imp) && seen.insert((ref_file.clone(), (*def).clone()))
+                {
+                    out.push((ref_file.clone(), (*def).clone()));
                 }
             }
         }
@@ -1358,6 +1368,7 @@ impl Store {
             .select((symbols::name, count(symbols::path).aggregate_distinct()))
             .load(&mut *conn)?;
         let n = distinct_files(&mut conn, root)?;
+        crate::sql_ext::analyze_symbols(&mut conn)?;
         drop(conn);
         let mut df = BTreeMap::new();
         for (name, n_files) in rows {
@@ -1368,13 +1379,24 @@ impl Store {
     }
 
     fn cached_name_freq(&self, root: &str, name: &str) -> Result<Option<(i64, i64)>> {
-        let Some(body) = self.kv_get(&idf_key(root))? else {
+        let key = idf_key(root);
+        let Some(body) = self.kv_get(&key)? else {
             return Ok(None);
         };
-        let cache: IdfCache = serde_json::from_str(&body).unwrap_or(IdfCache {
-            n: 0,
-            df: BTreeMap::new(),
-        });
+        // T646: ranking asks once per visited name, and parsing the whole map each time was
+        // most of a `graph review`. The body is still read, so another process's rebuild is seen.
+        let mut memo = self
+            .idf_memo
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if memo.as_ref().is_none_or(|m| m.key != key || m.body != body) {
+            let cache = serde_json::from_str(&body).unwrap_or(IdfCache {
+                n: 0,
+                df: BTreeMap::new(),
+            });
+            *memo = Some(IdfMemo { key, body, cache });
+        }
+        let cache = &memo.as_ref().expect("set above").cache;
         Ok(Some((cache.df.get(name).copied().unwrap_or(0), cache.n)))
     }
 }
@@ -1384,6 +1406,13 @@ impl Store {
 struct IdfCache {
     n: i64,
     df: BTreeMap<String, i64>,
+}
+
+/// One parsed [`IdfCache`] with the kv row it came from.
+pub(crate) struct IdfMemo {
+    key: String,
+    body: String,
+    cache: IdfCache,
 }
 
 fn idf_key(root: &str) -> String {
@@ -1425,16 +1454,21 @@ pub(crate) fn file_key(file: &str) -> Vec<String> {
 }
 
 /// A bare identifier is not a path. Hyphens match underscores; the file's segments must prefix the import.
+#[cfg(test)]
 fn import_matches_file(spec: &str, file: &str) -> bool {
+    import_path_segs(spec).is_some_and(|imp| key_prefixes_import(&file_key(file), &imp))
+}
+
+/// `None` for a bare identifier or an empty path.
+fn import_path_segs(spec: &str) -> Option<Vec<String>> {
     if !spec.contains([':', '/', '.', '\\']) {
-        return false;
+        return None;
     }
-    let imp = import_segs(spec);
-    let file = file_key(file);
-    if file.is_empty() || imp.is_empty() {
-        return false;
-    }
-    file.len() <= imp.len() && imp[..file.len()] == file[..]
+    Some(import_segs(spec)).filter(|imp| !imp.is_empty())
+}
+
+fn key_prefixes_import(file: &[String], imp: &[String]) -> bool {
+    !file.is_empty() && file.len() <= imp.len() && imp[..file.len()] == file[..]
 }
 
 #[cfg(test)]

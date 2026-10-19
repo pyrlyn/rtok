@@ -18,6 +18,7 @@ build never blocks the host.
 | `rtok filter --stdin` | filter a payload without executing it (OpenCode `tool.execute.after`) |
 | `rtok expand <id>` | print an archived payload, whole or by `--lines` / `--grep` |
 | `rtok stats` | measurements from session logs and the proxy |
+| `rtok discover` | shell commands your agents ran that have no rule or formatter, most output first |
 | `rtok doctor` | inspect hooks, MCP servers, proxy chain — including what each costs per turn, and how much space `rtok agents junk clear` would free |
 | `rtok agents install claude\|cursor\|codex\|opencode\|kilo\|pi\|zcode\|kimi\|copilot\|aider\|windsurf\|zed` | install into a host, with backups; `--dry-run` |
 | `rtok agents uninstall claude\|cursor\|codex\|opencode\|kilo\|pi\|zcode\|kimi\|copilot\|aider\|windsurf\|zed` | take rtok back out of a host, with backups; `--dry-run` |
@@ -28,10 +29,11 @@ build never blocks the host.
 | `rtok graph review [--since <ref>\|--staged] [--json] [--project <id\|dir>]` | risk-ranked reading list for a git diff: each changed file's score, the definitions no test reaches, and the line ranges to read |
 | `rtok graph diff [--from <ref>\|<project>:<ref>]... [--from-export <file>] [--to <ref>\|working] [--json] [--project <id\|dir>]` | what a change did to the graph, MCP `graph_diff`: symbols changed (signature or body), added, removed, renamed or moved, and call edges added or removed, each changed or removed symbol with its callers from the project and the projects it links to. The old side is read from git's object database (no checkout, the working tree is not touched); `--from` defaults to `HEAD`, `--to` to the working tree. A renamed symbol is shown only when exactly one removed and one added definition share its body; the text is cut at `plugins.graph.max_tokens` with an `expand <id>` for the rest, `--json` is whole. `--from <project>:<ref>` (a project name, id or directory; repeatable) compares that project from its own ref while the others use the plain `--from`. `--from-export <file>` compares the working tree with a saved `rtok graph export --level symbols` file instead of a revision: it lists added and removed symbols and the registry links added and removed (links cannot be compared with a git ref, the registry keeps no history), but not changes or edges, because an export keeps no signatures; MCP does not take a file path. Files that differ but no grammar reads (binary, a language without a grammar, unparseable) are listed as `changed, not analysed`; files the project excludes are not |
 | `rtok graph export [--level overview\|symbols] [--focus <symbol> [--depth N]] [--no-redact] [--from <file>] [--format json\|svg\|png] [--scale 1-4] [--transparent] [-o <file>] [--project <id\|dir>]` | the graph as a file, MCP `graph_export` (JSON only): `rtok.graph.v1` JSON (projects, links, symbols, calls; schema in `docs/schemas/`, format in [plugins](plugins.md#graph-export-format)). `overview` is projects and links, `symbols` adds every symbol and call, `--focus` keeps the symbols within `--depth` calls of one. Home, user name and absolute paths are redacted unless `--no-redact`; `--from` shows a saved export and touches neither the registry nor the index. `--format svg` draws a picture of the same export (the 200 best connected nodes, a legend and a footer with the projects, scope, backend, `indexed_at`, version, export time and a partial marker; the footer says how many nodes are hidden); `--format png` rasterises it at `--scale` times its size (1 to 4, 1 by default) and needs `-o`; `--transparent` drops the background. A PNG needs a font on the machine. In `rtok tui`, `e` on the Graph page writes the same file with the same function (format, level, redaction on unless switched off, the file you name), and `v` shows a saved JSON read-only |
-| `rtok graph projects` | list the registered projects with their index status (`add`, `select`, `remove`, `link` and `unlink` change the registry) |
+| `rtok graph projects` | list the registered projects with their index status (`add`, `select`, `remove`, `link` and `unlink` change the registry; `reindex` re-reads a project's files into its index) |
 | `rtok memory import <file>` | import notes as JSONL, deduped by body hash |
 | `rtok otel flush\|status` | export the ledgers over OTLP/HTTP, or report the watermarks |
 | `rtok task create\|list\|show\|status\|next\|ready\|claim\|release\|dep\|priority\|sync\|init` | the project's plan in its `[tasks]` adapter; `claim` takes a ready task, `dep` records a blocker, `sync` raises the id counters and reports drift |
+| `rtok task export github\|linear [--dry-run] [--json]` | mirror the disk tasks one way into GitHub Issues or Linear; a second run with nothing changed sends no write |
 | `rtok bench` | A/B two host configurations on fixed tasks |
 
 ## The graph page
@@ -40,7 +42,11 @@ The Graph page of `rtok dashboard` draws the code graph in two levels, as a 3D s
 scene, or a plain list (the choice is remembered; without WebGL the page shows 2D and says why).
 
 - **All projects.** One node per registered project, a line per link. Right-click a node for
-  Select, Open, Fly to and Copy path; double-click opens the project.
+  Select, Open, Re-index, Remove…, Fly to and Copy path; double-click opens the project. Re-index
+  runs `rtok graph projects reindex` on a worker: the node reads `indexing` meanwhile and the old
+  rows keep answering, then `ok`, or `failed` with the error. Remove… shows the dry run of
+  `rtok graph projects remove` (index rows and links that go, files untouched) and removes only
+  after you confirm. `rtok tui` has the same two actions on the Graph page.
 - **One project.** Files are cubes, types and modules octahedra, functions spheres, each in its
   project's colour, grouped by directory. Click a node to select it; click the selected file to
   expand its definitions, or the selected function to focus it (its callers and callees, one to
@@ -89,12 +95,17 @@ scene, or a plain list (the choice is remembered; without WebGL the page shows 2
   whole picture when none is left (it jumps under `prefers-reduced-motion`). The "2D" and "3D"
   buttons in the corner of the picture switch it; 3D is the same Three.js view as part 1 without
   orbit or picking, with a halo for heat, a shell per running call and a red wireframe for a
-  failure, and falls back to 2D with a notice when WebGL is not available. A bar between the two
+  failure, and falls back to 2D with a notice when WebGL is not available. Each running call carries a small
+  label on its node, in 2D and in 3D, with its tool and a seconds counter ticking up; a call that
+  ended keeps its label with its duration for 4 seconds and fades after 2, a call folded into "+N
+  more" labels the node that holds the count, and a call outside the scope has none. A bar between the two
   parts resizes them (drag, arrow keys, double-click for 50/50) and is remembered; "Hide live
   graph" hides the picture and ends the `/ws` subscription, and is remembered too. The page
   subscribes only while the live graph is shown. Below it: running calls, calls and failures, tokens sent, tokens without rtok and saved,
   per-tool bars and backend shares, over the last 1, 5 or 15 minutes or since `rtok web` started: the totals are read from the store, so a page reload shows the same
   figures (the store keeps the newest 5000 call events, so a call older than that is gone from them).
+  Under 900 px, where the live part stacks below the explorer, these numbers fold into one line (running,
+  calls, saved) that opens the full cards and shuts them again; from 900 px up nothing changes.
   Totals come from each frame's `summary` and the `graph` measurement rows, so a window equals
   `rtok stats` over the same calls (the per-tool bars and backend shares cover the calls a frame
   lists). The page also counts symbols asked (and how many calls crossed more than one project),
@@ -148,6 +159,13 @@ is the whole lossless contract — nothing rtok shortens is unrecoverable.
 with a `Measurement`, and from the proxy capturing real `usage` from API responses.
 `rtok stats --calibrate` refits the characters-per-token estimator against those real
 counts.
+
+`rtok discover [--since 30d] [--limit 20] [--json]` reads the `PostToolUse` shell calls the hook
+already stored in the database and lists the command families that have no rule and no
+formatter (the default cut still applies), ranked by the output tokens the agent read. It
+reruns nothing and claims no saving: only a `Measurement` row is a saving. Calls whose body
+exceeded `core.call_io_inline_bytes` were never stored and show up as `unreadable rows`.
+Pick the next rule family from the top rows.
 
 `rtok bench` runs two host configurations over the fixed task set in `bench/tasks.toml` and
 compares them.

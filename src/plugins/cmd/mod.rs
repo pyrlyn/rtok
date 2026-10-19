@@ -10,10 +10,19 @@
 use rtok_plugin_sdk::{Ctx, DashboardPage, Manifest, Plugin, PreToolDecision, PreToolUse, Surface};
 
 pub mod bounded;
+pub mod catfile;
+pub mod compact;
+pub mod diffs;
 pub mod hook;
+pub mod logfmt;
 
 pub mod filter;
 pub mod formatters;
+pub mod gh;
+pub mod grep;
+pub mod loops;
+pub mod mise;
+pub mod python;
 pub mod rules;
 pub mod run;
 

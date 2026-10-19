@@ -32,6 +32,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('web', 'web', [CompletionResultType]::ParameterValue, 'Local web UI over the same data as `rtok tui` (WebSocket API + React SPA)')
             [CompletionResult]::new('tui', 'tui', [CompletionResultType]::ParameterValue, 'Terminal UI over the same data as `rtok web` (one model, two renderings)')
             [CompletionResult]::new('stats', 'stats', [CompletionResultType]::ParameterValue, 'Measurements from session logs and the proxy')
+            [CompletionResult]::new('discover', 'discover', [CompletionResultType]::ParameterValue, 'Shell commands your agents ran that have no rule or formatter, most output first')
             [CompletionResult]::new('bench', 'bench', [CompletionResultType]::ParameterValue, 'A/B benchmark of host configurations')
             [CompletionResult]::new('doctor', 'doctor', [CompletionResultType]::ParameterValue, 'Inspect hooks, MCP servers and the proxy chain')
             [CompletionResult]::new('worktree', 'worktree', [CompletionResultType]::ParameterValue, 'Git worktrees of this repository: owner, state and disk cost')
@@ -142,6 +143,15 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
         }
+        'rtok;discover' {
+            [CompletionResult]::new('--since', '--since', [CompletionResultType]::ParameterName, 'How far back to read recorded shell calls (`30d`, `24h`)')
+            [CompletionResult]::new('--limit', '--limit', [CompletionResultType]::ParameterName, 'Rows to print, most output first')
+            [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'JSON instead of the table')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
         'rtok;bench' {
             [CompletionResult]::new('--tasks', '--tasks', [CompletionResultType]::ParameterName, 'Task list TOML')
             [CompletionResult]::new('--runs', '--runs', [CompletionResultType]::ParameterName, 'Repeats per task × config')
@@ -162,6 +172,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--fix', '--fix', [CompletionResultType]::ParameterName, 'Clean up broken hooks and duplicate hooks and MCP entries: a terminal gets a checklist, a pipe the diff; --yes writes without asking')
             [CompletionResult]::new('--yes', '--yes', [CompletionResultType]::ParameterName, 'With --fix: write the changes (a copy goes to `_backup/` first)')
             [CompletionResult]::new('--dry-run', '--dry-run', [CompletionResultType]::ParameterName, 'With --fix --yes: print the diffs and write nothing')
+            [CompletionResult]::new('--stat', '--stat', [CompletionResultType]::ParameterName, 'With --fix: stat lines and totals instead of the diffs (a dry run)')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
@@ -178,6 +189,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('whoami', 'whoami', [CompletionResultType]::ParameterValue, 'Your agent, where new worktrees go, the worktree you are in and the ones you hold')
             [CompletionResult]::new('gc', 'gc', [CompletionResultType]::ParameterValue, 'Remove merged, clean, idle worktrees with their branches; drop records of deleted ones')
             [CompletionResult]::new('clean', 'clean', [CompletionResultType]::ParameterValue, 'Delete idle tagged build caches (`CACHEDIR.TAG`) and keep the worktrees; dry run without `--yes`')
+            [CompletionResult]::new('migrate', 'migrate', [CompletionResultType]::ParameterValue, 'Move this repository''s worktrees into `[worktree] root`; dry run without `--yes`')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
             break
         }
@@ -212,6 +224,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--owner', '--owner', [CompletionResultType]::ParameterName, 'The owner an old lock names, as `<provider> / <model>`. Defaults to `<host> / <model>` of the agent')
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
             [CompletionResult]::new('--keep-branch', '--keep-branch', [CompletionResultType]::ParameterName, 'Remove an unmerged worktree too and keep its branch (a merged branch is kept as well)')
+            [CompletionResult]::new('--dry-run', '--dry-run', [CompletionResultType]::ParameterName, 'Show the path, branch, size and file count that would go; remove nothing')
             [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'JSON instead of the text line')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
@@ -237,6 +250,8 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--stale-lock', '--stale-lock', [CompletionResultType]::ParameterName, 'Treat someone else''s lock as abandoned once its merged, clean worktree is untouched this long')
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
             [CompletionResult]::new('--yes', '--yes', [CompletionResultType]::ParameterName, 'Apply; without it this is a dry run that changes nothing')
+            [CompletionResult]::new('--dry-run', '--dry-run', [CompletionResultType]::ParameterName, 'Say the dry run out loud: print what would go and change nothing (the default)')
+            [CompletionResult]::new('--stat', '--stat', [CompletionResultType]::ParameterName, 'The same preview as the dry run: a removal''s line already is its stat')
             [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'JSON instead of the table')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
@@ -244,6 +259,17 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
         }
         'rtok;worktree;clean' {
             [CompletionResult]::new('--idle', '--idle', [CompletionResultType]::ParameterName, 'Keep caches modified within this window (`24h`, `7d`)')
+            [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
+            [CompletionResult]::new('--yes', '--yes', [CompletionResultType]::ParameterName, 'Apply; without it this is a dry run that changes nothing')
+            [CompletionResult]::new('--dry-run', '--dry-run', [CompletionResultType]::ParameterName, 'Say the dry run out loud: print what would go and change nothing (the default)')
+            [CompletionResult]::new('--stat', '--stat', [CompletionResultType]::ParameterName, 'The same preview as the dry run: a removal''s line already is its stat')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'JSON instead of the table')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'rtok;worktree;migrate' {
+            [CompletionResult]::new('--owner', '--owner', [CompletionResultType]::ParameterName, 'Also move old locks without an agent whose owner is this')
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
             [CompletionResult]::new('--yes', '--yes', [CompletionResultType]::ParameterName, 'Apply; without it this is a dry run that changes nothing')
             [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'JSON instead of the table')
@@ -260,6 +286,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('whoami', 'whoami', [CompletionResultType]::ParameterValue, 'Your agent, where new worktrees go, the worktree you are in and the ones you hold')
             [CompletionResult]::new('gc', 'gc', [CompletionResultType]::ParameterValue, 'Remove merged, clean, idle worktrees with their branches; drop records of deleted ones')
             [CompletionResult]::new('clean', 'clean', [CompletionResultType]::ParameterValue, 'Delete idle tagged build caches (`CACHEDIR.TAG`) and keep the worktrees; dry run without `--yes`')
+            [CompletionResult]::new('migrate', 'migrate', [CompletionResultType]::ParameterValue, 'Move this repository''s worktrees into `[worktree] root`; dry run without `--yes`')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
             break
         }
@@ -287,6 +314,9 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
         'rtok;worktree;help;clean' {
             break
         }
+        'rtok;worktree;help;migrate' {
+            break
+        }
         'rtok;worktree;help;help' {
             break
         }
@@ -304,7 +334,10 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('release', 'release', [CompletionResultType]::ParameterValue, 'Clear the assignee and set the task open. Only the holder, unless --force')
             [CompletionResult]::new('dep', 'dep', [CompletionResultType]::ParameterValue, 'Record that this task waits on another. A cycle is refused and nothing is written')
             [CompletionResult]::new('priority', 'priority', [CompletionResultType]::ParameterValue, 'Set priority from 0 (highest) to 4. 2 is the default and is not stored')
+            [CompletionResult]::new('conflict', 'conflict', [CompletionResultType]::ParameterValue, 'Record that two tasks touch the same files, so they should not run at once. Symmetric; `ready` flags a task whose partner is in progress')
+            [CompletionResult]::new('parallel', 'parallel', [CompletionResultType]::ParameterValue, 'Mark a task safe to run beside any other task')
             [CompletionResult]::new('sync', 'sync', [CompletionResultType]::ParameterValue, 'Raise the id counters to the adapter''s highest ids and report drift; never writes the adapter')
+            [CompletionResult]::new('export', 'export', [CompletionResultType]::ParameterValue, 'Mirror the disk tasks one way into an issue tracker; the files stay the source of truth. A second run with nothing changed sends no write')
             [CompletionResult]::new('init', 'init', [CompletionResultType]::ParameterValue, 'Write `[tasks]` into this checkout''s `.rtok.toml` and seed the counter from existing tasks')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
             break
@@ -390,8 +423,32 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
         }
+        'rtok;task;conflict' {
+            [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
+            [CompletionResult]::new('--remove', '--remove', [CompletionResultType]::ParameterName, 'Take the conflict off instead')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Print the task as JSON')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'rtok;task;parallel' {
+            [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
+            [CompletionResult]::new('--off', '--off', [CompletionResultType]::ParameterName, 'Take the mark off instead')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Print the task as JSON')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
         'rtok;task;sync' {
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'JSON instead of the text')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'rtok;task;export' {
+            [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
+            [CompletionResult]::new('--dry-run', '--dry-run', [CompletionResultType]::ParameterName, 'Print the planned creates, updates and closes and send nothing')
             [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'JSON instead of the text')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
@@ -416,7 +473,10 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('release', 'release', [CompletionResultType]::ParameterValue, 'Clear the assignee and set the task open. Only the holder, unless --force')
             [CompletionResult]::new('dep', 'dep', [CompletionResultType]::ParameterValue, 'Record that this task waits on another. A cycle is refused and nothing is written')
             [CompletionResult]::new('priority', 'priority', [CompletionResultType]::ParameterValue, 'Set priority from 0 (highest) to 4. 2 is the default and is not stored')
+            [CompletionResult]::new('conflict', 'conflict', [CompletionResultType]::ParameterValue, 'Record that two tasks touch the same files, so they should not run at once. Symmetric; `ready` flags a task whose partner is in progress')
+            [CompletionResult]::new('parallel', 'parallel', [CompletionResultType]::ParameterValue, 'Mark a task safe to run beside any other task')
             [CompletionResult]::new('sync', 'sync', [CompletionResultType]::ParameterValue, 'Raise the id counters to the adapter''s highest ids and report drift; never writes the adapter')
+            [CompletionResult]::new('export', 'export', [CompletionResultType]::ParameterValue, 'Mirror the disk tasks one way into an issue tracker; the files stay the source of truth. A second run with nothing changed sends no write')
             [CompletionResult]::new('init', 'init', [CompletionResultType]::ParameterValue, 'Write `[tasks]` into this checkout''s `.rtok.toml` and seed the counter from existing tasks')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
             break
@@ -451,7 +511,16 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
         'rtok;task;help;priority' {
             break
         }
+        'rtok;task;help;conflict' {
+            break
+        }
+        'rtok;task;help;parallel' {
+            break
+        }
         'rtok;task;help;sync' {
+            break
+        }
+        'rtok;task;help;export' {
             break
         }
         'rtok;task;help;init' {
@@ -578,6 +647,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--all', '--all', [CompletionResultType]::ParameterName, 'All variants (the default when neither `--cli` nor `--desktop` is given)')
             [CompletionResult]::new('--no-restart', '--no-restart', [CompletionResultType]::ParameterName, 'Skip closing/reopening a running desktop app around the write')
             [CompletionResult]::new('--project', '--project', [CompletionResultType]::ParameterName, 'Add rtok to the project''s post-create script, so a worktree the host makes joins rtok (`cursor`, `kilo`, `windsurf`, `devin`); run it inside the repository')
+            [CompletionResult]::new('--stat', '--stat', [CompletionResultType]::ParameterName, 'With --dry-run: stat lines and totals instead of the planned edits')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
@@ -596,6 +666,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--all', '--all', [CompletionResultType]::ParameterName, 'All variants (the default when neither `--cli` nor `--desktop` is given)')
             [CompletionResult]::new('--no-restart', '--no-restart', [CompletionResultType]::ParameterName, 'Skip closing/reopening a running desktop app around the write')
             [CompletionResult]::new('--project', '--project', [CompletionResultType]::ParameterName, 'Add rtok to the project''s post-create script, so a worktree the host makes joins rtok (`cursor`, `kilo`, `windsurf`, `devin`); run it inside the repository')
+            [CompletionResult]::new('--stat', '--stat', [CompletionResultType]::ParameterName, 'With --dry-run: stat lines and totals instead of the planned edits')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
@@ -606,6 +677,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--no-restart', '--no-restart', [CompletionResultType]::ParameterName, 'Skip closing/reopening a running desktop app around the write')
             [CompletionResult]::new('--yes', '--yes', [CompletionResultType]::ParameterName, 'Also remove rtok entries you changed, without asking')
             [CompletionResult]::new('--project', '--project', [CompletionResultType]::ParameterName, 'Take rtok out of the project''s post-create script (`cursor`, `kilo`, `windsurf`, `devin`) instead of the host''s config')
+            [CompletionResult]::new('--stat', '--stat', [CompletionResultType]::ParameterName, 'With --dry-run: stat lines and totals instead of the planned edits')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
@@ -616,6 +688,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--no-restart', '--no-restart', [CompletionResultType]::ParameterName, 'Skip closing/reopening a running desktop app around the write')
             [CompletionResult]::new('--yes', '--yes', [CompletionResultType]::ParameterName, 'Also remove rtok entries you changed, without asking')
             [CompletionResult]::new('--project', '--project', [CompletionResultType]::ParameterName, 'Take rtok out of the project''s post-create script (`cursor`, `kilo`, `windsurf`, `devin`) instead of the host''s config')
+            [CompletionResult]::new('--stat', '--stat', [CompletionResultType]::ParameterName, 'With --dry-run: stat lines and totals instead of the planned edits')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
@@ -626,6 +699,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--no-restart', '--no-restart', [CompletionResultType]::ParameterName, 'Skip closing/reopening a running desktop app around the write')
             [CompletionResult]::new('--yes', '--yes', [CompletionResultType]::ParameterName, 'Also remove rtok entries you changed, without asking')
             [CompletionResult]::new('--project', '--project', [CompletionResultType]::ParameterName, 'Take rtok out of the project''s post-create script (`cursor`, `kilo`, `windsurf`, `devin`) instead of the host''s config')
+            [CompletionResult]::new('--stat', '--stat', [CompletionResultType]::ParameterName, 'With --dry-run: stat lines and totals instead of the planned edits')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
@@ -636,6 +710,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--no-restart', '--no-restart', [CompletionResultType]::ParameterName, 'Skip closing/reopening a running desktop app around the write')
             [CompletionResult]::new('--yes', '--yes', [CompletionResultType]::ParameterName, 'Also remove rtok entries you changed, without asking')
             [CompletionResult]::new('--project', '--project', [CompletionResultType]::ParameterName, 'Take rtok out of the project''s post-create script (`cursor`, `kilo`, `windsurf`, `devin`) instead of the host''s config')
+            [CompletionResult]::new('--stat', '--stat', [CompletionResultType]::ParameterName, 'With --dry-run: stat lines and totals instead of the planned edits')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
@@ -650,6 +725,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--no-restart', '--no-restart', [CompletionResultType]::ParameterName, 'Skip closing/reopening a running desktop app around the write')
             [CompletionResult]::new('--force', '--force', [CompletionResultType]::ParameterName, 'Reinstall the plugin even when it is already at the available version')
             [CompletionResult]::new('--check', '--check', [CompletionResultType]::ParameterName, 'List outdated plugins only (same output as `agents outdated`)')
+            [CompletionResult]::new('--stat', '--stat', [CompletionResultType]::ParameterName, 'With --dry-run: stat lines and totals instead of the planned edits')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
@@ -664,6 +740,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--no-restart', '--no-restart', [CompletionResultType]::ParameterName, 'Skip closing/reopening a running desktop app around the write')
             [CompletionResult]::new('--force', '--force', [CompletionResultType]::ParameterName, 'Reinstall the plugin even when it is already at the available version')
             [CompletionResult]::new('--check', '--check', [CompletionResultType]::ParameterName, 'List outdated plugins only (same output as `agents outdated`)')
+            [CompletionResult]::new('--stat', '--stat', [CompletionResultType]::ParameterName, 'With --dry-run: stat lines and totals instead of the planned edits')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
@@ -839,6 +916,8 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--min-size', '--min-size', [CompletionResultType]::ParameterName, 'Only items of at least this size (`10MB`); on `clear` this also limits what `--yes` removes')
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
             [CompletionResult]::new('--yes', '--yes', [CompletionResultType]::ParameterName, 'Apply; without it this is a dry run that changes nothing')
+            [CompletionResult]::new('--dry-run', '--dry-run', [CompletionResultType]::ParameterName, 'Say the dry run out loud: print what would go and change nothing (the default)')
+            [CompletionResult]::new('--stat', '--stat', [CompletionResultType]::ParameterName, 'The same preview as the dry run: a removal''s line already is its stat')
             [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'JSON instead of the table')
             [CompletionResult]::new('--trash', '--trash', [CompletionResultType]::ParameterName, 'Move to the OS trash instead of deleting')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
@@ -893,6 +972,8 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--min-size', '--min-size', [CompletionResultType]::ParameterName, 'Only items of at least this size (`10MB`); on `clear` this also limits what `--yes` removes')
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
             [CompletionResult]::new('--yes', '--yes', [CompletionResultType]::ParameterName, 'Apply; without it this is a dry run that changes nothing')
+            [CompletionResult]::new('--dry-run', '--dry-run', [CompletionResultType]::ParameterName, 'Say the dry run out loud: print what would go and change nothing (the default)')
+            [CompletionResult]::new('--stat', '--stat', [CompletionResultType]::ParameterName, 'The same preview as the dry run: a removal''s line already is its stat')
             [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'JSON instead of the table')
             [CompletionResult]::new('--trash', '--trash', [CompletionResultType]::ParameterName, 'Move to the OS trash instead of deleting')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
@@ -955,6 +1036,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             break
         }
         'rtok;agents;send' {
+            [CompletionResult]::new('--task', '--task', [CompletionResultType]::ParameterName, 'The task this message is about (e.g. `A12`); the recipient can read just that thread')
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
             [CompletionResult]::new('--all-live', '--all-live', [CompletionResultType]::ParameterName, 'Every live agent of this project (same repository or cwd), except the sender')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
@@ -962,6 +1044,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             break
         }
         'rtok;agent;send' {
+            [CompletionResult]::new('--task', '--task', [CompletionResultType]::ParameterName, 'The task this message is about (e.g. `A12`); the recipient can read just that thread')
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
             [CompletionResult]::new('--all-live', '--all-live', [CompletionResultType]::ParameterName, 'Every live agent of this project (same repository or cwd), except the sender')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
@@ -969,6 +1052,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             break
         }
         'rtok;agents;inbox' {
+            [CompletionResult]::new('--task', '--task', [CompletionResultType]::ParameterName, 'Only messages about this task (e.g. `A12`)')
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
             [CompletionResult]::new('--unread', '--unread', [CompletionResultType]::ParameterName, 'Only messages not read yet')
             [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'JSON instead of the framed text')
@@ -977,6 +1061,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             break
         }
         'rtok;agent;inbox' {
+            [CompletionResult]::new('--task', '--task', [CompletionResultType]::ParameterName, 'Only messages about this task (e.g. `A12`)')
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
             [CompletionResult]::new('--unread', '--unread', [CompletionResultType]::ParameterName, 'Only messages not read yet')
             [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'JSON instead of the framed text')
@@ -1148,6 +1233,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--all', '--all', [CompletionResultType]::ParameterName, 'All variants (the default when neither `--cli` nor `--desktop` is given)')
             [CompletionResult]::new('--no-restart', '--no-restart', [CompletionResultType]::ParameterName, 'Skip closing/reopening a running desktop app around the write')
             [CompletionResult]::new('--project', '--project', [CompletionResultType]::ParameterName, 'Add rtok to the project''s post-create script, so a worktree the host makes joins rtok (`cursor`, `kilo`, `windsurf`, `devin`); run it inside the repository')
+            [CompletionResult]::new('--stat', '--stat', [CompletionResultType]::ParameterName, 'With --dry-run: stat lines and totals instead of the planned edits')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
@@ -1155,15 +1241,18 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
         'rtok;run' {
             [CompletionResult]::new('--agent', '--agent', [CompletionResultType]::ParameterName, 'Sub-agent id from PreToolUse; scopes the dedup pointer')
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
+            [CompletionResult]::new('--no-ref', '--no-ref', [CompletionResultType]::ParameterName, 'Do not print the reference line after a cut')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
         }
         'rtok;filter' {
             [CompletionResult]::new('--cmd', '--cmd', [CompletionResultType]::ParameterName, 'Command family hint (`git status`, `cargo test`, …)')
+            [CompletionResult]::new('--exit', '--exit', [CompletionResultType]::ParameterName, 'Exit code of the command that printed stdin (with `--archive`); formatters read it')
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
             [CompletionResult]::new('--stdin', '--stdin', [CompletionResultType]::ParameterName, 'Read the payload from stdin (OpenCode `tool.execute.after`)')
             [CompletionResult]::new('--archive', '--archive', [CompletionResultType]::ParameterName, 'Archive stdin and print the expand trailer (same path as `run`)')
+            [CompletionResult]::new('--no-ref', '--no-ref', [CompletionResultType]::ParameterName, 'Do not print the reference line after a cut')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
@@ -1208,6 +1297,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--install', '--install', [CompletionResultType]::ParameterName, 'Write the script to the shell''s per-user completions directory')
             [CompletionResult]::new('--uninstall', '--uninstall', [CompletionResultType]::ParameterName, 'Remove what `--install` wrote')
             [CompletionResult]::new('--list', '--list', [CompletionResultType]::ParameterName, 'Print each shell, whether its completions are installed (yes/no) and the file')
+            [CompletionResult]::new('--dry-run', '--dry-run', [CompletionResultType]::ParameterName, 'With `--install`/`--uninstall`: show the file diff and write nothing')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
             break
@@ -1243,6 +1333,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
             [CompletionResult]::new('--force', '--force', [CompletionResultType]::ParameterName, 'Overwrite an existing file')
             [CompletionResult]::new('--dry-run', '--dry-run', [CompletionResultType]::ParameterName, 'Print the diff it would write and exit')
+            [CompletionResult]::new('--stat', '--stat', [CompletionResultType]::ParameterName, 'With --dry-run: stat lines and totals instead of the diff')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
@@ -1277,6 +1368,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
         'rtok;config;set' {
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
             [CompletionResult]::new('--dry-run', '--dry-run', [CompletionResultType]::ParameterName, 'Print the diff it would write and exit')
+            [CompletionResult]::new('--stat', '--stat', [CompletionResultType]::ParameterName, 'With --dry-run: stat lines and totals instead of the diff')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
@@ -1318,7 +1410,9 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('import', 'import', [CompletionResultType]::ParameterValue, 'Import `{kind,title,body}` JSONL; dedupe by body sha256')
             [CompletionResult]::new('export', 'export', [CompletionResultType]::ParameterValue, 'Print every note but session checkpoints as the JSONL `import` reads')
+            [CompletionResult]::new('extract', 'extract', [CompletionResultType]::ParameterValue, 'Save notes an external program extracts from a transcript (off by default)')
             [CompletionResult]::new('retire', 'retire', [CompletionResultType]::ParameterValue, 'Retire a note: a tombstone — never recalled or searched, body kept')
+            [CompletionResult]::new('forget', 'forget', [CompletionResultType]::ParameterValue, 'Retire notes nobody read for a long time (a dry run unless `--apply`)')
             [CompletionResult]::new('pin', 'pin', [CompletionResultType]::ParameterValue, 'Pin a note so it leads SessionStart recall')
             [CompletionResult]::new('unpin', 'unpin', [CompletionResultType]::ParameterValue, 'Drop a note back to newest-first recall order')
             [CompletionResult]::new('history', 'history', [CompletionResultType]::ParameterValue, 'Print the earlier title and body kept when an upsert changed this note')
@@ -1342,9 +1436,24 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
         }
+        'rtok;memory;extract' {
+            [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
         'rtok;memory;retire' {
             [CompletionResult]::new('--superseded-by', '--superseded-by', [CompletionResultType]::ParameterName, 'The replacement note id this one is superseded by')
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'rtok;memory;forget' {
+            [CompletionResult]::new('--project', '--project', [CompletionResultType]::ParameterName, 'Only this project')
+            [CompletionResult]::new('--days', '--days', [CompletionResultType]::ParameterName, 'Idle days; default `[plugins.memory] forget_after_days`')
+            [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
+            [CompletionResult]::new('--apply', '--apply', [CompletionResultType]::ParameterName, 'Retire the notes; without it nothing is written')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
@@ -1380,6 +1489,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--budget', '--budget', [CompletionResultType]::ParameterName, 'Token budget; default `[plugins.memory] sync_tokens`')
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
             [CompletionResult]::new('--dry-run', '--dry-run', [CompletionResultType]::ParameterName, 'Print the unified diff and write nothing')
+            [CompletionResult]::new('--stat', '--stat', [CompletionResultType]::ParameterName, 'With --dry-run: stat lines and totals instead of the diff')
             [CompletionResult]::new('--remove', '--remove', [CompletionResultType]::ParameterName, 'Delete the managed block and nothing else')
             [CompletionResult]::new('--force', '--force', [CompletionResultType]::ParameterName, 'Overwrite a hand-edited block')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
@@ -1398,7 +1508,9 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
         'rtok;memory;help' {
             [CompletionResult]::new('import', 'import', [CompletionResultType]::ParameterValue, 'Import `{kind,title,body}` JSONL; dedupe by body sha256')
             [CompletionResult]::new('export', 'export', [CompletionResultType]::ParameterValue, 'Print every note but session checkpoints as the JSONL `import` reads')
+            [CompletionResult]::new('extract', 'extract', [CompletionResultType]::ParameterValue, 'Save notes an external program extracts from a transcript (off by default)')
             [CompletionResult]::new('retire', 'retire', [CompletionResultType]::ParameterValue, 'Retire a note: a tombstone — never recalled or searched, body kept')
+            [CompletionResult]::new('forget', 'forget', [CompletionResultType]::ParameterValue, 'Retire notes nobody read for a long time (a dry run unless `--apply`)')
             [CompletionResult]::new('pin', 'pin', [CompletionResultType]::ParameterValue, 'Pin a note so it leads SessionStart recall')
             [CompletionResult]::new('unpin', 'unpin', [CompletionResultType]::ParameterValue, 'Drop a note back to newest-first recall order')
             [CompletionResult]::new('history', 'history', [CompletionResultType]::ParameterValue, 'Print the earlier title and body kept when an upsert changed this note')
@@ -1414,7 +1526,13 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
         'rtok;memory;help;export' {
             break
         }
+        'rtok;memory;help;extract' {
+            break
+        }
         'rtok;memory;help;retire' {
+            break
+        }
+        'rtok;memory;help;forget' {
             break
         }
         'rtok;memory;help;pin' {
@@ -1522,6 +1640,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('select', 'select', [CompletionResultType]::ParameterValue, 'Make a project the selected one; the page and later the CLI answer for it')
             [CompletionResult]::new('link', 'link', [CompletionResultType]::ParameterValue, 'Link a project into the selected one''s graph scope (indexes it when it never was)')
             [CompletionResult]::new('unlink', 'unlink', [CompletionResultType]::ParameterValue, 'Remove a link; an auto link stays removed on re-index')
+            [CompletionResult]::new('reindex', 'reindex', [CompletionResultType]::ParameterValue, 'Re-read a project''s files into its index (the page''s "Index now")')
             [CompletionResult]::new('remove', 'remove', [CompletionResultType]::ParameterValue, 'Drop a project and its index rows; its files are never touched')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
             break
@@ -1554,6 +1673,14 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('--from', '--from', [CompletionResultType]::ParameterName, 'Unlink from this project instead of the selected one')
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
             [CompletionResult]::new('--both', '--both', [CompletionResultType]::ParameterName, 'Also remove the link the other way')
+            [CompletionResult]::new('--dry-run', '--dry-run', [CompletionResultType]::ParameterName, 'Show the links that would go; remove nothing')
+            [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'JSON instead of a table')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'rtok;graph;projects;reindex' {
+            [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
             [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'JSON instead of a table')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
@@ -1561,6 +1688,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
         }
         'rtok;graph;projects;remove' {
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
+            [CompletionResult]::new('--dry-run', '--dry-run', [CompletionResultType]::ParameterName, 'Show the index rows and links that would go; remove nothing')
             [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'JSON instead of a table')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
@@ -1571,6 +1699,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('select', 'select', [CompletionResultType]::ParameterValue, 'Make a project the selected one; the page and later the CLI answer for it')
             [CompletionResult]::new('link', 'link', [CompletionResultType]::ParameterValue, 'Link a project into the selected one''s graph scope (indexes it when it never was)')
             [CompletionResult]::new('unlink', 'unlink', [CompletionResultType]::ParameterValue, 'Remove a link; an auto link stays removed on re-index')
+            [CompletionResult]::new('reindex', 'reindex', [CompletionResultType]::ParameterValue, 'Re-read a project''s files into its index (the page''s "Index now")')
             [CompletionResult]::new('remove', 'remove', [CompletionResultType]::ParameterValue, 'Drop a project and its index rows; its files are never touched')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
             break
@@ -1585,6 +1714,9 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             break
         }
         'rtok;graph;projects;help;unlink' {
+            break
+        }
+        'rtok;graph;projects;help;reindex' {
             break
         }
         'rtok;graph;projects;help;remove' {
@@ -1671,6 +1803,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('select', 'select', [CompletionResultType]::ParameterValue, 'Make a project the selected one; the page and later the CLI answer for it')
             [CompletionResult]::new('link', 'link', [CompletionResultType]::ParameterValue, 'Link a project into the selected one''s graph scope (indexes it when it never was)')
             [CompletionResult]::new('unlink', 'unlink', [CompletionResultType]::ParameterValue, 'Remove a link; an auto link stays removed on re-index')
+            [CompletionResult]::new('reindex', 'reindex', [CompletionResultType]::ParameterValue, 'Re-read a project''s files into its index (the page''s "Index now")')
             [CompletionResult]::new('remove', 'remove', [CompletionResultType]::ParameterValue, 'Drop a project and its index rows; its files are never touched')
             break
         }
@@ -1684,6 +1817,9 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             break
         }
         'rtok;graph;help;projects;unlink' {
+            break
+        }
+        'rtok;graph;help;projects;reindex' {
             break
         }
         'rtok;graph;help;projects;remove' {
@@ -1928,6 +2064,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('web', 'web', [CompletionResultType]::ParameterValue, 'Local web UI over the same data as `rtok tui` (WebSocket API + React SPA)')
             [CompletionResult]::new('tui', 'tui', [CompletionResultType]::ParameterValue, 'Terminal UI over the same data as `rtok web` (one model, two renderings)')
             [CompletionResult]::new('stats', 'stats', [CompletionResultType]::ParameterValue, 'Measurements from session logs and the proxy')
+            [CompletionResult]::new('discover', 'discover', [CompletionResultType]::ParameterValue, 'Shell commands your agents ran that have no rule or formatter, most output first')
             [CompletionResult]::new('bench', 'bench', [CompletionResultType]::ParameterValue, 'A/B benchmark of host configurations')
             [CompletionResult]::new('doctor', 'doctor', [CompletionResultType]::ParameterValue, 'Inspect hooks, MCP servers and the proxy chain')
             [CompletionResult]::new('worktree', 'worktree', [CompletionResultType]::ParameterValue, 'Git worktrees of this repository: owner, state and disk cost')
@@ -1978,6 +2115,9 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
         'rtok;help;stats' {
             break
         }
+        'rtok;help;discover' {
+            break
+        }
         'rtok;help;bench' {
             break
         }
@@ -1993,6 +2133,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('whoami', 'whoami', [CompletionResultType]::ParameterValue, 'Your agent, where new worktrees go, the worktree you are in and the ones you hold')
             [CompletionResult]::new('gc', 'gc', [CompletionResultType]::ParameterValue, 'Remove merged, clean, idle worktrees with their branches; drop records of deleted ones')
             [CompletionResult]::new('clean', 'clean', [CompletionResultType]::ParameterValue, 'Delete idle tagged build caches (`CACHEDIR.TAG`) and keep the worktrees; dry run without `--yes`')
+            [CompletionResult]::new('migrate', 'migrate', [CompletionResultType]::ParameterValue, 'Move this repository''s worktrees into `[worktree] root`; dry run without `--yes`')
             break
         }
         'rtok;help;worktree;add' {
@@ -2019,6 +2160,9 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
         'rtok;help;worktree;clean' {
             break
         }
+        'rtok;help;worktree;migrate' {
+            break
+        }
         'rtok;help;task' {
             [CompletionResult]::new('create', 'create', [CompletionResultType]::ParameterValue, 'Create a task under the next free id and print the id')
             [CompletionResult]::new('list', 'list', [CompletionResultType]::ParameterValue, 'The plan: open and in-progress tasks, subtasks under their parent')
@@ -2030,7 +2174,10 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('release', 'release', [CompletionResultType]::ParameterValue, 'Clear the assignee and set the task open. Only the holder, unless --force')
             [CompletionResult]::new('dep', 'dep', [CompletionResultType]::ParameterValue, 'Record that this task waits on another. A cycle is refused and nothing is written')
             [CompletionResult]::new('priority', 'priority', [CompletionResultType]::ParameterValue, 'Set priority from 0 (highest) to 4. 2 is the default and is not stored')
+            [CompletionResult]::new('conflict', 'conflict', [CompletionResultType]::ParameterValue, 'Record that two tasks touch the same files, so they should not run at once. Symmetric; `ready` flags a task whose partner is in progress')
+            [CompletionResult]::new('parallel', 'parallel', [CompletionResultType]::ParameterValue, 'Mark a task safe to run beside any other task')
             [CompletionResult]::new('sync', 'sync', [CompletionResultType]::ParameterValue, 'Raise the id counters to the adapter''s highest ids and report drift; never writes the adapter')
+            [CompletionResult]::new('export', 'export', [CompletionResultType]::ParameterValue, 'Mirror the disk tasks one way into an issue tracker; the files stay the source of truth. A second run with nothing changed sends no write')
             [CompletionResult]::new('init', 'init', [CompletionResultType]::ParameterValue, 'Write `[tasks]` into this checkout''s `.rtok.toml` and seed the counter from existing tasks')
             break
         }
@@ -2064,7 +2211,16 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
         'rtok;help;task;priority' {
             break
         }
+        'rtok;help;task;conflict' {
+            break
+        }
+        'rtok;help;task;parallel' {
+            break
+        }
         'rtok;help;task;sync' {
+            break
+        }
+        'rtok;help;task;export' {
             break
         }
         'rtok;help;task;init' {
@@ -2217,7 +2373,9 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
         'rtok;help;memory' {
             [CompletionResult]::new('import', 'import', [CompletionResultType]::ParameterValue, 'Import `{kind,title,body}` JSONL; dedupe by body sha256')
             [CompletionResult]::new('export', 'export', [CompletionResultType]::ParameterValue, 'Print every note but session checkpoints as the JSONL `import` reads')
+            [CompletionResult]::new('extract', 'extract', [CompletionResultType]::ParameterValue, 'Save notes an external program extracts from a transcript (off by default)')
             [CompletionResult]::new('retire', 'retire', [CompletionResultType]::ParameterValue, 'Retire a note: a tombstone — never recalled or searched, body kept')
+            [CompletionResult]::new('forget', 'forget', [CompletionResultType]::ParameterValue, 'Retire notes nobody read for a long time (a dry run unless `--apply`)')
             [CompletionResult]::new('pin', 'pin', [CompletionResultType]::ParameterValue, 'Pin a note so it leads SessionStart recall')
             [CompletionResult]::new('unpin', 'unpin', [CompletionResultType]::ParameterValue, 'Drop a note back to newest-first recall order')
             [CompletionResult]::new('history', 'history', [CompletionResultType]::ParameterValue, 'Print the earlier title and body kept when an upsert changed this note')
@@ -2232,7 +2390,13 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
         'rtok;help;memory;export' {
             break
         }
+        'rtok;help;memory;extract' {
+            break
+        }
         'rtok;help;memory;retire' {
+            break
+        }
+        'rtok;help;memory;forget' {
             break
         }
         'rtok;help;memory;pin' {
@@ -2289,6 +2453,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             [CompletionResult]::new('select', 'select', [CompletionResultType]::ParameterValue, 'Make a project the selected one; the page and later the CLI answer for it')
             [CompletionResult]::new('link', 'link', [CompletionResultType]::ParameterValue, 'Link a project into the selected one''s graph scope (indexes it when it never was)')
             [CompletionResult]::new('unlink', 'unlink', [CompletionResultType]::ParameterValue, 'Remove a link; an auto link stays removed on re-index')
+            [CompletionResult]::new('reindex', 'reindex', [CompletionResultType]::ParameterValue, 'Re-read a project''s files into its index (the page''s "Index now")')
             [CompletionResult]::new('remove', 'remove', [CompletionResultType]::ParameterValue, 'Drop a project and its index rows; its files are never touched')
             break
         }
@@ -2302,6 +2467,9 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             break
         }
         'rtok;help;graph;projects;unlink' {
+            break
+        }
+        'rtok;help;graph;projects;reindex' {
             break
         }
         'rtok;help;graph;projects;remove' {

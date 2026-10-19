@@ -12,12 +12,13 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, ensure};
+use rtok_sys::proc::{ProgressRunner, Unit};
 use serde::Serialize;
 
 use super::list::{Cache, orphans, usage};
 use super::{inventory, noted_table};
-use crate::bytes::human_bytes;
 use crate::render::{Col, duration};
+use change_preview::human_bytes;
 
 pub struct Policy {
     pub idle: Duration,
@@ -32,9 +33,17 @@ pub fn kept_because(cache: &Cache, current: bool, explicit: bool, p: &Policy) ->
         return Some("the worktree this command runs from; name its path to clean it".into());
     }
     let age = |m: SystemTime| p.now.duration_since(m).unwrap_or_default();
-    let active = cache.modified.is_some_and(|m| age(m) < p.idle);
-    active.then(|| "modified within the idle window".into())
+    match cache.modified {
+        Some(m) if age(m) < p.idle => Some("modified within the idle window".into()),
+        // T656: deletion cannot be undone, so missing evidence of age keeps the cache.
+        None => Some(AGE_UNKNOWN.into()),
+        Some(_) if cache.incomplete => Some(AGE_UNKNOWN.into()),
+        Some(_) => None,
+    }
 }
+
+/// Why a cache or worktree stays when its newest mtime could not be established.
+pub const AGE_UNKNOWN: &str = "age unknown: a file or its mtime could not be read";
 
 #[derive(Debug, Serialize)]
 pub struct Outcome {
@@ -42,6 +51,8 @@ pub struct Outcome {
     /// The cache root, relative to its worktree (`target`).
     pub cache: String,
     pub bytes: u64,
+    /// Files in the cache, counted before it is deleted; 0 for a cache that stays.
+    pub files: u64,
     pub modified_unix: Option<u64>,
     /// `clean` or `keep`.
     pub action: &'static str,
@@ -79,33 +90,69 @@ pub fn run(cwd: &Path, paths: &[PathBuf], policy: &Policy, yes: bool) -> Result<
     let here = real(cwd);
     let explicit = !paths.is_empty();
     let unix = |t: SystemTime| t.duration_since(UNIX_EPOCH).ok().map(|d| d.as_secs());
-    let mut outcomes = Vec::new();
-    for dir in targets(cwd, paths)? {
-        let current = here.starts_with(real(&dir));
+    let mut judged = Vec::new();
+    let dirs = targets(cwd, paths)?;
+    let current_at = super::deepest(&here, 0..dirs.len(), |i| dirs[*i].clone());
+    for (i, dir) in dirs.into_iter().enumerate() {
+        let current = current_at == Some(i);
         for cache in usage(&dir).caches {
             let kept = kept_because(&cache, current, explicit, policy);
-            let done = (yes && kept.is_none()).then(|| {
-                std::fs::remove_dir_all(&cache.path)
-                    .with_context(|| format!("cannot delete {}", cache.path.display()))
-            });
-            let relative = cache.path.strip_prefix(&dir).unwrap_or(&cache.path);
-            outcomes.push(Outcome {
-                worktree: dir.display().to_string(),
-                cache: relative.display().to_string(),
-                bytes: cache.bytes,
-                modified_unix: cache.modified.and_then(unix),
-                action: if kept.is_some() { "keep" } else { "clean" },
-                failed: matches!(done, Some(Err(_))),
-                note: match (kept, done) {
-                    (Some(why), _) => why,
-                    (None, Some(Ok(()))) => "deleted".into(),
-                    (None, Some(Err(e))) => format!("failed, kept: {e:#}"),
-                    (None, None) => "tagged cache, idle".into(),
-                },
-            });
+            judged.push((dir.clone(), cache, kept));
         }
     }
+    let count = judged
+        .iter()
+        .filter(|(.., kept)| yes && kept.is_none())
+        .count();
+    // A deletion is silent and can take long; a bar over the caches shows it is moving (T276.2).
+    let mut bar =
+        (count > 1).then(|| ProgressRunner::batch("cleaning caches…", count as u64, Unit::Items));
+    let mut outcomes = Vec::with_capacity(judged.len());
+    for (dir, cache, kept) in judged {
+        let relative = cache.path.strip_prefix(&dir).unwrap_or(&cache.path);
+        // Counted before the delete, so the preview and the report agree on what went.
+        let files = if kept.is_none() {
+            crate::removal_preview::size_of(&cache.path).1
+        } else {
+            0
+        };
+        let done = (yes && kept.is_none()).then(|| {
+            if let Some(bar) = bar.as_mut() {
+                bar.step(&format!("{} {}", dir.display(), relative.display()));
+            }
+            std::fs::remove_dir_all(&cache.path)
+                .with_context(|| format!("cannot delete {}", cache.path.display()))
+        });
+        outcomes.push(Outcome {
+            worktree: dir.display().to_string(),
+            cache: relative.display().to_string(),
+            bytes: cache.bytes,
+            files,
+            modified_unix: cache.modified.and_then(unix),
+            action: if kept.is_some() { "keep" } else { "clean" },
+            failed: matches!(done, Some(Err(_))),
+            note: match (kept, done) {
+                (Some(why), _) => why,
+                (None, Some(Ok(()))) => "deleted".into(),
+                (None, Some(Err(e))) => format!("failed, kept: {e:#}"),
+                (None, None) => "tagged cache, idle".into(),
+            },
+        });
+    }
+    if let Some(bar) = bar {
+        bar.finish();
+    }
     Ok(outcomes)
+}
+
+/// The removal lines of the caches a `--yes` would delete.
+fn preview(outcomes: &[Outcome]) -> String {
+    let paths: Vec<(String, u64, u64)> = outcomes
+        .iter()
+        .filter(|o| o.action == "clean" && !o.failed)
+        .map(|o| (format!("{}/{}", o.worktree, o.cache), o.bytes, o.files))
+        .collect();
+    crate::removal_preview::render(paths.iter().map(|(p, b, f)| (p.as_str(), *b, *f)))
 }
 
 pub fn to_table(outcomes: &[Outcome], yes: bool, now: SystemTime) -> String {
@@ -134,6 +181,11 @@ pub fn to_table(outcomes: &[Outcome], yes: bool, now: SystemTime) -> String {
     let mut out = noted_table(&cols, &lines, outcomes.iter().map(|o| o.note.as_str()));
     let cleaned = outcomes.iter().filter(|o| o.action == "clean" && !o.failed);
     let (n, bytes) = cleaned.fold((0, 0), |(n, b), o| (n + 1, b + o.bytes));
+    let planned = preview(outcomes);
+    if !yes && !planned.is_empty() {
+        out.push('\n');
+        out.push_str(&planned);
+    }
     out.push_str(&match (yes, n) {
         (false, 0) => "\nnothing to clean\n".to_string(),
         (false, n) => format!(
@@ -160,7 +212,7 @@ mod tests {
     #[rstest]
     #[case::idle(0, false, false, None)]
     #[case::idle_and_named(0, true, true, None)]
-    #[case::never_written(u64::MAX, false, false, None)]
+    #[case::no_mtime(u64::MAX, false, false, Some(AGE_UNKNOWN))]
     #[case::active(950, false, false, Some("modified within the idle window"))]
     #[case::active_and_named(950, true, true, Some("modified within the idle window"))]
     #[case::current(
@@ -179,6 +231,7 @@ mod tests {
             path: "/w/x/target".into(),
             bytes: 1,
             modified: (modified != u64::MAX).then(|| at(modified)),
+            incomplete: false,
         };
         let policy = Policy {
             idle: Duration::from_secs(100),
@@ -188,12 +241,32 @@ mod tests {
         assert_eq!(got.as_deref(), want);
     }
 
+    /// T656: an old mtime from a walk that could not read everything is a lower bound; the
+    /// unread part may be in use. A recent file found anyway still answers "active".
+    #[rstest]
+    #[case::old(0, Some(AGE_UNKNOWN))]
+    #[case::recent(950, Some("modified within the idle window"))]
+    fn an_incomplete_walk_never_reads_as_idle(#[case] modified: u64, #[case] want: Option<&str>) {
+        let cache = Cache {
+            path: "/w/x/target".into(),
+            bytes: 1,
+            modified: Some(at(modified)),
+            incomplete: true,
+        };
+        let policy = Policy {
+            idle: Duration::from_secs(100),
+            now: at(1_000),
+        };
+        assert_eq!(kept_because(&cache, false, false, &policy).as_deref(), want);
+    }
+
     #[test]
     fn the_table_sums_only_what_was_or_would_be_deleted() {
         let row = |action, cache: &str, bytes, note: &str, failed| Outcome {
             worktree: "/w/x".into(),
             cache: cache.into(),
             bytes,
+            files: 7,
             modified_unix: Some(1_000),
             action,
             note: note.into(),
@@ -223,6 +296,8 @@ mod tests {
         keep   /w/x     node_modules/.cache 3d04h     512 B  modified within the idle window
         clean  /w/x     build               3d04h    1.0 KB  failed, kept: cannot delete /w/x/build
 
+        - /w/x/target  2.0 KB  7 files
+        1 path, 7 files, -2.0 KB
         dry run: 1 caches, 2.0 KB to free, nothing changed; rerun with --yes
         ");
         assert!(to_table(&rows, true, now).ends_with("freed 2.0 KB in 1 caches (logical bytes)\n"));

@@ -21,8 +21,8 @@ use super::{
     ClaimConflict, ClaimOutcome, NewTask, PRIORITY_MAX, ReadyItem, Status, Task, TaskId,
     check_prefix, resolve_prefix,
 };
-use crate::config::layers::git_root;
 use crate::store::Store;
+use rtok_config::root::ProjectRoot;
 
 /// The adapters `[tasks] adapter` accepts; the config validator checks the same set.
 pub use crate::config::TASK_ADAPTERS as ADAPTERS;
@@ -49,10 +49,18 @@ pub struct Shown {
     pub subtasks: Vec<TaskId>,
 }
 
+/// `checkout`, not `main`: `.rtok.toml` and the disk adapter's directory are checked-in files,
+/// so each linked worktree has its own; the store identity is [`project_key`](crate::project::project_key).
+fn checkout_of(cwd: &Path, what: &str) -> Result<PathBuf> {
+    ProjectRoot::find(cwd)
+        .map(|r| r.checkout)
+        .with_context(|| format!("{what}: not inside a git checkout"))
+}
+
 impl Project {
     /// The project `cwd` belongs to, with the adapter `[tasks]` names.
     pub fn open(cfg: &crate::config::Tasks, cwd: &Path) -> Result<Self> {
-        let root = git_root(cwd).context("rtok task: not inside a git checkout")?;
+        let root = checkout_of(cwd, "rtok task")?;
         let key = crate::project::project_key(cwd)
             .context("rtok task: cannot tell which project this checkout is")?;
         let name = crate::project::project_name(cwd);
@@ -347,6 +355,75 @@ impl Project {
         self.adapter.save(&task)
     }
 
+    /// `id` and `other` touch the same files (`remove`: they no longer do). Symmetric: both tasks
+    /// are written, and an edge that is already as asked is left alone. A self-edge, a missing
+    /// task or an adapter that cannot store markers writes nothing, except that `remove` clears
+    /// `id`'s side of an edge whose peer is gone, which would otherwise need a hand edit.
+    pub fn conflict(&self, id: &TaskId, other: &TaskId, remove: bool) -> Result<Task> {
+        if id == other {
+            bail!("{id} cannot conflict with itself");
+        }
+        self.need_markers()?;
+        let _guard = self.adapter.claim_guard()?;
+        let mut task = self.get(id)?;
+        let mut peer = match self.adapter.get(other)? {
+            Some(peer) => peer,
+            None if remove => {
+                let Some(at) = task.conflicts_with.iter().position(|have| have == other) else {
+                    return Ok(task);
+                };
+                task.conflicts_with.remove(at);
+                return self.adapter.save(&task);
+            }
+            None => bail!("no task {other}"),
+        };
+        let edit = |t: &mut Task, with: &TaskId| {
+            let at = t.conflicts_with.iter().position(|have| have == with);
+            match (remove, at) {
+                (true, Some(at)) => {
+                    t.conflicts_with.remove(at);
+                    true
+                }
+                (false, None) => {
+                    t.conflicts_with.push(with.clone());
+                    t.conflicts_with.sort();
+                    true
+                }
+                _ => false,
+            }
+        };
+        let (task_changed, peer_changed) = (edit(&mut task, other), edit(&mut peer, id));
+        if peer_changed {
+            self.adapter.save(&peer)?;
+        }
+        if task_changed {
+            task = self.adapter.save(&task)?;
+        }
+        Ok(task)
+    }
+
+    /// Mark `id` safe to run beside any other task, or (`on` false) take the mark off.
+    pub fn set_parallel(&self, id: &TaskId, on: bool) -> Result<Task> {
+        self.need_markers()?;
+        let _guard = self.adapter.claim_guard()?;
+        let mut task = self.get(id)?;
+        if task.parallel == on {
+            return Ok(task);
+        }
+        task.parallel = on;
+        self.adapter.save(&task)
+    }
+
+    fn need_markers(&self) -> Result<()> {
+        if !self.adapter.stores_markers() {
+            bail!(
+                "{} tasks cannot store conflict or parallel markers yet: use the disk adapter",
+                self.adapter.name()
+            );
+        }
+        Ok(())
+    }
+
     /// `0` is highest, [`PRIORITY_MAX`] is lowest. The same level is not rewritten.
     pub fn set_priority(&self, id: &TaskId, level: u8) -> Result<Task> {
         if level > PRIORITY_MAX {
@@ -392,7 +469,7 @@ pub fn init(cwd: &Path, adapter: Option<&str>, prefix: Option<&str>) -> Result<P
     if let Some(p) = prefix {
         check_prefix(p)?;
     }
-    let root = git_root(cwd).context("rtok task init: not inside a git checkout")?;
+    let root = checkout_of(cwd, "rtok task init")?;
     let path = root.join(".rtok.toml");
     let text = match std::fs::read_to_string(&path) {
         Ok(text) => text,
@@ -435,11 +512,20 @@ pub fn ready_text(items: &[ReadyItem]) -> String {
     }
     let mut out = String::new();
     for item in items {
+        out.push_str(&format!("{}  {}", item.task.id, item.task.title));
         if item.stale {
-            out.push_str(&format!("{}  {}  (stale)\n", item.task.id, item.task.title));
-        } else {
-            out.push_str(&format!("{}  {}\n", item.task.id, item.task.title));
+            out.push_str("  (stale)");
         }
+        if item.task.parallel {
+            out.push_str("  [parallel]");
+        }
+        if !item.conflicts_in_progress.is_empty() {
+            out.push_str(&format!(
+                "  (conflicts with {} in progress)",
+                ids(&item.conflicts_in_progress)
+            ));
+        }
+        out.push('\n');
     }
     out
 }
@@ -456,6 +542,26 @@ pub fn filter(statuses: &[String], all: bool, parent: Option<&str>) -> Result<Fi
     })
 }
 
+/// Comma-separated ids.
+fn ids(list: &[TaskId]) -> String {
+    list.iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// The list line's tail: `  [parallel]` and `  [conflicts: A3, A4]`, nothing for a plain task.
+fn markers(t: &Task) -> String {
+    let mut out = String::new();
+    if t.parallel {
+        out.push_str("  [parallel]");
+    }
+    if !t.conflicts_with.is_empty() {
+        out.push_str(&format!("  [conflicts: {}]", ids(&t.conflicts_with)));
+    }
+    out
+}
+
 /// `rtok task list`: one line per task, subtasks indented under their parent.
 pub fn table(tasks: &[Task]) -> String {
     let width = tasks
@@ -467,9 +573,10 @@ pub fn table(tasks: &[Task]) -> String {
     for t in tasks {
         let id = format!("{}{}", "  ".repeat(t.id.path().len() - 1), t.id);
         out.push_str(&format!(
-            "{id:<width$}  {:<11}  {}\n",
+            "{id:<width$}  {:<11}  {}{}\n",
             t.status.as_str(),
-            t.title
+            t.title,
+            markers(t)
         ));
     }
     out
@@ -491,6 +598,12 @@ pub fn details(shown: &Shown) -> String {
     if !t.blocked_by.is_empty() {
         let ids: Vec<String> = t.blocked_by.iter().map(ToString::to_string).collect();
         out.push_str(&format!("blocked by: {}\n", ids.join(", ")));
+    }
+    if !t.conflicts_with.is_empty() {
+        out.push_str(&format!("conflicts with: {}\n", ids(&t.conflicts_with)));
+    }
+    if t.parallel {
+        out.push_str("parallel: yes\n");
     }
     if !shown.subtasks.is_empty() {
         let ids: Vec<String> = shown.subtasks.iter().map(ToString::to_string).collect();
@@ -561,6 +674,24 @@ mod tests {
             table(&listed),
             "A7      open         Pulled\n  A7.1  open         Leaf\nA8      open         First\n"
         );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// T660.2: files stay per checkout, the counter key is the one project's.
+    #[test]
+    fn a_linked_worktree_keeps_its_own_files_and_shares_the_project_key() {
+        let dir = crate::testutil::tmp_dir("t660-tasks");
+        let (main, wt) = crate::testutil::worktree_layout(&dir);
+        let cfg = crate::config::Tasks::default();
+        let (from_main, from_wt) = (
+            Project::open(&cfg, &main).unwrap(),
+            Project::open(&cfg, &wt).unwrap(),
+        );
+        assert_eq!(from_wt.root, wt);
+        assert_eq!(from_main.root, main);
+        assert_eq!(from_wt.key, from_main.key);
+        assert_eq!(init(&wt, None, None).unwrap(), wt.join(".rtok.toml"));
+        assert!(!main.join(".rtok.toml").exists());
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -708,6 +839,100 @@ mod claim_tests {
         let _ = std::fs::remove_dir_all(&path);
     }
 
+    /// An adapter that implements only what the trait requires: it stores no markers.
+    struct Bare(DiskAdapter);
+
+    impl TaskAdapter for Bare {
+        fn name(&self) -> &'static str {
+            "bare"
+        }
+        fn create(&self, task: &NewTask, id: &TaskId) -> Result<Task> {
+            self.0.create(task, id)
+        }
+        fn list(&self, filter: &Filter) -> Result<Vec<Task>> {
+            self.0.list(filter)
+        }
+        fn get(&self, id: &TaskId) -> Result<Option<Task>> {
+            self.0.get(id)
+        }
+        fn write_status(&self, id: &TaskId, status: Status) -> Result<Task> {
+            self.0.write_status(id, status)
+        }
+        fn max_id(&self, prefix: &str) -> Result<Option<TaskId>> {
+            self.0.max_id(prefix)
+        }
+    }
+
+    #[test]
+    fn markers_are_symmetric_idempotent_and_refused_where_they_cannot_be_kept() {
+        let path = dir("markers");
+        let p = project(&path);
+        for n in ["R1", "R2"] {
+            p.adapter()
+                .create(
+                    &NewTask {
+                        title: n.into(),
+                        description: String::new(),
+                        parent: None,
+                    },
+                    &id(n),
+                )
+                .unwrap();
+        }
+        let edge = p.conflict(&id("R1"), &id("R2"), false).unwrap();
+        assert_eq!(edge.conflicts_with, vec![id("R2")]);
+        assert_eq!(p.get(&id("R2")).unwrap().conflicts_with, vec![id("R1")]);
+
+        let file = std::fs::read_dir(&path)
+            .unwrap()
+            .map(|e| e.unwrap().path())
+            .find(|f| f.file_name().unwrap().to_str().unwrap().starts_with("R1 "))
+            .unwrap();
+        let before = bytes(&file);
+        p.conflict(&id("R2"), &id("R1"), false).unwrap();
+        assert_eq!(
+            bytes(&file),
+            before,
+            "an edge already there is not rewritten"
+        );
+        assert!(p.conflict(&id("R1"), &id("R1"), false).is_err());
+        assert!(p.conflict(&id("R1"), &id("R9"), false).is_err());
+
+        assert!(p.set_parallel(&id("R1"), true).unwrap().parallel);
+        let before = bytes(&file);
+        p.set_parallel(&id("R1"), true).unwrap();
+        assert_eq!(bytes(&file), before);
+        assert!(!p.set_parallel(&id("R1"), false).unwrap().parallel);
+
+        let cleared = p.conflict(&id("R1"), &id("R2"), true).unwrap();
+        assert!(cleared.conflicts_with.is_empty());
+        assert!(p.get(&id("R2")).unwrap().conflicts_with.is_empty());
+
+        let bare = Project::with_adapter(
+            "proj".into(),
+            path.clone(),
+            "R".into(),
+            Box::new(Bare(DiskAdapter::new(path.clone()))),
+        );
+        let err = bare.conflict(&id("R1"), &id("R2"), false).unwrap_err();
+        assert!(err.to_string().contains("bare tasks cannot store"), "{err}");
+        assert!(bare.set_parallel(&id("R1"), true).is_err());
+        assert!(bare.get(&id("R2")).unwrap().conflicts_with.is_empty());
+
+        // A peer whose file is gone leaves a stale edge that `--remove` must still clear.
+        p.conflict(&id("R1"), &id("R2"), false).unwrap();
+        std::fs::remove_file(path.join(format!("R2 - {}.md", "r2"))).unwrap();
+        assert!(p.conflict(&id("R1"), &id("R2"), false).is_err());
+        assert!(
+            p.conflict(&id("R1"), &id("R2"), true)
+                .unwrap()
+                .conflicts_with
+                .is_empty()
+        );
+        assert!(p.get(&id("R1")).unwrap().conflicts_with.is_empty());
+        let _ = std::fs::remove_dir_all(&path);
+    }
+
     #[test]
     fn a_missing_agent_row_can_be_taken_and_a_block_writes_nothing_on_a_cycle() {
         let path = dir("block");
@@ -799,6 +1024,48 @@ mod claim_tests {
                 .unwrap()
                 .is_none_or(|row| row.task_id != "R1")
         );
+        let _ = std::fs::remove_dir_all(&path);
+    }
+
+    /// T615: claims taken one after another by the same agent, and a re-claim of the first,
+    /// leave the store naming the last one claimed — whatever the spelling of the ids.
+    #[test]
+    fn the_stored_claim_follows_the_last_claim_made() {
+        let path = dir("order");
+        let store = Store::open_in_memory().unwrap();
+        let live = agent(&store, "live", ready::unix_now());
+        let adapter = project(&path);
+        for (n, title) in [("R1", "First"), ("R2", "Second")] {
+            adapter
+                .adapter()
+                .create(
+                    &NewTask {
+                        title: title.into(),
+                        description: String::new(),
+                        parent: None,
+                    },
+                    &id(n),
+                )
+                .unwrap();
+        }
+        let latest = || {
+            store
+                .latest_task_claim("proj", &live)
+                .unwrap()
+                .unwrap()
+                .task_id
+        };
+        project(&path)
+            .claim(&store, Some(&id("R1")), &live)
+            .unwrap();
+        project(&path)
+            .claim(&store, Some(&id("R2")), &live)
+            .unwrap();
+        assert_eq!(latest(), "R2");
+        project(&path)
+            .claim(&store, Some(&id("R1")), &live)
+            .unwrap();
+        assert_eq!(latest(), "R1", "a same-agent re-claim moves to the front");
         let _ = std::fs::remove_dir_all(&path);
     }
 }

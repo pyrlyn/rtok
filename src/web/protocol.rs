@@ -29,6 +29,10 @@ pub enum ServerFrame {
     Message { text: String },
     /// The archived payload a client asked for with [`ClientMessage::Expand`].
     Expand { id: String, text: String },
+    /// What removing a project would drop (T329.54): the dry run `graph projects remove
+    /// --dry-run` prints. Nothing was removed; the page asks the user before it sends the
+    /// confirmed request.
+    ProjectPlan { project: String, plan: String },
     /// The checklist of `rtok doctor --fix` and the diff of the selection (T331.12).
     DoctorPlan { plan: Plan },
     /// What a confirmed `doctor` apply did.
@@ -57,6 +61,39 @@ pub enum ServerFrame {
 impl ServerFrame {
     pub fn to_json(&self) -> String {
         serde_json::to_string(self).unwrap_or_default()
+    }
+}
+
+/// A request with the id its answer comes back under (T623). The server reads `req` off any
+/// message, so [`ClientMessage`] itself stays the bare shape; this is the wire form a client with
+/// more than one request in flight sends.
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
+pub struct Request {
+    /// Chosen by the client, never reused on one page: a reply for a request that timed out
+    /// still carries its own id, so it cannot be taken for the answer to a later one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub req: Option<u64>,
+    #[serde(flatten)]
+    pub message: ClientMessage,
+}
+
+/// A frame as it goes out for a request that carried `req`: the same fields plus the id, on
+/// success and on failure (a `message` notice) alike.
+#[derive(Debug, Serialize, JsonSchema)]
+pub struct Reply {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub req: Option<u64>,
+    #[serde(flatten)]
+    pub frame: ServerFrame,
+}
+
+/// `frame` (one JSON object from [`ServerFrame::to_json`]) with `req` written in, as
+/// [`Reply`] would serialize it. Spliced rather than re-parsed because graph and export frames
+/// are large and the reply path is the page's latency.
+pub fn tag_reply(frame: String, req: Option<u64>) -> String {
+    match (req, frame.strip_prefix('{')) {
+        (Some(req), Some(rest)) if rest.starts_with('"') => format!("{{\"req\":{req},{rest}"),
+        _ => frame,
     }
 }
 
@@ -112,6 +149,19 @@ pub enum ProjectRequest {
         #[serde(default)]
         both: bool,
     },
+    /// Re-read the project's files (T329.54). Answered at once; the row reads `indexing` until
+    /// the worker ends, then `ok` or `failed` with the error.
+    Reindex {
+        project: String,
+    },
+    /// Drop the project from the registry with its index rows; its files are never touched.
+    /// Without `confirmed` nothing is written and the dry run comes back as a
+    /// [`ServerFrame::ProjectPlan`].
+    Remove {
+        project: String,
+        #[serde(default)]
+        confirmed: bool,
+    },
 }
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
@@ -128,6 +178,10 @@ pub struct DoctorRequest {
     pub action: DoctorAction,
     #[serde(default)]
     pub selection: Selection,
+    /// For `apply`: the `token` of the plan the user confirmed. Without the plan's token, or with
+    /// one the files no longer produce, nothing is written and a fresh plan comes back.
+    #[serde(default)]
+    pub confirmed: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
@@ -163,6 +217,9 @@ struct WsProtocol {
     snapshot: Snapshot,
     server: ServerFrame,
     client: ClientMessage,
+    // The envelopes are named properties too, or the schema inlines the enums they wrap.
+    reply: Reply,
+    request: Request,
 }
 
 /// The schema as committed: pretty JSON with a trailing newline.
@@ -240,6 +297,46 @@ mod tests {
             ClientMessage::Junk { junk: JunkRequest { action: JunkAction::Plan, paths } } if paths.is_empty()
         ));
         assert!(serde_json::from_str::<ClientMessage>(r#"{"junk":{"action":"all"}}"#).is_err());
+    }
+
+    #[test]
+    fn a_request_id_rides_beside_any_message_and_is_optional() {
+        let r: Request = serde_json::from_str(r#"{"req":7,"doctor":{"action":"plan"}}"#).unwrap();
+        assert!(matches!(r.message, ClientMessage::Doctor { .. }));
+        assert_eq!(r.req, Some(7));
+        let r: Request = serde_json::from_str(r#"{"expand":"abc"}"#).unwrap();
+        assert_eq!(r.req, None);
+        // The bare message still parses with the id beside it: the server reads `req` itself.
+        let m: ClientMessage = serde_json::from_str(r#"{"req":7,"expand":"abc"}"#).unwrap();
+        assert!(matches!(m, ClientMessage::Expand { .. }));
+    }
+
+    /// `tag_reply` writes into the rendered text what [`Reply`] serializes, for every shape of
+    /// frame, and leaves a frame alone when the request had no id.
+    #[test]
+    fn tag_reply_matches_the_reply_envelope() {
+        let frames = [
+            ServerFrame::Message {
+                text: "no \"such\" key".into(),
+            },
+            ServerFrame::Expand {
+                id: "a".into(),
+                text: "{\"x\":1}".into(),
+            },
+        ];
+        for frame in frames {
+            let json = frame.to_json();
+            let want = serde_json::to_value(Reply {
+                req: Some(7),
+                frame,
+            })
+            .unwrap();
+            let got: serde_json::Value =
+                serde_json::from_str(&tag_reply(json.clone(), Some(7))).unwrap();
+            assert_eq!(got, want);
+            assert_eq!(tag_reply(json.clone(), None), json);
+        }
+        assert_eq!(tag_reply("not json".into(), Some(1)), "not json");
     }
 
     #[test]

@@ -10,13 +10,14 @@
 //! All I/O goes through [`Fs`], so a test plugs in an in-memory map instead of the real disk
 //! (this PR's own test does exactly that). The disk-backed `Fs` a host installer uses lands
 //! with the first host (T277 PR 2) and must write atomically and back up before every change,
-//! the same contract `rtok_agent_sdk::write_atomic` / `backup` already give real files.
+//! the same contract `fs_kit::write::atomic` / `rtok_agent_sdk::backup` already give real files.
 
 use std::path::Path;
 
 use anyhow::{Context, Result};
 use jsonc_parser::ParseOptions;
 use jsonc_parser::cst::{CstInputValue, CstRootNode};
+use rtok_agent_sdk::{parse_strict_json, without_default_type};
 use serde_json::Value;
 
 use crate::spec::{Format, McpSpec};
@@ -28,6 +29,12 @@ use crate::spec::{Format, McpSpec};
 pub trait Fs {
     /// Bytes at `path`, or `None` if it does not exist.
     fn read(&self, path: &Path) -> Option<Vec<u8>>;
+    /// [`Fs::read`] for a caller about to edit and write the file back: `Err` when the file
+    /// exists but cannot be read, so an unreadable config is never mistaken for an absent one and
+    /// replaced by a fresh file (T652). The default suits an `Fs` that cannot fail to read.
+    fn try_read(&self, path: &Path) -> Result<Option<Vec<u8>>> {
+        Ok(self.read(path))
+    }
     /// Overwrite (or create) `path` with `bytes`.
     fn write(&mut self, path: &Path, bytes: Vec<u8>) -> Result<()>;
     /// Best-effort copy of `path`'s current contents before it changes.
@@ -70,7 +77,10 @@ pub fn read_servers(
 /// place instead of rebuilding it from a plain value. `Unchanged` when the file already holds
 /// exactly `entry` there.
 pub fn write_entry(fs: &mut impl Fs, spec: &McpSpec, entry: &Value) -> Result<Written> {
-    if read_entry(fs, spec)?.as_ref() == Some(entry) {
+    // Claude.app drops the default `"type": "stdio"` when it re-saves its config (T265), so an
+    // entry that differs only by that field is already ours.
+    let same = |have: &Value| without_default_type(have) == without_default_type(entry);
+    if read_entry(fs, spec)?.as_ref().is_some_and(same) {
         return Ok(Written::Unchanged);
     }
     match spec.format {
@@ -95,14 +105,13 @@ pub fn remove_entry(fs: &mut impl Fs, spec: &McpSpec) -> Result<Written> {
 // ---- JSON (strict; T79 refuses to rewrite a file that fails to parse as plain JSON) ----
 
 fn parse_json(bytes: &[u8], path: &Path) -> Result<Value> {
-    if bytes.iter().all(u8::is_ascii_whitespace) {
-        return Ok(Value::Object(Default::default()));
-    }
-    serde_json::from_slice(bytes).with_context(|| format!("{}: not strict JSON", path.display()))
+    let raw =
+        std::str::from_utf8(bytes).with_context(|| format!("{}: not UTF-8", path.display()))?;
+    parse_strict_json(path, raw)
 }
 
 fn servers_json(fs: &impl Fs, spec: &McpSpec) -> Result<Option<serde_json::Map<String, Value>>> {
-    let Some(bytes) = fs.read(&spec.config_path) else {
+    let Some(bytes) = fs.try_read(&spec.config_path)? else {
         return Ok(None);
     };
     let root = parse_json(&bytes, &spec.config_path)?;
@@ -117,7 +126,7 @@ fn walk_json<'a>(
 }
 
 fn write_json(fs: &mut impl Fs, spec: &McpSpec, entry: Option<&Value>) -> Result<Written> {
-    let mut root = match fs.read(&spec.config_path) {
+    let mut root = match fs.try_read(&spec.config_path)? {
         Some(bytes) => parse_json(&bytes, &spec.config_path)?,
         None => Value::Object(Default::default()),
     };
@@ -201,7 +210,7 @@ fn parse_jsonc(bytes: Option<Vec<u8>>, path: &Path) -> Result<CstRootNode> {
 }
 
 fn servers_jsonc(fs: &impl Fs, spec: &McpSpec) -> Result<Option<serde_json::Map<String, Value>>> {
-    let Some(bytes) = fs.read(&spec.config_path) else {
+    let Some(bytes) = fs.try_read(&spec.config_path)? else {
         return Ok(None);
     };
     let root = parse_jsonc(Some(bytes), &spec.config_path)?;
@@ -221,7 +230,7 @@ fn servers_jsonc(fs: &impl Fs, spec: &McpSpec) -> Result<Option<serde_json::Map<
 }
 
 fn write_jsonc(fs: &mut impl Fs, spec: &McpSpec, entry: Option<&Value>) -> Result<Written> {
-    let root = parse_jsonc(fs.read(&spec.config_path), &spec.config_path)?;
+    let root = parse_jsonc(fs.try_read(&spec.config_path)?, &spec.config_path)?;
     let mut obj = root
         .object_value_or_create()
         .with_context(|| format!("{}: root is not an object", spec.config_path.display()))?;
@@ -276,7 +285,7 @@ fn parse_toml(bytes: &[u8], path: &Path) -> Result<toml_edit::DocumentMut> {
 }
 
 fn servers_toml(fs: &impl Fs, spec: &McpSpec) -> Result<Option<serde_json::Map<String, Value>>> {
-    let Some(bytes) = fs.read(&spec.config_path) else {
+    let Some(bytes) = fs.try_read(&spec.config_path)? else {
         return Ok(None);
     };
     let doc = parse_toml(&bytes, &spec.config_path)?;
@@ -296,7 +305,7 @@ fn servers_toml(fs: &impl Fs, spec: &McpSpec) -> Result<Option<serde_json::Map<S
 }
 
 fn write_toml(fs: &mut impl Fs, spec: &McpSpec, entry: Option<&Value>) -> Result<Written> {
-    let mut doc = match fs.read(&spec.config_path) {
+    let mut doc = match fs.try_read(&spec.config_path)? {
         Some(bytes) => parse_toml(&bytes, &spec.config_path)?,
         None => toml_edit::DocumentMut::new(),
     };
@@ -418,7 +427,7 @@ mod tests {
 
     use super::*;
     use crate::registry::RTOK;
-    use crate::spec::{Client, DuplicateName, EntryShape};
+    use crate::spec::{Client, DuplicateName, EntryShape, Launch};
 
     #[derive(Default)]
     struct MemFs(HashMap<PathBuf, Vec<u8>>);
@@ -441,6 +450,7 @@ mod tests {
             format,
             key_path: McpSpec::key_path("mcpServers"),
             server: RTOK,
+            launch: Launch::default(),
             entry_shape: EntryShape::Command,
             duplicate_name: DuplicateName::ShowsBoth,
             plugin_serves: None,

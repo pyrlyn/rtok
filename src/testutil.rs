@@ -21,6 +21,16 @@ pub fn tmp_dir(tag: &str) -> PathBuf {
     dir
 }
 
+/// An absolute path from a Unix-style spelling: unchanged on Unix, `C:` plus backslashes on
+/// Windows, where `/repo` has a root but no drive and is not absolute.
+pub fn native_abs(unix: &str) -> String {
+    if cfg!(windows) {
+        format!("C:{}", unix.replace('/', "\\"))
+    } else {
+        unix.to_string()
+    }
+}
+
 /// Default config with the DB, the archive and the log under a fresh [`tmp_dir`].
 pub fn config(tag: &str) -> (Config, PathBuf) {
     let dir = tmp_dir(tag);
@@ -86,6 +96,29 @@ pub fn worktree_layout(dir: &Path) -> (PathBuf, PathBuf) {
     std::fs::write(admin.join("commondir"), "../..\n").unwrap();
     std::fs::write(wt.join(".git"), format!("gitdir: {}\n", admin.display())).unwrap();
     (main, wt)
+}
+
+/// A linked worktree at `main/rel` as git writes it, without a git binary: `main/.git` is a
+/// directory, the admin dir under `.git/worktrees` has a `commondir`, and the worktree's
+/// `.git` file names the admin dir. T660.3: worktrees nested in the project they belong to.
+pub fn linked_worktree(main: &Path, rel: &str) -> PathBuf {
+    let wt = main.join(rel);
+    let admin = main.join(".git/worktrees").join(wt.file_name().unwrap());
+    std::fs::create_dir_all(&admin).unwrap();
+    std::fs::create_dir_all(&wt).unwrap();
+    std::fs::write(admin.join("commondir"), "../..\n").unwrap();
+    std::fs::write(wt.join(".git"), format!("gitdir: {}\n", admin.display())).unwrap();
+    wt
+}
+
+/// A submodule at `parent/rel`: a `.git` file naming an admin dir with no `commondir`.
+pub fn submodule(parent: &Path, rel: &str) -> PathBuf {
+    let sub = parent.join(rel);
+    let admin = parent.join(".git/modules").join(sub.file_name().unwrap());
+    std::fs::create_dir_all(&admin).unwrap();
+    std::fs::create_dir_all(&sub).unwrap();
+    std::fs::write(sub.join(".git"), format!("gitdir: {}\n", admin.display())).unwrap();
+    sub
 }
 
 /// T143: claim the otel hook-flush "queued" slot for a test, simulating another hook-spawned
@@ -309,6 +342,29 @@ mod tests {
         assert!(home.ends_with("target/test-home"), "{}", home.display());
         #[cfg(windows)]
         assert_eq!(std::env::var_os("USERPROFILE"), Some(home.into_os_string()));
+    }
+
+    /// T644: the dirs tests leave behind go to a per-checkout dir nextest empties each run,
+    /// never into this machine's `$TMPDIR`. Short on Unix, or `hook.sock` under it would be
+    /// past `sun_path`. Outside the checkout on every OS, or git discovery from a test's
+    /// scratch dir would find this repo.
+    #[test]
+    fn nextest_runs_under_the_test_tmp() {
+        if std::env::var_os("NEXTEST").is_none() {
+            return;
+        }
+        let tmp = std::env::temp_dir();
+        let name = tmp.file_name().unwrap().to_string_lossy();
+        assert!(name.starts_with("rtok-test-"), "{}", tmp.display());
+        assert!(
+            !tmp.starts_with(env!("CARGO_MANIFEST_DIR")),
+            "{}",
+            tmp.display()
+        );
+        if cfg!(unix) {
+            assert_eq!(tmp.parent(), Some(std::path::Path::new("/tmp")));
+        }
+        assert!(tmp.is_dir());
     }
 
     #[test]

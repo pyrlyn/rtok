@@ -17,6 +17,7 @@ serde_json = { workspace = true }
 # node back out as a `serde_json::Value` to compare against the entry rtok wants (T277 config.rs).
 jsonc-parser = { workspace = true, features = ["cst", "serde_json"] }
 toml_edit = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
 
 [lints]
 workspace = true

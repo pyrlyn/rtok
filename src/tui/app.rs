@@ -14,12 +14,14 @@ use crossterm::event::{KeyCode, KeyModifiers};
 
 use super::compare::Compare;
 use super::doctor_fix::{DoctorFix, Engine, Keyed};
+use super::drill::Drill;
 use super::exporter::Exporter;
 use super::junk_clear::{self, JunkClear};
 use super::live_calls::LiveCalls;
 use super::projects::{self, Key};
 use crate::config::{Config, validate};
 use crate::model::{self, Snapshot};
+use crate::web::protocol::ProjectRequest;
 
 /// The one key table (T60.8): the footer and the `?` overlay render from it, so the
 /// key hints are never hand-written twice. `(page, key, description)`; page `""` is
@@ -71,6 +73,9 @@ pub(crate) const KEYS: &[(&str, &str, &str)] = &[
     ("compare", "Esc", "close"),
     ("graph", "e", "export graph"),
     ("graph", "v", "view saved export"),
+    ("graph", "d", "drill"),
+    ("graph", "i", "re-index"),
+    ("graph", "x", "remove…"),
     ("export", "↑/↓", "choose field"),
     ("export", "Space", "change format, level, redact"),
     ("export", "type", "file to write, or export to view"),
@@ -121,6 +126,8 @@ pub struct App {
     projects: projects::ProjectsState,
     /// The Graph page's compare view (T485).
     compare: Compare,
+    /// The Graph page's one-project view (T561).
+    drill: Drill,
     /// The Graph page's export form and saved-export view (T329.41).
     exporter: Exporter,
     /// Whether the `?` help overlay is up (T60.8).
@@ -251,6 +258,7 @@ impl App {
             config: ConfigState::default(),
             projects: projects::ProjectsState::default(),
             compare: Compare::default(),
+            drill: Drill::default(),
             exporter: Exporter::default(),
             help: false,
             worker: None,
@@ -309,6 +317,7 @@ impl App {
             .skills
             .selected
             .min(self.visible_skills(&snapshot).saturating_sub(1));
+        self.projects.settle(&projects::entries(&snapshot));
         self.snapshot = snapshot;
         self.updated = crate::log::now();
     }
@@ -355,6 +364,7 @@ impl App {
     pub fn poll(&mut self) {
         self.live.poll(self.page() == "graph");
         self.compare.poll();
+        self.drill.poll();
         self.exporter.poll();
         let Some(latest) = self.worker.as_ref().and_then(|w| w.rx.try_iter().last()) else {
             return;
@@ -506,15 +516,39 @@ impl App {
         match self.projects.key(code, &rows) {
             Key::Ignored => return false,
             Key::Handled => {}
-            Key::Write(req, plan) => {
-                let status = match crate::web::project_write(&self.cfg, req) {
-                    // `select` answers with the registry table, which the page already shows.
-                    Ok(_) if plan.starts_with("select ") => format!("{plan}: done"),
-                    Ok(out) => out.trim().lines().collect::<Vec<_>>().join("; "),
-                    Err(e) => format!("{e:#}"),
+            Key::Plan(id) => {
+                let req = ProjectRequest::Remove {
+                    project: id.to_string(),
+                    confirmed: false,
                 };
-                self.projects.set_status(status);
+                match crate::web::project_write(&self.cfg, req) {
+                    Ok(dry_run) => self.projects.confirm_remove(id, &dry_run),
+                    Err(e) => self.projects.set_status(format!("{e:#}")),
+                }
+            }
+            Key::Write(req, plan) => {
+                let reindexed = match &req {
+                    ProjectRequest::Reindex { project } => project.parse::<i32>().ok(),
+                    _ => None,
+                };
+                match (reindexed, crate::web::project_write(&self.cfg, req)) {
+                    // The worker is running: the status line follows it from `refresh`.
+                    (Some(id), Ok(_)) => self.projects.watch(id, &rows),
+                    (_, outcome) => {
+                        let status = match outcome {
+                            // `select` answers with the registry table, which the page already shows.
+                            Ok(_) if plan.starts_with("select ") => format!("{plan}: done"),
+                            Ok(out) => out.trim().lines().collect::<Vec<_>>().join("; "),
+                            Err(e) => format!("{e:#}"),
+                        };
+                        self.projects.set_status(status);
+                    }
+                }
                 self.request();
+            }
+            Key::Drill(id, name) => {
+                self.drill
+                    .toggle(id, name, &self.cfg, self.worker.is_some());
             }
         }
         true
@@ -532,6 +566,10 @@ impl App {
 
     pub(super) fn compare(&self) -> &Compare {
         &self.compare
+    }
+
+    pub(super) fn drill(&self) -> &Drill {
+        &self.drill
     }
 
     /// The Graph page's export form (T329.41); one panel is open at a time, so a key goes to
@@ -574,6 +612,7 @@ impl App {
     }
 
     #[cfg(test)]
+    #[cfg_attr(windows, allow(dead_code))] // only unix tests call it (T902)
     pub(in crate::tui) fn set_doctor_engine(&mut self, engine: Engine) {
         self.doctor_fix = DoctorFix::new(engine);
     }
@@ -722,8 +761,15 @@ impl App {
         if self.page() == "graph" && self.exporter.typing() && self.exporter_key(code) {
             return false;
         }
+        // An open `/` filter owns every printable key, `?` and `r` included (T637).
+        if self.filter_typing()
+            && (self.page() == "calls" && self.calls_key(code)
+                || self.page() == "config" && self.config_key(code))
+        {
+            return false;
+        }
         // T60.8: `?` toggles the help overlay and `r` re-reads the model before the
-        // next tick; both are global.
+        // next tick; both are global outside text entry.
         if code == KeyCode::Char('?') {
             self.help = !self.help;
             return false;
@@ -801,6 +847,19 @@ impl App {
                 }
                 false
             }
+            _ => false,
+        }
+    }
+
+    /// Whether the page's `/` filter is capturing text.
+    fn filter_typing(&self) -> bool {
+        match self.page() {
+            "calls" => self
+                .calls
+                .expand
+                .as_ref()
+                .is_some_and(|pane| pane.filtering),
+            "config" => self.config.filtering,
             _ => false,
         }
     }
@@ -1164,6 +1223,67 @@ pub(super) mod tests {
             !app.key(KeyCode::Char('r'), KeyModifiers::NONE),
             "r is not a quit"
         );
+    }
+
+    /// T637: an open filter takes `?` and `r` as text; closed, they are global again.
+    #[test]
+    fn filter_text_is_not_stolen_by_global_shortcuts() {
+        let mut cfg = config();
+        cfg.tui.tab = "config".into();
+        let mut app = App::new(&cfg);
+        assert_eq!(app.page(), "config");
+        let requested = app.requested;
+        let none = KeyModifiers::NONE;
+        app.key(KeyCode::Char('/'), none);
+        for c in "proxy?r".chars() {
+            app.key(KeyCode::Char(c), none);
+        }
+        assert_eq!(app.config_filter(), (true, "proxy?r"));
+        assert!(!app.help_open(), "? is text, not help");
+        assert_eq!(app.requested, requested, "r is text, not a refresh");
+        app.key(KeyCode::Backspace, none);
+        assert_eq!(app.config_filter().1, "proxy?");
+        assert!(
+            !app.key(KeyCode::Char('q'), none),
+            "q is text while filtering"
+        );
+        assert_eq!(app.config_filter().1, "proxy?q");
+        assert!(
+            app.key(KeyCode::Char('c'), KeyModifiers::CONTROL),
+            "Ctrl+C still quits"
+        );
+        app.key(KeyCode::Enter, none);
+        assert_eq!(app.config_filter(), (false, "proxy?q"));
+        app.key(KeyCode::Char('?'), none);
+        assert!(app.help_open(), "? is help again once the filter closes");
+        app.key(KeyCode::Char('?'), none);
+        app.key(KeyCode::Char('r'), none);
+        assert_eq!(app.requested, requested + 1, "r refreshes again");
+        app.key(KeyCode::Char('/'), none);
+        assert!(app.config_filter().0, "the filter reopens");
+
+        let mut cfg = config();
+        cfg.tui.tab = "calls".into();
+        let mut app = App::new(&cfg);
+        app.calls.expand = Some(ExpandPane {
+            id: "x".into(),
+            text: String::new(),
+            filter: String::new(),
+            filtering: false,
+            scroll: 0,
+        });
+        let requested = app.requested;
+        app.key(KeyCode::Char('/'), none);
+        for c in "a?r".chars() {
+            app.key(KeyCode::Char(c), none);
+        }
+        let pane = app.calls.expand.as_ref().unwrap();
+        assert_eq!(pane.filter, "a?r");
+        assert!(!app.help_open());
+        assert_eq!(app.requested, requested);
+        app.key(KeyCode::Esc, none);
+        app.key(KeyCode::Char('?'), none);
+        assert!(app.help_open(), "closed, ? is help");
     }
 
     /// T60.8: the KEYS table documents every page whose keys the handler claims —

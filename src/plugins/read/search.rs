@@ -25,7 +25,7 @@ fn strip_prefix_ci(path: &Path, prefix: &Path) -> Option<PathBuf> {
     crate::fs::strip_prefix(path, prefix)
 }
 
-/// Canonical walk base: `dunce::canonicalize(cwd)`, or `cwd` when it does not
+/// Canonical walk base: `fs_kit::path::canonicalize(cwd)`, or `cwd` when it does not
 /// exist. `search`/`tree` compute this once per call (T59.2) — `display_rel`
 /// takes the base instead of paying the syscalls per hit or row.
 fn canonical_base_with(fs: &impl super::fs::ReadFs, cwd: &Path) -> PathBuf {
@@ -61,20 +61,28 @@ fn display_rel(path: &Path, root: &Path, base: &Path) -> String {
 
 /// `WalkBuilder::hidden(false)` also descends into `.git/`; no tool wants object files,
 /// packed refs or reflogs as hits (`search` returned `.git/logs/HEAD`, 2026-09-16).
+///
+/// A linked worktree below the walk root (one under `.rtok/worktrees`) is not walked into
+/// either: its files belong to another checkout even when no ignore rule names it.
+/// Submodules and nested clones stay in the walk.
 pub(crate) fn skip_git(e: &ignore::DirEntry) -> bool {
-    e.file_name() != ".git"
+    if e.file_name() == ".git" {
+        return false;
+    }
+    let worktree = e.depth() > 0
+        && e.file_type().is_some_and(|t| t.is_dir())
+        && crate::fs::is_linked_worktree(e.path());
+    !worktree
 }
 
 /// The regular files a walk reaches whose bytes are valid UTF-8 text, as `(path, text)`, read one
 /// at a time. T55.5: a file over `max_bytes` is skipped before it is read, so a multi-GB blob
 /// cannot spike MCP memory. Shared by `search` and the graph text backend (T329.10).
 pub(crate) fn text_files(
-    walk: WalkBuilder,
+    walk: impl Iterator<Item = ignore::DirEntry>,
     max_bytes: u64,
 ) -> impl Iterator<Item = (PathBuf, String)> {
-    walk.build()
-        .filter_map(Result::ok)
-        .filter(|e| e.file_type().is_some_and(|t| t.is_file()))
+    walk.filter(|e| e.file_type().is_some_and(|t| t.is_file()))
         .filter_map(move |e| {
             if fs::metadata(e.path()).ok()?.len() > max_bytes {
                 return None;
@@ -103,7 +111,7 @@ pub fn search(cx: &Ctx, pattern: &str, path: &str, max: Option<u32>) -> Result<S
     let mut hits = Vec::new();
     let mut walk = WalkBuilder::new(&root);
     walk.hidden(false).filter_entry(skip_git);
-    let mut files = text_files(walk, cfg.search_max_bytes);
+    let mut files = text_files(walk.build().filter_map(Result::ok), cfg.search_max_bytes);
     // Checked before the next file is read, so a full result set never costs another read.
     while hits.len() < cap {
         let Some((path, text)) = files.next() else {
@@ -235,6 +243,37 @@ mod tests {
         assert!(out.contains("a.txt:1:") && !out.contains(".git"), "{out}");
         let out = tree(&cx, dir.to_str().unwrap(), Some(3)).unwrap();
         assert!(out.contains("a.txt") && !out.contains(".git"), "{out}");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T660.3: a linked worktree nested in the tree (one under `.rtok/worktrees`) is another
+    /// checkout's files: no hit and no row from it, unless it is the walk root itself. A
+    /// submodule and a nested clone are still searched.
+    #[test]
+    fn search_and_tree_skip_a_nested_linked_worktree() {
+        let (rt, dir) = crate::plugins::read::tests::cx("skipnested");
+        let nested = crate::testutil::linked_worktree(&dir, ".rtok/worktrees/x");
+        let sub = crate::testutil::submodule(&dir, "mods/sub");
+        let clone = dir.join("deps/clone");
+        fs::create_dir_all(clone.join(".git")).unwrap();
+        fs::write(nested.join("n.txt"), "needle in nested\n").unwrap();
+        fs::write(sub.join("s.txt"), "needle in submodule\n").unwrap();
+        fs::write(clone.join("c.txt"), "needle in clone\n").unwrap();
+        fs::write(dir.join(".rtok/k.txt"), "needle in rtok\n").unwrap();
+        fs::write(dir.join("a.txt"), "needle in tree\n").unwrap();
+        let cx = Ctx::new(&rt);
+        let out = search(&cx, "needle", dir.to_str().unwrap(), None).unwrap();
+        for kept in ["a.txt:1:", "k.txt:1:", "s.txt:1:", "c.txt:1:"] {
+            assert!(out.contains(kept), "{kept} missing: {out}");
+        }
+        assert!(!out.contains("n.txt"), "{out}");
+        let out = tree(&cx, dir.to_str().unwrap(), Some(5)).unwrap();
+        for kept in ["a.txt", "k.txt", "s.txt", "c.txt"] {
+            assert!(out.contains(kept), "{kept} missing: {out}");
+        }
+        assert!(!out.contains("n.txt"), "{out}");
+        let out = search(&cx, "needle", nested.to_str().unwrap(), None).unwrap();
+        assert!(out.contains("n.txt:1:"), "{out}");
         let _ = fs::remove_dir_all(dir);
     }
 

@@ -116,6 +116,23 @@ impl Store {
         Ok(rebuild_hook_inputs(rows))
     }
 
+    /// Bodies of the newest `limit` hook calls named `event`, across every session, at or
+    /// after `since` (unix seconds): the shell history `rtok discover` reads. Same contract as
+    /// [`Store::recent_hook_inputs`]: a body the store did not keep comes back as `""`.
+    pub fn hook_inputs_since(&self, event: &str, since: i64, limit: i64) -> Result<Vec<String>> {
+        let mut conn = self.lock()?;
+        let rows: Vec<HookInputRow> = calls::table
+            .inner_join(call_io::table.left_join(hook_sessions::table))
+            .filter(calls::kind.eq("hook"))
+            .filter(calls::name.eq(event))
+            .filter(calls::ts.ge(since))
+            .order(calls::id.desc())
+            .limit(limit)
+            .select((call_io::request_json, hook_sessions::fields.nullable()))
+            .load(&mut *conn)?;
+        Ok(rebuild_hook_inputs(rows))
+    }
+
     /// Hook/call rows in this session at or after `ts` (window for `guard`).
     pub fn calls_since(&self, session: &str, ts: i64) -> Result<i64> {
         let mut conn = self.lock()?;

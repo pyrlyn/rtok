@@ -35,17 +35,7 @@ static VARIANTS: [Variant; 2] = [
 ];
 
 impl Agent for Antigravity {
-    fn id(&self) -> &'static str {
-        "antigravity"
-    }
-
-    fn variants(&self) -> &'static [Variant] {
-        &VARIANTS
-    }
-
-    fn readme(&self) -> &'static str {
-        include_str!("README.md")
-    }
+    super::agent_identity!("antigravity");
 
     fn support(&self, kind: Kind, module: &str) -> Support {
         match (module, kind) {

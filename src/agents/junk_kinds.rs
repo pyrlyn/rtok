@@ -283,16 +283,17 @@ pub fn aged_items(
             if meta.file_type().is_symlink() {
                 continue;
             }
-            let (modified, cut) = if meta.is_dir() {
+            let (modified, incomplete, cut) = if meta.is_dir() {
                 let (u, cut) = usage_until(&path, Instant::now() + limit);
-                (u.modified, cut)
+                (u.modified, u.incomplete, cut)
             } else {
-                (meta.modified().ok(), false)
+                (meta.modified().ok(), false, false)
             };
             let entry = Cache {
                 path: path.clone(),
                 bytes: 0,
                 modified,
+                incomplete,
             };
             let kept = if cut {
                 Some(SCAN_STOPPED.into())

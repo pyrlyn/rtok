@@ -94,7 +94,22 @@ const ELECTRON_CACHES: [&str; 5] = ["Cache", "Code Cache", "GPUCache", "CachedDa
 /// Hosts with no `specs` row on purpose: §22 reads "not documented" for every path they write
 /// (the config folder they already name through their markers is still listed). Keeping the
 /// list explicit makes a new host in `HOSTS` fail a test until it has a row or joins this list.
-pub const NO_ROWS: [&str; 3] = ["kilo", "aider", "roo"];
+pub const NO_ROWS: [&str; 14] = [
+    "kilo",
+    "aider",
+    "roo",
+    "droid",
+    "goose",
+    "kiro",
+    "junie",
+    "amp",
+    "warp",
+    "continue",
+    "crush",
+    "openhands",
+    "augment",
+    "reasonix",
+];
 
 /// The §22 rows and the desktop-app folders of `host`. A host §22 reads "not documented" for
 /// (Cursor, Kilo, Aider, ...) has only what its own config files already name.
@@ -165,6 +180,10 @@ pub fn specs(host: &str) -> Vec<Spec> {
             doc(Logs, "{home}/.local/share/devin/cli/logs"),
         ],
         "qwen" => vec![doc(Data, "{home}/.qwen")],
+        "codebuddy" => vec![
+            doc(Data, "{home}/.codebuddy"),
+            doc(Data, "{home}/.workbuddy"),
+        ],
         "vscode" => {
             let mut v = vec![doc(Data, "{xdg_config}/Code")];
             // Before `electron`, which lists the same folders read-only: the first spec wins.

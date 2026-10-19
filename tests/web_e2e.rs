@@ -9,6 +9,7 @@
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
 use std::ffi::OsStr;
+use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
@@ -16,6 +17,31 @@ use std::time::{Duration, Instant};
 use futures_util::{SinkExt, StreamExt};
 use serde_json::Value;
 use tokio_tungstenite::tungstenite::Message;
+
+/// A `/ws` handshake carrying the token `rtok web` wrote under `rtok_home` (S2).
+async fn connect_ws(
+    addr: &str,
+    rtok_home: &Path,
+) -> Result<
+    (
+        tokio_tungstenite::WebSocketStream<
+            tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+        >,
+        tokio_tungstenite::tungstenite::handshake::client::Response,
+    ),
+    tokio_tungstenite::tungstenite::Error,
+> {
+    use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+    let token = rtok::web::token::read(rtok_home).expect("web token file");
+    let mut req = format!("ws://{addr}/ws")
+        .into_client_request()
+        .expect("ws request");
+    req.headers_mut().insert(
+        "authorization",
+        format!("Bearer {token}").parse().expect("header"),
+    );
+    tokio_tungstenite::connect_async(req).await
+}
 
 struct Web {
     child: Child,
@@ -31,11 +57,10 @@ impl Drop for Web {
     }
 }
 
-fn free_port() -> u16 {
-    std::net::TcpListener::bind("127.0.0.1:0")
-        .and_then(|l| l.local_addr())
-        .expect("free port")
-        .port()
+/// The `host:port` in `rtok web`'s startup line, `rtok web http://<addr>  (ws://<addr>/ws)`.
+fn bound_addr(line: &str) -> Option<String> {
+    let rest = line.strip_prefix("rtok web http://")?;
+    rest.split_whitespace().next().map(str::to_owned)
 }
 
 /// `rtok web` with `HOME`/`RTOK_HOME` in a temp dir, so the snapshot never reads this
@@ -49,9 +74,10 @@ async fn start_with(label: &str, dist: Option<&OsStr>) -> Web {
     let home = std::env::temp_dir().join(format!("rtok-web-e2e-{label}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&home);
     std::fs::create_dir_all(&home).expect("home");
-    let port = free_port().to_string();
+    // Port 0: the kernel picks the port when `rtok web` binds and the startup line names it. A
+    // port probed here and handed over can be taken by a parallel test in between.
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_rtok"));
-    cmd.args(["web", "--host", "127.0.0.1", "--port", &port])
+    cmd.args(["web", "--host", "127.0.0.1", "--port", "0"])
         .env("RTOK_HOME", &home)
         .env("HOME", &home)
         .env_remove("RTOK_WEB_DIST");
@@ -60,17 +86,30 @@ async fn start_with(label: &str, dist: Option<&OsStr>) -> Web {
     }
     // `home` is the cwd, so nothing here (no `web/dist`, no `dist/` beside the binary) can feed
     // the page except what the binary embeds.
-    let child = cmd
+    let mut child = cmd
         .current_dir(&home)
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .spawn()
         .expect("spawn rtok web");
-    let web = Web {
+    let stderr = child.stderr.take().expect("stderr");
+    let (tx, rx) = std::sync::mpsc::channel();
+    // Drains past the startup line too: a full pipe would block the server's next write.
+    std::thread::spawn(move || {
+        for line in BufReader::new(stderr).lines().map_while(Result::ok) {
+            if let Some(addr) = bound_addr(&line) {
+                let _ = tx.send(addr);
+            }
+        }
+    });
+    let mut web = Web {
         child,
-        addr: format!("127.0.0.1:{port}"),
+        addr: String::new(),
         home,
     };
+    web.addr = rx
+        .recv_timeout(Duration::from_secs(20))
+        .expect("rtok web never printed its address");
     let deadline = Instant::now() + Duration::from_secs(20);
     loop {
         if let Ok(r) = reqwest::get(format!("http://{}/health", web.addr)).await
@@ -99,6 +138,28 @@ fn asset_url(html: &str, ext: &str) -> String {
         .find(|url| url.ends_with(ext))
         .unwrap_or_else(|| panic!("no {ext} asset in the page"))
         .to_string()
+}
+
+/// T641: `--port 0` lets the kernel pick the port at bind time, so parallel servers never race
+/// for a probed one; the startup line and `/health` name the port actually bound, not 0.
+#[tokio::test]
+async fn port_zero_reports_the_bound_port() {
+    let web = start("port0").await;
+    let port: u16 = web
+        .addr
+        .rsplit(':')
+        .next()
+        .and_then(|p| p.parse().ok())
+        .expect("port in the startup line");
+    assert_ne!(port, 0);
+    let health = reqwest::get(format!("http://{}/health", web.addr))
+        .await
+        .expect("health")
+        .text()
+        .await
+        .expect("body");
+    let health: Value = serde_json::from_str(&health).expect("json");
+    assert_eq!(health["port"], port, "{health}");
 }
 
 #[tokio::test]
@@ -189,9 +250,7 @@ async fn rtok_web_dist_overrides_the_embedded_spa() {
         "RTOK_WEB_DIST was ignored"
     );
     // The API is not the override's business.
-    let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://{}/ws", web.addr))
-        .await
-        .expect("ws connect");
+    let (mut ws, _) = connect_ws(&web.addr, &web.home).await.expect("ws connect");
     assert_eq!(next_json(&mut ws).await["type"], "snapshot");
     let _ = std::fs::remove_dir_all(&dist);
 }
@@ -237,9 +296,7 @@ fn plugin_enabled(snap: &Value, id: &str) -> bool {
 #[tokio::test]
 async fn websocket_streams_snapshots_and_answers_commands() {
     let web = start("ws").await;
-    let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://{}/ws", web.addr))
-        .await
-        .expect("ws connect");
+    let (mut ws, _) = connect_ws(&web.addr, &web.home).await.expect("ws connect");
 
     let first = next_json(&mut ws).await;
     assert_eq!(first["type"], "snapshot", "{first}");
@@ -288,6 +345,36 @@ async fn websocket_streams_snapshots_and_answers_commands() {
     ws.close(None).await.expect("close");
 }
 
+/// T623: an answer carries the `req` of the request it answers — a plan, a refusal, a parse
+/// error and a lookup miss alike — and a request without one is answered with none.
+#[tokio::test]
+async fn answers_echo_the_request_id_and_only_that_one() {
+    let web = start("req").await;
+    let (mut ws, _) = connect_ws(&web.addr, &web.home).await.expect("ws connect");
+    let sent = [
+        (r#"{"req":11,"junk":{"action":"plan"}}"#, "junkplan"),
+        (r#"{"req":12,"junk":{"action":"burn"}}"#, "message"),
+        (r#"{"req":13,"expand":"no-such-id"}"#, "message"),
+        (
+            r#"{"req":14,"set":{"key":"core.db_path","value":true}}"#,
+            "message",
+        ),
+        (r#"{"req":15,"graph":{}}"#, "message"),
+    ];
+    for (text, kind) in sent {
+        ws.send(Message::text(text)).await.expect("send");
+        let want: Value = serde_json::from_str(text).unwrap();
+        let reply = next_of(&mut ws, kind).await;
+        assert_eq!(reply["req"], want["req"], "{text} -> {reply}");
+    }
+    ws.send(Message::text(r#"{"expand":"no-such-id"}"#))
+        .await
+        .expect("send bare");
+    let bare = next_of(&mut ws, "message").await;
+    assert!(bare.get("req").is_none(), "{bare}");
+    ws.close(None).await.expect("close");
+}
+
 /// T331.12: the doctor fix over the real socket. A plan changes nothing; only `apply` writes,
 /// and it leaves the `_backup/` copy.
 #[cfg(unix)] // POSIX hook command paths
@@ -298,9 +385,7 @@ async fn doctor_plans_without_writing_and_applies_on_confirm() {
     std::fs::create_dir_all(settings.parent().unwrap()).expect("claude dir");
     let broken = r#"{"hooks": {"Stop": [{"hooks": [{"type": "command", "command": "/nonexistent/old.sh"}]}]}}"#;
     std::fs::write(&settings, broken).expect("settings");
-    let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://{}/ws", web.addr))
-        .await
-        .expect("ws connect");
+    let (mut ws, _) = connect_ws(&web.addr, &web.home).await.expect("ws connect");
     let none = r#""selection":{"keep":[],"toggled":[]}"#;
 
     ws.send(Message::text(format!(
@@ -316,8 +401,20 @@ async fn doctor_plans_without_writing_and_applies_on_confirm() {
     assert!(plan["plan"]["diff"].as_str().unwrap().contains("old.sh"));
     assert_eq!(std::fs::read_to_string(&settings).unwrap(), broken);
 
+    // T576: an apply that does not name the previewed plan writes nothing and answers with one.
     ws.send(Message::text(format!(
         r#"{{"doctor":{{"action":"apply",{none}}}}}"#
+    )))
+    .await
+    .expect("send unbound apply");
+    let refused = next_of(&mut ws, "doctorfixed").await;
+    assert_eq!(refused["fixed"]["code"], 1, "{refused}");
+    assert_eq!(refused["fixed"]["replan"]["token"], plan["plan"]["token"]);
+    assert_eq!(std::fs::read_to_string(&settings).unwrap(), broken);
+
+    let token = plan["plan"]["token"].as_str().expect("token");
+    ws.send(Message::text(format!(
+        r#"{{"doctor":{{"action":"apply",{none},"confirmed":"{token}"}}}}"#
     )))
     .await
     .expect("send apply");
@@ -364,9 +461,7 @@ async fn junk_plans_without_removing_and_applies_only_confirmed_paths() {
             .and_then(|f| f.set_modified(old))
             .expect("age the log past the settle window");
     }
-    let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://{}/ws", web.addr))
-        .await
-        .expect("ws connect");
+    let (mut ws, _) = connect_ws(&web.addr, &web.home).await.expect("ws connect");
 
     ws.send(Message::text(r#"{"junk":{"action":"plan"}}"#))
         .await

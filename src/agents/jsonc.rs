@@ -248,12 +248,13 @@ fn excise_member(text: &str, key_start: usize, value_end: usize) -> String {
     if back > 0 && bytes[back - 1] == b',' {
         return format!("{}{}", &text[..back - 1], &text[value_end..]);
     }
-    let mut fwd = value_end;
-    while fwd < bytes.len() && bytes[fwd].is_ascii_whitespace() {
-        fwd += 1;
-    }
+    // The comma may follow a comment (`1 /*keep*/,`): that comment is the user's and stays,
+    // and only the comma goes, or the next survivor would start with a stray one.
+    let fwd = skip_trivia(text, value_end);
     if bytes.get(fwd) == Some(&b',') {
-        return format!("{}{}", &text[..key_start], &text[fwd + 1..]);
+        let gap = &text[value_end..fwd];
+        let gap = if gap.trim().is_empty() { "" } else { gap };
+        return format!("{}{gap}{}", &text[..key_start], &text[fwd + 1..]);
     }
     format!("{}{}", &text[..key_start], &text[value_end..])
 }
@@ -427,6 +428,17 @@ pub fn remove_member(
         body = excise_member(&body, cks, cve);
     }
     Ok((body, true))
+}
+
+/// `json` when it exists or has no `.jsonc` sibling, else the sibling: a host that writes
+/// `settings.jsonc` itself (MiMo, Amp) has its lone file edited rather than a second one made.
+pub(crate) fn lone_sibling(json: &Path) -> std::path::PathBuf {
+    let sibling = json.with_extension("jsonc");
+    if !json.exists() && sibling.exists() {
+        sibling
+    } else {
+        json.to_path_buf()
+    }
 }
 
 /// [`upsert_member`] on a host's JSONC file, written under the run's `apply` gates. `report`
@@ -669,6 +681,10 @@ pub fn pull_items(
     while !hits.is_empty() && !segs.is_empty() && is_empty_at(&text, &segs) {
         text = remove_at(&text, path, &segs)?.0;
         segs.pop();
+    }
+    // Callers write this text as is: an edit that broke the file must fail, not be saved.
+    if !hits.is_empty() {
+        parse_at(&text, path)?;
     }
     Ok((text, hits.len()))
 }
@@ -920,6 +936,65 @@ mod tests {
                 push_item(raw, Path::new("t"), &["h", "p"], &json!("x")).is_err(),
                 "{raw}"
             );
+        }
+    }
+
+    /// T627: a comment between the removed value and its comma used to hide the comma, which
+    /// then led the next survivor (`{ /*keep*/,"other":2}`). The comment stays, the comma goes.
+    #[test]
+    fn removing_an_object_member_with_a_trailing_comment_keeps_the_text_valid() {
+        let rm = |raw: &str| {
+            remove_member(raw, Path::new("t"), "servers", "rtok")
+                .unwrap()
+                .0
+        };
+        for (raw, want) in [
+            (
+                r#"{"servers":{"rtok":1 /*keep*/,"other":2}}"#,
+                r#"{"servers":{ /*keep*/"other":2}}"#,
+            ),
+            (
+                "{\"servers\":{\"rtok\":1 // note\n,\"other\":2}}",
+                "{\"servers\":{ // note\n\"other\":2}}",
+            ),
+            (
+                r#"{"servers":{"a":0,"rtok":1 /*k*/,"b":2}}"#,
+                r#"{"servers":{"a":0 /*k*/,"b":2}}"#,
+            ),
+            (
+                r#"{"servers":{"a":0,"rtok":1 /*k*/}}"#,
+                r#"{"servers":{"a":0 /*k*/}}"#,
+            ),
+            (
+                r#"{"servers":{"a":0,"rtok":{"x":1} /*k*/,}}"#,
+                r#"{"servers":{"a":0 /*k*/,}}"#,
+            ),
+            // Plain whitespace before the comma goes with it, as before.
+            (
+                r#"{"servers":{"rtok":1 , "other":2}}"#,
+                r#"{"servers":{ "other":2}}"#,
+            ),
+        ] {
+            let got = rm(raw);
+            assert_eq!(got, want);
+            assert!(parse(&got).is_ok(), "{got}");
+        }
+    }
+
+    /// T627: the array twin, and two owned elements removed in one pass.
+    #[test]
+    fn removing_array_elements_with_trailing_comments_keeps_the_text_valid() {
+        for (raw, want) in [
+            (r#"{"a":["ours" /*keep*/,"x"]}"#, r#"{"a":[ /*keep*/"x"]}"#),
+            (
+                r#"{"a":["ours" /*1*/,"ours" /*2*/,"x"]}"#,
+                r#"{"a":[ /*1*/ /*2*/"x"]}"#,
+            ),
+            (r#"{"a":["x","ours" /*k*/]}"#, r#"{"a":["x" /*k*/]}"#),
+        ] {
+            let (got, n) = pull(raw, &["a"]);
+            assert_eq!((got.as_str(), n > 0), (want, true), "{raw}");
+            assert_eq!(parse(&got).unwrap()["a"], json!(["x"]), "{got}");
         }
     }
 
