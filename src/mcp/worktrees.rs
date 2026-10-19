@@ -112,7 +112,16 @@ pub fn remove(cx: &Runtime, agent: &AgentDetail, args: &Value) -> Result<String>
 }
 
 pub fn list(cx: &Runtime) -> Result<String> {
-    let mut rows = list::rows(&std::env::current_dir()?)?;
+    let cwd = std::env::current_dir()?;
+    // A server launched in `$HOME` has no repository of its own; list the worktrees of
+    // the client root that lies in one. Without a usable root the error names what to do,
+    // never git's `fatal: not a git repository`.
+    #[cfg(feature = "read")]
+    let extra = crate::plugins::read::roots::client_roots();
+    #[cfg(not(feature = "read"))]
+    let extra: Vec<std::path::PathBuf> = Vec::new();
+    let dir = crate::project::project_dir(&cwd, &extra)?;
+    let mut rows = list::rows(&dir)?;
     list::attribute_with_store(&mut rows, Some(&cx.store), &cx.config.agents.idle);
     Ok(serde_json::to_string(&rows)?)
 }
