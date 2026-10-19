@@ -154,7 +154,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T523 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T524 | in progress | P2 | 1 | 0% | MiMo / mimo |
 | T525 | in progress | P2 | 3 | 0% | MiMo / mimo |
-| T526 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T527 | in progress | P2 | 3 | 0% | MiMo / mimo |
 | T666.2 | todo | P2 | 3 | 0% | |
 | T687 | todo | P2 | 4 | 0% | |
@@ -660,14 +659,6 @@ T428 covers SessionStart. On the live store for 2026-10-03 through 2026-10-10, S
 Done when: a trace names the work inside SubagentStart and PreCompact. That work is under 10 ms at the median on this store, or the card records why those two events get a higher budget. `tests/latency.rs` covers both.
 
 Check: the latency cases green; five manual runs of each event on the rtok repo print no `slow` warning; `just check`.
-
-### T526. `worktree_list` and `search` when `rtok mcp` was started in the home directory
-
-T356 stops the graph from indexing `$HOME`. The other tools still run git there. Since 2026-10-05, `worktree_list` failed 8 times with `fatal: not a git repository` (the last on 2026-10-10), and `search` failed 5 times with `no project root: rtok mcp runs in /Users/listepo`. A server launched in the home directory has no repository until the client sends `roots/list` or the caller passes a path.
-
-Done when: with cwd = home and a client root inside a repository, `worktree_list` and `search` use that root. With no root they return an error that says to pass a path or open a project, and the text is not git's `fatal: not a git repository`.
-
-Check: an MCP test with cwd = a non-repo and a `roots/list` root; the no-root error text; `just check`.
 
 ### T527. A worktree claim does not stay held by an agent idle for days
 

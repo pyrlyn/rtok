@@ -276,11 +276,7 @@ fn under(path: &Path, root: &Path) -> bool {
 /// such a walk times out instead of answering. T356: graph indexing uses it too.
 pub(crate) fn walk_root_ok(root: &Path) -> Result<()> {
     if crate::fs::is_unwalkable_root(root, std::env::home_dir().as_deref()) {
-        let root = crate::fs::canon(root);
-        bail!(
-            "no project root: rtok mcp runs in {}; pass an absolute path inside the repository or start rtok mcp there",
-            root.display()
-        );
+        return Err(crate::project::no_project_root(root));
     }
     Ok(())
 }

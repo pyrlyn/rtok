@@ -475,3 +475,145 @@ fn mcp_accepts_sibling_worktrees_and_every_client_root() {
     let _ = child.wait();
     let _ = std::fs::remove_dir_all(&base);
 }
+
+/// Launched outside any repository (here `/`, the same unwalkable class as `$HOME`),
+/// `worktree_list` and a pathless `search` use the `roots/list` root that lies inside one.
+/// The first root is the launch cwd so the chdir keeps the process outside a repo.
+#[test]
+fn mcp_home_cwd_worktree_list_and_search_use_the_client_root() {
+    let base = std::env::temp_dir().join(format!("rtok-mcp-t526-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    std::fs::create_dir_all(&base).unwrap();
+    let base = fs_kit::path::canonicalize(&base).unwrap();
+    let repo = base.join("repo");
+    let wt = base.join("wt");
+    std::fs::create_dir_all(&repo).unwrap();
+    let git = |dir: &Path, args: &[&str]| {
+        let out = Command::new("git")
+            .arg("-C")
+            .arg(dir)
+            .args(["-c", "user.name=t", "-c", "user.email=t@t"])
+            .args(args)
+            .output()
+            .expect("git");
+        assert!(
+            out.status.success(),
+            "git {args:?}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    };
+    git(&repo, &["init", "-q"]);
+    std::fs::write(repo.join("needle.txt"), "fn needle() {}\n").unwrap();
+    git(&repo, &["add", "."]);
+    git(&repo, &["commit", "-q", "-m", "init"]);
+    git(
+        &repo,
+        &["worktree", "add", "-q", wt.to_str().unwrap(), "-b", "w"],
+    );
+
+    let home = base.join("rtok-home");
+    std::fs::create_dir_all(&home).unwrap();
+    let mut child = Command::new(env!("CARGO_BIN_EXE_rtok"))
+        .arg("mcp")
+        .env("RTOK_HOME", &home)
+        .current_dir("/")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("spawn rtok mcp");
+    let mut stdin = child.stdin.take().expect("stdin");
+    let lines = LineReader::new(child.stdout.take().expect("stdout"));
+    let mut send = |line: String| writeln!(stdin, "{line}").unwrap();
+    send(r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{"roots":{}},"clientInfo":{"name":"t","version":"1"}}}"#.into());
+    lines.next_line();
+    send(r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#.into());
+    lines.next_line(); // our roots/list request
+    let uri = |p: &Path| url::Url::from_directory_path(p).unwrap();
+    // First root is `/`: the chdir keeps the process where it was launched.
+    send(format!(
+        r#"{{"jsonrpc":"2.0","id":"rtok-roots","result":{{"roots":[{{"uri":"{}"}},{{"uri":"{}"}}]}}}}"#,
+        uri(Path::new("/")),
+        uri(&repo)
+    ));
+    let mut call = |name: &str, args: serde_json::Value| -> (bool, String) {
+        send(
+            serde_json::json!({"jsonrpc":"2.0","id":7,"method":"tools/call",
+                "params":{"name":name,"arguments":args}})
+            .to_string(),
+        );
+        let v: serde_json::Value = serde_json::from_str(&lines.next_line()).expect("response");
+        let text = v["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap_or_default();
+        (v["result"]["isError"] == true, text.to_string())
+    };
+
+    let (err, text) = call("worktree_list", serde_json::json!({}));
+    assert!(!err, "worktree_list: {text}");
+    // Rows name the checkout and its linked worktree, not the launch cwd.
+    assert!(text.contains(&repo.display().to_string()), "{text}");
+    assert!(text.contains(&wt.display().to_string()), "{text}");
+
+    let (err, text) = call("search", serde_json::json!({"pattern": "needle"}));
+    assert!(!err, "search: {text}");
+    assert!(text.contains("needle.txt"), "{text}");
+
+    drop(stdin);
+    let _ = child.wait();
+    let _ = std::fs::remove_dir_all(&base);
+}
+
+/// With no client root and no repository under the launch cwd, both tools name what to
+/// do next instead of surfacing git's `fatal: not a git repository`.
+#[test]
+fn mcp_home_cwd_without_a_root_says_pass_a_path_or_open_a_project() {
+    let home = std::env::temp_dir().join(format!("rtok-mcp-t526-noroot-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&home);
+    std::fs::create_dir_all(&home).unwrap();
+    let mut child = Command::new(env!("CARGO_BIN_EXE_rtok"))
+        .arg("mcp")
+        .env("RTOK_HOME", &home)
+        .current_dir("/")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("spawn rtok mcp");
+    let mut stdin = child.stdin.take().expect("stdin");
+    let lines = LineReader::new(child.stdout.take().expect("stdout"));
+    let mut send = |line: String| writeln!(stdin, "{line}").unwrap();
+    send(r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"t","version":"1"}}}"#.into());
+    lines.next_line();
+    send(r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#.into());
+    let mut call = |name: &str, args: serde_json::Value| -> (bool, String) {
+        send(
+            serde_json::json!({"jsonrpc":"2.0","id":7,"method":"tools/call",
+                "params":{"name":name,"arguments":args}})
+            .to_string(),
+        );
+        let v: serde_json::Value = serde_json::from_str(&lines.next_line()).expect("response");
+        let text = v["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap_or_default();
+        (v["result"]["isError"] == true, text.to_string())
+    };
+
+    for (name, args) in [
+        ("worktree_list", serde_json::json!({})),
+        ("search", serde_json::json!({"pattern": "x"})),
+    ] {
+        let (err, text) = call(name, args);
+        assert!(err, "{name} must refuse: {text}");
+        assert!(text.contains("no project root"), "{name}: {text}");
+        assert!(
+            text.contains("pass a path or open a project"),
+            "{name}: {text}"
+        );
+        assert!(!text.contains("fatal:"), "{name}: {text}");
+    }
+
+    drop(stdin);
+    let _ = child.wait();
+    let _ = std::fs::remove_dir_all(&home);
+}
