@@ -39,7 +39,6 @@
 - T527. A worktree claim does not stay held by an agent idle for days
 - T653. Exclude semantic-cache hits from provider-billed OTel usage
 - T654. Re-read graph files after an unreadable index attempt
-- T655. Make compressor in-flight admission atomic
 - T656. Keep worktrees and caches when their age cannot be established
 - T651. Honor ProgressRunner timeouts with inherited output
 - T666.2. Provider-backed memory extractor (blocked on the creator)
