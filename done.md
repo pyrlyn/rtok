@@ -1,5 +1,15 @@
 # rtok — completed tasks
 
+### T524. Worktree `--idle` accepts `30m` and `0s`
+
+`worktree gc --idle` / `--stale-lock` and `worktree clean --idle` parsed durations with `parse_since` (bare number means days, plus `d` and `h`). Agents copy `[agents] idle`'s humantime values (`30m`, `0s`, `1m`, `1s`), and the error named `--since` for a flag that is not `--since`.
+
+`parse_idle_from` in `rtok-store` is the one humantime parser for `[agents] idle` and those flags. `idle_secs` calls it. The worktree commands pass `--idle` or `--stale-lock` as the error source. `--since` stays on the days grammar, so `30m` is still rejected there. Flag help cites `30m` next to `24h` and `7d`.
+
+Check: unit tests `parse_idle_from_accepts_the_agents_idle_grammar` (`30m`, `0s`, `24h`, `7d`, `1m`, `1s`, `15m`, `10m`) and `parse_idle_from_names_the_passed_flag` (`5x` names `--idle`, `--stale-lock` and `[agents] idle`, never `--since`); `just check`.
+
+Check result: `cargo test -p rtok-store parse_idle_from` passed. `rtok worktree gc --idle 30m --dry-run` and `rtok worktree clean --idle 0s --dry-run` exited 0. `gc --idle 5x` reports `bad --idle "5x"`. `gc --stale-lock 5x` reports `bad --stale-lock "5x"`. `stats --since 5x` and `stats --since 30m` still report `bad --since unit`.
+
 ### T259. Docs flip planned→today + acceptance
 
 Batch, Flex and model routing already shipped as T385.1, T385.4, T385.5, T385.10 and T385.12.1–T385.12.2. `docs/batch-flex.md` (and `docs/ru`, `docs/uk`), `architecture.md` §12 and `src/plugins/proxy/AGENTS.md` still described observe, result usage, Flex injection and the semantic-cache skip as planned, and the config sketch listed keys the binary does not load (`enabled`, `observe`, `sticky`).
