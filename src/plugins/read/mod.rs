@@ -282,16 +282,19 @@ pub(crate) fn walk_root_ok(root: &Path) -> Result<()> {
 }
 
 /// Shared body of [`cap`] / [`cap_recording`]: cap at `plugins.read.max_chars`, archiving an
-/// oversized text so the cut carries its id. `kind` is `Some` only for callers whose entire
-/// "before" is this cap (`search`/`tree` have no other honest before), so a `Measurement` row
-/// is written exactly when the cap actually cuts something.
+/// oversized text so the cut carries its id. The printed id is the 8-character prefix
+/// (T908). `kind` is `Some` only for callers whose entire "before" is this cap
+/// (`search`/`tree` have no other honest before), so a `Measurement` row is written exactly
+/// when the cap actually cuts something.
 fn cap_impl(cx: &Ctx, text: String, kind: Option<&'static str>) -> Result<String> {
     let max = cx.plugin_config::<crate::config::Read>("read").max_chars as usize;
     if text.chars().count() <= max {
         return Ok(text);
     }
     let id = cx.put_archive(text.as_bytes())?;
-    let out = crate::expand::cut(&text, &format!("\n… archived {id} …\n"), max);
+    // The cut names the 8-char prefix (T672, T908). `expand` resolves it; the ledger keeps the full id.
+    let shown = crate::names::short_id(&id);
+    let out = crate::expand::cut(&text, &format!("\n… archived {shown} …\n"), max);
     if let Some(kind) = kind {
         let _ = cx.record(&Measurement {
             plugin: "read",
@@ -419,9 +422,11 @@ pub(crate) mod tests {
         assert_eq!(r.kind, "read_cap");
         assert_eq!(r.after_bytes as usize, out.len());
         assert!(r.before_bytes > r.after_bytes);
-        let id = r.ref_id.clone().unwrap();
-        assert_eq!(id, archive_id(&out));
-        let full = crate::expand::fetch(&cx, &id).unwrap().unwrap();
+        let stored = r.ref_id.clone().unwrap();
+        let shown = archive_id(&out);
+        assert_eq!(shown.len(), crate::names::MIN_PREFIX, "{out}");
+        assert!(stored.starts_with(shown), "{stored} {shown}");
+        let full = crate::expand::fetch(&cx, shown).unwrap().unwrap();
         assert_eq!(full.len() as i64, r.before_bytes);
 
         let small = dir.join("small.txt");
@@ -459,8 +464,11 @@ pub(crate) mod tests {
             out.chars().count(),
             max
         );
-        let id = archive_id(&out);
-        let archived = String::from_utf8(cx.store.get_archive(id, None).unwrap().unwrap()).unwrap();
+        let shown = archive_id(&out);
+        assert_eq!(shown.len(), crate::names::MIN_PREFIX, "{out}");
+        let id = crate::expand::resolve_id(&cx, shown).unwrap();
+        let archived =
+            String::from_utf8(cx.store.get_archive(&id, None).unwrap().unwrap()).unwrap();
         assert_eq!(archived, expected);
         let _ = fs::remove_dir_all(dir);
     }
@@ -814,8 +822,11 @@ pub(crate) mod tests {
             out.chars().count(),
             max
         );
-        let id = archive_id(&out);
-        let archived = String::from_utf8(cx.store.get_archive(id, None).unwrap().unwrap()).unwrap();
+        let shown = archive_id(&out);
+        assert_eq!(shown.len(), crate::names::MIN_PREFIX, "{out}");
+        let id = crate::expand::resolve_id(&cx, shown).unwrap();
+        let archived =
+            String::from_utf8(cx.store.get_archive(&id, None).unwrap().unwrap()).unwrap();
         assert_eq!(archived, expected);
         let _ = fs::remove_dir_all(dir);
     }

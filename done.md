@@ -15537,14 +15537,15 @@ Check: `five_hundred_hits_are_capped_with_archive_id` — the printed id is 8 he
 Status: done 2026-10-19
 Model: Cursor / grok 4.7
 
+### T908. Print the short archive id on a capped read
+
+T672 made `expand` resolve an 8-character prefix. A fresh read, `search`, or `tree` cut by `plugins.read.max_chars` still printed the full 64-character id inside `… archived <id> …`. The dedup and delta lines are T906; this is the cap marker. The measurement `ref_id` stays the full id. `plugins.read.max_chars` still has to be at least 100.
+
+Check: `a_capped_fresh_read_records_one_row` — the printed id is 8 hex chars, it is a prefix of the ledger `ref_id`, and `expand` of the prefix returns the uncapped text. `cap_includes_marker_in_max_chars` looks the same prefix up.
 ### T906. Print the short archive id on a read re-read
-
 T672 made `expand` resolve an 8-character prefix and switched the other pointers to `names::short_id`. The read cache still printed the full 64-character id (`unchanged id …`, and `previous` / `expand` on a delta). T674 left that until T672 landed. T531 had required the full id because expand was an exact primary-key lookup; that constraint is gone.
-
 The lines now print `short_id`. The measurement `ref_id` stays the full id. `expand` of the printed prefix returns the archived bytes.
-
 Check: `dedup_reference_expands_to_the_archived_bytes` — the printed id is 8 hex chars, CLI and MCP expand return the file, and the ledger `ref_id` is the 64-char id.
-
 Result: `dedup_line` and the delta pointer in `src/plugins/read/cache.rs` use `names::short_id`. The read plugin README matches.
 
 ### T905. Format `podman ps` with the `docker ps` table
