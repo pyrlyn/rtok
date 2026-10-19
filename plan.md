@@ -117,9 +117,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T261 | in progress | P2 | 3 | 95% | Cursor / grok 4.7 |
 | T275 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
 | T275.1 | in progress | P2 | 3 | 80% | Cursor / grok 4.7 |
-| T276 | in progress | P2 | 5 | 30% | Claude Code / sonnet-5.5 |
-| T276.3 | in progress | P2 | 4 | 0% | Claude Code / sonnet-5.5 |
-| T276.6 | in progress | P2 | 3 | 0% | Claude Code / sonnet-5.5 |
 | T277 | in progress | P2 | 5 | 30% | Claude Code / sonnet-5.5 |
 | T278 | in progress | P1 | 3 | 90% | Claude Code / claude-opus-5-5 |
 | T279 | in progress | P1 | 5 | 90% | Claude Code / claude-opus-5-5 |
@@ -142,13 +139,9 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T414.7 | in progress | P3 | 1 | 0% | MiMo / mimo |
 | T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
 | T428 | in progress | P2 | 3 | 85% | Claude Code / sonnet-5.5 |
-| T651 | in progress | P2 | 2 | 35% | Claude Code / sonnet-5.5 |
-| T652 | in progress | P1 | 2 | 60% | Claude Code / sonnet-5.5 |
 | T653 | in progress | P2 | 2 | 55% | Claude Code / sonnet-5.5 |
 | T654 | in progress | P2 | 2 | 65% | Claude Code / sonnet-5.5 |
-| T655 | in progress | P2 | 2 | 60% | Claude Code / sonnet-5.5 |
 | T656 | in progress | P2 | 2 | 60% | Claude Code / sonnet-5.5 |
-| T657 | in progress | P1 | 2 | 55% | Claude Code / sonnet-5.5 |
 | T436.4 | todo | P3 | 2 | 90% | |
 | T522 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T523 | in progress | P2 | 2 | 0% | MiMo / mimo |
@@ -162,30 +155,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 
 
 
-
-### T651. Honor ProgressRunner timeouts with inherited output
-
-Evidence baseline: `eb7d980af235f0ccb3d8ff58471d24b8267af35d`. Where: [`ProgressRunner::run_capped`](crates/rtok-sys/src/proc/mod.rs#L141-L151), wait/timeout handling (L205, L320). Impact/trigger: any caller selecting `Output::Inherit` with `.timeout()` can block past the deadline. Evidence level: actual `rtok-sys` path-dependency harness; `exec sleep 0.25` with 30 ms returned success after 267 ms under Inherit; Capture returned `TimedOut` after 44 ms.
-
-Execution plan:
-1. Add a focused regression using a synthetic slow child with `Output::Inherit`; assert `TimedOut` near the configured deadline. Keep a successful inherited child control and retain the Capture/Stream timeout behavior.
-2. Apply the timeout to the inherited child wait while preserving inherited stdin/stdout/stderr and direct-child kill/reap behavior.
-3. Cover zero/short timeout, an early successful exit and spawn errors without relying on a real host or agent.
-4. Run the focused `rtok-sys` process tests and `just check`.
-
-Check: the inherited slow-child regression fails before the fix and passes after it; inherited streams remain inherited; Capture and Stream timeout behavior stays intact; `just check` passes. Probe command: temporary Cargo harness at `/tmp/rtok-t650-harness`, path dependency on this checkout's `crates/rtok-sys`, `ProgressRunner::new("probe", "sh", ["-c", "exec sleep 0.25"]).progress(Progress::Off).output(Output::Inherit).timeout(Duration::from_millis(30)).run()`.
-
-### T652. Refuse to replace an unreadable MCP host config
-
-Evidence baseline: `eb7d980af235f0ccb3d8ff58471d24b8267af35d`. Where: [`Disk::read` and `Writer::read`](src/agents/mcp.rs#L385-L405), [`write_entry`](crates/rtok-mcp/src/config.rs#L122-L145), atomic writer in `crates/rtok-agent-sdk/src/lib.rs`. Impact/trigger: installing/updating rtok with backup disabled while a valid host JSON config is unreadable silently replaces the file and drops unrelated entries. Evidence level: actual `rtok-mcp::config::write_entry` plus actual SDK writer through synthetic disk Fs/Writer; fixture was JSON `{"mcp_servers":{"other":{"command":"keep"}}}`, mode 000, backup false. The call succeeded; after permissions were restored, `other` was gone and only rtok remained. T79 concerns JSONC rejection; T277 extracted the MCP writer.
-
-Execution plan:
-1. Make the disk-backed MCP reader distinguish a missing path from a read error and propagate the latter before any edit or write; preserve the missing-file creation path.
-2. Keep the existing `rtok_agent_sdk::write` atomic swap and backup behavior; a disabled backup must not permit replacing data that could not be read.
-3. Add a Unix regression using a scratch host file at mode `000`, with backup disabled, asserting install/update returns an error and the original bytes remain after permissions are restored. Add controls for a genuinely absent file and an ordinary readable foreign entry.
-4. Run the MCP/config tests, `just check`, and the applicable config/host documentation checks.
-
-Check: an unreadable existing config never gets replaced or reported as installed, including when `[setup].backup = false`; a missing config can still be created; readable unrelated entries survive; `just check` passes.
 
 ### T653. Exclude semantic-cache hits from provider-billed OTel usage
 
@@ -207,17 +176,6 @@ Evidence baseline: `eb7d980af235f0ccb3d8ff58471d24b8267af35d`. Where: [`index.rs
 
 Check: a file that becomes readable is re-parsed even when mtime and size are unchanged.
 
-### T655. Make compressor in-flight admission atomic
-
-Evidence baseline: `eb7d980af235f0ccb3d8ff58471d24b8267af35d`. Where: [`queue.rs`](src/plugins/compress/queue.rs#L58-L79), cap check separated from increment. Impact/trigger: concurrent `submit` calls can exceed `max_in_flight`, spawning more compressor jobs than configured. Evidence level: deterministic extracted schedule synchronized after the load and before increment; cap 1 accepted two (`/tmp/rtok-t650-queue-probe.rs`). T385.9 documents a cap but not concurrent admission.
-
-1. Reserve capacity atomically before inserting a new ID into `seen`; if capacity is full, leave the ID retryable. If it is a duplicate or the seen lock fails, release the reservation.
-2. Release the slot on every spawn/task completion path.
-3. Add a barrier-controlled distinct-ID concurrency regression for cap 1, plus duplicate, saturation/retry and completion/release controls.
-4. Run compressor queue and live-compression tests plus `just check`.
-
-Check: no concurrent schedule admits more than `max_in_flight`, and every completion/error path releases its reservation.
-
 ### T656. Keep worktrees and caches when their age cannot be established
 
 Evidence baseline: `eb7d980af235f0ccb3d8ff58471d24b8267af35d`. Where: [`gc::decide`](src/worktree/gc.rs#L87-L120), [`clean::kept_because`](src/worktree/clean.rs#L31-L37), and [`list::walk`](src/worktree/list.rs#L86-L129). Impact/trigger: a merged unlocked non-current worktree with no age evidence is eligible for gc; a tagged cache with no mtime is eligible for clean. Walk errors can also hide newer files, so even `Some(old)` can be incomplete. T342's deadline-capped walk is conservative, but does not cover errors. Evidence level: source-only decision-path review; no filesystem deletion or executed decision probe.
@@ -227,16 +185,6 @@ Evidence baseline: `eb7d980af235f0ccb3d8ff58471d24b8267af35d`. Where: [`gc::deci
 3. Run focused worktree gc/clean tests and `just check`.
 
 Check: missing age never authorizes removal; established fresh/old ages retain their policy. Do not validate by deleting real worktrees or caches.
-
-### T657. Match compressor credentials to the internal provider
-
-Evidence baseline: `eb7d980af235f0ccb3d8ff58471d24b8267af35d`. Where: [`Auth::from_headers`](src/plugins/compress/llm.rs#L58-L76) accepts arbitrary Authorization credentials; [`shape_request`](src/proxy/mod.rs#L691-L697) supplies those credentials for all wires; [`Compressor::new`](src/plugins/compress/llm.rs#L111-L127) defaults an empty URL to the local proxy and appends `/v1/messages`; [`try_run`](src/plugins/compress/llm.rs#L161-L185) applies text-size, code and span guards; [`ask`](src/plugins/compress/llm.rs#L204-L238) sends an Anthropic-shaped body and forwards the credential; [`upstream_for`](src/proxy/mod.rs#L221-L239) routes by the request wire or an explicit lane upstream. Impact/trigger: with `plugins.compress.llm.enabled=true` (off by default), proxy mode `compress`, and an offered eligible non-code archived text block, an OpenAI bearer credential can cross the credential-destination boundary and be sent with an Anthropic Messages body to the default Anthropic upstream. The mismatched request can fail authentication/protocol and the summary is skipped. An explicit internal-lane upstream can change the destination, but no provider-format conversion occurs. Evidence level: source-derived call-path review; no HTTP call or credential was used.
-
-1. Bind compressor credentials and request format to the configured internal provider, or use dedicated compressor credentials; never forward a credential from an incompatible agent wire.
-2. Add a fake-upstream test for OpenAI and Anthropic caller credentials that checks destination, headers and body format without contacting a provider.
-3. Run focused compressor/proxy tests and `just check`.
-
-Check: an OpenAI bearer is never presented as an Anthropic credential by default; valid configured internal provider requests continue to work.
 
 ### T666.2. Provider-backed memory extractor (blocked on the creator)
 
@@ -391,79 +339,6 @@ Execution plan:
 4. Tests: ping reply text; clap `mcp ping` vs `mcp --`; Vfs bodies for every host's MCP shape; e2e spawn of `rtok mcp` from a fake config (`MCP Test жив`); fake `claude` on PATH.
 5. Verify with `just check`. The creator-machine `claude --cli` / `--desktop` run stays open.
 
-### T276. Spinner audit: every place rtok runs an external command and the user waits for its output
-
-Goal: whenever rtok starts an external process and a person at a terminal waits for its result, a spinner is on screen from the moment the process starts until its output arrives, with a message that says what is happening (`installing plugin via claude…`, `probing MCP server context7…`, `creating worktree…`). Use the existing helpers in `src/render.rs` (`loader`, `spinner`, both silent when stderr is not a TTY) and `with_loader` in `src/cli.rs`; no new spinner code.
-
-Audit (first pass, `rg 'Command::new|tokio::process'` on origin/main `12c7e91`): 39 call sites in 16 production files (about 10 more are in tests and do not count). No `tokio::process` use. Step 1 of the fix confirms this list.
-
-Already covered (spinner shown today):
-- `rtok agents list` / `rtok agents info`: `app_version` (`agents/mod.rs:297`, `<bin> --version`) runs inside `with_loader("listing hosts" / "reading host")`.
-- `rtok agents install/update/remove` when stdin is not a TTY: the 10 calls in `agents/restart.rs` (`tasklist`, `pgrep`, `osascript` x2, `taskkill`, `killall`, `open`, `cmd`, direct spawn, `xdg-open`) and the host plugin CLI calls through `run_cli` / `spawn_cli` (`agents/mod.rs:248,252`) run inside `with_loader("updating host")`.
-- `rtok graph index`: LSP servers spawned in `graph/lsp.rs:202` run under `render::spinner("indexing")`.
-
-Missing, output awaited, spinner to add:
-1. `rtok agents install/update/remove` in an interactive terminal (`apply_hosts`, `cli.rs`): T81 turned the loader off entirely so it never draws over the plugin question. Instead, show a loader per step (`installing plugin via <bin>…`, `closing <app>…`, `reopening <app>…`) and stop it before any prompt and restart it after the answer. Covers the same `restart.rs` and `run_cli` sites.
-2. `rtok doctor` MCP probe (`doctor.rs:924-938`, `spawn_mcp` / `mcp_command`): starts each configured MCP server (often `npx` / `uvx`, several seconds cold) and waits for `tools/list`, with nothing on screen. Add `probing MCP server <name>…` per server.
-3. `rtok worktree add/gc/clean` (`worktree/git.rs:11`, the shared `git` helper): `git worktree add` and removal can take seconds on a large repo. Add a loader around the long `git` calls (`creating worktree…`, `removing worktree <id>…`); keep quick reads (`rev-parse`, `worktree list`) without one.
-4. `rtok bench` (`bench.rs:268`, `bench.rs:378`, `claude -p`): each run takes tens of seconds to minutes and prints nothing until it ends. Add a loader with the arm, the prompt number and elapsed time (`bench mcp 3/10…`).
-5. `rtok run <command>` (`plugins/cmd/run.rs:150`, `shell_command`): if the output is captured and printed only when the command ends, add `running <command>…`; if it streams live, add nothing (a spinner would interleave with it). Decide from the code in step 1.
-
-No spinner needed (checked, with the reason):
-- No person waits, or no terminal: `build.rs:12` (build time), `demon.rs:182,518` (supervised children), `bin/rtok-hook.rs:85` and `hooks/mod.rs:467` (hooks run by the agent), `otel/export.rs:496` (detached flush), `mcp/wrap.rs:44` (stdio proxy), `graph/watch.rs:720,740,759` (background watcher).
-- The child owns the terminal: `log.rs:196` (`tspin` viewer), `demon.rs:315,317,326` (`rtok demon upgrade` hands the terminal to `ketch` / `rtok-update`, which print their own progress).
-- Returns in milliseconds: `demon.rs:603` (`sysctl`), `bench.rs:88` (`sh` probe), `graph/lsp.rs:21,32` (`on_path`, `rustup which`), `graph/mod.rs:755` (`git diff --name-only`).
-
-Architecture: one `ProgressRunner` for every external command (replaces adding spinners site by site):
-- Where it lives: a `proc` module (`mod.rs` for the runner, `indicator.rs`, `parse.rs`) in the existing crate `crates/rtok-sys` (OS process shims), which both `rtok` and `crates/rtok-mcp` (T277) depend on, so the MCP crate needs neither the `rtok` crate nor its own `Command::new`; no new crate. It is the only place in the workspace that calls `std::process::Command::new`; `clippy.toml` gets `disallowed-methods = ["std::process::Command::new"]` with an `#[allow]` only inside `crates/rtok-sys`, so a new call site that bypasses the runner, in `rtok` or in `crates/`, fails `just check`. `TtyIndicator`'s `indicatif` dependency moves to that crate with its `toolchain.md` row. The Windows shim logic now in `spawn_cli` (`agents/mod.rs:246`) and `mcp_command` (`doctor.rs:932`) moves into the runner too.
-- Interface:
-  - `ProgressRunner::new(label: &str, program, args)` returns a builder with `.cwd()`, `.env()`, `.stdin()`, `.timeout()`, `.progress(Progress)`, `.output(Output)`, then `.run() -> Result<Captured>` or `.spawn() -> Result<Running>`.
-  - `enum Output { Capture, Stream, Inherit, Detached }`. `Capture` keeps stdout/stderr and shows an indicator until exit; `Stream` forwards lines live and suspends the indicator around each write; `Inherit` hands the terminal to the child (`tspin`, `ketch` upgrade) with no indicator; `Detached` is for background children (demon, otel flush, deferred hook) with no indicator.
-  - `enum Progress { Unknown, Parse(Box<dyn ProgressParser>), Callback }`. `Unknown` draws a spinner. The other two draw a progress bar as soon as the first measurable update arrives and fall back to the spinner until then.
-  - `trait ProgressParser: Send { fn feed(&mut self, stream: Stream, line: &str) -> Option<Update>; }` with `struct Update { pos: u64, total: Option<u64>, unit: Unit, msg: Option<String> }` and `enum Unit { Bytes, Percent, Items }`. Bytes render as MB with speed and ETA, percent as a 0-100 bar, items as `pos/total`.
-  - `trait Indicator { fn set(&self, u: &Update); fn message(&self, m: &str); fn suspend<R>(&self, f: impl FnOnce() -> R) -> R; fn finish(&self); }` with two implementations: `TtyIndicator` (indicatif, on stderr) and `Hidden`. The runner picks `Hidden` when stderr is not a TTY, under `--json`, inside MCP and hook contexts, and when `RTOK_NO_PROGRESS=1`, so their output stays byte-identical.
-- How a process reports progress:
-  - Parsing: the runner reads stderr and stdout line by line (splitting on `\r` too, which is how `git`, `curl` and `cargo` redraw) and passes each line to the parser. Built-in parsers in `parse.rs` are `GitProgress` (`Receiving objects: 45% (120/267)`, `Updating files`), `Percent` (any `NN%`), `CargoProgress` (`Building [==> ] 120/300`), and `JsonLines` (a line `{"progress":{"pos":..,"total":..,"unit":".."}}`, for rtok's own child processes and plugin CLIs). The runner adds the flag that turns progress on where the tool has one (`git --progress`).
-  - Callback: for work rtok measures itself, `ProgressRunner::batch(label, total, Unit::Items)` returns a `Batch` whose `.step(msg)` moves the bar; each command inside the batch runs with its own spinner line under the bar. `rtok bench` (runs), `rtok doctor` (servers), `rtok worktree gc/clean` (worktrees) and `rtok agents install/update/remove` over several hosts use this.
-  - Prompts: `proc::suspend(|| ask(...))` hides every live indicator while rtok waits for an answer and redraws it after. This replaces the T81 rule that turned the loader off for the whole interactive run.
-- Result: a new host, plugin CLI or subcommand that runs a program through `ProgressRunner` gets the right indicator with no extra code; the point fixes 1-5 above become one-line `label` / `progress` / `output` choices.
-
-Migration plan:
-1. Add the `proc` module in `crates/rtok-sys` with the runner, both indicators, the four parsers and `Batch`; unit tests feed recorded `git` / `cargo` / `curl` stderr into the parsers, and a test asserts `Hidden` writes nothing.
-2. Move the shared helpers first: `worktree/git.rs::git`, `agents/mod.rs::run_cli` / `spawn_cli` / `app_version`, `doctor.rs::spawn_mcp` / `mcp_command`. That converts most user-facing sites at once.
-3. Convert the remaining sites file by file, choosing `Output` per the audit: `agents/restart.rs` (10, `Capture`), `bench.rs` (3, `Batch` plus `Capture`), `plugins/cmd/run.rs` (`Stream` or `Capture` per step 1), `graph/lsp.rs` and `graph/mod.rs` (`Capture`, long-lived LSP children via `.spawn()`), `graph/watch.rs` (`Capture`, hidden in the watcher), `demon.rs` (`Detached` for children, `Inherit` for upgrade, `Capture` for `sysctl`), `log.rs` (`Inherit`), `otel/export.rs`, `hooks/mod.rs`, `bin/rtok-hook.rs`, `mcp/wrap.rs` (`Detached` / `Stream`, always hidden). `build.rs` stays on `Command` (build scripts cannot use the crate) and is the one listed exception.
-4. Delete the point indicators: `with_loader` and the T81 `interactive` switch in `cli.rs`, and `render::loader` / `render::spinner` once `graph index` uses a `Batch` over files. `render.rs` keeps only styles.
-5. Turn on the `clippy.toml` ban and fix whatever it still finds, including `crates/`.
-6. Update `docs/` (contributor notes: "run external programs only through `proc::ProgressRunner`") and `CHANGELOG.md`.
-
-Fix:
-1. Confirm the audit list above with `rg` over the whole workspace (including `crates/`), and record each site as covered / add / not needed in a table in this card.
-2. Implement the `ProgressRunner` migration above; items 1-5 are covered by it, not by separate spinners. Every message names the action and the target in present tense and ends with `…`; the loader is cleared (`finish_and_clear`) before the command's own output or any error is printed.
-3. Interactive rule (T81) stays: a loader never runs while rtok is waiting for an answer. Put the pause and resume in one helper so every prompt uses it.
-4. Nothing changes when stderr is not a TTY: pipes, CI, `--json` and MCP output stay byte-identical.
-5. Progress bar over spinner: when an operation can report progress (megabytes, percent, files or items done out of a known total), show an `indicatif` progress bar with that count, not a spinner. A spinner is only for a wait that cannot be measured, where the command gives no intermediate data until its output arrives. For the items above this means: `rtok bench` shows a bar over runs (`3/10`), `rtok doctor` a bar over servers when it probes more than one, `rtok worktree gc/clean` a bar over worktrees removed; a single `claude -p` run, one MCP server start or one `git worktree add` stays a spinner.
-
-Check: on a TTY, each of items 1-5 shows its message from the moment the process starts until output appears; `rtok agents update claude` in a terminal shows step loaders and the plugin question is readable; `rtok doctor 2>/dev/null` and `--json` output are unchanged; a Vfs or snapshot test asserts no spinner bytes on non-TTY stderr; every operation with a known total shows a progress bar with its count and a spinner appears only on unmeasurable waits; `just check`.
-
-Execution plan (after T275, T277 and T279, which touch the same `agents` spawn helpers):
-1. Worktree `_worktrees/rtok-T276`. Confirm the audit with `rg` over the workspace and write the site table into this card (Fix 1).
-2. PR 1: the `proc` module in `crates/rtok-sys` with `ProgressRunner`, `TtyIndicator` / `Hidden`, the four parsers, `Batch`, `proc::suspend`; parser tests on recorded stderr and a no-bytes test for `Hidden`.
-3. PR 2: the shared helpers (`worktree/git.rs::git`, `run_cli` / `spawn_cli` / `app_version`, `spawn_mcp` / `mcp_command`), with `proc::suspend` replacing the T81 switch.
-4. PRs 3-4: the remaining sites file by file, per the audit's `Output` choice.
-5. PR 5: delete `with_loader` / `render::loader` / `render::spinner`, turn on the `clippy.toml` ban, contributor docs and `CHANGELOG.md`.
-Each PR listed here becomes a subtask (`Tn.m`, D16) when it is claimed; this card stays the epic.
-
-### T276.3. Shared agent helpers on `ProgressRunner`: `run_cli`, `spawn_cli`, `app_version`, doctor MCP probe
-
-Split from T276 (migration plan step 2, 2026-10-11, D16): `agents/mod.rs::run_cli` / `spawn_cli` / `app_version` and `doctor.rs::spawn_mcp` / `mcp_command` go through `ProgressRunner`; `proc::suspend` replaces the T81 `interactive` switch so `rtok agents install/update/remove` shows step loaders and the plugin question stays readable; `probing MCP server <name>…` with a bar when more than one server. Starts after T275, T277 and T279 land (same spawn helpers). Unblocks T436.4. Depends on T276.1, T276.2.
-
-Check: the T276 card's Check lines for items 1 and 2; a non-TTY test asserts no spinner bytes; `just check`.
-
-### T276.6. Retire the point indicators, turn on the `Command::new` ban, docs and changelog
-
-Split from T276 (migration plan steps 4-6, 2026-10-11, D16): delete `with_loader` and the T81 switch in `cli.rs`, `render::loader` / `render::spinner` (`graph index` moves to a `Batch` over files), drop `indicatif` from the root crate, add `disallowed-methods = ["std::process::Command::new"]` to `clippy.toml` with an `#[allow]` only inside `crates/rtok-sys`, update the contributor notes in `docs/` and `CHANGELOG.md`. Closes T276. Depends on T276.2 to T276.5.
-
-Check: `just check` fails on a stray `Command::new` outside `crates/rtok-sys`.
 
 ### T277. Move rtok's MCP core into its own crate `crates/rtok-mcp`
 
