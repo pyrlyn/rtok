@@ -3,6 +3,7 @@
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
 import offlineArt from "@brand/illustrations/offline.svg?raw";
+import type { AuthProblem } from "./api/auth";
 import { Button } from "./ui/Button";
 import { Icon } from "./ui/Icon";
 import { Spinner } from "./ui/Spinner";
@@ -60,13 +61,24 @@ export function ErrorState({ message }: { message: string }) {
     );
 }
 
+// The token file's default path: the page cannot know `RTOK_HOME`, and `docs/web-auth.md` names it.
+const TOKEN_HINT = "?token=$(cat ~/.rtok/web-token)";
+
+const AUTH_TEXT: Record<AuthProblem, string> = {
+    missing: "rtok web needs its access token. Open this page with it:",
+    rejected: "rtok web was restarted and issued a new token. Open this page with it:",
+};
+
 /** Takes the whole screen (T407): stale data next to a dead link read as live. */
 export function Offline({
     connecting,
     onReconnect,
+    auth = null,
 }: {
     connecting: boolean;
     onReconnect: () => void;
+    /** T944: a token problem the plain "connection lost" would hide. */
+    auth?: AuthProblem | null;
 }) {
     return (
         // axe forbids `role="status"` on `<main>` (aria-allowed-role), so the live region is the text.
@@ -79,7 +91,16 @@ export function Offline({
                 />
                 <div role="status" className="flex flex-col items-center gap-2">
                     <h1 className="text-base font-bold text-warn-fg">Offline</h1>
-                    <p className="max-w-80 text-fg-muted">The connection to rtok was lost.</p>
+                    {auth ? (
+                        <>
+                            <p className="max-w-80 text-fg-muted">{AUTH_TEXT[auth]}</p>
+                            <code className="max-w-full rounded-md bg-surface-2 px-2 py-1 text-left break-all select-all">
+                                {`open "${globalThis.location.origin}/${TOKEN_HINT}"`}
+                            </code>
+                        </>
+                    ) : (
+                        <p className="max-w-80 text-fg-muted">The connection to rtok was lost.</p>
+                    )}
                 </div>
                 <Button
                     variant="solid"

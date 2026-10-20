@@ -150,8 +150,10 @@ fn sources(cfg: &crate::config::Config, p: &Probes, plugins: &[(String, PathBuf)
             for s in crate::agents::mcp::surfaces(agent, cfg, v.kind) {
                 let set = format!("{}:{}", agent.id(), s.label);
                 let mut add = |spec: McpSpec, scope, plugin| {
+                    // By host, not set: variants that read one file (Cursor, Codex) would
+                    // otherwise report every duplicate in it once per variant.
                     let seen = |o: &Source| {
-                        o.set == set
+                        o.agent == agent.id()
                             && o.spec.config_path == spec.config_path
                             && o.spec.key_path == spec.key_path
                     };
@@ -566,6 +568,7 @@ mod tests {
         c.doctor.claude_json = "/h/.claude.json".into();
         c.setup.codex.config_path = "/h/.codex/config.toml".into();
         c.setup.gemini.dir = "/h/.gemini".into();
+        c.setup.cursor.hooks_path = "/h/.cursor/hooks.json".into();
         c
     }
 
@@ -982,6 +985,23 @@ mod tests {
                 ("duplicate-mcp", "plugin:b:s".into(), false)
             ]
         );
+    }
+
+    /// T912: a host whose variants share one file (Cursor, now Codex) reported every
+    /// duplicate once per variant.
+    #[cfg(unix)]
+    #[test]
+    fn a_shared_file_host_reports_a_duplicate_once() {
+        let mut m = Mock::default();
+        m.files.insert(
+            "/h/.cursor/mcp.json".into(),
+            r#"{"mcpServers": {"a": {"command": "/bin/t"}, "b": {"command": "/bin/t"}}}"#.into(),
+        );
+        let found: Vec<_> = run(&m)
+            .into_iter()
+            .filter(|p| p.agent == "cursor")
+            .collect();
+        assert_eq!(found.len(), 2, "{found:?}");
     }
 
     #[cfg(unix)]

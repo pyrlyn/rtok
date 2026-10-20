@@ -1,5 +1,16 @@
 # rtok — completed tasks
 
+### T911. Count re-expands of the 8-character archive id
+
+T672 prints an 8-character archive id. `stats` still treated a pointer as shown only when the id was 12–64 hex chars, and it keyed the match on the first 12. An `… omitted (expand <8>)` line or a `[rtok <8>]` trailer was invisible, so the expand that followed it was not a re-expand. A full-id expand of that same archive missed it too.
+
+The matcher now accepts `names::MIN_PREFIX` (8) through 64 hex chars and keys on that prefix. A 7-character token still does not count. An older 12-character prefix still matches a full-id expand, because both keys are the first 8 characters.
+
+Check: `expand_right_after_counts_the_eight_char_id_pointers_print` — an 8-character trailer plus `rtok expand` of that prefix and an MCP expand of the full id count as two re-expands; a 7-character token and a different archive do not. `expand_right_after_counts_expands_of_shown_ids_only` still counts a 64-character id.
+
+Status: done 2026-10-20
+Model: Cursor / grok 4.7
+
 ### T910. Print the short archive id on the remaining expand pointers
 
 T672 shortened the command trailer. The hook budget marker, the skill deny, the guard duplicate line, the handoff brief, the MCP wrap trailer and the `rtok expand` omitted-line marker still printed the full 64-character id. `expand` already resolves an 8-character prefix. A prefix the caller already lengthened (9–63 hex chars) stays as sent. The measurement `ref_id` stays the full id. The hook marker is priced with an 8-character placeholder, the same length as the id it will print.
@@ -2292,6 +2303,29 @@ Requested by the creator (2026-10-04). While a screen waited for its first snaps
 Done: `Loading` (`web/src/states.tsx`) is a spinner with a "Loading…" label centred in the content area, still `role="status"` with `aria-busy`, so `WithSnapshot`, `Hosts` and `DataTable` all get it; the global reduced-motion rule stops the spin. `Offline` is a full-screen page with an unplugged-cable illustration (`web/assets/offline.svg`), one line of text and a Reconnect button; `Shell` renders only it once the socket closes and keeps it through the socket's own retries (`connecting`) until a link is open, so stale data never sits next to a dead link. The button calls `Api.reconnect` (close the current link, open a new one), which skips the backoff wait, and reads "Reconnecting…" while the new link connects. `WithSnapshot` lost its closed branch, which the shell now never reaches. Seven new SVGs follow the existing style (24×24, `currentColor` stroke 1.75, round caps), and `web/src/ui/Icon.test.ts` fails when a `PAGES` id has no icon.
 
 Check: the icon test failed before the SVGs landed; two new `app.test.tsx` cases cover Reconnect (a new link, still offline while connecting, screens back once open); `npm test` (169 tests) and typecheck green; the sidebar with all fourteen icons the centred spinner, and the offline screen in light, dark and at 375 px checked in the browser on the Vite dev server (Reconnect showed "Reconnecting…" and opened a new socket); `just check` green; `just spa-stories` (123, axe included) and `just spa-e2e` (17; the offline case now expects the full-screen page and a working Reconnect against the real `rtok web`) green.
+
+### T944. `rtok web`: say why `/ws` refuses instead of a bare Offline
+
+On 2026-10-20 the creator opened `http://127.0.0.1:3333/#/overview` without `?token=`: `/ws`
+answered 401 (S2, `docs/web-auth.md`) and the SPA showed only "Offline / Reconnect". A browser
+WebSocket cannot read the 401, and a token kept in `sessionStorage` goes stale when `rtok web`
+restarts (fresh token per start), which looks the same. The creator asked to cover both.
+
+Done: `GET /auth` (`src/web/mod.rs`) runs the `/ws` gate (`admitted`: token, then `Origin`)
+without the upgrade and answers 204, 401 or 403; `auth` is a reserved first segment in the SPA
+router. `web/src/api/auth.ts` turns that into a reason: no token → `missing`, `/auth` 401 →
+`rejected`, anything else (accepted, server down) → none. `Shell` asks on every close and
+`Offline` shows `open "<origin>/?token=$(cat ~/.rtok/web-token)"` with "needs its access token"
+or "was restarted and issued a new token"; a real disconnect keeps "The connection to rtok was
+lost." The Vite dev proxy forwards `/auth`; `docs/web-auth.md` describes the probe.
+
+Check: `tests/web_token.rs` `auth_probe_answers_the_ws_checks` failed before the route (the SPA
+answered 200) and passes after; Vitest `api/auth.test.ts`, `states.test.tsx` and three
+`app.test.tsx` cases failed first and pass; two new stories (axe) in `just spa-stories`; the
+e2e restart case now sees the plain text while the server is down and the "restarted" hint
+once it is back with a new token. `just js`, `just spa-test`, `just spa-stories`, `just spa-e2e`
+green; `just check` green except two graph watcher timing tests that fail on this loaded
+machine and touch nothing changed here.
 
 ### T310.9. Serve the SPA from `rtok web`
 
@@ -10489,6 +10523,14 @@ Plan: in `src/agents/codex/mod.rs`, `insert_proxy` keeps the replaced value as a
 Check: `just check`.
 
 Result: install then remove over `model_provider = "openai"` gives the original file back byte for byte (`proxy_remove_restores_the_replaced_model_provider`, re-install over rtok's own value included); an edited `[model_providers.rtok]` stays with `model_provider` and a `leave …` note unless `--yes` (`proxy_remove_leaves_a_hand_edited_provider_table`). `judge_owned` itself does not fit: its "runs the rtok binary" gate calls every provider table "not rtok's", so the check uses its ownership half, `keep_edited`. A proxy URL changed in rtok's config since install also reads as "changed by you" on remove.
+
+Model: Claude Code / claude-opus-5-5
+
+### T912. Detect the Codex desktop app (`ChatGPT.app`)
+
+Creator-reported: `rtok agents update codex --force` lists only the CLI. The Codex desktop app ships as `/Applications/ChatGPT.app` (bundle id `com.openai.codex`; older builds `Codex.app`) and reads the same `~/.codex/config.toml`, but `VARIANTS` in `src/agents/codex/mod.rs` has only `Kind::Cli`.
+
+Result: `Codex` gets a `Kind::Desktop` variant "Codex App" probing `ChatGPT.app` and `Codex.app` in `/Applications` and `~/Applications`, and `shared() = true`, so one apply covers both (the second block prints "same files as above"). Fail-first test `the_desktop_variant_is_detected_from_its_app_and_shares_the_cli_files` (index out of bounds before the fix); `kinds("codex")` is `[Cli, Desktop]`; restart's expected-name table maps it to `ChatGPT`, so a running app is quit and reopened around a changing write like other desktop hosts (`--no-restart` skips it). `rtok doctor`'s MCP duplicate check walked every variant, so a shared host (Cursor on main, Codex now) reported each duplicate twice; a source is now deduplicated by host, file and key instead of by variant set (`a_shared_file_host_reports_a_duplicate_once`, 4 problems before the fix). Source rows in research §40.1; Desktop rows in `docs/agents.md` (en/ru/uk). Live check: `rtok agents update codex --force --dry-run --no-restart` from the branch build lists `Desktop: Codex App — /Applications/ChatGPT.app`.
 
 Model: Claude Code / claude-opus-5-5
 

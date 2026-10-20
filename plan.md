@@ -1359,4 +1359,6 @@ T909: archive and compress pointers print the 8-char archive id. Done (`done.md`
 
 T910: hook, skill, handoff, MCP wrap and expand omitted markers print the 8-char archive id. Done (`done.md`).
 
+T911: `stats` counts a re-expand of the 8-char archive id pointers print. Done (`done.md`).
+
 T912: guides and `rtok config init` name the 8-char trailer id. Done (`done.md`).
