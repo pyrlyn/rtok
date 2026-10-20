@@ -136,14 +136,16 @@ fn decide(cx: &Ctx, name: &str, body: &str, cap: u64) -> Option<PreToolDecision>
     let id = cx.put_archive(body.as_bytes()).ok()?;
     let lines = body.lines().count();
     // The whole reason stays within the cap it enforces: map + intro + trailer.
+    // The printed id is 8 hex chars (T910). The measurement keeps the full id.
     let map = truncate(
         crate::plugins::read::outline::markdown_digest(body),
         (cap as usize).saturating_sub(512),
     );
+    let shown = crate::names::short_id(&id);
     let reason = format!(
         "rtok kept the map of skill {name} ({} KB); the full body is archived, not loaded:\n{map}\
-         [rtok {id} · {lines} lines · expand: rtok expand {id}]\n\
-         Pull one section with `rtok expand {id} --grep <heading>`; set [plugins.guard] skills = false to load skills whole.",
+         [rtok {shown} · {lines} lines · expand: rtok expand {shown}]\n\
+         Pull one section with `rtok expand {shown} --grep <heading>`; set [plugins.guard] skills = false to load skills whole.",
         bytes / 1024
     );
     let _ = cx.record(&Measurement {
@@ -315,11 +317,14 @@ mod tests {
             .nth(1)
             .and_then(|r| r.split(']').next())
             .unwrap();
+        assert_eq!(id.len(), crate::names::MIN_PREFIX, "{id}");
         assert!(
             reason.contains(&format!("[rtok {id} · {} lines ·", big.lines().count())),
             "{reason}"
         );
-        assert_eq!(rt.get_archive(id).unwrap().unwrap(), big.as_bytes());
+        let full = rt.store.archive_ids_with_prefix(id, 2).unwrap();
+        assert_eq!(full.len(), 1, "{full:?}");
+        assert_eq!(rt.get_archive(&full[0]).unwrap().unwrap(), big.as_bytes());
         // The 10 ms gate is the release number. Debug only guards against a gross
         // regression; the `windows-latest` runner took 270 ms here (ci run 35591648404),
         // most of it the archive write on NTFS, and 1685 ms under full-suite load (ci run

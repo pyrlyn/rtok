@@ -33,3 +33,26 @@
 - T525. SubagentStart and PreCompact under the 10 ms hook budget
 - T666.2. Provider-backed memory extractor (blocked on the creator)
 - T687. Hooks: PreToolUse/PostToolUse p50 to 10 ms
+- T920. PostToolUse hook went from ~4 ms to ~50 ms with v0.17.0-alpha.2 (memory observations)
+- T921. Hook calls that hang until the host's 5 s timeout, and the Pre/PostToolUse/SessionEnd tail
+- T922. `rtok run --` rewrite breaks every Bash call when `rtok` is not on PATH
+- T923. Relative MCP paths resolve against the server's checkout, not the caller's worktree
+- T924. MCP `worktree_*` tools: worktree in the wrong repo, agent ambiguity the agent cannot resolve
+- T925. Cursor plugin link into the versioned ketch store dangles after an upgrade; doctor stays green
+- T926. `rtok expand <id>` on the CLI returns an "identical to a result N turns ago" pointer
+- T927. `memory/observe` measurement rows claim the whole tool output as saved
+- T928. MCP input schemas mark aliased params required, so T353's aliases never reach the server
+- T929. Dedup stubs whose original is no longer in the agent's context (compaction, subagents)
+- T930. Read gate denies native Read for files `rtok read` cannot serve (images, paths outside roots)
+- T931. Bounded `sed -n a,bp` windows inside command chains are still elided
+- T932. Codex and Cursor MCP entries use a bare `rtok` command and fail to spawn
+- T933. Git guard still refuses `rtok run`-wrapped git (seen again 2026-10-16)
+- T934. Store "database is locked": hooks skipped, worktree claims not stored or released
+- T935. MCP `read`/`outline` fail with a bare ENOENT once the server's cwd is deleted
+- T936. `rtok worktree list --json`, `clean` and `add` take 8–10 s
+- T937. `calls` never records failures, and MCP calls have no `ms`
+- T938. `read` errors for binary files, directories and `~/.cargo` sources give no next step
+- T939. `errors.log`: deliberate refusals and broken pipes logged at error level
+- T940. Graph `references` writes hit "database is locked"; session-only projects auto-registered
+- T941. Probe: auto mode vs rtok (rewritten Bash input, 64-hex `expand` ids)
+- T942. `rtok expand -` used as a stdin pass-through by agents
