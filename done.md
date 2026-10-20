@@ -6,7 +6,7 @@ T672 prints 8 hex chars on a compressed command. `rtok report` still listed each
 
 The four renderers now print the 8-character prefix when the stored id is a full hex sha. `rtok expand` resolves it. A shorter id, and text that is not hex, stays as stored, so a prefix already chosen and the hostile-text fixture are not cut. The ledger `ref_id` and the document's `expanded_ids` stay the full sha.
 
-Check: `tests/report.rs` finds the 8-character prefix and not the sha; the markdown and HTML one-row snapshots show `ffffffff`; a full sha is absent from the PDF bytes.
+Check: `tests/report.rs` finds the 8-character prefix and not the sha in markdown and HTML; the markdown and HTML one-row snapshots show `ffffffff`; a full sha is absent from the PDF bytes.
 
 Status: done 2026-10-19
 Model: Cursor / grok 4.7

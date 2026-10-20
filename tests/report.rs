@@ -340,7 +340,12 @@ fn html_holds_every_markdown_number_and_fetches_nothing() {
     for n in numbers(&md) {
         assert!(html.contains(&n), "markdown number {n} missing from html");
     }
-    assert!(html.contains(&first_id), "expanded id missing from html");
+    let shown = rtok::names::short_id(&first_id);
+    assert!(html.contains(&shown), "expanded id missing from html");
+    assert!(
+        !html.contains(&first_id),
+        "html prints the prefix, not the sha"
+    );
     let order: Vec<usize> = [
         "Window",
         "Savings",
