@@ -5,14 +5,60 @@
 //! T285: `worktree_claims` — the agent (T282) each worktree is bound to. The git lock reason
 //! is the source of truth; these rows are the fast join `rtok worktree list` falls back on.
 
+use std::time::Duration;
+
 use crate::Result;
 use diesel::prelude::*;
 
 use super::Store;
-use super::schema::{calls, models, worktree_claims};
+use super::schema::{agents, calls, models, worktree_claims};
 use super::unixepoch;
 
+/// T527: the holder of a worktree claim (T285's `agent_id`, the same id a v2 lock reason's
+/// `agent` field names) and the two `agents` facts (T282) that say whether the claim still
+/// holds: `ended_at` and `last_seen`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Holder {
+    pub agent: String,
+    /// `agents.last_seen`, unix seconds.
+    pub last_seen: i64,
+    /// `agents.ended_at` — `Some` once the agent's session is over.
+    pub ended_at: Option<i64>,
+}
+
+impl Holder {
+    /// The claim holds only while its holder is around: not ended, and seen within
+    /// `stale_lock` of `now`. `stale_lock` is gc's `--stale-lock` window (T418) — one policy,
+    /// so `remove` and `adopt` stop refusing over an agent idle for days.
+    pub fn holds(&self, now: i64, stale_lock: Duration) -> bool {
+        let window = i64::try_from(stale_lock.as_secs()).unwrap_or(i64::MAX);
+        self.ended_at.is_none() && self.seen_ago(now) <= window
+    }
+
+    /// Seconds since the store last saw the holder — what a refusal reports.
+    pub fn seen_ago(&self, now: i64) -> i64 {
+        now.saturating_sub(self.last_seen)
+    }
+}
+
 impl Store {
+    /// The holder behind the worktree claims `agent` took — the `agents` row their `agent_id`
+    /// and a v2 lock reason's `agent` field both name. `None` when the store has no such agent:
+    /// a lost store keeps the lock (`worktree list` shows such a holder as `unknown`).
+    pub fn worktree_claim_holder(&self, agent: &str) -> Result<Option<Holder>> {
+        let mut conn = self.lock()?;
+        let row = agents::table
+            .filter(agents::id.eq(agent))
+            .select((agents::id, agents::last_seen, agents::ended_at))
+            .first::<(String, i64, Option<i64>)>(&mut *conn)
+            .optional()?;
+        Ok(row.map(|(agent, last_seen, ended_at)| Holder {
+            agent,
+            last_seen,
+            ended_at,
+        }))
+    }
+
     /// Bind `path` to `agent_id`, replacing any earlier claim on the same path.
     pub fn claim_worktree(&self, path: &str, agent_id: &str, task: &str) -> Result<()> {
         let mut conn = self.lock()?;
@@ -130,6 +176,54 @@ impl Store {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// gc's `--stale-lock` default (T418), the one window a claim holder is judged by (T527).
+    const STALE_LOCK: Duration = Duration::from_secs(7 * 86_400);
+    const NOW: i64 = 1_800_000_000;
+
+    /// T527: a claim held by an agent whose session is over does not hold its worktree.
+    #[test]
+    fn an_ended_holders_claim_does_not_hold() {
+        let store = Store::open_in_memory().unwrap();
+        let claude = store.host_id("claude").unwrap().unwrap();
+        let a = store
+            .register_agent(claude, "s-a", None, None, None)
+            .unwrap();
+        store.claim_worktree("/w/x", &a, "t1").unwrap();
+        store.end_agent(&a, NOW).unwrap();
+        let holder = store.worktree_claim_holder(&a).unwrap().unwrap();
+        assert!(!holder.holds(NOW, STALE_LOCK), "{holder:?}");
+    }
+
+    /// T527: an agent idle past `stale_lock` has abandoned its claims, however unended.
+    #[test]
+    fn a_holder_idle_past_stale_lock_does_not_hold() {
+        let store = Store::open_in_memory().unwrap();
+        let claude = store.host_id("claude").unwrap().unwrap();
+        let a = store
+            .register_agent(claude, "s-a", None, None, None)
+            .unwrap();
+        store.claim_worktree("/w/x", &a, "t1").unwrap();
+        let idle = i64::try_from(STALE_LOCK.as_secs()).unwrap();
+        store.set_agent_last_seen(&a, NOW - idle - 1).unwrap();
+        let holder = store.worktree_claim_holder(&a).unwrap().unwrap();
+        assert!(!holder.holds(NOW, STALE_LOCK), "{holder:?}");
+    }
+
+    /// T527: a claim touched inside the window still holds, and says when its holder was seen.
+    #[test]
+    fn a_holder_seen_today_holds_and_names_their_last_seen() {
+        let store = Store::open_in_memory().unwrap();
+        let claude = store.host_id("claude").unwrap().unwrap();
+        let a = store
+            .register_agent(claude, "s-a", None, None, None)
+            .unwrap();
+        store.claim_worktree("/w/x", &a, "t1").unwrap();
+        store.set_agent_last_seen(&a, NOW - 60).unwrap();
+        let holder = store.worktree_claim_holder(&a).unwrap().unwrap();
+        assert!(holder.holds(NOW, STALE_LOCK), "{holder:?}");
+        assert_eq!(holder.seen_ago(NOW), 60);
+    }
 
     #[test]
     fn a_claim_upserts_per_path() {
