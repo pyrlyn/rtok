@@ -3,7 +3,7 @@
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
 //! The T330.5.1 kinds on the `cache` item model: `logs` (the §22 log folders, review),
-//! `backups` (rtok's own `_backup` generations past `setup.backup_files`, review),
+//! `backups` (rtok's own `.backup_configs` generations past `setup.backup_files`, review),
 //! `snapshots` (Gemini CLI's restore points, never), the `[agents.junk] extra` paths and the
 //! `exclude` globs. Nothing here deletes: `junk_clear` plans, re-checks and removes (T330.4).
 
@@ -52,13 +52,16 @@ pub fn log_items(dirs: &[PathBuf], junk: &AgentsJunk, cx: &Ctx, limit: Duration)
     classed(aged, "review")
 }
 
-/// rtok's own copies in the `_backup` folder of each of `dirs` that `setup.backup_files` has no
-/// room for: a cap lowered after the copies were taken. The newest copy of a file always stays.
+/// rtok's own copies in the `.backup_configs` (and legacy `_backup`) folder of each of `dirs` that
+/// `setup.backup_files` has no room for: a cap lowered after the copies were taken. The newest
+/// copy of a file always stays.
 pub fn backup_items(dirs: &[PathBuf], keep: u32, limit: Duration) -> Vec<Item> {
     let keep = usize::try_from(keep).unwrap_or(usize::MAX);
-    let stale = dirs
-        .iter()
-        .flat_map(|d| rtok_agent_sdk::stale_backups(&d.join(rtok_agent_sdk::BACKUP_DIR), keep));
+    let stale = dirs.iter().flat_map(|d| {
+        rtok_agent_sdk::BACKUP_DIRS
+            .iter()
+            .flat_map(move |b| rtok_agent_sdk::stale_backups(&d.join(b), keep))
+    });
     let items = stale.map(|p| make_item("backups", &p, RTOK_OWN, None, limit));
     classed(items.collect(), "review")
 }
@@ -355,6 +358,24 @@ mod tests {
         );
         assert_eq!(backup_items(one, 1, LIMIT).len(), 2);
         assert!(backup_items(one, 0, LIMIT).is_empty(), "0 keeps every copy");
+    }
+
+    /// Copies an older rtok left in `_backup` count against the cap too (T911); each folder
+    /// keeps its own newest copy, since nothing moves the old ones over.
+    #[test]
+    fn legacy_backup_generations_past_the_cap_are_listed_too() {
+        let dir = tmp_dir("review-legacy-backups");
+        for f in ["_backup/s.json.bak-1", "_backup/s.json.bak-2"] {
+            put(&dir.join(f), b"x");
+        }
+        put(&dir.join(".backup_configs/s.json.bak-3"), b"x");
+
+        let items = backup_items(std::slice::from_ref(&dir), 1, LIMIT);
+
+        assert_eq!(items.len(), 1, "{items:?}");
+        // Components, not a string: Windows prints `\` between them.
+        let want = std::path::Path::new("_backup").join("s.json.bak-1");
+        assert!(std::path::Path::new(&items[0].path).ends_with(want));
     }
 
     #[test]

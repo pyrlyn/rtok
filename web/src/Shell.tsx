@@ -4,7 +4,9 @@
 
 import { Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { Suspense, useEffect, useRef, useState } from "react";
+import { type AuthProblem, authProblem } from "./api/auth";
 import { useConnection, useReconnect, useSnapshot } from "./api/query";
+import { pageToken } from "./api/ws";
 import { LiveStatus } from "./LiveStatus";
 import { Orb } from "./Orb";
 import { Kbd, paletteKeys } from "./palette/Kbd";
@@ -41,6 +43,7 @@ export function Shell() {
     const [offline, setOffline] = useState(false);
     if (connection === "closed" && !offline) setOffline(true);
     if (connection === "open" && offline) setOffline(false);
+    const auth = useAuthProblem(connection === "closed");
     const navigate = useNavigate();
     const [palette, setPalette] = useState(false);
     const [help, setHelp] = useState(false);
@@ -67,7 +70,9 @@ export function Shell() {
     }, [title]);
 
     if (offline)
-        return <Offline connecting={connection === "connecting"} onReconnect={reconnect} />;
+        return (
+            <Offline connecting={connection === "connecting"} onReconnect={reconnect} auth={auth} />
+        );
 
     return (
         <>
@@ -146,6 +151,20 @@ export function Shell() {
             </div>
         </>
     );
+}
+
+// Asked again on every close: a reload with `?token=` or a restarted server changes the answer.
+function useAuthProblem(closed: boolean): AuthProblem | null {
+    const [problem, setProblem] = useState<AuthProblem | null>(null);
+    useEffect(() => {
+        if (!closed) return;
+        let live = true;
+        void authProblem(pageToken()).then((p) => live && setProblem(p));
+        return () => {
+            live = false;
+        };
+    }, [closed]);
+    return problem;
 }
 
 export function NotFound() {

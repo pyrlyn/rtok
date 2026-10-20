@@ -102,6 +102,8 @@ and the compress view do too (T909). A decision already stored is replayed as wr
 The command trailer has printed that id since T672. The hook budget marker, skill deny,
 handoff brief, MCP wrap trailer and the expand omitted-line marker do too (T910). A stored measurement keeps the full id.
 
+Pointers print 8 hex chars (T672). `stats` counts a later expand of that prefix (T911).
+
 | # | Category (uses) | Best rival | rtok design (better, not copied) | Target |
 |---|---|---|---|---|
 | T672 | all (link line) | sqz `§ref§` ~13 tok | one short id `[rtok 1a2b3c4d · 111 lines]`, expand by prefix | −75 tok/call |

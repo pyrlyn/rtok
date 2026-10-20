@@ -54,7 +54,7 @@ const CSP: &str = "default-src 'self'; script-src 'self'; style-src 'self' 'unsa
 const IMMUTABLE: &str = "public, max-age=31536000, immutable";
 const REVALIDATE: &str = "no-cache";
 /// First path segments that belong to the API, never to a page route.
-const RESERVED: [&str; 4] = ["ws", "health", "api", "assets"];
+const RESERVED: [&str; 5] = ["ws", "health", "auth", "api", "assets"];
 
 /// Where the SPA's files come from.
 #[derive(Debug, Clone)]
@@ -322,6 +322,7 @@ mod tests {
         assert!(is_page_route("sessions/42"));
         assert!(!is_page_route("ws"));
         assert!(!is_page_route("ws/x"));
+        assert!(!is_page_route("auth"));
         assert!(!is_page_route("api/v1/anything"));
         assert!(!is_page_route("assets/missing"));
         assert!(!is_page_route("favicon.ico"));

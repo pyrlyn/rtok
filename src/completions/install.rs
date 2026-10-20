@@ -3,8 +3,13 @@
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
 //! `rtok completions [<shell>] --install | --uninstall | --list` (T318, T408): the script goes to the shell's
-//! standard per-user location. PowerShell also gets one dot-source line in `$PROFILE`; only
-//! that line is added or removed, the rest of the profile stays byte-for-byte.
+//! standard per-user location. PowerShell also gets one dot-source line in `$PROFILE`, zsh one
+//! in `.zshenv` (T943); only that line is added or removed, the rest of the file stays
+//! byte-for-byte.
+//!
+//! For bash, zsh, fish and PowerShell the installed file is a wrapper that asks the installed
+//! rtok for its script when the shell first needs it (T943): a static copy went stale on every
+//! upgrade, and nothing rewrites it. Elvish and Clink keep the static script.
 
 use std::path::{Path, PathBuf};
 
@@ -62,18 +67,7 @@ impl Places {
                     .unwrap_or_else(|| self.home.join(".local/share"));
                 (data.join("bash-completion/completions/rtok"), None)
             }
-            Shell::Zsh => {
-                let dir = self
-                    .zdotdir
-                    .clone()
-                    .unwrap_or_else(|| self.home.clone())
-                    .join(".zfunc");
-                let note = format!(
-                    "zsh loads it when .zshrc has: fpath+=({}); autoload -Uz compinit && compinit",
-                    dir.display()
-                );
-                (dir.join("_rtok"), Some(note))
-            }
+            Shell::Zsh => (self.zfunc().join("_rtok"), None),
             Shell::Fish => (self.config().join("fish/completions/rtok.fish"), None),
             Shell::Elvish => (
                 self.config().join("elvish/lib/rtok.elv"),
@@ -87,6 +81,45 @@ impl Places {
                 (dir.join("clink/rtok.lua"), None)
             }
         })
+    }
+
+    fn zdotdir(&self) -> PathBuf {
+        self.zdotdir.clone().unwrap_or_else(|| self.home.clone())
+    }
+
+    fn zfunc(&self) -> PathBuf {
+        self.zdotdir().join(".zfunc")
+    }
+
+    /// The rc file that gets one line of ours, and that line. zsh reads `.zshenv` before
+    /// `.zshrc` and so before any `compinit`, whatever the rc files do after it.
+    fn rc_line(&self, shell: Shell, script: &Path) -> Option<(PathBuf, String)> {
+        match shell {
+            Shell::Powershell => Some((self.ps_profile(), source_line(script))),
+            Shell::Zsh => {
+                let init = sh_quote(&self.zfunc().join(ZSH_INIT));
+                Some((
+                    self.zdotdir().join(".zshenv"),
+                    format!("[[ -o interactive && -r {init} ]] && . {init}  # rtok completions"),
+                ))
+            }
+            _ => None,
+        }
+    }
+
+    /// Files written beside the script: zsh's init, which puts `.zfunc` on `fpath` and
+    /// registers `_rtok` itself.
+    fn extra_files(&self, shell: Shell) -> Vec<(PathBuf, String)> {
+        match shell {
+            Shell::Zsh => {
+                let dir = sh_quote(&self.zfunc());
+                vec![(
+                    self.zfunc().join(ZSH_INIT),
+                    ZSH_INIT_BODY.replace("{dir}", &dir),
+                )]
+            }
+            _ => Vec::new(),
+        }
     }
 
     /// pwsh's `$PROFILE` (CurrentUserCurrentHost). A Documents folder moved elsewhere (OneDrive)
@@ -148,11 +181,59 @@ pub fn status(places: &Places) -> Vec<Status> {
         .collect()
 }
 
+/// zsh's init beside `_rtok`, sourced from `.zshenv`.
+const ZSH_INIT: &str = "rtok.zsh";
+
+// `compinit -C` trusts a dump made before `_rtok` existed and never looks at `fpath` again,
+// so the init registers `_rtok` itself on the first prompt, once the rc files ran `compinit`.
+const ZSH_INIT_BODY: &str = "\
+# Written by `rtok completions zsh --install`; `--uninstall` removes it and its .zshenv line.
+fpath=({dir} ${fpath:#{dir}})
+autoload -Uz add-zsh-hook
+_rtok_compdef() {
+  add-zsh-hook -d precmd _rtok_compdef
+  unfunction _rtok_compdef
+  (( $+functions[compdef] )) && { autoload -Uz _rtok; compdef _rtok rtok }
+}
+add-zsh-hook precmd _rtok_compdef
+";
+
+/// Each wrapper does nothing when `rtok` is not on `PATH`, so an uninstalled binary leaves no
+/// error at every prompt.
+const BASH_WRAPPER: &str = "\
+# Written by `rtok completions bash --install`: the installed rtok prints the script, so an upgrade never leaves it stale.
+if command -v rtok >/dev/null 2>&1; then eval \"$(command rtok completions bash)\"; fi
+";
+
+// Inside `eval` `$funcstack[1]` is `(eval)`, so the generated tail only runs `compdef`;
+// calling `_rtok` here completes the very Tab that loaded it.
+const ZSH_WRAPPER: &str = "\
+#compdef rtok
+# Written by `rtok completions zsh --install`: the installed rtok prints the script, so an upgrade never leaves it stale.
+(( $+commands[rtok] )) || return 1
+eval \"$(command rtok completions zsh)\" && _rtok \"$@\"
+";
+
+const FISH_WRAPPER: &str = "\
+# Written by `rtok completions fish --install`: the installed rtok prints the script, so an upgrade never leaves it stale.
+command -q rtok; and rtok completions fish | source
+";
+
+const POWERSHELL_WRAPPER: &str = "\
+# Written by `rtok completions powershell --install`: the installed rtok prints the script, so an upgrade never leaves it stale.
+if (Get-Command rtok -CommandType Application -ErrorAction SilentlyContinue) { rtok completions powershell | Out-String | Invoke-Expression }
+";
+
 fn source_line(script: &Path) -> String {
     format!(". \"{}\"  # rtok completions", script.display())
 }
 
-/// The profile with the source line appended; `None` when it is already there.
+/// `path` as one POSIX-shell word: single quotes keep `$`, spaces and `"` literal.
+fn sh_quote(path: &Path) -> String {
+    format!("'{}'", path.display().to_string().replace('\'', r"'\''"))
+}
+
+/// The rc file with our line appended; `None` when it is already there.
 fn profile_with(old: &str, line: &str) -> Option<String> {
     if old.lines().any(|l| l == line) {
         return None;
@@ -165,7 +246,7 @@ fn profile_with(old: &str, line: &str) -> Option<String> {
     Some(format!("{old}{sep}{line}\n"))
 }
 
-/// The profile without the source line; `None` when it is not there.
+/// The rc file without our line; `None` when it is not there.
 fn profile_without(old: &str, line: &str) -> Option<String> {
     old.lines().any(|l| l == line).then(|| {
         old.split_inclusive('\n')
@@ -175,21 +256,38 @@ fn profile_without(old: &str, line: &str) -> Option<String> {
 }
 
 fn script_body(shell: Shell, cmd: Command) -> Result<String> {
-    let mut body = Vec::new();
-    super::generate(shell, cmd, &mut body);
-    String::from_utf8(body).context("completion script is not UTF-8")
+    Ok(match shell {
+        Shell::Bash => BASH_WRAPPER.into(),
+        Shell::Zsh => ZSH_WRAPPER.into(),
+        Shell::Fish => FISH_WRAPPER.into(),
+        Shell::Powershell => POWERSHELL_WRAPPER.into(),
+        _ => {
+            let mut body = Vec::new();
+            super::generate(shell, cmd, &mut body);
+            String::from_utf8(body).context("completion script is not UTF-8")?
+        }
+    })
+}
+
+/// Every file [`install`] writes whole, script first.
+fn files(shell: Shell, cmd: Command, places: &Places) -> Result<Vec<(PathBuf, String)>> {
+    let (script, _) = places.script(shell)?;
+    let mut files = vec![(script, script_body(shell, cmd)?)];
+    files.extend(places.extra_files(shell));
+    Ok(files)
 }
 
 /// What [`install`] would change, as the shared diff. Writes nothing.
 pub fn preview_install(shell: Shell, cmd: Command, places: &Places) -> Result<Preview> {
-    let (script, _) = places.script(shell)?;
     let mut preview = Preview::default();
-    preview.edit(&script, &read(&script)?, &script_body(shell, cmd)?);
-    if shell == Shell::Powershell {
-        let profile = places.ps_profile();
-        let old = read(&profile)?;
-        if let Some(new) = profile_with(&old, &source_line(&script)) {
-            preview.edit(&profile, &old, &new);
+    let files = files(shell, cmd, places)?;
+    for (path, body) in &files {
+        preview.edit(path, &read(path)?, body);
+    }
+    if let Some((rc, line)) = places.rc_line(shell, &files[0].0) {
+        let old = read(&rc)?;
+        if let Some(new) = profile_with(&old, &line) {
+            preview.edit(&rc, &old, &new);
         }
     }
     Ok(preview)
@@ -199,52 +297,63 @@ pub fn preview_install(shell: Shell, cmd: Command, places: &Places) -> Result<Pr
 pub fn preview_uninstall(shell: Shell, places: &Places) -> Result<Preview> {
     let (script, _) = places.script(shell)?;
     let mut preview = Preview::default();
-    if let Ok(meta) = std::fs::metadata(&script) {
-        preview.remove(&script, meta.len(), 1);
+    for path in owned(shell, places, &script) {
+        if let Ok(meta) = std::fs::metadata(&path) {
+            preview.remove(&path, meta.len(), 1);
+        }
     }
-    if shell == Shell::Powershell {
-        let profile = places.ps_profile();
-        let old = read(&profile)?;
-        if let Some(new) = profile_without(&old, &source_line(&script)) {
-            preview.edit(&profile, &old, &new);
+    if let Some((rc, line)) = places.rc_line(shell, &script) {
+        let old = read(&rc)?;
+        if let Some(new) = profile_without(&old, &line) {
+            preview.edit(&rc, &old, &new);
         }
     }
     Ok(preview)
 }
 
-/// Write the script (and the PowerShell profile line); one report line per file.
+/// Write the script, its extra files and the rc line; one report line per file.
 pub fn install(shell: Shell, cmd: Command, places: &Places) -> Result<Vec<String>> {
-    let (script, note) = places.script(shell)?;
-    let body = script_body(shell, cmd)?;
-    let mut lines = vec![write_if_changed(&script, &body)?];
-    if shell == Shell::Powershell {
-        let profile = places.ps_profile();
-        let old = read(&profile)?;
-        match profile_with(&old, &source_line(&script)) {
-            None => lines.push(format!("unchanged {}", profile.display())),
-            Some(new) => lines.push(write_if_changed(&profile, &new)?),
+    let (_, note) = places.script(shell)?;
+    let files = files(shell, cmd, places)?;
+    let mut lines = Vec::new();
+    for (path, body) in &files {
+        lines.push(write_if_changed(path, body)?);
+    }
+    if let Some((rc, line)) = places.rc_line(shell, &files[0].0) {
+        let old = read(&rc)?;
+        match profile_with(&old, &line) {
+            None => lines.push(format!("unchanged {}", rc.display())),
+            Some(new) => lines.push(write_if_changed(&rc, &new)?),
         }
     }
     lines.extend(note);
     Ok(lines)
 }
 
+/// The script and the extra files: what [`uninstall`] deletes.
+fn owned(shell: Shell, places: &Places, script: &Path) -> Vec<PathBuf> {
+    std::iter::once(script.to_path_buf())
+        .chain(places.extra_files(shell).into_iter().map(|(p, _)| p))
+        .collect()
+}
+
 /// Remove exactly what [`install`] wrote.
 pub fn uninstall(shell: Shell, places: &Places) -> Result<Vec<String>> {
     let (script, _) = places.script(shell)?;
     let mut lines = Vec::new();
-    if script.exists() {
-        std::fs::remove_file(&script).with_context(|| format!("remove {}", script.display()))?;
-        lines.push(format!("removed {}", script.display()));
-    } else {
-        lines.push(format!("absent {}", script.display()));
+    for (i, path) in owned(shell, places, &script).iter().enumerate() {
+        if path.exists() {
+            std::fs::remove_file(path).with_context(|| format!("remove {}", path.display()))?;
+            lines.push(format!("removed {}", path.display()));
+        } else if i == 0 {
+            lines.push(format!("absent {}", path.display()));
+        }
     }
-    if shell == Shell::Powershell {
-        let profile = places.ps_profile();
-        let old = read(&profile)?;
-        if let Some(kept) = profile_without(&old, &source_line(&script)) {
-            fs_kit::write::atomic(&profile, &kept)?;
-            lines.push(format!("updated {}", profile.display()));
+    if let Some((rc, line)) = places.rc_line(shell, &script) {
+        let old = read(&rc)?;
+        if let Some(kept) = profile_without(&old, &line) {
+            fs_kit::write::atomic(&rc, &kept)?;
+            lines.push(format!("updated {}", rc.display()));
         }
     }
     Ok(lines)
@@ -336,6 +445,90 @@ mod tests {
             std::fs::read_to_string(&profile).unwrap(),
             format!("{mine}\n")
         );
+    }
+
+    /// T943: zsh needs no `.zshrc` edit: the init goes beside `_rtok` and `.zshenv` gets one
+    /// line; the rest of `.zshenv` stays byte-for-byte and uninstall takes back all of it.
+    #[test]
+    fn zsh_writes_its_init_and_one_zshenv_line_and_uninstall_takes_them_back() {
+        let p = places();
+        let zshenv = p.home.join(".zshenv");
+        let mine = "export A=1\r\n# keep me";
+        std::fs::write(&zshenv, mine).unwrap();
+
+        let lines = install(Shell::Zsh, cmd(), &p).unwrap();
+        let init = p.home.join(".zfunc/rtok.zsh");
+        assert_eq!(
+            lines,
+            [
+                format!("wrote {}", p.home.join(".zfunc/_rtok").display()),
+                format!("wrote {}", init.display()),
+                format!("wrote {}", zshenv.display()),
+            ]
+        );
+        let body = std::fs::read_to_string(&init).unwrap();
+        let dir = sh_quote(&p.home.join(".zfunc"));
+        assert!(
+            body.contains(&format!("fpath=({dir} ${{fpath:#{dir}}})")),
+            "{body}"
+        );
+        assert!(body.contains("compdef _rtok rtok"), "{body}");
+        let with = std::fs::read_to_string(&zshenv).unwrap();
+        let line = format!(
+            "[[ -o interactive && -r {q} ]] && . {q}  # rtok completions",
+            q = sh_quote(&init)
+        );
+        assert_eq!(with, format!("{mine}\n{line}\n"));
+
+        let again = install(Shell::Zsh, cmd(), &p).unwrap();
+        assert!(
+            again.iter().all(|l| l.starts_with("unchanged ")),
+            "{again:?}"
+        );
+
+        let gone = uninstall(Shell::Zsh, &p).unwrap();
+        assert_eq!(gone.len(), 3, "{gone:?}");
+        assert!(!init.exists() && !p.home.join(".zfunc/_rtok").exists());
+        assert_eq!(
+            std::fs::read_to_string(&zshenv).unwrap(),
+            format!("{mine}\n")
+        );
+    }
+
+    #[test]
+    fn zsh_follows_zdotdir() {
+        let mut p = places();
+        p.zdotdir = Some(p.home.join("zd"));
+        let lines = install(Shell::Zsh, cmd(), &p).unwrap();
+        assert_eq!(path(&lines[0], "wrote "), p.home.join("zd/.zfunc/_rtok"));
+        assert_eq!(path(&lines[2], "wrote "), p.home.join("zd/.zshenv"));
+    }
+
+    /// T943: a static copy goes stale on upgrade; the installed file asks the installed rtok.
+    #[test]
+    fn installed_scripts_ask_the_installed_rtok_except_elvish_and_clink() {
+        for (shell, call) in [
+            (Shell::Bash, "rtok completions bash"),
+            (Shell::Zsh, "rtok completions zsh"),
+            (Shell::Fish, "rtok completions fish"),
+            (Shell::Powershell, "rtok completions powershell"),
+        ] {
+            let body = script_body(shell, cmd()).unwrap();
+            assert!(body.contains(call), "{shell:?}: {body}");
+            assert!(body.lines().count() <= 4, "{shell:?} is a wrapper: {body}");
+        }
+        for shell in [Shell::Elvish, Shell::Clink] {
+            let body = script_body(shell, cmd()).unwrap();
+            assert!(
+                body.lines().count() > 4,
+                "{shell:?} is the static script: {body}"
+            );
+        }
+    }
+
+    #[test]
+    fn sh_quote_keeps_quotes_and_dollars_literal() {
+        assert_eq!(sh_quote(Path::new("/h/it's $HOME")), r"'/h/it'\''s $HOME'");
     }
 
     #[test]

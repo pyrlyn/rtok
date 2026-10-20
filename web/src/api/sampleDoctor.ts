@@ -90,7 +90,7 @@ export function mockMachine(): MockMachine {
       return {
         replan: null,
         code: 0,
-        text: `${picked.length} ${picked.length === 1 ? "entry" : "entries"} removed from ${new Set(picked.map((i) => i.source)).size} file(s); backups kept in _backup/\n`,
+        text: `${picked.length} ${picked.length === 1 ? "entry" : "entries"} removed from ${new Set(picked.map((i) => i.source)).size} file(s); backups kept in .backup_configs/\n`,
       };
     },
   };

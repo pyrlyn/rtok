@@ -376,7 +376,7 @@ async fn answers_echo_the_request_id_and_only_that_one() {
 }
 
 /// T331.12: the doctor fix over the real socket. A plan changes nothing; only `apply` writes,
-/// and it leaves the `_backup/` copy.
+/// and it leaves the `.backup_configs/` copy.
 #[cfg(unix)] // POSIX hook command paths
 #[tokio::test]
 async fn doctor_plans_without_writing_and_applies_on_confirm() {
@@ -425,8 +425,8 @@ async fn doctor_plans_without_writing_and_applies_on_confirm() {
             .unwrap()
             .contains("old.sh")
     );
-    // `Writer::backup` keeps the copy in a `_backup/` next to the file it replaces.
-    let backups = std::fs::read_dir(settings.parent().unwrap().join("_backup"))
+    // `Writer::backup` keeps the copy in a `.backup_configs/` next to the file it replaces.
+    let backups = std::fs::read_dir(settings.parent().unwrap().join(".backup_configs"))
         .map(|d| d.count())
         .unwrap_or(0);
     assert!(backups > 0, "no backup copy was kept");
