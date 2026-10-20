@@ -57,6 +57,10 @@ pub struct Snapshot {
     /// chains. `None` when this tick's probes failed; the page renders the failure
     /// rather than zeros, the way an unreadable store renders an empty page.
     pub doctor: Option<doctor::Report>,
+    /// T945: no doctor probe has landed yet — the probe runs off the tick, so `doctor` is
+    /// `None` without having failed; both surfaces render a placeholder, not the failure.
+    #[serde(default)]
+    pub doctor_pending: bool,
     /// Logs page (T15.7): the last `[log] lines` log lines, newest first — the same
     /// selection `rtok logs` screens ([`Model::log_lines`], T15.11). Riding the snapshot
     /// makes the page both surfaces' (D23); `[log] lines` is the frame's bound too.
@@ -430,7 +434,7 @@ pub fn snapshot(cfg: &Config) -> Snapshot {
     let mut snap = Model::new(cfg, store.as_ref()).snapshot();
     if let Some(msg) = store_err {
         snap.error = Some(msg);
-    } else if snap.doctor.is_none() {
+    } else if snap.doctor.is_none() && !snap.doctor_pending {
         snap.error = Some("doctor probe failed".into());
     }
     snap
@@ -648,45 +652,41 @@ const DOCTOR_SNAPSHOT_TTL: std::time::Duration = std::time::Duration::from_secs(
 /// section of the Hosts page (T330.2) walks agent folders and reuses it for the same reason.
 const WORKTREES_TTL: Duration = Duration::from_secs(300);
 
-/// Snapshot-only doctor: same [`doctor`] probes, cached briefly so `rtok tui` / `rtok web`
-/// ticks do not spawn MCP servers every two seconds. `rtok doctor` still goes through
-/// [`doctor`] uncached. Tests bypass the cache so Check pins stay byte-identical to a
-/// direct probe.
-fn doctor_for_snapshot(cfg: &Config) -> Option<doctor::Report> {
-    if cfg!(test) {
-        return doctor(cfg).ok();
-    }
-    use std::sync::OnceLock;
+/// What [`doctor_for_snapshot`] hands the snapshot: the report (`None` when the probe
+/// failed) and whether no probe has landed yet.
+type DoctorRead = (Option<doctor::Report>, bool);
 
-    struct Entry {
-        at: Instant,
-        key: String,
-        report: Option<doctor::Report>,
+/// Snapshot-only doctor: same [`doctor`] probes, cached briefly so `rtok tui` / `rtok web`
+/// ticks do not spawn MCP servers every two seconds. T945: the probe runs in [`Background`],
+/// never on the tick — on a cold transcript cache its read share parses every transcript,
+/// minutes before the first `/ws` frame; the snapshot ships the last known report, or
+/// pending before the first one lands. `rtok doctor` still goes through [`doctor`] uncached.
+/// Tests bypass the cache so Check pins stay byte-identical to a direct probe.
+fn doctor_for_snapshot(cfg: &Config) -> DoctorRead {
+    if cfg!(test) {
+        return (doctor(cfg).ok(), false);
     }
-    static CACHE: OnceLock<Mutex<Option<Entry>>> = OnceLock::new();
+    static DOCTOR: Background<(String, Option<doctor::Report>)> = Background::new();
     let key = format!(
         "{}{}{}",
         cfg.doctor.settings_path.display(),
         cfg.doctor.claude_json.display(),
         cfg.doctor.mcp_json.display()
     );
-    let lock = CACHE.get_or_init(|| Mutex::new(None));
-    if let Ok(guard) = lock.lock()
-        && let Some(e) = guard.as_ref()
-        && e.key == key
-        && e.at.elapsed() < DOCTOR_SNAPSHOT_TTL
-    {
-        return e.report.clone();
-    }
-    let report = doctor(cfg).ok();
-    if let Ok(mut guard) = lock.lock() {
-        *guard = Some(Entry {
-            at: Instant::now(),
-            key,
-            report: report.clone(),
-        });
-    }
-    report
+    let cfg = cfg.clone();
+    doctor_from(&DOCTOR, key, move || doctor(&cfg).ok())
+}
+
+/// [`doctor_for_snapshot`] over any cache and probe, so a test can pass a probe that blocks.
+/// A cached report for other doctor paths is dropped, not shown.
+fn doctor_from(
+    cache: &'static Background<(String, Option<doctor::Report>)>,
+    key: String,
+    read: impl FnOnce() -> Option<doctor::Report> + Send + 'static,
+) -> DoctorRead {
+    cache
+        .get_keyed(DOCTOR_SNAPSHOT_TTL, key, read)
+        .map_or((None, true), |report| (report, false))
 }
 
 /// T63.1: T61.3 listing × T61.1 resident. One accessor, two UIs (D23). Does not walk skill files.
@@ -992,6 +992,29 @@ impl<T: Clone + Send + 'static> Background<T> {
     }
 }
 
+impl<T: Clone + Send + 'static> Background<(String, T)> {
+    /// [`Background::get`] for a value read under `key` (the config it was read from): a
+    /// value cached under another key is dropped and `None` returned, so a snapshot never
+    /// shows a read of other settings.
+    fn get_keyed(
+        &'static self,
+        ttl: Duration,
+        key: String,
+        read: impl FnOnce() -> T + Send + 'static,
+    ) -> Option<T> {
+        let read_key = key.clone();
+        match self.get(ttl, move || (read_key, read())) {
+            Some((k, value)) if k == key => Some(value),
+            landed => {
+                if landed.is_some() {
+                    self.forget();
+                }
+                None
+            }
+        }
+    }
+}
+
 /// The Hosts page (T231): [`crate::agents::list`]'s blocks, verbatim — the same
 /// per-variant kind/version/config/module text `rtok agents list` prints, built from
 /// the same probe `agents_list`'s JSON form calls (D27, no duplicated logic).
@@ -1198,7 +1221,7 @@ impl<'a> Model<'a> {
                     .ok()
             })
             .unwrap_or_default();
-        let doctor = doctor_for_snapshot(self.cfg);
+        let (doctor, doctor_pending) = doctor_for_snapshot(self.cfg);
         let (st, usage, scanned, stats_text) = stats_skills(self.cfg);
         let skills = skills_from(
             doctor.as_ref().and_then(|d| d.skills.as_ref()),
@@ -1213,9 +1236,10 @@ impl<'a> Model<'a> {
             calls,
             sessions: self.sessions(0),
             // The one doctor query (D27): the snapshot carries what `rtok doctor`
-            // renders, so neither surface grows a probe of its own. Cached briefly —
-            // a failed or in-flight tick is `None`, never a failed snapshot.
+            // renders, so neither surface grows a probe of its own. Read off the tick
+            // (T945) — a failed or not-yet-landed probe is `None`, never a failed snapshot.
             doctor,
+            doctor_pending,
             logs: self.log_lines(None),
             error: None,
             skills,
