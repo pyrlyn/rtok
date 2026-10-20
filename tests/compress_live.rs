@@ -171,7 +171,14 @@ async fn the_summary_reaches_the_next_turn_and_stays_byte_stable() {
     // Turn 2 is the first time the result is outside the live zone: extractive, summary queued.
     let early = first_result(&sent(&agent, 2));
     assert!(early.contains("narrative:"), "{early}");
-    let id = archive_id(&early);
+    let short = archive_id(&early);
+    assert_eq!(short.len(), 8, "{short}");
+    let hits = state
+        .store
+        .archive_ids_with_prefix(&short, 2)
+        .expect("prefix");
+    assert_eq!(hits.len(), 1, "{hits:?}");
+    let id = hits[0].clone();
     assert!(stored(&state, &model(), &id).await.is_some(), "no summary");
 
     send(&addr, 3).await;
@@ -180,7 +187,8 @@ async fn the_summary_reaches_the_next_turn_and_stays_byte_stable() {
     let (third, fourth) = (sent(&agent, 3), sent(&agent, 4));
     let view = first_result(&third);
     assert!(view.contains(&format!("summary: {summary}")), "{view}");
-    assert!(view.contains(&format!("expand({id})")));
+    assert!(view.contains(&format!("expand({short})")), "{view}");
+    assert!(!view.contains(&id), "{view}");
     // The prefix of turn 4 up to the live edge is turn 3's, byte for byte.
     let edge = third["messages"].as_array().expect("messages").len() - 2;
     for i in 0..edge {
@@ -295,8 +303,16 @@ async fn an_anthropic_bearer_credential_still_reaches_the_compressor() {
     .await;
     send_with(&addr, 1, "authorization", "Bearer oauth-test").await;
     send_with(&addr, 2, "authorization", "Bearer oauth-test").await;
-    let id = archive_id(&first_result(&sent(&agent, 2)));
-    assert!(stored(&state, &model(), &id).await.is_some(), "no summary");
+    let short = archive_id(&first_result(&sent(&agent, 2)));
+    let hits = state
+        .store
+        .archive_ids_with_prefix(&short, 2)
+        .expect("prefix");
+    assert_eq!(hits.len(), 1, "{hits:?}");
+    assert!(
+        stored(&state, &model(), &hits[0]).await.is_some(),
+        "no summary"
+    );
     task.abort();
     calls.assert_calls(1);
 }
