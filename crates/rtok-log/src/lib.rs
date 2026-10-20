@@ -62,9 +62,11 @@ pub fn stamp(secs: u64) -> String {
     format!("{y:04}-{m:02}-{d:02} {h:02}:{min:02}:{s:02}")
 }
 
-/// One line. Newlines in `message` become spaces so one event cannot look like several.
+/// One line. Newlines in any field become spaces so one event cannot look like several: a
+/// WASM guest picks its own `level`, and names can come from config.
 pub fn line(secs: u64, level: &str, source: &str, name: &str, message: &str) -> String {
-    let message = message.replace(['\n', '\r'], " ");
+    let flat = |s: &str| s.replace(['\n', '\r'], " ");
+    let (level, source, name, message) = (flat(level), flat(source), flat(name), flat(message));
     format!("{} {level} {source}/{name}: {message}", stamp(secs))
 }
 
@@ -133,8 +135,14 @@ fn rank(level: &str) -> usize {
         .unwrap_or(0)
 }
 
+/// A new log file is the owner's only (`0600` on Unix): lines carry error text, paths and
+/// command lines, and the umask default (`0644`) let every local account read them.
 fn open_append(path: &Path) -> io::Result<fs::File> {
-    OpenOptions::new().create(true).append(true).open(path)
+    let mut o = OpenOptions::new();
+    o.create(true).append(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut o, 0o600);
+    o.open(path)
 }
 
 fn over(log: &FileLog<'_>, incoming: u64) -> bool {
@@ -199,6 +207,36 @@ mod tests {
             files,
             level: "debug",
         }
+    }
+
+    /// Audit 2026-10-19: logs were created with the umask mode, readable by every account.
+    #[cfg(unix)]
+    #[test]
+    fn a_new_log_file_is_owner_only() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tmp("mode");
+        let path = dir.join("rtok.log");
+        write_line(&log(&path, 1 << 20, 1), "x").unwrap();
+        let mode = fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// Audit 2026-10-19: only the message was flattened; a guest's `level` could forge a line.
+    #[test]
+    fn no_field_can_start_a_second_line() {
+        let got = line(
+            0,
+            "info\n1970-01-01 00:00:00 error",
+            "wasm\r",
+            "p\nq",
+            "m\nn",
+        );
+        assert_eq!(got.lines().count(), 1, "{got}");
+        assert_eq!(
+            got,
+            "1970-01-01 00:00:00 info 1970-01-01 00:00:00 error wasm /p q: m n"
+        );
     }
 
     #[test]
