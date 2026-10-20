@@ -324,7 +324,8 @@ fn squash(work: &Path, branch: &str) {
 }
 
 /// T153: `rtok worktree gc` removes what is finished, drops the records of deleted
-/// directories, and stops at every lock that is not the caller's.
+/// directories, and stops at every lock that is not the caller's — except on a vanished
+/// directory whose lock is past `--stale-lock` (T950).
 #[test]
 fn gc_removes_only_finished_worktrees_and_never_opens_a_foreign_lock() {
     let tmp = rtok::testutil::tmp_dir("worktree-gc");
@@ -345,6 +346,10 @@ fn gc_removes_only_finished_worktrees_and_never_opens_a_foreign_lock() {
     add(&work, "gone-mine", Some(&mine));
     add(&work, "theirs", Some(theirs));
     add(&work, "gone-theirs", Some(theirs));
+    // T950: a lock taken today on a vanished worktree still waits out `--stale-lock`.
+    let today = humantime::format_rfc3339(std::time::SystemTime::now()).to_string();
+    let fresh = format!("Cursor / grok | t3 | {}", &today[..10]);
+    add(&work, "gone-fresh", Some(&fresh));
     add(&work, "bare-lock", Some(""));
 
     commit(&tmp.join("wt-done"), "done.txt");
@@ -362,7 +367,7 @@ fn gc_removes_only_finished_worktrees_and_never_opens_a_foreign_lock() {
     std::fs::write(work.join("list.txt"), "1\n2\n3\nx\ny\n").unwrap();
     run(&work, &["commit", "-q", "-am", "y"]);
     run(&work, &["push", "-q", "origin", "main"]);
-    for name in ["gone", "gone-mine", "gone-theirs"] {
+    for name in ["gone", "gone-mine", "gone-theirs", "gone-fresh"] {
         std::fs::remove_dir_all(tmp.join(format!("wt-{name}"))).unwrap();
     }
     let listed = || run(&work, &["worktree", "list", "--porcelain"]);
@@ -394,19 +399,22 @@ fn gc_removes_only_finished_worktrees_and_never_opens_a_foreign_lock() {
     assert_eq!(planned("wt-bare-lock"), "keep: locked, owner unknown");
     assert_eq!(planned("wt-gone"), "drop-record: directory is gone");
     assert_eq!(planned("wt-gone-mine"), "drop-record: directory is gone");
-    assert_eq!(planned("wt-gone-theirs"), "keep: locked by Cursor / grok");
+    // T950: a vanished worktree holds no work; only a lock younger than `--stale-lock` keeps it.
+    assert_eq!(planned("wt-gone-theirs"), "drop-record: directory is gone");
+    assert_eq!(planned("wt-gone-fresh"), "keep: locked by Cursor / grok");
     // T418: past `--stale-lock` a foreign lock on a merged, clean worktree is abandoned;
-    // on a dirty, unmerged or vanished one it still holds.
+    // on a dirty or unmerged one it still holds.
     let stale = json_in(&tmp, &work, &[&idle0[..], &["--stale-lock", "0h"]].concat());
     let abandoned = |name: &str| by_name(&stale, name)["note"].as_str().unwrap().to_owned();
     let reclaimed = "merged, clean, abandoned lock by Cursor / grok";
     assert_eq!(abandoned("wt-theirs"), reclaimed);
     let reclaimed = "merged, clean, abandoned lock, owner unknown";
     assert_eq!(abandoned("wt-bare-lock"), reclaimed);
-    assert_eq!(abandoned("wt-gone-theirs"), "locked by Cursor / grok");
+    assert_eq!(abandoned("wt-gone-fresh"), "directory is gone");
     assert_eq!(listed(), before);
 
-    // No `--owner`, default idle window: only the unlocked stale record may go.
+    // No `--owner`, default idle window: only the unlocked stale record and the vanished ones
+    // under a lock past `--stale-lock` may go.
     let cautious = json_in(&tmp, &work, &["worktree", "gc", "--json", "--yes"]);
     let note = |rows, name: &str| by_name(rows, name)["note"].as_str().unwrap().to_owned();
     assert_eq!(
@@ -414,8 +422,11 @@ fn gc_removes_only_finished_worktrees_and_never_opens_a_foreign_lock() {
         "modified within the idle window"
     );
     assert_eq!(note(&cautious, "wt-mine"), format!("locked by {ME}"));
-    assert_eq!(note(&cautious, "wt-gone-mine"), format!("locked by {ME}"));
     assert_eq!(note(&cautious, "wt-gone"), "removed with its branch");
+    assert_eq!(note(&cautious, "wt-gone-mine"), "removed with its branch");
+    assert_eq!(note(&cautious, "wt-gone-theirs"), "removed with its branch");
+    assert_eq!(note(&cautious, "wt-gone-fresh"), "locked by Cursor / grok");
+    assert!(!work.join(".git/worktrees/wt-gone-theirs").exists());
 
     let applied = json_in(&tmp, &work, &[&idle0[..], &["--yes"]].concat());
     let remote_left = "removed with its branch; remote left: git push origin --delete t-done";
@@ -426,7 +437,7 @@ fn gc_removes_only_finished_worktrees_and_never_opens_a_foreign_lock() {
         "wt-open",
         "wt-theirs",
         "wt-bare-lock",
-        "wt-gone-theirs",
+        "wt-gone-fresh",
     ];
     let after = listed();
     let paths: Vec<&str> = after
@@ -445,7 +456,7 @@ fn gc_removes_only_finished_worktrees_and_never_opens_a_foreign_lock() {
         "main",
         "t-bare-lock",
         "t-dirty",
-        "t-gone-theirs",
+        "t-gone-fresh",
         "t-open",
         "t-theirs",
     ];
@@ -461,7 +472,7 @@ fn gc_removes_only_finished_worktrees_and_never_opens_a_foreign_lock() {
         [
             "wt-bare-lock",
             "wt-dirty",
-            "wt-gone-theirs",
+            "wt-gone-fresh",
             "wt-open",
             "wt-theirs"
         ]

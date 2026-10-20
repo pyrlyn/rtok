@@ -389,6 +389,16 @@ impl Store {
             .collect())
     }
 
+    /// Every agent with an `ended_at` (T949): `worktree gc` stops honouring the locks they
+    /// left, since nothing unlocks a worktree when its session ends.
+    pub fn ended_agent_ids(&self) -> Result<Vec<String>> {
+        let mut conn = self.lock()?;
+        Ok(agents::table
+            .filter(agents::ended_at.is_not_null())
+            .select(agents::id)
+            .load(&mut *conn)?)
+    }
+
     /// T283.3: record the pids above the hook process that registered `id` (nearest first).
     /// Written only when it differs, so a hook repeating the same chain adds no write; an empty
     /// chain says nothing and keeps what is stored.

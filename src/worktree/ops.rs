@@ -181,6 +181,14 @@ pub fn live_ids(cfg: &Config) -> HashSet<String> {
         .unwrap_or_default()
 }
 
+/// Ended agent ids for `worktree gc` (T949). No store means none ended, so every lock holds.
+pub fn ended_ids(cfg: &Config) -> HashSet<String> {
+    Store::open(&cfg.core.db_path)
+        .and_then(|s| s.ended_agent_ids())
+        .map(|ids| ids.into_iter().collect())
+        .unwrap_or_default()
+}
+
 /// Worktrees `adopt` parked for the next agent (T285's `live_ids` counterpart, T289.5).
 pub fn pending_paths(cfg: &Config) -> Vec<std::path::PathBuf> {
     Store::open(&cfg.core.db_path)
