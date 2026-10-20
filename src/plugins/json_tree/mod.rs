@@ -87,7 +87,11 @@ fn rewrite_block(tool_use_id: &str, content: &mut Value, cx: &Ctx) -> Option<Mea
 
     let value: Value = serde_json::from_str(&orig).ok()?;
     let folded = fold_json(&value)?;
-    let preview = format!("{PREFIX}{}]\n{}", "0".repeat(64), folded.text);
+    let preview = format!(
+        "{PREFIX}{}]\n{}",
+        "0".repeat(crate::names::MIN_PREFIX),
+        folded.text
+    );
     let est_before = cx.estimate(&orig, Class::Code);
     if cx.estimate(&preview, Class::Code) >= est_before {
         return None;
@@ -96,7 +100,11 @@ fn rewrite_block(tool_use_id: &str, content: &mut Value, cx: &Ctx) -> Option<Mea
         .put_archive(orig.as_bytes())
         .map_err(|e| cx.log("error", "plugin", "json_tree", &format!("put: {e}")))
         .ok()?;
-    let replacement = format!("{PREFIX}{archive_id}]\n{}", folded.text);
+    let replacement = format!(
+        "{PREFIX}{}]\n{}",
+        crate::names::short_id(&archive_id),
+        folded.text
+    );
     cx.put_archive_decision(tool_use_id, &archive_id, &replacement)
         .map_err(|e| cx.log("error", "plugin", "json_tree", &format!("decision: {e}")))
         .ok()?;
@@ -1027,6 +1035,13 @@ mod tests {
         assert!(text.starts_with(PREFIX), "{text}");
         assert!(!text.contains("[toon "));
         let archive_id = ms[0].ref_id.clone().unwrap();
+        let shown = crate::names::short_id(&archive_id);
+        assert_eq!(archive_id.len(), 64);
+        assert!(text.starts_with(&format!("{PREFIX}{shown}]")), "{text}");
+        assert!(
+            !text.contains(&archive_id),
+            "the pointer prints the prefix, not the sha"
+        );
 
         let mut second = tool_req(&value);
         filter(&mut second, &Ctx::new(&cx));
@@ -1036,7 +1051,7 @@ mod tests {
             "a second pass replays the stored pointer"
         );
 
-        let expanded = expand::fetch(&cx, &archive_id).unwrap().unwrap();
+        let expanded = expand::fetch(&cx, shown).unwrap().unwrap();
         assert_eq!(expanded, original.as_bytes());
     }
 

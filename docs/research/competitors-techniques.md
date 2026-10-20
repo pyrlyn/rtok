@@ -147,3 +147,5 @@ The full list stays behind `expand <id>`.
 - Anchor check from #1076 (`bench/c14`): 100 % of hashes (7-char prefix), paths and WARN/ERROR lines.
 - Exit status and stderr unchanged on failure.
 - Output never has more tokens than raw (o200k_base).
+
+`toon` and `json_tree` pointers print that same 8-character id (T914). A decision already stored is replayed as written. The measurement `ref_id` stays the full sha.

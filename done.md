@@ -1,5 +1,16 @@
 # rtok — completed tasks
 
+### T914. `toon` and `json_tree` print the 8-character archive id
+
+T672 prints 8 hex chars on a compressed command. A `toon` block and a `json_tree` fold still named the archive with the full 64-character sha (`[toon <sha>]`, `[json-tree <sha>]`). That text is what an agent reads back.
+
+Both pointers now print the 8-character prefix, and the size check prices a pointer of that length. `rtok expand` resolves the prefix. The measurement `ref_id` stays the full sha. A decision already stored is replayed as written, so an old pointer is not rewritten.
+
+Check: the toon expand test and the json_tree fold test find the 8-character prefix, not the sha, and `expand` of that prefix returns the original bytes.
+
+Status: done 2026-10-20
+Model: Cursor / grok 4.7
+
 ### T526. `worktree_list` and `search` when `rtok mcp` was started in the home directory
 
 T356 stops the graph from indexing `$HOME`. `worktree_list` and a pathless `search` still ran against the launch cwd, so a server started in the home directory failed with git's `fatal: not a git repository` or `no project root` until the client sent `roots/list` or the caller passed a path.
