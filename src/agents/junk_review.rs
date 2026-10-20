@@ -373,7 +373,9 @@ mod tests {
         let items = backup_items(std::slice::from_ref(&dir), 1, LIMIT);
 
         assert_eq!(items.len(), 1, "{items:?}");
-        assert!(items[0].path.ends_with("_backup/s.json.bak-1"));
+        // Components, not a string: Windows prints `\` between them.
+        let want = std::path::Path::new("_backup").join("s.json.bak-1");
+        assert!(std::path::Path::new(&items[0].path).ends_with(want));
     }
 
     #[test]
