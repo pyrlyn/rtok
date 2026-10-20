@@ -291,6 +291,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T940 | todo | P3 | 2 | 0% | |
 | T941 | todo | P3 | 2 | 0% | |
 | T942 | todo | P3 | 1 | 0% | |
+| T944 | in progress | P2 | 2 | 0% | Claude / opus-5.5 |
 
 
 
@@ -622,6 +623,27 @@ Done when: `rtok expand -` either passes stdin through unchanged or refuses with
 that names the right use; pick one with the creator.
 
 Check: a CLI test for `rtok expand -`; `just check`.
+
+### T944. `rtok web`: say why `/ws` refuses instead of a bare Offline
+
+On 2026-10-20 the creator opened `http://127.0.0.1:3333/#/overview` without `?token=`: `/ws`
+answered 401 (S2, `docs/web-auth.md`) and the SPA showed only "Offline / Reconnect". A browser
+WebSocket cannot read the 401, and a token kept in `sessionStorage` goes stale when `rtok web`
+restarts (fresh token per start), which looks the same.
+
+Done when: with no token in the page URL or `sessionStorage` the SPA shows a hint to open
+`http://127.0.0.1:3333/?token=$(cat ~/.rtok/web-token)`; with a token the server rejects, a hint
+that `rtok web` was restarted and the same URL; a real disconnect keeps the generic Offline.
+
+Plan:
+1. Server: `GET /auth` answers 204 for a valid token and 401 otherwise, through the same check
+   as the `/ws` upgrade (`src/web/mod.rs`, `src/web/token.rs`); Rust test in the web tests.
+2. SPA: `web/src/api/ws.ts` exposes the token state; on `closed`, no token → `missing`; a token →
+   probe `/auth` with `Authorization: Bearer`, 401 → `rejected`, anything else → plain Offline.
+   `web/src/states.tsx` `Offline` takes the reason; `web/src/Shell.tsx` passes it.
+3. Failing Vitest first (states + probe), then stories for both hints, `docs/web-auth.md`.
+
+Check: `just check`, `just spa-test`, `just js`, `just spa-stories`, `just spa-e2e`.
 
 ### T666.2. Provider-backed memory extractor (blocked on the creator)
 
