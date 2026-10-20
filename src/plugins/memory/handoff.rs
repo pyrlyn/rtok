@@ -283,7 +283,10 @@ pub fn build_brief(cx: &Ctx, budget_tokens: u32, hint: &str) -> Option<String> {
                     line = format!("{line}:{}", spans.join(", "));
                 }
                 match &p.archive_id {
-                    Some(id) => format!("{line} — rtok expand {id}"),
+                    Some(id) => {
+                        let shown = crate::names::short_id(id);
+                        format!("{line} — rtok expand {shown}")
+                    }
                     None => line,
                 }
             })
@@ -294,7 +297,10 @@ pub fn build_brief(cx: &Ctx, budget_tokens: u32, hint: &str) -> Option<String> {
     let archived = cx.put_archive(full.as_bytes()).ok();
     let trailer = archived
         .as_ref()
-        .map(|id| format!("\n[rtok {id} · expand: rtok expand {id}]"))
+        .map(|id| {
+            let shown = crate::names::short_id(id);
+            format!("\n[rtok {shown} · expand: rtok expand {shown}]")
+        })
         .unwrap_or_default();
     let room = budget_tokens.saturating_sub(cx.estimate(&trailer, Class::Prose));
     // T130.3: ranges go before any pointer does; the archived body keeps them.

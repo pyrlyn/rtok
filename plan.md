@@ -4,6 +4,130 @@ https://github.com/pyrlyn/rtok
 
 Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured reductions, pluggable methods.
 
+## Log triage 2026-10-20
+
+Found by reading rtok's own logs (`~/.rtok/errors.log`, `rtok.log`, the `calls`, `logs`,
+`measurements` and `observations` tables of `~/.rtok/rtok.db`) and the agent transcripts of
+2026-09-20 to 2026-10-20: Claude Code (`~/.claude/projects`, about 2,050 sessions), Codex
+(`~/.codex/sessions`, Codex desktop logs), Cursor (`~/.cursor`, Cursor app logs). Gemini CLI
+has no rtok entry, so nothing there. Problems that stopped after a merged fix (sibling-worktree
+`path outside cwd`, `invalid line range`, `--idle 0s`, the `cwd /` MCP timeouts) are not
+filed. Counts are as of 2026-10-20; the installed binary was v0.17.0-alpha.2 (2026-10-18).
+
+Tasks T920–T942 below come from it.
+
+## Audit 2026-10-19
+
+Three independent review passes over `main` at `cb0b8811`: pass 1 walked the modules, pass 2
+followed threats from each entry point (hooks, stdio and HTTP MCP, proxy, dashboard, WASM
+plugins, files read from a checkout, CI), pass 3 compared docs, comments and tests with the
+code. Nothing was exploited. Overlap: A1 and A5 close residuals that #1064 left open (S4 for
+`search`, S3 for logs); nothing repeats #601 or #1061. Open PRs #1166 and #1169 print shorter
+archive ids, which makes A11 easier to hit. To take a task, give it a T-id, a row and a `Check:`.
+
+| # | Severity | Finding | Passes | State |
+| --- | --- | --- | --- | --- |
+| A1 | medium | HTTP `search` printed lines of `.env` and keys that `read` refuses | 2, 3 | fixed |
+| A2 | low | Secret list missed `.git-credentials`, `.envrc`, `.pgpass`, keystores | 1 | fixed |
+| A3 | medium | Proxy logged reqwest errors with the full URL, Gemini `?key=` included | 1, 2 | fixed |
+| A4 | low | `docs fetch` joined a `Cargo.lock` version into a cache path unchecked | 2 | fixed |
+| A5 | low | `rtok.log` and `errors.log` were created `0644` | 1, 3 | fixed |
+| A6 | low | Log `level`, `source` and `name` could carry a newline and forge a line | 1 | fixed |
+| A7 | low | Proxy paths with `..` or `%2e%2e` climbed out of the upstream base path | 2 | fixed |
+| A8 | low | Semantic cache ignored `openai-project` in the caller key | 2 | fixed |
+| A9 | info | Web handler comments said the Origin check alone guards apply | 3 | fixed |
+| A10 | high | A checkout's `.rtok.toml` or `.env` can redirect data and keys or run a command | 2, 3 | planned |
+| A11 | medium | HTTP `expand` is always on and resolves any archive by an 8-char prefix | 2, 3 | planned |
+| A12 | low | WASM guests have a fuel limit but no memory limit | 1 | planned |
+| A13 | low | Log rotation lock sits in the shared temp dir under a predictable name | 1, 2 | planned |
+| A14 | low | Existing log files and `~/.rtok` keep their old loose modes | 3 | planned |
+| A15 | low | Proxy buffers up to 256 MiB per request with no global cap when lanes are off | 1 | planned |
+| A16 | low | `[otel] content = true` by default; a generic `OTEL_EXPORTER_OTLP_ENDPOINT` ships prompts | 3 | planned |
+
+Tests added for A1 to A8: `walk_filter_drops_credential_files_only_when_denied`,
+`secret_names_are_recognised`, `upstream_errors_never_carry_the_query_key`,
+`resolve_lock_refuses_path_like_names_and_versions`, `a_new_log_file_is_owner_only`,
+`no_field_can_start_a_second_line`, `join_upstream_refuses_dot_segments`,
+`openai_project_is_part_of_the_caller`.
+
+### A10. Project config can redirect egress and credentials (high)
+
+Where: `crates/rtok-config/src/layers.rs`, `assemble`, `read_dotenv`, `dotenv_pairs`; the
+project layer is `<git root>/.rtok.toml`, the dotenv layer reads the nearest `.env` first.
+What: both layers accept every key ("same schema", `docs/config.md`). A cloned repository can
+set `[otel] endpoint` (with `content = true`, the default), and `Stop`/`SessionEnd` hooks spawn
+`rtok otel flush` in that checkout (`src/hooks/mod.rs` → `otel::export::spawn_child`), shipping
+prompt and tool text to the repository's server. It can also set
+`plugins.memory.embed.url` plus `api_key_env` naming any variable (`src/store/http_embed.rs`
+sends it as a bearer token), `tasks.gitlab.url` (the GitLab token follows), `proxy.upstream` /
+`openai_upstream` / `gemini_upstream`, `plugins.memory.extract.command` (run by
+`rtok memory extract`), `log.path`, `core.archive_dir` and `plugins.read.allow_paths`.
+Change: give project layers (the project file and a project `.env`, not `~/.rtok/.env`) a
+deny list of key prefixes: `otel.`, `proxy.`, `mcp.`, `web.`, `log.`, `core.archive_dir`,
+`core.home`, `tasks.*.url`, `plugins.memory.embed.url`, `plugins.memory.embed.api_key_env`,
+`plugins.memory.extract.`, `plugins.compress.*.url`. Drop such keys with one stderr notice
+naming the file and key, keep them in `config show --sources` as "ignored (project)". Split
+`read_dotenv` so the project file and the home file are separate layers. Optionally add
+`rtok trust` (a per-repo opt-in kept in `~/.rtok/trusted.toml`, keyed by canonical root) for
+teams that do want to share one of these keys. Update `docs/config.md` layer 3 and 4.
+Why: opening an untrusted repository with an agent should not send its prompts or a user's
+tokens elsewhere. Same class as the `.env` issue found in stator's audit.
+
+### A11. HTTP `expand` reaches the whole archive (medium)
+
+Where: `src/mcp.rs` `Server::new` (keeps `expand` listed whatever `tools` says),
+`src/mcp/http.rs` `http_server`, `src/expand.rs` `resolve_id` and `fetch_range`,
+`crates/rtok-store/src/archive_rows.rs` `archive_ids_with_prefix`.
+What: over HTTP a token holder can call `expand` with any 8 hex chars; the prefix is matched
+against every archive in the store (all sessions and projects, including bodies archived from
+files `read` now refuses), and the ambiguity error lists longer candidates. Nothing limits the
+rate of guesses. Change: on the HTTP surface resolve only archives whose `session` is one this
+server wrote (filter `archive::session`), never print candidates in the ambiguity error there,
+and count failed lookups per connection (stop answering after a small number). Keep stdio as is.
+Why: the HTTP surface is for remote callers; it should expose only what it produced.
+
+### A12. WASM memory limit (low)
+
+Where: `src/plugins/wasm.rs` `WasmPlugin::load_with_fuel`, `WasmHost`.
+What: fuel stops an endless guest, but `memory.grow` up to 4 GiB is allowed. Change: keep a
+`wasmtime::StoreLimits` in `WasmHost` (memory size cap, for example 64 MiB, one instance, one
+table) and call `store.limiter`. Why: a bad plugin should fail, not exhaust the hook's memory.
+
+### A13. Rotation lock in the shared temp dir (low)
+
+Where: `crates/rtok-log/src/lib.rs` `open_rotate_lock`.
+What: the lock is `$TMPDIR/rtok-log-rotate-<hash>.lock`, the hash from `DefaultHasher` (fixed
+keys) over the log path, so it is predictable. On Linux `/tmp` is shared: another account can
+create the file first; `open` then fails, `write_line` returns the error and every line is
+dropped once the log reaches `max_bytes`. Change: put the lock beside the log
+(`<log dir>/.rotate.lock`, excluded from junk scans) or under the per-user runtime dir, open it
+with `O_NOFOLLOW` and mode `0600`; if the lock cannot be opened, append without rotating.
+Why: another user must not be able to silence rtok's logs.
+
+### A14. Old loose modes stay (low)
+
+Where: `crates/rtok-store/src/handle.rs` (tightens the db only), `crates/rtok-log/src/lib.rs`,
+`src/doctor.rs`. What: A5 and S3 set modes on new files; an existing `~/.rtok` (`0755`),
+`archive/` files and logs keep theirs. Change: one `rtok doctor` check that reports and, with
+`--fix`, sets `0700` on the home, `archive/` and the log dir and `0600` on their files.
+Why: the upgrade path is where most installs are.
+
+### A15. Proxy memory per request (low)
+
+Where: `src/proxy/mod.rs` `MAX_BODY_BYTES`, `handle`. What: each request may buffer 256 MiB,
+and with lanes off nothing caps concurrent requests, so a few local clients (or anyone, with a
+wide `proxy.bind`) can exhaust memory. Change: a `proxy.max_body_bytes` setting (default far
+below 256 MiB) and a global in-flight cap applied even with lanes off. Why: fail one request,
+not the proxy.
+
+### A16. Telemetry content on by default (low)
+
+Where: `crates/rtok-config/src/lib.rs` `Otel` (`content: bool = true`) and `Otel::resolve`
+(falls back to `OTEL_EXPORTER_OTLP_ENDPOINT`). What: a shell that exports the generic OTLP
+variable for another tool makes rtok send prompt and tool text there. Change: default `content`
+to false, or send content only when `[otel] endpoint` (not the generic variable) is set; say
+so in `docs/otel.md`. Why: content export should be an explicit choice.
+
 ## Security audit findings (2026-10-14)
 
 Find-only security review of `main` at `cd9644881` (OWASP Top 10, injection, path handling,
@@ -144,6 +268,29 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T525 | in progress | P2 | 3 | 0% | MiMo / mimo |
 | T666.2 | todo | P2 | 3 | 0% | |
 | T687 | todo | P2 | 4 | 0% | |
+| T920 | todo | P1 | 3 | 0% | |
+| T921 | todo | P1 | 3 | 0% | |
+| T922 | todo | P1 | 2 | 0% | |
+| T923 | todo | P1 | 3 | 0% | |
+| T924 | todo | P1 | 3 | 0% | |
+| T925 | todo | P1 | 3 | 0% | |
+| T926 | todo | P1 | 2 | 0% | |
+| T927 | todo | P2 | 2 | 0% | |
+| T928 | todo | P2 | 2 | 0% | |
+| T929 | todo | P2 | 3 | 0% | |
+| T930 | todo | P2 | 2 | 0% | |
+| T931 | todo | P2 | 3 | 0% | |
+| T932 | todo | P2 | 2 | 0% | |
+| T933 | todo | P2 | 2 | 0% | |
+| T934 | todo | P2 | 3 | 0% | |
+| T935 | todo | P2 | 2 | 0% | |
+| T936 | todo | P2 | 3 | 0% | |
+| T937 | todo | P3 | 2 | 0% | |
+| T938 | todo | P3 | 2 | 0% | |
+| T939 | todo | P3 | 2 | 0% | |
+| T940 | todo | P3 | 2 | 0% | |
+| T941 | todo | P3 | 2 | 0% | |
+| T942 | todo | P3 | 1 | 0% | |
 
 
 
@@ -151,6 +298,330 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 
 
 
+
+### T920. PostToolUse hook went from ~4 ms to ~50 ms with v0.17.0-alpha.2 (memory observations)
+
+`calls` (surface `hook`, name `PostToolUse`): mean 4.0 ms on 44,982 runs from 2026-10-12 to
+the alpha.2 install (2026-10-18 21:29), 53.5 ms on 3,385 runs since, minimum 45 ms. Every
+PostToolUse run on 2026-10-19 is over `max_ms` 10 ms. The first `observations` row (T454,
+merged 2026-10-09, first shipped in alpha.2) has the same second as the first slow call, and
+there is about one row per PostToolUse since. `rtok-hook` prints `{}` after 50 ms
+(`src/bin/rtok-hook.rs`), so many PostToolUse answers are now dropped, not only late. T687's
+12.5 ms baseline predates this.
+
+Done when: PostToolUse is back near its pre-alpha.2 latency with observations on (the insert
+leaves the hook path or gets cheap), and a latency test covers PostToolUse with observations
+enabled.
+
+Check: `tests/latency.rs` case with observations on, red before the fix; p50 on the live store
+for a day after install recorded in this card; `just check`.
+
+### T921. Hook calls that hang until the host's 5 s timeout, and the Pre/PostToolUse/SessionEnd tail
+
+Claude Code logged about 425 `hook_cancelled` events on rtok hook commands with
+`timedOut: true, timeoutMs: 5000` in about 94 sessions (rtok project 250, other projects 175),
+2026-09-14 to 2026-10-19: PreToolUse:Bash ~336, UserPromptSubmit 35, PreToolUse:Read 31,
+SubagentStart 18. Bursts on 10-02, 10-08 (99), 10-11, 10-15/16. Each one stalls the tool call
+5 s and skips rtok silently. `rtok-hook` bounds only the resident path (`TIMEOUT` 50 ms); when
+no resident answers it runs `rtok hook` itself with no deadline, and the plugin `hooks.json`
+falls back to `rtok hook` when `rtok-hook` is not on PATH. Host-measured p99 is 1.2–2.2 s for
+PreToolUse/PostToolUse; SessionEnd has 39% of 1,354 runs over 10 ms (p95 93 ms, max 896 ms).
+T687 covers only the p50, T525 only SubagentStart and PreCompact.
+
+Done when: no hook call can outlive a deadline well under the host timeout on any path (the
+fallback included), the cause of the hangs is named (store lock, disk, load, or the walk), and
+SessionEnd meets `max_ms` at the median.
+
+Check: a test where the fallback `rtok hook` is blocked (locked store, slow plugin) and the
+caller still gets `{}` under the deadline; `tests/latency.rs` covers SessionEnd; `just check`.
+
+### T922. `rtok run --` rewrite breaks every Bash call when `rtok` is not on PATH
+
+The PreToolUse(Bash) rewrite always produces `rtok run -- '<cmd>'` (`src/plugins/cmd/hook.rs`).
+When the shell that runs the command has no `rtok` on PATH, every call fails with
+`zsh: command not found: rtok`: 8 calls in a row on 2026-10-09 (workspace session, the agent
+stopped work) and once on 2026-10-18 (cox). T174 made the hook command itself fail open, not
+the command it writes.
+
+Done when: the rewritten command runs the original command when `rtok` cannot be found (an
+absolute path to the running binary, or a `command -v` guard), and output is unchanged
+otherwise.
+
+Check: a cmd hook test that runs the rewritten line with a PATH lacking `rtok` and gets the
+original command's output and exit code; `just check`.
+
+### T923. Relative MCP paths resolve against the server's checkout, not the caller's worktree
+
+A shared `rtok mcp` (Claude.app, or one server for a session and its worktree subagents) runs
+in the main checkout. A relative `read`/`search`/`outline` path then resolves there, so an agent
+in `.claude/worktrees/<x>` or `_worktrees/<x>` reads the main checkout's copy without its
+edits. About 10 subagents in cox (2026-09-26..29) concluded "rtok read is stale" and dropped to
+Bash; 27 `No such file or directory` errors in 12 sessions (2026-10-05..17, e.g. weft
+`WeftStudio.WinUI/MainWindow.xaml.cs`, which existed in the session cwd); 24 of 90 empty
+`search` results were contradicted by a grep. T351, T435 and T263 cover absolute sibling paths
+only.
+
+Done when: a relative path resolves against the caller's root when the server can know it
+(roots, the linked agent's worktree), and otherwise the answer names the root it resolved
+against, so a wrong root is visible. The tool descriptions say to pass absolute paths from a
+worktree.
+
+Check: read-plugin tests with a server root and a caller worktree that differ (relative path
+reads the worktree copy, or the answer names the root); `just check`.
+
+### T924. MCP `worktree_*` tools: worktree in the wrong repo, agent ambiguity the agent cannot resolve
+
+`worktree_add` takes only `task` and `slug` (`src/mcp/worktrees.rs`) and uses the server's
+repo. Through the shared Claude.app MCP it made an rtok worktree for a cox session
+(2026-10-16) and `_worktrees/scull-t3` for a kerf session (2026-10-18). `ambiguous: agents X, Y
+share this cwd; use RTOK_AGENT_ID` came 14 times (2026-10-11..13, weft, mailune), but an MCP
+caller cannot set the server's environment. `not linked to an agent session` is still logged
+after T473: 53 times in `logs` (17 after 2026-10-09), 42 tool errors in transcripts. Related:
+T281 (probe, in progress).
+
+Done when: `worktree_*` and `agent_*` tools take an explicit `repo` (or path) and `agent`
+argument, `worktree_add` refuses when the repo is not the caller's instead of guessing, and
+the ambiguity message names the argument to pass.
+
+Check: MCP tests for the wrong-repo refusal and for an ambiguous cwd resolved by `agent`;
+`just check`.
+
+### T925. Cursor plugin link into the versioned ketch store dangles after an upgrade; doctor stays green
+
+`~/.cursor/plugins/local/rtok` is a symlink to `~/.ketch/store/rtok/v0.15.1/plugins/cursor`
+(made 2026-10-05). ketch now holds only `v0.17.0-alpha.2`, so the link dangles: Cursor loads no
+rtok plugin, hooks, skills or rules, and `~/.cursor/hooks.json` has no rtok entry. Only the MCP
+entry in `~/.cursor/mcp.json` still works. Doctor and `agents info` did not report it.
+Related: T278 (MCP state in `agents info`, in progress).
+
+Done when: the Cursor install does not point into a versioned store path that an upgrade
+removes (copy, or a stable link re-pointed on upgrade), and doctor flags a dangling or stale
+plugin link for every host that installs by link.
+
+Check: an install test that removes the old store version and still finds the plugin; a
+doctor test with a dangling link; `just check`.
+
+### T926. `rtok expand <id>` on the CLI returns an "identical to a result N turns ago" pointer
+
+41 Bash `rtok expand <id>` calls in about 20 sessions (2026-09-22..10-17) got
+`[rtok <id> · identical to a result N turns ago · expand: rtok expand <id>]` instead of the
+content: the PostToolUse dedup (`identical_result` in `src/plugin.rs`) treats the expanded
+output as a repeat. The agent then needs MCP `expand` or a re-read.
+
+Done when: the output of `rtok expand` (CLI and MCP) is never replaced by a dedup or
+shortening pointer.
+
+Check: a hook test where a Bash `rtok expand <id>` result identical to an earlier one passes
+through whole; `just check`.
+
+### T927. `memory/observe` measurement rows claim the whole tool output as saved
+
+3,255 `memory/observe` rows since 2026-10-18 sum to about 1.9M estimated tokens saved (1.72M on
+2026-10-19). Example: measurement row 126014, before 99,589 bytes, after 404 bytes. The agent
+still gets the whole output; only the stored observation is short. The ledger sums every
+(plugin, kind) (`crates/rtok-store/src/measure_rows.rs`) with no exclusion for it, against the
+"no Measurement row = no saving claim" rule.
+
+Done when: observations write no saving row (or a cost row like `memory/brief`), and existing
+rows are dropped or excluded from the ledger.
+
+Check: a store test that `memory/observe` adds nothing to the saved total; `rtok gain` on a
+copy of the live store before and after, recorded here; `just check`.
+
+### T928. MCP input schemas mark aliased params required, so T353's aliases never reach the server
+
+`prepare_args` (`src/mcp.rs`) maps `query`→`pattern`, `file_path`→`path`, `hash`→`id`, but
+`search` requires `pattern`, `read` requires `path` and `expand` requires `id`
+(`src/plugins/read/mod.rs`, `src/mcp.rs`), so Claude Code rejects the call first with
+`-32602 Input validation error`: 28+ `search {"query"}` calls in 20 sessions (18 after T353),
+plus `read {"file_path"}`, `expand {"hash"}`, `symbol {"query"}`. `ping` requires `agent`
+although the code accepts none (6 sessions).
+
+Done when: every alias `prepare_args` accepts passes schema validation (e.g. `anyOf` of the
+alias sets, or the alias listed and `required` dropped where an alias exists), and `ping`'s
+`agent` is optional.
+
+Check: a test that validates each alias call against the advertised schema with a JSON-schema
+validator; `just check`.
+
+### T929. Dedup stubs whose original is no longer in the agent's context (compaction, subagents)
+
+After a Codex `compacted` event the agent got `identical to a result N turns ago` stubs for
+results it no longer had, and re-read with `lines` mode or `expand`. 36
+`unchanged since <sha8> (N lines)` MCP stubs went to agents that never saw the file, 30 of them
+subagents (2026-09-14..10-16). T127 kept session-only scoping on purpose (`research.md` §17.3);
+T122 and T531 are done.
+
+Done when: a compaction (PreCompact/PostCompact or the host's equivalent) resets the dedup and
+re-read windows of that session, and a subagent's first read of a file is never a stub (needs
+the creator's OK to revisit T127's scoping).
+
+Check: hook tests: a stub before compaction, the full result after; a subagent's first read is
+whole; `just check`.
+
+### T930. Read gate denies native Read for files `rtok read` cannot serve (images, paths outside roots)
+
+The PreToolUse(Read) gate denied native Read over 32 KB 703 times in the rtok project alone
+(by design), but 87 of those were paths outside the project (scratchpad logs, `tasks/*.output`,
+`tool-results`, `~/.cargo/registry`) and 13 were PNG/PDF screenshots. `mcp__rtok__read` then
+refuses the same path (`path outside cwd`), or cannot show an image, so the agent falls to
+`cat`/`sed` and gets shortened again. The deny text "use rtok read" also sends agents to a
+non-existent `rtok read` CLI (11 calls) and is shown as a "hook error".
+
+Done when: the gate lets native Read through for images, PDFs and paths `rtok read` would
+refuse, and its text names `mcp__rtok__read`.
+
+Check: read-hook tests for an image, a scratchpad path and an in-project large file (still
+denied); `just check`.
+
+### T931. Bounded `sed -n a,bp` windows inside command chains are still elided
+
+5,306 Bash results carried `N lines omitted (expand <id>)`. 1,260 of them after 2026-09-28 were
+`sed -n a,bp` windows of 120 lines or fewer inside chains (`sed ..; grep ..; sed ..`,
+`git show | sed`), peaking 2026-10-10..12. Agents then ran another sed (437), native Read (190)
+or `rtok expand` (160), and said so ("rtok's compression hides lines in the shell output",
+2026-10-19). T176 fixed the single-command case only (`src/plugins/cmd/bounded.rs`).
+
+Done when: a chain whose output is bounded by explicit line windows (each segment bounded, or
+the total under the window limit) passes through unshortened.
+
+Check: cmd tests for `sed -n 1,80p a; sed -n 1,40p b` and `git show x | sed -n 1,100p`
+passing through; unbounded chains still shortened; `just check`.
+
+### T932. Codex and Cursor MCP entries use a bare `rtok` command and fail to spawn
+
+`~/.codex/config.toml` has `[mcp_servers.rtok] command = "rtok"`, and `~/.cursor/mcp.json` the
+same. Codex desktop logged `MCP client for rtok failed to start: No such file or directory
+(os error 2)` 14 times on 2026-10-18 (12:58–17:30 UTC). The plugin hooks already fall back
+(`command -v rtok || $HOME/.ketch/bin/rtok`); the MCP entries do not. Related: T275 (MCP entry
+removed on update).
+
+Done when: the installers write an MCP command that resolves without the GUI app's PATH (an
+absolute path to the installed binary, kept current on update), and doctor flags an MCP
+command that does not resolve.
+
+Check: install tests for Codex and Cursor asserting the written command is absolute and
+exists; a doctor test with an unresolvable command; `just check`.
+
+### T933. Git guard still refuses `rtok run`-wrapped git (seen again 2026-10-16)
+
+107 refusals "this command runs rtok with the text `git ...` in a plain command, so what it runs
+cannot be shown not to be git": 89 on 2026-10-07 (cox, four subagents could not commit) and 18
+on 2026-10-16 (weft subagents). T437 (#799) fixed it on 2026-10-07; the 2026-10-16 case is
+either a hole in `runs_git` or an older installed binary.
+
+Done when: the 2026-10-16 commands are replayed against current `main`; if refused, `runs_git`
+accepts them and a test pins it; if allowed, this card records the binary version that refused
+and closes.
+
+Check: guard tests with the exact 2026-10-16 command lines; `just check`.
+
+### T934. Store "database is locked": hooks skipped, worktree claims not stored or released
+
+Still seen after the purge transaction and `busy_timeout` fixes: 33 `hook <Event> skipped:
+store locked` lines (5 on 2026-10-19), MCP `expand` failed with `database is locked`
+(2026-10-14), `rtok worktree remove` printed `warning: claim not released: database is locked`
+(2026-10-13) and, while filing this task, `rtok worktree add` printed `warning: claim not
+stored: database is locked` (2026-10-20). A lost claim lets another agent take the same task.
+
+Done when: claim writes retry or fail the command instead of warning, and the writer that holds
+the lock that long is named (the store is 1.1 GB with a 56 MB WAL).
+
+Check: a store test with a held write lock where `worktree add` either stores the claim or
+exits non-zero; `just check`.
+
+### T935. MCP `read`/`outline` fail with a bare ENOENT once the server's cwd is deleted
+
+16 calls failed with `No such file or directory (os error 2)` and no path, in 5 MCP sessions,
+the latest burst 2026-10-18 04:28–05:03, for relative and absolute paths alike. The worktree
+that was the server's cwd had been removed; `src/plugins/read/mod.rs` calls
+`std::env::current_dir()?` before the file read, so every read, search and tree fails until the
+server restarts.
+
+Done when: a vanished server cwd falls back to a roots/list root (or refuses with "server cwd
+no longer exists; pass an absolute path"), and absolute paths still work.
+
+Check: a test that removes the server's cwd and reads an absolute path; `just check`.
+
+### T936. `rtok worktree list --json`, `clean` and `add` take 8–10 s
+
+Codex tool outputs on 2026-10-11: `worktree list --json` 10.5 s, `worktree clean … --idle 0d`
+10.4 s, `worktree add` 8.6 s and 3.6 s; most other calls under 1 s. Likely the disk-size scan
+of large `target/` folders. T527 and T528 cover correctness, not speed.
+
+Done when: `list` does not size build folders unless asked (or caches the size), and the three
+commands finish under 1 s on the rtok repo with its worktrees, or the floor is written up.
+
+Check: a timing run before and after on the rtok repo recorded here; tests unchanged;
+`just check`.
+
+### T937. `calls` never records failures, and MCP calls have no `ms`
+
+Since 2026-10-01 `calls` has 0 rows with `ok = 0` or an `error`, although `logs` holds hundreds
+of MCP errors; `ms` is NULL for all 8,223 MCP calls (`insert_call` in
+`crates/rtok-store/src/call_log.rs` never sets them; only hooks and the proxy call
+`set_call_ms`). Error rates and MCP latency cannot be read from the store.
+
+Done when: MCP calls store `ms`, and failing calls on every surface store `ok = 0` and the
+error text.
+
+Check: store and MCP tests for a failing and a slow call; `just check`.
+
+### T938. `read` errors for binary files, directories and `~/.cargo` sources give no next step
+
+`read` of a PNG fails with `stream did not contain valid UTF-8` (4, weft), a directory with
+`Is a directory (os error 21)` (3), and `~/.cargo/registry/src/*` or `~/.cargo/git/checkouts`
+paths with `path outside cwd` (17). None says what to do.
+
+Done when: the binary case says "binary file; use the host's file tool", the directory case
+points to `tree`/`outline`, and the cargo case names `[plugins.read] allow_paths`.
+
+Check: read-plugin tests for the three messages; `just check`.
+
+### T939. `errors.log`: deliberate refusals and broken pipes logged at error level
+
+About 380 of 1,259 `errors.log` lines are refusals that worked as intended (`is locked by` 256,
+`not merged into origin` 49, `one worktree per task` 31, `uncommitted` 10), and
+`Broken pipe (os error 32)` is logged as an error 4 times. Real errors are hard to see.
+
+Done when: refusals and a closed stdout log below error level, and `errors.log` holds only
+unexpected failures.
+
+Check: CLI tests that a refused `worktree remove` and a broken pipe write nothing to
+`errors.log`; `just check`.
+
+### T940. Graph `references` writes hit "database is locked"; session-only projects auto-registered
+
+53 `graph/references … failed: database is locked` warnings (2026-10-05..20), 46 of them for
+`~/Library/Application Support/ClaudeBar/Probe`, an app probe with 615 sessions that ran only
+SessionStart/SessionEnd and was auto-added as a project; `~/GitHub` is a project too.
+
+Done when: a session that ran no tool does not register a project, the locked `references`
+write backs off instead of warning each time, and the existing probe project rows are dropped.
+
+Check: tests for the no-tool session and the back-off; `just check`.
+
+### T941. Probe: auto mode vs rtok (rewritten Bash input, 64-hex `expand` ids)
+
+Claude Code's auto-mode classifier "gave no verdict for Bash: a hook changed this call's input"
+12 times in 7 sessions (2026-10-06..12), blocking the call until it was re-issued; the rewriter
+is probably the cmd plugin's `updatedInput`, but other installed hooks were not ruled out. It
+also denied `rtok expand <64-hex>` 10 times in 6 sessions, the id looking like a secret.
+
+Done when: this card names which hook changed the input, whether rtok can avoid it, and whether
+pointers should print only short ids; findings in `research.md` with sources.
+
+Check: the probe write-up; no code change unless the creator approves one.
+
+### T942. `rtok expand -` used as a stdin pass-through by agents
+
+About 46 `unknown archive id: -` (also `x`, `/dev/stdin`) from 2026-10-02 to 10-18, 17 of them
+after T354's hint: agents run `cmd | rtok expand - || cmd`.
+
+Done when: `rtok expand -` either passes stdin through unchanged or refuses with a one-line hint
+that names the right use; pick one with the creator.
+
+Check: a CLI test for `rtok expand -`; `just check`.
 
 ### T666.2. Provider-backed memory extractor (blocked on the creator)
 
@@ -885,5 +1356,7 @@ Source: `docs/research/competitors-techniques.md` (techniques, licenses, links).
 T905 (idea I-133): `podman ps` uses the `docker ps` formatter. Done (`done.md`).
 
 T909: archive and compress pointers print the 8-char archive id. Done (`done.md`).
+
+T910: hook, skill, handoff, MCP wrap and expand omitted markers print the 8-char archive id. Done (`done.md`).
 
 T913: the report Expand list prints the 8-char archive id. Done (`done.md`).
