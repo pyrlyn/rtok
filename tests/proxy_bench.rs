@@ -152,16 +152,28 @@ fn end_to_end(cx: &Runtime, sent: &HashMap<String, String>) -> (i64, i64) {
     (before, after)
 }
 
-/// Every `plugin` row not in `skip` must match what upstream received (by `ref_id` containment).
+/// Every `plugin` row not in `skip` must match what upstream received.
+/// A full archive id is printed as its 8-character prefix (T909); the row keeps the full id.
 fn assert_terminal_bytes(rows: &[MeasRow], plugin: &str, skip: &HashSet<String>, sent: &[&String]) {
     for r in rows {
         let Some(ref_id) = &r.ref_id else { continue };
         if skip.contains(ref_id) {
             continue;
         }
-        let content = sent.iter().find(|c| c.contains(ref_id.as_str()));
+        let needle = printed_archive_id(ref_id);
+        let content = sent.iter().find(|c| c.contains(needle));
         let content = content.unwrap_or_else(|| panic!("{plugin} {ref_id}: not sent"));
         assert_eq!(content.len() as i64, r.after_bytes, "{plugin}: bytes");
+    }
+}
+
+/// The id a pointer prints. Full sha256 archive ids become 8 hex chars; anything else
+/// (a toon ref, a prefixed id) is matched as stored.
+fn printed_archive_id(ref_id: &str) -> &str {
+    if ref_id.len() >= 64 && ref_id.bytes().all(|b| b.is_ascii_hexdigit()) {
+        rtok::names::short_id(ref_id)
+    } else {
+        ref_id
     }
 }
 

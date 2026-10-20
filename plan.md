@@ -884,4 +884,6 @@ Source: `docs/research/competitors-techniques.md` (techniques, licenses, links).
 
 T905 (idea I-133): `podman ps` uses the `docker ps` formatter. Done (`done.md`).
 
+T909: archive and compress pointers print the 8-char archive id. Done (`done.md`).
+
 T913: the report Expand list prints the 8-char archive id. Done (`done.md`).
