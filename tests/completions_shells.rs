@@ -135,12 +135,16 @@ fn zsh_tab_completes_with_a_stale_compinit_dump_and_no_zshrc_edit() {
         return;
     };
     let home = home("zsh");
+    // A cleared environment, like the shell below: an exported `FPATH` can carry the
+    // developer's own `_rtok` into the dump.
     let made = Command::new(&zsh)
         .args([
             "-fc",
             "autoload -Uz compinit && compinit -u -d \"$HOME/dump\"",
         ])
+        .env_clear()
         .env("HOME", &home)
+        .env("PATH", path())
         .status()
         .unwrap();
     assert!(made.success());
