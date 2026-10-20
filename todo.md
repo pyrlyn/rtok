@@ -31,6 +31,5 @@
 - T436.4. Spinner on `agents install/update` through T276's `ProgressRunner`
 - T523. `worktree add` takes `T504 read-hook-same-path` as an id plus a slug
 - T525. SubagentStart and PreCompact under the 10 ms hook budget
-- T527. A worktree claim does not stay held by an agent idle for days
 - T666.2. Provider-backed memory extractor (blocked on the creator)
 - T687. Hooks: PreToolUse/PostToolUse p50 to 10 ms

@@ -158,7 +158,7 @@ fn remove(p: &Payload, store: Option<&Store>) -> Result<String> {
     // Windows refuses to delete any process's current directory, and the host may start this
     // hook inside the worktree; git then drops its record but leaves the directory behind.
     let _ = std::env::set_current_dir(main);
-    let done = remove::run(main, &p.worktree_path, &who, keep_branch);
+    let done = remove::run(main, &p.worktree_path, &who, keep_branch, store);
     match &done {
         Ok(removed) => {
             let released = store.map(|s| s.release_worktree_claim(&removed.path));
