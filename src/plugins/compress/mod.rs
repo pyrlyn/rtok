@@ -134,9 +134,9 @@ fn stored_view(archive_id: &str, pointer_len: usize, cx: &Ctx) -> Option<String>
             return None;
         }
     };
-    let short = &archive_id[..archive_id.len().min(12)];
+    let short = crate::names::short_id(archive_id);
     let view =
-        format!("[compress {short}]\ntype: tool_output\nsummary: {summary}\nexpand({archive_id})");
+        format!("[compress {short}]\ntype: tool_output\nsummary: {summary}\nexpand({short})");
     (view.len() < pointer_len).then_some(view)
 }
 
@@ -173,7 +173,7 @@ fn extractive_summary(id: &str, text: &str) -> String {
         .filter(|l| !facts.contains(l) && (l.contains('/') || l.contains('\\')))
         .take(3)
         .collect();
-    let short = &id[..id.len().min(12)];
+    let short = crate::names::short_id(id);
     let mut s = format!(
         "[compress {short}]\ntype: tool_output\ntitle: {}\nnarrative: {}",
         title.unwrap_or_else(|| "tool result".into()),
@@ -193,7 +193,7 @@ fn extractive_summary(id: &str, text: &str) -> String {
             s.push_str(&clip(f));
         }
     }
-    s.push_str(&format!("\nexpand({id})"));
+    s.push_str(&format!("\nexpand({short})"));
     s
 }
 
@@ -351,7 +351,9 @@ mod tests {
             view.contains("summary: ran 400 lines of shell output"),
             "{view}"
         );
-        assert!(view.ends_with(&format!("expand({id})")));
+        let short = crate::names::short_id(&id);
+        assert!(view.ends_with(&format!("expand({short})")), "{view}");
+        assert!(!view.contains(&id), "{view}");
         assert!(
             !take_offered().contains(&id),
             "a summarised id is not offered"
