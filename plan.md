@@ -280,7 +280,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T929 | todo | P2 | 3 | 0% | |
 | T930 | todo | P2 | 2 | 0% | |
 | T931 | todo | P2 | 3 | 0% | |
-| T932 | todo | P2 | 2 | 0% | |
 | T933 | todo | P2 | 2 | 0% | |
 | T934 | todo | P2 | 3 | 0% | |
 | T935 | todo | P2 | 2 | 0% | |
@@ -488,20 +487,6 @@ the total under the window limit) passes through unshortened.
 Check: cmd tests for `sed -n 1,80p a; sed -n 1,40p b` and `git show x | sed -n 1,100p`
 passing through; unbounded chains still shortened; `just check`.
 
-### T932. Codex and Cursor MCP entries use a bare `rtok` command and fail to spawn
-
-`~/.codex/config.toml` has `[mcp_servers.rtok] command = "rtok"`, and `~/.cursor/mcp.json` the
-same. Codex desktop logged `MCP client for rtok failed to start: No such file or directory
-(os error 2)` 14 times on 2026-10-18 (12:58–17:30 UTC). The plugin hooks already fall back
-(`command -v rtok || $HOME/.ketch/bin/rtok`); the MCP entries do not. Related: T275 (MCP entry
-removed on update).
-
-Done when: the installers write an MCP command that resolves without the GUI app's PATH (an
-absolute path to the installed binary, kept current on update), and doctor flags an MCP
-command that does not resolve.
-
-Check: install tests for Codex and Cursor asserting the written command is absolute and
-exists; a doctor test with an unresolvable command; `just check`.
 
 ### T933. Git guard still refuses `rtok run`-wrapped git (seen again 2026-10-16)
 

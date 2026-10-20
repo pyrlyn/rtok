@@ -54,7 +54,7 @@ fn entry(cmd: &str) -> Value {
 
 /// `amp.mcpServers.rtok = {command, args}`.
 pub fn register_mcp(cfg: &Config) -> Result<String> {
-    let cmd = super::rtok_command();
+    let cmd = super::rtok_mcp_command();
     jsonc::upsert_entry(cfg, &settings_path(cfg), KEY, "rtok", &entry(&cmd), |_| {
         format!("{KEY}.rtok: {}", super::mcp_summary(&cmd, HOST))
     })

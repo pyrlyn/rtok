@@ -161,7 +161,7 @@ fn mcp_entry(cmd: &str) -> Value {
 
 /// `mcpServers.rtok = {command, args}` — the minimal stdio shape the Gemini MCP docs show.
 pub fn register_mcp(cfg: &Config) -> Result<String> {
-    let bin = super::rtok_command();
+    let bin = super::rtok_mcp_command();
     rtok_agent_sdk::register_server(
         &apply(cfg),
         &settings_path(cfg),

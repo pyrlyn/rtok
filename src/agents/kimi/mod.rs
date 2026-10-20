@@ -196,7 +196,7 @@ fn mcp_entry(cmd: &str) -> Value {
 
 /// `mcpServers.rtok = {command, args}` in `mcp.json` — Kimi's documented shape carries no `type`.
 pub fn register_mcp(cfg: &Config) -> Result<String> {
-    let cmd = super::rtok_command();
+    let cmd = super::rtok_mcp_command();
     rtok_agent_sdk::register_server(
         &apply(cfg),
         &mcp_path(cfg),

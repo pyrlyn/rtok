@@ -45,7 +45,6 @@
 - T929. Dedup stubs whose original is no longer in the agent's context (compaction, subagents)
 - T930. Read gate denies native Read for files `rtok read` cannot serve (images, paths outside roots)
 - T931. Bounded `sed -n a,bp` windows inside command chains are still elided
-- T932. Codex and Cursor MCP entries use a bare `rtok` command and fail to spawn
 - T933. Git guard still refuses `rtok run`-wrapped git (seen again 2026-10-16)
 - T934. Store "database is locked": hooks skipped, worktree claims not stored or released
 - T935. MCP `read`/`outline` fail with a bare ENOENT once the server's cwd is deleted

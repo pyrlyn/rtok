@@ -133,7 +133,7 @@ pub fn run(cfg: &Config, remove: bool) -> Result<String> {
 
 /// Register `rtok mcp` in the user-scope `mcp.json`.
 pub fn register_mcp(cfg: &Config) -> Result<String> {
-    let cmd = super::rtok_command();
+    let cmd = super::rtok_mcp_command();
     let entry = json!({"command": cmd, "args": super::mcp_args("commandcode")});
     rtok_agent_sdk::register_server(
         &apply(cfg),

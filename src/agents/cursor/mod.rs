@@ -195,7 +195,7 @@ pub(crate) fn mcp_path(cfg: &Config) -> PathBuf {
 
 /// Register `rtok mcp` in `~/.cursor/mcp.json` (sibling of `hooks.json`).
 pub fn register_mcp(cfg: &Config) -> Result<String> {
-    let cmd = super::rtok_command();
+    let cmd = super::rtok_mcp_command();
     rtok_agent_sdk::register_mcp(
         &apply(cfg),
         &mcp_path(cfg),
@@ -421,6 +421,33 @@ mod tests {
         // A full apply still registers the entry independently of the plugin.
         Cursor.apply(&c, Kind::Desktop, Mode::Update).unwrap();
         assert!(Cursor.installed(&c, Kind::Desktop).contains(&"mcp"));
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T932: Cursor is started by the OS with no shell PATH, so a bare `rtok` fails to spawn;
+    /// the entry names an installed file, an older bare one is repointed, foreign servers stay.
+    #[cfg(unix)]
+    #[test]
+    fn mcp_command_is_an_absolute_existing_path() {
+        let ketch = super::super::fake_installed_rtok();
+        let dir = tmp("abs-mcp");
+        let c = cfg(dir.join("hooks.json"), false);
+        let mcp = mcp_path(&c);
+        fs::write(
+            &mcp,
+            r#"{"mcpServers":{"rtok":{"type":"stdio","command":"rtok","args":["mcp","--host","cursor"]},"other":{"command":"x"}}}"#,
+        )
+        .unwrap();
+        register_mcp(&c).unwrap();
+        let doc: Value = serde_json::from_str(&fs::read_to_string(&mcp).unwrap()).unwrap();
+        let got = doc["mcpServers"]["rtok"]["command"].as_str().unwrap();
+        assert_eq!(got, ketch.to_string_lossy());
+        assert!(
+            Path::new(got).is_absolute() && Path::new(got).is_file(),
+            "{got}"
+        );
+        assert_eq!(doc["mcpServers"]["other"], json!({"command": "x"}));
+        assert_eq!(register_mcp(&c).unwrap(), "no changes");
         let _ = fs::remove_dir_all(dir);
     }
 

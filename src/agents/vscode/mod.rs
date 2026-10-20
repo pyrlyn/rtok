@@ -201,7 +201,7 @@ fn mcp_entry(cmd: &str) -> Value {
 /// `servers.rtok = {type: "stdio", command, args}` in the profile `mcp.json`.
 pub fn register_mcp(cfg: &Config, insiders: bool) -> Result<String> {
     let path = mcp_path(cfg, insiders);
-    let cmd = super::rtok_command();
+    let cmd = super::rtok_mcp_command();
     rtok_agent_sdk::register_server(
         &apply(cfg),
         &path,

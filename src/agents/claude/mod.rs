@@ -411,7 +411,7 @@ fn mcp_spec(cfg: &Config, kind: Kind) -> McpSpec {
         Kind::Cli => mcp_spec_at(
             McpClient::Cli,
             cfg.doctor.claude_json.clone(),
-            super::rtok_command(),
+            super::rtok_mcp_command(),
         ),
         Kind::Desktop => mcp_spec_at(McpClient::Desktop, desktop_path(), desktop_command()),
     }
@@ -1249,7 +1249,11 @@ mod tests {
     }
 
     fn cli_spec_fn(path: &Path) -> McpSpec {
-        mcp_spec_at(McpClient::Cli, path.into(), crate::agents::rtok_command())
+        mcp_spec_at(
+            McpClient::Cli,
+            path.into(),
+            crate::agents::rtok_mcp_command(),
+        )
     }
 
     fn desktop_spec_at(path: &Path) -> McpSpec {

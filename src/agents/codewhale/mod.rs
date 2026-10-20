@@ -169,7 +169,7 @@ pub fn run(cfg: &Config, remove: bool) -> Result<String> {
 /// `mcpServers.rtok = {type: "stdio", command, args}` in `mcp.json` — the shape
 /// `docs/MCP.md` shows (`env`/`disabled`/remote fields are optional and unused here).
 pub fn register_mcp(cfg: &Config) -> Result<String> {
-    let cmd = super::rtok_command();
+    let cmd = super::rtok_mcp_command();
     rtok_agent_sdk::register_mcp(
         &apply(cfg),
         &mcp_path(cfg),
