@@ -56,4 +56,3 @@
 - T940. Graph `references` writes hit "database is locked"; session-only projects auto-registered
 - T941. Probe: auto mode vs rtok (rewritten Bash input, 64-hex `expand` ids)
 - T942. `rtok expand -` used as a stdin pass-through by agents
-- T944. `rtok web`: say why `/ws` refuses instead of a bare Offline

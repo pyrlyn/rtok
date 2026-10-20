@@ -246,6 +246,28 @@ async fn restart_rotates_the_token() {
         .expect("new token works");
 }
 
+/// T944: `/auth` runs the `/ws` checks without an upgrade. A browser WebSocket hides the 401, so
+/// this is how the SPA tells a missing or stale token from a server that is down.
+#[tokio::test]
+async fn auth_probe_answers_the_ws_checks() {
+    let home = temp_home("probe");
+    let web = start(&home);
+    let url = format!("http://{}/auth", web.addr);
+    let client = reqwest::Client::new();
+    let status = |req: reqwest::RequestBuilder| async move {
+        req.send().await.expect("probe answered").status().as_u16()
+    };
+    let real = read_token(&home);
+    assert_eq!(status(client.get(&url)).await, 401);
+    assert_eq!(status(client.get(&url).bearer_auth("wrong")).await, 401);
+    assert_eq!(status(client.get(&url).bearer_auth(&real)).await, 204);
+    let foreign = client
+        .get(&url)
+        .bearer_auth(&real)
+        .header("origin", "http://evil.example");
+    assert_eq!(status(foreign).await, 403);
+}
+
 /// 5: a non-loopback bind is refused without `RTOK_WEB_ALLOW_REMOTE=1`, and no token is issued.
 #[test]
 fn non_loopback_bind_is_denied_without_opt_in() {

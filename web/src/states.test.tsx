@@ -34,4 +34,27 @@ describe("shared states", () => {
         expect((busy as HTMLButtonElement).disabled).toBe(true);
         expect(busy.getAttribute("aria-busy")).toBe("true");
     });
+
+    // T944: a browser WebSocket hides the 401, so the screen names the token instead.
+    test("Offline says the connection was lost when no token problem is known", () => {
+        render(<Offline connecting={false} onReconnect={() => {}} />);
+        expect(screen.getByRole("status").textContent).toContain(
+            "The connection to rtok was lost.",
+        );
+        expect(screen.queryByText(/web-token/)).toBeNull();
+    });
+
+    test("a missing token shows the URL to open with it", () => {
+        render(<Offline connecting={false} onReconnect={() => {}} auth="missing" />);
+        const status = screen.getByRole("status");
+        expect(status.textContent).toContain("needs its access token");
+        expect(status.textContent).toContain(`${location.origin}/?token=$(cat ~/.rtok/web-token)`);
+    });
+
+    test("a rejected token says rtok web was restarted", () => {
+        render(<Offline connecting={false} onReconnect={() => {}} auth="rejected" />);
+        const status = screen.getByRole("status");
+        expect(status.textContent).toContain("restarted");
+        expect(status.textContent).toContain("?token=$(cat ~/.rtok/web-token)");
+    });
 });
