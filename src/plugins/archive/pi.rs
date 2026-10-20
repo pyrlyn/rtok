@@ -293,7 +293,9 @@ mod tests {
                 .split(')')
                 .next()
                 .unwrap();
-            let back = ctx.get_archive(id).unwrap().expect("archived payload");
+            let full = crate::expand::resolve_id(&cx, id).unwrap();
+            assert_eq!(id.len(), crate::names::MIN_PREFIX, "{id}");
+            let back = ctx.get_archive(&full).unwrap().expect("archived payload");
             assert_eq!(String::from_utf8(back).unwrap(), big(tag));
         }
         assert_eq!(

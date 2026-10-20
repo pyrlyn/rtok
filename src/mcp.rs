@@ -865,7 +865,14 @@ fn cap_result(text: &str, id: &str, max: usize) -> String {
     if text.chars().count() <= max {
         return text.to_string();
     }
-    crate::expand::cut(text, &format!("\n… expand({id}) …\n"), max)
+    // A full sha prints as 8 hex chars. A prefix the caller already lengthened
+    // (an ambiguous 8) stays as they sent it, so the marker does not re-ambiguate it.
+    let shown = if id.len() >= 64 {
+        crate::names::short_id(id)
+    } else {
+        id
+    };
+    crate::expand::cut(text, &format!("\n… expand({shown}) …\n"), max)
 }
 
 #[cfg(feature = "memory")]
@@ -1253,7 +1260,9 @@ mod tests {
             .unwrap();
         let args = serde_json::json!({"id": id});
         let out = expand_text(&cx, &args).unwrap();
-        assert!(out.contains("expand("), "{out}");
+        let short = crate::names::short_id(&id);
+        assert!(out.contains(&format!("expand({short})")), "{out}");
+        assert!(!out.contains(&id), "{out}");
         assert!(
             out.chars().count() <= max_chars as usize,
             "{}/{}",

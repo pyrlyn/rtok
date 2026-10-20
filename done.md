@@ -9,6 +9,15 @@ Check: `cap_budget_gives_back_lines_so_the_marker_fits` — the printed id is 8 
 Status: done 2026-10-19
 Model: Cursor / grok 4.7
 
+### T909. Print the short archive id on a live-zone pointer
+
+T672 shortened the command trailer. The archive live-zone pointer still printed a 12-character label and the full 64-character id in `expand(<id>)`, and the compress view did the same. `expand` already resolves an 8-character prefix. A decision already stored is replayed as written, so a cached prefix does not change. The measurement `ref_id` stays the full id.
+
+Check: `pointer_prints_an_8_char_id_and_the_ledger_keeps_the_full_one` — the printed id is 8 hex chars, the ledger `ref_id` is the full id, and `resolve_id` of that prefix returns the archived body. `a_stored_full_id_pointer_is_replayed_verbatim` keeps a pointer that already holds the full id. The skill pointer, the compress view and a capped MCP `expand` use the same prefix. `proxy_session_saves_over_the_floor` matches the printed prefix in the body upstream received.
+
+Status: done 2026-10-19
+Model: Cursor / grok 4.7
+
 ### T527. A worktree claim does not stay held by an agent idle for days
 
 Do: an open claim whose agent has ended, or whose `last_seen` is older than gc's `--stale-lock` (default `7d`), no longer blocks `remove` or `adopt`. A holder seen inside that window still refuses, and the refusal names how long ago they were seen. A lock that names no agent, or an agent the store does not know, still holds, with the previous wording. `remove`, its dry run, and `adopt`/`claim` share that decision. The window is `gc::STALE_LOCK_DEFAULT`, the same string `--stale-lock` defaults to.

@@ -96,6 +96,9 @@ every full/abbreviated hash, every path, every line matching `WARN|ERROR|error|f
 "never worse than raw" (already in #1077); archive raw and print the short `expand` id.
 Also shorten the trailing link line (today ~90 tokens with two 64-hex ids) to one 8–12 hex id:
 that alone is 70+ tokens on every compressed call and dominates small outputs.
+The command trailer has printed that 8-character id since T672. The archive live-zone pointer
+and the compress view do too (T909). A decision already stored is replayed as written.
+
 The command trailer has printed that id since T672. The hook budget marker, skill deny,
 handoff brief, MCP wrap trailer and the expand omitted-line marker do too (T910). A stored measurement keeps the full id.
 

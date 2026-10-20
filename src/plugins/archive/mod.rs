@@ -10,8 +10,10 @@
 //! T5.3: in `proxy.mode = "compress"`, a tool-result block is rewritten when it is older
 //! than `archive.keep_turns` (a turn = one `user` message, counted from the end) and above
 //! `archive.min_tokens`. The original goes to the archive store; the block's `content`
-//! becomes a pointer: `[archived <id>: N lines · T tokens · expand(<full id>)]` followed by
-//! `head_lines` … `tail_lines` of the original. The decision is persisted per
+//! becomes a pointer: `[archived <id>: N lines · T tokens · expand(<id>)]` followed by
+//! `head_lines` … `tail_lines` of the original. `<id>` is the 8-character prefix (T909);
+//! the archive row and the measurement keep the full id, and `expand` resolves the prefix.
+//! The decision is persisted per
 //! `tool_use_id` before the request is forwarded, so the pointer is byte-identical on every
 //! later request (the frozen prefix stays cacheable) and an `expand`ed id (T5.4) is never
 //! rewritten again. `system`, `tools` and the last `keep_turns` turns are never touched.
@@ -113,8 +115,8 @@ fn rewrite_skill(
             let n = text.lines().count();
             // `id` is a wire `tool_use_id`: not necessarily ASCII, so cut on chars.
             let short: String = id.chars().take(12).collect();
-            let live =
-                format!("[archived {short}: skill {name} · {n} lines · expand({archive_id})]");
+            let shown = crate::names::short_id(&archive_id);
+            let live = format!("[archived {short}: skill {name} · {n} lines · expand({shown})]");
             cx.put_archive_decision(&key, &archive_id, &live).ok()?;
             (archive_id, live)
         }
@@ -348,8 +350,10 @@ pub(crate) fn block_text(content: &Value) -> Option<String> {
 
 fn pointer_line(text: &str, id: &str, est: u32) -> String {
     let n = text.lines().count();
-    let short = &id[..id.len().min(12)];
-    format!("[archived {short}: {n} lines · {est} tokens · expand({id})]")
+    // One 8-char id in the label and in `expand` (T909). A stored decision keeps the
+    // text it was written with, so a prefix already in the cache does not change.
+    let short = crate::names::short_id(id);
+    format!("[archived {short}: {n} lines · {est} tokens · expand({short})]")
 }
 
 /// Widest line a pointer or L1 extract shows, in chars. Head/tail are counted in lines, so a
@@ -782,6 +786,61 @@ mod tests {
         assert!(l1.len() < text.len() / 10, "{}", l1.len());
     }
 
+    /// T909: the printed id is 8 hex chars. The ledger `ref_id` stays the full id,
+    /// and `expand` resolves the prefix back to that row.
+    #[test]
+    fn pointer_prints_an_8_char_id_and_the_ledger_keeps_the_full_one() {
+        let mut cx = cx("short-id");
+        cx.config.plugins.archive.keep_turns = 1;
+        cx.config.plugins.archive.min_tokens = 1;
+        let body = big("t1");
+        let mut values = vec![Value::String(body.clone()), Value::String("live".into())];
+        let ms = rewrite(refs(&mut values), &Ctx::new(&cx));
+        assert_eq!(ms.len(), 1);
+        let full = ms[0].ref_id.clone().unwrap();
+        assert_eq!(full.len(), 64, "{full}");
+        let short = crate::names::short_id(&full);
+        assert_eq!(short.len(), crate::names::MIN_PREFIX);
+        let shown = values[0].as_str().unwrap();
+        assert!(
+            shown.contains(&format!("[archived {short}:"))
+                && shown.contains(&format!("expand({short})")),
+            "{shown}"
+        );
+        assert!(!shown.contains(&full), "{shown}");
+        let resolved = crate::expand::resolve_id(&cx, short).unwrap();
+        assert_eq!(resolved, full);
+        let back = cx
+            .store
+            .get_archive(&resolved, Some(&cx.config.core.archive_dir))
+            .unwrap()
+            .unwrap();
+        assert_eq!(String::from_utf8(back).unwrap(), body);
+    }
+
+    /// A pointer written before the short id (full sha in `expand`) is replayed as stored.
+    /// Shortening only new decisions keeps a cached prefix byte-stable.
+    #[test]
+    fn a_stored_full_id_pointer_is_replayed_verbatim() {
+        let mut cx = cx("replay-old");
+        cx.config.plugins.archive.keep_turns = 0;
+        cx.config.plugins.archive.min_tokens = 1;
+        let body = big("old");
+        let full = Ctx::new(&cx).put_archive(body.as_bytes()).unwrap();
+        let old = format!(
+            "[archived {}: 400 lines · 9 tokens · expand({full})]",
+            &full[..12]
+        );
+        cx.store
+            .put_archive_decision("tu-1", &full, "s", &old)
+            .unwrap();
+        let mut values = vec![Value::String(body)];
+        let ms = rewrite(refs(&mut values), &Ctx::new(&cx));
+        assert_eq!(ms.len(), 1);
+        assert_eq!(values[0].as_str().unwrap(), old);
+        assert_eq!(ms[0].ref_id.as_deref(), Some(full.as_str()));
+    }
+
     /// Three lines with head 2 + tail 2 printed L2 twice.
     #[test]
     fn a_short_l1_extract_prints_each_line_once() {
@@ -1003,9 +1062,15 @@ mod tests {
         let ms = rewrite_skills(srefs(&mut values), &Ctx::new(&cx));
         assert_eq!(ms.len(), 2, "turns 2 and 1 (keep_turns=1); turn 0 stays");
         assert!(ms.iter().all(|m| m.kind == "skill"));
+        let shown = values[0].as_str().unwrap();
+        let full = ms[0].ref_id.clone().unwrap();
+        let short = crate::names::short_id(&full);
         assert!(
-            values[0].as_str().unwrap().starts_with("[archived ")
-                && values[0].as_str().unwrap().contains("skill pixel")
+            shown.starts_with("[archived ")
+                && shown.contains("skill pixel")
+                && shown.contains(&format!("expand({short})"))
+                && !shown.contains(&full),
+            "{shown}"
         );
         assert!(values[1].as_str().unwrap().starts_with("[archived "));
         assert_eq!(
