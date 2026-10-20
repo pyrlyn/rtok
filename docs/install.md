@@ -74,6 +74,14 @@ Space toggles, Enter installs the newly checked shells and removes the unchecked
 Esc or Ctrl-C changes nothing. Without a terminal, `rtok completions` with no shell fails
 instead of waiting; use `--list` to read the state.
 
+For bash, zsh, fish and PowerShell, `--install` writes a few-line wrapper that runs
+`rtok completions <shell>` when the shell first needs it, so an upgraded rtok completes its new
+commands without a reinstall. Elvish and Clink get the static script; rerun `--install` after
+an upgrade there. zsh needs no `.zshrc` edit: `--install` also writes `.zfunc/rtok.zsh`, which
+puts `.zfunc` on `fpath` and registers `_rtok` at the first prompt, so a `compinit -C` dump made
+earlier cannot hide it, and adds one line sourcing it to `${ZDOTDIR:-~}/.zshenv`. `--uninstall`
+removes both and leaves the rest of `.zshenv` byte-for-byte.
+
 Release archives also carry them pre-built in `share/`: `share/man/man1/*.1` and
 `share/completions/` (`rtok.bash`, `_rtok`, `rtok.fish`, `rtok.ps1`, `rtok.elv`, `rtok.lua`).
 
