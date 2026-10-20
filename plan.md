@@ -4,6 +4,118 @@ https://github.com/pyrlyn/rtok
 
 Token-reduction CLI for AI coding agents: hooks, MCP server, API proxy; measured reductions, pluggable methods.
 
+## Audit 2026-10-19
+
+Three independent review passes over `main` at `cb0b8811`: pass 1 walked the modules, pass 2
+followed threats from each entry point (hooks, stdio and HTTP MCP, proxy, dashboard, WASM
+plugins, files read from a checkout, CI), pass 3 compared docs, comments and tests with the
+code. Nothing was exploited. Overlap: A1 and A5 close residuals that #1064 left open (S4 for
+`search`, S3 for logs); nothing repeats #601 or #1061. Open PRs #1166 and #1169 print shorter
+archive ids, which makes A11 easier to hit. To take a task, give it a T-id, a row and a `Check:`.
+
+| # | Severity | Finding | Passes | State |
+| --- | --- | --- | --- | --- |
+| A1 | medium | HTTP `search` printed lines of `.env` and keys that `read` refuses | 2, 3 | fixed |
+| A2 | low | Secret list missed `.git-credentials`, `.envrc`, `.pgpass`, keystores | 1 | fixed |
+| A3 | medium | Proxy logged reqwest errors with the full URL, Gemini `?key=` included | 1, 2 | fixed |
+| A4 | low | `docs fetch` joined a `Cargo.lock` version into a cache path unchecked | 2 | fixed |
+| A5 | low | `rtok.log` and `errors.log` were created `0644` | 1, 3 | fixed |
+| A6 | low | Log `level`, `source` and `name` could carry a newline and forge a line | 1 | fixed |
+| A7 | low | Proxy paths with `..` or `%2e%2e` climbed out of the upstream base path | 2 | fixed |
+| A8 | low | Semantic cache ignored `openai-project` in the caller key | 2 | fixed |
+| A9 | info | Web handler comments said the Origin check alone guards apply | 3 | fixed |
+| A10 | high | A checkout's `.rtok.toml` or `.env` can redirect data and keys or run a command | 2, 3 | planned |
+| A11 | medium | HTTP `expand` is always on and resolves any archive by an 8-char prefix | 2, 3 | planned |
+| A12 | low | WASM guests have a fuel limit but no memory limit | 1 | planned |
+| A13 | low | Log rotation lock sits in the shared temp dir under a predictable name | 1, 2 | planned |
+| A14 | low | Existing log files and `~/.rtok` keep their old loose modes | 3 | planned |
+| A15 | low | Proxy buffers up to 256 MiB per request with no global cap when lanes are off | 1 | planned |
+| A16 | low | `[otel] content = true` by default; a generic `OTEL_EXPORTER_OTLP_ENDPOINT` ships prompts | 3 | planned |
+
+Tests added for A1 to A8: `walk_filter_drops_credential_files_only_when_denied`,
+`secret_names_are_recognised`, `upstream_errors_never_carry_the_query_key`,
+`resolve_lock_refuses_path_like_names_and_versions`, `a_new_log_file_is_owner_only`,
+`no_field_can_start_a_second_line`, `join_upstream_refuses_dot_segments`,
+`openai_project_is_part_of_the_caller`.
+
+### A10. Project config can redirect egress and credentials (high)
+
+Where: `crates/rtok-config/src/layers.rs`, `assemble`, `read_dotenv`, `dotenv_pairs`; the
+project layer is `<git root>/.rtok.toml`, the dotenv layer reads the nearest `.env` first.
+What: both layers accept every key ("same schema", `docs/config.md`). A cloned repository can
+set `[otel] endpoint` (with `content = true`, the default), and `Stop`/`SessionEnd` hooks spawn
+`rtok otel flush` in that checkout (`src/hooks/mod.rs` → `otel::export::spawn_child`), shipping
+prompt and tool text to the repository's server. It can also set
+`plugins.memory.embed.url` plus `api_key_env` naming any variable (`src/store/http_embed.rs`
+sends it as a bearer token), `tasks.gitlab.url` (the GitLab token follows), `proxy.upstream` /
+`openai_upstream` / `gemini_upstream`, `plugins.memory.extract.command` (run by
+`rtok memory extract`), `log.path`, `core.archive_dir` and `plugins.read.allow_paths`.
+Change: give project layers (the project file and a project `.env`, not `~/.rtok/.env`) a
+deny list of key prefixes: `otel.`, `proxy.`, `mcp.`, `web.`, `log.`, `core.archive_dir`,
+`core.home`, `tasks.*.url`, `plugins.memory.embed.url`, `plugins.memory.embed.api_key_env`,
+`plugins.memory.extract.`, `plugins.compress.*.url`. Drop such keys with one stderr notice
+naming the file and key, keep them in `config show --sources` as "ignored (project)". Split
+`read_dotenv` so the project file and the home file are separate layers. Optionally add
+`rtok trust` (a per-repo opt-in kept in `~/.rtok/trusted.toml`, keyed by canonical root) for
+teams that do want to share one of these keys. Update `docs/config.md` layer 3 and 4.
+Why: opening an untrusted repository with an agent should not send its prompts or a user's
+tokens elsewhere. Same class as the `.env` issue found in stator's audit.
+
+### A11. HTTP `expand` reaches the whole archive (medium)
+
+Where: `src/mcp.rs` `Server::new` (keeps `expand` listed whatever `tools` says),
+`src/mcp/http.rs` `http_server`, `src/expand.rs` `resolve_id` and `fetch_range`,
+`crates/rtok-store/src/archive_rows.rs` `archive_ids_with_prefix`.
+What: over HTTP a token holder can call `expand` with any 8 hex chars; the prefix is matched
+against every archive in the store (all sessions and projects, including bodies archived from
+files `read` now refuses), and the ambiguity error lists longer candidates. Nothing limits the
+rate of guesses. Change: on the HTTP surface resolve only archives whose `session` is one this
+server wrote (filter `archive::session`), never print candidates in the ambiguity error there,
+and count failed lookups per connection (stop answering after a small number). Keep stdio as is.
+Why: the HTTP surface is for remote callers; it should expose only what it produced.
+
+### A12. WASM memory limit (low)
+
+Where: `src/plugins/wasm.rs` `WasmPlugin::load_with_fuel`, `WasmHost`.
+What: fuel stops an endless guest, but `memory.grow` up to 4 GiB is allowed. Change: keep a
+`wasmtime::StoreLimits` in `WasmHost` (memory size cap, for example 64 MiB, one instance, one
+table) and call `store.limiter`. Why: a bad plugin should fail, not exhaust the hook's memory.
+
+### A13. Rotation lock in the shared temp dir (low)
+
+Where: `crates/rtok-log/src/lib.rs` `open_rotate_lock`.
+What: the lock is `$TMPDIR/rtok-log-rotate-<hash>.lock`, the hash from `DefaultHasher` (fixed
+keys) over the log path, so it is predictable. On Linux `/tmp` is shared: another account can
+create the file first; `open` then fails, `write_line` returns the error and every line is
+dropped once the log reaches `max_bytes`. Change: put the lock beside the log
+(`<log dir>/.rotate.lock`, excluded from junk scans) or under the per-user runtime dir, open it
+with `O_NOFOLLOW` and mode `0600`; if the lock cannot be opened, append without rotating.
+Why: another user must not be able to silence rtok's logs.
+
+### A14. Old loose modes stay (low)
+
+Where: `crates/rtok-store/src/handle.rs` (tightens the db only), `crates/rtok-log/src/lib.rs`,
+`src/doctor.rs`. What: A5 and S3 set modes on new files; an existing `~/.rtok` (`0755`),
+`archive/` files and logs keep theirs. Change: one `rtok doctor` check that reports and, with
+`--fix`, sets `0700` on the home, `archive/` and the log dir and `0600` on their files.
+Why: the upgrade path is where most installs are.
+
+### A15. Proxy memory per request (low)
+
+Where: `src/proxy/mod.rs` `MAX_BODY_BYTES`, `handle`. What: each request may buffer 256 MiB,
+and with lanes off nothing caps concurrent requests, so a few local clients (or anyone, with a
+wide `proxy.bind`) can exhaust memory. Change: a `proxy.max_body_bytes` setting (default far
+below 256 MiB) and a global in-flight cap applied even with lanes off. Why: fail one request,
+not the proxy.
+
+### A16. Telemetry content on by default (low)
+
+Where: `crates/rtok-config/src/lib.rs` `Otel` (`content: bool = true`) and `Otel::resolve`
+(falls back to `OTEL_EXPORTER_OTLP_ENDPOINT`). What: a shell that exports the generic OTLP
+variable for another tool makes rtok send prompt and tool text there. Change: default `content`
+to false, or send content only when `[otel] endpoint` (not the generic variable) is set; say
+so in `docs/otel.md`. Why: content export should be an explicit choice.
+
 ## Security audit findings (2026-10-14)
 
 Find-only security review of `main` at `cd9644881` (OWASP Top 10, injection, path handling,
@@ -885,5 +997,7 @@ Source: `docs/research/competitors-techniques.md` (techniques, licenses, links).
 T905 (idea I-133): `podman ps` uses the `docker ps` formatter. Done (`done.md`).
 
 T909: archive and compress pointers print the 8-char archive id. Done (`done.md`).
+
+T910: hook, skill, handoff, MCP wrap and expand omitted markers print the 8-char archive id. Done (`done.md`).
 
 T911: `stats` counts a re-expand of the 8-char archive id pointers print. Done (`done.md`).

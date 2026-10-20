@@ -67,7 +67,8 @@ impl Plugin for Guard {
         if n > i64::from(window) {
             return None;
         }
-        let reason = format!("duplicate; rtok expand {id}");
+        let shown = crate::names::short_id(&id);
+        let reason = format!("duplicate; rtok expand {shown}");
         // AGENTS: denial Measurement carries the avoided result size (archive bytes).
         // Never deny without a retrievable original (lossless + fail open). Metadata only:
         // reading a possibly-megabyte body would break the ≤ 10 ms hook budget (T55.16).

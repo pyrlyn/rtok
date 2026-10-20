@@ -99,6 +99,9 @@ that alone is 70+ tokens on every compressed call and dominates small outputs.
 The command trailer has printed that 8-character id since T672. The archive live-zone pointer
 and the compress view do too (T909). A decision already stored is replayed as written.
 
+The command trailer has printed that id since T672. The hook budget marker, skill deny,
+handoff brief, MCP wrap trailer and the expand omitted-line marker do too (T910). A stored measurement keeps the full id.
+
 Pointers print 8 hex chars (T672). `stats` counts a later expand of that prefix (T911).
 
 | # | Category (uses) | Best rival | rtok design (better, not copied) | Target |

@@ -345,7 +345,8 @@ fn memory(kind: &str, body: &[u8]) -> usize {
         .unwrap_or_else(|| panic!("memory: build_brief offered nothing for {kind}"));
     let id = last_ref_id(&cx, "memory")
         .unwrap_or_else(|| panic!("memory: no archive id recorded for {kind}"));
-    let trailer = format!("\n[rtok {id} · expand: rtok expand {id}]");
+    let shown = rtok::names::short_id(&id);
+    let trailer = format!("\n[rtok {shown} · expand: rtok expand {shown}]");
     let full = brief
         .strip_suffix(&trailer)
         .unwrap_or_else(|| panic!("memory: brief for {kind} does not end with its own trailer"));

@@ -140,6 +140,11 @@ pub fn join_upstream(base: &str, path: &str, query: Option<&str>) -> Result<Stri
     // `%XX` escapes; `path_segments_mut().push` would encode each `%` again.
     let mut joined = url.path().trim_end_matches('/').to_string();
     for segment in path.split('/').filter(|s| !s.is_empty()) {
+        // `set_path` resolves `..` (and `%2e%2e`) per the URL standard, which would climb out
+        // of the upstream's base path (`https://gateway/team-a` → `https://gateway/team-b`).
+        if is_dot_segment(segment) {
+            anyhow::bail!("request path has a `.` or `..` segment");
+        }
         joined.push('/');
         joined.push_str(segment);
     }
@@ -148,6 +153,12 @@ pub fn join_upstream(base: &str, path: &str, query: Option<&str>) -> Result<Stri
         url.set_query(Some(q));
     }
     Ok(url.into())
+}
+
+/// `.` or `..`, also percent-encoded (`%2e`, `.%2E`, ...), as the URL standard reads them.
+fn is_dot_segment(segment: &str) -> bool {
+    let s = segment.to_ascii_lowercase().replace("%2e", ".");
+    s == "." || s == ".."
 }
 
 /// The wire matching `path`, if this build understands it.
@@ -558,6 +569,28 @@ mod tests {
             )
             .expect("join"),
             "http://127.0.0.1/prefix/v1/models/a%20b%2Fc:generate"
+        );
+    }
+
+    /// Audit 2026-10-19: `..` segments climbed out of the upstream's base path.
+    #[test]
+    fn join_upstream_refuses_dot_segments() {
+        for path in [
+            "/../x",
+            "/v1/../../x",
+            "/%2e%2e/x",
+            "/.%2E/x",
+            "/./v1",
+            "/%2E/v1",
+        ] {
+            assert!(
+                join_upstream("https://gw/team-a", path, None).is_err(),
+                "{path}"
+            );
+        }
+        assert_eq!(
+            join_upstream("https://gw/team-a", "/v1/a..b/.x", None).expect("join"),
+            "https://gw/team-a/v1/a..b/.x"
         );
     }
 
