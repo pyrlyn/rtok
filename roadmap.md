@@ -659,15 +659,15 @@ numbers per listepo Rust norms.
 MVP = **S1 + S2 + S4 + S5** (S3 strongly recommended for “savings in rtok”;
 S6 not required).
 
-- [ ] `[proxy.batch]` / `[proxy.flex]` parse and validate
-- [ ] Batch hops tagged in `calls`; bodies unchanged
-- [ ] Flex inject/force on OpenAI Chat/Responses via `prepare`; effective tier
+- [x] `[proxy.batch]` / `[proxy.flex]` parse and validate
+- [x] Batch hops tagged in `calls`; bodies unchanged
+- [x] Flex inject/force on OpenAI Chat/Responses via `prepare`; effective tier
       recorded
-- [ ] Flex `429` policy implemented as documented (no silent default unless
+- [x] Flex `429` policy implemented as documented (no silent default unless
       configured)
-- [ ] Stats/report can separate Flex vs sync (Batch counts at minimum; usage if
+- [x] Stats/report can separate Flex vs sync (Batch counts at minimum; usage if
       S3 shipped)
-- [ ] `docs/batch-flex.md` updated for shipped behaviour; no sync→Batch
+- [x] `docs/batch-flex.md` updated for shipped behaviour; no sync→Batch
 - [ ] CI green for new unit/integration tests on Mac; no CloudAgent for listepo
       work
 
@@ -1100,19 +1100,23 @@ Check: `rg 'service_tier' crates/rtok-store/migrations/` empty (unless mini-PR);
 
 ### T259. Docs flip planned→today + acceptance
 
+**Status:** done 2026-10-19. The behaviour shipped as T385.1, T385.4, T385.5, T385.10 and
+T385.12.1–T385.12.2. This card is the doc pass those left unfinished. Routing is loaded
+(off by default); `sticky` stays planned.
+
 **Files:** `docs/batch-flex.md` (planned→today for shipped S1/S2/S4/S5 pieces; keep
-routing planned), `docs/config.md` (remove “validate fails” for loaded keys),
+routing's `sticky` planned), `docs/config.md` (remove “validate fails” for loaded keys),
 `architecture.md` §12 table, `src/plugins/proxy/AGENTS.md`, optional pointer from
 `ideas.md` when promoting.
 
 **Acceptance (MVP = T251+T252+T254+T255; T253 strongly recommended)**
 
-- [ ] `[proxy.batch]` / `[proxy.flex]` parse and validate
-- [ ] Batch hops tagged in `calls`; bodies unchanged
-- [ ] Flex inject/force on OpenAI Chat/Responses; effective tier recorded without hooks/MCP changes
-- [ ] Flex 429 policy as documented (no silent default unless configured)
-- [ ] Stats/report separate Flex vs sync (Batch counts at minimum; usage if T253 shipped)
-- [ ] `docs/batch-flex.md` updated; explicit **no** sync→Batch
+- [x] `[proxy.batch]` / `[proxy.flex]` parse and validate
+- [x] Batch hops tagged in `calls`; bodies unchanged
+- [x] Flex inject/force on OpenAI Chat/Responses; effective tier recorded without hooks/MCP changes
+- [x] Flex 429 policy as documented (no silent default unless configured)
+- [x] Stats/report separate Flex vs sync (Batch counts at minimum; usage if T253 shipped)
+- [x] `docs/batch-flex.md` updated; explicit **no** sync→Batch
 - [ ] CI green for new tests on Mac
 
 **Explicit non-goals restate:** no sync→Batch; hooks/MCP untouched; Anthropic has no Flex;

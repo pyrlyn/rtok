@@ -258,8 +258,10 @@ fn read_cap_marker_stays_within_max_chars() {
     );
     let start = out.find("… archived ").expect("archive marker") + "… archived ".len();
     let rest = &out[start..];
-    let id = &rest[..rest.find(" …").expect("archive marker end")];
-    let archived = String::from_utf8(cx.store.get_archive(id, None).unwrap().unwrap()).unwrap();
+    let shown = &rest[..rest.find(" …").expect("archive marker end")];
+    assert_eq!(shown.len(), 8, "{out}");
+    let id = rtok::expand::resolve_id(&cx, shown).unwrap();
+    let archived = String::from_utf8(cx.store.get_archive(&id, None).unwrap().unwrap()).unwrap();
     assert_eq!(archived, format!("1:{blob}"));
     let _ = fs::remove_dir_all(dir);
 }

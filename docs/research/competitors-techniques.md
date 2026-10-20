@@ -96,6 +96,8 @@ every full/abbreviated hash, every path, every line matching `WARN|ERROR|error|f
 "never worse than raw" (already in #1077); archive raw and print the short `expand` id.
 Also shorten the trailing link line (today ~90 tokens with two 64-hex ids) to one 8–12 hex id:
 that alone is 70+ tokens on every compressed call and dominates small outputs.
+The command trailer has printed that 8-character id since T672. The archive live-zone pointer
+and the compress view do too (T909). A decision already stored is replayed as written.
 
 | # | Category (uses) | Best rival | rtok design (better, not copied) | Target |
 |---|---|---|---|---|
@@ -136,7 +138,7 @@ checked 2026-10-15. `rtok discover` is on main (T688). This table still uses sqz
 | terraform / tf | default | 74 % |
 | xcodebuild | default | 90 % |
 | biome, rake/rails, bundle, wget, logcat | default, no golden | not measured |
-| podman | gap: the `docker ps` formatter matches only `docker` | open |
+| podman | `docker ps` formatter also matches `podman ps` (T905) | same golden as `docker ps` |
 
 What made the four new rows win is not a rule but a parser: `parse_diag` now reads `path:line[:col]: CODE msg`
 (ruff, flake8), `path:line: error: msg  [code]` (mypy), `path:line:col: C: Cop/Name: msg` (rubocop) and

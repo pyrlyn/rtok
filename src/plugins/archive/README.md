@@ -18,6 +18,10 @@ than `min_tokens`, the content becomes:
 [archived <id>: first 8 lines … last 4 lines · N tokens · expand(<id>)]
 ```
 
+`<id>` is the first 8 hex characters of the archive id. `expand` resolves that prefix.
+The measurement stores the full id. A decision already on disk is replayed as written, so a
+cached prefix does not change.
+
 Decisions are keyed by `tool_use_id` and persisted, so every later request rewrites the same
 block identically — the frozen prefix stays byte-stable and cache hits survive. Never touched:
 `system`, `tools`, the last `keep_turns` turns, or any block whose id was `expand`ed.

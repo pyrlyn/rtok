@@ -106,11 +106,11 @@ pub(super) enum WorktreeCmd {
         /// Open locks whose reason starts with this owner; any other lock holds until `--stale-lock`
         #[arg(long)]
         owner: Option<String>,
-        /// Keep worktrees modified within this window (`24h`, `7d`)
+        /// Keep worktrees modified within this window (`30m`, `24h`, `7d`)
         #[arg(long, default_value = "24h")]
         idle: String,
-        /// Treat someone else's lock as abandoned once its merged, clean worktree is untouched this long
-        #[arg(long, default_value = "7d")]
+        /// Treat someone else's lock as abandoned once its merged, clean worktree is untouched this long (`30m`, `7d`)
+        #[arg(long, default_value = crate::worktree::gc::STALE_LOCK_DEFAULT)]
         stale_lock: String,
         /// JSON instead of the table
         #[arg(long)]
@@ -120,7 +120,7 @@ pub(super) enum WorktreeCmd {
     Clean {
         /// Only these worktrees; the one this command runs from is cleaned only when named
         paths: Vec<PathBuf>,
-        /// Keep caches modified within this window (`24h`, `7d`)
+        /// Keep caches modified within this window (`30m`, `24h`, `7d`)
         #[arg(long, default_value = "24h")]
         idle: String,
         /// Apply; without it this is a dry run that changes nothing
@@ -277,15 +277,13 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: WorktreeCmd) -> Result<
             json,
         } => {
             use crate::worktree::gc;
-            use anyhow::Context as _;
             // T285: a live agent's worktree is never removed unless its task is finished (T453); no store, no live agents.
             let cfg = Config::load_with(config_file.as_deref(), None)?;
             let live = crate::worktree::ops::live_ids(&cfg);
             let policy = gc::Policy {
                 owner: owner.as_deref(),
-                idle: crate::measure::stats::parse_since(&idle).context("--idle")?,
-                stale_lock: crate::measure::stats::parse_since(&stale_lock)
-                    .context("--stale-lock")?,
+                idle: crate::store::parse_idle_from(&idle, "--idle")?,
+                stale_lock: crate::store::parse_idle_from(&stale_lock, "--stale-lock")?,
                 now: std::time::SystemTime::now(),
                 live,
                 pending: crate::worktree::ops::pending_paths(&cfg),
@@ -326,9 +324,8 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: WorktreeCmd) -> Result<
             json,
         } => {
             use crate::worktree::clean;
-            use anyhow::Context as _;
             let policy = clean::Policy {
-                idle: crate::measure::stats::parse_since(&idle).context("--idle")?,
+                idle: crate::store::parse_idle_from(&idle, "--idle")?,
                 now: std::time::SystemTime::now(),
             };
             let outcomes = clean::run(&std::env::current_dir()?, &paths, &policy, yes)?;
