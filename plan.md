@@ -142,7 +142,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T436.4 | todo | P3 | 2 | 90% | |
 | T523 | in progress | P2 | 2 | 0% | MiMo / mimo |
 | T525 | in progress | P2 | 3 | 0% | MiMo / mimo |
-| T527 | in progress | P2 | 3 | 0% | MiMo / mimo |
 | T666.2 | todo | P2 | 3 | 0% | |
 | T687 | todo | P2 | 4 | 0% | |
 
@@ -487,13 +486,6 @@ Done when: a trace names the work inside SubagentStart and PreCompact. That work
 
 Check: the latency cases green; five manual runs of each event on the rtok repo print no `slow` warning; `just check`.
 
-### T527. A worktree claim does not stay held by an agent idle for days
-
-On 2026-10-10 the store had 63 open `worktree_claims`. 46 belong to an agent last seen more than a day ago, 31 more than three days, all on the claude host. This week Claude recorded 617 SessionStart and 504 SessionEnd; 427 agents started since 2026-10-03 are still unended and idle over a day. `remove` and `adopt` then refuse with `locked by <reason>; not removed` or `not taken` (`src/worktree/remove.rs`, `src/worktree/claim.rs`) and do not say the holder has been idle. `gc`'s `--stale-lock` (default `7d`) already treats a foreign git lock as abandoned; the store claim does not.
-
-Done when: a claim whose agent has ended, or whose `last_seen` is older than `stale_lock`, does not block `remove` or `adopt`. A claim touched inside the window still refuses, and the refusal says how long ago the holder was seen.
-
-Check: store tests for an ended holder, a holder idle past `stale_lock`, and a holder seen today; `just check`.
 
 ### T356. Never index `$HOME` or `/` as a graph root
 

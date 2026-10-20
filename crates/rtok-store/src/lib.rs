@@ -72,6 +72,7 @@ pub use projects::{Origin, Project, Resolved, canon_root};
 mod task_claims;
 mod task_counters;
 mod worktree_claims;
+pub use worktree_claims::Holder;
 mod worktree_pending;
 
 use std::collections::{BTreeMap, HashMap, HashSet};
