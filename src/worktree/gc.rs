@@ -16,6 +16,16 @@ use super::list::newest_until;
 use super::{Entry, State, inventory, par_map};
 use crate::render::Col;
 
+/// `--stale-lock`'s default — how long a hold may go unseen before it is abandoned. gc judges
+/// a foreign git lock's worktree by it (T418); `remove` and `adopt` judge the `agents.last_seen`
+/// behind a claim by it (T527). One window, one policy.
+pub const STALE_LOCK_DEFAULT: &str = "7d";
+
+/// [`STALE_LOCK_DEFAULT`] as a duration, for the callers with no `--stale-lock` flag (T527).
+pub fn stale_lock() -> Duration {
+    crate::since::parse_since(STALE_LOCK_DEFAULT).expect("7d is a stale-lock window")
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Verdict {
     /// Merged, clean, idle and not held by anyone else: remove the worktree.
