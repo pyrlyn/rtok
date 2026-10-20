@@ -629,6 +629,13 @@ mod tests {
             k("cd /a && rtok run --agent sub_1 -- 'ls'"),
             k("cd /a && ls")
         );
+        // T922: the POSIX `command -v rtok` guard leads the wrapper and is not part of the key.
+        let guard = crate::names::run_guard();
+        assert_eq!(k(&format!("{guard}rtok run -- 'ls'")), k("ls"));
+        assert_eq!(
+            k(&format!("cd /a && {guard}rtok run --agent sub_1 -- 'ls'")),
+            k("cd /a && ls")
+        );
         assert_eq!(k("rtok run --agent ../x -- 'ls'"), None);
         assert_eq!(k("rtok run --agent -- 'ls'"), None);
 

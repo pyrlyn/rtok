@@ -270,7 +270,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T687 | todo | P2 | 4 | 0% | |
 | T920 | todo | P1 | 3 | 0% | |
 | T921 | todo | P1 | 3 | 0% | |
-| T922 | todo | P1 | 2 | 0% | |
 | T923 | todo | P1 | 3 | 0% | |
 | T924 | todo | P1 | 3 | 0% | |
 | T925 | todo | P1 | 3 | 0% | |
@@ -334,21 +333,6 @@ SessionEnd meets `max_ms` at the median.
 
 Check: a test where the fallback `rtok hook` is blocked (locked store, slow plugin) and the
 caller still gets `{}` under the deadline; `tests/latency.rs` covers SessionEnd; `just check`.
-
-### T922. `rtok run --` rewrite breaks every Bash call when `rtok` is not on PATH
-
-The PreToolUse(Bash) rewrite always produces `rtok run -- '<cmd>'` (`src/plugins/cmd/hook.rs`).
-When the shell that runs the command has no `rtok` on PATH, every call fails with
-`zsh: command not found: rtok`: 8 calls in a row on 2026-10-09 (workspace session, the agent
-stopped work) and once on 2026-10-18 (cox). T174 made the hook command itself fail open, not
-the command it writes.
-
-Done when: the rewritten command runs the original command when `rtok` cannot be found (an
-absolute path to the running binary, or a `command -v` guard), and output is unchanged
-otherwise.
-
-Check: a cmd hook test that runs the rewritten line with a PATH lacking `rtok` and gets the
-original command's output and exit code; `just check`.
 
 ### T923. Relative MCP paths resolve against the server's checkout, not the caller's worktree
 

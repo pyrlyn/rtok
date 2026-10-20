@@ -35,7 +35,6 @@
 - T687. Hooks: PreToolUse/PostToolUse p50 to 10 ms
 - T920. PostToolUse hook went from ~4 ms to ~50 ms with v0.17.0-alpha.2 (memory observations)
 - T921. Hook calls that hang until the host's 5 s timeout, and the Pre/PostToolUse/SessionEnd tail
-- T922. `rtok run --` rewrite breaks every Bash call when `rtok` is not on PATH
 - T923. Relative MCP paths resolve against the server's checkout, not the caller's worktree
 - T924. MCP `worktree_*` tools: worktree in the wrong repo, agent ambiguity the agent cannot resolve
 - T925. Cursor plugin link into the versioned ketch store dangles after an upgrade; doctor stays green

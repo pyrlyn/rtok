@@ -10,7 +10,8 @@ Every Bash output archived raw, filtered for the model, measured.
 
 ## How it works
 
-1. The PreToolUse hook rewrites `command` to `rtok run -- <command>` unless the command
+1. The PreToolUse hook rewrites `command` to `rtok run -- <command>` (on POSIX led by a
+   `command -v rtok` guard that runs `<command>` as-is when the host shell has no `rtok`, T922) unless the command
    first word is in `never_wrap` (default `rtok`, `sudo`), or it contains a heredoc, `&`
    background, or `-i`/`--interactive`.
 2. `rtok run` executes via `$SHELL -c` (no login shell: the host already ran its profile),
