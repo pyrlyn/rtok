@@ -249,16 +249,18 @@ pub fn shorten_result(
         let Ok(id) = cx.put_archive(text.as_bytes()) else {
             continue;
         };
+        let shown = crate::names::short_id(&id);
         if let Some(printed) = json_tree_fold(cx, &rule, tool, text, &id) {
             block["text"] = Value::String(printed);
             changed = true;
             continue;
         }
-        let cut = rules::apply(settings, text, 0, &rule, &id);
+        let cut = rules::apply(settings, text, 0, &rule, shown);
         if cut.len() >= text.len() {
             continue;
         }
-        let printed = format!("{cut}\n[rtok {id} · {lines} lines · expand: rtok expand {id}]");
+        let printed =
+            format!("{cut}\n[rtok {shown} · {lines} lines · expand: rtok expand {shown}]");
         let _ = cx.record(&Measurement {
             plugin,
             kind,
@@ -306,7 +308,8 @@ fn json_tree_fold(
         if folded.text.len() >= text.len() {
             return None;
         }
-        let printed = format!("{}\n[json-tree {archive_id}]", folded.text.trim_end());
+        let shown = crate::names::short_id(archive_id);
+        let printed = format!("{}\n[json-tree {shown}]", folded.text.trim_end());
         if printed.len() >= text.len() {
             return None;
         }
@@ -507,9 +510,24 @@ mod tests {
         let printed = result["content"][0]["text"].as_str().unwrap();
         assert!(printed.contains("expand: rtok expand "));
         assert!(printed.len() < text.len());
+        let printed_id = printed
+            .rsplit("rtok expand ")
+            .next()
+            .unwrap()
+            .trim_end_matches(']');
+        assert_eq!(printed_id.len(), crate::names::MIN_PREFIX, "{printed_id}");
         let rows = cx.store.list_measurements("archive").unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].kind, "mcp");
+        let full = rows[0]
+            .ref_id
+            .as_deref()
+            .unwrap()
+            .rsplit(':')
+            .next()
+            .unwrap();
+        assert_eq!(full.len(), 64, "{full}");
+        assert!(full.starts_with(printed_id), "{full} {printed_id}");
         let mut small = serde_json::json!({"content":[{"type":"text","text":"hi\n"}]});
         assert!(!shorten_result(
             &cx, &settings, "linear", "list", &mut small, "archive", "mcp"
