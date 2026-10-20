@@ -2552,7 +2552,7 @@ mod tests {
         assert_eq!(kinds("cursor"), [Kind::Cli, Kind::Desktop]);
         assert_eq!(kinds("opencode"), [Kind::Cli, Kind::Desktop]);
         assert_eq!(kinds("claude"), [Kind::Cli, Kind::Desktop]);
-        assert_eq!(kinds("codex"), [Kind::Cli]);
+        assert_eq!(kinds("codex"), [Kind::Cli, Kind::Desktop]);
         assert!(host("notahost").is_none());
         assert!(resolve(&["claude".into(), "nope".into()]).is_err());
     }

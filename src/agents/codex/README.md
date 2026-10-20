@@ -1,6 +1,6 @@
 # Codex
 
-`rtok agents install codex` — the Codex CLI (`codex`).
+`rtok agents install codex` — the Codex CLI (`codex`) and the desktop app (`/Applications/ChatGPT.app`, bundle id `com.openai.codex`; older builds `Codex.app`). Both read the same `~/.codex` files, so one apply covers both (T912, research §40.1).
 
 Files: `~/.codex/config.toml` (MCP / proxy) and `~/.codex/hooks.json` (the `codex` rows of `hook_events`: `PreToolUse` on Bash and `apply_patch`, `PostToolUse`, `PreCompact`, `PostCompact`, `SubagentStart`; T645, T262.3).
 

@@ -287,18 +287,38 @@ fn plugin_update(cfg: &Config) -> Result<String> {
     }
 }
 
-/// Codex CLI: `[mcp_servers.rtok]` and, with `--proxy`, `[model_providers.rtok]`.
+/// Codex CLI and app: `[mcp_servers.rtok]` and, with `--proxy`, `[model_providers.rtok]`.
 pub struct Codex;
 
-static VARIANTS: [Variant; 1] = [Variant {
-    kind: Kind::Cli,
-    name: "Codex",
-    bins: &["codex"],
-    apps: &[],
-}];
+static VARIANTS: [Variant; 2] = [
+    Variant {
+        kind: Kind::Cli,
+        name: "Codex",
+        bins: &["codex"],
+        apps: &[],
+    },
+    // The desktop app ships as `ChatGPT.app` (bundle id `com.openai.codex`, research §40.1);
+    // `Codex.app` covers builds from before the rename.
+    Variant {
+        kind: Kind::Desktop,
+        name: "Codex App",
+        bins: &[],
+        apps: &[
+            "/Applications/ChatGPT.app",
+            "~/Applications/ChatGPT.app",
+            "/Applications/Codex.app",
+            "~/Applications/Codex.app",
+        ],
+    },
+];
 
 impl Agent for Codex {
     super::agent_identity!("codex");
+
+    /// The app reads the CLI's `~/.codex` files, so one apply covers both.
+    fn shared(&self) -> bool {
+        true
+    }
 
     fn support(&self, _kind: Kind, module: &str) -> Support {
         match module {
@@ -626,6 +646,22 @@ mod tests {
         c.setup.dry_run = dry;
         c.setup.backup = false;
         (c, path)
+    }
+
+    /// T912: the desktop app ships as `ChatGPT.app` (bundle id `com.openai.codex`), so
+    /// `agents update codex` saw only the CLI.
+    #[test]
+    fn the_desktop_variant_is_detected_from_its_app_and_shares_the_cli_files() {
+        let v = &Codex.variants()[1];
+        assert_eq!((v.kind, v.name), (Kind::Desktop, "Codex App"));
+        assert!(v.bins.is_empty());
+        assert!(v.apps.contains(&"/Applications/ChatGPT.app"));
+        assert!(v.apps.contains(&"/Applications/Codex.app"));
+        assert!(Codex.shared());
+
+        let (c, path) = cfg("desktop", false);
+        assert_eq!(Codex.files(&c, Kind::Desktop), Codex.files(&c, Kind::Cli));
+        let _ = fs::remove_dir_all(path.parent().unwrap());
     }
 
     #[test]
