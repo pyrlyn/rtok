@@ -311,6 +311,31 @@ pub fn run(cfg: &Config, args: &[String], agent: Option<&str>) -> Result<i32> {
     Ok(code)
 }
 
+/// True when a stage of `argv` is `rtok expand …`: its output is the bytes the agent asked
+/// for, so a dedup pointer or a trailer on it only sends the agent back to `expand` (T926).
+/// A bare `rtok expand` is never wrapped (`never_wrap`); this catches the ones behind a
+/// chain or a pipe (`x; rtok expand id`, `rtok expand id | sed -n 1,9p`).
+fn runs_rtok_expand(argv: &[String]) -> bool {
+    let snippet = argv
+        .iter()
+        .map(|a| {
+            if argv.len() == 1 {
+                a.clone()
+            } else {
+                sh_quote(a)
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+    super::bounded::stages(&snippet).iter().any(|stage| {
+        let mut words = stage.iter().skip_while(|w| w.contains('='));
+        words
+            .next()
+            .is_some_and(|w| crate::names::cmd_stem(w).eq_ignore_ascii_case("rtok"))
+            && words.next().is_some_and(|w| w == "expand")
+    })
+}
+
 /// Archive `body` when the shortening dropped something, print the filtered text plus
 /// expand trailer, record a Measurement. Shared by `rtok run` and `rtok filter --archive`
 /// (which always passes `None`: that surface has no dispatch-time context to scope by).
@@ -344,6 +369,10 @@ fn emit_filtered_to(
             let _ = out.write_all(b"\n");
         }
     };
+    if runs_rtok_expand(argv) {
+        write_raw(out);
+        return;
+    }
     let cx = match crate::plugin::Runtime::open(cfg.clone(), "run") {
         Ok(cx) => cx,
         Err(_) => {
@@ -959,6 +988,25 @@ mod tests {
         let rows = store.list_measurements("cmd").unwrap();
         assert_eq!(rows.len(), 1, "{rows:?}");
         assert!(rows[0].after_bytes <= rows[0].before_bytes, "{rows:?}");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// T926: an `rtok expand` stage inside a wrapped command (`cd x && rtok expand id | sed`)
+    /// prints what the agent asked for, whole, every time — a pointer to "an identical
+    /// result" would send it straight back to `expand`.
+    #[test]
+    fn rtok_expand_output_is_never_deduped_or_shortened() {
+        let (c, dir) = cfg("expand-passthrough");
+        let body = (0..400).map(|i| format!("line {i}\n")).collect::<String>();
+        let argv = ["cat notes.txt; rtok expand abc12345".to_string()];
+        for _ in 0..2 {
+            let mut printed = Vec::new();
+            emit_filtered_to(&c, &argv, body.as_bytes(), 0, None, &mut printed);
+            assert_eq!(String::from_utf8_lossy(&printed), body);
+        }
+        let store = crate::store::Store::open(&c.core.db_path).unwrap();
+        let rows = store.list_measurements("cmd").unwrap();
+        assert!(rows.iter().all(|r| r.kind != "dedup"), "{rows:?}");
         let _ = fs::remove_dir_all(&dir);
     }
 

@@ -274,7 +274,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T923 | todo | P1 | 3 | 0% | |
 | T924 | todo | P1 | 3 | 0% | |
 | T925 | todo | P1 | 3 | 0% | |
-| T926 | todo | P1 | 2 | 0% | |
 | T927 | todo | P2 | 2 | 0% | |
 | T928 | todo | P2 | 2 | 0% | |
 | T929 | todo | P2 | 3 | 0% | |
@@ -400,19 +399,6 @@ plugin link for every host that installs by link.
 
 Check: an install test that removes the old store version and still finds the plugin; a
 doctor test with a dangling link; `just check`.
-
-### T926. `rtok expand <id>` on the CLI returns an "identical to a result N turns ago" pointer
-
-41 Bash `rtok expand <id>` calls in about 20 sessions (2026-09-22..10-17) got
-`[rtok <id> · identical to a result N turns ago · expand: rtok expand <id>]` instead of the
-content: the PostToolUse dedup (`identical_result` in `src/plugin.rs`) treats the expanded
-output as a repeat. The agent then needs MCP `expand` or a re-read.
-
-Done when: the output of `rtok expand` (CLI and MCP) is never replaced by a dedup or
-shortening pointer.
-
-Check: a hook test where a Bash `rtok expand <id>` result identical to an earlier one passes
-through whole; `just check`.
 
 ### T927. `memory/observe` measurement rows claim the whole tool output as saved
 

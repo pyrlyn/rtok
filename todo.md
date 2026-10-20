@@ -39,7 +39,6 @@
 - T923. Relative MCP paths resolve against the server's checkout, not the caller's worktree
 - T924. MCP `worktree_*` tools: worktree in the wrong repo, agent ambiguity the agent cannot resolve
 - T925. Cursor plugin link into the versioned ketch store dangles after an upgrade; doctor stays green
-- T926. `rtok expand <id>` on the CLI returns an "identical to a result N turns ago" pointer
 - T927. `memory/observe` measurement rows claim the whole tool output as saved
 - T928. MCP input schemas mark aliased params required, so T353's aliases never reach the server
 - T929. Dedup stubs whose original is no longer in the agent's context (compaction, subagents)
