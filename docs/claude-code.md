@@ -48,7 +48,7 @@ Plugin versions and updates: [docs/plugin-versions.md](plugin-versions.md)
 
 `rtok agents uninstall claude` takes it all back out: hook entries, MCP
 registration, and the proxy variable. Both install and uninstall copy every file
-they touch to `_backup/<name>.bak-<ts>` first; a no-op run leaves no copy,
+they touch to `.backup_configs/<name>.bak-<ts>` first; a no-op run leaves no copy,
 and identical content is never backed up twice. After a write, each requested
 module is read back — a module that did not land is a warning, as is an
 `rtok` that is not on `PATH`.

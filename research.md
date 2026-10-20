@@ -3018,6 +3018,12 @@ Question: what does Codex send and read on these three events, so rtok can wire 
 
 Consequences for rtok: Codex's `Bash` is Claude's `Bash`, so the existing Bash rewrite and deny paths apply once the output carries `allow`; there is no `Read` tool (reads go through `Bash`), and file edits are `apply_patch` with the patch text in `tool_input.command`, so T262.3's ledger cannot count Codex reads and parses the `*** Add/Update/Delete File:` and `*** Move to:` headers out of the patch text in `tool_input.command` (the docs' shape). Not verified: whether `allow` also skips Codex's own approval prompt on a rewritten command (the scratch run used `approval_policy = "never"`), and the `apply_patch` payload itself: the fake model's tool list (`exec_command`, `write_stdin`, `request_user_input`, `view_image`, goal and agent tools) offered no `apply_patch`, with or without `-s workspace-write`, `features.apply_patch_freeform` or a bundled model name, so the hook never fired on one.
 
+### 40.1 Codex desktop app bundle (T912, checked 2026-10-20)
+
+- The desktop app is documented as the "ChatGPT desktop app" and the macOS download is `Codex.dmg`. https://learn.chatgpt.com/docs/app (read 2026-10-20)
+- The app installs as `/Applications/ChatGPT.app`. It has bundle id `com.openai.codex` and ships `Contents/Resources/codex-cli`. Source: the app's own `Info.plist`, version 26.1013.40934, on the creator's Mac. Older builds were named `Codex.app`; that name is **unverified** and kept only as a fallback probe.
+- The app reads `~/.codex/config.toml`: the config reference documents `desktop.custom_file_handlers.<id>` there as "User-level only" for the ChatGPT desktop app. https://learn.chatgpt.com/docs/config-file/config-reference (read 2026-10-20). So the desktop variant shares the CLI's files (`shared() = true`).
+
 ## 41. Semantic memory over an embeddings endpoint (T668, checked 2026-10-15)
 
 Question: what real embedding source can sit behind `[plugins.memory.embed]` without a default download, a default spend, or a vector dependency in the default build. The creator chose a remote OpenAI-compatible endpoint; a local ONNX/candle model was rejected for its weights download and native runtime.

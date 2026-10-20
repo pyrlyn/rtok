@@ -27,6 +27,7 @@ const EXPECTED_VARIANTS: &[(&str, Kind, &str)] = &[
     ("cursor", Kind::Cli, "Cursor CLI"),
     ("cursor", Kind::Desktop, "Cursor"),
     ("codex", Kind::Cli, "Codex"),
+    ("codex", Kind::Desktop, "Codex App"),
     ("opencode", Kind::Cli, "OpenCode"),
     ("opencode", Kind::Desktop, "OpenCode Desktop"),
     ("kilo", Kind::Cli, "Kilo Code CLI"),

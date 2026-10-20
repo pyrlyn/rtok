@@ -575,7 +575,7 @@ pub(crate) fn read(path: &Path) -> String {
 /// Read a TOML document at `path`, or start from an empty one when the file is simply
 /// absent. An unreadable file (non-UTF-8 byte, wrong permissions) is an error, not an empty
 /// document: swallowing it would let an installer overwrite a config it never actually read,
-/// leaving only the `_backup/` copy as a way back.
+/// leaving only the `.backup_configs/` copy as a way back.
 pub(crate) fn load_toml(path: &Path) -> Result<DocumentMut> {
     let raw = match std::fs::read_to_string(path) {
         Ok(raw) => raw,
@@ -2552,7 +2552,7 @@ mod tests {
         assert_eq!(kinds("cursor"), [Kind::Cli, Kind::Desktop]);
         assert_eq!(kinds("opencode"), [Kind::Cli, Kind::Desktop]);
         assert_eq!(kinds("claude"), [Kind::Cli, Kind::Desktop]);
-        assert_eq!(kinds("codex"), [Kind::Cli]);
+        assert_eq!(kinds("codex"), [Kind::Cli, Kind::Desktop]);
         assert!(host("notahost").is_none());
         assert!(resolve(&["claude".into(), "nope".into()]).is_err());
     }

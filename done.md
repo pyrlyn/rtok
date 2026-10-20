@@ -1,5 +1,49 @@
 # rtok — completed tasks
 
+### T948. `worktree gc` idle age counts build caches
+
+Found 2026-10-20 with T949 and T950: 13 worktrees of this repo held ~134 GB, nearly all `target/`, and a `worktree gc` dry run removed one. `newest_until` folded the mtimes of files under tagged cache roots into the worktree's newest mtime, so a cargo or rust-analyzer build reset gc's 24 h idle clock without anyone touching the work.
+
+`newest_until` now skips every tagged cache root (`walk`'s `sources_only`), so gc's idle age reads source files only. `usage`, `worktree list` and `worktree clean`'s per-cache ages still count the caches.
+
+Check: `newest_until_leaves_tagged_caches_out` — an old source file and a new `target/` give the source's mtime, while `usage` still reports the cache's for the worktree and for the cache root.
+
+Status: done 2026-10-20
+Model: Claude Code / claude-opus-5-5
+
+### T949. `worktree gc` keeps a merged worktree whose locking agent has ended
+
+Bug. `gc::decide` (`src/worktree/gc.rs`) counted a git lock as held unless its agent was live (`Policy::live`) or the task was done (`Entry::done`, T453). The agent's `ended_at` in the store was never read, and nothing unlocks a worktree when its session ends (`git::unlock` runs only from `remove`, `migrate` and `claim`). A merged, clean worktree locked by an ended agent therefore waited `max(idle, stale_lock)`, 7 days by default. Seen: `rtok-plan-log-triage` (merged, agent `ended`) kept with "locked by Claude …", 4–18 GB of `target/` each. On the dry run after the fix it turned out to be a finished task (T453's `Verdict::Finished`): what kept it was T948's idle clock, which its `target/` kept resetting. This rule is for a merged worktree of an ended agent whose task is not marked finished.
+
+`gc::Policy` now takes the store's ended agent ids (`Store::ended_agent_ids`, `ops::ended_ids`), the way it takes the live ones; `worktree gc` and `agents junk` both pass them. A foreign lock naming an ended agent holds a merged, clean worktree only through the idle window, then `Verdict::Reclaim` with the note "agent <id> ended". A live agent's lock, and any lock on a dirty or unmerged worktree, still holds. An idle-but-not-ended agent (`rtok-t912`) is unchanged: it still waits out `stale_lock`.
+
+Check: `an_ended_agents_lock_holds_only_through_the_idle_window` — ended and idle → reclaim; ended but busy, unreadable, also live, dirty or unmerged, and a not-ended agent → keep.
+
+Status: done 2026-10-20
+Model: Claude Code / claude-opus-5-5
+
+### T950. `worktree gc` never drops the record of a vanished worktree under a foreign lock
+
+Bug. In `gc::decide` the `held` branch ran before `match entry.state`, so a `State::Stale` record (its directory is gone) under someone else's git lock got `keep("locked by …")` on every run and never reached `Verdict::DropRecord`. Seen: `_worktrees/completions-shared/apps/rtok-completions-shared` and `_worktrees/rtok-audit-20261018` (locked by OpenAI / GPT-6, 0 B, directories missing).
+
+Choice: after `stale_lock`, not at once. Git's lock exists for a worktree on a volume that is not mounted, so a fresh lock on a missing directory may still be in use. The record has no mtime, so the lock reason's date is its age. A vanished record under a foreign lock is dropped once that date is older than `stale_lock`, or at once when the lock's agent has ended (T949). An undated or bare lock still keeps it. `remove::detach` unlocks before it removes, so `--yes` drops only that admin entry, never a blanket `prune`.
+
+Check: `an_ended_agents_lock_holds_only_through_the_idle_window` — vanished with an ended agent or an old lock → drop-record; with a recent, undated or bare lock, or a recent lock of an agent that has not ended → keep. `gc_removes_only_finished_worktrees_and_never_opens_a_foreign_lock`: a vanished worktree under a September lock is dropped and its `.git/worktrees/<id>` is gone after `gc --yes`, one locked today stays.
+
+Status: done 2026-10-20
+Model: Claude Code / claude-opus-5-5
+
+### T911. Count re-expands of the 8-character archive id
+
+T672 prints an 8-character archive id. `stats` still treated a pointer as shown only when the id was 12–64 hex chars, and it keyed the match on the first 12. An `… omitted (expand <8>)` line or a `[rtok <8>]` trailer was invisible, so the expand that followed it was not a re-expand. A full-id expand of that same archive missed it too.
+
+The matcher now accepts `names::MIN_PREFIX` (8) through 64 hex chars and keys on that prefix. A 7-character token still does not count. An older 12-character prefix still matches a full-id expand, because both keys are the first 8 characters.
+
+Check: `expand_right_after_counts_the_eight_char_id_pointers_print` — an 8-character trailer plus `rtok expand` of that prefix and an MCP expand of the full id count as two re-expands; a 7-character token and a different archive do not. `expand_right_after_counts_expands_of_shown_ids_only` still counts a 64-character id.
+
+Status: done 2026-10-20
+Model: Cursor / grok 4.7
+
 ### T910. Print the short archive id on the remaining expand pointers
 
 T672 shortened the command trailer. The hook budget marker, the skill deny, the guard duplicate line, the handoff brief, the MCP wrap trailer and the `rtok expand` omitted-line marker still printed the full 64-character id. `expand` already resolves an 8-character prefix. A prefix the caller already lengthened (9–63 hex chars) stays as sent. The measurement `ref_id` stays the full id. The hook marker is priced with an 8-character placeholder, the same length as the id it will print.
@@ -2293,6 +2337,29 @@ Done: `Loading` (`web/src/states.tsx`) is a spinner with a "Loading…" label ce
 
 Check: the icon test failed before the SVGs landed; two new `app.test.tsx` cases cover Reconnect (a new link, still offline while connecting, screens back once open); `npm test` (169 tests) and typecheck green; the sidebar with all fourteen icons the centred spinner, and the offline screen in light, dark and at 375 px checked in the browser on the Vite dev server (Reconnect showed "Reconnecting…" and opened a new socket); `just check` green; `just spa-stories` (123, axe included) and `just spa-e2e` (17; the offline case now expects the full-screen page and a working Reconnect against the real `rtok web`) green.
 
+### T944. `rtok web`: say why `/ws` refuses instead of a bare Offline
+
+On 2026-10-20 the creator opened `http://127.0.0.1:3333/#/overview` without `?token=`: `/ws`
+answered 401 (S2, `docs/web-auth.md`) and the SPA showed only "Offline / Reconnect". A browser
+WebSocket cannot read the 401, and a token kept in `sessionStorage` goes stale when `rtok web`
+restarts (fresh token per start), which looks the same. The creator asked to cover both.
+
+Done: `GET /auth` (`src/web/mod.rs`) runs the `/ws` gate (`admitted`: token, then `Origin`)
+without the upgrade and answers 204, 401 or 403; `auth` is a reserved first segment in the SPA
+router. `web/src/api/auth.ts` turns that into a reason: no token → `missing`, `/auth` 401 →
+`rejected`, anything else (accepted, server down) → none. `Shell` asks on every close and
+`Offline` shows `open "<origin>/?token=$(cat ~/.rtok/web-token)"` with "needs its access token"
+or "was restarted and issued a new token"; a real disconnect keeps "The connection to rtok was
+lost." The Vite dev proxy forwards `/auth`; `docs/web-auth.md` describes the probe.
+
+Check: `tests/web_token.rs` `auth_probe_answers_the_ws_checks` failed before the route (the SPA
+answered 200) and passes after; Vitest `api/auth.test.ts`, `states.test.tsx` and three
+`app.test.tsx` cases failed first and pass; two new stories (axe) in `just spa-stories`; the
+e2e restart case now sees the plain text while the server is down and the "restarted" hint
+once it is back with a new token. `just js`, `just spa-test`, `just spa-stories`, `just spa-e2e`
+green; `just check` green except two graph watcher timing tests that fail on this loaded
+machine and touch nothing changed here.
+
 ### T310.9. Serve the SPA from `rtok web`
 
 Embed `web/dist` in the binary (hashed assets, precompressed, SPA fallback, CSP), keep `RTOK_WEB_PKG`-style dev override for a local `dist`, build the SPA in CI and release before cargo. Rewrite `tests/web.rs`, `tests/web_e2e.rs`, `tests/release_bundle.rs` and `tests/surface_parity.rs` for the SPA (parity reads the SPA's page list).
@@ -3928,6 +3995,35 @@ Check: unit tests for the status helper (temp `Places`), the planner (install-on
 Status: done 2026-10-04 · Model: Claude Code / sonnet-5-5
 
 Result: `src/completions/picker.rs`: pure `plan(installed, chosen) -> Changes`, `list` (`--list`), `run(places, cmd, ask)` that applies the plan through `install::install`/`uninstall`, and `ask_terminal`, the `inquire` MultiSelect (pre-checked where installed; Esc and Ctrl-C are a cancel that changes nothing). `install::status` is the one installed check: the script file `uninstall` removes, with `Places::script` still the only path owner; a shell with no per-user location (Clink off Windows) is listed with `-` and never offered. `rtok completions` with no shell chooses `--list`, the picker (stdin and stdout are terminals) or an error naming `<shell>`, `--install` and `--list`, so it never waits for input. Crate: `inquire` 0.9.4 (`default-features = false`, `crossterm` only; last release 2026-02, repository active 2026-03), picked over `dialoguer` (0.12.0, 2025-08) and `cliclack` (0.5.6) because it shares the crossterm 0.29 copy `rtok tui` already links; `rust.md` and `toolchain.md` have the row. Tests: 6 unit tests in `picker.rs` (planner four ways, status, apply with a fake prompt, cancel and prompt failure touch nothing, `--list`), `tests/completions_picker_pty.rs` drives the real prompt on a pseudo-terminal (check installs, uncheck removes, Esc cancels), trycmd `completions-list` and `completions-no-shell`. The shell completion goldens and `help`/`man` goldens changed only by the new `--list` flag and the longer command doc; `completions.list` is in `config_coverage` `ALLOW_KEYS`.
+
+### T943. `rtok completions --install` works in zsh without manual steps and never goes stale
+
+Creator request 2026-10-20: after `rtok completions --install`, Tab in zsh suggested nothing.
+Three causes on the creator's machine: `~/.zfunc` was not on `fpath` (install only printed a
+hint); the installed `_rtok` was generated by an older rtok and lacked newer commands, since
+nothing rewrites it after an upgrade; `compinit -C` trusts a dump made before `_rtok` existed,
+so even a correct `fpath` is ignored until the dump is deleted.
+
+Done when, in zsh, one `rtok completions zsh --install` and a new shell give Tab completion
+with a stale `compinit -C` dump and no `.zshrc` edit; an upgraded rtok completes its new
+commands without a reinstall (bash, zsh, fish, PowerShell too); `--uninstall` removes exactly
+what was written, and other content of a touched rc file stays byte-for-byte.
+
+Result: `src/completions/install.rs`. Bash, zsh, fish and PowerShell get a wrapper of a few
+lines that runs `rtok completions <shell>` when the shell first needs it (lazy in bash, zsh and
+fish; at profile load in PowerShell, about 10 ms) and does nothing without `rtok` on `PATH`. The
+zsh wrapper calls `_rtok` itself after the `eval`, because `$funcstack[1]` is `(eval)` there and
+the generated tail would only run `compdef`. Elvish and Clink keep the static script (no shell
+here to test a wrapper). zsh also gets `.zfunc/rtok.zsh` (puts `.zfunc` on `fpath`; on the first
+prompt, once the rc files ran `compinit`, autoloads `_rtok` and runs `compdef _rtok rtok`, so an
+old `compinit -C` dump does not matter) and one guarded line sourcing it in
+`${ZDOTDIR:-~}/.zshenv`, which zsh reads before `.zshrc`. The rc line reuses the PowerShell
+profile-line helpers; the old printed `fpath` hint is gone. Tests: unit tests over a temp home
+(the three zsh files, `.zshenv` kept byte-for-byte with CRLF and no trailing newline, uninstall,
+reinstall unchanged, `ZDOTDIR`, wrappers vs static scripts, quoting); `tests/completions_shells.rs`
+drives `zsh -i` on a pty with a dump made before `_rtok` and checks `rtok work<Tab>` →
+`rtok worktree` (fails on the old install code), plus wrapper tests for bash, fish and pwsh, each
+skipped when its shell is missing. `docs/install.md` describes it; `just check`.
 
 ### T319. Ship man pages and completions in release archives
 
@@ -8885,6 +8981,32 @@ Check result: `transcript_cache::tests::unchanged_transcripts_are_parsed_once` �
 
 Status: done 2026-09-24
 
+### T946. `rtok stats` reads every transcript twice for the compaction count
+
+`rtok stats --since 30d` takes 131 s on 2065 Claude JSONL files (3.7 GB), and `rtok web`'s
+background Stats/Skills scan (T943) costs the same CPU every 5 minutes. `stats::collect` parsed
+each file with `jsonl::parse_path`, which already records every `compact_boundary` in
+`Parsed::compactions`, then `compact_events` read the file again and ran `serde_json` on every
+line to count the same boundaries.
+
+Decision (creator, 2026-10-20): reuse `parsed.compactions`; the T135 cache does not fit because
+`fold_session` needs the whole `Parsed`, not per-file aggregates.
+
+Do (Claude Code / claude-opus-5-5, 2026-10-20): `collect` adds `parsed.compactions.len()`;
+`compact_events` and `is_compact_line` are gone. A file with one non-UTF-8 line now keeps its
+other lines' compactions (`read_to_string` used to drop the whole file to 0).
+
+Check result: `stats::tests::compactions_survive_a_non_utf8_line` (2 boundaries around a bad-UTF-8
+line) fails on the old code with `compact 0` and passes with 2;
+`compact_boundary_counts_once_per_event` unchanged and green; `just check` green. Release builds,
+`rtok stats --since 30d` on an APFS snapshot of `~/.claude/projects` (559 sessions) and a
+`.backup` of the store, load average 130-230 so wall time is noise (27-115 s for both): user CPU
+15.6 / 14.5 / 14.6 / 15.1 / 15.3 s before, 11.9 / 11.6 / 11.8 / 12.5 / 11.8 s after (about -21%).
+Output identical except the two dictionary `cache-safe saving` lines, which also differ between
+two runs of the old binary: `dictionary::Tally::seen` ranks equal-weight tokens in `HashMap` order.
+
+Status: done 2026-10-20
+
 ### T136. `rtok stats`: whole-file native Reads that `outline` would have answered
 Gate for I-82 (deny a native Read of an indexed source file). §2: Read is 15 % of tool-result tokens and the eight largest results are all whole-file Reads of 38–68 K chars. I-82 is parked on exactly this missing number.
 Plan: in `src/measure/stats.rs`, a `read_whole` row: native `Read` calls with no `offset`/`limit`, on a path whose extension has a tree-sitter grammar in the graph plugin, result ≥ the outline threshold; bytes and share of Read bytes and of all tool-result bytes; how many were followed by an Edit of the same path within the guard window (those needed the body). Reuse the grammar list and read-tool detection — no copies.
@@ -10489,6 +10611,14 @@ Plan: in `src/agents/codex/mod.rs`, `insert_proxy` keeps the replaced value as a
 Check: `just check`.
 
 Result: install then remove over `model_provider = "openai"` gives the original file back byte for byte (`proxy_remove_restores_the_replaced_model_provider`, re-install over rtok's own value included); an edited `[model_providers.rtok]` stays with `model_provider` and a `leave …` note unless `--yes` (`proxy_remove_leaves_a_hand_edited_provider_table`). `judge_owned` itself does not fit: its "runs the rtok binary" gate calls every provider table "not rtok's", so the check uses its ownership half, `keep_edited`. A proxy URL changed in rtok's config since install also reads as "changed by you" on remove.
+
+Model: Claude Code / claude-opus-5-5
+
+### T912. Detect the Codex desktop app (`ChatGPT.app`)
+
+Creator-reported: `rtok agents update codex --force` lists only the CLI. The Codex desktop app ships as `/Applications/ChatGPT.app` (bundle id `com.openai.codex`; older builds `Codex.app`) and reads the same `~/.codex/config.toml`, but `VARIANTS` in `src/agents/codex/mod.rs` has only `Kind::Cli`.
+
+Result: `Codex` gets a `Kind::Desktop` variant "Codex App" probing `ChatGPT.app` and `Codex.app` in `/Applications` and `~/Applications`, and `shared() = true`, so one apply covers both (the second block prints "same files as above"). Fail-first test `the_desktop_variant_is_detected_from_its_app_and_shares_the_cli_files` (index out of bounds before the fix); `kinds("codex")` is `[Cli, Desktop]`; restart's expected-name table maps it to `ChatGPT`, so a running app is quit and reopened around a changing write like other desktop hosts (`--no-restart` skips it). `rtok doctor`'s MCP duplicate check walked every variant, so a shared host (Cursor on main, Codex now) reported each duplicate twice; a source is now deduplicated by host, file and key instead of by variant set (`a_shared_file_host_reports_a_duplicate_once`, 4 problems before the fix). Source rows in research §40.1; Desktop rows in `docs/agents.md` (en/ru/uk). Live check: `rtok agents update codex --force --dry-run --no-restart` from the branch build lists `Desktop: Codex App — /Applications/ChatGPT.app`.
 
 Model: Claude Code / claude-opus-5-5
 
@@ -13927,6 +14057,17 @@ Check: `same_original_bytes_in_two_files_keep_one_undo_copy_each`; the old cross
 
 Status: done 2026-10-12
 Model: Claude Code / claude-sonnet-5-5
+
+### T911. Config backups go to `.backup_configs/`
+
+The creator asked to rename the folder that holds undo copies of host configs from `_backup/` to `.backup_configs/`. New copies go only to `.backup_configs/`. A `_backup/` folder left by an older rtok stays rtok's own: junk never walks it as foreign copies, and `stale_backups` / the junk review still list its generations past `setup.backup_files`. Nothing is moved.
+
+Done: `rtok-agent-sdk` has `BACKUP_DIR = ".backup_configs"`, `LEGACY_BACKUP_DIR`, `BACKUP_DIRS` and `is_backup_dir`; `prune_backups`, `stale_backups`, `junk_kinds::found_items` and `junk_review::backup_items` accept both names. Docs (en/ru/uk), `default.toml`, the `doctor --yes` help, comments and trycmd snapshots name `.backup_configs/`.
+
+Check: `backup_writes_to_backup_configs_not_the_legacy_folder`, `stale_backups_lists_only_generations_past_the_cap` for both folders, `legacy_backup_generations_past_the_cap_are_listed_too`, and the junk walk skipping both folders.
+
+Status: done 2026-10-20
+Model: Claude Code / claude-opus-5-5
 
 ### T570. Fail SDK writes on symlink cycles instead of replacing a link
 

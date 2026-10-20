@@ -286,6 +286,7 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: WorktreeCmd) -> Result<
                 stale_lock: crate::store::parse_idle_from(&stale_lock, "--stale-lock")?,
                 now: std::time::SystemTime::now(),
                 live,
+                ended: crate::worktree::ops::ended_ids(&cfg),
                 pending: crate::worktree::ops::pending_paths(&cfg),
             };
             let outcomes = gc::run(&std::env::current_dir()?, &policy, yes)?;

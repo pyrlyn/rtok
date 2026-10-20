@@ -110,11 +110,11 @@ impl Which for RealWhich {
     }
 }
 
-/// The only way the doctor changes a file: a copy to `_backup/` first, then an atomic swap.
+/// The only way the doctor changes a file: a copy to `.backup_configs/` first, then an atomic swap.
 /// Both are the helpers `agents install` already writes host configs with, so a doctor fix
 /// and an install leave the same undo trail.
 pub trait Writer {
-    /// Copy `path` into its `_backup/` folder, keeping `keep` generations; `None` when an
+    /// Copy `path` into its `.backup_configs/` folder, keeping `keep` generations; `None` when an
     /// identical copy is already there.
     fn backup(&self, path: &Path, keep: usize) -> io::Result<Option<PathBuf>>;
     /// Replace `path` with `body` so a reader sees the old or the new file, never half of it.
