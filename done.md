@@ -1,5 +1,38 @@
 # rtok — completed tasks
 
+### T948. `worktree gc` idle age counts build caches
+
+Found 2026-10-20 with T949 and T950: 13 worktrees of this repo held ~134 GB, nearly all `target/`, and a `worktree gc` dry run removed one. `newest_until` folded the mtimes of files under tagged cache roots into the worktree's newest mtime, so a cargo or rust-analyzer build reset gc's 24 h idle clock without anyone touching the work.
+
+`newest_until` now skips every tagged cache root (`walk`'s `sources_only`), so gc's idle age reads source files only. `usage`, `worktree list` and `worktree clean`'s per-cache ages still count the caches.
+
+Check: `newest_until_leaves_tagged_caches_out` — an old source file and a new `target/` give the source's mtime, while `usage` still reports the cache's for the worktree and for the cache root.
+
+Status: done 2026-10-20
+Model: Claude Code / claude-opus-5-5
+
+### T949. `worktree gc` keeps a merged worktree whose locking agent has ended
+
+Bug. `gc::decide` (`src/worktree/gc.rs`) counted a git lock as held unless its agent was live (`Policy::live`) or the task was done (`Entry::done`, T453). The agent's `ended_at` in the store was never read, and nothing unlocks a worktree when its session ends (`git::unlock` runs only from `remove`, `migrate` and `claim`). A merged, clean worktree locked by an ended agent therefore waited `max(idle, stale_lock)`, 7 days by default. Seen: `rtok-plan-log-triage` (merged, agent `ended`) kept with "locked by Claude …", 4–18 GB of `target/` each. On the dry run after the fix it turned out to be a finished task (T453's `Verdict::Finished`): what kept it was T948's idle clock, which its `target/` kept resetting. This rule is for a merged worktree of an ended agent whose task is not marked finished.
+
+`gc::Policy` now takes the store's ended agent ids (`Store::ended_agent_ids`, `ops::ended_ids`), the way it takes the live ones; `worktree gc` and `agents junk` both pass them. A foreign lock naming an ended agent holds a merged, clean worktree only through the idle window, then `Verdict::Reclaim` with the note "agent <id> ended". A live agent's lock, and any lock on a dirty or unmerged worktree, still holds. An idle-but-not-ended agent (`rtok-t912`) is unchanged: it still waits out `stale_lock`.
+
+Check: `an_ended_agents_lock_holds_only_through_the_idle_window` — ended and idle → reclaim; ended but busy, unreadable, also live, dirty or unmerged, and a not-ended agent → keep.
+
+Status: done 2026-10-20
+Model: Claude Code / claude-opus-5-5
+
+### T950. `worktree gc` never drops the record of a vanished worktree under a foreign lock
+
+Bug. In `gc::decide` the `held` branch ran before `match entry.state`, so a `State::Stale` record (its directory is gone) under someone else's git lock got `keep("locked by …")` on every run and never reached `Verdict::DropRecord`. Seen: `_worktrees/completions-shared/apps/rtok-completions-shared` and `_worktrees/rtok-audit-20261018` (locked by OpenAI / GPT-6, 0 B, directories missing).
+
+Choice: after `stale_lock`, not at once. Git's lock exists for a worktree on a volume that is not mounted, so a fresh lock on a missing directory may still be in use. The record has no mtime, so the lock reason's date is its age. A vanished record under a foreign lock is dropped once that date is older than `stale_lock`, or at once when the lock's agent has ended (T949). An undated or bare lock still keeps it. `remove::detach` unlocks before it removes, so `--yes` drops only that admin entry, never a blanket `prune`.
+
+Check: `an_ended_agents_lock_holds_only_through_the_idle_window` — vanished with an ended agent or an old lock → drop-record; with a recent, undated or bare lock, or a recent lock of an agent that has not ended → keep. `gc_removes_only_finished_worktrees_and_never_opens_a_foreign_lock`: a vanished worktree under a September lock is dropped and its `.git/worktrees/<id>` is gone after `gc --yes`, one locked today stays.
+
+Status: done 2026-10-20
+Model: Claude Code / claude-opus-5-5
+
 ### T911. Count re-expands of the 8-character archive id
 
 T672 prints an 8-character archive id. `stats` still treated a pointer as shown only when the id was 12–64 hex chars, and it keyed the match on the first 12. An `… omitted (expand <8>)` line or a `[rtok <8>]` trailer was invisible, so the expand that followed it was not a re-expand. A full-id expand of that same archive missed it too.
