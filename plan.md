@@ -1358,3 +1358,5 @@ T905 (idea I-133): `podman ps` uses the `docker ps` formatter. Done (`done.md`).
 T909: archive and compress pointers print the 8-char archive id. Done (`done.md`).
 
 T910: hook, skill, handoff, MCP wrap and expand omitted markers print the 8-char archive id. Done (`done.md`).
+
+T911: `stats` counts a re-expand of the 8-char archive id pointers print. Done (`done.md`).

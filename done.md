@@ -1,5 +1,16 @@
 # rtok — completed tasks
 
+### T911. Count re-expands of the 8-character archive id
+
+T672 prints an 8-character archive id. `stats` still treated a pointer as shown only when the id was 12–64 hex chars, and it keyed the match on the first 12. An `… omitted (expand <8>)` line or a `[rtok <8>]` trailer was invisible, so the expand that followed it was not a re-expand. A full-id expand of that same archive missed it too.
+
+The matcher now accepts `names::MIN_PREFIX` (8) through 64 hex chars and keys on that prefix. A 7-character token still does not count. An older 12-character prefix still matches a full-id expand, because both keys are the first 8 characters.
+
+Check: `expand_right_after_counts_the_eight_char_id_pointers_print` — an 8-character trailer plus `rtok expand` of that prefix and an MCP expand of the full id count as two re-expands; a 7-character token and a different archive do not. `expand_right_after_counts_expands_of_shown_ids_only` still counts a 64-character id.
+
+Status: done 2026-10-20
+Model: Cursor / grok 4.7
+
 ### T910. Print the short archive id on the remaining expand pointers
 
 T672 shortened the command trailer. The hook budget marker, the skill deny, the guard duplicate line, the handoff brief, the MCP wrap trailer and the `rtok expand` omitted-line marker still printed the full 64-character id. `expand` already resolves an 8-character prefix. A prefix the caller already lengthened (9–63 hex chars) stays as sent. The measurement `ref_id` stays the full id. The hook marker is priced with an 8-character placeholder, the same length as the id it will print.
