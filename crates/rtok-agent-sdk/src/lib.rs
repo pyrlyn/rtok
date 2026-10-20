@@ -53,7 +53,7 @@ pub const OWNED_MARKER: &str = ".rtok-owned";
 pub struct Apply {
     /// Describe the change and write nothing.
     pub dry_run: bool,
-    /// Copy each file to `_backup/<name>.bak-<unix-seconds>` before the first write to it.
+    /// Copy each file to `.backup_configs/<name>.bak-<unix-seconds>` before the first write to it.
     pub backup: bool,
     /// Newest `.bak-*` generations kept per file after a backup; `0` keeps all.
     pub backup_files: usize,
@@ -74,9 +74,22 @@ impl Apply {
 }
 
 /// Directory name next to a host config that holds undo copies.
-pub const BACKUP_DIR: &str = "_backup";
+pub const BACKUP_DIR: &str = ".backup_configs";
 
-/// Copy `path` to `_backup/<name>.bak-<unix-seconds>` beside it. `None` when there is no file
+/// The folder rtok wrote its copies to before T911. Nothing is written there any more, but the
+/// copies a user already has stay rtok's own: listed by the cap, never taken for foreign junk.
+pub const LEGACY_BACKUP_DIR: &str = "_backup";
+
+/// Every folder name rtok's own copies may sit in, the current one first.
+pub const BACKUP_DIRS: [&str; 2] = [BACKUP_DIR, LEGACY_BACKUP_DIR];
+
+/// True when `dir` is named like a folder of rtok's own copies, current or legacy.
+pub fn is_backup_dir(dir: &Path) -> bool {
+    dir.file_name()
+        .is_some_and(|d| BACKUP_DIRS.iter().any(|b| d == *b))
+}
+
+/// Copy `path` to `.backup_configs/<name>.bak-<unix-seconds>` beside it. `None` when there is no file
 /// yet, or when a generation of that same name already holds the same bytes — a second install
 /// or uninstall of unchanged content is the same undo. Another file's copy never counts: its
 /// own retention cap could prune it, taking this file's only undo bytes along (T569).
@@ -97,15 +110,15 @@ pub fn backup(path: &Path, keep: usize) -> Result<Option<PathBuf>> {
     Ok(bak)
 }
 
-/// Delete the oldest `_backup/<name>.bak-<ts>[-<n>]` generations beside `kept` — a copy
+/// Delete the oldest `.backup_configs/<name>.bak-<ts>[-<n>]` generations beside `kept` — a copy
 /// [`backup`] returned — until `keep` remain. `kept` itself is never deleted; `0` keeps all.
-/// Only regular files with that exact name shape inside a `_backup` folder are candidates.
+/// Only regular files with that exact name shape inside a [`BACKUP_DIRS`] folder are candidates.
 /// Best effort: an fs error leaves the rest in place and is not reported.
 pub fn prune_backups(kept: &Path, keep: usize) {
     let (Some(dir), Some(file)) = (kept.parent(), kept.file_name().and_then(OsStr::to_str)) else {
         return;
     };
-    if keep == 0 || dir.file_name().is_none_or(|d| d != BACKUP_DIR) {
+    if keep == 0 || !is_backup_dir(dir) {
         return;
     }
     let Some((name, _)) = file.rsplit_once(".bak-") else {
@@ -120,11 +133,11 @@ pub fn prune_backups(kept: &Path, keep: usize) {
     }
 }
 
-/// The generations in the `_backup` folder `dir` that a cap of `keep` has no room for: per base
-/// name, all but the newest `keep`, oldest first. Read-only, the listing twin of
+/// The generations in the [`BACKUP_DIRS`] folder `dir` that a cap of `keep` has no room for: per
+/// base name, all but the newest `keep`, oldest first. Read-only, the listing twin of
 /// [`prune_backups`] for a cap lowered after the copies were taken; `0` keeps all.
 pub fn stale_backups(dir: &Path, keep: usize) -> Vec<PathBuf> {
-    if keep == 0 || dir.file_name().is_none_or(|d| d != BACKUP_DIR) {
+    if keep == 0 || !is_backup_dir(dir) {
         return Vec::new();
     }
     let mut names: Vec<String> = fs::read_dir(dir)
@@ -1303,10 +1316,13 @@ mod tests {
     }
 
     /// The listing twin of `prune_backups`: per base name all but the newest `keep`, foreign
-    /// names and other folders never, and `0` keeps every copy.
-    #[test]
-    fn stale_backups_lists_only_generations_past_the_cap() {
-        let dir = tmp("stale-backups").join(BACKUP_DIR);
+    /// names and other folders never, and `0` keeps every copy. A `_backup` folder an older rtok
+    /// left is listed the same way, or a lowered cap could never clean it (T911).
+    #[rstest]
+    fn stale_backups_lists_only_generations_past_the_cap(
+        #[values(".backup_configs", "_backup")] folder: &str,
+    ) {
+        let dir = tmp(&format!("stale-backups{folder}")).join(folder);
         fs::create_dir_all(&dir).unwrap();
         for f in [
             "a.json.bak-1",
@@ -1330,8 +1346,21 @@ mod tests {
         assert!(names(0).is_empty() && names(3).is_empty());
         assert!(
             stale_backups(dir.parent().unwrap(), 1).is_empty(),
-            "not a _backup folder"
+            "not a backup folder"
         );
+    }
+
+    /// The folder name is the user-visible contract (T911): a new copy goes to
+    /// `.backup_configs/`, never to the legacy `_backup/`.
+    #[test]
+    fn backup_writes_to_backup_configs_not_the_legacy_folder() {
+        let dir = tmp("backup-configs-dir");
+        let path = dir.join("settings.json");
+        fs::write(&path, "v0").unwrap();
+        let bak = backup(&path, 0).unwrap().expect("a copy");
+        assert_eq!(bak.parent().unwrap(), dir.join(".backup_configs"));
+        assert!(!dir.join("_backup").exists());
+        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
@@ -1513,7 +1542,7 @@ mod tests {
         );
         want.sort();
         assert_eq!(names(&backup), want);
-        // 0 keeps all; a copy outside a `_backup` folder prunes nothing.
+        // 0 keeps all; a copy outside a backup folder prunes nothing.
         prune_backups(&kept, 0);
         prune_backups(&dir.join("settings.json.bak-99"), 1);
         assert_eq!(names(&backup), want);

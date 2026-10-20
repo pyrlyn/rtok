@@ -526,7 +526,9 @@ fn doctor_fix_removes_only_the_broken_hook_after_a_backup() {
         "{after}"
     );
     assert!(!after.contains("gone.sh"), "{after}");
-    let backups: Vec<_> = fs::read_dir(claude.join("_backup")).unwrap().collect();
+    let backups: Vec<_> = fs::read_dir(claude.join(".backup_configs"))
+        .unwrap()
+        .collect();
     assert_eq!(backups.len(), 1);
     let bak = backups[0].as_ref().unwrap().path();
     assert_eq!(fs::read_to_string(bak).unwrap(), raw);

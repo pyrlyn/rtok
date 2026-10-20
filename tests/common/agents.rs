@@ -627,12 +627,12 @@ pub fn contains_hook(text: &str, event: &str) -> bool {
         .contains(&format!("rtok hook {event}"))
 }
 
-/// The copies of `path` in its sibling `_backup/` directory, oldest name first.
+/// The copies of `path` in its sibling `.backup_configs/` directory, oldest name first.
 pub fn backups(path: &Path) -> Vec<PathBuf> {
     let Some(parent) = path.parent() else {
         return Vec::new();
     };
-    let dir = parent.join("_backup");
+    let dir = parent.join(".backup_configs");
     if !dir.is_dir() {
         return Vec::new();
     }

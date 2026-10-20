@@ -13917,6 +13917,17 @@ Check: `same_original_bytes_in_two_files_keep_one_undo_copy_each`; the old cross
 Status: done 2026-10-12
 Model: Claude Code / claude-sonnet-5-5
 
+### T911. Config backups go to `.backup_configs/`
+
+The creator asked to rename the folder that holds undo copies of host configs from `_backup/` to `.backup_configs/`. New copies go only to `.backup_configs/`. A `_backup/` folder left by an older rtok stays rtok's own: junk never walks it as foreign copies, and `stale_backups` / the junk review still list its generations past `setup.backup_files`. Nothing is moved.
+
+Done: `rtok-agent-sdk` has `BACKUP_DIR = ".backup_configs"`, `LEGACY_BACKUP_DIR`, `BACKUP_DIRS` and `is_backup_dir`; `prune_backups`, `stale_backups`, `junk_kinds::found_items` and `junk_review::backup_items` accept both names. Docs (en/ru/uk), `default.toml`, the `doctor --yes` help, comments and trycmd snapshots name `.backup_configs/`.
+
+Check: `backup_writes_to_backup_configs_not_the_legacy_folder`, `stale_backups_lists_only_generations_past_the_cap` for both folders, `legacy_backup_generations_past_the_cap_are_listed_too`, and the junk walk skipping both folders.
+
+Status: done 2026-10-20
+Model: Claude Code / claude-opus-5-5
+
 ### T570. Fail SDK writes on symlink cycles instead of replacing a link
 
 Confirmed on Unix with actual SDK functions: [link_target](crates/rtok-agent-sdk/src/lib.rs#L327) stops after 40 unsuccessful resolution attempts and returns the still-unresolved symlink. [write](crates/rtok-agent-sdk/src/lib.rs#L309) then calls [write_atomic](crates/rtok-agent-sdk/src/lib.rs#L352), whose rename replaces that symlink with a regular file. For cycle-a -> cycle-b -> cycle-a, write with backups enabled succeeds, replaces cycle-a, and makes cycle-b point to the new content; backup was skipped because exists() follows the cycle and returns false. This violates the SDK promise to preserve dotfile-manager symlinks. Existing dangling-link support does not cover loops.
