@@ -9,6 +9,16 @@ Check: `cap_budget_gives_back_lines_so_the_marker_fits` — the printed id is 8 
 Status: done 2026-10-19
 Model: Cursor / grok 4.7
 
+### T527. A worktree claim does not stay held by an agent idle for days
+
+Do: an open claim whose agent has ended, or whose `last_seen` is older than gc's `--stale-lock` (default `7d`), no longer blocks `remove` or `adopt`. A holder seen inside that window still refuses, and the refusal names how long ago they were seen. A lock that names no agent, or an agent the store does not know, still holds, with the previous wording. `remove`, its dry run, and `adopt`/`claim` share that decision. The window is `gc::STALE_LOCK_DEFAULT`, the same string `--stale-lock` defaults to.
+
+Check: store tests for an ended holder, a holder idle past `stale_lock`, and a holder seen today; `just check`.
+
+Result: `Store::worktree_claim_holder` and `Holder::holds` cover the three store cases. `claim::held_against` is what `remove` (including preview) and `adopt`/`claim` consult; unit tests cover an ended holder, a holder idle past the window, a holder seen inside it (the refusal contains `holder seen`), and a lock the store cannot judge. `tests/worktree.rs` stayed green. This change touches `crates/`, so `just check` is the full gate and runs in CI.
+
+Status: done 2026-10-19
+
 ### T526. `worktree_list` and `search` when `rtok mcp` was started in the home directory
 
 T356 stops the graph from indexing `$HOME`. `worktree_list` and a pathless `search` still ran against the launch cwd, so a server started in the home directory failed with git's `fatal: not a git repository` or `no project root` until the client sent `roots/list` or the caller passed a path.
@@ -48,6 +58,7 @@ Check: docs prose matches behaviour; `just check`; no sync→Batch.
 Result: the three language copies, the architecture table and the proxy agent notes match the code. No product code changed.
 
 Status: done 2026-10-19
+
 
 ### T653. Exclude semantic-cache hits from provider-billed OTel usage
 

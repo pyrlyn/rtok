@@ -12,6 +12,71 @@ use anyhow::{Context, Result, bail};
 use super::{Owner, git, origin};
 use crate::store::{AgentDetail, Origin, Store};
 
+/// Someone else's lock on a worktree, and what the store last saw of its holder — what
+/// `remove` and `adopt` refuse with.
+#[derive(Debug)]
+pub struct Held {
+    /// The lock's `Owner::reason()`, or `"an unknown owner"`.
+    pub by: String,
+    /// Seconds since the store last saw the holder; `None` when it cannot say.
+    pub seen_ago: Option<i64>,
+    /// `false` once the holder is gone — an ended agent, or one unseen for gc's
+    /// `--stale-lock` (T418's window). Such a claim holds nothing.
+    pub holds: bool,
+}
+
+impl Held {
+    /// `locked by …`, with how long ago the holder was seen when the store can say.
+    pub fn locked(&self) -> String {
+        match self.seen_ago {
+            Some(secs) => format!(
+                "locked by {}, holder seen {} ago",
+                self.by,
+                crate::render::duration(secs)
+            ),
+            None => format!("locked by {}", self.by),
+        }
+    }
+}
+
+/// The lock `record` has against `(owner, agent)` — `None` when there is none, so the caller
+/// may take the worktree outright. Otherwise the holder it names, with [`Held::holds`] saying
+/// whether that claim still stands: a holder that has ended, or that the store has not seen
+/// for gc's `--stale-lock`, has abandoned it and blocks nothing, while a fresh holder still
+/// refuses and the refusal names how long ago they were seen.
+pub fn held_against(
+    record: &super::Record,
+    (owner, agent): (&str, &str),
+    store: Option<&Store>,
+) -> Option<Held> {
+    if record.claimable_by(owner, agent) {
+        return None;
+    }
+    let owned = record.owner();
+    let by = owned
+        .as_ref()
+        .map_or_else(|| "an unknown owner".to_string(), |o| o.reason());
+    // Only an agent-named claim can be judged gone. A lock that names no agent, or a holder
+    // the store has no row for, keeps holding — a lock outlives a lost store.
+    let holder = owned
+        .as_ref()
+        .and_then(|o| o.agent.as_deref())
+        .and_then(|id| store.and_then(|s| s.worktree_claim_holder(id).ok().flatten()));
+    let now = i64::try_from(crate::log::now()).unwrap_or(i64::MAX);
+    Some(match holder {
+        Some(holder) => Held {
+            by,
+            seen_ago: Some(holder.seen_ago(now)),
+            holds: holder.holds(now, super::gc::stale_lock()),
+        },
+        None => Held {
+            by,
+            seen_ago: None,
+            holds: true,
+        },
+    })
+}
+
 /// The calling agent: `--agent <prefix>` (must resolve), else `RTOK_AGENT_ID` (T283; an id
 /// the store does not know is ignored) or the host session's agent (T473), else none.
 pub fn caller(store: Option<&Store>, flag: Option<&str>) -> Result<Option<AgentDetail>> {
@@ -202,7 +267,8 @@ fn task_of(path: &Path, task: Option<&str>, record: &super::Record) -> Result<St
 }
 
 /// `rtok worktree claim` / `adopt` and MCP `worktree_adopt`: bind the linked worktree that
-/// holds `path` to `agent` when it has no lock or the lock is already theirs. The task is
+/// holds `path` to `agent` when it has no lock, the lock is already theirs, or the holder has
+/// ended or gone unseen past gc's `--stale-lock` (T527). The task is
 /// `task`, else the old lock's, else the branch's first `-` segment. With `spare_evicting` a
 /// worktree in a pool its host evicts (T289, [`origin::evicts`]) gets no git lock: the store
 /// claim alone binds it.
@@ -211,13 +277,11 @@ pub fn run(
     (owner, agent): (&str, &str),
     task: Option<&str>,
     spare_evicting: bool,
+    store: Option<&Store>,
 ) -> Result<Adopted> {
     let (main, record) = linked(path)?;
-    if !record.claimable_by(owner, agent) {
-        let held = record
-            .owner()
-            .map_or("an unknown owner".into(), |o| o.reason());
-        bail!("{} is locked by {held}; not taken", path.display());
+    if let Some(held) = held_against(&record, (owner, agent), store).filter(|h| h.holds) {
+        bail!("{} is {}; not taken", path.display(), held.locked());
     }
     let task = task_of(path, task, &record)?;
     let reason = Owner {
@@ -265,7 +329,7 @@ pub fn bind(
     auto_add: bool,
 ) -> Result<Adopted> {
     let owner = owner(owner_flag, Some(agent), store)?;
-    let done = run(path, (&owner, &agent.id), task, spare_evicting)?;
+    let done = run(path, (&owner, &agent.id), task, spare_evicting, store)?;
     remember(store, &done.path, &agent.id, &done.task);
     register_project(store, auto_add, &done.path, done.branch.as_deref());
     Ok(done)
@@ -327,4 +391,73 @@ pub fn bind_unattended(
         pending: true,
         branch: record.branch.clone(),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::store::Store;
+    use crate::worktree::Record;
+
+    fn store_with(last_seen: i64, ended: bool) -> (Store, String) {
+        let store = Store::open_in_memory().unwrap();
+        let host = store.host_id("claude").unwrap().unwrap();
+        let id = store
+            .register_agent(host, "s-held", None, None, None)
+            .unwrap();
+        store.set_agent_last_seen(&id, last_seen).unwrap();
+        if ended {
+            store.end_agent(&id, last_seen).unwrap();
+        }
+        (store, id)
+    }
+
+    fn locked(agent: &str) -> Record {
+        Record {
+            locked: Some(format!("claude | t1 | 2026-10-01 | agent {agent}")),
+            ..Record::default()
+        }
+    }
+
+    #[test]
+    fn an_ended_holder_does_not_block_adopt() {
+        let now = i64::try_from(crate::log::now()).unwrap();
+        let (store, id) = store_with(now, true);
+        let held = held_against(&locked(&id), ("other", "other-agent"), Some(&store)).unwrap();
+        assert!(!held.holds, "{held:?}");
+    }
+
+    #[test]
+    fn a_holder_idle_past_stale_lock_does_not_block_adopt() {
+        let (store, id) = store_with(0, false);
+        let held = held_against(&locked(&id), ("other", "other-agent"), Some(&store)).unwrap();
+        assert!(!held.holds, "{held:?}");
+    }
+
+    #[test]
+    fn a_holder_seen_today_refuses_and_names_when_they_were_seen() {
+        let now = i64::try_from(crate::log::now()).unwrap();
+        let (store, id) = store_with(now.saturating_sub(60), false);
+        let held = held_against(&locked(&id), ("other", "other-agent"), Some(&store)).unwrap();
+        assert!(held.holds, "{held:?}");
+        let text = held.locked();
+        assert!(
+            text.starts_with("locked by claude | t1 | 2026-10-01 | agent ")
+                && text.contains("holder seen")
+                && text.ends_with(" ago"),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn a_lock_the_store_cannot_judge_keeps_the_old_refusal() {
+        let record = Record {
+            locked: Some("Cursor / grok | t3 | 2026-09-22".into()),
+            ..Record::default()
+        };
+        let held = held_against(&record, ("other", "other-agent"), None).unwrap();
+        assert!(held.holds);
+        assert_eq!(held.seen_ago, None);
+        assert_eq!(held.locked(), "locked by Cursor / grok | t3 | 2026-09-22");
+    }
 }

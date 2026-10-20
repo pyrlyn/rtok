@@ -110,7 +110,7 @@ pub(super) enum WorktreeCmd {
         #[arg(long, default_value = "24h")]
         idle: String,
         /// Treat someone else's lock as abandoned once its merged, clean worktree is untouched this long (`30m`, `7d`)
-        #[arg(long, default_value = "7d")]
+        #[arg(long, default_value = crate::worktree::gc::STALE_LOCK_DEFAULT)]
         stale_lock: String,
         /// JSON instead of the table
         #[arg(long)]
