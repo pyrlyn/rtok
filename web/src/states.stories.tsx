@@ -26,3 +26,14 @@ export const OfflineScreenLight: Story = { ...OfflineScreen, globals: { theme: "
 export const OfflineReconnecting: Story = {
     render: () => <Offline connecting onReconnect={() => {}} />,
 };
+// T944: what replaces "connection lost" when the token is why `/ws` refused.
+export const OfflineTokenMissing: Story = {
+    render: () => <Offline connecting={false} onReconnect={() => {}} auth="missing" />,
+};
+export const OfflineTokenRejected: Story = {
+    render: () => <Offline connecting={false} onReconnect={() => {}} auth="rejected" />,
+};
+export const OfflineTokenMissingLight: Story = {
+    ...OfflineTokenMissing,
+    globals: { theme: "light" },
+};
