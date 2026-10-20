@@ -10492,6 +10492,14 @@ Result: install then remove over `model_provider = "openai"` gives the original 
 
 Model: Claude Code / claude-opus-5-5
 
+### T912. Detect the Codex desktop app (`ChatGPT.app`)
+
+Creator-reported: `rtok agents update codex --force` lists only the CLI. The Codex desktop app ships as `/Applications/ChatGPT.app` (bundle id `com.openai.codex`; older builds `Codex.app`) and reads the same `~/.codex/config.toml`, but `VARIANTS` in `src/agents/codex/mod.rs` has only `Kind::Cli`.
+
+Result: `Codex` gets a `Kind::Desktop` variant "Codex App" probing `ChatGPT.app` and `Codex.app` in `/Applications` and `~/Applications`, and `shared() = true`, so one apply covers both (the second block prints "same files as above"). Fail-first test `the_desktop_variant_is_detected_from_its_app_and_shares_the_cli_files` (index out of bounds before the fix); `kinds("codex")` is `[Cli, Desktop]`; restart's expected-name table maps it to `ChatGPT`, so a running app is quit and reopened around a changing write like other desktop hosts (`--no-restart` skips it). `rtok doctor`'s MCP duplicate check walked every variant, so a shared host (Cursor on main, Codex now) reported each duplicate twice; a source is now deduplicated by host, file and key instead of by variant set (`a_shared_file_host_reports_a_duplicate_once`, 4 problems before the fix). Source rows in research §40.1; Desktop rows in `docs/agents.md` (en/ru/uk). Live check: `rtok agents update codex --force --dry-run --no-restart` from the branch build lists `Desktop: Codex App — /Applications/ChatGPT.app`.
+
+Model: Claude Code / claude-opus-5-5
+
 ### T182. Junk cleanup: `rtok agents junk clear` and per-host junk map
 
 Creator request 2026-09-22 (voice): AirTalk/rtok agents must clean up junk after themselves. Add `rtok agents junk clear` that deletes temporary files, logs, and cache that rtok (and the work it leaves behind) owns. Separately, inventory where each connected host stores its own junk — which folders — by reading that host's documentation, and record the map so clear/cleanup can cover host-side scratch safely.
