@@ -128,7 +128,7 @@ Options:
       --json           JSON instead of the table
       --fix            Clean up broken hooks and duplicate hooks and MCP entries: a terminal gets a
                        checklist, a pipe the diff; --yes writes without asking
-      --yes            With --fix: write the changes (a copy goes to `_backup/` first)
+      --yes            With --fix: write the changes (a copy goes to `.backup_configs/` first)
       --dry-run        With --fix --yes: print the diffs and write nothing
       --stat           With --fix: stat lines and totals instead of the diffs (a dry run)
       --only <ONLY>    With --fix: limit it to these problems (repeatable; default: all of them)

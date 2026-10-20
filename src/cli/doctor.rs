@@ -68,7 +68,7 @@ pub(super) struct Args {
     /// Clean up broken hooks and duplicate hooks and MCP entries: a terminal gets a checklist, a pipe the diff; --yes writes without asking
     #[arg(long)]
     pub(super) fix: bool,
-    /// With --fix: write the changes (a copy goes to `_backup/` first)
+    /// With --fix: write the changes (a copy goes to `.backup_configs/` first)
     #[arg(long, requires = "fix")]
     pub(super) yes: bool,
     /// With --fix --yes: print the diffs and write nothing

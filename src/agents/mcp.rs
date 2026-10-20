@@ -406,7 +406,7 @@ impl Fs for Disk {
 }
 
 /// The disk [`run`] writes through: [`rtok_agent_sdk::write`] gives the atomic swap, the
-/// `_backup` copy and the dry run that every other host installer already has, so this crate's
+/// `.backup_configs` copy and the dry run that every other host installer already has, so this crate's
 /// `Fs::backup` stays the no-op default.
 struct Writer<'a>(&'a rtok_agent_sdk::Apply);
 

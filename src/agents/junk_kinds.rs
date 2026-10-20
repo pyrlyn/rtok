@@ -146,8 +146,9 @@ fn is_index(name: &str, kind: &FileType) -> bool {
     journal || (kind.is_dir() && name == ".rust-analyzer")
 }
 
-/// An editor's or a tool's copy of a file (`*.bak`, `*.bak-<ts>`, `*~`); rtok's own `_backup`
-/// generations are `junk_review::backup_items`, never walked here.
+/// An editor's or a tool's copy of a file (`*.bak`, `*.bak-<ts>`, `*~`); rtok's own
+/// `.backup_configs` (and legacy `_backup`) generations are `junk_review::backup_items`, never
+/// walked here.
 fn is_backup(name: &str, kind: &FileType) -> bool {
     kind.is_file() && (name.ends_with(".bak") || name.contains(".bak-") || name.ends_with('~'))
 }
@@ -216,10 +217,7 @@ fn swap_reason(path: &Path) -> Option<String> {
 /// "not documented". Package-manager lockfiles are not junk and are not listed.
 pub fn found_items(roots: &[PathBuf], limit: Duration) -> Vec<Item> {
     let deadline = Instant::now() + limit;
-    let ours = |p: &Path| {
-        p.file_name()
-            .is_some_and(|n| n == rtok_agent_sdk::BACKUP_DIR)
-    };
+    let ours = |p: &Path| rtok_agent_sdk::is_backup_dir(p);
     let finds = roots
         .iter()
         .flat_map(|r| find(r, deadline, &ours, &lock_or_swap));
@@ -566,6 +564,8 @@ mod tests {
         let root = tmp_dir("kinds-backups");
         put(&root.join("notes.txt~"), b"x");
         put(&root.join("a/settings.json.bak"), b"x");
+        put(&root.join(".backup_configs/settings.json.bak-1"), b"x");
+        // An older rtok's folder (T911) is still ours, not a foreign copy.
         put(&root.join("_backup/settings.json.bak-1"), b"x");
 
         let items = found_items(std::slice::from_ref(&root), LIMIT);

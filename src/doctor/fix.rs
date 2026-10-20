@@ -604,7 +604,7 @@ pub(crate) mod tests {
             if self.fail_backup {
                 return Err(io::Error::from(io::ErrorKind::PermissionDenied));
             }
-            let bak = PathBuf::from(format!("/h/_backup/{}.bak", path.display()));
+            let bak = PathBuf::from(format!("/h/.backup_configs/{}.bak", path.display()));
             self.backups.borrow_mut().push(bak.clone());
             Ok(Some(bak))
         }
