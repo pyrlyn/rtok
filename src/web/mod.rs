@@ -706,8 +706,8 @@ fn import_reply(req: model::ImportRequest) -> String {
     match req {}
 }
 
-/// T331.12: the `doctor --fix` checklist for the page. The upgrade's origin guard covers it like
-/// `set`; only `apply` writes, through the engine's backup and refusals.
+/// T331.12: the `doctor --fix` checklist for the page. The upgrade's token and origin checks
+/// (S2) cover it like `set`; only `apply` writes, through the engine's backup and refusals.
 fn doctor_reply(state: &DashState, r: &DoctorRequest) -> String {
     let cfg = state
         .cfg
@@ -729,7 +729,7 @@ fn doctor_reply(state: &DashState, r: &DoctorRequest) -> String {
     .to_json()
 }
 
-/// T330.7: "clear safe junk" for the Hosts page. The upgrade's origin guard covers it like `set`;
+/// T330.7: "clear safe junk" for the Hosts page. The upgrade's token and origin checks cover it;
 /// only `apply` removes, through the same plan, re-checks and refusals as `agents junk clear`.
 fn junk_reply(state: &DashState, r: &JunkRequest) -> String {
     let cfg = state
