@@ -1160,7 +1160,7 @@ pub fn collect(dir: &Path, since: Duration, plugin: &str, replay: Replay) -> Res
             report.malformed += 1;
             continue;
         };
-        report.compact += compact_events(&p);
+        report.compact += parsed.compactions.len() as u64;
         if let Some(stem) = p.file_stem().and_then(OsStr::to_str) {
             report.session_stems.push(stem.to_string());
         }
@@ -1200,20 +1200,6 @@ pub fn collect(dir: &Path, since: Duration, plugin: &str, replay: Replay) -> Res
         report.repeat_reads.subagent.bytes += sa.reread_bytes;
     }
     Ok(report)
-}
-
-fn compact_events(path: &Path) -> u64 {
-    let Ok(text) = std::fs::read_to_string(path) else {
-        return 0;
-    };
-    text.lines().filter(|line| is_compact_line(line)).count() as u64
-}
-
-fn is_compact_line(line: &str) -> bool {
-    let Ok(v) = serde_json::from_str::<Value>(line) else {
-        return false;
-    };
-    super::jsonl::is_compact_boundary(&v)
 }
 
 fn fold_session(
@@ -2852,6 +2838,28 @@ mod tests {
             replay_ctt(&content, tokens, 5, rp),
             tokens * 2 + pointer * 3
         );
+    }
+
+    /// T946: the count comes from the single `parse_path` pass, so one undecodable line no
+    /// longer zeroes the file's compactions the way the old `read_to_string` re-read did.
+    #[test]
+    fn compactions_survive_a_non_utf8_line() {
+        let dir = tempfile_dir();
+        let mut body = Vec::new();
+        body.extend_from_slice(b"{\"type\":\"system\",\"subtype\":\"compact_boundary\"}\n");
+        body.extend_from_slice(b"{\"type\":\"user\",\"message\":\"\xff\xfe\"}\n");
+        body.extend_from_slice(b"  {\"type\":\"system\",\"subtype\":\"compact_boundary\"}  \n");
+        body.extend_from_slice(b"{\"type\":\"assistant\",\"message\":{\"content\":\"ok\"}}\n");
+        std::fs::write(dir.join("s.jsonl"), body).unwrap();
+        let r = collect(
+            &dir,
+            Duration::from_secs(86400 * 60),
+            "",
+            Replay::from_cfg(&Config::default()),
+        )
+        .unwrap();
+        assert_eq!((r.sessions, r.compact, r.malformed), (1, 2, 1));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
