@@ -10667,6 +10667,25 @@ Result: `Codex` gets a `Kind::Desktop` variant "Codex App" probing `ChatGPT.app`
 
 Model: Claude Code / claude-opus-5-5
 
+### T932. Codex and Cursor MCP entries use a bare `rtok` command and fail to spawn
+
+`~/.codex/config.toml` has `[mcp_servers.rtok] command = "rtok"`, and `~/.cursor/mcp.json` the
+same. Codex desktop logged `MCP client for rtok failed to start: No such file or directory
+(os error 2)` 14 times on 2026-10-18 (12:58–17:30 UTC). The plugin hooks already fall back
+(`command -v rtok || $HOME/.ketch/bin/rtok`); the MCP entries do not. Related: T275 (MCP entry
+removed on update).
+
+Done when: the installers write an MCP command that resolves without the GUI app's PATH (an
+absolute path to the installed binary, kept current on update), and doctor flags an MCP
+command that does not resolve.
+
+Check: install tests for Codex and Cursor asserting the written command is absolute and
+exists; a doctor test with an unresolvable command; `just check`.
+
+Result: `rtok_mcp_command()` (`src/agents/mod.rs`) names the `rtok` found on PATH, else `~/.ketch/bin/rtok` (ketch re-points that link on upgrade), else the old bare name; every MCP writer uses it (Codex, Cursor, Claude CLI, Gemini, Copilot, Devin, Kimi, OMP, VS Code, Windsurf, Zed, Grok, Reasonix, OpenCode/MiMo, Continue, Goose and the rest), hook lines keep `rtok_command()`. Codex repoints an older bare `command = "rtok"` and leaves a path the user chose; JSON hosts already rewrite on update. `rtok doctor` and `agents list` read an MCP entry as stale when its command is an absolute path to nothing, or a bare name while an absolute `rtok` exists. Windows is unchanged.
+
+Model: Claude Code / claude-sonnet-5-5
+
 ### T182. Junk cleanup: `rtok agents junk clear` and per-host junk map
 
 Creator request 2026-09-22 (voice): AirTalk/rtok agents must clean up junk after themselves. Add `rtok agents junk clear` that deletes temporary files, logs, and cache that rtok (and the work it leaves behind) owns. Separately, inventory where each connected host stores its own junk — which folders — by reading that host's documentation, and record the map so clear/cleanup can cover host-side scratch safely.

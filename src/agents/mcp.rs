@@ -328,7 +328,10 @@ pub(crate) fn rows(agent: &dyn super::Agent, cfg: &Config, kind: Kind) -> Vec<Mc
     if surfaces.is_empty() {
         return own_row(agent, cfg, kind).into_iter().collect();
     }
-    surfaces.iter().map(|s| status(&Disk, s)).collect()
+    surfaces
+        .iter()
+        .map(|s| spawnable(status(&Disk, s), s))
+        .collect()
 }
 
 /// The one row of a host that writes an MCP entry in a shape `rtok_mcp` does not parse
@@ -352,6 +355,22 @@ fn own_row(agent: &dyn super::Agent, cfg: &Config, kind: Kind) -> Option<McpRow>
         diff: None,
         plugin: None,
     })
+}
+
+/// T932: an entry that runs rtok can still name a command its host cannot spawn, so a present
+/// row on the real disk is stale once its command does not resolve. Apart from [`status`] because
+/// it looks at the machine's files, which a virtual config cannot stand in for.
+fn spawnable(mut row: McpRow, s: &McpSurface) -> McpRow {
+    if row.entry != EntryState::Present {
+        return row;
+    }
+    if let Ok(Some(have)) = rtok_mcp::config::read_entry(&Disk, &s.spec)
+        && let Some(why) = unresolved_command(&argv_of(&have))
+    {
+        row.entry = EntryState::Stale;
+        row.diff = Some(why);
+    }
+    row
 }
 
 /// `rtok doctor`'s MCP check (T275 Fix 5, D33): install and update always write rtok's entry
@@ -515,10 +534,8 @@ pub(crate) fn json_spec(
     }
 }
 
-/// `None` when `have` runs `rtok mcp` for `host` (any path to the rtok binary; argv as `command`
-/// plus `args`, or as one `command` array), with `--host <host>` or, as written before T283.2,
-/// without it; otherwise what it runs instead.
-fn stale_diff(have: &Value, host: &str) -> Option<String> {
+/// The argv an entry runs: `command` plus `args`, or one `command` array.
+fn argv_of(have: &Value) -> Vec<String> {
     let strs = |v: Option<&Value>| -> Vec<String> {
         v.and_then(Value::as_array)
             .map(|a| {
@@ -529,10 +546,34 @@ fn stale_diff(have: &Value, host: &str) -> Option<String> {
             })
             .unwrap_or_default()
     };
-    let argv = match have.get("command") {
+    match have.get("command") {
         Some(Value::String(c)) => [vec![c.clone()], strs(have.get("args"))].concat(),
         c => strs(c),
-    };
+    }
+}
+
+/// Why a host cannot spawn `argv[0]` (T932), `None` when it can. A bare name resolves through
+/// the PATH of whatever starts the host, and a GUI app has none of the shell's, so off Windows
+/// only an absolute path to an existing file counts. A bare name is flagged only while an
+/// install update can write something better; with no `rtok` to point at, the line would be
+/// noise. Windows keeps the user-wide PATH.
+fn unresolved_command(argv: &[String]) -> Option<String> {
+    let bin = argv.first()?;
+    let path = Path::new(bin);
+    if path.is_absolute() {
+        return (!path.is_file()).then(|| format!("runs `{bin}`, which does not exist"));
+    }
+    let fixable = Path::new(&super::rtok_mcp_command()).is_absolute();
+    (!cfg!(windows) && fixable).then(|| {
+        format!("runs bare `{bin}`, which a GUI host cannot find without the shell's PATH")
+    })
+}
+
+/// `None` when `have` runs `rtok mcp` for `host` (any path to the rtok binary; argv as `command`
+/// plus `args`, or as one `command` array), with `--host <host>` or, as written before T283.2,
+/// without it; otherwise what it runs instead.
+fn stale_diff(have: &Value, host: &str) -> Option<String> {
+    let argv = argv_of(have);
     let want_args = [RTOK.args, &["--host", host]].concat();
     let ours = argv.split_first().is_some_and(|(bin, args)| {
         let args: Vec<&str> = args.iter().map(String::as_str).collect();
@@ -1090,7 +1131,24 @@ mod tests {
         assert!(lines[0].contains("runs `rtok mcp --extra`"), "{lines:?}");
         assert!(lines[0].ends_with(fix), "{lines:?}");
 
-        write(serde_json::json!({"rtok": {"command": "rtok", "args": ["mcp"]}}));
+        // T932: a command a GUI host cannot spawn is stale even though it runs `rtok mcp`.
+        let installed = super::super::fake_installed_rtok();
+        for (command, why) in [
+            ("rtok", "runs bare `rtok`"),
+            (
+                "/nowhere/bin/rtok",
+                "`/nowhere/bin/rtok`, which does not exist",
+            ),
+        ] {
+            write(serde_json::json!({"rtok": {"command": command, "args": ["mcp"]}}));
+            let lines = warn(&cfg);
+            assert_eq!(lines.len(), 1, "{lines:?}");
+            assert!(lines[0].starts_with("stale: "), "{lines:?}");
+            assert!(lines[0].contains(why), "{lines:?}");
+            assert!(lines[0].ends_with(fix), "{lines:?}");
+        }
+
+        write(serde_json::json!({"rtok": {"command": installed, "args": ["mcp"]}}));
         assert!(warn(&cfg).is_empty());
 
         write(serde_json::json!({}));

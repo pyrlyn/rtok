@@ -23,7 +23,7 @@ use rtok_agent_sdk::NO_CHANGES;
 use serde_json::{Value, json};
 use toml_edit::{ArrayOfTables, DocumentMut, Item, Table, value};
 
-use super::{Agent, Kind, Mode, Support, Variant, apply, load_toml, rtok_command};
+use super::{Agent, Kind, Mode, Support, Variant, apply, load_toml, rtok_mcp_command};
 use crate::config::Config;
 
 /// Reasonix: the `reasonix` CLI (`dsnix` is its shim). The desktop app shares the same config
@@ -74,7 +74,7 @@ pub fn register_mcp(cfg: &Config) -> Result<String> {
     if plugins(&doc)?.is_some_and(|a| a.iter().any(is_rtok_table)) {
         return Ok(NO_CHANGES.into());
     }
-    let cmd = rtok_command();
+    let cmd = rtok_mcp_command();
     let mut entry = Table::new();
     entry.insert("name", value(NAME));
     entry.insert("command", value(&cmd));
@@ -207,7 +207,7 @@ mod tests {
             .filter(|t| is_rtok_table(t))
             .collect();
         assert_eq!(added.len(), 1, "{raw}");
-        assert_eq!(added[0]["command"].as_str().unwrap(), rtok_command());
+        assert_eq!(added[0]["command"].as_str().unwrap(), rtok_mcp_command());
         let args: Vec<_> = added[0]["args"]
             .as_array()
             .unwrap()

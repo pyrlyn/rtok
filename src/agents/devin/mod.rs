@@ -243,7 +243,7 @@ fn mcp_entry(cmd: &str) -> Value {
 }
 
 pub fn register_mcp(cfg: &Config) -> Result<String> {
-    let cmd = super::rtok_command();
+    let cmd = super::rtok_mcp_command();
     rtok_agent_sdk::register_server(
         &apply(cfg),
         &mcp_path(cfg),
