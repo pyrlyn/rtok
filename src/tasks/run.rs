@@ -74,6 +74,29 @@ fn checkout_of(cwd: &Path, what: &str) -> Result<PathBuf> {
         .with_context(|| format!("{what}: not inside a git checkout"))
 }
 
+/// T952.2: close `task` in the project of `main` when its task store has it active, after the
+/// worktree's PR merged. `None` for an id it does not know (a `plan.md` project: the `done.md`
+/// move rode in the PR) or one already closed. The disk adapter writes in `main`, as
+/// `rtok task status <id> done` run there would.
+pub fn close_if_active(
+    store: &Store,
+    cfg: &crate::config::Tasks,
+    main: &Path,
+    task: &str,
+) -> Result<Option<String>> {
+    let Ok(id) = task.parse::<TaskId>() else {
+        return Ok(None);
+    };
+    let project = Project::open(cfg, main)?;
+    match project.adapter().get(&id)? {
+        Some(t) if t.status.is_active() => {
+            project.status(store, &id, Some(Status::Done), false, None)?;
+            Ok(Some(id.to_string()))
+        }
+        _ => Ok(None),
+    }
+}
+
 impl Project {
     /// The project `cwd` belongs to, with the adapter `[tasks]` names.
     pub fn open(cfg: &crate::config::Tasks, cwd: &Path) -> Result<Self> {

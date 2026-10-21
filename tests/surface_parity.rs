@@ -1020,6 +1020,10 @@ const EXEMPT: &[(&str, &str)] = &[
         "removes one git worktree, its merged branch and its claim row (T286)",
     ),
     (
+        "worktree finish",
+        "commits, pushes, opens a PR and unlocks one git worktree (T952.1 MCP worktree_finish)",
+    ),
+    (
         "worktree clean",
         "deletes tagged build caches on the checkout's file system, not the store (T152)",
     ),

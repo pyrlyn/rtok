@@ -384,6 +384,7 @@ diesel::table! {
 }
 
 // 0025 (T285): the agent a worktree is bound to; the git lock reason is the source of truth.
+// 0051 (T952.2): `finished_at`, when `rtok worktree finish` handed it to review.
 diesel::table! {
     worktree_claims (path) {
         path -> Text,
@@ -391,6 +392,7 @@ diesel::table! {
         task -> Text,
         claimed_at -> BigInt,
         released_at -> Nullable<BigInt>,
+        finished_at -> Nullable<BigInt>,
     }
 }
 
