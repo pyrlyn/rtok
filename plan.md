@@ -252,7 +252,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T385.9 | in progress | P3 | 5 | 70% | Claude Code / claude-opus-5-5 |
 | T385.9.3 | todo | P3 | 2 | 10% | |
 | T394 | todo | P2 | 2 | 20% | |
-| T395 | todo | P3 | 2 | 20% | |
+| T395 | todo | P3 | 2 | 30% | |
 | T396 | todo | P3 | 2 | 90% | |
 | T398 | todo | P3 | 1 | 30% | |
 | T413 | todo | P2 | 3 | 0% | |
@@ -1032,6 +1032,8 @@ From `research.md` §2 "OpenTelemetry export (Gate P16)": still open is one real
 Done means: the `docs/otel.md` recipe for each backend is run with the proxy in front of a live session; the trace shape and `rtok_tokens_total` are recorded in §2 with a date, or the clause is dropped explicitly with the reason.
 
 Check: dated rows in §2 for both backends, or the dropped clause in `roadmap.md`.
+
+Progress (2026-10-21, `research.md` §2 "T395 status"): not run. This agent session's permissions refused `docker` and `colima`, so self-hosted SigNoz could not start. There is no SigNoz Cloud or Maple key, and agents never run a live host session behind the proxy (T280). The offline shape (hook, MCP and proxy rows → `invoke_agent` root plus `chat {model}`) is already asserted by `tests/otel.rs` `every_row_posts_once_and_the_marks_advance`. The orphaned P18 pointer in `roadmap.md` P16 now names T395. A re-run protocol is in §2. Left: the creator runs it once per backend and records the rows, or drops the clause with a reason.
 
 ### T396. Verify the usage readers against real files
 
