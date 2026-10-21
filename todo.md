@@ -18,8 +18,6 @@
 - T395. One real session as one OpenTelemetry trace in SigNoz and Maple
 - T396. Verify the usage readers against real files
 - T398. Probe editors on a `worktree.useRelativePaths` worktree
-- T414. Web dashboard restyle on the brand pack, built from `brand/` sources
-- T414.7. Re-shoot `web/screenshots/`; close the web admin gap in `brand/`
 - T416. Shared `change-preview` crate for dry-run output
 - T428. SessionStart hook back under the 10 ms budget
 - T436.4. Spinner on `agents install/update` through T276's `ProgressRunner`
