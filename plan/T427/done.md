@@ -1,0 +1,7 @@
+`web/src/brandSources.test.ts` hashes every file in `web/` and `brand/` (about 400 files, 5 MB). Run alone it takes about 2 s; in the parallel unit suite on a loaded host it took 16 to 68 s and failed the 5 s timeout. A copy of a brand file always has the same size, so only files whose size matches some brand file need a hash.
+
+Plan: 1) In `brandSources.test.ts`, stat every file first; hash a `web/` file only when its size is among the brand file sizes, and hash a brand file only when its size occurs in `web/`. 2) Show the guard still bites: copy a brand file into `web/src` locally, see the test fail, remove it. 3) Time the test alone before and after.
+
+Check: `just spa-test`, `just js`; the test fails on a planted copy; its own time drops well under the 5 s timeout.
+
+Result: the test stats every brand file, groups them by size, and hashes a `web/` file (and its same-size brand twins) only when a brand file shares its size. With the full brand pack installed (`brand/node_modules`, 208 files) the test takes 10 to 21 ms at load average 110 to 150, against 310 ms before (warm cache; up to 68 s in the parallel suite on a loaded host). A copy of `brand/illustrations/offline.svg` planted in `web/src` still fails it (`src/planted-copy.svg = illustrations/offline.svg`). `just js` green; `just spa-test` 182 of 183, the one failure the load-bound `app.test.tsx` nav test (5.04 s against the 5 s timeout), which this task does not touch.

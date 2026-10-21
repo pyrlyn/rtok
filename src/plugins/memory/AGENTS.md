@@ -71,4 +71,4 @@ if split out per T2.5.
 **Schema** lives in `crates/rtok-store/migrations/0001_schema_v1/up.sql` (`notes`, `notes_fts` + triggers). Changing
 it means a new migration directory, never an edit to `0001_schema_v1/up.sql`.
 
-**Checks**: `plan.md` T2.5, T6.1–T6.3.
+**Checks**: `plan/` T2.5, T6.1–T6.3.

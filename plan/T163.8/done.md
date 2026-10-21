@@ -1,0 +1,13 @@
+`purge_calls_older_than` and `run_retention` (dynamic `DELETE`s, archive path collection) and the remaining test sites (`purge_drops_old_calls…`, `retention_keeps_plugin_archives…`, `archive_in_session…`), then T163's full Check. Last slice: it runs after T163.3–T163.7 and removes `use diesel::sql_query` from `mod.rs`; it runs after T163.9 too.
+
+Execution plan: (1) rewrite with `diesel::delete(...).filter(...)` and typed updates inside the existing transaction; (2) T163's `grep` over `src` finds nothing; (3) hook path still ≤ 10 ms (`rtok bench` or the existing timing test); (4) move T163 and all its slices to `done.md`.
+
+Check: T163's Check.
+
+Progress: `purge_related`, `delete_old_calls` and `purge_archive` are `diesel::delete` / `diesel::update`. `doomed_archives` is `sql_ext::DoomedArchives` (UNION of two archive columns plus three `NOT EXISTS` — no typed form). `sql_ext` no longer calls `sql_query`. Store tests (59) and clippy `-D warnings` on `--lib --tests` passed.
+
+Progress (2026-09-26, Cursor / grok 4.7): removed `batch_execute` / `sql_query` from `purge_waits_out_a_concurrent_writer` and `archive_in_session_query_plan_uses_the_session_ts_index`. Those two use `sql_ext::BeginImmediate` / `Commit` / `ExplainArchiveInSessionPlan` (`QueryFragment`; Diesel has no statement form for `BEGIN IMMEDIATE` or `EXPLAIN QUERY PLAN`) plus the existing `busy_timeout` / `pragma_journal_wal`. Still open: T163's grep. Hits left are `migrate()` (T163.4), `db_before_migration` / migration / schema-drift tests, `into_sql::<Bool>()`, and `exec_pragma`'s WAL `batch_execute` (a prepared execute leaves `journal_mode` at `delete`). Do not close T163.8 until the parent grep is clean.
+
+Progress (2026-09-26, Cursor / grok 4.7): three store tests no longer use raw SQL — `migration_0020_drops_pre_existing_duplicate_notes` and `migration_0021_keeps_old_rows_and_records_a_keyed_call_once` seed through `sql_ext` `QueryFragment`s (one statement each); `schema_0002_seeds_hosts_and_rejects_bad_fk` uses `CountCoreV2Tables` for `sqlite_master`, typed `hosts::table.count()`, and typed `sessions` insert. Card stays open: parent grep still hits `migrate()` and WAL `batch_execute`.
+
+Result (2026-09-26, Cursor / grok 4.7): combined slice branches `t163.4-migration-bridge`, `t163-wal-pragma`, `t163.8-test-lock`, `t163-schema-drift`, and `t163.8-migration-fixtures` onto `t163-grep-clean` from `origin/main`. `git grep -nE 'sql_query|sql::<|batch_execute' -- src` is empty. `open_on_disk_uses_wal`, `migration_is_idempotent`, `legacy_schema_migrations_are_not_rerun`, `schema_matches_the_migrated_tables_and_snapshot`, and `cargo clippy -p rtok --lib --tests -- -D warnings` passed. Slice PRs left open (not force-pushed, not merged here).

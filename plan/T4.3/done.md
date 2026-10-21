@@ -1,0 +1,4 @@
+**T4.3 `read` map/signatures via tree-sitter-tags** · T4.2 · `src/plugins/read/outline.rs`
+Do: features `lang-rust, lang-ts, lang-js, lang-python, lang-dart, lang-c, lang-go` (default all); `mode=map` → definitions (kind, name, line) from each grammar's tags query; `mode=signatures` → definition lines verbatim. Unknown language → fall back to `lines 1-60` + note.
+Check: `read(src/main.rs, mode=map)` on this crate lists `fn main`; golden tests per language on 20-line fixtures.
+Status: done 2026-09-02 · Check: `map_src_main_lists_fn_main` contains `fn main`; `golden_per_language` (rs/ts/js/py/dart/c/go) plus `unknown_language_falls_back`. `make check` green. Deviation: also `mod.rs` (mode dispatch, MCP description), `Cargo.toml` (optional grammars). Fixtures are padded to 20 lines in-test rather than separate files. New deps: `tree-sitter`/`tree-sitter-tags` (parser + definition tags); `tree-sitter-{rust,javascript,typescript,python,c,go,dart}` behind `lang-*`.

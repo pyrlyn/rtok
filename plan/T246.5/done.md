@@ -1,0 +1,11 @@
+T246.1–T246.6 (T246.1–T246.4 and T246.6 done), creator request 2026-09-24: removing rtok (`agents remove <host>`, and the plugin-supersedes strips of T243) must take back only what rtok itself wrote; anything the user changed in it is asked about — remove or keep. Today `rtok_agent_sdk::unregister_server` drops any entry named `rtok` whatever its command, and `skill::sync` removes a marked rtok skill even after the user edited it. Hooks already go through `strip_ours` + `is_rtok_bin`, but a user-edited rtok hook (other matcher, timeout, extra args) goes silently too.
+
+Outcomes, one ownership check per kind: **ours, unchanged** (equal to what the installer writes now, any rtok binary path counting as the same): remove; **ours, changed by the user** (it runs rtok, but differs): ask `? remove <what> in <file>? you changed it [y/N]` through a new SDK prompt whose default (Enter, EOF) is keep; `--yes` removes; no terminal keeps and reports `leave … (changed by you; remove by hand)`; **not ours** (named `rtok` but not running rtok): leave it and report `leave … (not rtok's; remove by hand)`. A `leave` report writes nothing. Split below so each PR stays under 10 files.
+
+zed (JSONC editor) and grok (TOML) take the T246.1 ownership check on their own writers; then the name-only `rtok_agent_sdk::unregister_server` goes private or goes, so no remove path drops an entry by name alone.
+
+Check: `tests/agent_remove.rs` leaves an edited zed and grok entry without `--yes`; `just check` green.
+
+Result: zed (JSONC) and grok (TOML) run the T246.1 ownership check on their own values through a new `rtok_agent_sdk::judge_owned`, which `unregister_owned` now uses too, so the check exists once. Grok converts its `[mcp_servers.rtok]` table to JSON for it. `unregister_server` is private: no remove path drops an entry by name alone. Tests: `zed_remove_asks_before_taking_an_edited_mcp_entry` and `grok_remove_asks_before_taking_an_edited_mcp_entry` (an edited entry stays without `--yes`, goes with it; a foreign `rtok` entry stays); unchanged entries are still removed without `--yes` (`agents_install::remove_twice_says_no_changes_and_the_second_takes_no_backup`).
+
+Model: Claude Code / opus-5-5 (first draft, abandoned uncommitted in another session's worktree), claude-sonnet-5 (finished), claude-opus-5-5 (review)

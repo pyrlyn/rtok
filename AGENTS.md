@@ -2,9 +2,9 @@
 
 **What.** One Rust binary cutting tokens for coding agents; every method is a plugin. Surfaces: `rtok hook <event>`, `rtok mcp`, `rtok proxy`.
 
-**Read first.** `plan.md`, `architecture.md`, `research.md`. Also `roadmap.md`, `ideas.md` (never implement), `done.md`. Per plugin: `src/plugins/<id>/AGENTS.md`. No unplanned work.
+**Read first.** `plan/README.md`, `architecture.md`, `research.md`. Also `roadmap.md`, `ideas.md` (never implement). Per plugin: `src/plugins/<id>/AGENTS.md`. No unplanned work.
 
-**Workflow.** Claim a `todo` row in `plan.md` first. Finish: `just check`, commit `<id>: <title>`, move task to `done.md`.
+**Tasks.** One folder per task: `plan/<id>/task.md` (front matter: status, priority, complexity, readiness, agent). `plan/<id>/done.md` = closed. Claim a `todo` task first. Finish: `just check`, commit `<id>: <title>`, write `done.md`.
 
 **Rules.** Fail open: hook exits 0 in ≤10 ms unmodified. Lossless: `expand <id>`. No `Measurement` row = no saving claim. Injections budgeted, byte-stable. PostToolUse adds context only. New dep: one-line reason. No raw SQL (Diesel). No duplicated logic. Skills only in `skills/`, never bundled (T234). New plugins/hosts obey D21. Own TOML: schema from types, one config module (T238). Host configs: no schema; check only our entry, rest byte-for-byte. No real agents in tests (debug only).
 

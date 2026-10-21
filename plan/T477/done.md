@@ -1,0 +1,12 @@
+T329 plans web actions to re-index ("Index now") and remove a project on the graph page; D27 (amended 2026-10-10, T346) requires the same actions in the TUI. Depends on the T329 subtask that adds those web actions and on T476 (done: the TUI project keys, picker and confirm stage live in `src/tui/projects.rs`, and `web::project_write` runs on the key loop, so the re-index here needs a worker to keep the screen alive). Done means: the TUI graph page has re-index and remove keys that call the same functions as the web actions and the CLI commands, with the same guards: remove shows the plan (what leaves the registry, that no file is deleted) and needs a confirm key; re-index shows progress on the status line and leaves the old data usable while it runs.
+
+Check: a TUI test on a fixture project: re-index brings a stale project to indexed and equals the CLI result, remove drops it from the registry only after the confirm, declining changes nothing; `tests/surface_parity.rs` lists both actions on both surfaces; `just check`.
+
+Execution plan (2026-10-12): 1. confirm the web graph page's re-index and remove actions exist (the T329 subtask this card depends on); stop if not; 2. TUI keys calling the same functions as the web and CLI, re-index on a worker with status-line progress, remove behind the plan + confirm stage of `src/tui/projects.rs`; 3. TUI fixture test against the CLI result, decline changes nothing, `tests/surface_parity.rs`; `just check`.
+
+Result: On the TUI Graph page `i` sends `ProjectRequest::Reindex` through `web::project_write`, so it takes the same `jobs::start` path as the web page; the status line shows `indexing <name>…` and `ProjectsState::settle` (from `refresh`) turns it into `indexed <name>` or `index of <name> failed: …` without blocking the screen. `x` fetches the unconfirmed Remove plan and enters the existing `Stage::Confirm` with it on the status line (no file is deleted); only `y` sends the confirmed Remove. The note and key hints are wrapped paragraphs with counted heights, so the new hints do not hide others on narrow terminals.
+
+Check: `tui::projects` `reindex_runs_on_a_worker_and_leaves_what_the_cli_leaves`, `reindex_of_a_missing_project_is_refused_on_the_status_line`, `remove_shows_the_plan_and_only_the_confirm_key_drops_the_project`; `tests/surface_parity.rs` `project_writes_exist_on_both_surfaces` lists ("Reindex","i") and ("Remove","x"); `just full-check`.
+
+Status: done 2026-10-12
+Model: Claude Code / claude-sonnet-5-5

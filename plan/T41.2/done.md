@@ -1,0 +1,7 @@
+**T41.2 LSP setup page with Rust and Dart examples** · T41.1 · `docs/lsp.md`, `docs/config.md`, `site/content/docs/reference/_content.gotmpl`
+Do: new `docs/lsp.md` walking through Rust (rust-analyzer via `rustup component add rust-analyzer`) and Dart (Dart SDK): install the server, set `backend = "lsp"` in `.rtok.toml` or `RTOK_PLUGINS_GRAPH_BACKEND=lsp`, which file marks the workspace root (`Cargo.toml` / `pubspec.yaml`), confirm via MCP `outline` / `callers` plus the `lsp*` measurement rows, and fallback without the server (error, set `backend = "tags"` back). Linked from the `backend` line in `docs/config.md` (that line is verbatim `config/default.toml`, left intact); gotmpl row added after `configuration`.
+Check: `just site` builds; every command on the page run once and dated.
+Complexity: 2/5 — one docs page plus link plus gotmpl row; `src/` and `tests/` untouched.
+Status: done 2026-09-15
+Check result: `mise exec -- just site` builds, `reference/lsp/index.html` rendered. Commands run 2026-09-15: `rustup component add rust-analyzer` (already installed), `rust-analyzer --version` 1.97.1, `dart --version` 3.13.1, `config get plugins.graph.backend` → `tags` bare / `lsp` with env, `config show --sources` confirms `lsp (env)`, `cargo test --test graph_lsp_gate` 5 passed. Note: this machine's `~/.rtok/config.toml` carries stale keys, so bare `config show/get` reads empty here — pre-existing, page verified with a clean `RTOK_CONFIG`. No numbers claimed (D3).
+Model: OpenCode / Muse Spark 1.3 Contributor

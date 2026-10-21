@@ -1,0 +1,12 @@
+In the plan, T329 §6a (plan.md on branch `docs/plan-graph-projects`, ~line 752, from PR #540 (T329), not merged yet) says "T329 changes the default to an ordered fallback chain, `backend = "auto"`: LSP first, tree-sitter second, plain text search last", with per-request fallback on timeout. `src/plugins/graph/PLAN.md` (P30 survey) says "**C** rejected for gate honesty" (line 229, alternative C = tags-first with LSP fallback), lists under Rejected "**Default-on LSP** — tags stay default" (line 278) and "Hybrid tags+LSP per call without a mode flag (alternative C)" (line 279), and requires that the default answers stay byte-identical to tags (lines 246, 272); `roadmap.md:407` says "tags index remains default". These contradict each other because T329 makes the rejected design the default without revisiting the measured reasons (cold LSP start vs 23-26 ms warm tags, Gate P30 byte identity).
+
+Goal: research both approaches, compare trade-offs, recommend one, then update the conflicting tasks. Do not change either task before the decision.
+
+Check: the recommendation and the chosen approach are recorded in this card (or as a decision row), and every task named above is updated so the plan no longer contradicts itself.
+
+Decision (2026-10-09, creator): `tags` stays the graph default (research option 1); `auto` (LSP first, then tags, then text) is an opt-in value. Changing the default later needs a new gate with recorded `lsp.*` cold and warm latency rows (there are none on record, so "no `Measurement` row = no claim" applies), the `lsp_fallback` rate, and a creator decision that supersedes P30. Also fixed the stale claim that a pinned `backend = "lsp"` errors without a server: since T376 it answers from tags with a `(tags; lsp: <reason>)` header and an `lsp_fallback` row.
+
+Updated: `plan.md` T329 §6a (heading, intro, "Mode 1", config default `tags`), §8f "Backend alive" (the configured backend working scores 1; 0.6 and 0.3 only for fallbacks under `auto`/`lsp`), the T329 acceptance lines for `lsp` without a server and for the health ring, the T329 split note, and the T329.9 and T329.19 cards; `src/plugins/graph/PLAN.md` (one dated line in the P30 Rejected list); `docs/lsp.md` "Without the server" and its `docs/ru` and `docs/uk` translations, which still said the tool returns an error and records nothing. `roadmap.md` needed no change.
+
+Status: done 2026-10-09
+Model: Claude Code / sonnet-5.5

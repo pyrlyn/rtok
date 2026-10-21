@@ -1,0 +1,8 @@
+Found 2026-09-24: Claude.app starts the `rtok mcp` from `claude_desktop_config.json` with cwd `/`. The graph tools use `current_dir()` as the index root, so under `auto_index` every `symbol` / `callers` / `impact` / `explore` walks the whole disk and times out (the store holds no `symbols` rows for `/`). `read` resolves relative paths against `/`, and `search` / `tree` without a path walk the disk too. Claude Code and Claude.app both advertise the MCP `roots` capability; rtok never asks for roots.
+
+Check: `tests/mcp.rs` gains a roots handshake test and a refuse-at-`/` test; `tests/graph_contract.rs` and the rest of `tests/mcp.rs` unchanged; `just check`.
+
+Result: `src/mcp.rs` remembers `capabilities.roots` from `initialize`, answers `notifications/initialized` and `notifications/roots/list_changed` with a `roots/list` request (id `rtok-roots`), and moves the process into the first `file://` root of the reply (`url::Url::to_file_path`, directory only); the reply produces no output line. `read::walk_root_ok` refuses `/` and the home directory; graph `call` checks it for every tool but `outline`, `search` / `tree` check the resolved walk root (an explicit `path` still works from `/`), and the MCP watcher skips such a root. New tests `mcp_moves_into_the_first_file_root_after_roots_list`, `mcp_refuses_symbol_at_filesystem_root_without_walking` and `walk_root_ok_rejects_filesystem_root_and_accepts_a_project_dir` pass; `--test mcp --test graph_contract` 14/14, 195 `graph` / `read` / `mcp` unit tests pass, workspace clippy clean. New dependency `url` (already in the lockfile at 2.5.8).
+
+Status: done 2026-09-24
+Model: Claude Code / claude-opus-5-5 (code by claude-sonnet-5, reviewed)

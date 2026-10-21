@@ -1,0 +1,13 @@
+`just spa-e2e` failed once (2026-10-12) in "offline takes the whole screen when the server stops; Reconnect brings it back": `Rtok.dispose()` threw `ENOTEMPTY, Directory not empty` on the temp home. `stop()` waits for `rtok web` alone, but a cold snapshot spawns children that outlive it: the doctor probe `rtok mcp` (`doctor::list_tools` → `mcp_roundtrip`, same `RTOK_HOME`) and `git -C <home> …` from the worktree scan. A `rtok mcp` that starts after its parent died creates `rtok.db-wal` and `rtok.db-shm` in the home root while `rmSync` walks it. The offline test is the one that stops the server right after `live`, mid-snapshot. Sampling `rtok web`'s children in the suite showed both `rtok mcp` and `git` at stop time, and `lsof +D <home>` found orphaned `git`/`xcodebuild` there after `stop()` returned.
+
+Done: `stop()` returns only after every process the test's `rtok web` started has exited; `dispose()` removes the home with no retry.
+
+Plan:
+
+1. `web/e2e/group.ts`: spawn a process as the leader of its own process group (`detached: true`); stop it by sending SIGTERM to the group, SIGKILL after 5 s, then poll `kill(-pgid, 0)` until `ESRCH`. Only that group is signalled. A worker that exits early kills the groups it still owns.
+2. `web/e2e/rtok.ts`: `start()` and `stop()` go through it.
+3. `web/e2e/group.spec.ts`: a `sh` leader whose child keeps recreating a file in a temp dir; after the stop the child is gone and the dir is removed and stays removed. Fails against the old stop (only the leader waited for).
+
+Check: `group.spec.ts` fails before the fix and passes after; `just spa-e2e` green; the offline test with `--repeat-each` green.
+
+Result (2026-10-12, Claude Code / claude-opus-5-5): `web/e2e/group.ts` spawns `rtok web` as a process-group leader (`detached: true`). `stopGroup` sends SIGTERM to the group, SIGKILL after 5 s, and polls `kill(-pgid, 0)` until `ESRCH`. A worker's `exit` handler SIGKILLs any group it still owns. `Rtok.start()` and `stop()` use it, and `dispose()` still does one `rmSync` with no retry. `group.spec.ts` has two tests: a child that keeps writing, and one that ignores SIGTERM with a 300 ms grace. Both failed against the old stop (the writer was still alive) and pass 20/20 with the fix. Suite: 40 passed. The offline test passed 40/40 with `--repeat-each 40`. Three suite runs passed 119/120; the one failure was the seed's `rtok mcp` in `metrics-fold`, killed by the 30 s `spawnSync` timeout. That failure also happened before the fix and is a separate bug. Not done: the runs used a debug `rtok` built from a sibling worktree at `77faf2102`, since the change touches no Rust; `just check` is left to CI.

@@ -16,7 +16,7 @@
 
 **Dependencies allowed**: `tokio`, `axum`/`hyper`, `reqwest` (streaming). One-line reason each.
 
-**Checks**: `plan.md` T5.1, T5.2.
+**Checks**: `plan/` T5.1, T5.2.
 
 **Batch / Flex / routing** (see `docs/batch-flex.md`)
 - Batch ≠ Flex ≠ model routing. Never auto-convert sync agent turns into Batch jobs.

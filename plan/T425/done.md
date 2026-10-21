@@ -1,0 +1,7 @@
+`checkpoint::tests::session_end_on_a_large_transcript_is_bounded` asserts the SessionEnd hook on a 50 MB transcript finishes in under 10 s. It failed in `just check` at 13.8 s with host load ~130 on a 16-core Mac (debug build); alone at load 50-110 it took 5.2-8.0 s, so the fixed bound has little margin under load. Its comment says the bound only catches a quadratic regression. Done: the test times a 5 MB transcript before and after the 50 MB one in the same test and bounds the 50 MB run against the slower small run (near-linear scaling), with no wall-clock bound; the open count and note-body checks stay. Same approach as T421.
+
+Plan: `src/plugins/checkpoint.rs` only — a helper times one SessionEnd run per project; small, big, small; assert `big < max(small) * K` with K well under the ~100x a quadratic extractor gives.
+
+Check: the test passes repeatedly under CPU load (own `yes` burners); it fails when the extraction loop is made quadratic; `just check` green.
+
+Result (2026-10-05, Claude Code / opus-5.5): `timed_session_end` runs one SessionEnd per project and checks the single `Store::open`; the test times 5 MB, 50 MB, 5 MB and asserts `large < max(small) * 30`, with no wall-clock bound; the note-body check stays. Ten runs beside 32 `yes` burners (host load 73-345): every run passed, the 50 MB hook took 5.0-9.3 s, ratios 0.5-9.3 (a 5 MB run spiked to 12 s once). A per-line `Vec::iter().sum()` over every earlier line injected into `extract_lines_with` failed it: 241 s against 2.7 s, ratio 90.0. `just check` green (2450 tests).

@@ -130,11 +130,11 @@ fn rewrites_recursive_ls() {
 
 In this repository, `crate::plugin::Runtime::in_memory("test")` is the real host without a
 file — use it when the assertion is about what actually landed in the store, and the fixtures
-in `tests/fixtures/hooks/` for realistic events. Then the task's Check from `plan.md` (see
+in `tests/fixtures/hooks/` for realistic events. Then the task's Check from `plan/<id>/task.md` (see
 `roadmap.md` for order), then `just check`.
 
 ## 7. Ship
 
-Commit `<task-id>: <title>` on the task's own branch and open one PR for it (D16). Same PR: mark the task done and
-move it from `plan.md` to `done.md` with the date and the Check output. Implemented work still
-listed in `plan.md` is unfinished.
+Commit `<task-id>: <title>` on the task's own branch and open one PR for it (D16). Same PR: write the task's
+`plan/<id>/done.md` with the date and the Check output. Implemented work whose folder has no
+`done.md` is unfinished.

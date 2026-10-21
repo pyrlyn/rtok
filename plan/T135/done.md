@@ -1,0 +1,11 @@
+From I-87 (T74 investigation, 2026-09-21): `doctor::read_share` parses the whole `stats.transcripts_dir` on the snapshot path, ~36 s CPU per cache miss on this machine, once per 30 s TTL. T113 moved the model off the UI thread, so the freeze is gone but the burn is not.
+Plan (needs a decision first): D19 keeps observability a projection of ledgers, and this parser is a second recorder. Either (a) per-file aggregates cached by `(path, size, mtime)` so only changed JSONL is parsed, or (b) `read_share` reads what `rtok stats` ingest already persisted and `doctor` parses nothing. Ask the creator which; then one implementation, shared by `doctor`, `tui`, `report`.
+Check: bench or test on a fixture directory — second snapshot with no file change parses 0 bytes; `rtok doctor` wall time on this machine before/after recorded in the card; `just check` green.
+
+Decision (creator, 2026-09-24): option (a), per-file aggregates cached by `(path, size, mtime)`.
+
+Do (Claude Code / claude-opus-5-5, 2026-09-24): `src/measure/transcript_cache.rs` — `FileAgg { size, mtime_ns, tool_tokens, skills }` per transcript: `est_tokens` of every tool_result per tool name (the same numbers `stats::collect` puts in `tools`) and `Skill` invocations per `input.skill`. `scan` goes through a process-wide map (the web/TUI 30 s snapshot loop hits it) seeded from `transcripts-cache.json` beside the store and rewritten, pruned of deleted transcripts, only when something was parsed; tests never touch the file (a default `Config` points at the real `~/.rtok`). `doctor::read_share` sums the cached rows, minus sub-agent transcripts as `collect` does; `doctor::skill_invocations`, which parsed every transcript a second time, reads the same cache. Unreadable or unwritable cache = a re-parse, never an error.
+
+Check result: `transcript_cache::tests::unchanged_transcripts_are_parsed_once` — the second pass parses 0 bytes, a reloaded cache file parses 0 bytes, a rewritten transcript is parsed again; the `read_share` doctor tests unchanged and green. `rtok doctor` wall time on this machine (1.5 GB under `~/.claude/projects`): 17.7 s before (installed release), 9.0 s on the first run with an empty cache (one parse instead of two), 0.21 s on the next run.
+
+Status: done 2026-09-24
