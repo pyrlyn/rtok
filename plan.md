@@ -256,8 +256,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T398 | todo | P3 | 1 | 30% | |
 | T413 | todo | P2 | 3 | 0% | |
 | T413.13 | in progress | P3 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
-| T414 | in progress | P1 | 4 | 20% | Claude Code / opus-5.5 |
-| T414.7 | in progress | P3 | 1 | 10% | Claude Code / opus-5.5 |
 | T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
 | T428 | in progress | P2 | 3 | 85% | Claude Code / sonnet-5.5 |
 | T436.4 | todo | P3 | 2 | 90% | |
@@ -1078,22 +1076,6 @@ Check: the T413 per-host check (step 5) for this host.
 Plan: Trae docs for the MCP file. Reuse the VS Code helper only if the key and path match; otherwise a thin host of its own.
 
 Finding (2026-10-12, `research.md` §32.13): Trae's docs name only a project `.trae/mcp.json`, which is the project's, and a user-level `mcp.json` behind the app's Raw Config button with no path. No installer is written until a documented user-level path exists.
-
-### T414. Web dashboard restyle on the brand pack, built from `brand/` sources
-
-Creator request 2026-10-05: a new look for the `rtok web` SPA from the brand pack in `brand/` (tokens, logos, icons, `DESIGN.md`, on top of the `@pyrlyn/brand` base it pins). Creator decisions 2026-10-05: a restyle by the brandbook (pages and navigation stay; shell, panels, tables, KPIs and charts change); a mockup first, approved before the pages; our own `web/src/ui` React components on the brand roles (`--pyr-*`), not the base `.pyr-*` classes. Creator decisions 2026-10-05, later: UI/UX additions (grouped sidebar, command palette and shortcuts, clickable KPIs, live status with pause) and features (Δtok savings trend, table filters in the URL, CSV/JSON export), one sub-task each (T414.8–T414.14). Creator decisions 2026-10-05, later still: charts draw on canvas through ECharts 6, behind our own chart abstraction so the library can be swapped; hover shows a tooltip, and other places change live with the hover where that does not repeat the tooltip; small marks (budget grid, plugin bitset, token mix, share bars) stay DOM and share the same tooltip (T414.15, T414.16). Creator decision 2026-10-05, after the charts: open-source UI toolkits are allowed; behaviour (focus, keyboard, overlays, menus, dialogs, listboxes) comes from React Aria Components, styled by us on the `--pyr-*` roles, so the look stays ours (from T414.9 on; its `Autocomplete` serves the palette, so no `cmdk`).
-
-Source rule: `web/` holds no copy of a brand file. Tokens, fonts, icons, logos and illustrations are imported from `brand/` and `brand/node_modules/@pyrlyn/brand` at build time; anything derived (CSS, raster sizes) is produced by a program in the build, never committed by hand. `brand/README.md` "Known gaps" and `PROVENANCE.md` "Adopting in each surface" list today's copies.
-
-Check: every sub-task below is closed in `done.md`, and no file under `web/` is byte-identical to a file under `brand/` or `brand/node_modules/@pyrlyn/brand/base/`.
-
-### T414.7. Re-shoot `web/screenshots/`; close the web admin gap in `brand/`
-
-Regenerate `web/screenshots/` with the existing script; in `brand/README.md` "Known gaps" and `PROVENANCE.md` "Adopting in each surface" mark the web admin as adopted.
-
-Check: `just check` green; `brand/README.md` no longer says the web admin ships its own copies.
-
-Plan (claim taken over from MiMo, idle at 0% since 2026-10-12): `brand/README.md` and `PROVENANCE.md` already say the web admin is adopted (#1140), and #1140 added `web/scripts/shoot.mjs` but re-shot only part of the set and wired it nowhere. 1. `?sample=empty|loading|error` in `web/src/api/sample.ts` gives the three state shots (`calls-empty`, `overview-loading`, `overview-error`) without a server, with unit tests. 2. `shoot.mjs` writes those at 1440 and 390 px; `npm run screenshots`, `just spa-screenshots`. 3. Re-shoot all 48, look at a sample in both themes. 4. Close T414.7 and T414 (check: no byte-identical copy, `web/src/brandSources.test.ts`).
 
 ### T416. Shared `change-preview` crate for dry-run output
 
