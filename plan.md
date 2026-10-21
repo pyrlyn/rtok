@@ -248,8 +248,8 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
 | T369.1 | todo | P3 | 1 | 0% | |
 | T370 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
-| T385 | in progress | P1 | 5 | 20% | Claude Code / opus-5-5 |
-| T385.3 | todo | P1 | 3 | 20% | |
+| T385 | in progress | P1 | 5 | 85% | Claude Code / opus-5-5 |
+| T385.3 | todo | P1 | 3 | 50% | |
 | T385.9 | in progress | P3 | 5 | 70% | Claude Code / claude-opus-5-5 |
 | T385.9.3 | todo | P3 | 2 | 10% | |
 | T394 | todo | P2 | 2 | 20% | |
@@ -1015,11 +1015,15 @@ Plan: split 2026-10-04 into T385.1–T385.13 below, one PR each, taken in id ord
 
 Check: each sub-task carries its own Check; this card closes when every step is done or dropped with its number in `research.md`.
 
+Progress (2026-10-21): every build step and measurement an agent can run is in `done.md` (T385.1, .2, .4–.8, .9.1, .9.2, .10–.13). Open: T385.3 (offline half recorded in `research.md` §16.10, live arms left) and T385.9 via T385.9.3 (live Gate P28 bench); both need the creator's API spend (T394).
+
 ### T385.3. Defaults bench: `compress` mode, context editing, skills, `live_blobs`
 
 optimization.md §5. `rtok bench` cost per passed task for each setting on and off, recorded with a date in `research.md` (`tools_rewrite` is T124). Settings whose row shows a net saving with the pass rate held become default-on in a follow-up; the rest stay off with their number. Branch `t128-proxy-compress-default` (PR #562, `df2a13ba`) is prior art. Needs the creator's API spend for live arms (see T394).
 
 Check: one dated `research.md` row per setting.
+
+Progress (2026-10-21, `research.md` §16.10): the offline half is in. A read-only pass over 30 days of this machine's Claude Code transcripts (204,565 requests) puts a ceiling on each setting's request side: `compress` mode (pointer only) 6.35 % of input tokens, 5.17 % of input cost net of cache re-writes; `skills` 0.11 % / 0.04 %; `live_blobs` 0 eligible blocks; `context_management` 22.95 % / 20.33 %, a clearing whose quality cost only a pass rate shows. No pass rate, so no default changes. Left: the live arms for `compress` mode and `context_management` (`skills` and `live_blobs` have too little to act on to be worth paid arms), which need long tasks with real checks in place of `bench/tasks.toml`, one `rtok proxy` per arm, and the creator's API spend (T394).
 
 ### T385.9. P28 Phase 2: async compressor on the `internal` lane
 
