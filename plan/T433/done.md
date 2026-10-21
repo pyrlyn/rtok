@@ -1,0 +1,8 @@
+Every saved hook stdin repeated the same session fields (`session_id`, `transcript_path`, `cwd`, `scratchpad_dir`, `permission_mode`, `effort`, `agent_id`, `agent_type`). Store them once per distinct value set, keep only the event's own fields in the saved body, and rebuild the full stdin for readers; `[core] store_raw = true` keeps the full body.
+
+Check: `two_hook_calls_share_one_session_row_and_read_back_whole`, `store_raw_and_old_rows_keep_the_full_body`, `retention_drops_unreferenced_session_rows`; `just check` green; hyperfine on the debug binary shows no measurable hook latency change (18.6 ± 1.3 ms vs 18.2 ± 2.8 ms with `store_raw`).
+
+Result: migration `0032_hook_sessions` adds `hook_sessions (id, fields UNIQUE)` and `call_io.hook_session_id`; the hook dispatcher saves through `Store::insert_hook_call_io` (`src/store/hook_fields.rs`), which, unless `store_raw` is on, splits a JSON-object stdin within `call_io_inline_bytes` into the event body and the session fields inside the existing `call_io` transaction, from the one parse cleaning already did. `call_io_request`, `recent_hook_inputs(_for_event)` and the OTel `call_detail` splice the two objects back as text. Old rows keep NULL and their full body. Retention clears the reference with the body and drops unreferenced session rows. A split body's `request_bytes` and `request_sha256` describe the saved bytes (T431's rule), and the rebuilt stdin is equal as JSON, not byte for byte (key order); `store_raw` keeps exact bytes. One session row per distinct field set instead of a copy in every body (131 B vs 227 B per saved request on a small PostToolUse). #823.
+
+Status: done 2026-10-08
+Model: Claude Code / claude-opus-5-5

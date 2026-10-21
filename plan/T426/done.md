@@ -1,0 +1,8 @@
+`present()` counts a host as installed when only its config folder (or that folder's parent) exists, so `rtok agents install gemini` writes rtok into `~/.gemini` with no Gemini CLI on the machine. Done: a host variant is present only when its app bundle or binary is found (`app_path`); leftover config folders no longer count, in `agents list`, `install`, `update`, `doctor` and `junk` alike. `agents install|update <host>` whose wanted variants are all absent writes nothing and exits non-zero with `error: <host> is not installed`; with several hosts, any absent one refuses the whole run before any backup. A host with one present variant still installs into it, and the absent sibling prints `— not found` as today. `--remove` is unchanged.
+
+Done: `present()` (`src/agents/mod.rs`) is `app_path(v).is_some()`, so `agents list`, `install`, `update`, `doctor`, `junk` and `mcp ping` agree; `run` refuses before any backup with `<host> is not installed` when a named host has no wanted variant present; `remove` is unchanged. `Agent::markers` now only feeds `agents junk list`. Test fixtures: `fake_hosts` in `tests/common/agents.rs` stubs every host CLI and app bundle under the sandbox home, `raw_without_claude` keeps only those stubs (they fail past `--version`), and `a_host_whose_app_is_missing_is_refused_before_any_write` covers the refusal.
+
+Check: `rtok agents install gemini` with `~/.gemini` but no `gemini` binary exits 1 with `gemini is not installed` (dry run on the creator's machine); full nextest 2409 passed; `just check` green.
+
+Status: done 2026-10-06
+Model: Claude Code / claude-opus-5-5
