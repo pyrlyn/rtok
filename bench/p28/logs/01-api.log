@@ -1,0 +1,112 @@
+2026-10-21T09:24:02Z DEBUG api.router     request matched a cached route entry, the read replica answered while still fresh
+2026-10-21T09:24:04Z DEBUG api.limiter    token bucket refilled for the tenant, burst allowance back at its configured ceiling
+2026-10-21T09:24:12Z INFO  api.metrics    request histogram flushed to the collector, no samples dropped in this window
+2026-10-21T09:24:19Z INFO  api.metrics    request histogram flushed to the collector, no samples dropped in this window
+2026-10-21T09:24:21Z INFO  api.handler    idempotency key accepted, the earlier response replayed to the caller unchanged
+2026-10-21T09:24:22Z INFO  api.metrics    request histogram flushed to the collector, no samples dropped in this window
+2026-10-21T09:24:29Z DEBUG api.pool       connection checked out of the pool and returned clean, no pending transaction left
+2026-10-21T09:24:37Z INFO  api.handler    request served from the warm pool, response streamed to the client without a retry
+2026-10-21T09:24:41Z DEBUG api.limiter    token bucket refilled for the tenant, burst allowance back at its configured ceiling
+2026-10-21T09:24:47Z INFO  api.auth       session token validated against the issuer, scopes match the route policy
+2026-10-21T09:24:48Z INFO  api.handler    request served from the warm pool, response streamed to the client without a retry
+2026-10-21T09:24:49Z DEBUG api.router     route POST /v1/payments/charges matched the payments service, no override set
+2026-10-21T09:24:56Z INFO  api.handler    request served from the warm pool, response streamed to the client without a retry
+2026-10-21T09:25:00Z WARN  api.upstream   transient error from the fraud scorer, request retried once and then served
+2026-10-21T09:25:01Z DEBUG api.pool       connection checked out of the pool and returned clean, no pending transaction left
+2026-10-21T09:25:09Z INFO  api.handler    idempotency key accepted, the earlier response replayed to the caller unchanged
+2026-10-21T09:25:18Z INFO  api.metrics    request histogram flushed to the collector, no samples dropped in this window
+2026-10-21T09:25:24Z INFO  api.handler    idempotency key accepted, the earlier response replayed to the caller unchanged
+2026-10-21T09:25:28Z INFO  api.handler    idempotency key accepted, the earlier response replayed to the caller unchanged
+2026-10-21T09:25:36Z DEBUG api.router     route POST /v1/payments/charges matched the payments service, no override set
+2026-10-21T09:25:37Z DEBUG api.limiter    token bucket refilled for the tenant, burst allowance back at its configured ceiling
+2026-10-21T09:25:44Z WARN  api.upstream   transient error from the fraud scorer, request retried once and then served
+2026-10-21T09:25:47Z INFO  api.auth       session token validated against the issuer, scopes match the route policy
+2026-10-21T09:25:49Z DEBUG api.limiter    token bucket refilled for the tenant, burst allowance back at its configured ceiling
+2026-10-21T09:25:58Z INFO  api.handler    request body validated against the schema, all required fields present and typed
+2026-10-21T09:26:07Z DEBUG api.pool       connection checked out of the pool and returned clean, no pending transaction left
+2026-10-21T09:26:12Z INFO  api.handler    idempotency key accepted, the earlier response replayed to the caller unchanged
+2026-10-21T09:26:17Z DEBUG api.router     route POST /v1/payments/charges matched the payments service, no override set
+2026-10-21T09:26:26Z INFO  api.metrics    request histogram flushed to the collector, no samples dropped in this window
+2026-10-21T09:26:33Z WARN  api.upstream   transient error from the fraud scorer, request retried once and then served
+2026-10-21T09:26:41Z INFO  api.handler    request served from the warm pool, response streamed to the client without a retry
+2026-10-21T09:26:48Z INFO  api.handler    idempotency key accepted, the earlier response replayed to the caller unchanged
+2026-10-21T09:26:51Z DEBUG api.pool       connection checked out of the pool and returned clean, no pending transaction left
+2026-10-21T09:27:00Z INFO  api.handler    request body validated against the schema, all required fields present and typed
+2026-10-21T09:27:02Z INFO  api.handler    request body validated against the schema, all required fields present and typed
+2026-10-21T09:27:11Z INFO  api.metrics    request histogram flushed to the collector, no samples dropped in this window
+2026-10-21T09:27:14Z INFO  api.auth       session token validated against the issuer, scopes match the route policy
+2026-10-21T09:27:20Z DEBUG api.pool       connection checked out of the pool and returned clean, no pending transaction left
+2026-10-21T09:27:21Z INFO  api.metrics    request histogram flushed to the collector, no samples dropped in this window
+2026-10-21T09:27:22Z INFO  api.metrics    request histogram flushed to the collector, no samples dropped in this window
+2026-10-21T09:27:29Z DEBUG api.limiter    token bucket refilled for the tenant, burst allowance back at its configured ceiling
+2026-10-21T09:27:32Z DEBUG api.router     request matched a cached route entry, the read replica answered while still fresh
+2026-10-21T09:27:33Z INFO  api.handler    idempotency key accepted, the earlier response replayed to the caller unchanged
+2026-10-21T09:27:42Z INFO  api.handler    idempotency key accepted, the earlier response replayed to the caller unchanged
+2026-10-21T09:27:49Z INFO  api.handler    idempotency key accepted, the earlier response replayed to the caller unchanged
+2026-10-21T09:27:55Z INFO  api.handler    request body validated against the schema, all required fields present and typed
+2026-10-21T09:28:00Z INFO  api.metrics    request histogram flushed to the collector, no samples dropped in this window
+2026-10-21T09:28:07Z INFO  api.handler    request served from the warm pool, response streamed to the client without a retry
+2026-10-21T09:28:16Z DEBUG api.router     request matched a cached route entry, the read replica answered while still fresh
+2026-10-21T09:28:23Z INFO  api.handler    idempotency key accepted, the earlier response replayed to the caller unchanged
+2026-10-21T09:28:31Z INFO  api.handler    request served from the warm pool, response streamed to the client without a retry
+2026-10-21T09:28:37Z ERROR api.payments   charge rejected by the acquirer with code E4127, card network declined the capture
+2026-10-21T09:28:46Z INFO  api.handler    idempotency key accepted, the earlier response replayed to the caller unchanged
+2026-10-21T09:28:54Z DEBUG api.pool       connection checked out of the pool and returned clean, no pending transaction left
+2026-10-21T09:29:01Z INFO  api.handler    request body validated against the schema, all required fields present and typed
+2026-10-21T09:29:02Z INFO  api.handler    request body validated against the schema, all required fields present and typed
+2026-10-21T09:29:10Z INFO  api.handler    request body validated against the schema, all required fields present and typed
+2026-10-21T09:29:14Z INFO  api.handler    request served from the warm pool, response streamed to the client without a retry
+2026-10-21T09:29:23Z DEBUG api.router     request matched a cached route entry, the read replica answered while still fresh
+2026-10-21T09:29:25Z DEBUG api.router     request matched a cached route entry, the read replica answered while still fresh
+2026-10-21T09:29:26Z DEBUG api.limiter    token bucket refilled for the tenant, burst allowance back at its configured ceiling
+2026-10-21T09:29:28Z INFO  api.auth       session token validated against the issuer, scopes match the route policy
+2026-10-21T09:29:36Z INFO  api.handler    request served from the warm pool, response streamed to the client without a retry
+2026-10-21T09:29:41Z INFO  api.handler    request served from the warm pool, response streamed to the client without a retry
+2026-10-21T09:29:46Z INFO  api.handler    idempotency key accepted, the earlier response replayed to the caller unchanged
+2026-10-21T09:29:49Z INFO  api.auth       session token validated against the issuer, scopes match the route policy
+2026-10-21T09:29:54Z INFO  api.handler    request body validated against the schema, all required fields present and typed
+2026-10-21T09:29:57Z INFO  api.auth       session token validated against the issuer, scopes match the route policy
+2026-10-21T09:30:02Z DEBUG api.router     request matched a cached route entry, the read replica answered while still fresh
+2026-10-21T09:30:07Z DEBUG api.router     request matched a cached route entry, the read replica answered while still fresh
+2026-10-21T09:30:12Z WARN  api.db         slowest query in this window took 4812 ms on the ledger balance lookup, plan reused
+2026-10-21T09:30:18Z INFO  api.metrics    request histogram flushed to the collector, no samples dropped in this window
+2026-10-21T09:30:26Z INFO  api.metrics    request histogram flushed to the collector, no samples dropped in this window
+2026-10-21T09:30:27Z INFO  api.auth       session token validated against the issuer, scopes match the route policy
+2026-10-21T09:30:34Z DEBUG api.limiter    token bucket refilled for the tenant, burst allowance back at its configured ceiling
+2026-10-21T09:30:41Z INFO  api.handler    request body validated against the schema, all required fields present and typed
+2026-10-21T09:30:46Z INFO  api.handler    idempotency key accepted, the earlier response replayed to the caller unchanged
+2026-10-21T09:30:51Z INFO  api.auth       session token validated against the issuer, scopes match the route policy
+2026-10-21T09:30:58Z INFO  api.handler    idempotency key accepted, the earlier response replayed to the caller unchanged
+2026-10-21T09:31:02Z INFO  api.handler    request served from the warm pool, response streamed to the client without a retry
+2026-10-21T09:31:09Z INFO  api.handler    request served from the warm pool, response streamed to the client without a retry
+2026-10-21T09:31:10Z DEBUG api.router     request matched a cached route entry, the read replica answered while still fresh
+2026-10-21T09:31:18Z DEBUG api.router     request matched a cached route entry, the read replica answered while still fresh
+2026-10-21T09:31:27Z DEBUG api.pool       connection checked out of the pool and returned clean, no pending transaction left
+2026-10-21T09:31:36Z INFO  api.handler    idempotency key accepted, the earlier response replayed to the caller unchanged
+2026-10-21T09:31:40Z INFO  api.metrics    request histogram flushed to the collector, no samples dropped in this window
+2026-10-21T09:31:47Z INFO  api.handler    request served from the warm pool, response streamed to the client without a retry
+2026-10-21T09:31:53Z INFO  api.handler    tenant acme-north switched to the strict settlement mode by an operator action
+2026-10-21T09:31:54Z DEBUG api.pool       connection checked out of the pool and returned clean, no pending transaction left
+2026-10-21T09:31:57Z DEBUG api.limiter    token bucket refilled for the tenant, burst allowance back at its configured ceiling
+2026-10-21T09:31:58Z INFO  api.handler    idempotency key accepted, the earlier response replayed to the caller unchanged
+2026-10-21T09:32:00Z DEBUG api.limiter    token bucket refilled for the tenant, burst allowance back at its configured ceiling
+2026-10-21T09:32:05Z INFO  api.auth       session token validated against the issuer, scopes match the route policy
+2026-10-21T09:32:08Z DEBUG api.limiter    token bucket refilled for the tenant, burst allowance back at its configured ceiling
+2026-10-21T09:32:13Z DEBUG api.pool       connection checked out of the pool and returned clean, no pending transaction left
+2026-10-21T09:32:14Z DEBUG api.router     request matched a cached route entry, the read replica answered while still fresh
+2026-10-21T09:32:18Z INFO  api.handler    request served from the warm pool, response streamed to the client without a retry
+2026-10-21T09:32:21Z INFO  api.metrics    request histogram flushed to the collector, no samples dropped in this window
+2026-10-21T09:32:28Z INFO  api.handler    request served from the warm pool, response streamed to the client without a retry
+2026-10-21T09:32:34Z INFO  api.handler    idempotency key accepted, the earlier response replayed to the caller unchanged
+2026-10-21T09:32:38Z INFO  api.auth       session token validated against the issuer, scopes match the route policy
+2026-10-21T09:32:42Z DEBUG api.pool       connection checked out of the pool and returned clean, no pending transaction left
+2026-10-21T09:32:44Z INFO  api.metrics    request histogram flushed to the collector, no samples dropped in this window
+2026-10-21T09:32:49Z DEBUG api.pool       connection checked out of the pool and returned clean, no pending transaction left
+2026-10-21T09:32:50Z INFO  api.metrics    request histogram flushed to the collector, no samples dropped in this window
+2026-10-21T09:32:57Z INFO  api.handler    request body validated against the schema, all required fields present and typed
+2026-10-21T09:32:58Z DEBUG api.limiter    token bucket refilled for the tenant, burst allowance back at its configured ceiling
+2026-10-21T09:33:02Z DEBUG api.router     request matched a cached route entry, the read replica answered while still fresh
+2026-10-21T09:33:05Z INFO  api.handler    request body validated against the schema, all required fields present and typed
+2026-10-21T09:33:12Z INFO  api.handler    request body validated against the schema, all required fields present and typed
+2026-10-21T09:33:17Z INFO  api.handler    idempotency key accepted, the earlier response replayed to the caller unchanged
+2026-10-21T09:33:24Z INFO  api.auth       session token validated against the issuer, scopes match the route policy
