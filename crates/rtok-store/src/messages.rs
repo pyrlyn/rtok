@@ -336,7 +336,7 @@ mod tests {
     fn a_task_that_is_not_an_id_is_refused_on_both_sides() {
         let store = Store::open_in_memory().unwrap();
         let (a, b) = two_agents(&store);
-        for bad in ["", "12", "A0", "A1.2.3", "A12\n> forged"] {
+        for bad in ["", "12", "A0", "A1.2.3.4", "A12\n> forged"] {
             assert!(
                 store.send_message_on(Some(&a), &b, "x", Some(bad)).is_err(),
                 "{bad:?}"

@@ -106,6 +106,14 @@ pub fn run(cfg: &Config) -> Result<()> {
             let (cx, stop) = (&server.cx, &stop);
             s.spawn(move || crate::plugins::graph::health::run(cx, Some(&root), stop));
         }
+        // T952.2: close the task, then remove the worktree, once a finished PR merges.
+        if server.cx.config.worktree.enabled {
+            let (cx, stop) = (&server.cx, &stop);
+            let close = move |main: &std::path::Path, task: &str| {
+                crate::tasks::run::close_if_active(&cx.store, &cx.config.tasks, main, task)
+            };
+            s.spawn(move || crate::worktree::reap::run(&cx.store, &close, stop));
+        }
         // T329.8: register, link and index what the project's manifests reference, off the
         // request path so `initialize` and the first tool call are not delayed. Detached with its
         // own connection: EOF must not wait for up to `max_auto_projects` indexes, and a cut-off
@@ -415,6 +423,10 @@ impl Server {
             },
             Listed {
                 plugin: "mcp",
+                def: worktrees::finish_def(),
+            },
+            Listed {
+                plugin: "mcp",
                 def: worktrees::adopt_def(),
             },
             Listed {
@@ -531,6 +543,9 @@ impl Server {
             "worktree_remove" => self
                 .agent_for(args)
                 .and_then(|(agent, _)| worktrees::remove(&self.cx, &agent, args)),
+            "worktree_finish" => self
+                .agent()
+                .and_then(|(agent, _)| worktrees::finish(&self.cx, &agent, args)),
             "worktree_adopt" => self
                 .agent_for(args)
                 .and_then(|(agent, _)| worktrees::adopt(&self.cx, &agent, args)),
@@ -1164,6 +1179,7 @@ mod tests {
     const WRITING_TOOLS: &[&str] = &[
         "worktree_add",
         "worktree_remove",
+        "worktree_finish",
         "worktree_adopt",
         "agent_send",
         "agent_status_set",

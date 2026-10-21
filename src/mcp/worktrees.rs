@@ -2,12 +2,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
-//! T285 (D34): MCP `worktree_add`, `worktree_list`, `worktree_remove` and `worktree_adopt` (T289.2), the
-//! agent-facing side of `rtok worktree add` / `list` / `remove`. They call the same functions as the CLI; the only
-//! difference is who the agent is: the MCP session's link (T283.1). The optional `agent`
-//! argument (T924) only fills a link that is missing or a guess, never overrides a stable one,
-//! so a model still cannot claim a worktree in another session's name or pick its own lock
-//! owner. The optional `repo` says which repository to act in when the server runs elsewhere.
+//! T285 (D34): MCP `worktree_add`, `worktree_list`, `worktree_remove`, `worktree_finish` (T952.1)
+//! and `worktree_adopt` (T289.2), the agent-facing side of `rtok worktree add` / `list` /
+//! `remove` / `finish`. They call the same functions as the CLI; the only difference is who the
+//! agent is: the MCP session's link (T283.1). The optional `agent` argument (T924) only fills a
+//! link that is missing or a guess, never overrides a stable one, so a model still cannot claim a
+//! worktree in another session's name or pick its own lock owner. The optional `repo` says which
+//! repository to act in when the server runs elsewhere (for `worktree_finish` it is the GitHub
+//! `owner/name`).
 
 use std::path::{Path, PathBuf};
 
@@ -18,7 +20,7 @@ use serde_json::{Value, json};
 use super::{with_agent, with_repo};
 use crate::plugin::{Runtime, ToolDef};
 use crate::store::AgentDetail;
-use crate::worktree::{claim, list, remove};
+use crate::worktree::{claim, finish, list, remove};
 
 pub fn add_def() -> ToolDef {
     ToolDef {
@@ -45,6 +47,14 @@ pub fn remove_def() -> ToolDef {
         input_schema: with_repo(with_agent(
             json!({"type":"object","properties":{"path":{"type":"string"},"task":{"type":"string"},"keep_branch":{"type":"boolean"}}}),
         )),
+    }
+}
+
+pub fn finish_def() -> ToolDef {
+    ToolDef {
+        name: "worktree_finish",
+        description: "Send this agent's worktree at path to review: commit leftovers (no credential files), push, open or reuse the PR, squash auto-merge unless no_auto_merge, unlock. Never closes the task.",
+        input_schema: json!({"type":"object","properties":{"path":{"type":"string","description":"the worktree or a directory inside it"},"message":{"type":"string","description":"commit message for uncommitted work"},"repo":{"type":"string","description":"owner/name for gh"},"no_auto_merge":{"type":"boolean"}},"required":["path"]}),
     }
 }
 
@@ -153,6 +163,20 @@ pub fn remove(cx: &Runtime, agent: &AgentDetail, args: &Value) -> Result<String>
         (Some(agent), None),
         keep_branch,
     )?;
+    Ok(serde_json::to_string(&done)?)
+}
+
+pub fn finish(cx: &Runtime, agent: &AgentDetail, args: &Value) -> Result<String> {
+    let Some(path) = arg(args, "path") else {
+        bail!("`path` is required: the task worktree");
+    };
+    let opts = finish::Options {
+        message: arg(args, "message").map(Into::into),
+        repo: arg(args, "repo").map(Into::into),
+        no_auto_merge: args["no_auto_merge"].as_bool().unwrap_or(false),
+    };
+    let path = std::env::current_dir()?.join(path);
+    let done = finish::for_agent(Some(&cx.store), &path, (Some(agent), None), &opts)?;
     Ok(serde_json::to_string(&done)?)
 }
 

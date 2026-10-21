@@ -98,6 +98,15 @@ updated_at: 1790000000
 Why the task exists and what done means.
 ```
 
+### Раскладка папками
+
+Проект, который хранит план папками (`plan/<id>/task.md`, закрытие через `plan/<id>/done.md`), использует тот же адаптер: задайте `[tasks.disk] dir = "plan"`. `layout = "auto"` (по умолчанию) читает `dir` как папки, если там уже есть `<id>/task.md`, иначе как файлы выше; `layout = "files"` или `"folders"` задаёт раскладку явно, так пустой каталог начинается с папок. Ничего не конвертируется само.
+
+- В `task.md` front matter `status` (`todo` или `in progress`), `priority` (`P0`–`P3`, это 0–3 в rtok), `complexity`, `readiness` и `agent` (исполнитель), затем `# <id>. Title` и тело. Запись меняет только строки `status`, `priority` и `agent`, остальное остаётся байт в байт.
+- Задача с `done.md` выполнена; если его первая строка начинается с `Dropped`, она закрыта. `rtok task status <id> done --report <текст>` (или `--report -` для stdin) пишет отчёт, без флага пишется строка по умолчанию. Команда не открывает завершённую задачу заново: удалите её `done.md` сами.
+- Папки, имена которых не id задач, игнорируются. Блокеры, конфликты, маркер parallel и приоритет 4 негде хранить в front matter, поэтому такие команды отказывают, а не теряют данные.
+- Задача, созданная через rtok, получает `complexity: 3`, нулевую `readiness` и, если в описании нет строки `Check:`, заготовку для неё.
+
 ## Команды
 
 | Команда | Что делает |
@@ -106,7 +115,7 @@ Why the task exists and what done means.
 | `rtok task create <title> [-d <text> \| --body-file <path\|->] [--parent <id>] [--json]` | добавляет задачу под следующий свободный id (`A12`, или `A12.3` при `--parent`); `--body-file -` читает описание из stdin |
 | `rtok task list [--status <s,…>] [--all] [--parent <id>] [--json]` | активные задачи, подзадачи выводятся с отступом под родителем; `--status` принимает список через запятую |
 | `rtok task show <id> [--json]` | одна задача с подзадачами, ссылкой и описанием |
-| `rtok task status <id> [<status>] [--force] [--json]` | читает статус или задаёт `open`, `in-progress`, `done` или `closed` |
+| `rtok task status <id> [<status>] [--force] [--report <текст>] [--json]` | читает статус или задаёт `open`, `in-progress`, `done` или `closed`; `--report` — итоговый отчёт завершённой задачи (раскладка папками) |
 | `rtok task next [--json]` | первая готовая задача. Если блокеров нет, это по-прежнему открытая задача с наименьшим номером без активной подзадачи |
 | `rtok task ready [--json]` | все задачи, которые можно взять, сначала с высшим приоритетом (`0` раньше `2`) |
 | `rtok task claim [id] [--agent <id>] [--json]` | взять `id` или первую готовую задачу. Нужен `--agent` или `RTOK_AGENT_ID`. В GitHub и GitLab запись исполнителя — последняя запись побеждает, это не compare-and-set |
@@ -149,7 +158,7 @@ Why the task exists and what done means.
 | `task_create` | `title` (обязательный), `description`, `parent` | `task create` |
 | `task_list` | `status` (список или строка через запятую), `all`, `parent` | `task list` |
 | `task_get` | `id` (обязательный) | `task show` |
-| `task_status` | `id` (обязательный), `status`, `force` | `task status` |
+| `task_status` | `id` (обязательный), `status`, `force`, `report` | `task status` |
 | `task_next` | нет | `task next` |
 | `task_ready` | нет | `task ready` |
 | `task_claim` | `id`, `agent` | `task claim` |

@@ -437,7 +437,11 @@ pub(super) fn status_line(page: &str, note: &str) -> Line<'static> {
 /// so this is a rendering, not a second probe run. `None` is a failed tick, not an
 /// empty page. Section heads (unindented lines) are bold.
 fn doctor(app: &App) -> Paragraph<'static> {
-    let Some(report) = app.snapshot().doctor.as_ref() else {
+    let snap = app.snapshot();
+    let Some(report) = snap.doctor.as_ref() else {
+        if snap.doctor_pending {
+            return empty("running doctor…");
+        }
         return empty("doctor did not answer this tick — `rtok doctor` has the details");
     };
     let lines = report
@@ -1206,6 +1210,22 @@ pub(super) mod tests {
             }
             assert!(screen.contains(line), "line `{line}` is on screen");
         }
+    }
+
+    /// T945: before the first doctor probe lands the page says so, not that it failed.
+    #[test]
+    fn doctor_tab_waits_for_the_first_probe() {
+        let mut app = App::new(&config());
+        app.refresh(model::Snapshot {
+            doctor_pending: true,
+            ..model::Snapshot::default()
+        });
+        while app.page() != "doctor" {
+            app.key(KeyCode::Right, KeyModifiers::NONE);
+        }
+        let screen = screen(&app);
+        assert!(screen.contains("running doctor…"), "{screen}");
+        assert!(!screen.contains("did not answer"), "{screen}");
     }
 
     /// T478: `f` on the Doctor tab swaps the report for the fix checklist, Esc closes it
