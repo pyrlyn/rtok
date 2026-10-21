@@ -1735,6 +1735,29 @@ Caveats:
 
 Verdict: no decision on the default. The two scout sub-agents used 53 KB of tool results each, against 140 KB for `Explore` and 184 KB for `general-purpose`, but n = 2 and the read column cannot see MCP reads. Keep `rtok-scout` as shipped and re-measure once it has a usable sample. T128's split must also count MCP reads per agentType before the read column can compare them.
 
+### 17.5 Spawn brief: measured net (T131, 2026-10-21)
+
+Commands (read-only, run 2026-10-21 02:21 EEST from the T131 branch at 6ead87eb1 plus the detector fix below): `rtok stats --since 17d --json` for `.subagents.with_brief` / `.without_brief`, and `rtok stats --plugin memory` for the cost rows, summed per `kind`. Window: 2026-10-04 (T292 turned `spawn_brief` on by default) to 2026-10-21. Store: this machine's `~/.claude/projects`, 583 sessions, 87 with sub-agents, 881 sub-agents. Host: Claude Code 2.1.304, `spawn_brief = true`, `spawn_brief_tokens = 300`.
+
+**Detector bug found first.** The first run reported 0 briefed sub-agents out of 881, while the store held 1,021 `memory`/`brief` cost rows. Claude Code does not put `SubagentStart` `additionalContext` in a `user` message. It writes a separate `{"type":"attachment","attachment":{"type":"hook_additional_context","hookEvent":"SubagentStart","content":[…]}}` record after the task prompt, so `first_user_text` never saw the marker. `jsonl::Parsed::subagent_start_context` now collects that record. The table below is from the fixed run.
+
+| Split | Sub-agents | Native Read B per agent | Re-read B per agent | Re-read share of reads | Uncached input tokens per agent |
+| --- | --- | --- | --- | --- | --- |
+| brief | 525 | 30,911 | 2,109 | 6.8 % | 205 |
+| no brief | 356 | 35,516 | 1,590 | 4.5 % | 282 |
+
+Totals: brief 16,228,448 Read B / 1,107,232 re-read B / 107,860 input tokens. No brief: 12,643,831 / 565,935 / 100,263.
+
+Cost: 1,021 `memory`/`brief` rows across the whole ledger (`--plugin` reads every row and does not apply `--since`): 846,385 B, 201,823 estimated tokens, or 198 tokens per brief. At that mean, the 525 briefs in the window cost about 104 K tokens of sub-agent prompt. That is a lower bound, because the brief is cache-read again on every later turn of the sub-agent.
+
+Caveats:
+- The split is not randomized. A sub-agent gets no brief when the parent had read or edited nothing before the spawn (empty ledger). So the no-brief group is biased toward spawns made before the parent read anything, which have less parent overlap to re-read.
+- Cache-read and cache-write tokens are not split by brief, only the uncached input column is. That column is small next to the tree's 8.6 G cache-read tokens and does not price the brief.
+- The lower Read volume of briefed agents (−4.6 KB per agent) is not the metric T131 set, and it carries the same selection bias. It is not claimed as a saving.
+- The store is live, so a re-run drifts by a few rows.
+
+Verdict: measured net < 0. The brief costs about 198 tokens per spawn, and no metric T131 set shows a saving: briefed sub-agents re-read a larger share of their reads (6.8 % vs 4.5 %), not a smaller one. Under T131's rule the default would stay off. D35 (creator, 2026-09-27) already keeps `spawn_brief` on regardless, so this records the number and changes no default; reversing D35 is the creator's call. Side finding from `rtok logs` the same day: `hook SubagentStart slow` warnings at 97–106 ms against `max_ms` 10.
+
 ## 18. Git worktrees: accumulation, ownership, build artifacts (2026-09-21)
 
 Creator question: worktrees pile up, nobody knows whose they are, names are random, and they fill the disk. Not a token saving — no `Measurement` row and no public number follows from this section.

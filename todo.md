@@ -1,7 +1,5 @@
 - T124. Realized `tools_rewrite` saving as a dated `research.md` row
 
-- T131. Measure the spawn brief: cost row and on/off re-read share
-
 - T156. Probe: `WorktreeCreate`/`WorktreeRemove` hooks and reflink-seeded `target/`
 - T261. CI takes ~9.5 min on macOS; the webui check recompiles 183 crates every run
 - T275. Install/update removes rtok's MCP entry from an agent's config while a plugin serves MCP (every host)
