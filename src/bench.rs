@@ -492,7 +492,7 @@ mod tests {
         );
     }
 
-    /// T385.3: the live-arm overlay (`research.md` §16.10.1) runs exactly its three arms, and
+    /// T385.3: the live-arm overlay (`research.md` §47) runs exactly its three arms, and
     /// each arm's settings file sends `claude -p` to a proxy port of its own.
     #[test]
     fn defaults_overlay_runs_three_arms_on_their_own_proxies() {

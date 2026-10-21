@@ -1,4 +1,4 @@
-# T385.3 live arms (research.md §16.10.1). Run from the repo root (paths are cwd-relative):
+# T385.3 live arms (research.md §47). Run from the repo root (paths are cwd-relative):
 #   rtok --config bench/configs/defaults/bench.toml bench --tasks <six-task file>
 # Each arm is a `claude --settings` file pointing at its own `rtok proxy`. An overlay cannot
 # drop the built-in `a` and `b` arms (maps merge), so the first two arms reuse those names.

@@ -786,7 +786,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&home);
     }
 
-    /// T385.3: the live arms start their proxies with these (`research.md` §16.10.1); a name
+    /// T385.3: the live arms start their proxies with these (`research.md` §47); a name
     /// that stopped resolving would silently bench the default instead.
     #[test]
     fn defaults_bench_arm_settings_reach_their_keys() {
