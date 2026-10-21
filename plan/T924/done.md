@@ -1,0 +1,6 @@
+**T924 MCP `worktree_*` / `agent_*` tools take `agent` and `repo`** · `src/mcp.rs`, `src/mcp/{worktrees,messages,agents}.rs`, `src/agents/link.rs`
+Done:
+- `worktree_add`, `worktree_remove`, `worktree_adopt`, `agent_send`, `agent_inbox`, `agent_status_set` and `whoami` take an optional `agent` (id or prefix). It fills a link that is missing, ambiguous or a cwd/ancestor guess; it never overrides a stable link (the session's own env var or its own row), and it only names a live, top-level agent of the server's host. The link rule shows as `arg` in `whoami`.
+- The ambiguity and "outside" errors name the argument to pass (``pass `agent` with the id of yours``).
+- `worktree_add`, `worktree_list` and `worktree_remove` take an optional `repo`. `worktree_add` refuses when the repository it would act in is not the repository of the agent's recorded cwd (``pass `repo` with your repository's path``); an agent with no recorded repository cannot be checked and is not refused. `worktree_adopt` already had `path`.
+Check: `mcp::tests::an_ambiguous_cwd_is_resolved_by_the_agent_argument`, `the_agent_argument_never_overrides_the_sessions_own_link`, `worktree_add_refuses_a_repository_that_is_not_the_callers`; `just check`.
