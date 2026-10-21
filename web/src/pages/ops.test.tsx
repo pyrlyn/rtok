@@ -108,6 +108,13 @@ describe("doctor", () => {
         expect(within(checks).getByText("doctor probe")).toBeTruthy();
         expect(screen.queryByRole("region", { name: "hooks" })).toBeNull();
     });
+
+    test("before the first probe lands the page says doctor is running", async () => {
+        mount(serving({ ...sampleSnapshot, doctor: null, doctor_pending: true }), "/doctor");
+        const checks = await screen.findByRole("region", { name: "checks" });
+        expect(within(checks).getByText("running doctor…")).toBeTruthy();
+        expect(within(checks).queryByText(/did not answer/)).toBeNull();
+    });
 });
 
 describe("logs", () => {
