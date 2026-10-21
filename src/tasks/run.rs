@@ -90,7 +90,7 @@ pub fn close_if_active(
     let project = Project::open(cfg, main)?;
     match project.adapter().get(&id)? {
         Some(t) if t.status.is_active() => {
-            project.status(store, &id, Some(Status::Done), false)?;
+            project.status(store, &id, Some(Status::Done), false, None)?;
             Ok(Some(id.to_string()))
         }
         _ => Ok(None),
