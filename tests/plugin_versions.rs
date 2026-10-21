@@ -139,11 +139,7 @@ mod claude_reinstall {
     fn seed(home: &Path, source_json: &str, version: &str) {
         let dir = home.join(".claude/plugins");
         fs::create_dir_all(&dir).unwrap();
-        fs::write(
-            dir.join("known_marketplaces.json"),
-            format!(r#"{{"rtok":{{"source":{source_json}}}}}"#),
-        )
-        .unwrap();
+        seed_marketplace(home, source_json);
         fs::write(
         dir.join("installed_plugins.json"),
         format!(
@@ -325,6 +321,151 @@ mod claude_reinstall {
         fs::remove_file(home.join("fake-claude-fail-install")).unwrap();
         let again = rtok(&["agents", "update", "claude", "--cli"], &cfg, &home);
         assert!(again.contains("+ plugin"), "{again}");
+    }
+
+    /// T279 step 1: a local install writes its `+g<sha>[.dirty]` version, with `"source":
+    /// "local"`, into the copy Claude runs and points the receipt `path` at that copy; the next
+    /// run reads the copy's file back, finds the same build and calls no `claude`.
+    #[test]
+    fn a_local_install_stamps_the_installed_copy_and_a_rerun_skips() {
+        let (home, cfg) = home_with_fake_claude("pv-local-stamp");
+        seed(&home, GITHUB_SOURCE, "0.1.0");
+        fs::write(home.join("fake-claude-install-path"), "").unwrap();
+
+        let out = rtok(
+            &["agents", "update", "claude", "--cli", "--source", "local"],
+            &cfg,
+            &home,
+        );
+        assert!(out.contains("+ plugin"), "{out}");
+        let copy = home.join(".claude/plugins/cache/rtok/rtok/local");
+        let stamp = json(&copy.join(".rtok-plugin-version"));
+        assert_eq!(stamp["source"], "local", "{stamp}");
+        let version = stamp["version"].as_str().unwrap().to_string();
+        assert!(
+            version.starts_with(&format!("{}+g", env!("CARGO_PKG_VERSION"))),
+            "{version}"
+        );
+        let receipt = json(&receipt_path(&home));
+        assert_eq!(receipt["claude"]["version"], version.as_str());
+        assert_eq!(
+            Path::new(receipt["claude"]["path"].as_str().unwrap()),
+            copy.as_path()
+        );
+
+        // What `claude plugin marketplace add <tree>` leaves behind (the fake does not).
+        let tree = receipt["claude"]["ref"].as_str().unwrap();
+        let local_source = serde_json::json!({"source": "directory", "path": tree}).to_string();
+        seed_marketplace(&home, &local_source);
+        let before = claude_log(&home);
+        let again = rtok(&["agents", "update", "claude", "--cli"], &cfg, &home);
+        assert!(again.contains("already current"), "{again}");
+        assert_eq!(claude_log(&home), before, "same build calls no claude");
+    }
+
+    /// The installed copy's file outranks the receipt (T279 step 2): a receipt at the running
+    /// version over a copy stamped `0.0.9` is an update, not a skip.
+    #[test]
+    fn the_installed_copy_s_version_file_outranks_the_receipt() {
+        let (home, cfg) = home_with_fake_claude("pv-copy-first");
+        let copy = home.join(".claude/plugins/cache/rtok/rtok/old");
+        fs::create_dir_all(&copy).unwrap();
+        fs::write(
+            copy.join(".rtok-plugin-version"),
+            r#"{"schema":1,"plugin":"claude","version":"0.0.9"}"#,
+        )
+        .unwrap();
+        seed(&home, GITHUB_SOURCE, env!("CARGO_PKG_VERSION"));
+        let plugins = home.join(".claude/plugins");
+        let record = format!(
+            r#"{{"version":2,"plugins":{{"rtok@rtok":[{{"scope":"user","installPath":"{}"}}]}}}}"#,
+            copy.display()
+        );
+        fs::write(plugins.join("installed_plugins.json"), record).unwrap();
+        write_receipt(
+            &home,
+            &format!(
+                r#"{{"claude":{{"source":"github","ref":"v{v}","marketplace":"rtok","path":"{p}","version":"{v}","installed_at":"2026-10-21T00:00:00Z"}}}}"#,
+                v = env!("CARGO_PKG_VERSION"),
+                p = copy.display()
+            ),
+        );
+
+        let out = rtok(&["agents", "update", "claude", "--cli"], &cfg, &home);
+        assert!(out.contains("~ plugin rtok@rtok updated"), "{out}");
+    }
+
+    /// T279 step 6: `--dry-run --force` names the forced reinstall and its source, spawns no
+    /// `claude` and writes no receipt.
+    #[test]
+    fn dry_run_force_prints_would_reinstall_and_changes_nothing() {
+        let (home, cfg) = home_with_fake_claude("pv-dry-force");
+        seed(&home, GITHUB_SOURCE, env!("CARGO_PKG_VERSION"));
+
+        let out = rtok(
+            &[
+                "agents",
+                "update",
+                "claude",
+                "--cli",
+                "--force",
+                "--dry-run",
+            ],
+            &cfg,
+            &home,
+        );
+        let want = format!(
+            "would reinstall rtok@rtok from github v{} (forced): \
+             claude plugin uninstall rtok@rtok && claude plugin install rtok@rtok",
+            env!("CARGO_PKG_VERSION")
+        );
+        assert!(out.contains(&want), "{out}");
+        assert_eq!(claude_log(&home), "");
+        assert!(!receipt_path(&home).exists());
+    }
+
+    /// The marketplace source reads its version from Claude's refreshed catalog checkout,
+    /// refreshing it once (not again inside the update).
+    #[test]
+    fn the_marketplace_source_reads_the_refreshed_catalog() {
+        let (home, cfg) = home_with_fake_claude("pv-catalog");
+        seed(&home, GITHUB_SOURCE, env!("CARGO_PKG_VERSION"));
+        let catalog = home.join(".claude/plugins/marketplaces/rtok/plugins/claude");
+        fs::create_dir_all(&catalog).unwrap();
+        fs::write(
+            catalog.join(".rtok-plugin-version"),
+            r#"{"schema":1,"plugin":"claude","version":"99.0.0"}"#,
+        )
+        .unwrap();
+        write_receipt(
+            &home,
+            &format!(
+                r#"{{"claude":{{"source":"marketplace","ref":"v{v}","marketplace":"rtok","path":"/x","version":"{v}","installed_at":"2026-10-21T00:00:00Z"}}}}"#,
+                v = env!("CARGO_PKG_VERSION")
+            ),
+        );
+
+        let out = rtok(&["agents", "update", "claude", "--cli"], &cfg, &home);
+        assert!(
+            out.contains("~ plugin rtok@rtok updated to 99.0.0"),
+            "{out}"
+        );
+        assert_eq!(
+            claude_log(&home),
+            "plugin marketplace update rtok\nplugin update rtok@rtok\n"
+        );
+        let receipt = json(&receipt_path(&home));
+        assert_eq!(receipt["claude"]["version"], "99.0.0");
+        assert_eq!(receipt["claude"]["source"], "marketplace");
+    }
+
+    /// `known_marketplaces.json` alone, pointing `rtok` at `source_json`.
+    fn seed_marketplace(home: &Path, source_json: &str) {
+        fs::write(
+            home.join(".claude/plugins/known_marketplaces.json"),
+            format!(r#"{{"rtok":{{"source":{source_json}}}}}"#),
+        )
+        .unwrap();
     }
 } // mod claude_reinstall
 

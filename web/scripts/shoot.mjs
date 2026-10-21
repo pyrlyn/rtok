@@ -5,7 +5,9 @@
 // Re-shoot `web/screenshots/` from the built SPA (`npm run build` first). Playwright + Chromium
 // (the same tooling the original set used), `?sample` data, dark and light via
 // `localStorage['rtok-theme']`, DPR 1, reduced motion so charts and the orb are still. Named
-// `<page>-<width>-<theme>.webp` to match the set from the T414 restyle. `sips` encodes webp.
+// `<page>-<width>-<theme>.webp` to match the set from the T414 restyle; the empty, loading and
+// error states come from `?sample=<state>` (T414.7). Chromium encodes webp (`toWebp`).
+// `npm run screenshots` (`just spa-screenshots`).
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { extname, join, normalize } from "node:path";
@@ -18,6 +20,13 @@ const PAGES = ["overview", "plugins", "calls", "sessions", "doctor", "logs"];
 const WIDTHS = [390, 768, 1440];
 const THEMES = ["dark", "light"];
 const HEIGHTS = { 390: 844, 768: 1024, 1440: 900 };
+// State shots, at the widths the original set had them.
+const STATES = [
+    { name: "calls-empty", id: "calls", sample: "empty" },
+    { name: "overview-loading", id: "overview", sample: "loading" },
+    { name: "overview-error", id: "overview", sample: "error" },
+];
+const STATE_WIDTHS = [390, 1440];
 
 const MIME = {
     ".html": "text/html",
@@ -89,14 +98,19 @@ const main = async () => {
                     } catch {}
                 }, theme);
                 const page = await context.newPage();
-                for (const id of PAGES) {
-                    await page.goto(`http://127.0.0.1:${port}/?sample#/${id}`, {
+                const shots = [
+                    ...PAGES.map((id) => ({ name: id, id, sample: "" })),
+                    ...(STATE_WIDTHS.includes(width) ? STATES : []),
+                ];
+                for (const { name, id, sample } of shots) {
+                    const query = sample ? `sample=${sample}` : "sample";
+                    await page.goto(`http://127.0.0.1:${port}/?${query}#/${id}`, {
                         waitUntil: "networkidle",
                     });
                     await page.waitForTimeout(250);
                     const png = await page.screenshot({ fullPage: true, type: "png" });
                     const webp = await toWebp(page, png);
-                    await writeFile(join(out, `${id}-${width}-${theme}.webp`), webp);
+                    await writeFile(join(out, `${name}-${width}-${theme}.webp`), webp);
                     n += 1;
                 }
                 await context.close();

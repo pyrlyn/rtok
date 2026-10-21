@@ -1,0 +1,112 @@
+2026-10-21T10:24:03Z DEBUG db.vacuum      autovacuum finished on the postings table, dead tuples reclaimed without a lock
+2026-10-21T10:24:04Z INFO  db.backup      continuous archive segment shipped to the bucket, checksum verified on arrival
+2026-10-21T10:24:13Z DEBUG db.pool        idle connection recycled after its lifetime, replacement opened in the background
+2026-10-21T10:24:19Z DEBUG db.pool        idle connection recycled after its lifetime, replacement opened in the background
+2026-10-21T10:24:28Z INFO  db.pool        connection established to the primary, session parameters applied as configured
+2026-10-21T10:24:29Z DEBUG db.query       prepared statement cache warm, plan reused for the posting insert of the ledger
+2026-10-21T10:24:36Z DEBUG db.pool        idle connection recycled after its lifetime, replacement opened in the background
+2026-10-21T10:24:38Z INFO  db.backup      continuous archive segment shipped to the bucket, checksum verified on arrival
+2026-10-21T10:24:40Z DEBUG db.query       prepared statement cache warm, plan reused for the posting insert of the ledger
+2026-10-21T10:24:41Z INFO  db.backup      continuous archive segment shipped to the bucket, checksum verified on arrival
+2026-10-21T10:24:45Z DEBUG db.pool        idle connection recycled after its lifetime, replacement opened in the background
+2026-10-21T10:24:46Z DEBUG db.route       pools for /primary and /replica rebuilt after the topology notice from the agent
+2026-10-21T10:24:47Z INFO  db.backup      continuous archive segment shipped to the bucket, checksum verified on arrival
+2026-10-21T10:24:51Z WARN  db.pool        connect error on a standby, marked unhealthy and skipped by the router
+2026-10-21T10:25:00Z INFO  db.pool        connection established to the primary, session parameters applied as configured
+2026-10-21T10:25:05Z INFO  db.migrate     schema version matches the binary, no pending migration found for this release
+2026-10-21T10:25:08Z INFO  db.backup      continuous archive segment shipped to the bucket, checksum verified on arrival
+2026-10-21T10:25:13Z DEBUG db.pool        idle connection recycled after its lifetime, replacement opened in the background
+2026-10-21T10:25:15Z INFO  db.migrate     schema version matches the binary, no pending migration found for this release
+2026-10-21T10:25:19Z DEBUG db.route       pools for /primary and /replica rebuilt after the topology notice from the agent
+2026-10-21T10:25:21Z DEBUG db.vacuum      autovacuum finished on the postings table, dead tuples reclaimed without a lock
+2026-10-21T10:25:30Z WARN  db.pool        connect error on a standby, marked unhealthy and skipped by the router
+2026-10-21T10:25:31Z DEBUG db.pool        idle connection recycled after its lifetime, replacement opened in the background
+2026-10-21T10:25:39Z DEBUG db.query       prepared statement cache warm, plan reused for the posting insert of the ledger
+2026-10-21T10:25:45Z INFO  db.backup      continuous archive segment shipped to the bucket, checksum verified on arrival
+2026-10-21T10:25:53Z DEBUG db.pool        health probe answered by the primary, pool stays at its configured minimum size
+2026-10-21T10:25:58Z DEBUG db.vacuum      autovacuum finished on the postings table, dead tuples reclaimed without a lock
+2026-10-21T10:26:02Z DEBUG db.route       pools for /primary and /replica rebuilt after the topology notice from the agent
+2026-10-21T10:26:06Z INFO  db.migrate     schema version matches the binary, no pending migration found for this release
+2026-10-21T10:26:08Z WARN  db.pool        connect error on a standby, marked unhealthy and skipped by the router
+2026-10-21T10:26:17Z INFO  db.replica     read replica lag within the budget, routing reads to the nearest healthy node
+2026-10-21T10:26:23Z DEBUG db.pool        health probe answered by the primary, pool stays at its configured minimum size
+2026-10-21T10:26:28Z DEBUG db.pool        health probe answered by the primary, pool stays at its configured minimum size
+2026-10-21T10:26:30Z DEBUG db.pool        idle connection recycled after its lifetime, replacement opened in the background
+2026-10-21T10:26:33Z INFO  db.backup      continuous archive segment shipped to the bucket, checksum verified on arrival
+2026-10-21T10:26:36Z DEBUG db.vacuum      autovacuum finished on the postings table, dead tuples reclaimed without a lock
+2026-10-21T10:26:43Z DEBUG db.pool        health probe answered by the primary, pool stays at its configured minimum size
+2026-10-21T10:26:45Z INFO  db.pool        connection established to the primary, session parameters applied as configured
+2026-10-21T10:26:51Z DEBUG db.vacuum      autovacuum finished on the postings table, dead tuples reclaimed without a lock
+2026-10-21T10:26:59Z DEBUG db.vacuum      autovacuum finished on the postings table, dead tuples reclaimed without a lock
+2026-10-21T10:27:01Z DEBUG db.pool        health probe answered by the primary, pool stays at its configured minimum size
+2026-10-21T10:27:06Z DEBUG db.pool        idle connection recycled after its lifetime, replacement opened in the background
+2026-10-21T10:27:08Z DEBUG db.pool        health probe answered by the primary, pool stays at its configured minimum size
+2026-10-21T10:27:13Z INFO  db.pool        connection established to the primary, session parameters applied as configured
+2026-10-21T10:27:18Z DEBUG db.pool        health probe answered by the primary, pool stays at its configured minimum size
+2026-10-21T10:27:24Z INFO  db.backup      continuous archive segment shipped to the bucket, checksum verified on arrival
+2026-10-21T10:27:32Z INFO  db.pool        connection established to the primary, session parameters applied as configured
+2026-10-21T10:27:35Z DEBUG db.vacuum      autovacuum finished on the postings table, dead tuples reclaimed without a lock
+2026-10-21T10:27:43Z DEBUG db.pool        idle connection recycled after its lifetime, replacement opened in the background
+2026-10-21T10:27:44Z WARN  db.replica     replica lag over the budget for a short window, reads routed to the primary
+2026-10-21T10:27:49Z DEBUG db.query       prepared statement cache warm, plan reused for the posting insert of the ledger
+2026-10-21T10:27:53Z INFO  db.migrate     schema version matches the binary, no pending migration found for this release
+2026-10-21T10:28:00Z INFO  db.backup      continuous archive segment shipped to the bucket, checksum verified on arrival
+2026-10-21T10:28:02Z DEBUG db.pool        health probe answered by the primary, pool stays at its configured minimum size
+2026-10-21T10:28:10Z INFO  db.migrate     schema version matches the binary, no pending migration found for this release
+2026-10-21T10:28:19Z INFO  db.backup      continuous archive segment shipped to the bucket, checksum verified on arrival
+2026-10-21T10:28:22Z INFO  db.replica     read replica lag within the budget, routing reads to the nearest healthy node
+2026-10-21T10:28:31Z INFO  db.backup      continuous archive segment shipped to the bucket, checksum verified on arrival
+2026-10-21T10:28:38Z INFO  db.replica     read replica lag within the budget, routing reads to the nearest healthy node
+2026-10-21T10:28:45Z DEBUG db.vacuum      autovacuum finished on the postings table, dead tuples reclaimed without a lock
+2026-10-21T10:28:48Z DEBUG db.query       prepared statement cache warm, plan reused for the posting insert of the ledger
+2026-10-21T10:28:51Z DEBUG db.pool        idle connection recycled after its lifetime, replacement opened in the background
+2026-10-21T10:28:55Z INFO  db.migrate     schema version matches the binary, no pending migration found for this release
+2026-10-21T10:28:56Z DEBUG db.query       prepared statement cache warm, plan reused for the posting insert of the ledger
+2026-10-21T10:28:59Z DEBUG db.pool        health probe answered by the primary, pool stays at its configured minimum size
+2026-10-21T10:29:04Z INFO  db.replica     read replica lag within the budget, routing reads to the nearest healthy node
+2026-10-21T10:29:07Z INFO  db.pool        connection established to the primary, session parameters applied as configured
+2026-10-21T10:29:16Z INFO  db.backup      continuous archive segment shipped to the bucket, checksum verified on arrival
+2026-10-21T10:29:22Z DEBUG db.vacuum      autovacuum finished on the postings table, dead tuples reclaimed without a lock
+2026-10-21T10:29:31Z INFO  db.migrate     schema version matches the binary, no pending migration found for this release
+2026-10-21T10:29:39Z INFO  db.pool        connection established to the primary, session parameters applied as configured
+2026-10-21T10:29:46Z INFO  db.backup      continuous archive segment shipped to the bucket, checksum verified on arrival
+2026-10-21T10:29:53Z INFO  db.backup      continuous archive segment shipped to the bucket, checksum verified on arrival
+2026-10-21T10:30:01Z DEBUG db.pool        idle connection recycled after its lifetime, replacement opened in the background
+2026-10-21T10:30:02Z INFO  db.backup      continuous archive segment shipped to the bucket, checksum verified on arrival
+2026-10-21T10:30:04Z DEBUG db.query       prepared statement cache warm, plan reused for the posting insert of the ledger
+2026-10-21T10:30:12Z DEBUG db.query       prepared statement cache warm, plan reused for the posting insert of the ledger
+2026-10-21T10:30:14Z INFO  db.migrate     schema version matches the binary, no pending migration found for this release
+2026-10-21T10:30:15Z DEBUG db.vacuum      autovacuum finished on the postings table, dead tuples reclaimed without a lock
+2026-10-21T10:30:16Z DEBUG db.pool        idle connection recycled after its lifetime, replacement opened in the background
+2026-10-21T10:30:25Z INFO  db.migrate     schema version matches the binary, no pending migration found for this release
+2026-10-21T10:30:31Z DEBUG db.pool        idle connection recycled after its lifetime, replacement opened in the background
+2026-10-21T10:30:33Z INFO  db.pool        connection established to the primary, session parameters applied as configured
+2026-10-21T10:30:40Z DEBUG db.query       prepared statement cache warm, plan reused for the posting insert of the ledger
+2026-10-21T10:30:45Z INFO  db.migrate     schema version matches the binary, no pending migration found for this release
+2026-10-21T10:30:51Z DEBUG db.vacuum      autovacuum finished on the postings table, dead tuples reclaimed without a lock
+2026-10-21T10:30:53Z DEBUG db.pool        health probe answered by the primary, pool stays at its configured minimum size
+2026-10-21T10:31:01Z DEBUG db.pool        idle connection recycled after its lifetime, replacement opened in the background
+2026-10-21T10:31:09Z DEBUG db.pool        health probe answered by the primary, pool stays at its configured minimum size
+2026-10-21T10:31:14Z DEBUG db.pool        health probe answered by the primary, pool stays at its configured minimum size
+2026-10-21T10:31:17Z DEBUG db.pool        idle connection recycled after its lifetime, replacement opened in the background
+2026-10-21T10:31:23Z DEBUG db.pool        idle connection recycled after its lifetime, replacement opened in the background
+2026-10-21T10:31:31Z INFO  db.replica     read replica lag within the budget, routing reads to the nearest healthy node
+2026-10-21T10:31:40Z INFO  db.migrate     schema version matches the binary, no pending migration found for this release
+2026-10-21T10:31:44Z INFO  db.pool        connection established to the primary, session parameters applied as configured
+2026-10-21T10:31:47Z DEBUG db.vacuum      autovacuum finished on the postings table, dead tuples reclaimed without a lock
+2026-10-21T10:31:56Z INFO  db.pool        connection established to the primary, session parameters applied as configured
+2026-10-21T10:31:58Z INFO  db.replica     read replica lag within the budget, routing reads to the nearest healthy node
+2026-10-21T10:32:07Z INFO  db.replica     read replica lag within the budget, routing reads to the nearest healthy node
+2026-10-21T10:32:10Z DEBUG db.vacuum      autovacuum finished on the postings table, dead tuples reclaimed without a lock
+2026-10-21T10:32:14Z DEBUG db.vacuum      autovacuum finished on the postings table, dead tuples reclaimed without a lock
+2026-10-21T10:32:18Z DEBUG db.vacuum      autovacuum finished on the postings table, dead tuples reclaimed without a lock
+2026-10-21T10:32:22Z DEBUG db.query       prepared statement cache warm, plan reused for the posting insert of the ledger
+2026-10-21T10:32:26Z INFO  db.backup      continuous archive segment shipped to the bucket, checksum verified on arrival
+2026-10-21T10:32:35Z DEBUG db.query       prepared statement cache warm, plan reused for the posting insert of the ledger
+2026-10-21T10:32:41Z DEBUG db.pool        health probe answered by the primary, pool stays at its configured minimum size
+2026-10-21T10:32:42Z INFO  db.pool        connection established to the primary, session parameters applied as configured
+2026-10-21T10:32:50Z INFO  db.replica     read replica lag within the budget, routing reads to the nearest healthy node
+2026-10-21T10:32:54Z INFO  db.replica     read replica lag within the budget, routing reads to the nearest healthy node
+2026-10-21T10:33:02Z DEBUG db.vacuum      autovacuum finished on the postings table, dead tuples reclaimed without a lock
+2026-10-21T10:33:08Z DEBUG db.vacuum      autovacuum finished on the postings table, dead tuples reclaimed without a lock
+2026-10-21T10:33:12Z DEBUG db.pool        idle connection recycled after its lifetime, replacement opened in the background

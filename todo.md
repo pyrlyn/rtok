@@ -1,11 +1,8 @@
 - T124. Realized `tools_rewrite` saving as a dated `research.md` row
 
-- T131. Measure the spawn brief: cost row and on/off re-read share
-
 - T156. Probe: `WorktreeCreate`/`WorktreeRemove` hooks and reflink-seeded `target/`
 - T261. CI takes ~9.5 min on macOS; the webui check recompiles 183 crates every run
 - T275. Install/update removes rtok's MCP entry from an agent's config while a plugin serves MCP (every host)
-- T275.1. `rtok mcp ping <agent>`: prove the agent's rtok MCP server is alive and answering
 - T277. Move rtok's MCP core into its own crate `crates/rtok-mcp`
 - T278. `rtok agents info <agent>` reports the real MCP state, not "mcp installed" by assumption
 - T279. One plugin version scheme for every install source (GitHub, local, marketplace), and `agents update` that skips an up-to-date plugin
@@ -13,7 +10,6 @@
 - T289. Worktrees the host creates join rtok: `rtok worktree adopt` and the post-create hooks
 - T356. Never index `$HOME` or `/` as a graph root
 - T369.1. Measure grep_symbol follow-up rate after an opt-in window
-- T370. SessionStart repo map ranked by file-level personalized PageRank
 - T385. Proxy lanes and the optimization plan from `docs/research/optimization.md`
 - T385.3. Defaults bench: `compress` mode, context editing, skills, `live_blobs`
 - T385.9. P28 Phase 2: async compressor on the `internal` lane
@@ -22,10 +18,6 @@
 - T395. One real session as one OpenTelemetry trace in SigNoz and Maple
 - T396. Verify the usage readers against real files
 - T398. Probe editors on a `worktree.useRelativePaths` worktree
-- T413. More agent hosts: popular agents rtok does not install into yet
-- T413.13. `rtok agents install trae` — Trae
-- T414. Web dashboard restyle on the brand pack, built from `brand/` sources
-- T414.7. Re-shoot `web/screenshots/`; close the web admin gap in `brand/`
 - T416. Shared `change-preview` crate for dry-run output
 - T428. SessionStart hook back under the 10 ms budget
 - T436.4. Spinner on `agents install/update` through T276's `ProgressRunner`
@@ -35,17 +27,14 @@
 - T687. Hooks: PreToolUse/PostToolUse p50 to 10 ms
 - T920. PostToolUse hook went from ~4 ms to ~50 ms with v0.17.0-alpha.2 (memory observations)
 - T921. Hook calls that hang until the host's 5 s timeout, and the Pre/PostToolUse/SessionEnd tail
-- T922. `rtok run --` rewrite breaks every Bash call when `rtok` is not on PATH
 - T923. Relative MCP paths resolve against the server's checkout, not the caller's worktree
 - T924. MCP `worktree_*` tools: worktree in the wrong repo, agent ambiguity the agent cannot resolve
 - T925. Cursor plugin link into the versioned ketch store dangles after an upgrade; doctor stays green
-- T926. `rtok expand <id>` on the CLI returns an "identical to a result N turns ago" pointer
 - T927. `memory/observe` measurement rows claim the whole tool output as saved
 - T928. MCP input schemas mark aliased params required, so T353's aliases never reach the server
 - T929. Dedup stubs whose original is no longer in the agent's context (compaction, subagents)
 - T930. Read gate denies native Read for files `rtok read` cannot serve (images, paths outside roots)
 - T931. Bounded `sed -n a,bp` windows inside command chains are still elided
-- T932. Codex and Cursor MCP entries use a bare `rtok` command and fail to spawn
 - T933. Git guard still refuses `rtok run`-wrapped git (seen again 2026-10-16)
 - T934. Store "database is locked": hooks skipped, worktree claims not stored or released
 - T935. MCP `read`/`outline` fail with a bare ENOENT once the server's cwd is deleted

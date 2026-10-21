@@ -41,7 +41,8 @@ use anyhow::Result;
 use super::plugin::HostPlugin;
 use super::{
     Agent, Kind, Mode, Support, Variant, apply_mcp_only, installed_mcp_only, jsonc,
-    local_mcp_entry, mcp_summary, opencode, register_local_mcp, rtok_command, unregister_local_mcp,
+    local_mcp_entry, mcp_summary, opencode, register_local_mcp, rtok_mcp_command,
+    unregister_local_mcp,
 };
 use crate::config::Config;
 
@@ -88,7 +89,7 @@ pub fn register_mcp(cfg: &Config) -> Result<String> {
     if !is_jsonc(&path) {
         return register_local_mcp(cfg, &path, "mcp", "mimo");
     }
-    let cmd = rtok_command();
+    let cmd = rtok_mcp_command();
     jsonc::upsert_entry(
         cfg,
         &path,

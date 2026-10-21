@@ -30,6 +30,8 @@
 - `grep_symbol.rs` (T369, opt-in `grep_symbol = true`, cfg `graph`): index lookup only
   (`symbol_defs`, never `index_for`), 1-5 definitions, each re-checked against its file's
   line (a stale row falls through), text from `graph::def_text`, capped at the inject
-  budget; `kind: "grep_symbol"` Measurement carries no saving (D3).
+  budget; `kind: "grep_symbol"` Measurement carries no saving (D3). `rtok stats` finds
+  answers in transcripts by `ANSWERED` and the name by `symbol_name` (T369.1): change
+  either and the follow-up count changes with it.
 
 **Checks**: `plan.md` T2.6. Order: `roadmap.md` § `guard`.
