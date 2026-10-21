@@ -3155,3 +3155,36 @@ const run = (cmd) => new Promise((res) => {
 ```
 
 No T687 number was taken. The machine was not idle: 16 cores at load average 13 to 20 with other sessions building, and the `true` floor read p50 8.97 ms (100 rounds) against the 5.2 ms of §19.2, so any hook figure would be mostly load. For scale only, the installed `rtok-hook` v0.15.1 (no resident) read p50 26.64 ms in the same run; that is neither the current code nor a result. What §19.2/§19.7 already fix: the floor is 5.2 to 5.6 ms (node plus `/bin/sh`), the hook with a resident is 12.3 to 12.5 ms, so reaching 10 ms means taking at most 4.4 ms above the floor for the shell line, the `rtok-hook` start, the socket round trip and the hook. The next step is a rerun on a quiet machine of `command -v rtok-hook && exec rtok-hook PreToolUse` against `true` and a bare `rtok-hook` start, to see which of those four pieces owns the 6.7 ms, before touching code.
+
+## 47. Defaults bench, live half: arms, harness gaps and re-run protocol (T385.3, checked 2026-10-21)
+
+Status: no live arm ran, so nothing is measured here and every default stays as it is. §16.10 holds the offline ceiling per setting (`compress` mode 5.17 % of input cost net, `context_management` 20.33 %, `skills` 0.04 %, `live_blobs` 0 blocks) and keeps live arms only for `compress` mode and `context_management`. The arms are paid `claude -p` runs that need the creator's API spend (T394); this session also could not run `rtok`, read `~/.rtok` or reach a local model server. This section is what an agent could prepare without spend: the arm files, and what `rtok bench` (`src/bench.rs` at `5aa4a495`) has to change before its pass column means anything.
+
+**Arms.** `bench/configs/defaults/bench.toml` is an `rtok --config` overlay for `rtok bench`; each arm is a `claude --settings` file whose only key is `ANTHROPIC_BASE_URL`, so the arms differ in the proxy alone. Tests pin the set: `bench::tests::defaults_overlay_runs_three_arms_on_their_own_proxies` (the overlay loads through the real layering with exactly these arms on distinct ports) and `layers::tests::defaults_bench_arm_settings_reach_their_keys` (the flag and variable below reach `proxy.mode` and `proxy.context_management`).
+
+| Arm | Settings file | Proxy, one shell each | What differs |
+| --- | --- | --- | --- |
+| `a` | `a-off.json` | `RTOK_HOME=<dir>/a rtok proxy --port 8801` | Nothing: `passthrough`, today's default |
+| `b` | `b-compress.json` | `RTOK_HOME=<dir>/b rtok proxy --port 8802 --mode compress` | `archive` pointer, `toon`, the `compress` plugin and noise stripping; `skills` and `live_blobs` stay at their default `false` |
+| `context` | `context.json` | `RTOK_HOME=<dir>/context RTOK_PROXY_CONTEXT_MANAGEMENT=true rtok proxy --port 8803` | `clear_tool_uses_20250919` with platform defaults (§16.10), unless the client sent its own `context_management`; each armed request writes a zero-saving `proxy` / `context_management` Measurement row, so the run shows whether it armed at all |
+
+The arms reuse the names `a` and `b` because an overlay's `[bench.configs]` merges with the built-in `a`/`b` map and cannot remove them; other names would also run the legacy and rtok arms. There is no `compress` + `context` arm: with both on, `archive` stands down on the Anthropic wire (`platform_clears` in `src/proxy/mod.rs`), so it is the `context` arm plus `toon` and `compress`. A separate `RTOK_HOME` per arm keeps each arm's archive decisions and Measurement rows apart (`rtok stats` per arm).
+
+**Harness gaps.** Besides the placeholder `check = "true"` and the short tasks §16.10 names:
+
+1. `check` runs once per task per arm, after all `runs` of that arm (`table`), so `pass` counts tasks, not runs, and only the last run's tree is checked.
+2. `claude -p` runs in the directory `rtok bench` started in (`one` sets no working directory) and nothing resets it between runs or arms: an edit from run 1 of arm `a` is the starting state of every later run. With the overlay's paths that directory is the rtok checkout itself.
+3. A run that fails or passes `timeout_s` scores zeros and still counts in the mean (`acc.n += 1`), so a broken arm looks cheap.
+4. Cost is the host's `total_cost_usd` from `claude -p`, not `[stats.prices]`; comparable across arms of one run, not across runs on different price lists.
+5. Exactly six tasks or `rtok bench` refuses to start.
+6. Relative paths in a `--config` file resolve against the working directory, not the file, although `docs/config.md` ("Rules") says otherwise. The overlay uses repo-root paths and must be run from the repo root.
+
+Gaps 1–3 decide whether the pass rate and the mean cost are real; they are an `rtok bench` change, not part of this card (I-140).
+
+**Re-run protocol (creator).** Until I-140 lands, work around gaps 1–3 by hand:
+
+1. A six-task file in a fixture repo (not this checkout). Every task needs a real `check`, at least five tool rounds after a result of 1500 or more tokens (so the pointer fires, §16.9), and at least two must pass 100,000 input tokens (so context editing fires). End every `check` with a reset of the fixture (`git -C <fixture> reset -q --hard && git -C <fixture> clean -qfd`, keeping the check's exit status).
+2. Start the three proxies from the table, each with its own empty `RTOK_HOME`.
+3. Copy the overlay with absolute paths and, from the fixture repo, run `RTOK_BENCH_LIVE=1 rtok --config <copy> bench --tasks <file> --runs 1`, as many times as the sample needs; keep each printed table (the per-arm JSON under `<tasks dir>/results/` is overwritten). Discard any run with a zero row.
+4. Per arm, record mean input, cache and output tokens, mean `total_cost_usd`, passes and cost per passed task, `claude --version` and the model; for `b`, `RTOK_HOME=<dir>/b rtok stats --plugin archive --since 1d`; for `context`, the count of `proxy` / `context_management` rows.
+5. One dated row per setting under this section. A setting becomes default-on in a follow-up only if cost per passed task falls with the pass rate held (T385.3); otherwise it stays off with its row.

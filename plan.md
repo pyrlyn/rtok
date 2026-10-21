@@ -1019,6 +1019,8 @@ Check: each sub-task carries its own Check; this card closes when every step is 
 
 optimization.md §5. `rtok bench` cost per passed task for each setting on and off, recorded with a date in `research.md` (`tools_rewrite` is T124). Settings whose row shows a net saving with the pass rate held become default-on in a follow-up; the rest stay off with their number. Branch `t128-proxy-compress-default` (PR #562, `df2a13ba`) is prior art. Needs the creator's API spend for live arms (see T394).
 
+Live-arm prep (2026-10-21, `research.md` §47): `bench/configs/defaults/` holds the three arms §16.10 keeps (`a` passthrough :8801, `b` compress :8802, `context` :8803, one `rtok proxy` and `RTOK_HOME` each), pinned by tests, with a step-by-step protocol for the creator. Nothing ran. `rtok bench` checks once per task per arm, never resets the working directory and averages failed runs in as zeros (I-140); the protocol works around that with `--runs 1` and a resetting `check`.
+
 Check: one dated `research.md` row per setting.
 
 ### T385.9. P28 Phase 2: async compressor on the `internal` lane
