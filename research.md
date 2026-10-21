@@ -2342,6 +2342,27 @@ Question: which file does each host read after it creates a worktree, and what e
 - **Kilo.** https://kilo.ai/docs/automate/agent-manager and https://kilo.ai/docs/automate/agent-manager-workflows. The setup script is `.kilo/setup-script` or `.kilo/setup-script.sh` (macOS/Linux, in that order) and `.kilo/setup-script.ps1`, `.cmd`, `.bat` (Windows, in that order), "in your project". It runs "whenever a new worktree is created", after the root-level `.env` files are copied and before the agent starts, with `WORKTREE_PATH` (the new worktree) and `REPO_PATH` (the repository root) in the environment; `sh` runs a POSIX script, no executable bit needed; five-minute timeout; on failure the worktree is kept for inspection (so a failing setup line can hold the session up, and our line must fail open). Managed worktrees live in `.kilo/worktrees/`. The file is a plain script, so our entry is a marked block, and an existing `.kilo/setup-script.sh` is edited instead of creating `.kilo/setup-script`, which would shadow it. Windows variants are not written (no unix shell to run the block).
 - **Not confirmed** (so not claimed): whether any of the three evicts or breaks on a git-locked worktree (T281's live probe); what Cursor does with a failing command.
 
+### Git lock against a host's own eviction (T289, 2026-10-21)
+
+Question (T289 step 2): does a git lock that rtok puts on a worktree in an evicting pool break the host's eviction (Cursor's cap of 25, Windsurf and Devin about 20 by last access, Codex the 15 newest)? `src/worktree/origin.rs` `evicts` answers "assume yes" for `cursor`, `windsurf` and `codex`, so `adopt` gives those a store claim and no lock.
+
+What git itself does with a lock (https://git-scm.com/docs/git-worktree: "`remove`: … to remove a locked working tree, specify `--force` twice"; "`prune`: … unless locked"; §18.2, checked 2026-09-22 with git 2.54):
+
+| How a host evicts | With rtok's lock | Without (store claim only) |
+| --- | --- | --- |
+| `git worktree remove [--force]` | refused, so the worktree stays and the pool can stay over its cap | removed; `gc` drops the claim of a gone record |
+| `git worktree remove -f -f` | removed; the lock did nothing | removed |
+| delete the directory, then `git worktree prune` | the directory goes, but the record and its branch's checkout stay for good (a locked record is never `prunable`) | the record goes at the next prune |
+
+So in an evicting pool a lock either blocks the sweep or does nothing. It only protects the worktree if the host's sweep reads git locks and skips locked worktrees, and none of the three hosts' docs say that it does. The store-only claim cannot be worse than a lock under any of the mechanisms above. The one thing it gives up is that protection, and only on a host that would honour the lock.
+
+Not measured here. The agent session could not run a host (T280) and its permissions blocked scratch shell scripts, `gh search` and web search. Cursor and Windsurf/Devin are closed source, and neither vendor page says how the sweep removes a worktree. Codex's open repository was not read for the same reason. Re-run protocol (creator, one host at a time):
+
+1. Scratch repository. Fill the host's pool to its cap with its own worktrees (Cursor 25, Windsurf/Devin 20, Codex 15). Lock one with `git worktree lock --reason "probe | t0 | <date> | agent 00000000"`, and make it the oldest or least recently used.
+2. Create one more worktree in the host, so the sweep has to evict. On Cursor the documented sweep runs every 6 hours, so wait for it or restart the app.
+3. Record `git worktree list --porcelain` before and after, plus anything the host prints or logs. Is the locked one gone, still there with its directory, or still there without it? Did the host evict a different worktree instead, refuse to create, or go over the cap?
+4. Flip `evicts` for that host only if the host skipped the locked worktree and stayed under its cap, then add a row to this table.
+
 ## 27. Memory defaults and one install point (T291–T294) (2026-09-27)
 
 Creator 2026-09-27: the write hook and the session-end hook must fire, smart memory must be on by default, and every agent must get that from one module (or one `create`), not from a hand-written manifest per host. Decision D35. Cloud sync of notes is a later task in a private repo; that repo was not found in the local tree or via `gh repo list` / `gh search` on this date (the only cloud-sync hit was Fern in `listepo/budget-app`, a different product). D8 stands: this repo keeps one SQLite file and does not grow a sync protocol. T294 only widens the JSONL row so a later replicator can carry a tombstone.
