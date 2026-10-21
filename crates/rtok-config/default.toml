@@ -418,6 +418,8 @@
 [worktree]                            # rtok worktree add | list | gc
 # enabled = true                        # false: rtok worktree and MCP worktree_* are off; Claude's worktree hooks act as without rtok
 # root = ".rtok/worktrees"              # where `rtok worktree add` creates worktrees, as <root>/<repo>-<task>; relative: under the main checkout
+# seed = true                          # fill a new worktree's seed_dirs from the sibling that built them last, by copy-on-write clone (--no-seed)
+# seed_dirs = ["target", "node_modules"] # build caches to seed, relative to the checkout; a bare name also matches one level down
 
 [tasks]                               # task adapters; usually set per project in .rtok.toml
 # adapter = "disk"                      # disk | github | gitlab

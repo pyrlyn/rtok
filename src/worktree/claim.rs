@@ -204,7 +204,7 @@ fn register_project(store: Option<&Store>, auto_add: bool, path: &Path, branch: 
 pub fn add(
     store: Option<&Store>,
     cwd: &Path,
-    root: &Path,
+    wt: &crate::config::Worktree,
     id: (&str, Option<&str>),
     agent: Option<&AgentDetail>,
     owner_flag: Option<String>,
@@ -212,8 +212,11 @@ pub fn add(
 ) -> Result<super::add::Plan> {
     let owner = owner(owner_flag, agent, store)?;
     let agent_id = agent.map(|a| a.id.as_str());
-    let plan = super::add::run(cwd, root, id, (&owner, agent_id))?;
+    let plan = super::add::run(cwd, &wt.root, id, (&owner, agent_id))?;
     copy_symbol_index(store, cwd, &plan.path);
+    if wt.seed {
+        super::seed::from_siblings(cwd, &plan.path, &wt.seed_dirs);
+    }
     if let Some(agent) = agent_id {
         remember(store, &plan.path, agent, &plan.task);
     }

@@ -7193,7 +7193,7 @@ _rtok() {
             return 0
             ;;
         rtok__subcmd__worktree__subcmd__add)
-            opts="-h --owner --agent --config --help"
+            opts="-h --owner --agent --no-seed --config --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0

@@ -144,6 +144,7 @@ complete -c rtok -n "__fish_rtok_using_subcommand worktree; and not __fish_seen_
 complete -c rtok -n "__fish_rtok_using_subcommand worktree; and __fish_seen_subcommand_from add" -l owner -d 'Who holds it, as `<provider> / <model>`; written into the lock reason. Defaults to `<host> / <model>` of the agent' -r
 complete -c rtok -n "__fish_rtok_using_subcommand worktree; and __fish_seen_subcommand_from add" -l agent -d 'The rtok agent id (any unique prefix) to bind it to; defaults to `RTOK_AGENT_ID`' -r
 complete -c rtok -n "__fish_rtok_using_subcommand worktree; and __fish_seen_subcommand_from add" -l config -d 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)' -r -F
+complete -c rtok -n "__fish_rtok_using_subcommand worktree; and __fish_seen_subcommand_from add" -l no-seed -d 'Do not seed `[worktree] seed_dirs` from a sibling checkout this time'
 complete -c rtok -n "__fish_rtok_using_subcommand worktree; and __fish_seen_subcommand_from add" -s h -l help -d 'Print help'
 complete -c rtok -n "__fish_rtok_using_subcommand worktree; and __fish_seen_subcommand_from claim" -l agent -d 'The rtok agent id (any unique prefix); defaults to `RTOK_AGENT_ID`' -r
 complete -c rtok -n "__fish_rtok_using_subcommand worktree; and __fish_seen_subcommand_from claim" -l owner -d 'The owner an old lock names, as `<provider> / <model>`. Defaults to `<host> / <model>` of the agent' -r
