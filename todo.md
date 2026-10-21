@@ -46,4 +46,3 @@
 - T940. Graph `references` writes hit "database is locked"; session-only projects auto-registered
 - T941. Probe: auto mode vs rtok (rewritten Bash input, 64-hex `expand` ids)
 - T942. `rtok expand -` used as a stdin pass-through by agents
-- T952.2. Close the task and remove the worktree after its PR merges

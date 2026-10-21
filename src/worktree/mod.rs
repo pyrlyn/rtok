@@ -17,6 +17,7 @@ pub mod list;
 pub mod migrate;
 pub mod ops;
 pub mod origin;
+pub mod reap;
 pub mod remove;
 pub mod whoami;
 
