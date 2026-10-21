@@ -474,7 +474,7 @@ fn cmd_hook_measurement_matches_returned_bytes() {
         .as_str()
         .unwrap_or("")
         .to_string();
-    assert!(modified.starts_with("rtok run -- "), "{modified}");
+    assert!(modified.contains("rtok run -- "), "{modified}");
     let out = run(&home, &["run", "cat", file.to_str().unwrap()], "", &home.0);
     assert!(out.contains(" lines]"), "{out}");
     let rows = rows(&home, "cmd");

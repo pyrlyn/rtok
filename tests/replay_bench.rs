@@ -112,7 +112,7 @@ fn replay(home: &Home) {
                     .as_str()
                     .unwrap_or("")
                     .to_string();
-                if modified.starts_with("rtok run -- ") {
+                if modified.contains("rtok run -- ") {
                     run(home, &["run", "cat", file.to_str().unwrap()], "", &home.0);
                 }
             }
