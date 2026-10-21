@@ -4,7 +4,7 @@
 
 // Offline data source (`?sample`) and the snapshot fixture shared by Storybook, Vitest and
 // offline e2e. Typed as `Snapshot`, so a schema change breaks `tsc` here instead of drifting.
-import { echoReq, type Connect, type Connection, type Frame } from "./ws";
+import { echoReq, type Connect, type Connection, type Frame, type Handlers } from "./ws";
 import { alertRow, call, plugin, project, stats } from "./sampleRows";
 import { applyProject } from "../pages/projectLogic";
 import { mockMachine } from "./sampleDoctor";
@@ -336,8 +336,25 @@ export const sampleSnapshot: Snapshot = {
 export const isSampleRequested = (search: string): boolean =>
   new URLSearchParams(search).has("sample");
 
-export const connectSample: Connect = (handlers) => {
-  let snapshot = structuredClone(sampleSnapshot);
+// `?sample=<state>` (T414.7): the states `web/scripts/shoot.mjs` shoots without a server. `loading`
+// opens the link and sends no snapshot; any other value is the full fixture.
+const sampleStates: Record<string, Snapshot | null> = {
+  empty: { ...sampleSnapshot, calls: [] },
+  error: { ...sampleSnapshot, error: "sample: the store did not open" },
+  loading: null,
+};
+
+export const sampleConnect = (search: string): Connect => {
+  const state = new URLSearchParams(search).get("sample") ?? "";
+  if (!Object.hasOwn(sampleStates, state)) return connectSample;
+  const first = sampleStates[state] ?? null;
+  return (handlers) => connectSampleFrom(first, handlers);
+};
+
+export const connectSample: Connect = (handlers) => connectSampleFrom(sampleSnapshot, handlers);
+
+function connectSampleFrom(first: Snapshot | null, handlers: Handlers): Connection {
+  let snapshot = structuredClone(first ?? sampleSnapshot);
   const machine = mockMachine();
   const junk = mockJunk();
   let stopped = false;
@@ -351,7 +368,7 @@ export const connectSample: Connect = (handlers) => {
   handlers.onState("connecting");
   later(() => {
     handlers.onState("open");
-    emit();
+    if (first) emit();
   });
 
   const connection: Connection = {
@@ -448,4 +465,4 @@ export const connectSample: Connect = (handlers) => {
     },
   };
   return connection;
-};
+}
