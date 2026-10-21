@@ -673,6 +673,46 @@ Your local meters (each measures a different slice, none the bill):
 | claude-mem | "87 % savings" | ratio of its own retrieval reads (21 K) vs. work it indexed (159 K) |
 | token-optimizer | author's sessions: 14.44 M tokens / 30 d, "$313/mo measured" | 3.3 chars/token estimator; 27 Python hooks here |
 
+### Paid live benches: status and re-run protocol (T394, 2026-10-21)
+
+No live row yet. In the agent session for T394, the permission policy refused to run `claude` at all (`claude --version` needed approval that a non-interactive session cannot give), and refused the built `rtok` binary unless it went through `cargo run`. So `claude --version`, the auth state and every paid arm are still unrecorded. No API spend was made.
+
+The harness still runs on main `62027a93`. These dry-runs spend nothing, because `RTOK_BENCH_LIVE` was unset and no `claude` was spawned:
+
+| suite | command | schedule |
+|-------|---------|----------|
+| T9.2 legacy vs rtok | `cargo run --release --bin rtok -- bench --runs 3 --dry-run` | 6 tasks × a/b × 3 = 36 runs |
+| T68.9 graph | `cargo run --release --bin rtok -- bench --suite graph --runs 1 --dry-run` | 12 questions × mcp/native = 24 runs |
+| T53.1 nudges | (two `rtok bench` passes, one per arm, see 6. below) | 6 tasks × off/on × 3 = 36 runs |
+
+Reading `src/bench.rs` turned up five things that would make a live row unreadable. Check each one before paying for a run:
+
+1. **A failed run still counts as a pass at $0.** If `claude -p` exits non-zero, `one()` returns zeros, and the run still counts in `n`. Every `bench/tasks.toml` check is `true`, so a run where every call fails prints 6/6 pass and $0.0000. That is the T53.1 trap. So the T9.2 and nudges pass rate is not evidence, and the "pass rate holds" half of Gate P9 cannot be measured on this task set. Look at `is_error` in one run's JSON before reading the table.
+2. **The user's own settings load into every arm.** `claude -p --settings <arm>.json` merges into `~/.claude/settings.json`; there is no `--setting-sources ""` or `--strict-mcp-config`. The user's own hooks, plugins and MCP servers (rtok's plugin included) therefore load in arm a, in the graph `native` arm and in the nudges off arm. Run with a scratch `HOME`/`CLAUDE_CONFIG_DIR` that holds only auth.
+3. **The arms need local proxies.** `legacy.json` points at `:8788`/`:8787` (headroom → caveman), and `rtok.json` points at `:8790` (`rtok proxy`). If a proxy is down, every call in that arm fails, which is case 1.
+4. **The A/B tasks run in the caller's cwd.** `one()` sets no `cwd`, so "Add a function foo" edits whatever tree `rtok bench` was started in. Start it inside a scratch copy of a fixture crate, not this checkout.
+5. **The graph cost column may read zero.** `graph_one` prices by a top-level `model` key and adds nothing when that key is missing. Check that the first live JSON has the key; if it does not, use its `total_cost_usd`.
+
+Re-run protocol (creator's terminal, outside an agent sandbox):
+
+```bash
+claude --version; claude auth status          # record both; loggedIn must be true
+claude -p "Reply ok" --output-format json --max-turns 1 | jq '.is_error,.total_cost_usd'
+rtok proxy &                                    # :8790; start headroom/caveman for arm a
+# 1. T9.2: default [bench.configs] a/b
+RTOK_BENCH_LIVE=1 rtok bench --runs 3          # → bench/results/a.json, b.json
+# 2. T68.9
+RTOK_BENCH_LIVE=1 rtok bench --suite graph --runs 1
+# 3. T53.1 nudges: one pass per arm, each its own RTOK_CONFIG and RTOK_HOME
+#    off.toml: [plugins.inject] modes = []          [bench.configs] off = "bench/configs/rtok.json"
+#    on.toml:  [plugins.inject] modes = ["nudges"]  [bench.configs] on  = "bench/configs/rtok.json"
+RTOK_CONFIG=off.toml RTOK_BENCH_LIVE=1 rtok bench --runs 3
+RTOK_CONFIG=on.toml  RTOK_BENCH_LIVE=1 rtok bench --runs 3
+rtok stats --price                              # per RTOK_HOME, for the cost column
+```
+
+Each suite then gets one dated row in this section with the command, `claude --version`, mean input, cache and output tokens, `stats --price` cost and pass rate. Gate P9 and the fourth P8b clause close or fail on those rows. Until they land, `nudges` stays off and `docs/comparison.md` §5 keeps "no live end-to-end cost win".
+
 ## 3. Host surfaces (verified against code.claude.com/docs/en/hooks and env-vars, 2026-09-01)
 
 - 32 hook events. PreToolUse may return `permissionDecision` (allow/deny/ask) and `updatedInput`; exit 2 blocks. **PostToolUse cannot modify or replace the tool result**; it only adds context. SessionStart/UserPromptSubmit inject via stdout or `additionalContext`. Command hooks support `async: true`. Timeouts are per event (600 s default, 30 s UserPromptSubmit, 10 s MessageDisplay).
