@@ -18,9 +18,7 @@ use crate::config::Config;
 use anyhow::Result;
 use rtok_agent_sdk::{Apply, KETCH_INSTALL, NO_CHANGES, array_at, edit_json, object_at};
 use rtok_mcp::ops::Mode as McpMode;
-use rtok_mcp::spec::{
-    Client as McpClient, DuplicateName, EntryShape, Format as McpFormat, Launch, McpSpec,
-};
+use rtok_mcp::spec::{Client as McpClient, EntryShape, McpSpec};
 use semver::Version;
 use serde::Deserialize;
 use serde::de::{Deserializer, MapAccess, Visitor};
@@ -388,21 +386,14 @@ pub(super) fn strip_ours_as(
 /// object at `file`, started with `command` and named `--host claude`. Claude Code and Claude
 /// Desktop are the two clients; they differ only in file and launch command.
 pub(crate) fn mcp_spec_at(client: McpClient, file: PathBuf, command: String) -> McpSpec {
-    McpSpec {
-        host: "claude",
+    mcp::json_spec(
+        "claude",
         client,
-        config_path: file,
-        format: McpFormat::Json,
-        key_path: McpSpec::key_path("mcpServers"),
-        server: rtok_mcp::registry::RTOK,
-        launch: Launch {
-            command: Some(command),
-            host_arg: true,
-        },
-        entry_shape: EntryShape::TypedCommand,
-        duplicate_name: DuplicateName::ShowsBoth,
-        plugin_serves: None,
-    }
+        file,
+        "mcpServers",
+        command,
+        EntryShape::TypedCommand,
+    )
 }
 
 /// [`mcp_spec_at`] for `kind` at the real file: `~/.claude.json`, or the desktop config.
@@ -411,7 +402,7 @@ fn mcp_spec(cfg: &Config, kind: Kind) -> McpSpec {
         Kind::Cli => mcp_spec_at(
             McpClient::Cli,
             cfg.doctor.claude_json.clone(),
-            super::rtok_command(),
+            super::rtok_mcp_command(),
         ),
         Kind::Desktop => mcp_spec_at(McpClient::Desktop, desktop_path(), desktop_command()),
     }
@@ -1037,22 +1028,7 @@ impl Agent for Claude {
             // the plugin no longer serves MCP, so there is no second rtok server to guard
             // against here (D21, T243, T244 amended).
             return Ok(vec![
-                if remove {
-                    mcp::run(cfg, &spec, McpMode::Remove)?
-                } else if cfg.setup.mcp {
-                    let update = mode == Mode::Update;
-                    mcp::run(
-                        cfg,
-                        &spec,
-                        if update {
-                            McpMode::Update
-                        } else {
-                            McpMode::Install
-                        },
-                    )?
-                } else {
-                    NO_CHANGES.into()
-                },
+                mcp::sync(cfg, &spec, mode)?.unwrap_or_else(|| NO_CHANGES.into()),
                 super::skill::sync("claude", cfg, remove)?,
             ]);
         }
@@ -1336,7 +1312,11 @@ mod tests {
     }
 
     fn cli_spec_fn(path: &Path) -> McpSpec {
-        mcp_spec_at(McpClient::Cli, path.into(), crate::agents::rtok_command())
+        mcp_spec_at(
+            McpClient::Cli,
+            path.into(),
+            crate::agents::rtok_mcp_command(),
+        )
     }
 
     fn desktop_spec_at(path: &Path) -> McpSpec {

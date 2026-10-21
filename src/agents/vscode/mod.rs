@@ -28,7 +28,8 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use rtok_agent_sdk::NO_CHANGES;
-use serde_json::{Value, json};
+use rtok_mcp::spec::{Client, EntryShape, McpSpec};
+use serde_json::json;
 
 use super::plugin::HostPlugin;
 use super::{Agent, Kind, Mode, Support, Variant, apply, home_dir, jsonc};
@@ -131,16 +132,8 @@ impl Agent for Vscode {
         // profile `mcp.json`'s `servers.rtok` regardless of plugin state; only remove takes
         // it out.
         for insiders in [false, true] {
-            let line = if remove {
-                unregister_mcp(cfg, insiders)?
-            } else if cfg.setup.mcp {
-                register_mcp(cfg, insiders)?
-            } else {
-                NO_CHANGES.into()
-            };
-            if line != NO_CHANGES {
-                lines.push(line);
-            }
+            let line = super::mcp::sync(cfg, &mcp_spec(cfg, insiders), mode)?;
+            lines.extend(line.filter(|l| l != NO_CHANGES));
         }
         if lines.is_empty() {
             lines.push(NO_CHANGES.into());
@@ -193,33 +186,16 @@ pub fn default_user_dir(insiders: bool) -> PathBuf {
     home.join(".config").join(app).join("User")
 }
 
-/// The `servers.rtok` entry [`register_mcp`] writes.
-fn mcp_entry(cmd: &str) -> Value {
-    json!({"type": "stdio", "command": cmd, "args": super::mcp_args("vscode")})
-}
-
-/// `servers.rtok = {type: "stdio", command, args}` in the profile `mcp.json`.
-pub fn register_mcp(cfg: &Config, insiders: bool) -> Result<String> {
-    let path = mcp_path(cfg, insiders);
-    let cmd = super::rtok_command();
-    rtok_agent_sdk::register_server(
-        &apply(cfg),
-        &path,
+/// `servers.rtok = {type: "stdio", command, args}` in the stable or Insiders profile
+/// `mcp.json`; `rtok_mcp::ops` writes and removes it (T277.2).
+pub(crate) fn mcp_spec(cfg: &Config, insiders: bool) -> McpSpec {
+    super::mcp::json_spec(
+        "vscode",
+        Client::Ide,
+        mcp_path(cfg, insiders),
         "servers",
-        NAME,
-        mcp_entry(&cmd),
-        &super::mcp_summary(&cmd, "vscode"),
-    )
-}
-
-/// Drop `servers.rtok` from the profile `mcp.json`, unless the user edited it (T246.2).
-pub fn unregister_mcp(cfg: &Config, insiders: bool) -> Result<String> {
-    super::unregister_ours(
-        cfg,
-        &mcp_path(cfg, insiders),
-        "servers",
-        NAME,
-        &mcp_entry("rtok"),
+        super::rtok_mcp_command(),
+        EntryShape::TypedCommand,
     )
 }
 
@@ -346,15 +322,21 @@ mod tests {
     fn mcp_entry_is_stdio_and_idempotent() {
         let dir = tmp("mcp");
         let c = cfg(dir.clone(), false);
-        let first = register_mcp(&c, false).unwrap();
+        let first = crate::agents::mcp::install(&c, &mcp_spec(&c, false)).unwrap();
         assert!(first.starts_with("servers.rtok: "), "{first}");
-        assert_eq!(register_mcp(&c, false).unwrap(), NO_CHANGES);
+        assert_eq!(
+            crate::agents::mcp::install(&c, &mcp_spec(&c, false)).unwrap(),
+            NO_CHANGES
+        );
         let raw = fs::read_to_string(mcp_path(&c, false)).unwrap();
         let doc: serde_json::Value = serde_json::from_str(&raw).unwrap();
         let rtok = &doc["servers"]["rtok"];
         assert_eq!(rtok["type"], "stdio");
         assert_eq!(rtok["args"], json!(["mcp", "--host", "vscode"]));
-        assert_eq!(unregister_mcp(&c, false).unwrap(), "- servers.rtok");
+        assert_eq!(
+            crate::agents::mcp::remove(&c, &mcp_spec(&c, false)).unwrap(),
+            "- servers.rtok"
+        );
         let _ = fs::remove_dir_all(dir);
     }
 
@@ -425,8 +407,8 @@ mod tests {
         c.setup.yes = true;
         // A plain install ran first (or the offer was declined earlier): mcp.json already
         // carries `servers.rtok` before the plugin is linked.
-        register_mcp(&c, false).unwrap();
-        register_mcp(&c, true).unwrap();
+        crate::agents::mcp::install(&c, &mcp_spec(&c, false)).unwrap();
+        crate::agents::mcp::install(&c, &mcp_spec(&c, true)).unwrap();
 
         let lines = Vscode.apply(&c, Kind::Desktop, Mode::Install).unwrap();
         let joined = lines.join("\n");
@@ -493,7 +475,7 @@ mod tests {
             Kind::Desktop,
             &path,
             "servers",
-            || register_mcp(&c, false),
+            || crate::agents::mcp::install(&c, &mcp_spec(&c, false)),
         );
         let _ = fs::remove_dir_all(dir);
     }

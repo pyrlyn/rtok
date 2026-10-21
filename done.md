@@ -891,6 +891,18 @@ Crate changes: `McpSpec` gains `launch` (absolute command, `--host <id>` pair); 
 
 Check: crate table tests (launch and type tolerance; ownership x `--yes` x dry run), Claude table over both clients x install, update, remove with foreign keys kept, and a dry run that creates no file; `just check`.
 
+### T277.2. Cursor, Copilot, Gemini, Kimi and VS Code write and remove rtok's MCP entry through `rtok_mcp::ops`
+
+Epic PR 3, first half: the strict-JSON hosts T275 listed as affected. Each keeps only its `McpSpec` value (`mcp_spec`); its `register_mcp`, `unregister_mcp` and `mcp_entry` are gone. `agents::mcp::json_spec` builds a strict-JSON host spec (launch command, `--host <id>`, entry shape), and Claude's `mcp_spec_at` uses it too. `agents::mcp::sync` maps `agents install|update|remove` onto `ops::Mode` behind `[setup] mcp`; Cursor, Kimi, VS Code and the Claude Desktop branch call it. Copilot and Gemini keep `d21_plugin_apply` and pass closures over `mcp::install` / `mcp::remove`, because Qwen and CodeBuddy (JSONC, not migrated) still pass their own fn items. The crate gains `EntryShape::LocalAllTools` for Copilot's `{type: "local", ..., tools: ["*"]}`.
+
+Behaviour is unchanged except one case inherited from T277.1: a `mcpServers` / `servers` value that is not an object is an error naming the file, not replaced by `{}`. ZCode (nested `mcp.servers`), Codex and Grok (TOML) are the next subtask.
+
+Check: crate test `every_entry_shape_writes_its_documented_keys`; every host's existing lifecycle (T275), legacy-upgrade (T283.2) and ownership (T246) tests pass with only their call sites changed; `just full-check`.
+
+Result: `just full-check` on macOS against `c8ceaa2d`: fmt, clippy `-D warnings`, nextest 4101 passed, 8 skipped, pytest 43 passed, `build-min`, jscpd 1.79% lines; `just docs-check` green.
+Status: done 2026-10-21
+Model: Claude Code / claude-opus-5-5
+
 ### T461. Windows resident exit condition matches Unix
 
 Cloud review finding (suspected): the Windows resident (`src/hooks/resident.rs`) exits only when `hook.lock` vanishes, while the Unix one also exits when its socket file vanishes. Not a bug. The Unix check exists because a new resident unlinks and rebinds the socket path, which would orphan the old listener. A named pipe has no file a user or another resident can delete, and `ServerOptions::first_pipe_instance(true)` makes a second resident fail to create the pipe while the first holds it, so there is no Windows counterpart to mirror. Added a comment on the Windows tick saying why; no behaviour change.
@@ -10224,6 +10236,35 @@ Result: install and update write `mcpServers.rtok` in `~/.commandcode/mcp.json` 
 Status: done 2026-10-11
 Model: Claude Code / sonnet-5.5
 
+### T275.1. `rtok mcp ping <agent>`: prove the agent's rtok MCP server is alive and answering
+
+`installed` only says a config entry exists (and today not even that, see T275). This command checks the real path: the agent starts rtok's MCP server from its own config, calls a tool, and writes the answer into its chat.
+
+Syntax: `rtok mcp ping <agent> [--cli|--desktop] [--timeout <secs>] [--json]`. `<agent>` takes the same host names as `rtok agents install|info` (`claude`, `cursor`, `codex`, `copilot`, `gemini`, `vscode`, …); `--cli` / `--desktop` picks the variant like `agents install`; no agent means every host `agents list` shows with MCP installed. Place it in `src/cli.rs` as a `ping` subcommand of `rtok mcp`, next to `--call`. The foreign-server wrap stays behind `--` (`rtok mcp -- <argv>`), so `rtok mcp ping …` must not be parsed as a wrap argv: add a clap test for both forms. Add a matching line to `rtok agents info` help that points at it.
+
+What it sends:
+1. A new MCP tool `ping` in rtok's own server (`src/mcp`), taking `{"agent": "<display name>"}` and returning exactly `MCP <display name> жив`, where the display name is the host name `agents list` prints (for example `MCP Claude Desktop жив`, `MCP Claude Code жив`, `MCP Cursor CLI жив`). The call is logged like any MCP call, with no measurement row.
+2. For hosts with a headless CLI, rtok runs the agent once with one prompt: `Call the rtok MCP tool "ping" with agent="<display name>" and reply with its result only, nothing else.` For example `claude -p …`, `codex exec …`, `cursor-agent -p …`, `copilot -p …`, `gemini -p …`. The exact non-interactive flag per host is verified against its docs and recorded in the host README.
+3. For desktop-only hosts (Claude Desktop, VS Code chat, Windsurf, Zed …) there is no documented way to send a prompt from outside. rtok prints the same prompt for the user to paste into the app's chat, then does the server-side part itself: it spawns the MCP command exactly as written in that host's config (`command` / `args` / `env`), runs `initialize`, `tools/list` and `tools/call ping`, and checks the reply. That proves the configured server starts and answers, but not that the app loaded it; the output says which of the two was checked.
+
+Success: the agent's chat reply (captured stdout for headless hosts) is exactly `MCP <display name> жив`, after trimming whitespace. Anything else is a failure: no rtok entry in the host's config, the server fails to start, the `ping` tool is missing, a timeout (default 60 s), or a different reply. Each failure prints its reason and the fix (for a missing entry, `rtok agents install <agent>`). Exit code 0 only when every checked host succeeds. `--json` prints one object per host: `agent`, `variant`, `mode` (`chat` or `server-only`), `reply`, `ok`, `reason`.
+
+Tests: unit test for the `ping` tool reply text; clap tests for `rtok mcp ping` vs `rtok mcp -- …`; a Vfs test that the server-only check reads `command` / `args` from each host's config (rtok's entry, not a hardcoded path); an e2e that spawns `rtok mcp` through a fake host config and gets `MCP Test жив`; headless hosts are covered by a fake agent binary on PATH that runs the MCP call and echoes the result.
+
+Check: on the creator's machine `rtok mcp ping claude --cli` prints `MCP Claude Code жив` from `claude -p`, `rtok mcp ping claude --desktop` checks the server from `claude_desktop_config.json` and prints the prompt, and after T275 both succeed; `just check`.
+
+Execution plan:
+1. `src/mcp.rs`: tool `ping`, always listed, reply `MCP <agent> жив`, logged through the existing call row (no measurement).
+2. `src/cli.rs`: `ping` subcommand of `rtok mcp` beside `--call`; wrap stays behind `--`. `agents info` long help points at `rtok mcp ping`.
+3. `src/mcp/ping.rs`: headless rows for claude (`-p`), codex (`exec`), cursor (`cursor-agent -p`), copilot (`-p`), gemini (`-p`), each recorded in that host README with the docs link. Every other variant is server-only: read `command` / `args` / `env` from `Agent::files`, spawn through `doctor`'s MCP round-trip (`initialize`, `tools/list`, `tools/call ping`).
+4. Tests: ping reply text; clap `mcp ping` vs `mcp --`; Vfs bodies for every host's MCP shape; e2e spawn of `rtok mcp` from a fake config (`MCP Test жив`); fake `claude` on PATH.
+5. Verify with `just check`.
+
+Result: the command, the `ping` tool, the headless rows (claude, cursor, codex, copilot, gemini) with their README lines, the server-only probe from each host's config and the tests landed in #430. The creator-machine Check ran on macOS (Darwin 27.0.0) with rtok 0.17.0-alpha.3 (`0d1608a71`): `rtok mcp ping claude --cli --timeout 120` ran `claude -p` and printed `MCP Claude Code жив` (`mode` `chat`, `ok` true); `rtok mcp ping claude --desktop` spawned the `mcpServers.rtok` command from `claude_desktop_config.json`, printed the paste prompt and `Checked the configured server, not whether Claude Desktop loaded it: MCP Claude Desktop жив` (`mode` `server-only`, `ok` true). Both succeed after T275. Pasting the prompt into the Claude Desktop chat stays a manual step by design.
+
+Status: done 2026-10-21
+Model: Claude Code / claude-opus-5-5
+
 ### T332. Investigate: rtok's own MCP duplicate: T331 keep rule vs D33/T275
 
 In the plan, T331 (plan.md on branch `docs/plan-doctor-hooks-mcp`, ~line 711, from PR #542 (T331), not merged yet) says "for rtok's own server, the rules of T275 (plugin serves MCP, so the separate entry goes)" and keeps the "plugin-provided first" copy by default, reporting a host that de-duplicates by name as "shadowed, unused, still removable" (~line 706). D33 (plan.md@966f067 line 709) and T275 (plan.md@966f067 lines 171-175) say "Install and update always write the config entry `rtok`; only `remove` takes it out, and a plugin no longer suppresses or strips it", "the rtok plugin ships no MCP server", and "Gemini keeps both, since settings.json wins over an extension's same-name server". These contradict each other because `rtok doctor --fix --yes` would delete exactly the config entry D33 requires (on Gemini, and on any host where an old plugin still serves MCP), and the next `rtok agents install|update` would write it back, so the two features undo each other.
@@ -10625,6 +10666,25 @@ Creator-reported: `rtok agents update codex --force` lists only the CLI. The Cod
 Result: `Codex` gets a `Kind::Desktop` variant "Codex App" probing `ChatGPT.app` and `Codex.app` in `/Applications` and `~/Applications`, and `shared() = true`, so one apply covers both (the second block prints "same files as above"). Fail-first test `the_desktop_variant_is_detected_from_its_app_and_shares_the_cli_files` (index out of bounds before the fix); `kinds("codex")` is `[Cli, Desktop]`; restart's expected-name table maps it to `ChatGPT`, so a running app is quit and reopened around a changing write like other desktop hosts (`--no-restart` skips it). `rtok doctor`'s MCP duplicate check walked every variant, so a shared host (Cursor on main, Codex now) reported each duplicate twice; a source is now deduplicated by host, file and key instead of by variant set (`a_shared_file_host_reports_a_duplicate_once`, 4 problems before the fix). Source rows in research §40.1; Desktop rows in `docs/agents.md` (en/ru/uk). Live check: `rtok agents update codex --force --dry-run --no-restart` from the branch build lists `Desktop: Codex App — /Applications/ChatGPT.app`.
 
 Model: Claude Code / claude-opus-5-5
+
+### T932. Codex and Cursor MCP entries use a bare `rtok` command and fail to spawn
+
+`~/.codex/config.toml` has `[mcp_servers.rtok] command = "rtok"`, and `~/.cursor/mcp.json` the
+same. Codex desktop logged `MCP client for rtok failed to start: No such file or directory
+(os error 2)` 14 times on 2026-10-18 (12:58–17:30 UTC). The plugin hooks already fall back
+(`command -v rtok || $HOME/.ketch/bin/rtok`); the MCP entries do not. Related: T275 (MCP entry
+removed on update).
+
+Done when: the installers write an MCP command that resolves without the GUI app's PATH (an
+absolute path to the installed binary, kept current on update), and doctor flags an MCP
+command that does not resolve.
+
+Check: install tests for Codex and Cursor asserting the written command is absolute and
+exists; a doctor test with an unresolvable command; `just check`.
+
+Result: `rtok_mcp_command()` (`src/agents/mod.rs`) names the `rtok` found on PATH, else `~/.ketch/bin/rtok` (ketch re-points that link on upgrade), else the old bare name; every MCP writer uses it (Codex, Cursor, Claude CLI, Gemini, Copilot, Devin, Kimi, OMP, VS Code, Windsurf, Zed, Grok, Reasonix, OpenCode/MiMo, Continue, Goose and the rest), hook lines keep `rtok_command()`. Codex repoints an older bare `command = "rtok"` and leaves a path the user chose; JSON hosts already rewrite on update. `rtok doctor` and `agents list` read an MCP entry as stale when its command is an absolute path to nothing, or a bare name while an absolute `rtok` exists. Windows is unchanged.
+
+Model: Claude Code / claude-sonnet-5-5
 
 ### T182. Junk cleanup: `rtok agents junk clear` and per-host junk map
 

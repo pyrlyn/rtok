@@ -116,7 +116,7 @@ fn mcp_entry(cmd: &str) -> Value {
 
 /// `mcpServers.rtok = {type: "stdio", command, args}` in the MCP file [`mcp_path`] picks.
 pub fn register_mcp(cfg: &Config, kind: Kind) -> Result<String> {
-    let cmd = super::rtok_command();
+    let cmd = super::rtok_mcp_command();
     jsonc::upsert_entry(
         cfg,
         &mcp_path(cfg, kind),
