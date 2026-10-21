@@ -250,10 +250,10 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T385.3 | todo | P1 | 3 | 50% | |
 | T385.9 | in progress | P3 | 5 | 75% | Claude Code / claude-opus-5-5 |
 | T385.9.3 | todo | P3 | 2 | 40% | |
-| T394 | todo | P2 | 2 | 20% | |
+| T394 | todo | P2 | 2 | 30% | |
 | T395 | todo | P3 | 2 | 30% | |
 | T396 | todo | P3 | 2 | 90% | |
-| T398 | todo | P3 | 1 | 30% | |
+| T398 | todo | P3 | 1 | 40% | |
 | T414 | in progress | P1 | 4 | 20% | Claude Code / opus-5.5 |
 | T414.7 | in progress | P3 | 1 | 0% | MiMo / mimo |
 | T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
@@ -1007,6 +1007,16 @@ Done means: one dated row per suite in §2 (nudges off/on, T9.2 legacy vs rtok, 
 
 Check: the rows are in §2 and `docs/comparison.md`; the gates are marked.
 
+Progress (2026-10-21, `research.md` §2 "Paid live benches: status and re-run protocol"): there are still no live rows. The agent session's permission policy refused to run `claude` (even `--version`), so nothing was spent. The harness dry-runs pass on main: 36 runs for T9.2 and 24 for T68.9. Reading `src/bench.rs` showed five problems that would make a paid row unreadable:
+
+- a failed run counts as a 6/6 pass at $0, because every `bench/tasks.toml` check is `true`;
+- the user's own settings and MCP servers load into every arm;
+- the arms depend on proxies on `:8788`, `:8787` and `:8790`;
+- the A/B tasks edit the caller's cwd;
+- the graph cost column keys on a top-level `model` field.
+
+The re-run protocol is written there. Left: the creator's paid run outside an agent sandbox. Because of the first problem, the Gate P9 "pass rate holds" clause needs real `check`s first.
+
 ### T395. One real session as one OpenTelemetry trace in SigNoz and Maple
 
 From `research.md` §2 "OpenTelemetry export (Gate P16)": still open is one real Claude Code session (hooks, MCP and proxy) exported as a single trace with an `invoke_agent` root and `chat {model}` spans, checked in SigNoz and Maple. `roadmap.md` says these clauses are Gate P18, but P18 in `done.md` has no such clause, so the item is orphaned. Needs a SigNoz or Maple account.
@@ -1029,6 +1039,8 @@ Execution plan (2026-10-12): 1. run the Kilo, Gemini CLI, Copilot CLI and pi rea
 
 Progress (2026-10-12, `research.md` §30): Copilot CLI 1.0.80 — `tokenDetails` is authoritative (it equals `usage` plus the compaction requests), the reader now takes it (`token_details_carry_the_compaction_requests_that_usage_leaves_out`, fail-first), and `inputTokens` including the cache legs is confirmed. pi 0.85.1 — reader sums match an independent sum over 953 entries; fixture for the `reasoning`/`cacheWrite1h` shape; fork id copying confirmed from source, not observed. Copilot resume: the reader keeps the last shutdown per session, cumulative per the SDK source (`github/copilot-sdk` 6be623b, `nodejs/src/generated/session-events.ts`; fail-first `a_resumed_session_counts_its_last_shutdown_not_the_sum_of_all`), not yet seen in a real resumed log. Left: a Kilo message row (this machine's db has none), Gemini CLI (not installed here), Grok `signals.json` (observed keys accepted by the creator 2026-10-13, but grok 1.0.34 wrote no `signals.json` in this machine's 3 sessions, `research.md` §30.7). Rechecked 2026-10-13: still 0 Kilo `message` rows and no Gemini chat files. Kilo done 2026-10-15 (`research.md` §30.1: a real `message` row read through LM Studio, fixture added). Still needs the creator to run one Gemini CLI (not installed here) and one Grok session (xAI-only, not runnable on a local model), then a reader and fixture per shape.
 
+Rechecked 2026-10-21 on `62027a93` (`rtok agents usage --source logs`, read-only): `gemini` is still not on `PATH` and no Gemini CLI row is read; Copilot CLI still has 1 session (last day 2026-09-02), so still no resumed log; Grok is still skipped as `unsupported`, and this run could not list `~/.grok/sessions` to look for a new `signals.json` (sandbox). Kilo, pi, Kimi Code, OpenCode, Codex and Claude Code read without error. Nothing new to fixture; the three open items still need the creator's machine.
+
 ### T398. Probe editors on a `worktree.useRelativePaths` worktree
 
 From `research.md` §18.2 (T157): every non-interactive reader opens a relative-link worktree, but VS Code, Zed, Cursor and lazygit are untested, so the setting stays opt-in. It is the setting that would have prevented the 18 GB orphaned `graph-perf` worktree.
@@ -1036,6 +1048,8 @@ From `research.md` §18.2 (T157): every non-interactive reader opens a relative-
 Done means: one dated row per editor in §18.2. If all pass, the `worktrees` skill and `AGENTS.md` gain the setting (T157's Check); if any fails, the failure is recorded and the setting stays off.
 
 Check: the §18.2 table has four dated rows.
+
+Progress (2026-10-21, `research.md` §18.2): an agent session could not launch any of the four (sandbox refused every editor command), so each row reads "not run" with that date, and §18.2 now holds the manual protocol plus a lead: this machine's shell resolves `/usr/bin/git` first, and a git older than 2.48 refuses `extensions.relativeWorktrees`. Left: the creator (or an unsandboxed session) runs the protocol and turns the four rows into pass or fail; the setting stays off until then.
 
 ### T414. Web dashboard restyle on the brand pack, built from `brand/` sources
 

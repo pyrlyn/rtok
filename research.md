@@ -673,6 +673,46 @@ Your local meters (each measures a different slice, none the bill):
 | claude-mem | "87 % savings" | ratio of its own retrieval reads (21 K) vs. work it indexed (159 K) |
 | token-optimizer | author's sessions: 14.44 M tokens / 30 d, "$313/mo measured" | 3.3 chars/token estimator; 27 Python hooks here |
 
+### Paid live benches: status and re-run protocol (T394, 2026-10-21)
+
+No live row yet. In the agent session for T394, the permission policy refused to run `claude` at all (`claude --version` needed approval that a non-interactive session cannot give), and refused the built `rtok` binary unless it went through `cargo run`. So `claude --version`, the auth state and every paid arm are still unrecorded. No API spend was made.
+
+The harness still runs on main `62027a93`. These dry-runs spend nothing, because `RTOK_BENCH_LIVE` was unset and no `claude` was spawned:
+
+| suite | command | schedule |
+|-------|---------|----------|
+| T9.2 legacy vs rtok | `cargo run --release --bin rtok -- bench --runs 3 --dry-run` | 6 tasks × a/b × 3 = 36 runs |
+| T68.9 graph | `cargo run --release --bin rtok -- bench --suite graph --runs 1 --dry-run` | 12 questions × mcp/native = 24 runs |
+| T53.1 nudges | (two `rtok bench` passes, one per arm, see 6. below) | 6 tasks × off/on × 3 = 36 runs |
+
+Reading `src/bench.rs` turned up five things that would make a live row unreadable. Check each one before paying for a run:
+
+1. **A failed run still counts as a pass at $0.** If `claude -p` exits non-zero, `one()` returns zeros, and the run still counts in `n`. Every `bench/tasks.toml` check is `true`, so a run where every call fails prints 6/6 pass and $0.0000. That is the T53.1 trap. So the T9.2 and nudges pass rate is not evidence, and the "pass rate holds" half of Gate P9 cannot be measured on this task set. Look at `is_error` in one run's JSON before reading the table.
+2. **The user's own settings load into every arm.** `claude -p --settings <arm>.json` merges into `~/.claude/settings.json`; there is no `--setting-sources ""` or `--strict-mcp-config`. The user's own hooks, plugins and MCP servers (rtok's plugin included) therefore load in arm a, in the graph `native` arm and in the nudges off arm. Run with a scratch `HOME`/`CLAUDE_CONFIG_DIR` that holds only auth.
+3. **The arms need local proxies.** `legacy.json` points at `:8788`/`:8787` (headroom → caveman), and `rtok.json` points at `:8790` (`rtok proxy`). If a proxy is down, every call in that arm fails, which is case 1.
+4. **The A/B tasks run in the caller's cwd.** `one()` sets no `cwd`, so "Add a function foo" edits whatever tree `rtok bench` was started in. Start it inside a scratch copy of a fixture crate, not this checkout.
+5. **The graph cost column may read zero.** `graph_one` prices by a top-level `model` key and adds nothing when that key is missing. Check that the first live JSON has the key; if it does not, use its `total_cost_usd`.
+
+Re-run protocol (creator's terminal, outside an agent sandbox):
+
+```bash
+claude --version; claude auth status          # record both; loggedIn must be true
+claude -p "Reply ok" --output-format json --max-turns 1 | jq '.is_error,.total_cost_usd'
+rtok proxy &                                    # :8790; start headroom/caveman for arm a
+# 1. T9.2: default [bench.configs] a/b
+RTOK_BENCH_LIVE=1 rtok bench --runs 3          # → bench/results/a.json, b.json
+# 2. T68.9
+RTOK_BENCH_LIVE=1 rtok bench --suite graph --runs 1
+# 3. T53.1 nudges: one pass per arm, each its own RTOK_CONFIG and RTOK_HOME
+#    off.toml: [plugins.inject] modes = []          [bench.configs] off = "bench/configs/rtok.json"
+#    on.toml:  [plugins.inject] modes = ["nudges"]  [bench.configs] on  = "bench/configs/rtok.json"
+RTOK_CONFIG=off.toml RTOK_BENCH_LIVE=1 rtok bench --runs 3
+RTOK_CONFIG=on.toml  RTOK_BENCH_LIVE=1 rtok bench --runs 3
+rtok stats --price                              # per RTOK_HOME, for the cost column
+```
+
+Each suite then gets one dated row in this section with the command, `claude --version`, mean input, cache and output tokens, `stats --price` cost and pass rate. Gate P9 and the fourth P8b clause close or fail on those rows. Until they land, `nudges` stays off and `docs/comparison.md` §5 keeps "no live end-to-end cost win".
+
 ## 3. Host surfaces (verified against code.claude.com/docs/en/hooks and env-vars, 2026-09-01)
 
 - 32 hook events. PreToolUse may return `permissionDecision` (allow/deny/ask) and `updatedInput`; exit 2 blocks. **PostToolUse cannot modify or replace the tool result**; it only adds context. SessionStart/UserPromptSubmit inject via stdout or `additionalContext`. Command hooks support `async: true`. Timeouts are per event (600 s default, 30 s UserPromptSubmit, 10 s MessageDisplay).
@@ -1872,11 +1912,26 @@ Scratch repositories only. `git config worktree.useRelativePaths true` followed 
 | git CLI | 2.54.0 | yes | `git status`, `git worktree list` |
 | cargo (VCS dirty check) | 1.97.1 | yes | `cargo package --list` inside the worktree reports the one uncommitted file |
 | gh | 2.101.0 | yes | `gh repo view --json name` inside the worktree resolves `pyrlyn/rtok` |
-| lazygit, delta, editors (VS Code, Zed, Cursor) | — | not tested | interactive; lazygit shells out to the git CLI, delta never opens a repository |
+| delta | — | not applicable | delta formats a diff on stdin and never opens a repository |
+| VS Code | — | not run (2026-10-21, T398) | `code` is on PATH (`/opt/homebrew/bin/code`); the T398 agent session could not start it: its sandbox refused every editor launch, `--version` included |
+| Cursor | — | not run (2026-10-21, T398) | `cursor` is on PATH (`~/.local/bin/cursor`); same refusal |
+| Zed | — | not run (2026-10-21, T398) | `zed` is on PATH (`/opt/homebrew/bin/zed`); same refusal |
+| lazygit | — | not run (2026-10-21, T398) | `lazygit` is on PATH (`/opt/homebrew/bin/lazygit`); same refusal (it needs a TTY anyway) |
 
 Move test: the parent directory holding `repo/` and `wt/` was moved with `mv a b`. With relative links, `git -C b/wt status` and `git -C b/repo worktree list` work unchanged, and `git worktree repair` is not needed. The absolute-link control breaks on the same move: `fatal: not a git repository: (null)`, and the worktree is listed as `prunable`. Renaming only one side (the repository or the worktree) breaks the relative link too, as expected.
 
 Conclusion: every non-interactive reader on this machine opens a relative-link worktree. The editors are untested. The setting stays opt-in until they are checked: the T157 Check asks for "every reader passes" before the setting is added to the `worktrees` skill and AGENTS.md.
+
+Lead from the T398 session (2026-10-21): in that session `which git` printed `/usr/bin/git` (the Xcode git), not Homebrew's. An editor that runs its own git, or `/usr/bin/git` because a Dock-launched app does not get the shell's PATH, refuses the worktree if that git is older than 2.48, which predates `extensions.relativeWorktrees`. So each editor row records which git binary the editor ran, not only the editor version.
+
+Manual protocol for the four rows (T398; scratch only, never this repository):
+
+1. `mkdir /tmp/t398 && cd /tmp/t398 && git init -q repo && git -C repo commit -q --allow-empty -m init && git -C repo config worktree.useRelativePaths true && git -C repo worktree add -q ../wt && echo x > wt/new.txt`. Then `cat wt/.git` must print `gitdir: ../repo/.git/worktrees/wt`.
+2. VS Code: `code --user-data-dir /tmp/t398/vscode --new-window /tmp/t398/wt`. Pass: Source Control shows branch `wt` and `new.txt` as untracked, and Output › Git shows no `fatal:`. The first lines of that log name the git binary and its version.
+3. Cursor: the same with `cursor --user-data-dir /tmp/t398/cursor`.
+4. Zed: `zed /tmp/t398/wt`. Pass: the git panel shows `new.txt` and the branch picker shows `wt`. `~/Library/Logs/Zed/Zed.log` has no git error for `/tmp/t398`.
+5. lazygit: `cd /tmp/t398/wt && lazygit`. Pass: it opens without an error popup, the Files panel lists `new.txt`, and staging plus committing it works.
+6. One row per editor above with `--version`, the git it ran, the date and pass or fail. Fail on any one: record the error text and keep the setting off. Then `rm -rf /tmp/t398`.
 
 ### 18.3 Hosts (vendor docs, fetched 2026-09-21, not re-verified by running each host)
 
@@ -2693,7 +2748,7 @@ What `rtok agents usage --source logs` reads per host, from each host's own sour
 | OpenCode | `message.data` JSON in `opencode.db` | supported |
 | Kilo | `message.data` JSON in `kilo.db` | supported; the reader runs on the real `kilo.db`; a real assistant row was read on 2026-10-15 (§30.1, `a_real_kilo_7_8_1_assistant_row_is_read_with_its_extra_fields`) |
 | Copilot CLI | `tokenDetails` (else `usage`) of each `modelMetrics` entry of `session.shutdown` in `session-state/*/events.jsonl` | supported, per session; checked on the one real log (2026-10-12); a resumed session counts its last shutdown only (cumulative per the SDK source, 2026-10-12), not yet seen in a real resumed log |
-| Gemini CLI | `tokens` of `gemini` messages in `tmp/*/chats/session-*.jsonl` (and legacy `.json`) | supported, **unverified** on real files (no Gemini CLI and no chats on this machine, 2026-10-12) |
+| Gemini CLI | `tokens` of `gemini` messages in `tmp/*/chats/session-*.jsonl` (and legacy `.json`) | supported, **unverified** on real files (no Gemini CLI and no chats on this machine, 2026-10-12, rechecked 2026-10-21) |
 | Droid | none | `unsupported` |
 | pi | `usage` of entries in `sessions/*/*.jsonl` | supported, matches an independent sum on real files |
 | Kimi Code | `usage.record` lines of `sessions/*/*/agents/*/wire.jsonl` | supported, matches an independent sum on real files |
@@ -2716,13 +2771,13 @@ What `rtok agents usage --source logs` reads per host, from each host's own sour
 - The SDK's event schema (https://github.com/github/copilot-sdk, commit `5b2d7cdd7da1e5d082ae316a533cbb7584a495c1`, `nodejs/src/generated/session-events.ts`) marks `assistant.usage` (per API call) as ephemeral, "not persisted to the session event log on disk". What is persisted is `session.shutdown.data.modelMetrics[<model>].usage`: `inputTokens`, `outputTokens`, `cacheReadTokens`, `cacheWriteTokens`, `reasoningTokens?`, totals over the whole run. A session that never shut down cleanly has no totals and is not counted.
 - Checked on 2026-10-12 against the one real log on this machine (written by Copilot CLI 1.0.80, `session.start.copilotVersion`; 1.0.83 is installed): one `session.shutdown`, one model, no `session.resume`. Its `modelMetrics` entry carries `usage` and a `tokenDetails` block (`input`, `cache_read`, `cache_write`, `output`, each `{tokenCount}`), and the two differ by exactly the seven `session.compaction_complete` events of the log: `tokenDetails.input` (2,096,414) is `inputTokens - cacheReadTokens` (913,181) plus the sum of the compactions' `compactionTokensUsed.inputTokens` (1,183,233), and `tokenDetails.output` (18,945) is `usage.outputTokens` (9,800) plus their `outputTokens` (9,145); the cache legs are equal. So `usage` leaves the compaction requests out, `tokenDetails` is the whole spend (the SDK describes the per-model block only as "Token count details per type" and the session-wide one as "accumulated token counts", https://github.com/github/copilot-sdk, commit `6be623b01b194a61466385e3f708639ec98ce8ac`, `nodejs/src/generated/session-events.ts`, `ShutdownModelMetric.tokenDetails`, `ShutdownData.tokenDetails`), and `inputTokens` does include the cache legs (confirmed: the equality only holds if it does). The reader therefore takes `tokenDetails` when it has `input` and `output`, and `usage` otherwise. Before this check it followed `usage` and so left out the compaction input and output.
 - **Unverified, kept 2026-10-12**: whether `outputTokens` includes reasoning (the real log has 0 reasoning tokens). The `outputTokens` of the 1,116 `assistant.message` events add up to 84,327, which matches neither block, and `requests.count` is 158; nothing read explains the gap, so per-message counts are not used.
-- **Confirmed from the SDK source, not yet observed in a real resumed log (2026-10-12)**: a resumed session's later `session.shutdown` carries session-wide cumulative totals, so the reader takes the last shutdown of each `events.jsonl` instead of summing them. Source: https://github.com/github/copilot-sdk, commit `6be623b01b194a61466385e3f708639ec98ce8ac` (committed 2026-10-10, checked 2026-10-12), `nodejs/src/generated/session-events.ts`: `ShutdownData.tokenDetails` is "Session-wide per-token-type accumulated token counts"; `ShutdownModelMetric.usage` fields read "across all requests to this model" (`UsageMetricsModelMetricUsage`); `session.usage_checkpoint` is a "Durable session usage checkpoint for reconstructing aggregate accounting on resume" and its `totalNanoAiu` is "Session-wide accumulated nano-AI units cost at checkpoint time". Nothing in the schema says a resume starts a new accounting scope, and `session.resume` (`ResumeData`) carries no usage fields. The checkpoint carries no per-model token legs (only an `@internal` `accountingSnapshot` and cache state), so the reader ignores it. This machine has no resumed log (one `events.jsonl` with a shutdown, no `session.resume` event), so the cumulative behaviour is documentation, not an observed file; it stays to be confirmed on a real resumed session.
+- **Confirmed from the SDK source, not yet observed in a real resumed log (2026-10-12)**: a resumed session's later `session.shutdown` carries session-wide cumulative totals, so the reader takes the last shutdown of each `events.jsonl` instead of summing them. Source: https://github.com/github/copilot-sdk, commit `6be623b01b194a61466385e3f708639ec98ce8ac` (committed 2026-10-10, checked 2026-10-12), `nodejs/src/generated/session-events.ts`: `ShutdownData.tokenDetails` is "Session-wide per-token-type accumulated token counts"; `ShutdownModelMetric.usage` fields read "across all requests to this model" (`UsageMetricsModelMetricUsage`); `session.usage_checkpoint` is a "Durable session usage checkpoint for reconstructing aggregate accounting on resume" and its `totalNanoAiu` is "Session-wide accumulated nano-AI units cost at checkpoint time". Nothing in the schema says a resume starts a new accounting scope, and `session.resume` (`ResumeData`) carries no usage fields. The checkpoint carries no per-model token legs (only an `@internal` `accountingSnapshot` and cache state), so the reader ignores it. This machine has no resumed log (one `events.jsonl` with a shutdown, no `session.resume` event), so the cumulative behaviour is documentation, not an observed file; it stays to be confirmed on a real resumed session. Rechecked 2026-10-21: `rtok agents usage --source logs --host copilot` still reads 1 session (last day 2026-09-02), so there is still no resumed log here.
 
 ### 30.3 Gemini CLI
 
 - https://github.com/google-gemini/gemini-cli, commit `fb972b2f87fe7d5b06d37eac711490162d98de2c`. `packages/core/src/config/storage.ts`: the project temp directory is `<home>/.gemini/tmp/<project identifier>`, chats are in its `chats/` directory, and `GEMINI_CLI_HOME` replaces the home directory (`packages/core/src/utils/paths.ts`). Sub-agent chats sit in `chats/<parent session id>/`.
 - `packages/core/src/services/chatRecordingService.ts` and `chatRecordingTypes.ts`: a chat is an append-only JSONL log of messages, `$patch` records, `$rewindTo` records and `$set` metadata; a `gemini` message has `id`, `timestamp`, `model` and `tokens` = `{input, output, cached, thoughts?, tool?, total}` where `input` is `promptTokenCount` (which includes `cached`), `output` `candidatesTokenCount`, `thoughts` `thoughtsTokenCount` and `tool` `toolUsePromptTokenCount`. The last record with a given message id wins. An older release wrote one `session-*.json` document with a `messages` array; the CLI migrates it only when the session is opened again.
-- Not run on real files, **unverified** (kept 2026-10-12): `gemini` is not installed here and `~/.gemini/tmp` is empty, so neither a chat file nor the host's version could be read.
+- Not run on real files, **unverified** (kept 2026-10-12, rechecked 2026-10-21): `gemini` is not installed here and `~/.gemini/tmp` is empty, so neither a chat file nor the host's version could be read. On 2026-10-21 `gemini` was still not on `PATH` and `rtok agents usage --source logs` read no Gemini CLI row.
 
 ### 30.4 Droid (Factory)
 
@@ -2747,7 +2802,7 @@ What `rtok agents usage --source logs` reads per host, from each host's own sour
 
 - xAI's own guide, shipped in `~/.grok/docs/user-guide/17-sessions.md` of grok 1.0.34 (read 2026-10-03; `~/.grok/version.json`): sessions are `~/.grok/sessions/<encoded-cwd>/<session-id>/` (`$GROK_HOME` moves the base), and `signals.json` holds "token usage, tool/turn counters". It names no keys. The same page documents `grok usage <session-id>` ("Use this instead of reading session files") that prints per-session and per-turn tokens and cost as JSON.
 - Verdict: `unsupported`. The documented route is another program, which rtok does not run (D6), and the file's keys are not documented. Reading `signals.json` from observed keys would be a guess. If the creator accepts observed keys as a source, it is a small reader.
-- The creator accepted observed keys on 2026-10-13 (T396), but there are none to observe: grok 1.0.34 (`~/.grok/version.json`) has 3 sessions on this machine and none holds a `signals.json`; their `summary.json`, `updates.jsonl`, `events.jsonl`, `chat_history.jsonl` and `prompt_context.json` have no key path containing `token`, `usage` or `cost` (key names listed with `jq paths`, no content read). The verdict stays `unsupported` until a session with a `signals.json` exists.
+- The creator accepted observed keys on 2026-10-13 (T396), but there are none to observe: grok 1.0.34 (`~/.grok/version.json`) has 3 sessions on this machine and none holds a `signals.json`; their `summary.json`, `updates.jsonl`, `events.jsonl`, `chat_history.jsonl` and `prompt_context.json` have no key path containing `token`, `usage` or `cost` (key names listed with `jq paths`, no content read). The verdict stays `unsupported` until a session with a `signals.json` exists. Kept 2026-10-21: `rtok agents usage --source logs` still skips Grok as `unsupported`; that run could not list `~/.grok/sessions` (sandboxed agent), so whether a `signals.json` exists now was not checked.
 
 ### 30.8 ZCode (T358.4)
 
@@ -2857,6 +2912,7 @@ Trae IDE (ByteDance). Facts are from the vendor's docs, https://docs.trae.ai/ide
 - User-level MCP servers: added in the app's MCP panel. The page names the **Raw Config (JSON)** button, which opens "the mcp.json file in TRAE", but gives no path for it. The path is not in the page, and Trae is not installed on this machine to read it back.
 - VS Code layout: Trae is a VS Code fork, but the docs do not say it reads VS Code's `mcp.json` or `settings.json`, so `src/agents/vscode/` cannot be reused on a guess.
 - Because the only documented user-level file has no documented path, a fixed path would be a guess; the host stays out until the docs (or a Trae install to inspect) name one.
+- 2026-10-21 (T413.13 session): re-check blocked. The session had no web access (the docs page could not be fetched) and Trae is not installed on this machine (no `/Applications/Trae.app`, `~/.trae` or `~/Library/Application Support/Trae`), so the 2026-10-12 result above still stands and no installer is written. The probe that settles it: on a machine with Trae, open the MCP panel, press **Raw Config (JSON)** and record the path of the file it opens, plus whether its servers sit under `mcpServers` (Cline shape) or `servers` (VS Code shape).
 - 2026-10-21 (T413 close): not re-checked. The closing session had no web access and no Trae install, so the 2026-10-12 result above is still the latest. The installer waits in `roadmap.md` "Agent hosts".
 
 ### 32.12 Warp (T413.12, checked 2026-10-12)
