@@ -1,0 +1,5 @@
+`worktree clean`, `worktree gc` and `agents junk clear` keep dry run as the default and gain `--dry-run` (the same thing, said explicitly; conflicts with `--yes`) and `--stat`. Both modes print one `- path  size  N files` line per path plus the totals line, because a removal's line already is its stat; `--stat` is accepted so every preview command takes the same flags. `junk::disk_usage_until` counts files next to bytes; `--json` gains `files`.
+
+Check: trycmd cases for each command in default, `--stat`, `--dry-run --yes` (rejected) and `--json`; `just check` green.
+
+Result: `worktree clean`, `worktree gc` and `agents junk clear` take `--dry-run` (conflicts with `--yes`) and `--stat`; both print one `- path  size  N files` line per path and the totals line through `change_preview` (`src/removal_preview.rs`). `junk::Usage` counts `files` next to `bytes`; `--json` gains `files` (and `bytes` on `worktree gc`). trycmd covers the `--dry-run --yes` rejection and the `junk clear` cases; default, `--stat` and the git-backed clean/gc output are asserted in `tests/worktree.rs`.

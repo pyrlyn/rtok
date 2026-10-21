@@ -1,0 +1,7 @@
+Restyle the shell (sidebar, header, theme switch) and the Overview page per `brand/DESIGN.md` and the base `DESIGN.md` it inherits (type scale, spacing, radii, elevation, motion, focus ring). The `@theme` block moves from the flat `--rtok-*` build to the `--pyr-*` roles of `@brand/dist/tokens.css`. The mockup is real code on its PR branch, shown with `?sample` (`npm --prefix web run dev`, then `/?sample#/overview`); the PR is not merged until the creator approves.
+
+Check: dark and light screenshots sent to the creator, and the creator's approval quoted in this card.
+
+Approval (2026-10-05): the creator approved the dark and light screenshots ("yes").
+
+Result (2026-10-05, Claude Code / opus-5.5): `app.css` imports `@brand/dist/tokens.css`; the `@theme` block maps type, leading, tracking, radii, easing and control sizes to `var(--pyr-*)` and the brand colours to `--rtok-brand-*`; `Orb` and `orbGl` read `--pyr-accent-rgb` / `--pyr-delta-rgb`. Shell: brand mark + RTOK wordmark with the coral Δ in the sidebar, a link-state `Pill` (`live` / `connecting` / `closed`) and an icon theme switch in the header. Overview: a savings hero (`BudgetGrid`, the logo's 4×4 bitset with the cut share in coral; Δ saved tok; Δtok %; est before / after bars) above a six-KPI grid. e2e expects the `live` label. `spa-typecheck`, `spa-test` (170), `spa-e2e` (17), `just js` and `just check` (2443) green; `spa-stories` 121/123 under host load 15, the two `GraphOverview` WebGL stories pass 7/7 alone (known flake, T414.1).
