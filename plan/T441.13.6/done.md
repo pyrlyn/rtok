@@ -1,0 +1,11 @@
+`research.md` §28.4 F11, creator go-ahead 2026-10-11 (the Linear part was under T441 §13 "Out of scope"). Second backend for the T441.13.5 exporter: `rtok task export linear` mirrors disk tasks one way into a Linear team through Linear's GraphQL API, finds earlier exports by a stable marker of the rtok id, updates drift, and moves `done`/`closed` tasks to the team's completed/canceled workflow state. Config `[tasks.export.linear] team = "<key>"`, token from `LINEAR_API_KEY`. Facts about the API are checked against Linear's own docs and cited in `research.md` with the date.
+
+Done when: same contract as T441.13.5 (idempotent re-run, `--dry-run`, recorded fixtures, no live network); `just check`.
+
+Check: the Linear fixture tests and `just check`.
+
+Result: `rtok task export linear [--dry-run] [--json]` mirrors disk tasks one way into a Linear team over its GraphQL API (`src/tasks/export/linear.rs`), with a personal key from `LINEAR_API_KEY` and the team key from `[tasks.export.linear] team`; an empty team is refused before any request. It reuses the T441.13.5 diff, so creates, updates, closes and reopens go out only on drift and a re-run sends no write. Status maps to the team's workflow state by type (open → `unstarted`, else `backlog`; in progress → `started`; done → `completed`; closed → `canceled`), labels follow the GitHub vocabulary and missing ones are created, a subtask becomes a sub-issue through `parentId`, and archived issues are listed so a re-run never duplicates. Conflict and parallel markers count as drift for both backends. `remote.rs`: the token error names only the variable when a provider has no CLI, and GraphQL `errors[0].message` is used even on a 400 (Linear's rate limit is a 400 `RATELIMITED`). API facts with URLs and the 2026-10-11 check date in `research.md` §35.5; the page size above 50 and Linear's description normalisation are marked unverified (if Linear rewrites descriptions, a task would show as an update on every run). Seven httpmock tests on hand-written fixtures in Linear's response shape (create plus re-run, update/done/closed/reopen, subtask and parent state, dry-run, GraphQL error in a 200, the 400 rate limit, a missing workflow state) plus two in `export.rs`; docs en/ru/uk.
+
+Status: done 2026-10-11
+
+Model: Claude Code / claude-sonnet-5-5
