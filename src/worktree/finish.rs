@@ -4,7 +4,8 @@
 
 //! `rtok worktree finish` (T952.1): hand a task's worktree to review in one step — commit
 //! what is left, push, open (or reuse) the PR, ask for auto-merge, then unlock. It never
-//! closes the task: that waits for the merge (T952.2).
+//! closes the task: it marks the claim, and `rtok mcp` closes the task and removes the
+//! worktree once the PR merges (T952.2, [`super::reap`]).
 
 use std::path::Path;
 
@@ -108,7 +109,15 @@ fn open_pr(dir: &Path, branch: &str, base: &str, repo: Option<&str>) -> Result<S
     if let Some(url) = open {
         return Ok(url);
     }
-    let create = ["pr", "create", "--head", branch, "--base", base, "--fill-first"];
+    let create = [
+        "pr",
+        "create",
+        "--head",
+        branch,
+        "--base",
+        base,
+        "--fill-first",
+    ];
     let out = gh(dir, "opening the PR…", &with_repo(&create, repo))?;
     // `gh pr create` prints progress lines before the URL.
     Ok(out.lines().last().unwrap_or_default().to_owned())
@@ -212,6 +221,14 @@ pub fn for_agent(
     let unlocked = record.locked.is_some();
     if unlocked {
         git::unlock(&main, &record.path)?;
+    }
+    // The push and the PR already happened, so a missing mark costs only the cleanup.
+    match store.map(|s| s.finish_worktree_claim(&shown)) {
+        Some(Ok(true)) => {}
+        Some(Err(e)) => warnings.push(format!("not removed after the merge: {e:#}")),
+        _ => warnings.push(
+            "no claim in the rtok store, so nothing removes it after the merge; run `rtok worktree remove` then".into(),
+        ),
     }
     Ok(Finished {
         path: shown,

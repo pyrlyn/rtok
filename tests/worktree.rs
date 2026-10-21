@@ -2237,6 +2237,23 @@ esac
     bin
 }
 
+/// `rtok worktree add <task> <slug>` in `work` as `agent`; the new worktree's path.
+fn add_as(tmp: &Path, work: &Path, agent: &str, task: &str, slug: &str) -> std::path::PathBuf {
+    let out = rtok_as(
+        tmp,
+        work,
+        Some(agent),
+        &["worktree", "add", task, slug],
+        b"",
+    );
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    std::path::PathBuf::from(String::from_utf8_lossy(&out.stdout).trim_end())
+}
+
 /// `rtok worktree finish --json` in `cwd` as `agent`, with the fake `gh` first on `PATH` and a
 /// git identity of its own (`HOME` is the scratch directory).
 #[cfg(unix)]
@@ -2273,21 +2290,7 @@ fn finish_commits_pushes_opens_the_pr_and_unlocks_only_the_caller_s_worktree() {
     fake_gh(&tmp);
     let (_store, ids) = agents(&tmp, &["sess-me", "sess-them"]);
     let (me, them) = (ids[0].as_str(), ids[1].as_str());
-    let add = |agent: &str, task: &str, slug: &str| {
-        let out = rtok_as(
-            &tmp,
-            &work,
-            Some(agent),
-            &["worktree", "add", task, slug],
-            b"",
-        );
-        assert!(
-            out.status.success(),
-            "{}",
-            String::from_utf8_lossy(&out.stderr)
-        );
-        std::path::PathBuf::from(String::from_utf8_lossy(&out.stdout).trim_end())
-    };
+    let add = |agent: &str, task: &str, slug: &str| add_as(&tmp, &work, agent, task, slug);
     let err = |out: &std::process::Output| String::from_utf8_lossy(&out.stderr).into_owned();
     let locked = |name: &str| {
         find(&inventory(&work).unwrap(), name)
@@ -2360,4 +2363,94 @@ fn finish_commits_pushes_opens_the_pr_and_unlocks_only_the_caller_s_worktree() {
         std::fs::read_to_string(tmp.join("gh.log")).unwrap(),
         "refusals call no gh"
     );
+}
+
+/// T952.2: after `finish`, a round keeps an unmerged and a dirty worktree and a merged one
+/// whose task cannot be closed; the next round closes the task, then removes the worktree,
+/// its branch and its claim.
+#[cfg(unix)]
+#[test]
+fn a_finished_worktree_goes_after_its_merge_and_its_task_closes_first() {
+    use rtok::tasks::run::Project;
+    use rtok::tasks::{NewTask, Status};
+    use rtok::worktree::reap::{Outcome, sweep};
+    let tmp = rtok::testutil::tmp_dir("worktree-reap");
+    let work = origin_clone(&tmp, "rtok");
+    fake_gh(&tmp);
+    let (store, ids) = agents(&tmp, &["sess-me"]);
+    let me = ids[0].as_str();
+    let tasks = rtok::config::Tasks::default();
+    let project = Project::open(&tasks, &work).unwrap();
+    let new = NewTask {
+        title: "reap".into(),
+        description: String::new(),
+        parent: None,
+    };
+    let task = project.create(&store, &new).unwrap().id;
+
+    let merged = add_as(&tmp, &work, me, &task.to_string(), "merged");
+    let open = add_as(&tmp, &work, me, "t2", "open");
+    let dirty = add_as(&tmp, &work, me, "t3", "dirty");
+    for wt in [&merged, &open, &dirty] {
+        let name = wt.file_name().unwrap().to_string_lossy().into_owned();
+        std::fs::write(wt.join(format!("{name}.txt")), &name).unwrap();
+        let out = finish_as(&tmp, wt, me, &[]);
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+    // Keys before the removal: the stored path is canonical, and a gone path has none.
+    let [merged_key, open_key, dirty_key] =
+        [&merged, &open, &dirty].map(|wt| stored_claim_path(wt));
+    let branch = |wt: &Path| run(wt, &["branch", "--show-current"]).trim().to_owned();
+    let merged_branch = branch(&merged);
+    squash(&work, &merged_branch);
+    squash(&work, &branch(&dirty));
+    run(&work, &["push", "-q", "origin", "main"]);
+    std::fs::write(dirty.join("late.txt"), "late").unwrap();
+
+    type Round = std::collections::HashMap<String, Result<Outcome, String>>;
+    let round = |tasks: &rtok::config::Tasks| -> Round {
+        let close =
+            |main: &Path, task: &str| rtok::tasks::run::close_if_active(&store, tasks, main, task);
+        sweep(&store, &close)
+            .into_iter()
+            .map(|(path, out)| (path, out.map_err(|e| format!("{e:#}"))))
+            .collect()
+    };
+    let broken = rtok::config::Tasks {
+        adapter: "nope".into(),
+        ..rtok::config::Tasks::default()
+    };
+    let first = round(&broken);
+    assert!(
+        first[&merged_key]
+            .clone()
+            .unwrap_err()
+            .contains("unknown [tasks] adapter"),
+        "{first:?}"
+    );
+    assert_eq!(first[&open_key], Ok(Outcome::Waiting(State::Unmerged)));
+    assert_eq!(first[&dirty_key], Ok(Outcome::Waiting(State::Dirty)));
+    assert!(merged.exists());
+    assert_eq!(project.get(&task).unwrap().status, Status::Open);
+
+    let second = round(&tasks);
+    match &second[&merged_key] {
+        Ok(Outcome::Removed { closed, .. }) => assert_eq!(closed, &Some(task.to_string())),
+        other => panic!("{other:?}"),
+    }
+    assert!(!merged.exists() && open.exists() && dirty.exists());
+    assert_eq!(project.get(&task).unwrap().status, Status::Done);
+    assert!(run(&work, &["branch", "--list", &merged_branch]).is_empty());
+    let left: Vec<String> = store
+        .finished_worktree_claims()
+        .unwrap()
+        .into_iter()
+        .map(|(path, _)| path)
+        .collect();
+    assert!(!left.contains(&merged_key), "{left:?}");
+    assert_eq!(left.len(), 2, "{left:?}");
 }
