@@ -12,3 +12,5 @@ Left open: the `ci.yml` comment still names `plan.md`. Touching `ci.yml` trips t
 
 Checked: `cargo test --test plan_dir` on the migrated tree, and the loss check against
 `c14b95e1b` described in the task's Check line.
+
+`AGENTS.md` shortened to stay under its 350-token budget (`tests/host_docs.rs`).
