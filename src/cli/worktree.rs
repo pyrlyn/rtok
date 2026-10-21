@@ -80,6 +80,32 @@ pub(super) enum WorktreeCmd {
         #[arg(long)]
         json: bool,
     },
+    /// Hand your task worktree to review: commit what is left, push, open or reuse the PR, ask
+    /// for squash auto-merge, then unlock. Refuses the main checkout, another agent's lock and
+    /// credential files; never closes the task
+    Finish {
+        /// The worktree, or a directory inside it; defaults to the current directory
+        path: Option<PathBuf>,
+        /// Commit message for uncommitted work; defaults to `<task>: <branch slug>`
+        #[arg(short, long)]
+        message: Option<String>,
+        /// `owner/name` for gh, when the `origin` URL does not name the repository
+        #[arg(long)]
+        repo: Option<String>,
+        /// Open the PR without auto-merge
+        #[arg(long)]
+        no_auto_merge: bool,
+        /// The rtok agent id (any unique prefix); defaults to `RTOK_AGENT_ID`
+        #[arg(long)]
+        agent: Option<String>,
+        /// The owner an old lock names, as `<provider> / <model>`. Defaults to `<host> / <model>`
+        /// of the agent
+        #[arg(long)]
+        owner: Option<String>,
+        /// JSON instead of the text lines
+        #[arg(long)]
+        json: bool,
+    },
     /// Every worktree and orphan with its owner, state, source and build-cache bytes
     List {
         /// JSON instead of the table
@@ -238,6 +264,34 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: WorktreeCmd) -> Result<
                 print!("{}", done.preview_text());
             } else {
                 println!("{}: {}", done.path, done.note);
+            }
+
+            Ok(())
+        }
+        WorktreeCmd::Finish {
+            path,
+            message,
+            repo,
+            no_auto_merge,
+            agent,
+            owner,
+            json,
+        } => {
+            let cfg = Config::load_with(config_file.as_deref(), None)?;
+            let opts = crate::worktree::finish::Options {
+                message,
+                repo,
+                no_auto_merge,
+            };
+            let path = match path {
+                Some(path) => path,
+                None => std::env::current_dir()?,
+            };
+            let done = crate::worktree::ops::finish(&cfg, &path, agent.as_deref(), owner, &opts)?;
+            if json {
+                print_json(&done)?;
+            } else {
+                print!("{}", done.to_text());
             }
 
             Ok(())

@@ -126,6 +126,18 @@ pub fn remove(
     )
 }
 
+pub fn finish(
+    cfg: &Config,
+    path: &Path,
+    agent: Option<&str>,
+    owner: Option<String>,
+    opts: &super::finish::Options,
+) -> Result<super::finish::Finished> {
+    let store = opened(cfg);
+    let agent = claim::caller(store.as_ref(), agent)?;
+    super::finish::for_agent(store.as_ref(), path, (agent.as_ref(), owner), opts)
+}
+
 pub fn whoami(cfg: &Config, cwd: &Path) -> Whoami {
     let store = opened(cfg);
     // An unknown `RTOK_AGENT_ID` still leaves the root and the cwd worth printing.

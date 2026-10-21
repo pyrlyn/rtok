@@ -401,6 +401,10 @@ impl Server {
             },
             Listed {
                 plugin: "mcp",
+                def: worktrees::finish_def(),
+            },
+            Listed {
+                plugin: "mcp",
                 def: worktrees::adopt_def(),
             },
             Listed {
@@ -517,6 +521,9 @@ impl Server {
             "worktree_remove" => self
                 .agent()
                 .and_then(|(agent, _)| worktrees::remove(&self.cx, &agent, args)),
+            "worktree_finish" => self
+                .agent()
+                .and_then(|(agent, _)| worktrees::finish(&self.cx, &agent, args)),
             "worktree_adopt" => self
                 .agent()
                 .and_then(|(agent, _)| worktrees::adopt(&self.cx, &agent, args)),
@@ -1112,6 +1119,7 @@ mod tests {
     const WRITING_TOOLS: &[&str] = &[
         "worktree_add",
         "worktree_remove",
+        "worktree_finish",
         "worktree_adopt",
         "agent_send",
         "agent_status_set",

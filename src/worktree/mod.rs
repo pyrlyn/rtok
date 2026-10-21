@@ -9,6 +9,7 @@
 pub mod add;
 pub mod claim;
 pub mod clean;
+pub mod finish;
 pub mod gc;
 pub mod git;
 pub mod host;

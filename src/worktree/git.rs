@@ -173,6 +173,49 @@ pub fn fetch(repo: &Path, base: &str) -> Result<()> {
     git_slow(repo, &label, &["fetch", "--quiet", "origin", branch]).map(drop)
 }
 
+/// The paths `git add -A` would stage, deletions left out: a deleted file cannot leak.
+/// `--porcelain -z` keeps names raw; a rename's or copy's second field is its source.
+pub fn pending_paths(worktree: &Path) -> Result<Vec<String>> {
+    let out = git_ok(
+        worktree,
+        &["status", "--porcelain", "-z", "--untracked-files=all"],
+    )?;
+    let mut fields = out.stdout.split(|b| *b == 0).filter(|f| f.len() > 3);
+    let mut paths = Vec::new();
+    while let Some(field) = fields.next() {
+        let (xy, path) = field.split_at(3);
+        if matches!(xy[0], b'R' | b'C') {
+            fields.next();
+        }
+        if !xy[..2].contains(&b'D') {
+            paths.push(String::from_utf8_lossy(path).into_owned());
+        }
+    }
+    Ok(paths)
+}
+
+/// `git add -A` and one commit with `message`; the repository's own hooks and identity apply.
+pub fn commit_all(worktree: &Path, message: &str) -> Result<()> {
+    git_ok(worktree, &["add", "-A"])?;
+    git_slow(
+        worktree,
+        "committing…",
+        &["commit", "--quiet", "-m", message],
+    )
+    .map(drop)
+}
+
+/// `git push -u origin <branch>`: the upstream is set so a later plain `git push` lands here.
+pub fn push(worktree: &Path, branch: &str) -> Result<()> {
+    let label = format!("pushing {branch}…");
+    git_slow(
+        worktree,
+        &label,
+        &["push", "--quiet", "-u", "origin", branch],
+    )
+    .map(drop)
+}
+
 /// One locked worktree on a new branch with no upstream: a bare `git push` from it
 /// cannot reach the default branch.
 pub fn add_locked(repo: &Path, path: &Path, branch: &str, reason: &str, base: &str) -> Result<()> {

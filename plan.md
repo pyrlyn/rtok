@@ -282,6 +282,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T940 | todo | P3 | 2 | 0% | |
 | T941 | todo | P3 | 2 | 0% | |
 | T942 | todo | P3 | 1 | 0% | |
+| T952.2 | todo | P1 | 3 | 0% | |
 
 
 
@@ -289,6 +290,14 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 
 
 
+
+### T952.2. Close the task and remove the worktree after its PR merges
+
+Creator request 2026-10-21; needs T952.1. A finished worktree waits for `rtok worktree gc` by hand, and nothing marks its task closed when the PR lands. The order is fixed by the creator: the task is closed only after the PR is merged, and the worktree is removed only after that.
+
+Done: `rtok mcp`, which runs for the whole session, checks the worktrees `finish` handed off on a background thread (never in a hook: the 10 ms budget). For one whose branch is merged into the base (squash-aware `git::is_merged`) and clean: first close its task (`task_status done` when the task is an rtok task; a `plan.md` project's `done.md` move rides in the PR and lands with the merge), then remove it through `remove::detach`, release the claim and delete the merged local branch. An unmerged, dirty or closed-without-merge PR is left alone and reported in `worktree list`. Fail open: a failed check is logged and retried on the next tick.
+
+Check: tests with a fake merge (branch merged into a local bare `origin`): the task is closed before the worktree goes, a dirty or unmerged one stays, a failure keeps the worktree; `just check`.
 
 ### T920. PostToolUse hook went from ~4 ms to ~50 ms with v0.17.0-alpha.2 (memory observations)
 

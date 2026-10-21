@@ -125,6 +125,12 @@ const ALLOW_KEYS: &[&str] = &[
     // unmerged branch survives this one removal.
     "worktree.remove.owner",
     "worktree.remove.keep_branch",
+    // `worktree finish` (T952.1): one hand-off per call — its commit message, the PR's
+    // repository, whether to auto-merge and whose old lock.
+    "worktree.finish.message",
+    "worktree.finish.repo",
+    "worktree.finish.no_auto_merge",
+    "worktree.finish.owner",
     // `worktree clean` (T152): same per-call rule as `gc` — a stored `yes` would delete
     // without anyone typing it; `--idle` is T153's flag with T153's default.
     "worktree.clean.yes",

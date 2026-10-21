@@ -480,7 +480,7 @@ hooks check none found
 duplicate hooks none found
 duplicate mcp servers none found
 mcp
-  rtok (40 tools, ~1043 desc tokens) [CWD]/target/[..]
+  rtok (41 tools, ~1087 desc tokens) [CWD]/target/[..]
 proxy 
 proxy openai 
 BASH_MAX_OUTPUT_LENGTH (unset)

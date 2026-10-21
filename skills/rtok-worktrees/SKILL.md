@@ -21,6 +21,10 @@ A worktree the host made itself: `worktree_adopt` or `rtok worktree adopt --task
 
 ## Finish
 
+When the task is done: `worktree_finish` (path) or `rtok worktree finish` inside the worktree
+commits what is left, pushes, opens the PR with squash auto-merge and unlocks. It does not
+close the task: close it only after the PR is merged.
+
 After the PR is merged: `worktree_remove` or `rtok worktree remove <path|task>` from the main
 checkout, then delete the remote branch if the forge did not. `rtok worktree gc --yes` sweeps
 many; `rtok worktree clean --yes` frees build caches and keeps the worktree;

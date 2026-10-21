@@ -12207,6 +12207,18 @@ Execution, PR 2 (2026-10-03, Claude Code / sonnet-5): on top of T285 PR 2. (1) `
 
 Result (2026-10-03, Claude Code / sonnet-5): PR 1 is #482 (the CLI); PR 2 is this one. MCP `worktree_remove` removes the linked agent's own clean worktree (with its branch once merged), refuses a dirty or unmerged one (`keep_branch` removes an unmerged clean one and keeps the branch), another agent's lock and the cwd, never forces, and releases the claim. The CLI and MCP share `remove::for_agent`; the claim-release warning on the CLI is now unstyled, like `claim::remember`'s. About 57 more description tokens in the MCP listing (18 to 19 tools). Stacks on #676 (T285 PR 2).
 
+### T952.1. `rtok worktree finish`: commit, push, open the PR, unlock
+
+Creator request 2026-10-21. Finishing a task in an rtok worktree takes five manual steps today (commit, push, `gh pr create`, auto-merge, unlock), and agents skip some: the worktree stays locked and its branch never reaches a PR. One command does them in order from inside the worktree. It never closes the task: the task closes only after the PR is merged (T952.2).
+
+Done: `rtok worktree finish [path] [-m <msg>] [--repo <owner/name>] [--no-auto-merge]` and MCP `worktree_finish`. It refuses the main checkout, a detached HEAD, a branch with no own commits and nothing to commit, and another agent's lock. A dirty tree is committed whole (`git add -A`; message `-m`, else `<task>: <branch slug>`), refused when a staged path is a credential file (`read::roots::is_secret`). Then `git push -u origin <branch>`, reuse the open PR for the branch or `gh pr create --fill`, `gh pr merge --auto --squash` unless `--no-auto-merge` (a refusal there is a warning), and last `git worktree unlock` of our own lock, so a failed step leaves the lock in place. The claim row stays: a live agent's worktree is still never collected.
+
+Plan: `src/worktree/finish.rs` (steps above; git through `git.rs`, `gh` through `rtok_sys::proc`), `git.rs` gains `add_all`, `commit`, `push`, `staged`; `src/cli/worktree.rs` `Finish`; `src/mcp/worktrees.rs` `worktree_finish`; EXEMPT row in `tests/surface_parity.rs`; trycmd/man goldens; `docs/agents-and-worktrees.md` (+ `ru`/`uk`), `skills/rtok-worktrees`.
+
+Check: `tests/worktree.rs` cases against a local bare `origin` and a fake `gh` on `PATH` (dirty tree committed and pushed, PR reused, auto-merge refusal warns, secret refused, foreign lock refused, unlock only at the end); `just check`.
+
+Check result: `just check` green (4125 tests). `finish_commits_pushes_opens_the_pr_and_unlocks_only_the_caller_s_worktree` covers the refused `.env`, the commit `t1: fin` pushed to the bare `origin`, one `gh pr create` and a reused PR on the second run, the auto-merge refusal as a warning, the unlock, another agent's lock, a branch with nothing to hand over and the main checkout. `is_secret` moved from `plugins/read/roots.rs` to `crate::fs` (re-exported) so the guard works without the `read` feature.
+
 ### T420. `just check` runs only what a change touches; `just full-check` runs everything
 
 `just check` ran every gate and the whole test suite (2446 tests, about 7 minutes on a loaded host), whatever changed. Done: `just check` runs format, lint and tests only for files changed against the merge base with `main` (plus uncommitted changes) and the tests that depend on them; docs-only changes skip the cargo tests; `just full-check` runs the previous full gate unchanged, and CI keeps running the full gate. When the selection cannot be computed, `just check` falls back to the full gate.
