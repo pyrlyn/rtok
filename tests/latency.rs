@@ -310,8 +310,8 @@ fn latency_hook_session_start_with_populated_notes_p95_under_10ms() {
 }
 
 /// T370: `map_rank = "pagerank"` reads one stored row and ranks in memory, with no scan of
-/// `symbols` and no process. The graph is about this repo's size (500 files, 40k edges at the
-/// time of writing) so the decode and the personalized iterations are paid in full.
+/// `symbols` and no process. The graph is about this repo's size (900 files, 120k edges on
+/// 2026-10-21) so the decode and the personalized iterations are paid in full.
 #[test]
 fn latency_hook_session_start_with_a_pagerank_map_p95_under_10ms() {
     p95_with(
@@ -356,22 +356,22 @@ fn session_start_in_temp_dir() -> String {
     v.to_string()
 }
 
-/// A config that turns the pagerank map on, and a stored graph about this repo's size (500
-/// files, 40k edges at the time of writing) so the decode and the personalized iterations are
-/// paid in full.
+/// A config that turns the pagerank map on, and a stored graph about this repo's size (900
+/// files, 120k edges on 2026-10-21) so the decode and the personalized iterations are paid in
+/// full.
 fn seed_pagerank_home(home: &std::path::Path) {
     std::fs::write(
         home.join("config.toml"),
         "[plugins.graph]\nmap_tokens = 1000\nmap_rank = \"pagerank\"\n",
     )
     .expect("write config");
-    let (files, names) = (500, 2000);
+    let (files, names) = (900, 3600);
     let mut scan = Vec::new();
     for k in 0..names {
         scan.push((format!("sym{k}"), format!("f{:03}.rs", k % files), true, 1));
     }
     for i in 0..files {
-        for j in 0..80 {
+        for j in 0..135 {
             let k = (i * 31 + j * 17) % names;
             scan.push((
                 format!("sym{k}"),

@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
-//! Divan benches for the graph index: cold index + warm walk + warm symbol query.
+//! Divan benches for the graph index: cold index + warm walk + warm symbol query, and the
+//! SessionStart pagerank map over this repo's own index (T370).
 //!
 //! Tags vs LSP token/latency comparison (tool-output into context) lives in
 //! `tests/graph_backend_bench.rs` — run:
@@ -22,7 +23,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use divan::Bencher;
 use rtok::config::Config;
 use rtok::plugin::{Ctx, Runtime};
-use rtok::plugins::graph::{index, symbol};
+use rtok::plugins::graph::{index, rank, symbol};
 
 fn main() {
     divan::main();
@@ -98,4 +99,30 @@ fn warm_walk(b: Bencher) {
 fn warm_symbol(b: Bencher) {
     b.with_inputs(|| indexed("symbol"))
         .bench_refs(|f| symbol(&Ctx::new(&f.cx), &f.dir, "f0").unwrap().len());
+}
+
+/// Files a compacted session's last checkpoint might name: they seed the personalized rank.
+const CHECKPOINT: [&str; 4] = [
+    "src/plugins/graph/rank.rs",
+    "src/plugins/graph/mod.rs",
+    "src/plugin.rs",
+    "src/store/symbols.rs",
+];
+
+/// T370: the SessionStart part `map_rank = "pagerank"` adds on this repo: read the stored graph,
+/// decode it, iterate from the seeds and render 1000 tokens. The tree is indexed once, outside
+/// the timed region. `now` is far past every mtime, so only `seeds` personalize the rank.
+#[divan::bench(args = [false, true], sample_count = 50, sample_size = 1)]
+fn session_start_pagerank_map(b: Bencher, personalized: bool) {
+    let (cx, dir) = home("rank");
+    let repo = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    index::run(&Ctx::new(&cx), repo, false).unwrap();
+    let root = index::canon(repo);
+    let seeds: Vec<String> = if personalized {
+        CHECKPOINT.iter().map(|p| (*p).to_string()).collect()
+    } else {
+        Vec::new()
+    };
+    b.bench(|| rank::map(&Ctx::new(&cx), &root, 1000, &seeds, i64::MAX).unwrap());
+    let _ = std::fs::remove_dir_all(dir);
 }
