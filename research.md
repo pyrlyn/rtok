@@ -395,6 +395,38 @@ trace with an `invoke_agent` root and `chat {model}` spans — this ledger has n
 and no proxy traffic, and rtok is not on this machine's PATH — and for SigNoz and Maple, which
 need an account or an API key.
 
+**T395 status, 2026-10-21: not run, clause kept.** An agent session (Claude Code /
+claude-opus-5-5, worktree `feat/t395`) tried to run the clause and could not. Its permission
+mode refused every `docker` and `colima` call, so a self-hosted SigNoz could not start. The
+session had no SigNoz Cloud ingestion key and no Maple workspace key. It also could not start a
+second live Claude Code session behind `rtok proxy`, because agents never run a host (T280) and a
+live session costs API spend. Nothing reached either backend, so this paragraph records no
+trace shape and no `rtok_tokens_total` value. The offline half is already covered.
+`tests/otel.rs` `every_row_posts_once_and_the_marks_advance` seeds one session with a hook, an
+MCP and a proxy call, then asserts that `chat {model}` and `invoke_agent` reach a mock collector.
+The clause stays open: only the live backend check is missing, and this run produced no
+evidence for dropping it.
+
+Re-run protocol (the creator's machine, about 15 minutes):
+
+1. Backend. For SigNoz, run the `docs/otel.md` recipe from a SigNoz checkout, or set
+   `endpoint` / `headers` to SigNoz Cloud. For Maple, set the workspace OTLP URL and the
+   `Authorization=Bearer …` header. Keep `content = false` unless the prompts may leave the machine.
+2. Session. `rtok proxy` in one terminal. Then
+   `ANTHROPIC_BASE_URL=http://127.0.0.1:8790 claude` in a repo where the rtok hooks and MCP are
+   installed. One prompt that makes at least one `Read` and one rtok MCP call, then `/exit`, so
+   `SessionEnd` sets `ended_at`.
+3. Export. Run `rtok otel flush`, then `rtok otel status`. Pending must be 0 on every stream.
+4. Record a dated row per backend here: the backend version, the trace id, and whether it is one
+   trace with the `invoke_agent claude` root. Also the child span names, which must include
+   `chat {model}`, `execute_tool …` from both the hooks and MCP, and `hook …`. Then the
+   `rtok_tokens_total` (`rtok.tokens`) value by `gen_ai.token.type`, checked through the
+   backend's own query API or UI.
+
+If the creator decides a commercial backend sign-off is not worth an account, the clause is
+dropped in `roadmap.md` P16 with that reason, and Jaeger and Grafana (2026-09-07 above) stay the
+verified backends.
+
 
 ### WASM bundle (`rtok web`, T60.7, 2026-09-18)
 
