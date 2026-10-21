@@ -466,8 +466,8 @@ target/tmp/t60-2-config-init.toml
 +# shell    = ""                         # "" = $SHELL
 +# rules    = "~/.rtok/rules.toml"       # extra filter rules; missing → built-in rules/default.toml
 +# rules_dir = "~/.rtok/rules.d"         # drop-ins: every *.toml merges after rules in name order
-+# trailer  = true                       # print `[rtok <id12> · N lines]` after a cut; false = `--no-ref`
-+# trailer_min_lines = 40                # add `[rtok <id12> · N lines]` above this
++# trailer  = true                       # print `[rtok <id8> · N lines]` after a cut; false = `--no-ref`
++# trailer_min_lines = 40                # add `[rtok <id8> · N lines]` above this
 +# fail_tail_lines   = 80                # non-zero exit → last N lines verbatim
 +# never_wrap = ["rtok", "sudo"]         # first-word deny list; heredocs, `&` are always skipped
 +# interactive_stems = ["python", "node", "psql", "sqlite3", "irb", "bash", "sh", "zsh", "docker", "kubectl"]  # `-i` skips wrap only for these (docker: run/exec; kubectl: exec); `--interactive` always skips

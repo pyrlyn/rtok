@@ -53,6 +53,17 @@ Check: `cap_budget_gives_back_lines_so_the_marker_fits` — the printed id is 8 
 Status: done 2026-10-19
 Model: Cursor / grok 4.7
 
+### T912. Docs name the 8-character trailer id
+
+T672 prints 8 hex chars on the `[rtok …]` trailer. The guides, the cmd README and the file `rtok config init` writes still said `<id12>`.
+
+They now say `<id8>`. `rtok expand` resolves that prefix. The Russian and Ukrainian copies of `docs/config.md` and `docs/cmd-rules.md` match. Older done cards keep the wording they shipped with.
+
+Check: `tests/trycmd/config-init.toml` matches `crates/rtok-config/default.toml` on the trailer comment; `docs/config.md`, `docs/cmd-rules.md` and `src/plugins/cmd/README.md` say `<id8>`, and so do `docs/ru` and `docs/uk`.
+
+Status: done 2026-10-19
+Model: Cursor / grok 4.7
+
 ### T909. Print the short archive id on a live-zone pointer
 
 T672 shortened the command trailer. The archive live-zone pointer still printed a 12-character label and the full 64-character id in `expand(<id>)`, and the compress view did the same. `expand` already resolves an 8-character prefix. A decision already stored is replayed as written, so a cached prefix does not change. The measurement `ref_id` stays the full id.

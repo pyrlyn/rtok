@@ -21,7 +21,7 @@ Every Bash output archived raw, filtered for the model, measured.
    `formatter`) summarises the output. Other families go through the TOML rules in
    `rules/default.toml` (kind `rule`): head/tail/dedupe/drop, always keeping
    `error|warning|panic|FAIL|Traceback`.
-4. Output over 40 lines gets a trailer: `[rtok <id12> · N lines]` (`rtok expand <id12>` resolves the prefix; `--no-ref` or `trailer = false` drops it).
+4. Output over 40 lines gets a trailer: `[rtok <id8> · N lines]` (`rtok expand <id8>` resolves the prefix; `--no-ref` or `trailer = false` drops it).
    Below that the trailer prints only when the shortening dropped something a reader
    could miss (a line, a cut string, invalid bytes) and the output does not already name
    `expand <id>` (the rules' `… N lines omitted` marker is a pointer of its own). A
