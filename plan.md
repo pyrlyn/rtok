@@ -254,8 +254,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T395 | todo | P3 | 2 | 30% | |
 | T396 | todo | P3 | 2 | 90% | |
 | T398 | todo | P3 | 1 | 40% | |
-| T414 | in progress | P1 | 4 | 20% | Claude Code / opus-5.5 |
-| T414.7 | in progress | P3 | 1 | 0% | MiMo / mimo |
 | T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
 | T428 | in progress | P2 | 3 | 85% | Claude Code / sonnet-5.5 |
 | T436.4 | todo | P3 | 2 | 90% | |
@@ -1050,20 +1048,6 @@ Done means: one dated row per editor in §18.2. If all pass, the `worktrees` ski
 Check: the §18.2 table has four dated rows.
 
 Progress (2026-10-21, `research.md` §18.2): an agent session could not launch any of the four (sandbox refused every editor command), so each row reads "not run" with that date, and §18.2 now holds the manual protocol plus a lead: this machine's shell resolves `/usr/bin/git` first, and a git older than 2.48 refuses `extensions.relativeWorktrees`. Left: the creator (or an unsandboxed session) runs the protocol and turns the four rows into pass or fail; the setting stays off until then.
-
-### T414. Web dashboard restyle on the brand pack, built from `brand/` sources
-
-Creator request 2026-10-05: a new look for the `rtok web` SPA from the brand pack in `brand/` (tokens, logos, icons, `DESIGN.md`, on top of the `@pyrlyn/brand` base it pins). Creator decisions 2026-10-05: a restyle by the brandbook (pages and navigation stay; shell, panels, tables, KPIs and charts change); a mockup first, approved before the pages; our own `web/src/ui` React components on the brand roles (`--pyr-*`), not the base `.pyr-*` classes. Creator decisions 2026-10-05, later: UI/UX additions (grouped sidebar, command palette and shortcuts, clickable KPIs, live status with pause) and features (Δtok savings trend, table filters in the URL, CSV/JSON export), one sub-task each (T414.8–T414.14). Creator decisions 2026-10-05, later still: charts draw on canvas through ECharts 6, behind our own chart abstraction so the library can be swapped; hover shows a tooltip, and other places change live with the hover where that does not repeat the tooltip; small marks (budget grid, plugin bitset, token mix, share bars) stay DOM and share the same tooltip (T414.15, T414.16). Creator decision 2026-10-05, after the charts: open-source UI toolkits are allowed; behaviour (focus, keyboard, overlays, menus, dialogs, listboxes) comes from React Aria Components, styled by us on the `--pyr-*` roles, so the look stays ours (from T414.9 on; its `Autocomplete` serves the palette, so no `cmdk`).
-
-Source rule: `web/` holds no copy of a brand file. Tokens, fonts, icons, logos and illustrations are imported from `brand/` and `brand/node_modules/@pyrlyn/brand` at build time; anything derived (CSS, raster sizes) is produced by a program in the build, never committed by hand. `brand/README.md` "Known gaps" and `PROVENANCE.md` "Adopting in each surface" list today's copies.
-
-Check: every sub-task below is closed in `done.md`, and no file under `web/` is byte-identical to a file under `brand/` or `brand/node_modules/@pyrlyn/brand/base/`.
-
-### T414.7. Re-shoot `web/screenshots/`; close the web admin gap in `brand/`
-
-Regenerate `web/screenshots/` with the existing script; in `brand/README.md` "Known gaps" and `PROVENANCE.md` "Adopting in each surface" mark the web admin as adopted.
-
-Check: `just check` green; `brand/README.md` no longer says the web admin ships its own copies.
 
 ### T416. Shared `change-preview` crate for dry-run output
 

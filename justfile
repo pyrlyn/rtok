@@ -115,6 +115,11 @@ spa-e2e: spa-build && spa-e2e-run
 spa-e2e-run:
     {{npm}} --prefix web run test:e2e
 
+# T414.7: re-shoots web/screenshots/ from the built SPA on `?sample` data (Chromium, as spa-stories).
+# Not in any gate: it rewrites tracked files.
+spa-screenshots: spa-build
+    {{npm}} --prefix web run screenshots
+
 # T183: tools/publish_marketplace's own test suite (no network, no real `gh`).
 python:
     {{pytest}} tools/tests

@@ -2671,6 +2671,34 @@ Status: done 2026-10-08
 
 Model: Claude Code / claude-sonnet-5-5
 
+### T414.7. Re-shoot `web/screenshots/`; close the web admin gap in `brand/`
+
+Regenerate `web/screenshots/` with the existing script; in `brand/README.md` "Known gaps" and `PROVENANCE.md` "Adopting in each surface" mark the web admin as adopted.
+
+Check: `just check` green; `brand/README.md` no longer says the web admin ships its own copies.
+
+Plan (claim taken over from MiMo, idle at 0% since 2026-10-12): the change of #1224, rebuilt on today's `main` because that branch conflicts in `plan.md`/`todo.md`. 1. `?sample=empty|loading|error` in `web/src/api/sample.ts` gives the three state shots (`calls-empty`, `overview-loading`, `overview-error`) without a server, with unit tests. 2. `web/scripts/shoot.mjs` writes those at 1440 and 390 px; `npm run screenshots`, `just spa-screenshots`. 3. Re-shoot all 48 and look at the state shots. 4. Drop the last present-tense "web ships a copy" lines from `brand/`. 5. Close T414.7 and T414.
+
+Result (2026-10-21, Claude Code / opus-5.5): #1140 had already marked the web admin adopted in `PROVENANCE.md` and added `shoot.mjs`, but the script re-shot only part of the set, was wired nowhere, and the `calls-empty`, `overview-loading` and `overview-error` shots still showed the plain-HTML admin of #447. New `sampleConnect(search)` in `web/src/api/sample.ts`: `?sample=empty` is the full fixture with no calls, `loading` opens the link and sends no snapshot, `error` carries a snapshot error, any other value is the full fixture as before; `App.tsx` picks the source through it; four unit tests in `query.test.ts`. `shoot.mjs` writes the three states at 390 and 1440 px in both themes next to the 36 page shots; `npm run screenshots`, `just spa-screenshots` (in no gate: it rewrites tracked files). All 48 shots re-shot here; 42 are byte-identical to the #1224 set, six differ by a few bytes. The error, empty and loading shots were looked at. `brand/README.md`, `PROVENANCE.md`, `DESIGN.md` and the `tokens.json` `$description` no longer say `web/` ships a copy of the tokens (`build.mjs` does not read the description; `npm --prefix brand run check` is up to date). The static `?sample` script was kept over the unmerged `t414.7-reshoot-screenshots` branch (Playwright on the real binary): it needs no cargo build or seeded store and its shots are deterministic. Gates: fmt, clippy (`-D warnings`), jscpd, `just js`, pytest (43), `spa-typecheck`, `spa-test` (502), `spa-stories` (260) and the brand check green. The shared disk of this Mac ran out three times while other sessions built, so `cargo nextest` never finished here: the first run passed 1711 tests before a test hit "database or disk is full", and every later failure was ENOSPC or a store that could not open; `spa-e2e` passed 44 of 45, the one failure in fixture teardown at the same time. This change touches no Rust; CI runs both suites.
+
+Status: done 2026-10-21
+
+Model: Claude Code / opus-5.5
+
+### T414. Web dashboard restyle on the brand pack, built from `brand/` sources
+
+Creator request 2026-10-05: a new look for the `rtok web` SPA from the brand pack in `brand/` (tokens, logos, icons, `DESIGN.md`, on top of the `@pyrlyn/brand` base it pins). Creator decisions 2026-10-05: a restyle by the brandbook (pages and navigation stay; shell, panels, tables, KPIs and charts change); a mockup first, approved before the pages; our own `web/src/ui` React components on the brand roles (`--pyr-*`), not the base `.pyr-*` classes. Creator decisions 2026-10-05, later: UI/UX additions (grouped sidebar, command palette and shortcuts, clickable KPIs, live status with pause) and features (Δtok savings trend, table filters in the URL, CSV/JSON export), one sub-task each (T414.8–T414.14). Creator decisions 2026-10-05, later still: charts draw on canvas through ECharts 6, behind our own chart abstraction so the library can be swapped; hover shows a tooltip, and other places change live with the hover where that does not repeat the tooltip; small marks (budget grid, plugin bitset, token mix, share bars) stay DOM and share the same tooltip (T414.15, T414.16). Creator decision 2026-10-05, after the charts: open-source UI toolkits are allowed; behaviour (focus, keyboard, overlays, menus, dialogs, listboxes) comes from React Aria Components, styled by us on the `--pyr-*` roles, so the look stays ours (from T414.9 on; its `Autocomplete` serves the palette, so no `cmdk`).
+
+Source rule: `web/` holds no copy of a brand file. Tokens, fonts, icons, logos and illustrations are imported from `brand/` and `brand/node_modules/@pyrlyn/brand` at build time; anything derived (CSS, raster sizes) is produced by a program in the build, never committed by hand. `brand/README.md` "Known gaps" and `PROVENANCE.md` "Adopting in each surface" list today's copies.
+
+Check: every sub-task below is closed in `done.md`, and no file under `web/` is byte-identical to a file under `brand/` or `brand/node_modules/@pyrlyn/brand/base/`.
+
+Result (2026-10-21, Claude Code / opus-5.5): every sub-task (T414.1-T414.17) is closed in this file, T414.7 last. No file under `web/` is byte-identical to one under `brand/` or `@pyrlyn/brand/base/`: `web/src/brandSources.test.ts` (in `spa-test`) is green.
+
+Status: done 2026-10-21
+
+Model: Claude Code / opus-5.5
+
 ### T415. Graph overview story tests wait for the real readiness signal
 
 `web/src/pages/GraphOverview.stories.tsx`: "Webgl Off Shows Two D" and "Webgl Draws And Click Selects" flake under host load (about half of `just spa-stories` runs at load average 15-250). They fail at ~1000 ms, the default testing-library `findBy*`/`waitFor` timeout, while the lazy Scene3D/Scene2D chunks and the d3-force layout worker are still loading. Done: every wait in those play functions has an explicit, generous timeout tied to a real readiness signal (2D nodes drawn, canvas drawn, layout placed the node and stopped moving), so they pass under load and still fail fast when the scene never renders. No global vitest timeout, no retries, no chart code changes.
