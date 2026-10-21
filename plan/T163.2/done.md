@@ -1,0 +1,5 @@
+Second slice of T163: the 6 sites in `otel.rs` and 4 in `embed.rs` move to the Diesel DSL over `schema.rs` (aggregates via `diesel::dsl::{min, count}` and `group_by`). Anything the DSL cannot express goes through the shared extension module from T163.1 — whichever slice lands first creates it.
+
+Check: `grep -nE 'sql_query|sql::<|batch_execute' src/store/otel.rs src/store/embed.rs` finds nothing; tests unchanged and green; `just check`.
+
+Result: aggregates (`otel_token_totals`, `otel_call_totals`, `otel_first_ts`, the stale-embedding join, the cosine candidate select) are typed DSL, and `note_embeddings` is a `table!`. Two statements have no form in Diesel 2.3: `sessions_pending_export`'s `ROW_NUMBER() OVER`, and the embedding upsert's `ON CONFLICT DO UPDATE … WHERE` (`DoUpdate` has no WHERE). Both live in `src/store/sql_ext.rs` as `QueryFragment`s, each with a comment naming the missing construct. The grep over the two files is empty. `cargo test -p rtok --lib store::` (59), `sessions_pending` (2) and `--test p29_memory` (2) passed; clippy `-D warnings` on `--lib --tests` passed.
