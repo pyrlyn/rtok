@@ -1,0 +1,3 @@
+Cloud review finding (2026-10-08): `copy_dir` in `crates/rtok-agent-sdk/src/lib.rs` carried `#[allow(dead_code)]` and was said to be dead on Unix, to be gated with `cfg(not(unix))`. The claim was wrong: `copy_dir` is reached on every target through `copy_owned_with` and `copy_owned`, which `SkillPlan::Copy` calls when a skill is installed as an owned copy. Gating it would break that path on Unix. Only the stale allow was removed; clippy `-D warnings` on the crate reports no dead code without it.
+
+Check: `cargo fmt --check`, `cargo clippy -p rtok-agent-sdk --all-targets -- -D warnings`, `cargo test -p rtok-agent-sdk`.
