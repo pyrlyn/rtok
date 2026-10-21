@@ -492,6 +492,31 @@ mod tests {
         );
     }
 
+    /// T385.3: the live-arm overlay (`research.md` §47) runs exactly its three arms, and
+    /// each arm's settings file sends `claude -p` to a proxy port of its own.
+    #[test]
+    fn defaults_overlay_runs_three_arms_on_their_own_proxies() {
+        let home = crate::testutil::tmp_dir("bench-defaults");
+        let overlay =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("bench/configs/defaults/bench.toml");
+        let mut c = crate::config::layers::load(&home, Some(&overlay), None).unwrap();
+        let arms: Vec<&str> = c.bench.configs.keys().map(String::as_str).collect();
+        assert_eq!(arms, ["a", "b", "context"]);
+        let mut urls = std::collections::BTreeSet::new();
+        for path in c.bench.configs.values() {
+            let body = std::fs::read(path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+            let v: Value = serde_json::from_slice(&body).unwrap();
+            let url = v["env"]["ANTHROPIC_BASE_URL"].as_str().unwrap();
+            assert!(url.starts_with("http://127.0.0.1:88"), "{url}");
+            urls.insert(url.to_string());
+        }
+        assert_eq!(urls.len(), 3, "{urls:?}");
+        c.bench.dry_run = true;
+        c.bench.runs = 1;
+        assert_eq!(run(&c).unwrap().lines().count(), 6 * 3);
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
     #[test]
     fn real_run_prints_a_table() {
         let s = run(&cfg(false)).unwrap();
