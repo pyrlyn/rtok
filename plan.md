@@ -243,7 +243,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T277 | in progress | P2 | 5 | 45% | Claude Code / sonnet-5.5 |
 | T278 | in progress | P1 | 3 | 90% | Claude Code / claude-opus-5-5 |
 | T279 | in progress | P1 | 5 | 90% | Claude Code / claude-opus-5-5 |
-| T281 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
+| T281 | in progress | P1 | 3 | 75% | Claude Code / claude-opus-5-5 |
 | T289 | in progress | P2 | 4 | 75% | Claude Code / sonnet-5 |
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
 | T369.1 | todo | P3 | 1 | 0% | |
@@ -917,6 +917,8 @@ Plan:
 Check: `research.md` §26 gains a dated table host → host version → the MCP process's link to the session (env var name / ppid rule / cwd only / none) → sub-agent behaviour → one MCP process per session yes/no, each row with its source (the probe log or the vendor docs URL). The T283 card is updated with the rule per host.
 
 Execution (2026-09-27): agent sessions may not read their own process environment (blocked by the host's policy), so the live runs are the creator's. (1) Worktree `_worktrees/rtok-t281`. (2) Vendor docs first, per host: which env vars an MCP server process inherits, the hook payload's session field, whether one MCP process serves one session; each fact cited with URL and date. (3) A probe kit in the scratchpad, never committed: an MCP stdio wrapper that logs pid, ppid chain, cwd, the filtered env var names and values, `initialize` params, then execs `rtok mcp`; a hook script that logs the same next to the payload's session field; a one-page run sheet for the creator. (4) `research.md` §26 gets the table from the docs now, with a "probe" column left `pending` until the creator's logs arrive; T283's card gets the rule per host once they do.
+
+Progress (2026-10-21, `research.md` §26 "Probe status"): no new live row. The agent session's permissions blocked `ps`, `rtok agents whoami` and MCP `whoami`. The two Claude Code Probe cells now cite T473's live `ps eww` (2026-10-09): rule (a) through `CLAUDE_CODE_SESSION_ID`, and the desktop app's app-level server shared by every session (T455, T924). A re-run protocol is written there, built on MCP `whoami`'s `rule` field. Left: the creator's runs for the other eight hosts, then T283's card and `done.md`.
 
 ### T289. Worktrees the host creates join rtok: `rtok worktree adopt` and the post-create hooks
 
