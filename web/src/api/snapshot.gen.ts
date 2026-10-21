@@ -1052,6 +1052,11 @@ export interface Snapshot {
    */
   doctor: Report | null;
   /**
+   * T945: no doctor probe has landed yet — the probe runs off the tick, so `doctor` is
+   * `None` without having failed; both surfaces render a placeholder, not the failure.
+   */
+  doctor_pending: boolean;
+  /**
    * Set when the store will not open or this tick's doctor probe failed (T60.6). Both
    * surfaces render it as a banner instead of an empty page.
    */

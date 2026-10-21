@@ -63,6 +63,9 @@ describe("page logic", () => {
         expect(states.filter((s) => s === "warn")).toHaveLength(3);
         expect(states.filter((s) => s === "skip")).toHaveLength(2);
         expect(doctorChecks(null)).toMatchObject([{ st: "fail", field: "Snapshot.doctor = null" }]);
+        expect(doctorChecks(null, true)).toMatchObject([
+            { st: "skip", field: "Snapshot.doctor_pending" },
+        ]);
         const bare = { ...richSnapshot.doctor!, hooks_total: 0, mcp: [], proxy: "" };
         expect(
             doctorChecks(bare)
