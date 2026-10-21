@@ -477,6 +477,8 @@ cmd = ""                              # підказка сімейства ко
 [worktree]                            # rtok worktree add | claim | remove | list | gc
 enabled = true                        # false: кожна команда `rtok worktree` (і list) каже, що worktree не ввімкнено, MCP не показує жодного інструмента worktree_*, а хуки Claude WorktreeCreate/WorktreeRemove роблять те, що Claude робить без rtok
 root = ".rtok/worktrees"              # де `rtok worktree add` створює worktree, як <root>/<repo>-<task>; відносний: у основному checkout; `~` розкривається
+seed = true                           # заповнити seed_dirs нового worktree із сусіднього checkout, що збирав їх останнім: copy-on-write клони (APFS, btrfs, XFS, bcachefs, ReFS, Dev Drive), інакше звичайна копія; `rtok worktree add --no-seed` пропускає це один раз
+seed_dirs = ["target", "node_modules"] # кеші збірки для засіву, відносно checkout; голе ім'я збігається й на рівень нижче (web/node_modules)
 
 [tasks]                               # адаптери задач (T441); зазвичай задаються для проєкту в .rtok.toml
 adapter = "disk"                      # disk | github | gitlab

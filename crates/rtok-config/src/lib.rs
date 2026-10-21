@@ -1065,6 +1065,12 @@ section! {
         /// Where worktrees are created, as `<root>/<repo>-<task>`. A relative root is under the
         /// main checkout.
         root: PathBuf = p(".rtok/worktrees"),
+        /// Fill a new worktree's `seed_dirs` from the sibling checkout that built them last, by
+        /// copy-on-write clone where the file system can (T953); `--no-seed` skips it once.
+        seed: bool = true,
+        /// Build caches to seed, relative to the checkout. A bare name also matches one level
+        /// down (`node_modules` takes `web/node_modules`).
+        seed_dirs: Vec<String> = strs(&["target", "node_modules"]),
     }
 }
 

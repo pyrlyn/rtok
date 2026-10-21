@@ -23,6 +23,9 @@ pub(super) enum WorktreeCmd {
         /// The rtok agent id (any unique prefix) to bind it to; defaults to `RTOK_AGENT_ID`
         #[arg(long)]
         agent: Option<String>,
+        /// Do not seed `[worktree] seed_dirs` from a sibling checkout this time
+        #[arg(long)]
+        no_seed: bool,
     },
     /// Bind an existing worktree to an agent: rewrites its lock only when unlocked or already yours
     Claim {
@@ -164,6 +167,7 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: WorktreeCmd) -> Result<
             slug,
             owner,
             agent,
+            no_seed,
         } => {
             let cfg = Config::load_with(config_file.as_deref(), None)?;
             let cwd = std::env::current_dir()?;
@@ -174,6 +178,7 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: WorktreeCmd) -> Result<
                 slug.as_deref(),
                 owner,
                 agent.as_deref(),
+                no_seed,
             )?;
             crate::agents::task_list::write_for(&cwd, &plan.path, &plan.task);
             println!("{}", plan.path.display());

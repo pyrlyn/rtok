@@ -467,8 +467,10 @@ Every effective key with its origin — the `config show --sources` page.
 | web.port | 3333 | default |
 | worktree.enabled | true | default |
 | worktree.root | .rtok/worktrees | default |
+| worktree.seed | true | default |
+| worktree.seed_dirs | [target, node_modules] | default |
 
-422 keys.
+424 keys.
 
 ## Doctor
 

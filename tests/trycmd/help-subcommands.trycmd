@@ -1331,6 +1331,7 @@ Options:
                        Defaults to `<host> / <model>` of the agent
       --agent <AGENT>  The rtok agent id (any unique prefix) to bind it to; defaults to
                        `RTOK_AGENT_ID`
+      --no-seed        Do not seed `[worktree] seed_dirs` from a sibling checkout this time
   -h, --help           Print help
 
 $ rtok worktree claim --help

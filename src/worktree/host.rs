@@ -96,12 +96,11 @@ fn create(p: &Payload, cfg: &Config, store: Option<&Store>) -> Result<PathBuf> {
     }
     let agent = session_agent(store, p);
     let owner = agent.is_none().then(|| HOST.to_string());
-    let root = &cfg.worktree.root;
     let auto_add = cfg.plugins.graph.auto_add_projects;
     let plan = claim::add(
         store,
         cwd,
-        root,
+        &cfg.worktree,
         (&p.name, None),
         agent.as_ref(),
         owner,
