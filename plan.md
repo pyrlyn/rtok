@@ -257,7 +257,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T413 | todo | P2 | 3 | 0% | |
 | T413.13 | in progress | P3 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
 | T414 | in progress | P1 | 4 | 20% | Claude Code / opus-5.5 |
-| T414.7 | in progress | P3 | 1 | 0% | MiMo / mimo |
+| T414.7 | in progress | P3 | 1 | 10% | Claude Code / opus-5.5 |
 | T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
 | T428 | in progress | P2 | 3 | 85% | Claude Code / sonnet-5.5 |
 | T436.4 | todo | P3 | 2 | 90% | |
@@ -1092,6 +1092,8 @@ Check: every sub-task below is closed in `done.md`, and no file under `web/` is 
 Regenerate `web/screenshots/` with the existing script; in `brand/README.md` "Known gaps" and `PROVENANCE.md` "Adopting in each surface" mark the web admin as adopted.
 
 Check: `just check` green; `brand/README.md` no longer says the web admin ships its own copies.
+
+Plan (claim taken over from MiMo, idle at 0% since 2026-10-12): `brand/README.md` and `PROVENANCE.md` already say the web admin is adopted (#1140), and #1140 added `web/scripts/shoot.mjs` but re-shot only part of the set and wired it nowhere. 1. `?sample=empty|loading|error` in `web/src/api/sample.ts` gives the three state shots (`calls-empty`, `overview-loading`, `overview-error`) without a server, with unit tests. 2. `shoot.mjs` writes those at 1440 and 390 px; `npm run screenshots`, `just spa-screenshots`. 3. Re-shoot all 48, look at a sample in both themes. 4. Close T414.7 and T414 (check: no byte-identical copy, `web/src/brandSources.test.ts`).
 
 ### T416. Shared `change-preview` crate for dry-run output
 
