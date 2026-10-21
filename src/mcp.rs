@@ -29,6 +29,8 @@ pub mod http;
 
 mod agents;
 mod messages;
+#[cfg(feature = "read")]
+mod paths;
 mod tasks;
 mod worktrees;
 
@@ -358,6 +360,10 @@ struct Server {
     agent: Mutex<Option<(String, link::Rule)>>,
     /// Unix seconds this process started: a cwd candidate must have been seen since.
     started: i64,
+    /// T923: the linked agent's registered cwd and when it was read, so a call from an unlinked
+    /// shared server does not redo the link rules every time.
+    #[cfg(feature = "read")]
+    caller: Mutex<Option<(std::time::Instant, Option<std::path::PathBuf>)>>,
 }
 
 impl Server {
@@ -468,6 +474,8 @@ impl Server {
             roots_capable: AtomicBool::new(false),
             agent: Mutex::new(None),
             started: crate::log::now() as i64,
+            #[cfg(feature = "read")]
+            caller: Mutex::new(None),
         })
     }
 
@@ -533,12 +541,61 @@ impl Server {
                 .and_then(|(agent, _)| agents::set_status(&self.cx, &agent, args)),
             "worktree_list" => worktrees::list(&self.cx),
             n if n.starts_with("task_") => tasks::call(&self.cx, n, args),
-            _ => return invoke_text(&self.cx, name, args),
+            _ => return self.invoke_rooted(name, args),
         };
         match own {
             Ok(t) => (t, true),
             Err(e) => (e.to_string(), false),
         }
+    }
+
+    /// `invoke_text`, with the relative paths of `read`, `search`, `tree` and `outline` resolved
+    /// against the caller's root (T923) and the answer naming that root where a wrong one shows.
+    #[cfg(feature = "read")]
+    fn invoke_rooted(&self, name: &str, args: &Value) -> (String, bool) {
+        if !paths::is_rooted(name) {
+            return invoke_text(&self.cx, name, args);
+        }
+        let guard = std::env::current_dir()
+            .ok()
+            .zip(self.caller_dir())
+            .and_then(|(cwd, dir)| crate::plugins::read::roots::enter_caller(&cwd, &dir));
+        let args = paths::anchor_outline(name, args);
+        let (text, ok) = invoke_text(&self.cx, name, &args);
+        (paths::annotate(name, &args, text, ok, guard.is_some()), ok)
+    }
+
+    #[cfg(not(feature = "read"))]
+    fn invoke_rooted(&self, name: &str, args: &Value) -> (String, bool) {
+        invoke_text(&self.cx, name, args)
+    }
+
+    /// The registered cwd of the agent this process serves, if any: where its relative paths
+    /// start. Untrusted until `enter_caller` accepts it.
+    #[cfg(feature = "read")]
+    fn caller_dir(&self) -> Option<std::path::PathBuf> {
+        const TTL: std::time::Duration = std::time::Duration::from_secs(5);
+        if let Ok(g) = self.caller.lock()
+            && let Some((at, dir)) = g.as_ref()
+            && at.elapsed() < TTL
+        {
+            return dir.clone();
+        }
+        let dir = match self.link() {
+            link::Link::Linked { id, .. } => self
+                .cx
+                .store
+                .agent_detail(&id)
+                .ok()
+                .flatten()
+                .and_then(|d| d.cwd)
+                .map(std::path::PathBuf::from),
+            _ => None,
+        };
+        if let Ok(mut g) = self.caller.lock() {
+            *g = Some((std::time::Instant::now(), dir.clone()));
+        }
+        dir
     }
 
     /// The agent this session is linked to, or the reason it is not.
@@ -1337,6 +1394,28 @@ mod tests {
                 .contains("path outside cwd"),
             "{v}"
         );
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T923: a relative path that misses names the root it was resolved against, so an agent
+    /// in another checkout sees the server's root instead of concluding the file is gone.
+    #[cfg(feature = "read")]
+    #[test]
+    fn a_missed_relative_read_names_the_root_it_used() {
+        let (cfg, dir) = tmp("names-root");
+        let server = Server::new(&cfg).unwrap();
+        let (is_error, text) = call_text(&server, "read", json!({"path": "no/such/file.rs"}));
+        let root = std::env::current_dir().unwrap();
+        assert!(is_error, "{text}");
+        assert!(
+            text.ends_with(&format!(
+                "(relative paths resolved against {})",
+                root.display()
+            )),
+            "{text}"
+        );
+        let (_, abs) = call_text(&server, "read", json!({"path": "/no/such/file.rs"}));
+        assert!(!abs.contains("resolved against"), "{abs}");
         let _ = fs::remove_dir_all(dir);
     }
 
