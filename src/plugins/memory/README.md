@@ -106,7 +106,7 @@ and hook recall is on, `sync` and `rtok doctor` print the same T59.7 overlap lin
 
 ## Tasks
 
-See `roadmap.md` § `memory`. Checks in `plan.md`.
+See `roadmap.md` § `memory`. Checks in `plan/`.
 
 T6.1 notes API · T2.5 checkpoint · T6.2 recall · T6.3 import · T66.1 upsert · T66.2 export · T69.1 lifecycle · T69.3 recall bench · T69.6 sync.
 

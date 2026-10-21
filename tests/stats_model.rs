@@ -307,9 +307,21 @@ fn stats_page_matches_price_and_cache_on_the_fixture_store() {
     let mut cfg = rtok::testutil::config_file_in(&h);
     cfg.stats.transcripts_dir = h.join(".claude/projects");
     cfg.stats.codex_dir = h.join(".codex/sessions");
-    let page = rtok::web::model::snapshot(&cfg)
-        .stats
-        .expect("the stats page scanned the fixture");
+    // T947: the scan runs off the tick, so the first snapshots say "reading transcripts…".
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    let page = loop {
+        let page = rtok::web::model::snapshot(&cfg)
+            .stats
+            .expect("the stats page has text");
+        if page != "reading transcripts…\n" {
+            break page;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the stats scan never landed"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    };
 
     for line in price.lines() {
         assert!(

@@ -28,13 +28,16 @@ pub fn add(
     slug: Option<&str>,
     owner: Option<String>,
     agent: Option<&str>,
+    no_seed: bool,
 ) -> Result<Plan> {
     let store = opened(cfg);
     let agent = claim::caller(store.as_ref(), agent)?;
+    let mut wt = cfg.worktree.clone();
+    wt.seed &= !no_seed;
     claim::add(
         store.as_ref(),
         cwd,
-        &cfg.worktree.root,
+        &wt,
         (task, slug),
         agent.as_ref(),
         owner,

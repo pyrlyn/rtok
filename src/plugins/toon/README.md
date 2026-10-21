@@ -26,7 +26,7 @@ min_rows = 5
 
 ## Tasks
 
-See `roadmap.md` § `toon`. Checks in `plan.md`.
+See `roadmap.md` § `toon`. Checks in `plan/`.
 
 T11.7 `proxy_filter` TOON on tabular JSON (default on). A table that would not shrink is left as is.
 

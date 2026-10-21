@@ -1,0 +1,7 @@
+**T61.1 `stats` counts injected skill bodies** · T61.2, T61.3, T63.1 · `src/measure/jsonl.rs`, `src/measure/stats.rs`, `src/measure/codex.rs`, `tests/stats_model.rs`, `research.md`
+Do: `measure::jsonl` keeps `isMeta` user records with a top-level `sourceToolUseID` as `Injected { tool_use_id, bytes, turn }` (body = the flattened `message.content` text); `stats` folds them per `Skill` tool_use's `input.skill` into a `skills` section — count, bytes, mean, p95, max, est_tokens and `resident` = bytes × the API requests at or after the injection turn — under `mcp` in the table and in `--json` (absent when empty, so the existing goldens hold byte-identical).
+Check: `skills_fold_injected_bodies_and_count_resident_requests` (fixture transcript with a 3-line and a 3,000-line body; resident multiplication asserted), `stats_renders_injected_skill_bodies` (binary-level, `tests/stats_model.rs`); measured row in `research.md` §10.2 dated 2026-09-18 — 24 bodies, 792,820 B, `resident` ≈ 96.8 MB over 30 d (`update-config` 391,824 B, `claude-api` 248,816 B, `slint` 35,997 B over 8).
+Complexity: 2/5 — one parser arm, one fold, one table section.
+Status: done 2026-09-18
+Check result: measure 48/48 + stats_model 5/5 green; full `just check` green in the isolation worktree. Deviation: the card expected a `stats_model` golden re-bless — none was needed because the section is absent when no skill body exists; the golden coverage arrives as the new binary test. Also `codex::jsonl_paths` widened to `pub(crate)` for the doctor reuse.
+Model: ZCode / GLM-5.3-Flash

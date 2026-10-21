@@ -1,0 +1,7 @@
+In the plan, D34 (plan.md@966f067 line 710) makes the agent id a UUID accepted by "any unique prefix of 4+ chars", and T285/T286/T289 (plan.md@966f067 lines 493, 510, 557) define `--agent <id-prefix>` for `rtok worktree` commands. T331 (branch `docs/plan-doctor-hooks-mcp`, ~line 733, from PR #542 (T331), not merged yet) defines "`--agent <host>` limits the check to one host", and T330 (~lines 775, 787, from PR #541 (T330), not merged yet) defines `--agent <host|id>`, including the pseudo-agent `rtok`. These contradict each other because one flag name gets three meanings, and under D12 (plan.md@966f067 line 690, "every CLI flag is a config key") it cannot map to one key; a host name that is also valid hex (for example `cafe`) would be ambiguous between the two forms.
+
+Goal: research both approaches, compare trade-offs, recommend one, then update the conflicting tasks. Do not change either task before the decision.
+
+Check: the recommendation and the chosen approach are recorded in this card (or as a decision row), and every task named above is updated so the plan no longer contradicts itself.
+
+Decision (creator, 2026-10-10): no renames. `--agent` means one thing per command: on `rtok worktree` commands an agent id (D34 prefix); on `rtok doctor` and `rtok agents junk` a host id (plus the pseudo-host `rtok` for junk). T330 now says `--agent <host>`; config keys are per command already (D12).

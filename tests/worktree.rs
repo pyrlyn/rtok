@@ -2009,7 +2009,10 @@ fn a_new_worktree_inherits_no_symbol_rows_under_rtok() {
     let plan = rtok::worktree::claim::add(
         Some(&store),
         &work,
-        &tmp.join("_worktrees"),
+        &rtok::config::Worktree {
+            root: tmp.join("_worktrees"),
+            ..Default::default()
+        },
         ("t1", None),
         None,
         Some(ME.into()),

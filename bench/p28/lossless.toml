@@ -1,0 +1,13 @@
+# T385.9.3 lossless arm: the v0.1 archive pointer, no compressor. Differs from llm.toml only
+# in port and `[plugins.compress.llm] enabled`.
+
+[proxy]
+port = 8791
+mode = "compress"
+
+[plugins.archive]
+keep_turns = 2    # both arms: the first body leaves the live zone while the agent still reads
+min_tokens = 300  # both arms: the fixture bodies are 376–545 estimated tokens
+
+[plugins.compress.llm]
+enabled = false

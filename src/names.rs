@@ -25,6 +25,18 @@ pub(crate) fn cmd_stem(path: &str) -> &str {
     }
 }
 
+/// T922: leads the `rtok run` wrapper on POSIX. The host's Bash may lack `rtok` on its PATH even
+/// when the hook found one (hook lines also try `~/.ketch/bin`), and `command not found` would
+/// fail every call; this defines a stand-in `rtok` that evals the last argument — the quoted
+/// original command — in a subshell, like the real child shell. Never written on Windows, where
+/// the rewrite is PowerShell-quoted and `command -v` does not exist.
+pub(crate) fn run_guard() -> &'static str {
+    if cfg!(windows) { "" } else { POSIX_RUN_GUARD }
+}
+
+const POSIX_RUN_GUARD: &str =
+    "command -v rtok >/dev/null 2>&1 || rtok() ( for a; do :; done; eval \"$a\" ); ";
+
 /// PreToolUse sees the user's command; PostToolUse often sees `rtok run -- '…'`,
 /// or `rtok run --agent <id> -- '…'` when the dispatch carried a sub-agent id (T457).
 pub(crate) fn strip_wrap(s: &str) -> String {
@@ -45,6 +57,7 @@ pub(crate) fn strip_wrap(s: &str) -> String {
 /// Drops one `rtok run` wrapper. `<id>` is the token `cmd` embeds: 1–64 bytes of ASCII
 /// alnum, `_` or `-`. A lookalike stays intact, so it is not keyed as the inner command.
 fn strip_run_wrap(s: &str) -> &str {
+    let s = s.strip_prefix(POSIX_RUN_GUARD).unwrap_or(s);
     if let Some(rest) = s.strip_prefix("rtok run -- ") {
         return rest;
     }

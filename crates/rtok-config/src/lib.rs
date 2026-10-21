@@ -103,6 +103,9 @@ pub const HOSTS: &[&str] = &[
 /// Adapters `[tasks] adapter` accepts. `tasks::run::ADAPTERS` re-exports this.
 pub const TASK_ADAPTERS: [&str; 3] = ["disk", "github", "gitlab"];
 
+/// Layouts `[tasks.disk] layout` accepts.
+pub const TASK_LAYOUTS: [&str; 3] = ["auto", "files", "folders"];
+
 /// Plugin catalogue: `(id, default_on)`. The registry's manifests must match this list
 /// (asserted by a test in `plugins`), and [`Plugins`] has one field per id.
 pub const CATALOGUE: [(&str, bool); 13] = [
@@ -734,7 +737,8 @@ section! {
         runs: u32 = 3,
         dry_run: bool = false,
         timeout_s: u64 = 900,
-        /// `""` = T9.1 six tasks; `"graph"` = T68.9 with/without MCP.
+        /// `""` = T9.1 six tasks; `"graph"` = T68.9 with/without MCP; `"p28"` = T385.9.3
+        /// Gate P28, compressor vs lossless pointer (`bench/p28.toml`).
         suite: String = String::new(),
         /// `[bench.configs]` — free-form `name = settings file`, so not a fixed struct.
         configs: BTreeMap<String, PathBuf> = [
@@ -1064,6 +1068,12 @@ section! {
         /// Where worktrees are created, as `<root>/<repo>-<task>`. A relative root is under the
         /// main checkout.
         root: PathBuf = p(".rtok/worktrees"),
+        /// Fill a new worktree's `seed_dirs` from the sibling checkout that built them last, by
+        /// copy-on-write clone where the file system can (T953); `--no-seed` skips it once.
+        seed: bool = true,
+        /// Build caches to seed, relative to the checkout. A bare name also matches one level
+        /// down (`node_modules` takes `web/node_modules`).
+        seed_dirs: Vec<String> = strs(&["target", "node_modules"]),
     }
 }
 
@@ -1107,10 +1117,13 @@ section! {
 }
 
 section! {
-    /// `[tasks.disk]` — one Markdown file per task.
+    /// `[tasks.disk]` — Markdown files on disk, one file or one folder per task.
     TasksDisk {
-        /// Relative to the project root; done tasks move to `<dir>/done`.
+        /// Relative to the project root; with `files`, done tasks move to `<dir>/done`.
         dir: PathBuf = p("tasks"),
+        /// `files` (`R12 - slug.md`, done ones in `<dir>/done`), `folders` (`<id>/task.md`, closed
+        /// by an `<id>/done.md`; the `plan/` layout) or `auto`: `folders` when `dir` holds one.
+        layout: String = s("auto"),
     }
 }
 
@@ -1222,7 +1235,7 @@ section! {
         rules: PathBuf = p("~/.rtok/rules.toml"),
         /// Drop-in dir: every `*.toml` merges after `rules` in name order (T50.2).
         rules_dir: PathBuf = p("~/.rtok/rules.d"),
-        /// Print the `[rtok <id12> · N lines]` reference line after a cut (T661).
+        /// Print the `[rtok <id8> · N lines]` reference line after a cut (T672).
         /// `false` (`RTOK_PLUGINS_CMD_TRAILER=false`, `rtok run --no-ref`) drops it.
         trailer: bool = true,
         trailer_min_lines: u32 = 40,

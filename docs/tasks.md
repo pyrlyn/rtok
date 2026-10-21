@@ -94,6 +94,15 @@ updated_at: 1790000000
 Why the task exists and what done means.
 ```
 
+### The folder layout
+
+A project that keeps its plan as folders (`plan/<id>/task.md`, closed by `plan/<id>/done.md`) uses the same adapter: set `[tasks.disk] dir = "plan"`. `layout = "auto"` (the default) reads `dir` as folders when it already holds an `<id>/task.md`, and as the files above otherwise; `layout = "files"` or `"folders"` forces one, which is how an empty directory starts in folders. Nothing is converted for you.
+
+- `task.md` has the front matter `status` (`todo` or `in progress`), `priority` (`P0`–`P3`, rtok's 0–3), `complexity`, `readiness` and `agent` (the assignee), then `# <id>. Title` and the body. A write changes only the `status`, `priority` and `agent` lines; the rest stays byte for byte.
+- A task with a `done.md` is done; if its first line starts with `Dropped` it is closed. `rtok task status <id> done --report <text>` (or `--report -` for stdin) writes the report, and without one a one-line default. A finished task is not reopened by a command: remove its `done.md` yourself.
+- Folder names that are not task ids are ignored. Blockers, conflicts, the parallel marker and priority 4 have no place in the front matter, so those commands refuse instead of dropping them.
+- A task created through rtok gets `complexity: 3`, a zero `readiness` and, when its description has none, a `Check:` line to fill in.
+
 ## Commands
 
 | Command | What it does |
@@ -102,7 +111,7 @@ Why the task exists and what done means.
 | `rtok task create <title> [-d <text> \| --body-file <path\|->] [--parent <id>] [--json]` | adds a task under the next free id (`A12`, or `A12.3` under `--parent`); `--body-file -` reads the description from stdin |
 | `rtok task list [--status <s,…>] [--all] [--parent <id>] [--json]` | active tasks, with subtasks indented under their parent; `--status` takes a comma-separated list |
 | `rtok task show <id> [--json]` | one task with its subtasks, link and description |
-| `rtok task status <id> [<status>] [--force] [--json]` | reads the status, or sets it to `open`, `in-progress`, `done` or `closed` |
+| `rtok task status <id> [<status>] [--force] [--report <text>] [--json]` | reads the status, or sets it to `open`, `in-progress`, `done` or `closed`; `--report` is the closing report of a finished task (folder layout) |
 | `rtok task next [--json]` | the first ready task. With no blockers, that is still the lowest open task with no active subtask |
 | `rtok task ready [--json]` | every task that can be claimed, highest priority first (`0` before `2`) |
 | `rtok task claim [id] [--agent <id>] [--json]` | claim `id`, or the first ready task. Pass `--agent` or set `RTOK_AGENT_ID`. On GitHub and GitLab the assignee write is last-write-wins, not compare-and-set |
@@ -145,7 +154,7 @@ Without `--json` the commands print text. With `--json` they print the task as J
 | `task_create` | `title` (required), `description`, `parent` | `task create` |
 | `task_list` | `status` (a list, or a comma-separated string), `all`, `parent` | `task list` |
 | `task_get` | `id` (required) | `task show` |
-| `task_status` | `id` (required), `status`, `force` | `task status` |
+| `task_status` | `id` (required), `status`, `force`, `report` | `task status` |
 | `task_next` | none | `task next` |
 | `task_ready` | none | `task ready` |
 | `task_claim` | `id`, `agent` | `task claim` |
@@ -165,7 +174,8 @@ Set `[tasks]` per project in `.rtok.toml`; `rtok task init` writes it there. The
 # prefix  = ""                        # task id prefix (R → R12); empty: first letter of the project name
 
 [tasks.disk]
-# dir = "tasks"                       # one Markdown file per task, relative to the project root; done ones go to <dir>/done
+# dir = "tasks"                         # where the Markdown tasks live, relative to the project root
+# layout = "auto"                       # files: "R12 - slug.md", done ones in <dir>/done; folders: "<id>/task.md", closed by "<id>/done.md" (plan/); auto: folders when <dir> holds one
 
 [tasks.github]
 # repo    = ""                        # owner/name; empty: the origin remote

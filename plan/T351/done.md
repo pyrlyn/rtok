@@ -1,0 +1,12 @@
+Found 2026-10-02 in `~/.rtok/errors.log` (2026-09-27 … 2026-10-02): 158 of 231 lines are `path outside cwd`; 135 of them point into `_worktrees/<repo>-<task>/…` (cox, ketch, stator, rtok), 23 into `/tmp` or a Claude Code session scratchpad. Agents follow the worktree rule (one worktree per task) while the host started `rtok mcp` in the main checkout, so `read`, `search` and `outline` fail and the agent falls back to native tools.
+
+Done when: a path inside any worktree of the cwd's repository (`git worktree list`) is accepted by every MCP tool that has the cwd guard, and so is a path under any `file://` root of the client's `roots/list` answer (today only the first one is kept, as the cwd — T263, `src/mcp.rs`); paths outside every allowed root are still refused with `is_error` (T172). Creator decision 2026-10-02: host session scratchpads (`/tmp`, `/private/tmp/claude-*/…/scratchpad`) stay outside — native `Read` covers them; `plugins.read.allow_paths` stays the manual escape hatch.
+
+Check: MCP tests with a temp repo plus a linked worktree — read/search/outline inside the worktree succeed; a `roots/list` answer with two roots allows both; a path in an unrelated directory and a scratchpad path are still refused; `just check`.
+
+Execution plan: (1) `src/plugins/read/mod.rs` root guard: extra roots = `allow_paths` + every worktree of the cwd's repository (`git worktree list --porcelain`, resolved once per server and cached, fail-soft when git is absent) + every `file://` root of the client's `roots/list` answer; (2) `src/mcp.rs` (T263): keep all roots, not only the first (the first stays the cwd); (3) tests: temp repo + linked worktree, two-root `roots/list`, unrelated and scratchpad paths still refused; `just check`.
+
+**Result (2026-10-02).** #610: `src/plugins/read/roots.rs` — in `rtok mcp` only (`roots::enable`), `resolve_with` falls back, after the cwd/`allow_paths` check fails, to the cwd repo's worktrees (`worktree::git::list`, cached per cwd for 30 s so a worktree added mid-session is seen) and every `file://` directory root of `roots/list` (the first still becomes the cwd). Scratchpads stay refused. Tests: `mcp_accepts_sibling_worktrees_and_every_client_root`, `roots::tests::*`; Windows needed `dunce::canonicalize` in the tests (git rejects `\\?\` paths).
+
+Status: done 2026-10-02
+Model: Claude Code / claude-sonnet-5-5 (reviewed by Claude Code / claude-opus-5-5)

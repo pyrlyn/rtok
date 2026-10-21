@@ -1,0 +1,5 @@
+**T22.6 `idle-hook` must not false-positive on busy PostToolUse** · T22.5 · `src/report/advice.rs`, `tests/report.rs`
+Do: `kinds_for_hook` maps `PostToolUse` to no Measurement kinds (`_ => &[]`), so any PostToolUse with ≥ `OFTEN_HOOK_CALLS` emits an `idle-hook` recommendation even when the path is busy (guard cache fill, read invalidation, graph stale marks). Fix the rule so productive PostToolUse side-effects are recognised — or exclude events whose work is not a Measurement kind by design — and keep true idle hooks flagged.
+Check: a fixture with ≥10 PostToolUse calls and guard/read activity produces no `idle-hook` finding for `PostToolUse`; a truly idle event still does; `just check` green.
+Status: done 2026-09-10 · Model: GLM-5.3
+Check result: green. `idle_hooks` only considers idle-by-design events (`PreCompact` / `Stop` / `SessionEnd`); `PostToolUse` is excluded. Advice fixture uses 12 `PreCompact` (fires once) plus 12 `PostToolUse` (silent); healthy store with 12 `PostToolUse` stays empty. `cargo test --test report` 6/6 green.

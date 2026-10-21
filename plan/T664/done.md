@@ -1,0 +1,16 @@
+code-review-graph is ahead on review features (~30 MCP tools) while rtok wins on cost (`docs/comparison/rtok-vs-code-review-graph.md`). Port only the features that save tokens or answer "what does this edit touch?" without the full tool bill. Savings both sides: **no data** in rtok docs for a shared corpus.
+
+Check: one or more graph ops (or docs) covering the chosen features; MCP description-token budget documented; `just check`.
+
+**Plan.** Already shipped: `impact`, `graph_diff` (T329.18), `rtok graph review` (T454, CLI only), blast grouping. (1) Read the feature list in `docs/comparison/rtok-vs-code-review-graph.md` (PR #1071) and the code-review-graph README; mark each feature take / skip / already have. (2) Take at most the features that answer "what does this edit touch?" with no new MCP tool (the surface gate is 170 tokens): candidates are a test-gap list (changed defs with no test caller) and a risk summary line on `graph_diff`. (3) Fail-first tests on a fixture repo in `src/plugins/graph/review.rs` / `diff.rs`; keep `tests/graph_contract.rs` strings unchanged unless the commit says why. (4) Take/skip table in the comparison file (or `research.md` while #1071 is open); `just check`.
+
+**Result (2026-10-16).** Already shipped: `impact`, `graph_diff`, blast grouping, `graph review` (CLI). The one feature that answers "is what I changed covered" without a new tool is taken: `graph_diff` ends each project's changed list with one `untested: a, b` line for changed functions, methods and classes no test reaches within the two caller levels it already gathers (no extra walk; description tokens unchanged). A risk number, flows and communities, and extra review tools are skipped; reasons in `research.md` §44 (the comparison file is still on open PR #1071). Test `changed_definitions_without_a_test_caller_are_listed_as_untested` was written first and failed. No shared-corpus saving was measured.
+
+On `6557b6d1` `tests/report_ai.rs` failed twice (`empty_store_ai_says_so`, `ai_carries_the_section_set_with_md_numbers`): with an empty `RTOK_HOME`/`HOME`, `rtok report --ai` dropped the whole `doctor` section past the default `[report] budget_tokens = 8000`. The `agents` block of the doctor text was ~16 KB of the ~35 KB document: every T413 host variant printed four module lines, most with a long `not supported: …` reason repeated per variant. The creator chose to shrink that block in the AI report only and keep the budget. `rtok doctor`, the md/html/pdf reports and the TUI keep the full lines.
+
+Result: `doctor::Report::to_compact_text` renders each host variant as one line (`claude (desktop) hooks=n/a mcp=no proxy=n/a plugin=n/a`, legend on the `agents` line, reasons left to `rtok doctor`) through `agents::module_summary`; `src/report/ai.rs` `doctor()` uses it. On an empty home the doctor section went from 16.6 KB to 3.2 KB and the whole document from 35.7 KB to 22.3 KB, `dropped: none`.
+
+Check: `doctor_agents_are_one_line_per_host_variant` (compact line, no reason, full text unchanged); the two `tests/report_ai.rs` tests pass again; `just check` green on fmt, clippy and all 3815 tests. `dup` stays over its threshold as on `origin/main` (2.13 % there, 2.09 % here; T663 owns it).
+
+Status: done 2026-10-14
+Model: Claude / opus-5.5

@@ -307,7 +307,7 @@
 # runs     = 3
 # dry_run  = false
 # timeout_s = 900                       # per task run
-# suite    = ""                         # "" = the six default tasks; "graph" = with and without MCP
+# suite    = ""                         # "" = the six default tasks; "graph" = with and without MCP; "p28" = compressor vs lossless (bench/p28.toml)
 # [bench.configs]                       # name = settings file passed to `claude --settings`
 # a = "bench/configs/legacy.json"
 # b = "bench/configs/rtok.json"
@@ -418,13 +418,16 @@
 [worktree]                            # rtok worktree add | list | gc
 # enabled = true                        # false: rtok worktree and MCP worktree_* are off; Claude's worktree hooks act as without rtok
 # root = ".rtok/worktrees"              # where `rtok worktree add` creates worktrees, as <root>/<repo>-<task>; relative: under the main checkout
+# seed = true                          # fill a new worktree's seed_dirs from the sibling that built them last, by copy-on-write clone (--no-seed)
+# seed_dirs = ["target", "node_modules"] # build caches to seed, relative to the checkout; a bare name also matches one level down
 
 [tasks]                               # task adapters; usually set per project in .rtok.toml
 # adapter = "disk"                      # disk | github | gitlab
 # prefix  = ""                          # task id prefix (R → R12); empty: first letter of the project name
 
 [tasks.disk]
-# dir = "tasks"                         # one Markdown file per task, relative to the project root; done ones go to <dir>/done
+# dir = "tasks"                         # where the Markdown tasks live, relative to the project root
+# layout = "auto"                       # files: "R12 - slug.md", done ones in <dir>/done; folders: "<id>/task.md", closed by "<id>/done.md" (plan/); auto: folders when <dir> holds one
 
 [tasks.github]
 # repo    = ""                          # owner/name; empty: the origin remote
@@ -459,8 +462,8 @@
 # shell    = ""                         # "" = $SHELL
 # rules    = "~/.rtok/rules.toml"       # extra filter rules; missing → built-in rules/default.toml
 # rules_dir = "~/.rtok/rules.d"         # drop-ins: every *.toml merges after rules in name order
-# trailer  = true                       # print `[rtok <id12> · N lines]` after a cut; false = `--no-ref`
-# trailer_min_lines = 40                # add `[rtok <id12> · N lines]` above this
+# trailer  = true                       # print `[rtok <id8> · N lines]` after a cut; false = `--no-ref`
+# trailer_min_lines = 40                # add `[rtok <id8> · N lines]` above this
 # fail_tail_lines   = 80                # non-zero exit → last N lines verbatim
 # never_wrap = ["rtok", "sudo"]         # first-word deny list; heredocs, `&` are always skipped
 # interactive_stems = ["python", "node", "psql", "sqlite3", "irb", "bash", "sh", "zsh", "docker", "kubectl"]  # `-i` skips wrap only for these (docker: run/exec; kubectl: exec); `--interactive` always skips

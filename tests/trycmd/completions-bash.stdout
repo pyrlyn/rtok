@@ -7110,12 +7110,16 @@ _rtok() {
             return 0
             ;;
         rtok__subcmd__task__subcmd__status)
-            opts="-h --force --json --config --help"
+            opts="-h --force --report --json --config --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
+                --report)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 --config)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
@@ -7216,7 +7220,7 @@ _rtok() {
             return 0
             ;;
         rtok__subcmd__worktree__subcmd__add)
-            opts="-h --owner --agent --config --help"
+            opts="-h --owner --agent --no-seed --config --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0

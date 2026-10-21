@@ -54,7 +54,7 @@ delta_max_ratio = 0.6        # full file when the diff is not below this fractio
 
 ## Tasks
 
-See `roadmap.md` § `read`. Checks in `plan.md`.
+See `roadmap.md` § `read`. Checks in `plan/`.
 
 T4.2 full/lines · T4.3 map/signatures · T4.4 dedup · T4.5 search + tree · T4.6 Read advice · T50.3 stripped.
 

@@ -1,0 +1,1 @@
+Goal: the same four tools, byte-identical, on an embedded graph store — kept only if it wins on numbers. Plan: `plan.md` P8c, survey `src/plugins/graph/PLAN.md` v0.3. T8.9 (the contract these tasks are judged against) is recorded under P8b below, where it was written.

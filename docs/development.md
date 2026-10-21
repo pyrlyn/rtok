@@ -60,6 +60,6 @@ rtok proxy --dry-run
 rtok otel status
 ```
 
-Read [`plan.md`](../plan.md) for the current implementation plan, [`done.md`](../done.md) for
-completed tasks, and [`docs/plugin-authoring.md`](plugin-authoring.md) to build an
+Read [`plan/README.md`](../plan/README.md) for how tasks are kept (one folder per task under
+`plan/`, closed ones carry a `done.md`), and [`docs/plugin-authoring.md`](plugin-authoring.md) to build an
 external plugin.

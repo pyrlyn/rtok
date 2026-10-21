@@ -39,6 +39,7 @@ const ALLOW: &[&str] = &[
     "cli",        // action: agent setup variant filter (T37.0); not a setting
     "desktop",    // action: agents install variant filter (T37.0); not a setting
     "no-restart", // action: skip this call's close/reopen of a running desktop app (T141); not a setting
+    "no-seed", // action: this `worktree add` skips `[worktree] seed` once (T953); the setting is `seed`
     "serve", // action: rtok hook --serve runs the resident hook process (T178, D32); not a setting
     "agent", // action: rtok run --agent <id>, scopes the dedup pointer per call (T127); not a setting
 ];
@@ -225,6 +226,8 @@ const ALLOW_KEYS: &[&str] = &[
     "task.list.all",
     "task.list.parent",
     "task.status.force",
+    // The closing report of one finished task (T955); nothing to store.
+    "task.status.report",
     // `task conflict|parallel` (T441.13.2): undo flags for one call, nothing to store.
     "task.conflict.remove",
     "task.parallel.off",

@@ -34,4 +34,4 @@
   answers in transcripts by `ANSWERED` and the name by `symbol_name` (T369.1): change
   either and the follow-up count changes with it.
 
-**Checks**: `plan.md` T2.6. Order: `roadmap.md` § `guard`.
+**Checks**: `plan/` T2.6. Order: `roadmap.md` § `guard`.

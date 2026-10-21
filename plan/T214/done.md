@@ -1,0 +1,7 @@
+Found 2026-09-22 in the host-plugins pass: every `hooks.json` entry budgets `timeout: 5`, but the TS plugins spawn `rtok` with none — `spawnSync` in `plugins/opencode/rtok.ts:31-43` blocks the whole host event loop per `tool.execute.*`/compaction event, and pi's `execFile` handlers (`plugins/pi/extensions/rtok.ts:34-51, 116-147`) await with neither timeout nor the event's abort signal (`signal: undefined`). A wedged `rtok` (DB lock, broken pipe) freezes the host session instead of failing open.
+
+Plan: `timeout: 5000` on the `spawnSync`/`execFile` options plus `event.signal` where available; a timeout kill then hits T195's `failed` path and keeps the original content.
+
+Check: vitest cases with a >5 s stub — `filterStdin` returns the original stdin within ~6 s (extend `tests/node/fake-rtok.ts` with a sleep helper) and the equivalent pi `tool_result` case; vitest green.
+
+Do (2026-09-23): opencode `spawnSync` and pi `execFile` spawn `rtok` with `timeout: 5000`; pi also passes the event's abort `signal`. A timeout, abort or non-zero exit resolves `failed`, and every pi handler keeps the original content on it. Review fix: pi's `rtok()` now listens for `error` on the child's stdin, so a child that dies before reading a large input (timeout kill, abort) no longer crashes the host with an unhandled EPIPE. Check: vitest `a wedged rtok times out …` (opencode and pi) and `an rtok that exits before reading stdin keeps the original (EPIPE fails open)` (fails without the fix); `tests/pi_plugin.rs`, `tests/filter.rs`, `tests/opencode_plugin.rs` green.

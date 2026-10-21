@@ -26,7 +26,7 @@ enabled = false
 
 ## Tasks
 
-See `roadmap.md` § `json_tree`. Checks in `plan.md`.
+See `roadmap.md` § `json_tree`. Checks in `plan/`.
 
 ## Status
 
