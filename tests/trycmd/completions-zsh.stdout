@@ -405,6 +405,7 @@ _arguments "${_arguments_options[@]}" : /
 ;;
 (status)
 _arguments "${_arguments_options[@]}" : /
+'--report=[Closing report of a task set to done or closed (/`-/` for stdin); the plan/ layout keeps it in done.md]:TEXT:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '--force[Finish a parent even though subtasks are still open]' /
 '--json[Print the task as JSON]' /

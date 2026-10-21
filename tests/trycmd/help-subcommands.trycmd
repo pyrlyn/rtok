@@ -1476,6 +1476,8 @@ Arguments:
 Options:
       --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
       --force          Finish a parent even though subtasks are still open
+      --report <TEXT>  Closing report of a task set to done or closed (`-` for stdin); the plan/
+                       layout keeps it in done.md
       --json           Print the task as JSON
   -h, --help           Print help
 

@@ -220,6 +220,8 @@ const ALLOW_KEYS: &[&str] = &[
     "task.list.all",
     "task.list.parent",
     "task.status.force",
+    // The closing report of one finished task (T955); nothing to store.
+    "task.status.report",
     // `task conflict|parallel` (T441.13.2): undo flags for one call, nothing to store.
     "task.conflict.remove",
     "task.parallel.off",

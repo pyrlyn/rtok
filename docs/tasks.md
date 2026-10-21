@@ -101,7 +101,7 @@ A project that keeps its plan as folders (`plan/<id>/task.md`, closed by `plan/<
 - `task.md` has the front matter `status` (`todo` or `in progress`), `priority` (`P0`–`P3`, rtok's 0–3), `complexity`, `readiness` and `agent` (the assignee), then `# <id>. Title` and the body. A write changes only the `status`, `priority` and `agent` lines; the rest stays byte for byte.
 - A task with a `done.md` is done; if its first line starts with `Dropped` it is closed. `rtok task status <id> done --report <text>` (or `--report -` for stdin) writes the report, and without one a one-line default. A finished task is not reopened by a command: remove its `done.md` yourself.
 - Folder names that are not task ids are ignored. Blockers, conflicts, the parallel marker and priority 4 have no place in the front matter, so those commands refuse instead of dropping them.
-- A task created through rtok gets `complexity: 3`, `readiness: 0%` and, when its description has none, a `Check:` line to fill in.
+- A task created through rtok gets `complexity: 3`, a zero `readiness` and, when its description has none, a `Check:` line to fill in.
 
 ## Commands
 
