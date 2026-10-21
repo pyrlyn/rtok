@@ -324,10 +324,34 @@ pub(crate) fn status(fs: &impl Fs, s: &McpSurface) -> McpRow {
 
 /// [`status`] of every surface `agent`'s `kind` variant reads, off the real disk.
 pub(crate) fn rows(agent: &dyn super::Agent, cfg: &Config, kind: Kind) -> Vec<McpRow> {
-    surfaces(agent, cfg, kind)
-        .iter()
-        .map(|s| status(&Disk, s))
-        .collect()
+    let surfaces = surfaces(agent, cfg, kind);
+    if surfaces.is_empty() {
+        return own_row(agent, cfg, kind).into_iter().collect();
+    }
+    surfaces.iter().map(|s| status(&Disk, s)).collect()
+}
+
+/// The one row of a host that writes an MCP entry in a shape `rtok_mcp` does not parse
+/// (Continue's and Goose's YAML items, Reasonix's `[[plugins]]` array): its own exact parser,
+/// [`super::Agent::installed`], decides `present` or `missing` for the file it writes. Such a
+/// parser has no stale state. `None` for a host without MCP (aider, pi, antigravity).
+fn own_row(agent: &dyn super::Agent, cfg: &Config, kind: Kind) -> Option<McpRow> {
+    if matches!(agent.support(kind, "mcp"), super::Support::No(_)) {
+        return None;
+    }
+    let file = agent.files(cfg, kind).into_iter().next()?;
+    let entry = if agent.installed(cfg, kind).contains(&"mcp") {
+        EntryState::Present
+    } else {
+        EntryState::Missing
+    };
+    Some(McpRow {
+        surface: kind.as_str(),
+        file: tilde(&file),
+        entry,
+        diff: None,
+        plugin: None,
+    })
 }
 
 /// `rtok doctor`'s MCP check (T275 Fix 5, D33): install and update always write rtok's entry
@@ -896,6 +920,87 @@ mod tests {
         assert_eq!(rows.len(), 1);
         assert!(rows[0].spec.config_path.ends_with("commandcode/mcp.json"));
         assert_eq!(rows[0].spec.key_path, ["mcpServers"]);
+    }
+
+    /// Every host that can write MCP gets an `mcp` row: through `rtok_mcp` where it parses the
+    /// host's format, else from the host's own parser. A new host outside `surfaces` lands here
+    /// on purpose or not at all.
+    #[test]
+    fn every_mcp_host_has_a_row_source() {
+        let cfg = vfs_cfg();
+        let mut own = Vec::new();
+        for id in super::super::HOSTS {
+            let host = super::super::host(id).unwrap();
+            for v in host.variants() {
+                let mcp = !matches!(host.support(v.kind, "mcp"), super::super::Support::No(_));
+                if mcp && surfaces(host, &cfg, v.kind).is_empty() {
+                    own.push(*id);
+                }
+            }
+        }
+        own.sort_unstable();
+        own.dedup();
+        assert_eq!(own, ["continue", "goose", "reasonix"]);
+    }
+
+    /// Continue, Goose and Reasonix: `agents info` prints `mcp  cli  entry <file>` after
+    /// install and `missing` after remove, from each host's own parser.
+    #[test]
+    fn own_parser_hosts_report_entry_per_surface() {
+        type Setup = fn(&mut Config, std::path::PathBuf);
+        type Edit = fn(&Config) -> anyhow::Result<String>;
+        use super::super::{continue_dev, goose, reasonix};
+        let hosts: [(&str, &str, Setup, Edit, Edit); 3] = [
+            (
+                "continue",
+                "config.yaml",
+                |c, p| c.setup.r#continue.config_path = p,
+                continue_dev::register_mcp,
+                continue_dev::unregister_mcp,
+            ),
+            (
+                "goose",
+                "config.yaml",
+                |c, p| c.setup.goose.config_path = p,
+                goose::register_mcp,
+                goose::unregister_mcp,
+            ),
+            (
+                "reasonix",
+                "config.toml",
+                |c, p| c.setup.reasonix.dir = p.parent().unwrap().to_path_buf(),
+                reasonix::register_mcp,
+                reasonix::unregister_mcp,
+            ),
+        ];
+        for (id, file, setup, install, remove) in hosts {
+            let (cfg, path) = super::super::test_scratch_cfg(id, "t278-own", file, false, setup);
+            let host = super::super::host(id).unwrap();
+            let row = || {
+                let rows = rows(host, &cfg, Kind::Cli);
+                assert_eq!(rows.len(), 1, "{id}");
+                rows.into_iter().next().unwrap()
+            };
+            let missing = row();
+            assert_eq!(
+                (missing.surface, missing.entry, missing.plugin),
+                ("cli", EntryState::Missing, None),
+                "{id}"
+            );
+            assert_eq!(missing.text(), format!("missing ({file} has no \"rtok\")"));
+            install(&cfg).unwrap();
+            let present = row();
+            assert_eq!(present.entry, EntryState::Present, "{id}");
+            assert_eq!(present.text(), format!("entry {}", tilde(&path)));
+            assert!(lines(&[present], "").contains("mcp     cli  entry "));
+            assert!(
+                super::super::installed_modules(host, Kind::Cli, &cfg).contains(&"mcp"),
+                "{id}"
+            );
+            remove(&cfg).unwrap();
+            assert_eq!(row().entry, EntryState::Missing, "{id}");
+            let _ = fs::remove_dir_all(path.parent().unwrap());
+        }
     }
 
     /// Amp's `"amp.mcpServers"` is one flat key; split on the dot, status would look under an
