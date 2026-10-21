@@ -1,0 +1,4 @@
+**T14.1 `measure` design** · T14.0 · `src/plugins/measure/PLAN.md`
+Do: survey how agent tooling actually counts savings — the four retired dashboards plus at least one outside source (LLM-observability token accounting such as Langfuse/Helicone/OpenLLMetry, or a published agent-benchmark cost methodology). Answer: is **context-token-turns** the right primary number, or is cost per passed bench task the honest one and CTT only a diagnostic? Decide what `stats` reports first and what it refuses to claim without proxy `usage`.
+Check: shared Check; `Target:` is stated as a metric definition plus the P1 gate's baseline requirement.
+Status: done 2026-09-02 · `src/plugins/measure/PLAN.md`. CTT is the diagnostic; cost per passed bench task is the honest number; `stats` refuses $ without proxy usage. Target matches P1 baseline.
