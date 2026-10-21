@@ -237,7 +237,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | --- | --- | --- | --- | --- | --- |
 | T124 | todo | P3 | 2 | 60% | |
 | T156 | in progress | P3 | 3 | 50% | Claude Code / claude-opus-5-5 |
-| T261 | in progress | P2 | 3 | 95% | Cursor / grok 4.7 |
+| T261 | in progress | P2 | 3 | 95% | Claude Code / claude-opus-5-5 |
 | T275 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
 | T275.1 | in progress | P2 | 3 | 80% | Cursor / grok 4.7 |
 | T277 | in progress | P2 | 5 | 30% | Claude Code / sonnet-5.5 |
@@ -681,6 +681,13 @@ Progress (Cursor / grok 4.7): items 1–3 already on `origin/main` via #332 — 
 `check (ubuntu-latest)` and `check (macos-latest)` were green both times; cold→warm job wall: ubuntu 161 s → 146 s, macOS 362 s → 222 s (see PR #411 comment).
 
 Fold estimate (not folding): **82** `tests/*.rs` bins. macOS log `Finished test profile`: cold **2 m 05 s**, warm **1 m 16 s**. No per-binary `Linking` lines in the CI log. Fold not in this PR (82-file mechanical move; own task).
+
+Progress (Claude Code / claude-opus-5-5, 2026-10-21, local only: this agent may not edit `.github/workflows/` and has no Actions access):
+- Both blockers are gone on `main`. `just dup` passes: 408 clones, 1.79 % of lines (threshold 2). The Devin and `agents_install` Windows failures were fixed by #418 (`eaa385ea`, "Devin CI fixes"), and T425 (#759, `e37bd4cf`) replaced the wall-clock bound of `session_end_on_a_large_transcript_is_bounded` with a scaling check. `windows` runs inside `ci.yml`, which `pipeline.yml`'s `gate` needs, so every pull request merged since then has passed it.
+- The title's cause is gone: T310.12 (#664, `3f6d69e7`) deleted `crates/rtok-webui`, so `webui-check` and its 183 uncached crates no longer exist, and item 1 has nothing left to cache.
+- CI has changed shape since #411. Test binaries are built once per OS (`build-tests`, `cargo nextest archive`) and run in 2 shards (`test`, `windows`); sccache is on; `MACOS_RUNNER` can move macOS to the dedicated Mac. The #411 job timings no longer describe the critical path.
+- Item 4, re-measured on this Mac (16 cores, `cargo test --workspace --no-run --timings`, local `line-tables-only`): 129 `tests/*.rs` files (142 test executables in the workspace). Cold: `Finished` in 1 m 14 s; the 129 test units took 400.7 CPU-s (median 3.26 s) over 28 s of wall. After `touch src/lib.rs`: `Finished` in 46 s; the `rtok` lib test unit took 15 s, and the 129 test units took 360 CPU-s (median 2.98 s, smallest 1.18 s) over 25 s of wall. On a 3-core hosted macOS runner, 360 CPU-s is about 120 s, which matches the 76–125 s `Finished test profile` in #411. The fold is parked as I-136; it is not done here.
+- Left for the Check: one warm-cache `workflow_dispatch` run of `ci.yml` that is green, plus a PR comment with per-job timings against #411's table. The `save-if: … workflow_dispatch` lines in `ci.yml` (`lint` and `check` are marked "T261 experiment"; `build-tests` and `docs` have the same condition) keep manual runs warm for exactly that. Once the run is recorded, the creator decides whether they stay.
 
 ### T275. Install/update removes rtok's MCP entry from an agent's config while a plugin serves MCP (every host)
 
