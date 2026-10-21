@@ -395,6 +395,38 @@ trace with an `invoke_agent` root and `chat {model}` spans — this ledger has n
 and no proxy traffic, and rtok is not on this machine's PATH — and for SigNoz and Maple, which
 need an account or an API key.
 
+**T395 status, 2026-10-21: not run, clause kept.** An agent session (Claude Code /
+claude-opus-5-5, worktree `feat/t395`) tried to run the clause and could not. Its permission
+mode refused every `docker` and `colima` call, so a self-hosted SigNoz could not start. The
+session had no SigNoz Cloud ingestion key and no Maple workspace key. It also could not start a
+second live Claude Code session behind `rtok proxy`, because agents never run a host (T280) and a
+live session costs API spend. Nothing reached either backend, so this paragraph records no
+trace shape and no `rtok_tokens_total` value. The offline half is already covered.
+`tests/otel.rs` `every_row_posts_once_and_the_marks_advance` seeds one session with a hook, an
+MCP and a proxy call, then asserts that `chat {model}` and `invoke_agent` reach a mock collector.
+The clause stays open: only the live backend check is missing, and this run produced no
+evidence for dropping it.
+
+Re-run protocol (the creator's machine, about 15 minutes):
+
+1. Backend. For SigNoz, run the `docs/otel.md` recipe from a SigNoz checkout, or set
+   `endpoint` / `headers` to SigNoz Cloud. For Maple, set the workspace OTLP URL and the
+   `Authorization=Bearer …` header. Keep `content = false` unless the prompts may leave the machine.
+2. Session. `rtok proxy` in one terminal. Then
+   `ANTHROPIC_BASE_URL=http://127.0.0.1:8790 claude` in a repo where the rtok hooks and MCP are
+   installed. One prompt that makes at least one `Read` and one rtok MCP call, then `/exit`, so
+   `SessionEnd` sets `ended_at`.
+3. Export. Run `rtok otel flush`, then `rtok otel status`. Pending must be 0 on every stream.
+4. Record a dated row per backend here: the backend version, the trace id, and whether it is one
+   trace with the `invoke_agent claude` root. Also the child span names, which must include
+   `chat {model}`, `execute_tool …` from both the hooks and MCP, and `hook …`. Then the
+   `rtok_tokens_total` (`rtok.tokens`) value by `gen_ai.token.type`, checked through the
+   backend's own query API or UI.
+
+If the creator decides a commercial backend sign-off is not worth an account, the clause is
+dropped in `roadmap.md` P16 with that reason, and Jaeger and Grafana (2026-09-07 above) stay the
+verified backends.
+
 
 ### WASM bundle (`rtok web`, T60.7, 2026-09-18)
 
@@ -1736,6 +1768,30 @@ Caveats: `bytes / 4` underestimates code (about 3 chars per token), so token sha
 
 What is left for T385.3 is the live half: `rtok bench` cost per passed task with each setting on and off. `rtok bench` today runs the six short tasks of `bench/tasks.toml`, whose `check` is `true`, and passes each arm as a `claude --settings` file; a task of a few small tool calls never puts a 1500-token result 4 user messages back, so neither the pointer nor the skill rule would fire (the §16.9 failure). The live run needs long tasks with real checks, one `rtok proxy` per arm on its own port and `RTOK_HOME`, and the creator's API spend (T394).
 
+### 16.11 P28 compressor live bench: arms, tasks and re-run protocol (T385.9.3, 2026-10-21)
+
+Status: nothing ran, so this is **not** Gate P28 evidence and `[plugins.compress.llm] enabled` stays `false`. §16.9 named three gaps between the local attempt and a real bench: no `rtok bench` arm for the compressor, no task with more than `keep_turns` turns after its large results, and no check that can fail. This section closes the parts an agent can close without API spend; the paid run is the creator's (T394).
+
+**Arms.** `bench/p28/bench.toml` is an `rtok --config` overlay with two arms, each a `claude --settings` file pointing at its own `rtok proxy`. The settings files are equal except for `ANTHROPIC_BASE_URL`: both allow `Read(./logs/**)` and `Edit(./answer.txt)` and deny `Bash`, `Grep` and `Glob`, so the model has to read each log whole instead of searching it (a search result is too small to be archived, and then the arms cannot differ).
+
+| Arm | Settings file | Proxy, one shell each | What differs |
+| --- | --- | --- | --- |
+| `a` | `a-lossless.json` | `RTOK_HOME=$W/a rtok proxy --port 8811 --mode compress` | Nothing: the v0.1 lossless path (`archive` pointer, then the extractive `compress` view) |
+| `b` | `b-llm.json` | `RTOK_HOME=$W/b RTOK_PLUGINS_COMPRESS_LLM_ENABLED=true rtok proxy --port 8812 --mode compress` | The compressor: summaries from `claude-haiku-4-5` on this proxy's `internal` lane, with the agent's credentials |
+
+**Tasks.** `bench/p28/tasks.toml` holds six tasks over eight invented service logs (`bench/p28/logs/`, 112 lines and about 13 KB each, the `acme` names of `tests/fixtures/p28_must_keep.toml`). Every task reads all eight logs in order, one per turn, then writes one fact from one of the first three logs to `answer.txt`: a decline code, a query time, an `ip:port`, a config path, a request id and a batch id. By the last read that result is at least five user messages back, past `keep_turns` = 4, so `archive` has pointed at it and arm `b` has had turns to summarise it. `check` greps the answer and removes `answer.txt`, so it fails when the answer is wrong and leaves the next arm a clean directory. `bench::tests::p28_tasks_ask_for_a_must_keep_span_no_cheaper_view_shows` pins the fixture: each log is over `min_tokens` and not code (so it is archived and the compressor takes it), has no more than `max_spans` must-keep spans, and each answer is on one line only, outside the pointer's 8 head and 4 tail lines and outside the extractive view, and is itself a must-keep span, so the guard rejects a summary without it. Every span of the log together is shorter than the pointer, so a summary that keeps them all can still replace it. Arm `a` has to re-read the log (or `expand` it); arm `b` can answer from the summary. `bench::tests::p28_overlay_runs_two_arms_that_differ_only_in_their_proxy` and `layers::tests::p28_bench_arm_settings_reach_their_keys` pin the arms and the variable.
+
+**What the bench does not count.** `total_cost_usd` comes from `claude -p` and leaves out the compressor calls, which the proxy makes itself. They are on the `internal` lane in arm `b`'s store and have to be added by hand. `rtok bench` also checks once per task per arm after all runs, runs `claude -p` in its own working directory and averages a failed run in as zeros (I-140, PR #1215); `--runs 1`, running from the copy and dropping zero rows work around that.
+
+**Re-run protocol (creator).**
+
+1. `W=$(mktemp -d); cp -R bench/p28 "$W/p28"; mkdir "$W/a" "$W/b"`. Run from the copy, outside any checkout, so neither arm loads this repo's `CLAUDE.md`. Each arm gets its own empty `RTOK_HOME`, which keeps the archive decisions, summaries and lane usage apart.
+2. Start the two proxies from the table. Use a coding model other than `claude-haiku-4-5`, so that the compressor's usage has a model row of its own in step 4.
+3. `cd "$W/p28" && RTOK_BENCH_LIVE=1 rtok --config bench.toml bench --runs 1`, five times or more (30 runs per arm). Save each printed table, because `results/` is overwritten, and drop any run with a zero row.
+4. Per arm, record mean input, cache and output tokens, mean `total_cost_usd`, passes, `claude --version` and the model. For `b`, also record `RTOK_HOME=$W/b rtok stats --price` (the `lane` table's `internal` row and the `claude-haiku-4-5` cost) and the stored summaries (`sqlite3 "$W/b/rtok.db" 'select count(*) from archive_summaries'`, read only). Add the compressor cost to `b`'s total before dividing by passes. With 0 summaries the compressor did not fire, as in §16.9, and the run is not evidence.
+5. `expand` recovery: run `RTOK_HOME=$W/b rtok expand <id> --grep E4127` on the archive id of `logs/01-api.log`, from `rtok stats --plugin archive` or the pointer in a request. It must print the original line.
+6. Write one dated row under this section: cost per passed task with the compressor's cost included, pass rate, and compressor tokens and calls, for each arm. If `b` costs less per passed task and its pass rate is no lower, T385.9 closes and the flag may become a default in a follow-up. Otherwise the flag stays off, with this row.
+
 ## 17. Sharing context between an agent and its sub-agents (2026-09-21)
 
 Creator request: a freshly spawned sub-agent gets none of the parent's context, reads the same files again and pays for them again. Find what rtok can apply; sub-agents stay cheap (Haiku). Method: two Haiku agents (repo inventory, web scan), one Haiku docs check, an ad-hoc scan of this machine's transcripts; synthesis in the main session. Vendor numbers stay claims.
@@ -2936,6 +2992,11 @@ Sources: this repository at branch `t370-pagerank-map` (base `pyrlyn/main` `c7e4
   `pagerank` minus `refs` is 17.4 pp over all commits, 17.8 pp on the newer half and 17.0 pp on the older half; the card asks for 15 pp. Definitions per file were set by this backtest: three per file gave 41.7 % (15.0 pp, no margin), one gave 49.8 %. Two keeps a name next to each file while clearing the bar on both halves. The personalized row stands in for "files edited in the last day"; the hook seeds from the indexed mtime.
 - Cost on the hook path: a stored graph of 500 files and 39 920 edges is 701 395 bytes of JSON. Decoding it takes 1.4 ms and 20 personalized iterations take 0.33 ms (release, `timing` probe, removed after the run). Building the graph at index time takes 12 ms. `latency_hook_session_start_with_a_pagerank_map_p95_under_10ms` spawns the real hook; a second pass of three variants with the same graph, release: with the map p50 12.9 ms / p95 16.6 ms, with the config but no stored graph p50 10.8 ms / p95 15.7 ms, with neither p50 10.9 ms / p95 13.6 ms. The map adds about 2 ms at p50. On this loaded host the existing SessionStart latency tests (`..._with_project_registration`, `..._with_populated_notes`) also miss 10 ms (p95 13.9 ms and 25.9 ms), so the 10 ms gate needs a quiet machine to be judged.
 - The card's check of 30 ms p95 measured 30.9 ms in the first run (load about 50, so just over) and 16.6 ms in the second; the stricter 10 ms budget of T428 cannot be judged on this host. A quiet-machine run of `cargo test --release --test latency session_start` is the open item.
+- Re-run 2026-10-21 (`origin/main` `5aa4a495`, same macOS arm64 laptop, load average 13 to 18; no quieter window came). The tree has grown: the stored graph is 896 files, 121 552 edges, 2 299 141 bytes of JSON; reading the row takes 0.8 ms and decoding it 4.5 to 5.7 ms (scratch probe, removed after the run).
+  - Divan, new bench `session_start_pagerank_map` (`cargo bench --bench graph -- session_start`), this repo indexed once outside the timed region, 1000-token map: global rank median 5.40 ms (fastest 5.24, slowest 6.47); seeded by four checkpoint paths median 7.94 ms (fastest 7.36, slowest 8.91). 50 samples each.
+  - Spawned hook (`cargo test --release --test latency session_start -- --test-threads=1 --nocapture`, n = 200; the pagerank fixture now matches this size, 900 files and 120k edges): with the map p50 16.6 ms / p95 18.6 ms; populated notes p50 10.6 / p95 15.3 ms; project registration p50 10.0 / p95 11.3 ms. All three `_p95_under_10ms` tests fail at this load, the two without a map as well; with the 500-file fixture of the first run the map case measured p50 11.6 / p95 13.7 ms.
+  - The `refs` order is far slower on the same index: `symbol_top_refs(root, 1000)`, what a 1000-token `refs` map asks for, took 452 to 567 ms in the same probe, about 70 times the pagerank map.
+  - Verdict: the card's 30 ms p95 passes (18.6 ms, at load), the backtest's +17.4 pp stands, so `map_rank` defaults to `pagerank`. `map_tokens` still defaults to 0, so the map stays opt-in and the default hook is unchanged. The 10 ms budget stays with T428: with the map on, the decode of the stored JSON is the larger cost (about 5 of the 7 ms the map adds), and a smaller encoding of the edges is where that time would come back.
 
 ## 35. Task adapters: prior art, GitHub and GitLab APIs (T441.1, checked 2026-10-07)
 
@@ -3264,3 +3325,36 @@ const run = (cmd) => new Promise((res) => {
 ```
 
 No T687 number was taken. The machine was not idle: 16 cores at load average 13 to 20 with other sessions building, and the `true` floor read p50 8.97 ms (100 rounds) against the 5.2 ms of §19.2, so any hook figure would be mostly load. For scale only, the installed `rtok-hook` v0.15.1 (no resident) read p50 26.64 ms in the same run; that is neither the current code nor a result. What §19.2/§19.7 already fix: the floor is 5.2 to 5.6 ms (node plus `/bin/sh`), the hook with a resident is 12.3 to 12.5 ms, so reaching 10 ms means taking at most 4.4 ms above the floor for the shell line, the `rtok-hook` start, the socket round trip and the hook. The next step is a rerun on a quiet machine of `command -v rtok-hook && exec rtok-hook PreToolUse` against `true` and a bare `rtok-hook` start, to see which of those four pieces owns the 6.7 ms, before touching code.
+
+## 47. Defaults bench, live half: arms, harness gaps and re-run protocol (T385.3, checked 2026-10-21)
+
+Status: no live arm ran, so nothing is measured here and every default stays as it is. §16.10 holds the offline ceiling per setting (`compress` mode 5.17 % of input cost net, `context_management` 20.33 %, `skills` 0.04 %, `live_blobs` 0 blocks) and keeps live arms only for `compress` mode and `context_management`. The arms are paid `claude -p` runs that need the creator's API spend (T394); this session also could not run `rtok`, read `~/.rtok` or reach a local model server. This section is what an agent could prepare without spend: the arm files, and what `rtok bench` (`src/bench.rs` at `5aa4a495`) has to change before its pass column means anything.
+
+**Arms.** `bench/configs/defaults/bench.toml` is an `rtok --config` overlay for `rtok bench`; each arm is a `claude --settings` file whose only key is `ANTHROPIC_BASE_URL`, so the arms differ in the proxy alone. Tests pin the set: `bench::tests::defaults_overlay_runs_three_arms_on_their_own_proxies` (the overlay loads through the real layering with exactly these arms on distinct ports) and `layers::tests::defaults_bench_arm_settings_reach_their_keys` (the flag and variable below reach `proxy.mode` and `proxy.context_management`).
+
+| Arm | Settings file | Proxy, one shell each | What differs |
+| --- | --- | --- | --- |
+| `a` | `a-off.json` | `RTOK_HOME=<dir>/a rtok proxy --port 8801` | Nothing: `passthrough`, today's default |
+| `b` | `b-compress.json` | `RTOK_HOME=<dir>/b rtok proxy --port 8802 --mode compress` | `archive` pointer, `toon`, the `compress` plugin and noise stripping; `skills` and `live_blobs` stay at their default `false` |
+| `context` | `context.json` | `RTOK_HOME=<dir>/context RTOK_PROXY_CONTEXT_MANAGEMENT=true rtok proxy --port 8803` | `clear_tool_uses_20250919` with platform defaults (§16.10), unless the client sent its own `context_management`; each armed request writes a zero-saving `proxy` / `context_management` Measurement row, so the run shows whether it armed at all |
+
+The arms reuse the names `a` and `b` because an overlay's `[bench.configs]` merges with the built-in `a`/`b` map and cannot remove them; other names would also run the legacy and rtok arms. There is no `compress` + `context` arm: with both on, `archive` stands down on the Anthropic wire (`platform_clears` in `src/proxy/mod.rs`), so it is the `context` arm plus `toon` and `compress`. A separate `RTOK_HOME` per arm keeps each arm's archive decisions and Measurement rows apart (`rtok stats` per arm).
+
+**Harness gaps.** Besides the placeholder `check = "true"` and the short tasks §16.10 names:
+
+1. `check` runs once per task per arm, after all `runs` of that arm (`table`), so `pass` counts tasks, not runs, and only the last run's tree is checked.
+2. `claude -p` runs in the directory `rtok bench` started in (`one` sets no working directory) and nothing resets it between runs or arms: an edit from run 1 of arm `a` is the starting state of every later run. With the overlay's paths that directory is the rtok checkout itself.
+3. A run that fails or passes `timeout_s` scores zeros and still counts in the mean (`acc.n += 1`), so a broken arm looks cheap.
+4. Cost is the host's `total_cost_usd` from `claude -p`, not `[stats.prices]`; comparable across arms of one run, not across runs on different price lists.
+5. Exactly six tasks or `rtok bench` refuses to start.
+6. Relative paths in a `--config` file resolve against the working directory, not the file, although `docs/config.md` ("Rules") says otherwise. The overlay uses repo-root paths and must be run from the repo root.
+
+Gaps 1–3 decide whether the pass rate and the mean cost are real; they are an `rtok bench` change, not part of this card (I-140).
+
+**Re-run protocol (creator).** Until I-140 lands, work around gaps 1–3 by hand:
+
+1. A six-task file in a fixture repo (not this checkout). Every task needs a real `check`, at least five tool rounds after a result of 1500 or more tokens (so the pointer fires, §16.9), and at least two must pass 100,000 input tokens (so context editing fires). End every `check` with a reset of the fixture (`git -C <fixture> reset -q --hard && git -C <fixture> clean -qfd`, keeping the check's exit status).
+2. Start the three proxies from the table, each with its own empty `RTOK_HOME`.
+3. Copy the overlay with absolute paths and, from the fixture repo, run `RTOK_BENCH_LIVE=1 rtok --config <copy> bench --tasks <file> --runs 1`, as many times as the sample needs; keep each printed table (the per-arm JSON under `<tasks dir>/results/` is overwritten). Discard any run with a zero row.
+4. Per arm, record mean input, cache and output tokens, mean `total_cost_usd`, passes and cost per passed task, `claude --version` and the model; for `b`, `RTOK_HOME=<dir>/b rtok stats --plugin archive --since 1d`; for `context`, the count of `proxy` / `context_management` rows.
+5. One dated row per setting under this section. A setting becomes default-on in a follow-up only if cost per passed task falls with the pass rate held (T385.3); otherwise it stays off with its row.

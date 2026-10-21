@@ -277,7 +277,7 @@ fn short(id: &str) -> &str {
 
 /// A diff or source file: logs and prose summarise well, these lose the exact lines the agent
 /// edits against, so they wait for `code = true`.
-fn is_code(text: &str) -> bool {
+pub(crate) fn is_code(text: &str) -> bool {
     let lines: Vec<&str> = text.lines().filter(|l| !l.trim().is_empty()).collect();
     if lines
         .iter()

@@ -548,7 +548,7 @@ head_lines = 8
 tail_lines = 4
 tiers      = false                    # багаторівневе завантаження, вмикається явно (типово вимкнено); специфікація поведінки OpenViking L0/L1/L2 — AGPL-3.0, rtok не вендорить, не лінкує й не запускає її як підпроцес (D6); відкриває нативну реалізацію в T33.2
 live_blobs = false                    # зменшувати вкладені дампи JSON + блоки data: у блоках користувача, ніколи results/system/tools/останні 2 ходи (T51.1, вмикається явно)
-skills     = true                     # архівувати тіла skills поза keep_turns (T61.2); вимикається через skills = false
+skills     = false                    # архівувати тіла skills поза keep_turns (T61.2, вмикається явно)
 
 [plugins.proxy]
 enabled = true                        # плагін proxy (фіксація використання); сам сервер — це [proxy]
@@ -605,7 +605,7 @@ enabled    = true
 max_tokens = 2000                     # на відповідь; понад це: head + "N more, expand <id>"
 impact_tokens = 1500                  # impact: файли згруповано й ранжовано в межах цього бюджету, далі "+K files, M refs not shown"; --all або 0 = усі рядки
 map_tokens = 0                        # обмеження карти репозиторію на SessionStart (частка D5 поряд із memory.recall_tokens); 0 = вимкнено, доки не пройде A/B P7
-map_rank   = "refs"                   # порядок карти на SessionStart: refs = посилання на ім'я; pagerank = файли за персоналізованим PageRank, персоналізованим нещодавно редагованими файлами й останнім checkpoint після compact
+map_rank   = "pagerank"               # порядок карти на SessionStart: refs = посилання на ім'я; pagerank = файли за персоналізованим PageRank, персоналізованим нещодавно редагованими файлами й останнім checkpoint після compact
 body_lines = 40                       # symbol(): скільки рядків коду показувати на визначення
 auto_index = true                     # true = кожен виклик обходить дерево; false = індексувати один раз, далі `rtok graph index` або спостерігач (файл, позначений хуком як застарілий, до того читається як відсутній)
 auto_add_projects = true               # T329.6: реєструвати каталог у реєстрі проєктів, коли там стартує сесія з хуками, створюється або приєднується worktree через `rtok worktree` (під назвою його гілки) або виконується виклик graph MCP; false = реєстр змінюється лише через сторінку й CLI
