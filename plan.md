@@ -240,8 +240,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T261 | in progress | P2 | 3 | 95% | Cursor / grok 4.7 |
 | T275 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
 | T275.1 | in progress | P2 | 3 | 80% | Cursor / grok 4.7 |
-| T277 | in progress | P2 | 5 | 30% | Claude Code / sonnet-5.5 |
-| T277.2 | in progress | P2 | 3 | 0% | Claude Code / claude-opus-5-5 |
+| T277 | in progress | P2 | 5 | 45% | Claude Code / sonnet-5.5 |
 | T278 | in progress | P1 | 3 | 90% | Claude Code / claude-opus-5-5 |
 | T279 | in progress | P1 | 5 | 90% | Claude Code / claude-opus-5-5 |
 | T281 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
@@ -801,18 +800,7 @@ Execution plan (after T275 PR A, which gives the core in `src/agents/mcp.rs`):
 4. PR 5: `doctor`'s MCP probe into the crate; `ping` joins when T275.1 lands.
 5. PR 6: delete leftover helpers, add the guard test against MCP keys under `src/agents/`, generate the `docs/agents.md` host table.
 Each PR listed here becomes a subtask (`Tn.m`, D16) when it is claimed; this card stays the epic.
-Progress: PR 1 merged (#437); PR 2 (Claude Code and Desktop) done as T277.1. Next: PR 3, the other hosts.
-
-### T277.2. Cursor, Copilot, Gemini, Kimi and VS Code write and remove rtok's MCP entry through `rtok_mcp::ops`
-
-Epic PR 3, first half: the strict-JSON hosts T275 lists as affected. Each host keeps only its `McpSpec` value (`mcp_spec`); its `register_mcp`, `unregister_mcp` and `mcp_entry` go. `apply` (and `d21_plugin_apply` for Copilot and Gemini) calls one shared `agents::mcp::sync`, which maps install, update and remove onto `rtok_mcp::ops::apply` behind `[setup] mcp`. Copilot's `{type: "local", tools: ["*"]}` entry becomes an `EntryShape` in the crate. ZCode, Codex and Grok (TOML and nested keys) stay for the next subtask, keeping this PR at 10 files.
-
-Execution plan:
-1. `crates/rtok-mcp/src/spec.rs`: `EntryShape::LocalAllTools` for Copilot; crate test of its entry.
-2. `src/agents/mcp.rs`: `json_spec` (strict-JSON spec with the host's launch command and `--host <id>`) and `sync` (agents `Mode` → `ops::Mode`, `[setup] mcp` gate).
-3. `src/agents/mod.rs`: `D21Plugin` takes `mcp_spec` instead of the two fn items.
-4. Per host (`cursor`, `copilot`, `gemini`, `kimi`, `vscode`): `mcp_spec`, `apply` through `sync`, delete the MCP functions; tests call `mcp::run` on the spec.
-5. Verify: the hosts' existing lifecycle, legacy-upgrade and ownership tests unchanged in expectation; `just check`.
+Progress: PR 1 merged (#437); PR 2 (Claude Code and Desktop) done as T277.1; PR 3's strict-JSON half (Cursor, Copilot, Gemini, Kimi, VS Code) done as T277.2. Next: ZCode, Codex and Grok, then the unaffected hosts.
 
 ### T278. `rtok agents info <agent>` reports the real MCP state, not "mcp installed" by assumption
 
