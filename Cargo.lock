@@ -1603,10 +1603,10 @@ dependencies = [
 [[package]]
 name = "fs-kit"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ce7c1d8e448538e4054724fc0978228824b84b74f499069665cccc99b09a9a1"
+source = "git+https://github.com/pyrlyn/crates?rev=afa651209f2b99b03058ed63bd4e62477737dbdb#afa651209f2b99b03058ed63bd4e62477737dbdb"
 dependencies = [
  "dunce",
+ "reflink-copy",
 ]
 
 [[package]]
@@ -4073,6 +4073,18 @@ dependencies = [
  "parking_lot",
  "percent-encoding",
  "serde_json",
+]
+
+[[package]]
+name = "reflink-copy"
+version = "0.1.30"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d9dd7ab4af0363d5ccfd2838d782a28196cf32a5cc2e4fe3c5dc83f2be588b8b"
+dependencies = [
+ "cfg-if",
+ "libc",
+ "rustix",
+ "windows",
 ]
 
 [[package]]
@@ -6988,6 +7000,7 @@ dependencies = [
  "toml_parser",
  "tracing",
  "winapi",
+ "windows",
  "windows-sys 0.61.2",
  "winnow 0.7.15",
  "winnow 1.0.4",
