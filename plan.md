@@ -231,7 +231,7 @@ New bugs, dead code and moves from a read-only Cursor cloud review of `main` at 
 | T466 | P2 | move | compared | `.github/actions/rustup-toolchain-cache` → `pyrlyn/ci/.github/actions/` | Only rtok uses it (`ci.yml`, `graph-review.yml`; checked 2026-10-10 across `apps/` and `packages/`). `pyrlyn/ci` already ships `setup-rust` (mise-pinned Rust and `rust-cache`); sharing would mean folding the toolchain cache into it. No move without a new creator OK. |
 | T470 | P3 | move | suspected | `tools/test-changed.sh`, `tools/selective-check.sh` → `scoped-check` / `pyrlyn/ci` | Overlap was claimed but not diffed against cox or `pyrlyn/ci`. Compare first; move only what matches. |
 
-Already tracked here, not added again: `src/render.rs` → `change-preview` is T416.1; per-host MCP code → `crates/rtok-mcp` and the unused `rtok_mcp::ops::apply` are T277; `OPERATION_ICONS` → a shared icon crate is T436.3; the test-only `VersionFile::write`/`::new` and the stale `#[allow(dead_code)]` on `read_installed` (`src/agents/plugin_version.rs:84`, `:112`, `:268`) are open on T279.
+Already tracked here, not added again: `src/render.rs` → `change-preview` is T416.1; per-host MCP code → `crates/rtok-mcp` and the unused `rtok_mcp::ops::apply` are T277; `OPERATION_ICONS` → a shared icon crate is T436.3; the test-only `VersionFile::write`/`::new` and the stale `#[allow(dead_code)]` on `read_installed` were fixed on T279 (2026-10-21: all three are used by `agents update`).
 
 | # | Status | Priority | Complexity | Readiness | Agent |
 | --- | --- | --- | --- | --- | --- |
@@ -239,16 +239,15 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T156 | in progress | P3 | 3 | 50% | Claude Code / claude-opus-5-5 |
 | T261 | in progress | P2 | 3 | 95% | Claude Code / claude-opus-5-5 |
 | T275 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
-| T275.1 | in progress | P2 | 3 | 80% | Cursor / grok 4.7 |
 | T277 | in progress | P2 | 5 | 45% | Claude Code / sonnet-5.5 |
 | T278 | in progress | P1 | 3 | 90% | Claude Code / claude-opus-5-5 |
-| T279 | in progress | P1 | 5 | 90% | Claude Code / claude-opus-5-5 |
-| T281 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
-| T289 | in progress | P2 | 4 | 75% | Claude Code / sonnet-5 |
-| T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
-| T369.1 | todo | P3 | 1 | 0% | |
-| T385 | in progress | P1 | 5 | 20% | Claude Code / opus-5-5 |
-| T385.3 | todo | P1 | 3 | 20% | |
+| T279 | in progress | P1 | 5 | 95% | Claude Code / claude-opus-5-5 |
+| T281 | in progress | P1 | 3 | 75% | Claude Code / claude-opus-5-5 |
+| T289 | in progress | P2 | 4 | 90% | Claude Code / claude-opus-5-5 |
+| T356 | in progress | P1 | 2 | 90% | Claude Code / claude-opus-5-5 |
+| T369.1 | in progress | P3 | 1 | 50% | Claude Code / claude-opus-5-5 |
+| T385 | in progress | P1 | 5 | 85% | Claude Code / opus-5-5 |
+| T385.3 | todo | P1 | 3 | 50% | |
 | T385.9 | in progress | P3 | 5 | 70% | Claude Code / claude-opus-5-5 |
 | T385.9.3 | todo | P3 | 2 | 10% | |
 | T394 | todo | P2 | 2 | 20% | |
@@ -278,7 +277,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T929 | todo | P2 | 3 | 0% | |
 | T930 | todo | P2 | 2 | 0% | |
 | T931 | todo | P2 | 3 | 0% | |
-| T932 | todo | P2 | 2 | 0% | |
 | T933 | todo | P2 | 2 | 0% | |
 | T934 | todo | P2 | 3 | 0% | |
 | T935 | todo | P2 | 2 | 0% | |
@@ -486,20 +484,6 @@ the total under the window limit) passes through unshortened.
 Check: cmd tests for `sed -n 1,80p a; sed -n 1,40p b` and `git show x | sed -n 1,100p`
 passing through; unbounded chains still shortened; `just check`.
 
-### T932. Codex and Cursor MCP entries use a bare `rtok` command and fail to spawn
-
-`~/.codex/config.toml` has `[mcp_servers.rtok] command = "rtok"`, and `~/.cursor/mcp.json` the
-same. Codex desktop logged `MCP client for rtok failed to start: No such file or directory
-(os error 2)` 14 times on 2026-10-18 (12:58–17:30 UTC). The plugin hooks already fall back
-(`command -v rtok || $HOME/.ketch/bin/rtok`); the MCP entries do not. Related: T275 (MCP entry
-removed on update).
-
-Done when: the installers write an MCP command that resolves without the GUI app's PATH (an
-absolute path to the installed binary, kept current on update), and doctor flags an MCP
-command that does not resolve.
-
-Check: install tests for Codex and Cursor asserting the written command is absolute and
-exists; a doctor test with an unresolvable command; `just check`.
 
 ### T933. Git guard still refuses `rtok run`-wrapped git (seen again 2026-10-16)
 
@@ -746,34 +730,9 @@ Execution plan (lands before T277; T277 then moves the core into its crate):
 2. PR A, Claude Code and Desktop: shared MCP core in `src/agents/mcp.rs` (write/remove/status by spec), decision row amending D21, drop `code_serves_mcp` in `apply` and `installed`, Vfs tests (a)-(f) for Claude.
 3. PRs B-D, the other affected hosts in groups of at most 10 files: Copilot and Gemini (`d21_plugin_apply`); Cursor, Codex, VS Code; ZCode, Kimi, Grok. Each deletes that host's MCP branch and adds its table rows to the shared Vfs test.
 4. PR E: `doctor` warning (Fix 5), re-bless `docs/agents.md` and README MCP rows, then the creator-machine Check.
-Progress (2026-09-28): PR A and B-D merged for Claude, Copilot, Gemini, Codex, Cursor (#444), VS Code (#455), ZCode (#459), Kimi (#467); Grok is #468. PR E merged (#483, doctor warning). Command Code, the last host that gated MCP on its plugin, is T275.2 (2026-10-11). Left: the creator-machine Check.
+Progress (2026-09-28): PR A and B-D merged for Claude, Copilot, Gemini, Codex, Cursor (#444), VS Code (#455), ZCode (#459), Kimi (#467); Grok is #468. PR E merged (#483, doctor warning). Command Code, the last host that gated MCP on its plugin, is T275.2 (2026-10-11). Left: the creator-machine Check. On 2026-10-21 T275.1's `rtok mcp ping claude --cli` and `--desktop` both answered on the creator's machine (done.md).
 Progress (2026-10-21, agent audit on `main` `0d1608a`): no code change needed. Every host this card lists, plus Command Code, Qwen and CodeBuddy, now writes its MCP entry on install and update behind `[setup] mcp`, whether or not a plugin is installed. Only `remove` takes the entry out. Evidence: Claude Desktop `claude/mod.rs:944-970`, Claude Code `:977-1001`, `d21_plugin_apply` `agents/mod.rs:1599-1627` (Copilot, Gemini, Qwen, CodeBuddy), Cursor `cursor/mod.rs:98-109`, VS Code `vscode/mod.rs:121-137`, ZCode `zcode/mod.rs:232-249`, Kimi `kimi/mod.rs:111-135`, Grok `grok/mod.rs:85-104`, Command Code `commandcode/mod.rs:94-102`, Codex `codex/mod.rs:360-383` (`run` takes only `remove`). `tests/singleton.rs` checks the one-server-per-surface rule. omp, pi and Antigravity were checked as the card asks; none matches (`research.md` §25 row). omp writes `mcpServers.rtok` on every install. pi has no MCP. Antigravity's plugin `mcp_config.json` is its only MCP path, and rtok writes no Antigravity config. One gap found, not fixed because it is unplanned: `plugins/devin/.mcp.json` still ships `mcpServers.rtok` beside the `mcp_config.json` entry that setup always writes, and §25 has no Devin row, so whether Devin merges the two is unknown. The creator decides if Devin follows D33. The Check did not run: this session's permissions blocked running any `rtok` binary and reading host files outside the worktree. Re-run protocol for the creator: (1) `rtok agents update claude --dry-run` shows no `- mcpServers.rtok` line, then `rtok agents update claude`; (2) `jq '.mcpServers.rtok' "$HOME/Library/Application Support/Claude/claude_desktop_config.json" ~/.claude.json` prints two non-null entries; (3) Claude Desktop's Settings → Developer lists rtok, and `/mcp` in the Code tab and in `claude` lists one `rtok`; (4) `rtok agents info claude` and `rtok agents list` print `mcp` for each surface whose file holds the entry; (5) after `rtok agents update cursor`, `codex` and `copilot`, the entry is still in `~/.cursor/mcp.json`, `~/.codex/config.toml` (`[mcp_servers.rtok]`) and `~/.copilot/mcp-config.json`; (6) `rtok mcp ping claude --cli` and `--desktop` succeed (T275.1). When all six pass, the card moves to `done.md`.
 Each PR listed here becomes a subtask (`Tn.m`, D16) when it is claimed; this card stays the epic.
-
-### T275.1. `rtok mcp ping <agent>`: prove the agent's rtok MCP server is alive and answering
-
-`installed` only says a config entry exists (and today not even that, see T275). This command checks the real path: the agent starts rtok's MCP server from its own config, calls a tool, and writes the answer into its chat.
-
-Syntax: `rtok mcp ping <agent> [--cli|--desktop] [--timeout <secs>] [--json]`. `<agent>` takes the same host names as `rtok agents install|info` (`claude`, `cursor`, `codex`, `copilot`, `gemini`, `vscode`, …); `--cli` / `--desktop` picks the variant like `agents install`; no agent means every host `agents list` shows with MCP installed. Place it in `src/cli.rs` as a `ping` subcommand of `rtok mcp`, next to `--call`. The foreign-server wrap stays behind `--` (`rtok mcp -- <argv>`), so `rtok mcp ping …` must not be parsed as a wrap argv: add a clap test for both forms. Add a matching line to `rtok agents info` help that points at it.
-
-What it sends:
-1. A new MCP tool `ping` in rtok's own server (`src/mcp`), taking `{"agent": "<display name>"}` and returning exactly `MCP <display name> жив`, where the display name is the host name `agents list` prints (for example `MCP Claude Desktop жив`, `MCP Claude Code жив`, `MCP Cursor CLI жив`). The call is logged like any MCP call, with no measurement row.
-2. For hosts with a headless CLI, rtok runs the agent once with one prompt: `Call the rtok MCP tool "ping" with agent="<display name>" and reply with its result only, nothing else.` For example `claude -p …`, `codex exec …`, `cursor-agent -p …`, `copilot -p …`, `gemini -p …`. The exact non-interactive flag per host is verified against its docs and recorded in the host README.
-3. For desktop-only hosts (Claude Desktop, VS Code chat, Windsurf, Zed …) there is no documented way to send a prompt from outside. rtok prints the same prompt for the user to paste into the app's chat, then does the server-side part itself: it spawns the MCP command exactly as written in that host's config (`command` / `args` / `env`), runs `initialize`, `tools/list` and `tools/call ping`, and checks the reply. That proves the configured server starts and answers, but not that the app loaded it; the output says which of the two was checked.
-
-Success: the agent's chat reply (captured stdout for headless hosts) is exactly `MCP <display name> жив`, after trimming whitespace. Anything else is a failure: no rtok entry in the host's config, the server fails to start, the `ping` tool is missing, a timeout (default 60 s), or a different reply. Each failure prints its reason and the fix (for a missing entry, `rtok agents install <agent>`). Exit code 0 only when every checked host succeeds. `--json` prints one object per host: `agent`, `variant`, `mode` (`chat` or `server-only`), `reply`, `ok`, `reason`.
-
-Tests: unit test for the `ping` tool reply text; clap tests for `rtok mcp ping` vs `rtok mcp -- …`; a Vfs test that the server-only check reads `command` / `args` from each host's config (rtok's entry, not a hardcoded path); an e2e that spawns `rtok mcp` through a fake host config and gets `MCP Test жив`; headless hosts are covered by a fake agent binary on PATH that runs the MCP call and echoes the result.
-
-Check: on the creator's machine `rtok mcp ping claude --cli` prints `MCP Claude Code жив` from `claude -p`, `rtok mcp ping claude --desktop` checks the server from `claude_desktop_config.json` and prints the prompt, and after T275 both succeed; `just check`.
-
-Execution plan:
-1. `src/mcp.rs`: tool `ping`, always listed, reply `MCP <agent> жив`, logged through the existing call row (no measurement).
-2. `src/cli.rs`: `ping` subcommand of `rtok mcp` beside `--call`; wrap stays behind `--`. `agents info` long help points at `rtok mcp ping`.
-3. `src/mcp/ping.rs`: headless rows for claude (`-p`), codex (`exec`), cursor (`cursor-agent -p`), copilot (`-p`), gemini (`-p`), each recorded in that host README with the docs link. Every other variant is server-only: read `command` / `args` / `env` from `Agent::files`, spawn through `doctor`'s MCP round-trip (`initialize`, `tools/list`, `tools/call ping`).
-4. Tests: ping reply text; clap `mcp ping` vs `mcp --`; Vfs bodies for every host's MCP shape; e2e spawn of `rtok mcp` from a fake config (`MCP Test жив`); fake `claude` on PATH.
-5. Verify with `just check`. The creator-machine `claude --cli` / `--desktop` run stays open.
-
 
 ### T277. Move rtok's MCP core into its own crate `crates/rtok-mcp`
 
@@ -826,6 +785,7 @@ Check: on the creator's machine, before T275 is fixed `rtok agents info claude` 
 
 Execution (2026-09-27): one PR off main. Status comes from `rtok_mcp::status` (T277, merged in #437) per surface. `agents info`, `agents list`, `installed_hosts` and `web/model.rs` all read it, so a plugin only counts for the surface it serves. Tests: one table-driven `Vfs` test per host, plus the regression "Code plugin installed, Desktop file without `rtok`" → `desktop missing`. The T275 per-host PRs still open (VS Code, ZCode, Kimi, Grok) touch the same host modules, and whichever lands second rebases.
 Progress (2026-09-28): merged in #464 (per-surface `mcp` lines, `--json` and web `mcp: [{surface, file, entry, diff?, plugin}]`, table-driven test over every host, the `desktop missing` regression). Left: the creator-machine Check.
+Progress (2026-10-21, agent audit on `main` `3ccd3a2`): the fix still holds. `installed_modules`, `installed_hosts`, `agents info`, `agents list`, `--json`, the web model (`src/model/mod.rs:576`) and `doctor` all read `mcp::rows`. `claude/mod.rs:910` checks Desktop with `has_entry` only and never through `code_serves_mcp`, which no longer exists. One gap was found and fixed: Continue, Goose (both YAML) and Reasonix (`[[plugins]]` TOML) were added after #464. They write an MCP entry that `rtok_mcp` cannot parse, so they had no `mcp` surface line. `mcp::rows` now falls back to the host's own exact parser for them (`present`/`missing`, no stale state). A guard test fails when another MCP host has no row source. The Check did not run: this session's permissions blocked running any `rtok` binary. T275 is fixed in code, so the "before T275" half can no longer be seen. Re-run protocol for the creator: (1) `jq '.mcpServers.rtok' "$HOME/Library/Application Support/Claude/claude_desktop_config.json"`. If it prints `null`, `rtok agents info claude` must show `mcp     desktop  missing (claude_desktop_config.json has no "rtok")` even with the Code plugin installed. (2) Run `rtok agents install claude --desktop`, then `rtok agents info claude`, which shows `mcp     desktop  entry ~/Library/…/claude_desktop_config.json`. (3) `rtok agents info claude --json` carries `mcp: [{surface, file, entry, plugin}]` for `cli` and `desktop`, and both values match `jq`. When all three pass, the card moves to `done.md`.
 
 ### T279. One plugin version scheme for every install source (GitHub, local, marketplace), and `agents update` that skips an up-to-date plugin
 
@@ -902,6 +862,7 @@ Execution plan:
 4. PR 4: `docs/plugin-versions.md` with real command output, and its links (step 7).
 Each PR listed here becomes a subtask (`Tn.m`, D16) when it is claimed; this card stays the epic.
 Progress (2026-09-28): PRs 1-4 merged (docs: #465, today's behaviour). Open against this card, for the creator: the installed copy's `.rtok-plugin-version` is never read or written (`read_installed` and `VersionFile::write` are unused), so there is no legacy line from it; a missing `claude` on `PATH` prints "already current"; the dry-run reinstall wording differs from step 5; `--source local` fails from a release install; the marketplace source does not read the catalog. Only Claude is wired; Codex, Copilot and Gemini follow.
+Progress (2026-10-21): PR 5 (`feat/t279`) closes the Claude items above. `agents update` reads the installed copy's file first (`installPath`), a local install writes `+g<sha>[.dirty]` and `"source":"local"` into it, and the receipt `path` names that copy. A local rebuild reinstalls, because Claude caches by manifest version. The installed copy's manifest is not rewritten. `--dry-run` prints `would reinstall rtok@rtok from github v… (forced): <claude calls>`. A local tree outside git keeps its file version. The marketplace source refreshes the catalog once, then reads `~/.claude/plugins/marketplaces/rtok/plugins/claude/.rtok-plugin-version`. With `claude` missing, the update line now says so instead of "already current" (host detection also needs `claude`, so this is a guard). Left: Codex, Copilot and Gemini wiring, and the creator-machine Check.
 
 ### T281. Probe: tie a host session's hooks and its rtok MCP server to one agent
 
@@ -916,6 +877,8 @@ Plan:
 Check: `research.md` §26 gains a dated table host → host version → the MCP process's link to the session (env var name / ppid rule / cwd only / none) → sub-agent behaviour → one MCP process per session yes/no, each row with its source (the probe log or the vendor docs URL). The T283 card is updated with the rule per host.
 
 Execution (2026-09-27): agent sessions may not read their own process environment (blocked by the host's policy), so the live runs are the creator's. (1) Worktree `_worktrees/rtok-t281`. (2) Vendor docs first, per host: which env vars an MCP server process inherits, the hook payload's session field, whether one MCP process serves one session; each fact cited with URL and date. (3) A probe kit in the scratchpad, never committed: an MCP stdio wrapper that logs pid, ppid chain, cwd, the filtered env var names and values, `initialize` params, then execs `rtok mcp`; a hook script that logs the same next to the payload's session field; a one-page run sheet for the creator. (4) `research.md` §26 gets the table from the docs now, with a "probe" column left `pending` until the creator's logs arrive; T283's card gets the rule per host once they do.
+
+Progress (2026-10-21, `research.md` §26 "Probe status"): no new live row. The agent session's permissions blocked `ps`, `rtok agents whoami` and MCP `whoami`. The two Claude Code Probe cells now cite T473's live `ps eww` (2026-10-09): rule (a) through `CLAUDE_CODE_SESSION_ID`, and the desktop app's app-level server shared by every session (T455, T924). A re-run protocol is written there, built on MCP `whoami`'s `rule` field. Left: the creator's runs for the other eight hosts, then T283's card and `done.md`.
 
 ### T289. Worktrees the host creates join rtok: `rtok worktree adopt` and the post-create hooks
 
@@ -933,6 +896,8 @@ Check: adopt e2e in a scratch repo with a worktree under a fake `~/.cursor/workt
 Execution (2026-10-03, Claude Code / sonnet-5): split into four PRs, each at most about 300 LOC, stacked on T288 step 4. Design decisions the card left open:
 - `adopt` is `claim` with three differences: the path defaults to the caller's worktree (cwd), `--task` names the task when the branch cannot (a detached HEAD such as Codex's `thread-N`; the directory name is the last fallback), and a worktree in a pool whose host evicts by itself (Cursor, Windsurf/Devin, Codex) gets **no git lock**, only the claim row. Reason: the card says to confirm per host whether a locked worktree breaks the host's eviction, and that needs a live run on each host (the creator's probe, like T281); until it is confirmed, a lock could stop Cursor's cap of 25 from evicting, so the safe choice is the store-only claim. `worktree list` and `gc` already read an unlocked worktree's claim row (T285), so a live agent's adopted worktree is still never collected. Flip the pool table once a host is confirmed.
 - The origin of a worktree is derived from its path (`~/.cursor/worktrees/`, `~/.windsurf/worktrees/`, `<repo>/.claude/worktrees/`, `<repo>/.kilo/worktrees/`, `$CODEX_HOME/worktrees`, `~/conductor/workspaces/`; else `rtok` under `[worktree] root`, else `other`), so no migration. The `worktree list` table already has a `source` column (source bytes), so the new field is named `origin` in the table and in `--json`.
+
+Progress (2026-10-21, `research.md` §26 "Git lock against a host's own eviction"): T289.1–T289.5 are in `done.md`, so steps 2–5 and the Check's e2e parts are shipped. Still open: step 2's per-host confirmation. Git's documented lock rules (`remove` refuses a lock without `-f -f`; `prune` never drops a locked record) mean a lock in an evicting pool either blocks the sweep or does nothing. The store-only claim in `origin::evicts` is therefore never worse, and it gives up protection only on a host whose sweep honours locks. No host was run. Agents never run one (T280), and this session's permissions blocked scratch scripts, `gh search` and web search. A re-run protocol is written there. Left: the creator's live run on Cursor, Windsurf/Devin and Codex; then flip `evicts` per host, or keep it, and close the card.
 
 ### T523. `worktree add` takes `T504 read-hook-same-path` as an id plus a slug
 
@@ -966,11 +931,22 @@ Check: graph tests for both refused roots and an accepted project root; a store 
 
 Execution plan (after T352 lands — it adds `drop_vanished_symbol_roots` to retention): reuse `plugins::read::walk_root_ok` (T263: refuses `/` and the home directory for the watcher) in the graph's root choice (`src/plugins/graph/mod.rs`, the `current_dir()` call sites) and return `no project: pass path or open a project (roots)`; extend T352's root drop so a root that fails `walk_root_ok` is dropped like a vanished one. Tests: graph refuses home and `/`, accepts a temp project; retention drops a home-root row.
 
+Progress (2026-10-21, audit): the code and both tests are in (#619). `index::run_with`, `run_changed_with` and `ensure` call `walk_root_ok` before any walk or write, so the CLI, the MCP tools and the watcher all get `no project root: rtok mcp runs in <dir>; pass a path or open a project` (`project::no_project_root`, T526). Retention calls `Store::drop_dead_symbol_roots` (`crates/rtok-store/src/retention.rs`) on every `rtok mcp`/`rtok proxy` start and on `rtok agents junk clear`; it drops `symbols`, `symbol_stale` and `extractor` rows of a root that is gone, `/` or `$HOME`. Tests: `index_refuses_home_and_filesystem_root_but_accepts_a_project` (`src/plugins/graph/index.rs`), `retention_drops_home_and_filesystem_roots` (`crates/rtok-store/src/tests_schema.rs`), `unwalkable_root_is_the_filesystem_root_or_home_only` (`src/fs.rs`). `just full-check` passes on this branch. Not measured: the `symbols` size on a copy of the real store. This agent session could not read `~/.rtok/rtok.db`, because the session's permissions only cover the worktree. The "before" is the 2026-10-02 figure above (617,319 home-root rows inside 282 MB of `symbols*`). Since #619, every `rtok mcp` start has run this retention on the live store, so a fresh copy probably already has 0 home-root rows. If so, the re-run records that as the "after", and a before/after pair on one copy is no longer possible. Left: the creator runs this protocol and records the numbers here, then the card moves to `done.md`.
+
+Re-run protocol (macOS, the store is never touched in place):
+
+1. `mkdir -p /tmp/t356 && sqlite3 ~/.rtok/rtok.db ".backup /tmp/t356/rtok.db"` (a consistent copy, WAL included).
+2. Before: `ls -l /tmp/t356/rtok.db`; `sqlite3 -readonly /tmp/t356/rtok.db "SELECT root, COUNT(*) FROM symbols GROUP BY root ORDER BY 2 DESC LIMIT 5; SELECT COUNT(*) FROM symbols WHERE root IN ('/', '$HOME');"` (the shell expands `$HOME`).
+3. Retention on the copy only: `RTOK_HOME=/tmp/t356 sh -c 'sleep 60 | rtok mcp'` (housekeeping runs on its own thread at start, and the open stdin keeps the server alive while it does). `HOME` stays real, so `$HOME` is the root that gets dropped.
+4. After: repeat step 2. Record both rows in this card.
+
 ### T369.1. Measure grep_symbol follow-up rate after an opt-in window
 
 Turn `plugins.guard.grep_symbol` on for a dated window and measure the share of follow-up Grep/Read on the same name within 3 calls (`guard/grep_symbol` rows against the transcripts). At most 25 % means propose default-on to the creator; above it, keep the flag opt-in and record why. Also re-measure the PreToolUse hook p95 on an idle machine (`cargo test --release --test latency -- --test-threads=1`; the flag-on test is `latency_hook_grep_symbol_answer_p95_under_10ms`); on 2026-10-06 the load average was 46 and even the baseline run failed the 10 ms gate. Record the result as a dated row in `research.md` §29.5.
 
 Check: a dated `research.md` §29.5 row with the follow-up share and the idle-machine p95 (under 10 ms); `just check`.
+
+Progress (2026-10-21, Claude Code / claude-opus-5-5, `research.md` §29.5 T369.1 row): the metric is now an `rtok stats` line, `grep symbol answers N  tokens T  then same-name Grep/Read F (P%)` (`GrepSymbolRow`, `fold_grep_symbol` in `src/measure/stats.rs`). It finds answers by `grep_symbol::ANSWERED` and the name by the hook's own classifier. The follow-up share is not measured: no window has run (the flag was never on, and these transcripts hold no native `Grep`), and this session could not read `~/.rtok`, `~/.claude` or run `rtok stats` on them. Hook p95 was measured under load (9–11), not idle. The flag-on answer passed the 10 ms gate in one of three runs (p95 9.58–10.59 ms). Plain `PreToolUse` passed all three (9.09–9.46 ms). Left: the creator's window and `rtok stats --since <days>`, and a re-run of the latency suite on an idle machine (protocol in §29.5). The default stays `false` until then.
 
 ### T385. Proxy lanes and the optimization plan from `docs/research/optimization.md`
 
@@ -995,11 +971,15 @@ Plan: split 2026-10-04 into T385.1–T385.13 below, one PR each, taken in id ord
 
 Check: each sub-task carries its own Check; this card closes when every step is done or dropped with its number in `research.md`.
 
+Progress (2026-10-21): every build step and measurement an agent can run is in `done.md` (T385.1, .2, .4–.8, .9.1, .9.2, .10–.13). Open: T385.3 (offline half recorded in `research.md` §16.10, live arms left) and T385.9 via T385.9.3 (live Gate P28 bench); both need the creator's API spend (T394).
+
 ### T385.3. Defaults bench: `compress` mode, context editing, skills, `live_blobs`
 
 optimization.md §5. `rtok bench` cost per passed task for each setting on and off, recorded with a date in `research.md` (`tools_rewrite` is T124). Settings whose row shows a net saving with the pass rate held become default-on in a follow-up; the rest stay off with their number. Branch `t128-proxy-compress-default` (PR #562, `df2a13ba`) is prior art. Needs the creator's API spend for live arms (see T394).
 
 Check: one dated `research.md` row per setting.
+
+Progress (2026-10-21, `research.md` §16.10): the offline half is in. A read-only pass over 30 days of this machine's Claude Code transcripts (204,565 requests) puts a ceiling on each setting's request side: `compress` mode (pointer only) 6.35 % of input tokens, 5.17 % of input cost net of cache re-writes; `skills` 0.11 % / 0.04 %; `live_blobs` 0 eligible blocks; `context_management` 22.95 % / 20.33 %, a clearing whose quality cost only a pass rate shows. No pass rate, so no default changes. Left: the live arms for `compress` mode and `context_management` (`skills` and `live_blobs` have too little to act on to be worth paid arms), which need long tasks with real checks in place of `bench/tasks.toml`, one `rtok proxy` per arm, and the creator's API spend (T394).
 
 ### T385.9. P28 Phase 2: async compressor on the `internal` lane
 

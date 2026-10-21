@@ -99,6 +99,10 @@ pub struct Report {
     /// T383: native Reads the read hook denied, and what followed. Absent when none.
     #[serde(default, skip_serializing_if = "ReadDenyRow::is_empty")]
     pub read_deny: ReadDenyRow,
+    /// T369.1: native Greps the guard answered from the symbol index, and the follow-ups on
+    /// the same name. Absent when none.
+    #[serde(default, skip_serializing_if = "GrepSymbolRow::is_empty")]
+    pub grep_symbol: GrepSymbolRow,
     /// T65.1: tool_result bytes whose SHA-256 matches an earlier result in the
     /// same session. Absent when none, so the goldens hold.
     #[serde(default, skip_serializing_if = "RepeatRow::is_empty")]
@@ -211,6 +215,24 @@ pub struct ReadDenyRow {
 }
 
 impl ReadDenyRow {
+    fn is_empty(&self) -> bool {
+        self.calls == 0
+    }
+}
+
+/// T369.1: native `Grep`s the guard answered from the symbol index (`grep_symbol = true`).
+/// `followed`: answers after which the agent still looked within the next
+/// [`DENY_FOLLOW_CALLS`] tool calls — a `Grep` or shell `rg`/`grep` naming the same symbol,
+/// or a `Read` (native or rtok MCP) of a file the answer listed. The card's bar is
+/// `followed / calls` at most 25 %.
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GrepSymbolRow {
+    pub calls: u64,
+    pub tokens: u64,
+    pub followed: u64,
+}
+
+impl GrepSymbolRow {
     fn is_empty(&self) -> bool {
         self.calls == 0
     }
@@ -559,6 +581,16 @@ impl Report {
             s.push_str(&format!(
                 "read deny calls {}  tokens {}  then rtok read {}  then native Read {}  then ToolSearch {}\n",
                 d.calls, d.tokens, d.then_mcp, d.then_native, d.then_toolsearch
+            ));
+        }
+        if self.grep_symbol.calls > 0 {
+            let g = &self.grep_symbol;
+            s.push_str(&format!(
+                "grep symbol answers {}  tokens {}  then same-name Grep/Read {} ({:.1}%)\n",
+                g.calls,
+                g.tokens,
+                g.followed,
+                pct(g.followed, g.calls)
             ));
         }
         if !self.repeat_reads.is_empty() {
@@ -1234,6 +1266,7 @@ fn fold_session(
     fold_read_delta(&mut report.read_delta, parsed);
     fold_read_whole(&mut report.read_whole, parsed, replay);
     fold_read_deny(&mut report.read_deny, parsed);
+    fold_grep_symbol(&mut report.grep_symbol, parsed);
     fold_repeat(&mut report.repeat, parsed);
     fold_repeat_reads(&mut report.repeat_reads, parsed);
     fold_expand_after(&mut report.expand_after, parsed);
@@ -1593,14 +1626,19 @@ fn fold_read_whole(row: &mut ReadWholeRow, parsed: &Parsed, rp: Replay) {
 /// How many tool calls after a deny count as "what the agent did next".
 const DENY_FOLLOW_CALLS: usize = 3;
 
-/// T383: see [`ReadDenyRow`]. The result text is the hook's reason, possibly behind a host
-/// prefix, so it is matched by substring; without the `read` plugin there is no hook to match.
-fn fold_read_deny(row: &mut ReadDenyRow, parsed: &Parsed) {
-    let results: BTreeMap<&str, &str> = parsed
+/// Each tool result's text by the id of the call it answers.
+fn result_texts(parsed: &Parsed) -> BTreeMap<&str, &str> {
+    parsed
         .tool_results
         .iter()
         .map(|r| (r.tool_use_id.as_str(), r.content.as_str()))
-        .collect();
+        .collect()
+}
+
+/// T383: see [`ReadDenyRow`]. The result text is the hook's reason, possibly behind a host
+/// prefix, so it is matched by substring; without the `read` plugin there is no hook to match.
+fn fold_read_deny(row: &mut ReadDenyRow, parsed: &Parsed) {
+    let results = result_texts(parsed);
     for (i, u) in parsed.tool_uses.iter().enumerate() {
         let Some(text) = results.get(u.id.as_str()) else {
             continue;
@@ -1635,6 +1673,64 @@ fn fold_read_deny(row: &mut ReadDenyRow, parsed: &Parsed) {
 
 fn is_rtok_mcp_read(name: &str) -> bool {
     mcp_group(name) == Some("rtok") && name.ends_with("__read")
+}
+
+/// T369.1: see [`GrepSymbolRow`]. The answer is found by its head line, the name by the
+/// hook's own classifier, the listed files by the `path::name#kind@line` id that opens each
+/// definition. Without `guard` and `graph` there is no hook to match.
+#[cfg(all(feature = "guard", feature = "graph"))]
+fn fold_grep_symbol(row: &mut GrepSymbolRow, parsed: &Parsed) {
+    use crate::plugins::graph::parse_symbol_id;
+    use crate::plugins::guard::grep_symbol::{ANSWERED, symbol_name};
+    let results = result_texts(parsed);
+    for (i, u) in parsed.tool_uses.iter().enumerate() {
+        if u.name != "Grep" {
+            continue;
+        }
+        let Some(text) = results.get(u.id.as_str()).filter(|t| t.contains(ANSWERED)) else {
+            continue;
+        };
+        let Some(name) = symbol_name(&u.input) else {
+            continue;
+        };
+        row.calls += 1;
+        row.tokens += est_tokens(text.len() as u64);
+        let files: Vec<String> = text
+            .lines()
+            .filter_map(|l| parse_symbol_id(l.split_whitespace().next()?))
+            .map(|(path, ..)| path)
+            .collect();
+        if parsed.tool_uses[i + 1..]
+            .iter()
+            .take(DENY_FOLLOW_CALLS)
+            .any(|n| same_name_follow_up(n, name, &files))
+        {
+            row.followed += 1;
+        }
+    }
+}
+
+#[cfg(not(all(feature = "guard", feature = "graph")))]
+fn fold_grep_symbol(_row: &mut GrepSymbolRow, _parsed: &Parsed) {}
+
+/// A search naming `name` (substring, so a longer name that contains it counts too) or a read
+/// of one of `files` (index-relative paths, so a suffix match).
+#[cfg(all(feature = "guard", feature = "graph"))]
+fn same_name_follow_up(n: &jsonl::ToolUse, name: &str, files: &[String]) -> bool {
+    let text = |key: &str| n.input.get(key).and_then(Value::as_str).unwrap_or("");
+    match n.name.as_str() {
+        "Grep" => text("pattern").contains(name),
+        "Bash" => {
+            let cmd = text("command");
+            matches!(bash_family(cmd).as_str(), "rg" | "grep") && cmd.contains(name)
+        }
+        tool if tool == "Read" || is_rtok_mcp_read(tool) => tool_path(&n.input).is_some_and(|p| {
+            files
+                .iter()
+                .any(|f| p == f || p.ends_with(&format!("/{f}")))
+        }),
+        _ => false,
+    }
 }
 
 #[cfg(feature = "read")]
@@ -1727,11 +1823,7 @@ type Last = (String, Option<u64>, Option<u64>, bool);
 /// caller ([`collect`]) from [`super::subagents`], the only place that can see it.
 #[cfg(feature = "read")]
 fn fold_repeat_reads(row: &mut RepeatReadsRow, parsed: &Parsed) {
-    let results: BTreeMap<&str, &str> = parsed
-        .tool_results
-        .iter()
-        .map(|r| (r.tool_use_id.as_str(), r.content.as_str()))
-        .collect();
+    let results = result_texts(parsed);
     let saw_rtok = results.values().any(|c| has_rtok_marker(c));
     let mut paths: Vec<Last> = Vec::new();
     for u in &parsed.tool_uses {
@@ -2566,8 +2658,7 @@ mod tests {
         use crate::plugins::read::hook::REASON;
         let dir = tempfile_dir();
         let deny = format!("PreToolUse:Read hook error: {REASON}");
-        let call = |id: &str, name: &str, input: Value| json!({"type":"assistant","message":{"id":format!("m{id}"),"content":[{"type":"tool_use","id":id,"name":name,"input":input}]}});
-        let result = |id: &str, body: &str| json!({"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":id,"content":body}]}});
+        let (call, result) = (tool_call, tool_result);
         let lines = [
             call("t1", "Read", json!({"file_path":"src/a.rs"})),
             result("t1", &deny),
@@ -2623,11 +2714,55 @@ mod tests {
             "{table}"
         );
         fs::remove_dir_all(&dir).ok();
+        assert_absent_when_empty("read deny", "read_deny");
+    }
+
+    /// T369.1: Greps the guard answered are counted; one is followed when, within the next
+    /// three calls, the agent reads a listed file or searches the name again (`Grep` or shell
+    /// `rg`); a search four calls later, another file and a Grep that really ran do not count.
+    #[cfg(all(feature = "guard", feature = "graph"))]
+    #[test]
+    fn grep_symbol_counts_answers_and_same_name_follow_ups() {
+        use crate::plugins::guard::grep_symbol::ANSWERED;
         let dir = tempfile_dir();
-        let none = write_and_collect(&dir, "empty.jsonl", &[]);
-        assert!(!none.to_table().contains("read deny"));
-        assert!(!serde_json::to_string(&none).unwrap().contains("read_deny"));
+        let answer = |name: &str, path: &str| {
+            format!(
+                "Grep `{name}` {ANSWERED}: 1 def, 2 refs (`callers`)\n\
+                 {path}::{name}#function@1 {path}:1 function\npub fn {name}() {{}}\n"
+            )
+        };
+        let (call, result) = (tool_call, tool_result);
+        let lib = answer("parse_since", "src/lib.rs");
+        let other = answer("other_fn", "src/b.rs");
+        let lines = [
+            call("t1", "Grep", json!({"pattern":"fn parse_since"})),
+            result("t1", &lib),
+            call("t2", "Read", json!({"file_path":"/proj/src/lib.rs"})),
+            call("t3", "Grep", json!({"pattern":"\\bparse_since\\("})),
+            result("t3", &lib),
+            call("t4", "Bash", json!({"command":"ls"})),
+            call("t5", "Bash", json!({"command":"rg -n parse_since src"})),
+            call("t6", "Grep", json!({"pattern":"other_fn"})),
+            result("t6", &other),
+            call("t7", "mcp__rtok__read", json!({"path":"/proj/src/c.rs"})),
+            call("t8", "Bash", json!({"command":"echo other_fn"})),
+            call("t9", "Bash", json!({"command":"ls"})),
+            call("t10", "Grep", json!({"pattern":"other_fn"})),
+            result("t10", "src/b.rs:1:pub fn other_fn() {}"),
+        ];
+        let r = write_and_collect(&dir, "grep.jsonl", &lines);
+        let g = &r.grep_symbol;
+        let tokens = 2 * est_tokens(lib.len() as u64) + est_tokens(other.len() as u64);
+        assert_eq!((g.calls, g.tokens, g.followed), (3, tokens, 2));
+        let table = r.to_table();
+        assert!(
+            table.contains(&format!(
+                "grep symbol answers 3  tokens {tokens}  then same-name Grep/Read 2 (66.7%)"
+            )),
+            "{table}"
+        );
         fs::remove_dir_all(&dir).ok();
+        assert_absent_when_empty("grep symbol", "grep_symbol");
     }
 
     #[test]
@@ -3026,6 +3161,28 @@ mod tests {
             "{}",
             report.to_table()
         );
+    }
+
+    /// One transcript line: an assistant message calling `name` with `input`.
+    #[cfg(any(feature = "read", all(feature = "guard", feature = "graph")))]
+    fn tool_call(id: &str, name: &str, input: Value) -> Value {
+        json!({"type":"assistant","message":{"id":format!("m{id}"),"content":[{"type":"tool_use","id":id,"name":name,"input":input}]}})
+    }
+
+    /// One transcript line: the result `body` of call `id`.
+    #[cfg(any(feature = "read", all(feature = "guard", feature = "graph")))]
+    fn tool_result(id: &str, body: &str) -> Value {
+        json!({"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":id,"content":body}]}})
+    }
+
+    /// An empty transcript prints no `label` line and has no `key` in `--json`.
+    #[cfg(any(feature = "read", all(feature = "guard", feature = "graph")))]
+    fn assert_absent_when_empty(label: &str, key: &str) {
+        let dir = tempfile_dir();
+        let none = write_and_collect(&dir, "empty.jsonl", &[]);
+        assert!(!none.to_table().contains(label));
+        assert!(!serde_json::to_string(&none).unwrap().contains(key));
+        fs::remove_dir_all(&dir).ok();
     }
 
     /// Write `lines` to the dir's transcript and collect the report — the tail

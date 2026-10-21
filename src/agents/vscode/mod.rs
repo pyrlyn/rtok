@@ -194,7 +194,7 @@ pub(crate) fn mcp_spec(cfg: &Config, insiders: bool) -> McpSpec {
         Client::Ide,
         mcp_path(cfg, insiders),
         "servers",
-        super::rtok_command(),
+        super::rtok_mcp_command(),
         EntryShape::TypedCommand,
     )
 }

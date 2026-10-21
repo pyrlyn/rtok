@@ -79,10 +79,8 @@ pub struct VersionFile {
 }
 
 impl VersionFile {
-    /// Exercised by this module's own round-trip tests; writing a fresh `.rtok-plugin-version`
-    /// into an installed copy is a later task (resolving that path needs the version-numbered
-    /// cache directory a host names only after install, out of PR 3's scope).
-    #[allow(dead_code)]
+    /// A committed-shape file (no `source`); a local install sets `source` before writing it
+    /// into the installed copy (`claude::record_install`).
     pub fn new(plugin: impl Into<String>, version: Version) -> Self {
         Self {
             schema: SCHEMA,
@@ -109,8 +107,6 @@ impl VersionFile {
     }
 
     /// Writes the compact, single-line JSON shape the committed files use, LF-terminated.
-    /// Same PR 3 scope note as [`VersionFile::new`].
-    #[allow(dead_code)]
     pub fn write(&self, path: &Path) -> Result<()> {
         let body = format!("{}\n", serde_json::to_string(self)?);
         crate::config::write_file(path, &body).map_err(Into::into)
@@ -262,11 +258,8 @@ pub fn installed(
 }
 
 /// Reads the version file (if the installed copy has one) and the receipt row, then applies
-/// [`installed`] — the thin I/O wrapper the pure lookup is built on. Not called yet: Claude's
-/// `plugin_update` (T279 PR 3) only has the receipt and the host record — locating the
-/// installed copy's own file needs the version-numbered cache directory a host names only
-/// after install, a later task.
-#[allow(dead_code)]
+/// [`installed`] — the thin I/O wrapper the pure lookup is built on, shared by `agents update`
+/// (Claude) and `agents outdated` so both read the same installed version.
 pub fn read_installed(
     version_file_path: &Path,
     receipt: &Receipt,
@@ -296,25 +289,37 @@ pub struct Available {
 }
 
 /// The version available from `source` (plan T279 step 2), given the plugin's local tree
-/// (`plugins/<host>` for a local install; unused otherwise) and the running rtok's own
-/// version. GitHub and marketplace both read as `running_version`: PR 1's `--check` (and its
-/// Rust twin) keep every `.rtok-plugin-version` and manifest equal to `CARGO_PKG_VERSION`, so
-/// the tag or catalog entry matching this binary is already known — no network call, and
-/// `agents outdated` (T279.1) works offline. Only a local checkout can genuinely differ from
-/// what is running, so it alone reads its own file and `git describe`.
-pub fn available(source: Source, local_dir: &Path, running_version: &Version) -> Result<Available> {
-    if source != Source::Local {
-        return Ok(Available {
-            version: running_version.clone(),
-            source,
-        });
-    }
-    let file = VersionFile::read(&local_dir.join(".rtok-plugin-version"))?;
-    let describe = git_describe(local_dir)?;
-    Ok(Available {
-        version: local_version(&file.version, &describe),
-        source,
-    })
+/// (`plugins/<host>`, read for a local install only), the host's catalog copy of the plugin
+/// (read for a marketplace install only) and the running rtok's own version.
+///
+/// GitHub reads as `running_version`: PR 1's `--check` (and its Rust twin) keep every
+/// `.rtok-plugin-version` and manifest equal to `CARGO_PKG_VERSION`, so the tag matching this
+/// binary is already known — no network call, and `agents outdated` (T279.1) works offline.
+/// Marketplace reads the catalog's own file when the host has one on disk (the caller refreshes
+/// the catalog first), else the running version. Local reads its tree's file and adds
+/// `+g<sha>[.dirty]` from `git describe`; a tree outside any git checkout (the `plugins/` of a
+/// release install, used for offline installs) keeps the file's version as is.
+pub fn available(
+    source: Source,
+    local_dir: &Path,
+    catalog_dir: Option<&Path>,
+    running_version: &Version,
+) -> Result<Available> {
+    let version = match source {
+        Source::Github => running_version.clone(),
+        Source::Marketplace => match catalog_dir.map(|d| d.join(".rtok-plugin-version")) {
+            Some(path) if path.is_file() => VersionFile::read(&path)?.version,
+            _ => running_version.clone(),
+        },
+        Source::Local => {
+            let file = VersionFile::read(&local_dir.join(".rtok-plugin-version"))?;
+            match git_describe(local_dir) {
+                Ok(describe) => local_version(&file.version, &describe),
+                Err(_) => file.version,
+            }
+        }
+    };
+    Ok(Available { version, source })
 }
 
 /// `git -C <dir> describe --always --dirty`, trimmed — the only place this module spawns a
@@ -357,6 +362,13 @@ pub enum Decision {
     SkipOlder { warning: String },
 }
 
+/// True when `installed` is strictly older than `target` by SemVer precedence (build
+/// metadata ignored). Same rule `agents outdated` uses; equal base with different build
+/// metadata is not behind.
+pub fn is_behind(installed: &Version, target: &Version) -> bool {
+    target.cmp_precedence(installed) == Ordering::Greater
+}
+
 /// The pure decision. `force` bypasses every other rule (reinstall when installed, install
 /// when not — the comparison below never runs). Otherwise: a source change always reinstalls;
 /// else compare by SemVer *precedence* (`Version::cmp_precedence`, which disregards build
@@ -365,20 +377,13 @@ pub enum Decision {
 /// base version "older"/"newer" instead of just differently built) — newer updates, older
 /// skips with a warning, equal precedence with equal build metadata skips, equal precedence
 /// with different build metadata updates (a local rebuild at the same base version).
-/// True when `installed` is strictly older than `target` by SemVer precedence (build
-/// metadata ignored). Same rule `agents outdated` uses; equal base with different build
-/// metadata is not behind.
-pub fn is_behind(installed: &Version, target: &Version) -> bool {
-    target.cmp_precedence(installed) == Ordering::Greater
-}
-
 pub fn decide(installed: Option<Installed>, available: &Available, force: bool) -> Decision {
     let Some(installed) = installed else {
         return Decision::Install;
     };
     if force {
         return Decision::Reinstall {
-            reason: "--force".to_string(),
+            reason: "forced".to_string(),
         };
     }
     if installed.source != available.source {
@@ -801,11 +806,26 @@ mod tests {
     #[test]
     fn available_github_and_marketplace_read_as_the_running_version() {
         let running = v("0.10.0");
+        let missing = Path::new("/does/not/exist");
         for source in [Source::Github, Source::Marketplace] {
-            let a = super::available(source, Path::new("/does/not/exist"), &running).unwrap();
+            let a = super::available(source, missing, Some(missing), &running).unwrap();
             assert_eq!(a.version, running);
             assert_eq!(a.source, source);
         }
+    }
+
+    #[test]
+    fn available_marketplace_reads_the_catalog_copy() {
+        let catalog = scratch("available-catalog");
+        VersionFile::new("claude", v("0.11.0"))
+            .write(&catalog.join(".rtok-plugin-version"))
+            .unwrap();
+        let none = Path::new("/does/not/exist");
+        let a = super::available(Source::Marketplace, none, Some(&catalog), &v("0.10.0")).unwrap();
+        assert_eq!(a.version, v("0.11.0"));
+        // GitHub stays pinned to the running binary's tag whatever the catalog says.
+        let g = super::available(Source::Github, none, Some(&catalog), &v("0.10.0")).unwrap();
+        assert_eq!(g.version, v("0.10.0"));
     }
 
     #[test]
@@ -834,18 +854,26 @@ mod tests {
             .current_dir(&dir)
             .status()
             .unwrap();
-        let a = super::available(Source::Local, &dir, &v("99.0.0")).unwrap();
+        let a = super::available(Source::Local, &dir, None, &v("99.0.0")).unwrap();
         assert_eq!(a.source, Source::Local);
         assert!(a.version.to_string().starts_with("0.10.0+g"), "{a:?}");
     }
 
     #[test]
-    fn available_local_names_the_directory_when_git_fails() {
+    fn available_local_outside_a_checkout_keeps_the_file_version() {
+        // A release install's `plugins/` tree: no git, so no build metadata to add.
         let dir = scratch("available-local-no-git");
         VersionFile::new("claude", v("0.10.0"))
             .write(&dir.join(".rtok-plugin-version"))
             .unwrap();
-        let err = super::available(Source::Local, &dir, &v("99.0.0"))
+        let a = super::available(Source::Local, &dir, None, &v("99.0.0")).unwrap();
+        assert_eq!(a.version, v("0.10.0"));
+    }
+
+    #[test]
+    fn available_local_names_the_file_when_the_tree_has_none() {
+        let dir = scratch("available-local-no-file");
+        let err = super::available(Source::Local, &dir, None, &v("99.0.0"))
             .unwrap_err()
             .to_string();
         assert!(err.contains(&dir.display().to_string()), "{err}");

@@ -23,6 +23,9 @@ const MAX_DEFS: usize = 5;
 /// Words that may precede the identifier in a definition-shaped pattern.
 const DEF_WORDS: [&str; 7] = ["fn", "def", "class", "struct", "type", "func", "interface"];
 
+/// In every answer's head line; `rtok stats` finds the answers in transcripts by it (T369.1).
+pub(crate) const ANSWERED: &str = "answered from the rtok index, Grep not run";
+
 pub(super) fn answer(ev: &PreToolUse, cx: &Ctx) -> Option<PreToolDecision> {
     if !cx
         .plugin_config::<crate::config::Guard>("guard")
@@ -52,7 +55,7 @@ pub(super) fn answer(ev: &PreToolUse, cx: &Ctx) -> Option<PreToolDecision> {
 /// The identifier a `Grep` input looks for, when that is all it asks for: a bare identifier
 /// or `<fn|def|class|struct|type|func|interface> <ident>`, with no option that narrows or
 /// changes the match (`glob`, `type`, `-i`, `multiline`).
-fn symbol_name(input: &Value) -> Option<&str> {
+pub(crate) fn symbol_name(input: &Value) -> Option<&str> {
     let set = |k: &str| match input.get(k) {
         Some(Value::String(s)) => !s.is_empty(),
         Some(Value::Bool(b)) => *b,
@@ -145,7 +148,7 @@ fn reason(cx: &Ctx, cwd: &Path, scope: Option<&str>, name: &str) -> Option<Strin
         .map(|g| g.2)
         .sum();
     let head = format!(
-        "Grep `{name}` answered from the rtok index, Grep not run: {} def, {refs} refs (`callers`)\n",
+        "Grep `{name}` {ANSWERED}: {} def, {refs} refs (`callers`)\n",
         rows.len()
     );
     Some(fit(cx, &(head + &defs)))
