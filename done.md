@@ -53,6 +53,13 @@ Check: `cap_budget_gives_back_lines_so_the_marker_fits` — the printed id is 8 
 Status: done 2026-10-19
 Model: Cursor / grok 4.7
 
+### T913. The report prints the 8-character archive id
+
+T672 prints 8 hex chars on a compressed command. `rtok report` still listed each frozen archive as the full 64-character sha in the Expand section (markdown, HTML, PDF and `--ai`). That text is what an agent reads back.
+
+The four renderers now print the 8-character prefix when the stored id is a full hex sha. `rtok expand` resolves it. A shorter id, and text that is not hex, stays as stored, so a prefix already chosen and the hostile-text fixture are not cut. The ledger `ref_id` and the document's `expanded_ids` stay the full sha.
+
+Check: `tests/report.rs` finds the 8-character prefix and not the sha in markdown and HTML; the markdown and HTML one-row snapshots show `ffffffff`; a full sha is absent from the PDF bytes.
 ### T912. Docs name the 8-character trailer id
 
 T672 prints 8 hex chars on the `[rtok …]` trailer. The guides, the cmd README and the file `rtok config init` writes still said `<id12>`.

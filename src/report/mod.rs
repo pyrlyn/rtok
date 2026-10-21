@@ -83,7 +83,7 @@ pub(super) fn bar_shares(pairs: &[(String, i64)]) -> Vec<f64> {
 
 #[cfg(test)]
 mod tests {
-    use super::bar_shares;
+    use super::{bar_shares, shown_archive_id};
 
     #[test]
     fn bar_shares_scales_to_the_max_and_floors_negatives() {
@@ -105,6 +105,29 @@ mod tests {
     fn bar_shares_empty_is_empty() {
         let pairs: Vec<(String, i64)> = Vec::new();
         assert_eq!(bar_shares(&pairs), Vec::<f64>::new());
+    }
+
+    #[test]
+    fn shown_archive_id_shortens_only_a_full_sha() {
+        let full = "ab".repeat(32);
+        assert_eq!(shown_archive_id(&full), "abababab");
+        assert_eq!(shown_archive_id("abababab"), "abababab");
+        assert_eq!(shown_archive_id(&"f".repeat(12)), &"f".repeat(12));
+        assert_eq!(
+            shown_archive_id("<script>alert(1)</script>"),
+            "<script>alert(1)</script>"
+        );
+    }
+}
+
+/// A full archive sha prints as eight hex chars. `rtok expand` resolves that prefix.
+/// A shorter id, or text that is not hex, stays whole: a stored prefix is not
+/// re-cut, and the hostile-text fixture is still escaped in full.
+pub(crate) fn shown_archive_id(id: &str) -> &str {
+    if id.len() >= 64 && id.bytes().all(|b| b.is_ascii_hexdigit()) {
+        crate::names::short_id(id)
+    } else {
+        id
     }
 }
 

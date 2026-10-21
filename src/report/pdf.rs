@@ -427,7 +427,11 @@ fn sections(doc: &Document) -> Vec<Sec> {
         let what = if exp.expanded_ids.is_empty() {
             "none".into()
         } else {
-            exp.expanded_ids.join(", ")
+            exp.expanded_ids
+                .iter()
+                .map(|id| super::shown_archive_id(id))
+                .collect::<Vec<_>>()
+                .join(", ")
         };
         vec![format!(
             "rtok expand froze {} of {} live-zone pointers ({:.1}%). Expanded: {}.",
