@@ -19,3 +19,5 @@ reaches a Unix copy).
 Checked: SDK tests install from a fake ketch store, remove the old version and still find the
 plugin; replace an existing link into a store with a copy; classify dangling / foreign / absent
 links. A doctor test with a dangling Cursor link. `just check`.
+
+PR: https://github.com/pyrlyn/rtok/pull/1236
