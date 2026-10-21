@@ -16,5 +16,5 @@
 **Do not** add LLM calls or embeddings here in v0.1 (those are `ideas.md` Later / v0.2+). `--calibrate` is the only
 network call and must exit 0 with "skipped" when no API key is present.
 
-**Checks** are in `plan.md` under T1.1–T1.5, T5.5, T9.1. Run the task's Check verbatim, then
+**Checks** are in `plan/` under T1.1–T1.5, T5.5, T9.1. Run the task's Check verbatim, then
 `just check`.

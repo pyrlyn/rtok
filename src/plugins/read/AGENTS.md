@@ -17,4 +17,4 @@ tree-sitter grammar features `lang-*` in `Cargo.toml`.
 **Dependencies allowed**: `tree-sitter`, `tree-sitter-tags`, per-language grammars behind
 features, `ignore` for gitignore-aware search. Justify each in the commit message.
 
-**Checks**: `plan.md` T4.2–T4.6; golden per-language fixtures are 20-line files.
+**Checks**: `plan/` T4.2–T4.6; golden per-language fixtures are 20-line files.

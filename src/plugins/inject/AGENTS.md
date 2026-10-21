@@ -14,4 +14,4 @@
 - Modes are data. Do not encode mode text in Rust.
 - Mode text appears in SessionStart output once and never in UserPromptSubmit output.
 
-**Checks**: `plan.md` T2.4, T7.1.
+**Checks**: `plan/` T2.4, T7.1.

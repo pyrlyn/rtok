@@ -52,7 +52,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 
-/// Token-reduction CLI for AI coding agents. See plan.md for the task list.
+/// Token-reduction CLI for AI coding agents. See plan/ for the task list.
 #[derive(Parser)]
 // `bin_name`: clap would print argv[0]'s file name, `rtok.exe` on Windows (T83.7).
 #[command(name = "rtok", bin_name = "rtok", version = crate::VERSION, about)]
