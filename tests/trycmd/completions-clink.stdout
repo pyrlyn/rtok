@@ -110,8 +110,8 @@ clink.argmatcher("rtok")
         "status" .. clink.argmatcher()
           :addarg({})
           :addarg({})
-          :addflags({ "--force", "--json", "--config" .. clink.argmatcher():addarg(clink.filematches), "--help", "-h" })
-          :adddescriptions({ ["--force"] = "Finish a parent even though subtasks are still open", ["--json"] = "Print the task as JSON", ["--config"] = "User config file (else `RTOK_CONFIG` or `<home>/config.toml`)", ["--help"] = "Print help", ["-h"] = "Print help" }),
+          :addflags({ "--force", "--report" .. clink.argmatcher():addarg({}), "--json", "--config" .. clink.argmatcher():addarg(clink.filematches), "--help", "-h" })
+          :adddescriptions({ ["--force"] = "Finish a parent even though subtasks are still open", ["--report"] = "Closing report of a task set to done or closed (`-` for stdin); the plan/ layout keeps it in done.md", ["--json"] = "Print the task as JSON", ["--config"] = "User config file (else `RTOK_CONFIG` or `<home>/config.toml`)", ["--help"] = "Print help", ["-h"] = "Print help" }),
         "next" .. clink.argmatcher()
           :addflags({ "--json", "--config" .. clink.argmatcher():addarg(clink.filematches), "--help", "-h" })
           :adddescriptions({ ["--json"] = "JSON instead of the text", ["--config"] = "User config file (else `RTOK_CONFIG` or `<home>/config.toml`)", ["--help"] = "Print help", ["-h"] = "Print help" }),

@@ -372,6 +372,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
             break
         }
         'rtok;task;status' {
+            [CompletionResult]::new('--report', '--report', [CompletionResultType]::ParameterName, 'Closing report of a task set to done or closed (`-` for stdin); the plan/ layout keeps it in done.md')
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
             [CompletionResult]::new('--force', '--force', [CompletionResultType]::ParameterName, 'Finish a parent even though subtasks are still open')
             [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'Print the task as JSON')

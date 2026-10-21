@@ -233,6 +233,7 @@ complete -c rtok -n "__fish_rtok_using_subcommand task; and __fish_seen_subcomma
 complete -c rtok -n "__fish_rtok_using_subcommand task; and __fish_seen_subcommand_from show" -l config -d 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)' -r -F
 complete -c rtok -n "__fish_rtok_using_subcommand task; and __fish_seen_subcommand_from show" -l json -d 'JSON instead of the text'
 complete -c rtok -n "__fish_rtok_using_subcommand task; and __fish_seen_subcommand_from show" -s h -l help -d 'Print help'
+complete -c rtok -n "__fish_rtok_using_subcommand task; and __fish_seen_subcommand_from status" -l report -d 'Closing report of a task set to done or closed (`-` for stdin); the plan/ layout keeps it in done.md' -r
 complete -c rtok -n "__fish_rtok_using_subcommand task; and __fish_seen_subcommand_from status" -l config -d 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)' -r -F
 complete -c rtok -n "__fish_rtok_using_subcommand task; and __fish_seen_subcommand_from status" -l force -d 'Finish a parent even though subtasks are still open'
 complete -c rtok -n "__fish_rtok_using_subcommand task; and __fish_seen_subcommand_from status" -l json -d 'Print the task as JSON'
