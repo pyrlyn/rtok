@@ -1,0 +1,112 @@
+2026-10-21T09:54:05Z DEBUG worker.fx      rate snapshot reused from the current window, no fresh quote was requested
+2026-10-21T09:54:12Z DEBUG worker.queue   lease renewed before expiry, the job is still running on the same worker
+2026-10-21T09:54:15Z DEBUG worker.gc      expired leases swept, nothing left behind by workers that went away
+2026-10-21T09:54:17Z DEBUG worker.queue   lease renewed before expiry, the job is still running on the same worker
+2026-10-21T09:54:24Z INFO  worker.queue   job dequeued in priority order, lease taken and heartbeat timer started
+2026-10-21T09:54:25Z INFO  worker.queue   job acknowledged and removed from the queue, lease released to the scheduler
+2026-10-21T09:54:34Z DEBUG worker.fx      rate snapshot reused from the current window, no fresh quote was requested
+2026-10-21T09:54:39Z DEBUG worker.audit   audit chain link verified against the previous entry, hash chain intact
+2026-10-21T09:54:41Z INFO  worker.settle  leg accepted for posting, ledger balanced with no carry left on the account
+2026-10-21T09:54:45Z INFO  worker.queue   job acknowledged and removed from the queue, lease released to the scheduler
+2026-10-21T09:54:50Z INFO  worker.queue   job dequeued in priority order, lease taken and heartbeat timer started
+2026-10-21T09:54:55Z DEBUG worker.route   handler for /settle/legs bound to the settlement queue on this worker
+2026-10-21T09:54:58Z DEBUG worker.fx      rate snapshot reused from the current window, no fresh quote was requested
+2026-10-21T09:55:03Z WARN  worker.fx      quote service returned an error page, the cached snapshot was used instead
+2026-10-21T09:55:09Z INFO  worker.queue   job acknowledged and removed from the queue, lease released to the scheduler
+2026-10-21T09:55:15Z DEBUG worker.queue   lease renewed before expiry, the job is still running on the same worker
+2026-10-21T09:55:24Z INFO  worker.settle  posting written and fsynced, the outbox event queued for the notifier
+2026-10-21T09:55:27Z DEBUG worker.fx      rate snapshot reused from the current window, no fresh quote was requested
+2026-10-21T09:55:35Z DEBUG worker.fx      rate snapshot reused from the current window, no fresh quote was requested
+2026-10-21T09:55:40Z DEBUG worker.route   handler for /settle/legs bound to the settlement queue on this worker
+2026-10-21T09:55:49Z DEBUG worker.queue   lease renewed before expiry, the job is still running on the same worker
+2026-10-21T09:55:54Z WARN  worker.fx      quote service returned an error page, the cached snapshot was used instead
+2026-10-21T09:55:59Z INFO  worker.queue   job dequeued in priority order, lease taken and heartbeat timer started
+2026-10-21T09:56:08Z INFO  worker.queue   job acknowledged and removed from the queue, lease released to the scheduler
+2026-10-21T09:56:15Z DEBUG worker.fx      rate snapshot reused from the current window, no fresh quote was requested
+2026-10-21T09:56:20Z INFO  worker.settle  posting written and fsynced, the outbox event queued for the notifier
+2026-10-21T09:56:28Z INFO  worker.settle  posting written and fsynced, the outbox event queued for the notifier
+2026-10-21T09:56:31Z DEBUG worker.route   handler for /settle/legs bound to the settlement queue on this worker
+2026-10-21T09:56:36Z DEBUG worker.fx      rate snapshot reused from the current window, no fresh quote was requested
+2026-10-21T09:56:41Z WARN  worker.fx      quote service returned an error page, the cached snapshot was used instead
+2026-10-21T09:56:43Z INFO  worker.queue   job dequeued in priority order, lease taken and heartbeat timer started
+2026-10-21T09:56:51Z INFO  worker.queue   job dequeued in priority order, lease taken and heartbeat timer started
+2026-10-21T09:57:00Z INFO  worker.queue   job acknowledged and removed from the queue, lease released to the scheduler
+2026-10-21T09:57:06Z DEBUG worker.gc      expired leases swept, nothing left behind by workers that went away
+2026-10-21T09:57:10Z INFO  worker.settle  leg accepted for posting, ledger balanced with no carry left on the account
+2026-10-21T09:57:17Z DEBUG worker.queue   lease renewed before expiry, the job is still running on the same worker
+2026-10-21T09:57:25Z DEBUG worker.fx      rate snapshot reused from the current window, no fresh quote was requested
+2026-10-21T09:57:28Z INFO  worker.queue   job acknowledged and removed from the queue, lease released to the scheduler
+2026-10-21T09:57:35Z DEBUG worker.audit   audit chain link verified against the previous entry, hash chain intact
+2026-10-21T09:57:44Z DEBUG worker.audit   audit chain link verified against the previous entry, hash chain intact
+2026-10-21T09:57:50Z DEBUG worker.fx      rate snapshot reused from the current window, no fresh quote was requested
+2026-10-21T09:57:51Z DEBUG worker.queue   lease renewed before expiry, the job is still running on the same worker
+2026-10-21T09:57:56Z DEBUG worker.fx      rate snapshot reused from the current window, no fresh quote was requested
+2026-10-21T09:57:58Z DEBUG worker.fx      rate snapshot reused from the current window, no fresh quote was requested
+2026-10-21T09:58:01Z DEBUG worker.audit   audit chain link verified against the previous entry, hash chain intact
+2026-10-21T09:58:09Z INFO  worker.queue   job acknowledged and removed from the queue, lease released to the scheduler
+2026-10-21T09:58:10Z INFO  worker.queue   job dequeued in priority order, lease taken and heartbeat timer started
+2026-10-21T09:58:12Z DEBUG worker.audit   audit chain link verified against the previous entry, hash chain intact
+2026-10-21T09:58:18Z INFO  worker.queue   job acknowledged and removed from the queue, lease released to the scheduler
+2026-10-21T09:58:24Z INFO  worker.queue   job dequeued in priority order, lease taken and heartbeat timer started
+2026-10-21T09:58:30Z INFO  worker.queue   job acknowledged and removed from the queue, lease released to the scheduler
+2026-10-21T09:58:37Z INFO  worker.settle  leg accepted for posting, ledger balanced with no carry left on the account
+2026-10-21T09:58:42Z DEBUG worker.queue   lease renewed before expiry, the job is still running on the same worker
+2026-10-21T09:58:50Z DEBUG worker.fx      rate snapshot reused from the current window, no fresh quote was requested
+2026-10-21T09:58:53Z INFO  worker.queue   job acknowledged and removed from the queue, lease released to the scheduler
+2026-10-21T09:59:00Z INFO  worker.queue   job acknowledged and removed from the queue, lease released to the scheduler
+2026-10-21T09:59:06Z INFO  worker.settle  leg accepted for posting, ledger balanced with no carry left on the account
+2026-10-21T09:59:07Z ERROR worker.settle  leg_0004 failed: BudgetExhausted while posting the transfer leg, job parked
+2026-10-21T09:59:08Z DEBUG worker.audit   audit chain link verified against the previous entry, hash chain intact
+2026-10-21T09:59:11Z DEBUG worker.gc      expired leases swept, nothing left behind by workers that went away
+2026-10-21T09:59:17Z DEBUG worker.audit   audit chain link verified against the previous entry, hash chain intact
+2026-10-21T09:59:19Z INFO  worker.queue   job acknowledged and removed from the queue, lease released to the scheduler
+2026-10-21T09:59:23Z DEBUG worker.gc      expired leases swept, nothing left behind by workers that went away
+2026-10-21T09:59:27Z INFO  worker.settle  posting written and fsynced, the outbox event queued for the notifier
+2026-10-21T09:59:28Z DEBUG worker.queue   lease renewed before expiry, the job is still running on the same worker
+2026-10-21T09:59:29Z INFO  worker.queue   job dequeued in priority order, lease taken and heartbeat timer started
+2026-10-21T09:59:32Z INFO  worker.settle  leg accepted for posting, ledger balanced with no carry left on the account
+2026-10-21T09:59:41Z INFO  worker.queue   job dequeued in priority order, lease taken and heartbeat timer started
+2026-10-21T09:59:45Z DEBUG worker.gc      expired leases swept, nothing left behind by workers that went away
+2026-10-21T09:59:46Z DEBUG worker.audit   audit chain link verified against the previous entry, hash chain intact
+2026-10-21T09:59:55Z DEBUG worker.queue   lease renewed before expiry, the job is still running on the same worker
+2026-10-21T10:00:02Z INFO  worker.queue   job acknowledged and removed from the queue, lease released to the scheduler
+2026-10-21T10:00:10Z DEBUG worker.fx      rate snapshot reused from the current window, no fresh quote was requested
+2026-10-21T10:00:14Z DEBUG worker.fx      rate snapshot reused from the current window, no fresh quote was requested
+2026-10-21T10:00:21Z DEBUG worker.gc      expired leases swept, nothing left behind by workers that went away
+2026-10-21T10:00:22Z DEBUG worker.gc      expired leases swept, nothing left behind by workers that went away
+2026-10-21T10:00:29Z DEBUG worker.fx      rate snapshot reused from the current window, no fresh quote was requested
+2026-10-21T10:00:33Z DEBUG worker.gc      expired leases swept, nothing left behind by workers that went away
+2026-10-21T10:00:40Z INFO  worker.queue   backlog drained, queue depth back under the alert threshold for the tenant
+2026-10-21T10:00:48Z DEBUG worker.fx      rate snapshot reused from the current window, no fresh quote was requested
+2026-10-21T10:00:49Z DEBUG worker.fx      rate snapshot reused from the current window, no fresh quote was requested
+2026-10-21T10:00:54Z INFO  worker.queue   job dequeued in priority order, lease taken and heartbeat timer started
+2026-10-21T10:00:58Z INFO  worker.queue   job acknowledged and removed from the queue, lease released to the scheduler
+2026-10-21T10:01:02Z DEBUG worker.fx      rate snapshot reused from the current window, no fresh quote was requested
+2026-10-21T10:01:07Z INFO  worker.settle  posting written and fsynced, the outbox event queued for the notifier
+2026-10-21T10:01:13Z INFO  worker.settle  leg accepted for posting, ledger balanced with no carry left on the account
+2026-10-21T10:01:19Z INFO  worker.queue   job dequeued in priority order, lease taken and heartbeat timer started
+2026-10-21T10:01:26Z DEBUG worker.queue   lease renewed before expiry, the job is still running on the same worker
+2026-10-21T10:01:34Z INFO  worker.queue   job dequeued in priority order, lease taken and heartbeat timer started
+2026-10-21T10:01:36Z INFO  worker.settle  posting written and fsynced, the outbox event queued for the notifier
+2026-10-21T10:01:40Z INFO  worker.settle  posting written and fsynced, the outbox event queued for the notifier
+2026-10-21T10:01:46Z INFO  worker.settle  leg accepted for posting, ledger balanced with no carry left on the account
+2026-10-21T10:01:54Z INFO  worker.queue   job acknowledged and removed from the queue, lease released to the scheduler
+2026-10-21T10:02:01Z DEBUG worker.audit   audit chain link verified against the previous entry, hash chain intact
+2026-10-21T10:02:06Z DEBUG worker.fx      rate snapshot reused from the current window, no fresh quote was requested
+2026-10-21T10:02:13Z DEBUG worker.audit   audit chain link verified against the previous entry, hash chain intact
+2026-10-21T10:02:15Z DEBUG worker.gc      expired leases swept, nothing left behind by workers that went away
+2026-10-21T10:02:19Z INFO  worker.queue   job acknowledged and removed from the queue, lease released to the scheduler
+2026-10-21T10:02:26Z INFO  worker.queue   job dequeued in priority order, lease taken and heartbeat timer started
+2026-10-21T10:02:31Z INFO  worker.settle  leg accepted for posting, ledger balanced with no carry left on the account
+2026-10-21T10:02:34Z INFO  worker.queue   job dequeued in priority order, lease taken and heartbeat timer started
+2026-10-21T10:02:42Z DEBUG worker.gc      expired leases swept, nothing left behind by workers that went away
+2026-10-21T10:02:49Z INFO  worker.settle  posting written and fsynced, the outbox event queued for the notifier
+2026-10-21T10:02:50Z DEBUG worker.fx      rate snapshot reused from the current window, no fresh quote was requested
+2026-10-21T10:02:53Z DEBUG worker.fx      rate snapshot reused from the current window, no fresh quote was requested
+2026-10-21T10:02:58Z INFO  worker.queue   job dequeued in priority order, lease taken and heartbeat timer started
+2026-10-21T10:03:05Z DEBUG worker.queue   lease renewed before expiry, the job is still running on the same worker
+2026-10-21T10:03:09Z INFO  worker.settle  posting written and fsynced, the outbox event queued for the notifier
+2026-10-21T10:03:13Z INFO  worker.queue   job dequeued in priority order, lease taken and heartbeat timer started
+2026-10-21T10:03:19Z INFO  worker.settle  leg accepted for posting, ledger balanced with no carry left on the account
+2026-10-21T10:03:28Z DEBUG worker.gc      expired leases swept, nothing left behind by workers that went away
+2026-10-21T10:03:29Z DEBUG worker.gc      expired leases swept, nothing left behind by workers that went away

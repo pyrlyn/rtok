@@ -1,0 +1,112 @@
+2026-10-21T10:04:06Z DEBUG ci.cache       cache key unchanged since the last run, upload skipped for this step
+2026-10-21T10:04:14Z INFO  ci.runner      step started on a clean workspace, toolchain resolved from the pinned channel
+2026-10-21T10:04:15Z INFO  ci.runner      step finished successfully, artifacts uploaded to the run storage area
+2026-10-21T10:04:17Z DEBUG ci.runner      environment prepared, secrets masked in the log output as configured
+2026-10-21T10:04:25Z INFO  ci.lint        lint pass finished with nothing new compared with the base revision
+2026-10-21T10:04:32Z INFO  ci.runner      step finished successfully, artifacts uploaded to the run storage area
+2026-10-21T10:04:36Z INFO  ci.cache       dependency cache restored from the previous green run on the main branch
+2026-10-21T10:04:40Z INFO  ci.runner      step started on a clean workspace, toolchain resolved from the pinned channel
+2026-10-21T10:04:45Z DEBUG ci.runner      log stream rotated, the previous chunk sealed and handed to the archiver
+2026-10-21T10:04:52Z DEBUG ci.runner      environment prepared, secrets masked in the log output as configured
+2026-10-21T10:04:54Z DEBUG ci.runner      environment prepared, secrets masked in the log output as configured
+2026-10-21T10:04:57Z DEBUG ci.runner      workspace mounted under /work/acme with the cache volume attached read only
+2026-10-21T10:05:00Z INFO  ci.report      summary posted to the pull request, reviewers notified as configured
+2026-10-21T10:05:03Z WARN  ci.runner      flaky network error while fetching a mirror, the fetch was retried and passed
+2026-10-21T10:05:04Z INFO  ci.runner      step started on a clean workspace, toolchain resolved from the pinned channel
+2026-10-21T10:05:08Z INFO  ci.runner      step finished successfully, artifacts uploaded to the run storage area
+2026-10-21T10:05:11Z DEBUG ci.runner      environment prepared, secrets masked in the log output as configured
+2026-10-21T10:05:17Z DEBUG ci.cache       cache key unchanged since the last run, upload skipped for this step
+2026-10-21T10:05:26Z INFO  ci.runner      step finished successfully, artifacts uploaded to the run storage area
+2026-10-21T10:05:30Z DEBUG ci.runner      workspace mounted under /work/acme with the cache volume attached read only
+2026-10-21T10:05:34Z DEBUG ci.runner      environment prepared, secrets masked in the log output as configured
+2026-10-21T10:05:41Z WARN  ci.runner      flaky network error while fetching a mirror, the fetch was retried and passed
+2026-10-21T10:05:42Z DEBUG ci.cache       cache key unchanged since the last run, upload skipped for this step
+2026-10-21T10:05:49Z INFO  ci.lint        lint pass finished with nothing new compared with the base revision
+2026-10-21T10:05:52Z DEBUG ci.runner      environment prepared, secrets masked in the log output as configured
+2026-10-21T10:05:54Z DEBUG ci.cache       cache key unchanged since the last run, upload skipped for this step
+2026-10-21T10:05:59Z INFO  ci.lint        lint pass finished with nothing new compared with the base revision
+2026-10-21T10:06:00Z DEBUG ci.runner      workspace mounted under /work/acme with the cache volume attached read only
+2026-10-21T10:06:02Z INFO  ci.lint        lint pass finished with nothing new compared with the base revision
+2026-10-21T10:06:07Z WARN  ci.runner      flaky network error while fetching a mirror, the fetch was retried and passed
+2026-10-21T10:06:12Z INFO  ci.lint        lint pass finished with nothing new compared with the base revision
+2026-10-21T10:06:18Z INFO  ci.report      summary posted to the pull request, reviewers notified as configured
+2026-10-21T10:06:26Z DEBUG ci.runner      environment prepared, secrets masked in the log output as configured
+2026-10-21T10:06:29Z INFO  ci.report      summary posted to the pull request, reviewers notified as configured
+2026-10-21T10:06:34Z INFO  ci.runner      step started on a clean workspace, toolchain resolved from the pinned channel
+2026-10-21T10:06:40Z INFO  ci.runner      step started on a clean workspace, toolchain resolved from the pinned channel
+2026-10-21T10:06:41Z DEBUG ci.runner      log stream rotated, the previous chunk sealed and handed to the archiver
+2026-10-21T10:06:47Z DEBUG ci.runner      log stream rotated, the previous chunk sealed and handed to the archiver
+2026-10-21T10:06:48Z DEBUG ci.runner      log stream rotated, the previous chunk sealed and handed to the archiver
+2026-10-21T10:06:49Z INFO  ci.report      summary posted to the pull request, reviewers notified as configured
+2026-10-21T10:06:53Z DEBUG ci.runner      environment prepared, secrets masked in the log output as configured
+2026-10-21T10:06:57Z INFO  ci.cache       dependency cache restored from the previous green run on the main branch
+2026-10-21T10:07:03Z INFO  ci.report      summary posted to the pull request, reviewers notified as configured
+2026-10-21T10:07:12Z INFO  ci.lint        lint pass finished with nothing new compared with the base revision
+2026-10-21T10:07:20Z DEBUG ci.cache       cache key unchanged since the last run, upload skipped for this step
+2026-10-21T10:07:26Z INFO  ci.cache       dependency cache restored from the previous green run on the main branch
+2026-10-21T10:07:27Z DEBUG ci.cache       cache key unchanged since the last run, upload skipped for this step
+2026-10-21T10:07:29Z DEBUG ci.runner      log stream rotated, the previous chunk sealed and handed to the archiver
+2026-10-21T10:07:35Z INFO  ci.runner      step finished successfully, artifacts uploaded to the run storage area
+2026-10-21T10:07:38Z INFO  ci.lint        lint pass finished with nothing new compared with the base revision
+2026-10-21T10:07:43Z INFO  ci.lint        lint pass finished with nothing new compared with the base revision
+2026-10-21T10:07:48Z INFO  ci.cache       dependency cache restored from the previous green run on the main branch
+2026-10-21T10:07:53Z INFO  ci.lint        lint pass finished with nothing new compared with the base revision
+2026-10-21T10:07:55Z DEBUG ci.runner      environment prepared, secrets masked in the log output as configured
+2026-10-21T10:07:58Z FAILED ci.test       ledger posting tests failed: 2 failed; 141 passed, the run was marked red
+2026-10-21T10:08:06Z DEBUG ci.cache       cache key unchanged since the last run, upload skipped for this step
+2026-10-21T10:08:07Z DEBUG ci.runner      environment prepared, secrets masked in the log output as configured
+2026-10-21T10:08:16Z INFO  ci.cache       dependency cache restored from the previous green run on the main branch
+2026-10-21T10:08:17Z DEBUG ci.runner      log stream rotated, the previous chunk sealed and handed to the archiver
+2026-10-21T10:08:23Z INFO  ci.runner      step finished successfully, artifacts uploaded to the run storage area
+2026-10-21T10:08:31Z DEBUG ci.cache       cache key unchanged since the last run, upload skipped for this step
+2026-10-21T10:08:34Z DEBUG ci.runner      log stream rotated, the previous chunk sealed and handed to the archiver
+2026-10-21T10:08:35Z INFO  ci.runner      step started on a clean workspace, toolchain resolved from the pinned channel
+2026-10-21T10:08:41Z INFO  ci.report      summary posted to the pull request, reviewers notified as configured
+2026-10-21T10:08:44Z INFO  ci.runner      step finished successfully, artifacts uploaded to the run storage area
+2026-10-21T10:08:51Z DEBUG ci.runner      environment prepared, secrets masked in the log output as configured
+2026-10-21T10:08:54Z INFO  ci.cache       dependency cache restored from the previous green run on the main branch
+2026-10-21T10:09:00Z DEBUG ci.runner      log stream rotated, the previous chunk sealed and handed to the archiver
+2026-10-21T10:09:01Z DEBUG ci.runner      environment prepared, secrets masked in the log output as configured
+2026-10-21T10:09:06Z DEBUG ci.runner      log stream rotated, the previous chunk sealed and handed to the archiver
+2026-10-21T10:09:14Z DEBUG ci.runner      environment prepared, secrets masked in the log output as configured
+2026-10-21T10:09:23Z DEBUG ci.runner      environment prepared, secrets masked in the log output as configured
+2026-10-21T10:09:31Z INFO  ci.report      summary posted to the pull request, reviewers notified as configured
+2026-10-21T10:09:39Z INFO  ci.lint        lint pass finished with nothing new compared with the base revision
+2026-10-21T10:09:44Z DEBUG ci.cache       cache key unchanged since the last run, upload skipped for this step
+2026-10-21T10:09:51Z INFO  ci.report      summary posted to the pull request, reviewers notified as configured
+2026-10-21T10:09:53Z DEBUG ci.runner      environment prepared, secrets masked in the log output as configured
+2026-10-21T10:10:02Z DEBUG ci.runner      log stream rotated, the previous chunk sealed and handed to the archiver
+2026-10-21T10:10:10Z DEBUG ci.runner      environment prepared, secrets masked in the log output as configured
+2026-10-21T10:10:16Z INFO  ci.runner      retry of the failed step queued behind the current run on the same runner
+2026-10-21T10:10:18Z DEBUG ci.runner      environment prepared, secrets masked in the log output as configured
+2026-10-21T10:10:23Z INFO  ci.report      summary posted to the pull request, reviewers notified as configured
+2026-10-21T10:10:25Z INFO  ci.lint        lint pass finished with nothing new compared with the base revision
+2026-10-21T10:10:26Z INFO  ci.lint        lint pass finished with nothing new compared with the base revision
+2026-10-21T10:10:32Z DEBUG ci.cache       cache key unchanged since the last run, upload skipped for this step
+2026-10-21T10:10:40Z DEBUG ci.cache       cache key unchanged since the last run, upload skipped for this step
+2026-10-21T10:10:45Z DEBUG ci.cache       cache key unchanged since the last run, upload skipped for this step
+2026-10-21T10:10:48Z INFO  ci.lint        lint pass finished with nothing new compared with the base revision
+2026-10-21T10:10:56Z INFO  ci.runner      step started on a clean workspace, toolchain resolved from the pinned channel
+2026-10-21T10:11:02Z DEBUG ci.cache       cache key unchanged since the last run, upload skipped for this step
+2026-10-21T10:11:10Z DEBUG ci.cache       cache key unchanged since the last run, upload skipped for this step
+2026-10-21T10:11:19Z DEBUG ci.cache       cache key unchanged since the last run, upload skipped for this step
+2026-10-21T10:11:25Z INFO  ci.lint        lint pass finished with nothing new compared with the base revision
+2026-10-21T10:11:31Z DEBUG ci.cache       cache key unchanged since the last run, upload skipped for this step
+2026-10-21T10:11:37Z DEBUG ci.runner      log stream rotated, the previous chunk sealed and handed to the archiver
+2026-10-21T10:11:45Z DEBUG ci.runner      environment prepared, secrets masked in the log output as configured
+2026-10-21T10:11:51Z INFO  ci.lint        lint pass finished with nothing new compared with the base revision
+2026-10-21T10:12:00Z DEBUG ci.runner      environment prepared, secrets masked in the log output as configured
+2026-10-21T10:12:04Z DEBUG ci.runner      environment prepared, secrets masked in the log output as configured
+2026-10-21T10:12:12Z INFO  ci.lint        lint pass finished with nothing new compared with the base revision
+2026-10-21T10:12:14Z DEBUG ci.cache       cache key unchanged since the last run, upload skipped for this step
+2026-10-21T10:12:17Z DEBUG ci.runner      log stream rotated, the previous chunk sealed and handed to the archiver
+2026-10-21T10:12:22Z DEBUG ci.runner      log stream rotated, the previous chunk sealed and handed to the archiver
+2026-10-21T10:12:23Z DEBUG ci.cache       cache key unchanged since the last run, upload skipped for this step
+2026-10-21T10:12:26Z INFO  ci.runner      step finished successfully, artifacts uploaded to the run storage area
+2026-10-21T10:12:29Z INFO  ci.report      summary posted to the pull request, reviewers notified as configured
+2026-10-21T10:12:32Z INFO  ci.runner      step finished successfully, artifacts uploaded to the run storage area
+2026-10-21T10:12:40Z INFO  ci.runner      step started on a clean workspace, toolchain resolved from the pinned channel
+2026-10-21T10:12:43Z INFO  ci.runner      step finished successfully, artifacts uploaded to the run storage area
+2026-10-21T10:12:46Z INFO  ci.runner      step started on a clean workspace, toolchain resolved from the pinned channel
+2026-10-21T10:12:52Z INFO  ci.cache       dependency cache restored from the previous green run on the main branch
+2026-10-21T10:13:00Z DEBUG ci.runner      environment prepared, secrets masked in the log output as configured

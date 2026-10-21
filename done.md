@@ -1057,6 +1057,32 @@ Check: unit test on a scripted temp repo (three commits, one over the 20-file ca
 
 Result (2026-10-06, Claude Code / sonnet-5.5): `src/plugins/graph/cochange.rs` counts pairs from `git log` (shared `git_stdout` helper, no dependency) and keeps them as one `kv` document per root (`plugin:graph:cochange:<root>`), recounted only when `git rev-parse HEAD` moves; no new table, so no migration. New `Host::plugin_state_get` is the read half of `plugin_state_set`. `impact` appends `changes with: ...` after the cap; `rank::build` adds both directions of each pair at `0.3 x (1 + ln count)`. Backtest over the last 100 commits of this repo, partners counted from the 300 commits before each one: hit@5 76 % (76 of 100; target 30 %), the first file had a partner in 91. Cold build on this repo: 54 ms in a debug build at a host load of 34 (target 300 ms). Note: `plan.md`, `todo.md` and `done.md` change with most commits here, which lifts the hit rate. The map sees a new HEAD from the next index run that changes the root.
 
+### T370. SessionStart repo map ranked by file-level personalized PageRank
+
+From the Empryo study (idea-only, clean-room; Empryo `repo-map.ts` PageRank and render, `repo-map-utils.ts:479-493`: damping 0.85, 20 iterations, budget 1500 / 2500 / 4000 tokens). T52.3 / I-28 ranks definitions by raw reference count (`symbol_top_refs`, `src/store/symbols.rs:614`), off by default and without a live A/B; `repo_map` (`src/plugins/graph/mod.rs:1090`) pops and re-estimates the rendered text in a loop, quadratic in the number of rows. A file graph (edge = file A references a name defined in file B, weighted by T368's IDF) with PageRank puts hub files first, and a personalization vector moves the map toward what the session is about.
+
+Plan: new `src/plugins/graph/rank.rs` — CSR adjacency from one `symbols` scan, power iteration (0.85, 20 iterations or L1 delta < 1e-6), dangling mass spread uniformly. Global ranks persisted per root in a `file_rank` table (new migration), recomputed at index end; personalized ranks are computed at SessionStart and never persisted (Empryo issue #228: a stored personalized rank leaked one session's focus into the next). Personalization: git-dirty files, the last checkpoint's paths on `compact` (`src/plugins/checkpoint.rs`), and the SessionStart `source` (`crates/rtok-plugin-sdk/src/lib.rs:274`). Render top files with their top definitions; fill the budget in one pass with a running token estimate instead of pop-and-re-estimate. Host trait method in `crates/rtok-plugin-sdk/src/host.rs` and its Runtime impl in `src/plugin.rs`. Config `plugins.graph.map_rank = "refs" | "pagerank"`, default `refs` until the check passes.
+
+Done when: with `map_rank = "pagerank"`, the SessionStart map lists files by rank under `map_tokens`, personalized by dirty files, and a stored rank never contains session state.
+
+Check: unit tests for PageRank on a 4-node graph (known stationary vector, sum = 1 ± 1e-9) and for personalization; offline backtest over the last 200 commits of this repo: recall of the commit's touched files in a `map_tokens = 1000` map, `pagerank` minus `refs` ≥ 15 pp; SessionStart hook p95 ≤ 30 ms on this repo (divan bench); `just check`.
+
+Execution plan (Claude Code / sonnet-5.5; fits one task, no split):
+1. `src/plugins/graph/rank.rs`: file graph from one grouped `symbols` scan (edge A to B when A references a name defined in B, weight = refs x ln(1 + files / files-referencing-name) / files-defining-name; T368's shared IDF table replaces it when it lands), power iteration (0.85, 20 iterations or L1 < 1e-6, dangling mass uniform) over CSR, JSON encode/decode of the graph, and a one-pass renderer with a running token estimate. No crate: the maintained graph crates have no personalized PageRank.
+2. Migration `0030_file_rank` (`file_rank (root PRIMARY KEY, graph TEXT)`): paths, global ranks, indexed mtimes, top defs per file and the edges, written at index end; a project removal drops it. Three `Symbols` host methods with default bodies (`symbol_file_scan`, `file_rank_get`, `file_rank_put`), Diesel impls in `src/store/symbols.rs`, Runtime in `src/plugin.rs`.
+3. SessionStart reads the one row and never spawns a process (D1, T428's 10 ms): personalization seeds are files whose indexed mtime is under 24 h old (only when that set is a working set, 32 files at most; a fresh clone seeds nothing) plus, on `compact`, the paths of the session's last checkpoint (`checkpoint::last_paths`). The personalized rank is computed in memory and never stored.
+4. Config `plugins.graph.map_rank = "refs" | "pagerank"` (default `refs`), `default.toml`, `docs/config.md`, trycmd and config_coverage goldens; `repo_map` branches on it, `refs` output unchanged.
+5. Tests: 4-node stationary vector, personalization, no session state in the stored row, codec round trip, budget fill, store round trip and purge, SessionStart through the hook. An ignored backtest (`cargo test --lib backtest -- --ignored --nocapture`) reproduces the numbers recorded in `research.md` section 34; a latency test measures the hook with a populated row.
+
+Progress (2026-10-06, Claude Code / sonnet-5.5): steps 1 to 5 are in. Backtest over the last 200 commits, 1000-token map: `refs` 26.7 %, `pagerank` 44.1 %, so +17.4 pp (card asks 15 pp; both halves of the history clear it). Open: the hook latency check. The host ran at a load of 30 to 50, the unmapped SessionStart hook itself missed 10 ms there (p95 13.9 ms), and the pagerank map added about 2 ms at p50 (decode 1.4 ms of a 700 KB stored graph, 20 iterations 0.33 ms). Re-run `cargo test --release --test latency session_start` on a quiet machine; the default stays `refs` until it passes.
+
+Result (2026-10-21, Claude Code / claude-opus-5-5): the open latency item, re-run on the same laptop at a load of 13 to 18 (no quieter window came; `research.md` §34). The tree has grown to 896 files and 121 552 edges (2.3 MB stored graph). New divan bench `session_start_pagerank_map` (`cargo bench --bench graph -- session_start`) on this repo's own index: global rank median 5.40 ms, seeded by checkpoint paths 7.94 ms. Spawned hook, `tests/latency.rs` fixture grown to that size: with the map p95 18.6 ms against the card's 30 ms; the hook without a map p95 11.3 ms at the same load, so T428's 10 ms is still not judged here. A `refs` map of 1000 tokens costs 452 to 567 ms in `symbol_top_refs` on the same index. With the check passed, `plugins.graph.map_rank` defaults to `pagerank` (falls back to `refs` while no graph is stored); `map_tokens` still defaults to 0, so the map stays opt-in.
+
+Check: backtest +17.4 pp (2026-10-06, unchanged); hook p95 18.6 ms ≤ 30 ms; `just check`.
+
+Status: done 2026-10-21
+Model: Claude Code / claude-opus-5-5
+
 ### T375. Checkpoint keeps per-file actions (read / edited / created / deleted)
 
 From the Empryo study (idea-only, clean-room). `Checkpoint` recorded paths without what happened to them, so after compact the agent re-read files it only looked at and could miss the ones it changed. The checkpoint now lists every file with its action, `path <p> (edited|created|deleted|read[ a-b])`, changed files first (edited, created, deleted, then read, each group by path, byte-stable). Actions are folded from the transcript's `tool_use` blocks: Read is read (with its offset/limit range), Edit/MultiEdit is edited, Write is edited unless its result says the file was created, Bash `rm` / `git rm` is deleted (shlex; globs, variables, `~`, `--cached`, `-n` and relative paths after a `cd` are skipped). Rows written before the change decode as reads; `last_paths` drops deleted files from the repo-map personalization. No schema change: the checkpoint is note text.
@@ -2644,6 +2670,34 @@ Result (2026-10-08, Claude Code / claude-sonnet-5-5): the six pages already sat 
 Status: done 2026-10-08
 
 Model: Claude Code / claude-sonnet-5-5
+
+### T414.7. Re-shoot `web/screenshots/`; close the web admin gap in `brand/`
+
+Regenerate `web/screenshots/` with the existing script; in `brand/README.md` "Known gaps" and `PROVENANCE.md` "Adopting in each surface" mark the web admin as adopted.
+
+Check: `just check` green; `brand/README.md` no longer says the web admin ships its own copies.
+
+Plan (claim taken over from MiMo, idle at 0% since 2026-10-12): the change of #1224, rebuilt on today's `main` because that branch conflicts in `plan.md`/`todo.md`. 1. `?sample=empty|loading|error` in `web/src/api/sample.ts` gives the three state shots (`calls-empty`, `overview-loading`, `overview-error`) without a server, with unit tests. 2. `web/scripts/shoot.mjs` writes those at 1440 and 390 px; `npm run screenshots`, `just spa-screenshots`. 3. Re-shoot all 48 and look at the state shots. 4. Drop the last present-tense "web ships a copy" lines from `brand/`. 5. Close T414.7 and T414.
+
+Result (2026-10-21, Claude Code / opus-5.5): #1140 had already marked the web admin adopted in `PROVENANCE.md` and added `shoot.mjs`, but the script re-shot only part of the set, was wired nowhere, and the `calls-empty`, `overview-loading` and `overview-error` shots still showed the plain-HTML admin of #447. New `sampleConnect(search)` in `web/src/api/sample.ts`: `?sample=empty` is the full fixture with no calls, `loading` opens the link and sends no snapshot, `error` carries a snapshot error, any other value is the full fixture as before; `App.tsx` picks the source through it; four unit tests in `query.test.ts`. `shoot.mjs` writes the three states at 390 and 1440 px in both themes next to the 36 page shots; `npm run screenshots`, `just spa-screenshots` (in no gate: it rewrites tracked files). All 48 shots re-shot here; 42 are byte-identical to the #1224 set, six differ by a few bytes. The error, empty and loading shots were looked at. `brand/README.md`, `PROVENANCE.md`, `DESIGN.md` and the `tokens.json` `$description` no longer say `web/` ships a copy of the tokens (`build.mjs` does not read the description; `npm --prefix brand run check` is up to date). The static `?sample` script was kept over the unmerged `t414.7-reshoot-screenshots` branch (Playwright on the real binary): it needs no cargo build or seeded store and its shots are deterministic. Gates: fmt, clippy (`-D warnings`), jscpd, `just js`, pytest (43), `spa-typecheck`, `spa-test` (502), `spa-stories` (260) and the brand check green. The shared disk of this Mac ran out three times while other sessions built, so `cargo nextest` never finished here: the first run passed 1711 tests before a test hit "database or disk is full", and every later failure was ENOSPC or a store that could not open; `spa-e2e` passed 44 of 45, the one failure in fixture teardown at the same time. This change touches no Rust; CI runs both suites.
+
+Status: done 2026-10-21
+
+Model: Claude Code / opus-5.5
+
+### T414. Web dashboard restyle on the brand pack, built from `brand/` sources
+
+Creator request 2026-10-05: a new look for the `rtok web` SPA from the brand pack in `brand/` (tokens, logos, icons, `DESIGN.md`, on top of the `@pyrlyn/brand` base it pins). Creator decisions 2026-10-05: a restyle by the brandbook (pages and navigation stay; shell, panels, tables, KPIs and charts change); a mockup first, approved before the pages; our own `web/src/ui` React components on the brand roles (`--pyr-*`), not the base `.pyr-*` classes. Creator decisions 2026-10-05, later: UI/UX additions (grouped sidebar, command palette and shortcuts, clickable KPIs, live status with pause) and features (Δtok savings trend, table filters in the URL, CSV/JSON export), one sub-task each (T414.8–T414.14). Creator decisions 2026-10-05, later still: charts draw on canvas through ECharts 6, behind our own chart abstraction so the library can be swapped; hover shows a tooltip, and other places change live with the hover where that does not repeat the tooltip; small marks (budget grid, plugin bitset, token mix, share bars) stay DOM and share the same tooltip (T414.15, T414.16). Creator decision 2026-10-05, after the charts: open-source UI toolkits are allowed; behaviour (focus, keyboard, overlays, menus, dialogs, listboxes) comes from React Aria Components, styled by us on the `--pyr-*` roles, so the look stays ours (from T414.9 on; its `Autocomplete` serves the palette, so no `cmdk`).
+
+Source rule: `web/` holds no copy of a brand file. Tokens, fonts, icons, logos and illustrations are imported from `brand/` and `brand/node_modules/@pyrlyn/brand` at build time; anything derived (CSS, raster sizes) is produced by a program in the build, never committed by hand. `brand/README.md` "Known gaps" and `PROVENANCE.md` "Adopting in each surface" list today's copies.
+
+Check: every sub-task below is closed in `done.md`, and no file under `web/` is byte-identical to a file under `brand/` or `brand/node_modules/@pyrlyn/brand/base/`.
+
+Result (2026-10-21, Claude Code / opus-5.5): every sub-task (T414.1-T414.17) is closed in this file, T414.7 last. No file under `web/` is byte-identical to one under `brand/` or `@pyrlyn/brand/base/`: `web/src/brandSources.test.ts` (in `spa-test`) is green.
+
+Status: done 2026-10-21
+
+Model: Claude Code / opus-5.5
 
 ### T415. Graph overview story tests wait for the real readiness signal
 
@@ -9431,6 +9485,24 @@ Status: done 2026-10-08
 
 Model: Claude Code / claude-sonnet-5-5
 
+### T413. More agent hosts: popular agents rtok does not install into yet
+
+Creator request 2026-10-05: add installers for popular coding agents missing from `src/agents/` (22 hosts on `9d6557c7`). One sub-task per host, one PR each. The list below is a lead, not evidence: every fact a sub-task relies on (binary, config paths, MCP entry format, hook events and payloads, plugin or extension API) is first written into `research.md` with its primary source (vendor docs or the repository's own files, URL plus date checked).
+
+Shared shape for every sub-task, per `architecture.md` "New host" and D21:
+1. Research: a `research.md` row for the host with the sources above; if a field is not documented, it stays out of the installer (never guessed).
+2. `src/agents/<host>/mod.rs` implementing `Agent` (variants, detection, files, installed modules, apply) and `README.md` with the module table and `## Docs`; registered in `HOSTS` and `host()`; `[setup.<host>]` paths in `config/default.toml`, `src/config/mod.rs`, `docs/config.md`.
+3. Reuse first: a host that forks or mirrors an existing one (named per card) shares that host's code through a helper, never a copy. Host configs: check only rtok's entry, keep the rest byte-for-byte; backups and `--dry-run` from `rtok-agent-sdk`.
+4. `docs/agents.md` row; `agents_install` matrix row (install twice / remove twice / list) against fake homes, never the real agent.
+5. Per-host check: the targeted tests above, `agents_doc` and `host_docs` green, `just check` green; one manual `rtok agents install <host> --dry-run` on this machine if the host is installed here, otherwise say "not installed here" in `done.md`.
+
+Check: every sub-task below is closed in `done.md` with its per-host check.
+
+Done: all 15 sub-tasks are closed below. Thirteen added installers: Roo Code, Qwen Code, Factory Droid, Kiro (CLI and IDE), Amp, Goose, Continue, Augment (Auggie CLI), JetBrains Junie, Crush, Warp, OpenHands and DeepSeek Reasonix each have a `src/agents/<host>/` directory on main. Two closed without code: Amazon Q Developer CLI went into Kiro (T413.10), and Trae documents no user-level MCP file path (T413.13). The Trae installer is in `roadmap.md` "Agent hosts" and waits for a documented path. Since T663 the hosts share `agent_identity!`, `mcp_only_file!` and `assert_mcp_only_apply_idempotent`, which keeps `just dup` under its threshold.
+
+Status: done 2026-10-21
+Model: Claude Code / claude-opus-5-5
+
 ### T413.1. `rtok agents install roo` — Roo Code
 
 VS Code extension forked from Cline. Landed on main in `46e7139b` (feat) with host registration fixed in #760 (`376e1645`).
@@ -9574,6 +9646,23 @@ Check: `agents_doc`, `host_docs`, `agents_install`, `agents_list_content`, `agen
 
 Status: done 2026-10-12
 Model: Claude Code / claude-sonnet-5-5
+
+### T413.13. `rtok agents install trae` — Trae
+
+Trae IDE (ByteDance). MCP; check whether its config mirrors the VS Code layout `src/agents/vscode/` already handles.
+
+Check: the T413 per-host check (step 5) for this host.
+
+Plan: Trae docs for the MCP file. Reuse the VS Code helper only if the key and path match; otherwise a thin host of its own.
+
+Finding (2026-10-12, `research.md` §32.13): Trae's docs name only a project `.trae/mcp.json`, which is the project's, and a user-level `mcp.json` behind the app's Raw Config button with no path. No installer is written until a documented user-level path exists.
+
+Done: closed without code, like T413.10. Rule 1 of T413 forbids guessing the path, so there is nothing to write. The claim from 2026-10-12 had stayed at 0% after #1030 recorded the finding, and the closing session on 2026-10-21 had no web access to re-read the docs page, so §32.13 is still the latest check. Trae is not installed on this machine. The installer moved to `roadmap.md` "Agent hosts" with its re-open condition: a vendor page (or a Trae install to inspect) naming the user-level `mcp.json` path. The VS Code helper is reused only if that file uses VS Code's key and layout.
+
+Check: nothing to run; docs-only change. `plan.md` table, cards and `todo.md` stay in sync.
+
+Status: done 2026-10-21
+Model: Claude Code / claude-opus-5-5
 
 ### T663. `just dup` back under the 2% jscpd threshold
 

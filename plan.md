@@ -246,19 +246,14 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T289 | in progress | P2 | 4 | 90% | Claude Code / claude-opus-5-5 |
 | T356 | in progress | P1 | 2 | 90% | Claude Code / claude-opus-5-5 |
 | T369.1 | in progress | P3 | 1 | 50% | Claude Code / claude-opus-5-5 |
-| T370 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
 | T385 | in progress | P1 | 5 | 85% | Claude Code / opus-5-5 |
 | T385.3 | todo | P1 | 3 | 50% | |
-| T385.9 | in progress | P3 | 5 | 70% | Claude Code / claude-opus-5-5 |
-| T385.9.3 | todo | P3 | 2 | 60% | |
-| T394 | todo | P2 | 2 | 20% | |
-| T395 | todo | P3 | 2 | 20% | |
+| T385.9 | in progress | P3 | 5 | 75% | Claude Code / claude-opus-5-5 |
+| T385.9.3 | todo | P3 | 2 | 40% | |
+| T394 | todo | P2 | 2 | 30% | |
+| T395 | todo | P3 | 2 | 30% | |
 | T396 | todo | P3 | 2 | 90% | |
-| T398 | todo | P3 | 1 | 30% | |
-| T413 | todo | P2 | 3 | 0% | |
-| T413.13 | in progress | P3 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
-| T414 | in progress | P1 | 4 | 20% | Claude Code / opus-5.5 |
-| T414.7 | in progress | P3 | 1 | 0% | MiMo / mimo |
+| T398 | todo | P3 | 1 | 40% | |
 | T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
 | T428 | in progress | P2 | 3 | 85% | Claude Code / sonnet-5.5 |
 | T436.4 | todo | P3 | 2 | 90% | |
@@ -949,25 +944,6 @@ Check: a dated `research.md` §29.5 row with the follow-up share and the idle-ma
 
 Progress (2026-10-21, Claude Code / claude-opus-5-5, `research.md` §29.5 T369.1 row): the metric is now an `rtok stats` line, `grep symbol answers N  tokens T  then same-name Grep/Read F (P%)` (`GrepSymbolRow`, `fold_grep_symbol` in `src/measure/stats.rs`). It finds answers by `grep_symbol::ANSWERED` and the name by the hook's own classifier. The follow-up share is not measured: no window has run (the flag was never on, and these transcripts hold no native `Grep`), and this session could not read `~/.rtok`, `~/.claude` or run `rtok stats` on them. Hook p95 was measured under load (9–11), not idle. The flag-on answer passed the 10 ms gate in one of three runs (p95 9.58–10.59 ms). Plain `PreToolUse` passed all three (9.09–9.46 ms). Left: the creator's window and `rtok stats --since <days>`, and a re-run of the latency suite on an idle machine (protocol in §29.5). The default stays `false` until then.
 
-### T370. SessionStart repo map ranked by file-level personalized PageRank
-
-From the Empryo study (idea-only, clean-room; Empryo `repo-map.ts` PageRank and render, `repo-map-utils.ts:479-493`: damping 0.85, 20 iterations, budget 1500 / 2500 / 4000 tokens). T52.3 / I-28 ranks definitions by raw reference count (`symbol_top_refs`, `src/store/symbols.rs:614`), off by default and without a live A/B; `repo_map` (`src/plugins/graph/mod.rs:1090`) pops and re-estimates the rendered text in a loop, quadratic in the number of rows. A file graph (edge = file A references a name defined in file B, weighted by T368's IDF) with PageRank puts hub files first, and a personalization vector moves the map toward what the session is about.
-
-Plan: new `src/plugins/graph/rank.rs` — CSR adjacency from one `symbols` scan, power iteration (0.85, 20 iterations or L1 delta < 1e-6), dangling mass spread uniformly. Global ranks persisted per root in a `file_rank` table (new migration), recomputed at index end; personalized ranks are computed at SessionStart and never persisted (Empryo issue #228: a stored personalized rank leaked one session's focus into the next). Personalization: git-dirty files, the last checkpoint's paths on `compact` (`src/plugins/checkpoint.rs`), and the SessionStart `source` (`crates/rtok-plugin-sdk/src/lib.rs:274`). Render top files with their top definitions; fill the budget in one pass with a running token estimate instead of pop-and-re-estimate. Host trait method in `crates/rtok-plugin-sdk/src/host.rs` and its Runtime impl in `src/plugin.rs`. Config `plugins.graph.map_rank = "refs" | "pagerank"`, default `refs` until the check passes.
-
-Done when: with `map_rank = "pagerank"`, the SessionStart map lists files by rank under `map_tokens`, personalized by dirty files, and a stored rank never contains session state.
-
-Check: unit tests for PageRank on a 4-node graph (known stationary vector, sum = 1 ± 1e-9) and for personalization; offline backtest over the last 200 commits of this repo: recall of the commit's touched files in a `map_tokens = 1000` map, `pagerank` minus `refs` ≥ 15 pp; SessionStart hook p95 ≤ 30 ms on this repo (divan bench); `just check`.
-
-Execution plan (Claude Code / sonnet-5.5; fits one task, no split):
-1. `src/plugins/graph/rank.rs`: file graph from one grouped `symbols` scan (edge A to B when A references a name defined in B, weight = refs x ln(1 + files / files-referencing-name) / files-defining-name; T368's shared IDF table replaces it when it lands), power iteration (0.85, 20 iterations or L1 < 1e-6, dangling mass uniform) over CSR, JSON encode/decode of the graph, and a one-pass renderer with a running token estimate. No crate: the maintained graph crates have no personalized PageRank.
-2. Migration `0030_file_rank` (`file_rank (root PRIMARY KEY, graph TEXT)`): paths, global ranks, indexed mtimes, top defs per file and the edges, written at index end; a project removal drops it. Three `Symbols` host methods with default bodies (`symbol_file_scan`, `file_rank_get`, `file_rank_put`), Diesel impls in `src/store/symbols.rs`, Runtime in `src/plugin.rs`.
-3. SessionStart reads the one row and never spawns a process (D1, T428's 10 ms): personalization seeds are files whose indexed mtime is under 24 h old (only when that set is a working set, 32 files at most; a fresh clone seeds nothing) plus, on `compact`, the paths of the session's last checkpoint (`checkpoint::last_paths`). The personalized rank is computed in memory and never stored.
-4. Config `plugins.graph.map_rank = "refs" | "pagerank"` (default `refs`), `default.toml`, `docs/config.md`, trycmd and config_coverage goldens; `repo_map` branches on it, `refs` output unchanged.
-5. Tests: 4-node stationary vector, personalization, no session state in the stored row, codec round trip, budget fill, store round trip and purge, SessionStart through the hook. An ignored backtest (`cargo test --lib backtest -- --ignored --nocapture`) reproduces the numbers recorded in `research.md` section 34; a latency test measures the hook with a populated row.
-
-Progress (2026-10-06, Claude Code / sonnet-5.5): steps 1 to 5 are in. Backtest over the last 200 commits, 1000-token map: `refs` 26.7 %, `pagerank` 44.1 %, so +17.4 pp (card asks 15 pp; both halves of the history clear it). Open: the hook latency check. The host ran at a load of 30 to 50, the unmapped SessionStart hook itself missed 10 ms there (p95 13.9 ms), and the pagerank map added about 2 ms at p50 (decode 1.4 ms of a 700 KB stored graph, 20 iterations 0.33 ms). Re-run `cargo test --release --test latency session_start` on a quiet machine; the default stays `refs` until it passes.
-
 ### T385. Proxy lanes and the optimization plan from `docs/research/optimization.md`
 
 From `research.md` §31 and `docs/research/optimization.md` §6 (2026-10-04): a 12-step plan, "proposal, nothing built", which says to promote items into `plan.md` before coding. `src/proxy/` has no lane code. This card is the spec; split it into sub-tasks (T385.1 …) when claiming, one PR each, in this order:
@@ -997,6 +973,8 @@ Progress (2026-10-21): every build step and measurement an agent can run is in `
 
 optimization.md §5. `rtok bench` cost per passed task for each setting on and off, recorded with a date in `research.md` (`tools_rewrite` is T124). Settings whose row shows a net saving with the pass rate held become default-on in a follow-up; the rest stay off with their number. Branch `t128-proxy-compress-default` (PR #562, `df2a13ba`) is prior art. Needs the creator's API spend for live arms (see T394).
 
+Live-arm prep (2026-10-21, `research.md` §47): `bench/configs/defaults/` holds the three arms §16.10 keeps (`a` passthrough :8801, `b` compress :8802, `context` :8803, one `rtok proxy` and `RTOK_HOME` each), pinned by tests, with a step-by-step protocol for the creator. Nothing ran. `rtok bench` checks once per task per arm, never resets the working directory and averages failed runs in as zeros (I-140); the protocol works around that with `--runs 1` and a resetting `check`.
+
 Check: one dated `research.md` row per setting.
 
 Progress (2026-10-21, `research.md` §16.10): the offline half is in. A read-only pass over 30 days of this machine's Claude Code transcripts (204,565 requests) puts a ceiling on each setting's request side: `compress` mode (pointer only) 6.35 % of input tokens, 5.17 % of input cost net of cache re-writes; `skills` 0.11 % / 0.04 %; `live_blobs` 0 eligible blocks; `context_management` 22.95 % / 20.33 %, a clearing whose quality cost only a pass rate shows. No pass rate, so no default changes. Left: the live arms for `compress` mode and `context_management` (`skills` and `live_blobs` have too little to act on to be worth paid arms), which need long tasks with real checks in place of `bench/tasks.toml`, one `rtok proxy` per arm, and the creator's API spend (T394).
@@ -1019,6 +997,8 @@ Progress (2026-10-21): the bench is built and unrun. `rtok bench --suite p28` (`
 
 Progress (2026-10-15, `research.md` §16.9): a local attempt on LM Studio (`prism-ml/bonsai-27b`) gave no evidence: the control arm returned an empty answer, and with the flag on the compressor never fired (0 summaries). Left: a bench that can pass its control (a capable model), tasks with more than `keep_turns` turns after the large results, and a compressor arm in `rtok bench`; the paid run still needs the creator.
 
+Progress (2026-10-21, `research.md` §16.11): the arm and the tasks are in. `bench/p28/` holds an `rtok bench` overlay with arms `a` (:8811, compress mode, compressor off) and `b` (:8812, plus `RTOK_PLUGINS_COMPRESS_LLM_ENABLED=true`). It has six tasks that read eight 13 KB logs one per turn and then answer from one of the first three, with checks that can fail. Tests pin the arms and show that each answer is a must-keep span that neither the pointer nor the extractive view shows. Nothing ran. Left: the paid run by the §16.11 protocol (T394), with the compressor's internal-lane cost added to arm `b` by hand.
+
 ### T394. Run the paid live benches and record them
 
 From `research.md` §3 (coaching nudges A/B) and §2 (A/B bench T9.2, `graph` T68.9): every live arm is unrun ("No live token, cache, or USD rows … the gate is do not enable"; T68.9 "Live API clause remains open"). Gate P9 and P8b clause 4 stay open until they run. Needs the creator's session and API spend: an agent sandbox cannot run them (OAuth expired).
@@ -1027,6 +1007,16 @@ Done means: one dated row per suite in §2 (nudges off/on, T9.2 legacy vs rtok, 
 
 Check: the rows are in §2 and `docs/comparison.md`; the gates are marked.
 
+Progress (2026-10-21, `research.md` §2 "Paid live benches: status and re-run protocol"): there are still no live rows. The agent session's permission policy refused to run `claude` (even `--version`), so nothing was spent. The harness dry-runs pass on main: 36 runs for T9.2 and 24 for T68.9. Reading `src/bench.rs` showed five problems that would make a paid row unreadable:
+
+- a failed run counts as a 6/6 pass at $0, because every `bench/tasks.toml` check is `true`;
+- the user's own settings and MCP servers load into every arm;
+- the arms depend on proxies on `:8788`, `:8787` and `:8790`;
+- the A/B tasks edit the caller's cwd;
+- the graph cost column keys on a top-level `model` field.
+
+The re-run protocol is written there. Left: the creator's paid run outside an agent sandbox. Because of the first problem, the Gate P9 "pass rate holds" clause needs real `check`s first.
+
 ### T395. One real session as one OpenTelemetry trace in SigNoz and Maple
 
 From `research.md` §2 "OpenTelemetry export (Gate P16)": still open is one real Claude Code session (hooks, MCP and proxy) exported as a single trace with an `invoke_agent` root and `chat {model}` spans, checked in SigNoz and Maple. `roadmap.md` says these clauses are Gate P18, but P18 in `done.md` has no such clause, so the item is orphaned. Needs a SigNoz or Maple account.
@@ -1034,6 +1024,8 @@ From `research.md` §2 "OpenTelemetry export (Gate P16)": still open is one real
 Done means: the `docs/otel.md` recipe for each backend is run with the proxy in front of a live session; the trace shape and `rtok_tokens_total` are recorded in §2 with a date, or the clause is dropped explicitly with the reason.
 
 Check: dated rows in §2 for both backends, or the dropped clause in `roadmap.md`.
+
+Progress (2026-10-21, `research.md` §2 "T395 status"): not run. This agent session's permissions refused `docker` and `colima`, so self-hosted SigNoz could not start. There is no SigNoz Cloud or Maple key, and agents never run a live host session behind the proxy (T280). The offline shape (hook, MCP and proxy rows → `invoke_agent` root plus `chat {model}`) is already asserted by `tests/otel.rs` `every_row_posts_once_and_the_marks_advance`. The orphaned P18 pointer in `roadmap.md` P16 now names T395. A re-run protocol is in §2. Left: the creator runs it once per backend and records the rows, or drops the clause with a reason.
 
 ### T396. Verify the usage readers against real files
 
@@ -1047,6 +1039,8 @@ Execution plan (2026-10-12): 1. run the Kilo, Gemini CLI, Copilot CLI and pi rea
 
 Progress (2026-10-12, `research.md` §30): Copilot CLI 1.0.80 — `tokenDetails` is authoritative (it equals `usage` plus the compaction requests), the reader now takes it (`token_details_carry_the_compaction_requests_that_usage_leaves_out`, fail-first), and `inputTokens` including the cache legs is confirmed. pi 0.85.1 — reader sums match an independent sum over 953 entries; fixture for the `reasoning`/`cacheWrite1h` shape; fork id copying confirmed from source, not observed. Copilot resume: the reader keeps the last shutdown per session, cumulative per the SDK source (`github/copilot-sdk` 6be623b, `nodejs/src/generated/session-events.ts`; fail-first `a_resumed_session_counts_its_last_shutdown_not_the_sum_of_all`), not yet seen in a real resumed log. Left: a Kilo message row (this machine's db has none), Gemini CLI (not installed here), Grok `signals.json` (observed keys accepted by the creator 2026-10-13, but grok 1.0.34 wrote no `signals.json` in this machine's 3 sessions, `research.md` §30.7). Rechecked 2026-10-13: still 0 Kilo `message` rows and no Gemini chat files. Kilo done 2026-10-15 (`research.md` §30.1: a real `message` row read through LM Studio, fixture added). Still needs the creator to run one Gemini CLI (not installed here) and one Grok session (xAI-only, not runnable on a local model), then a reader and fixture per shape.
 
+Rechecked 2026-10-21 on `62027a93` (`rtok agents usage --source logs`, read-only): `gemini` is still not on `PATH` and no Gemini CLI row is read; Copilot CLI still has 1 session (last day 2026-09-02), so still no resumed log; Grok is still skipped as `unsupported`, and this run could not list `~/.grok/sessions` to look for a new `signals.json` (sandbox). Kilo, pi, Kimi Code, OpenCode, Codex and Claude Code read without error. Nothing new to fixture; the three open items still need the creator's machine.
+
 ### T398. Probe editors on a `worktree.useRelativePaths` worktree
 
 From `research.md` §18.2 (T157): every non-interactive reader opens a relative-link worktree, but VS Code, Zed, Cursor and lazygit are untested, so the setting stays opt-in. It is the setting that would have prevented the 18 GB orphaned `graph-perf` worktree.
@@ -1055,47 +1049,7 @@ Done means: one dated row per editor in §18.2. If all pass, the `worktrees` ski
 
 Check: the §18.2 table has four dated rows.
 
-### T413. More agent hosts: popular agents rtok does not install into yet
-
-Creator request 2026-10-05: add installers for popular coding agents missing from `src/agents/` (22 hosts on `9d6557c7`). One sub-task per host, one PR each. The list below is a lead, not evidence: every fact a sub-task relies on (binary, config paths, MCP entry format, hook events and payloads, plugin or extension API) is first written into `research.md` with its primary source (vendor docs or the repository's own files, URL plus date checked).
-
-Shared shape for every sub-task, per `architecture.md` "New host" and D21:
-1. Research: a `research.md` row for the host with the sources above; if a field is not documented, it stays out of the installer (never guessed).
-2. `src/agents/<host>/mod.rs` implementing `Agent` (variants, detection, files, installed modules, apply) and `README.md` with the module table and `## Docs`; registered in `HOSTS` and `host()`; `[setup.<host>]` paths in `config/default.toml`, `src/config/mod.rs`, `docs/config.md`.
-3. Reuse first: a host that forks or mirrors an existing one (named per card) shares that host's code through a helper, never a copy. Host configs: check only rtok's entry, keep the rest byte-for-byte; backups and `--dry-run` from `rtok-agent-sdk`.
-4. `docs/agents.md` row; `agents_install` matrix row (install twice / remove twice / list) against fake homes, never the real agent.
-
-5. Per-host check: the targeted tests above, `agents_doc` and `host_docs` green, `just check` green; one manual `rtok agents install <host> --dry-run` on this machine if the host is installed here, otherwise say "not installed here" in `done.md`.
-
-Check: every sub-task below is closed in `done.md` with its per-host check.
-
-
-
-
-
-### T413.13. `rtok agents install trae` — Trae
-
-Trae IDE (ByteDance). MCP; check whether its config mirrors the VS Code layout `src/agents/vscode/` already handles.
-
-Check: the T413 per-host check (step 5) for this host.
-
-Plan: Trae docs for the MCP file. Reuse the VS Code helper only if the key and path match; otherwise a thin host of its own.
-
-Finding (2026-10-12, `research.md` §32.13): Trae's docs name only a project `.trae/mcp.json`, which is the project's, and a user-level `mcp.json` behind the app's Raw Config button with no path. No installer is written until a documented user-level path exists.
-
-### T414. Web dashboard restyle on the brand pack, built from `brand/` sources
-
-Creator request 2026-10-05: a new look for the `rtok web` SPA from the brand pack in `brand/` (tokens, logos, icons, `DESIGN.md`, on top of the `@pyrlyn/brand` base it pins). Creator decisions 2026-10-05: a restyle by the brandbook (pages and navigation stay; shell, panels, tables, KPIs and charts change); a mockup first, approved before the pages; our own `web/src/ui` React components on the brand roles (`--pyr-*`), not the base `.pyr-*` classes. Creator decisions 2026-10-05, later: UI/UX additions (grouped sidebar, command palette and shortcuts, clickable KPIs, live status with pause) and features (Δtok savings trend, table filters in the URL, CSV/JSON export), one sub-task each (T414.8–T414.14). Creator decisions 2026-10-05, later still: charts draw on canvas through ECharts 6, behind our own chart abstraction so the library can be swapped; hover shows a tooltip, and other places change live with the hover where that does not repeat the tooltip; small marks (budget grid, plugin bitset, token mix, share bars) stay DOM and share the same tooltip (T414.15, T414.16). Creator decision 2026-10-05, after the charts: open-source UI toolkits are allowed; behaviour (focus, keyboard, overlays, menus, dialogs, listboxes) comes from React Aria Components, styled by us on the `--pyr-*` roles, so the look stays ours (from T414.9 on; its `Autocomplete` serves the palette, so no `cmdk`).
-
-Source rule: `web/` holds no copy of a brand file. Tokens, fonts, icons, logos and illustrations are imported from `brand/` and `brand/node_modules/@pyrlyn/brand` at build time; anything derived (CSS, raster sizes) is produced by a program in the build, never committed by hand. `brand/README.md` "Known gaps" and `PROVENANCE.md` "Adopting in each surface" list today's copies.
-
-Check: every sub-task below is closed in `done.md`, and no file under `web/` is byte-identical to a file under `brand/` or `brand/node_modules/@pyrlyn/brand/base/`.
-
-### T414.7. Re-shoot `web/screenshots/`; close the web admin gap in `brand/`
-
-Regenerate `web/screenshots/` with the existing script; in `brand/README.md` "Known gaps" and `PROVENANCE.md` "Adopting in each surface" mark the web admin as adopted.
-
-Check: `just check` green; `brand/README.md` no longer says the web admin ships its own copies.
+Progress (2026-10-21, `research.md` §18.2): an agent session could not launch any of the four (sandbox refused every editor command), so each row reads "not run" with that date, and §18.2 now holds the manual protocol plus a lead: this machine's shell resolves `/usr/bin/git` first, and a git older than 2.48 refuses `extensions.relativeWorktrees`. Left: the creator (or an unsandboxed session) runs the protocol and turns the four rows into pass or fail; the setting stays off until then.
 
 ### T416. Shared `change-preview` crate for dry-run output
 
@@ -1305,11 +1259,11 @@ Already covered: `assert_cmd`, `divan`, `httpmock`, `insta`, `rstest`,
 
 Source: study of [proxysoul/Empryo](https://github.com/proxysoul/Empryo) (formerly SoulForge) at `669ff91`. **Idea-only, clean-room: Empryo is BSL 1.1, no code copied.** Every card cites Empryo only for the idea; implementations are written from the card.
 
-Take first, in order: T369, T370, T372, T373, T374. Then T375, T377, T378 (gated on I-95). T368, T371 and T376 are done.
+Take first, in order: T369, T372, T373, T374. Then T375, T377, T378 (gated on I-95). T368, T370, T371 and T376 are done.
 
 The 14 portable ideas and where each landed:
 
-1. PageRank repo map — T370 (extends T52.3 / I-28).
+1. PageRank repo map — T370 (done; extends T52.3 / I-28).
 2. Edge confidence / name IDF — T368.
 3. Git co-change — T371 (done).
 4. Blast radius under a budget — T377.

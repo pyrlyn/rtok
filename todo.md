@@ -10,7 +10,6 @@
 - T289. Worktrees the host creates join rtok: `rtok worktree adopt` and the post-create hooks
 - T356. Never index `$HOME` or `/` as a graph root
 - T369.1. Measure grep_symbol follow-up rate after an opt-in window
-- T370. SessionStart repo map ranked by file-level personalized PageRank
 - T385. Proxy lanes and the optimization plan from `docs/research/optimization.md`
 - T385.3. Defaults bench: `compress` mode, context editing, skills, `live_blobs`
 - T385.9. P28 Phase 2: async compressor on the `internal` lane
@@ -19,10 +18,6 @@
 - T395. One real session as one OpenTelemetry trace in SigNoz and Maple
 - T396. Verify the usage readers against real files
 - T398. Probe editors on a `worktree.useRelativePaths` worktree
-- T413. More agent hosts: popular agents rtok does not install into yet
-- T413.13. `rtok agents install trae` — Trae
-- T414. Web dashboard restyle on the brand pack, built from `brand/` sources
-- T414.7. Re-shoot `web/screenshots/`; close the web admin gap in `brand/`
 - T416. Shared `change-preview` crate for dry-run output
 - T428. SessionStart hook back under the 10 ms budget
 - T436.4. Spinner on `agents install/update` through T276's `ProgressRunner`
