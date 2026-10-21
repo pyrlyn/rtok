@@ -65,17 +65,17 @@ impl Plugin for Read {
         vec![
             ToolDef {
                 name: "read",
-                description: "Read a file; mode full|lines|map|signatures|diff|stripped|density:X; range a-b for full|lines|stripped.",
+                description: "Read a file; mode full|lines|map|signatures|diff|stripped|density:X; range a-b for full|lines|stripped. From a worktree, pass absolute paths.",
                 input_schema: json!({"type":"object","properties":{"path":{"type":"string"},"mode":{"type":"string"},"range":{"type":"string"}},"required":["path"]}),
             },
             ToolDef {
                 name: "search",
-                description: "Regex search files; path:line: snippet, max hits.",
+                description: "Regex search files; path:line: snippet, max hits. From a worktree, pass absolute paths.",
                 input_schema: json!({"type":"object","properties":{"pattern":{"type":"string"},"path":{"type":"string"},"max":{"type":"integer"}},"required":["pattern"]}),
             },
             ToolDef {
                 name: "tree",
-                description: "Compact directory listing with sizes; depth cap.",
+                description: "Compact directory listing with sizes; depth cap. From a worktree, pass absolute paths.",
                 input_schema: json!({"type":"object","properties":{"path":{"type":"string"},"depth":{"type":"integer"}}}),
             },
         ]
@@ -83,7 +83,7 @@ impl Plugin for Read {
 }
 
 pub fn read(cx: &Ctx, path: &str, mode: &str, range: Option<&str>) -> Result<String> {
-    let cwd = std::env::current_dir()?;
+    let cwd = roots::cwd()?;
     read_with(cx, &fs::HostFs, &cwd, path, mode, range)
 }
 
