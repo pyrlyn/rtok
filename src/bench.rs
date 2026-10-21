@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Licensed under GPL-3.0 or later; see https://www.gnu.org/licenses/gpl-3.0.html
 
-//! `rtok bench` A/B harness (plan T9.1, T68.9).
+//! `rtok bench` A/B harness (plan T9.1, T68.9, T385.9.3).
+
+mod p28;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -42,6 +44,9 @@ struct Acc {
 pub fn run(cfg: &Config) -> Result<String> {
     if cfg.bench.suite == "graph" {
         return run_graph(cfg);
+    }
+    if cfg.bench.suite == "p28" {
+        return p28::run(cfg);
     }
     if !cfg.bench.suite.is_empty() {
         bail!("unknown bench suite {:?}", cfg.bench.suite);

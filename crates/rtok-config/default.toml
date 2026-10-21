@@ -307,7 +307,7 @@
 # runs     = 3
 # dry_run  = false
 # timeout_s = 900                       # per task run
-# suite    = ""                         # "" = the six default tasks; "graph" = with and without MCP
+# suite    = ""                         # "" = the six default tasks; "graph" = with and without MCP; "p28" = compressor vs lossless (bench/p28.toml)
 # [bench.configs]                       # name = settings file passed to `claude --settings`
 # a = "bench/configs/legacy.json"
 # b = "bench/configs/rtok.json"

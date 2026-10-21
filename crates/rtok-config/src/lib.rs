@@ -734,7 +734,8 @@ section! {
         runs: u32 = 3,
         dry_run: bool = false,
         timeout_s: u64 = 900,
-        /// `""` = T9.1 six tasks; `"graph"` = T68.9 with/without MCP.
+        /// `""` = T9.1 six tasks; `"graph"` = T68.9 with/without MCP; `"p28"` = T385.9.3
+        /// Gate P28, compressor vs lossless pointer (`bench/p28.toml`).
         suite: String = String::new(),
         /// `[bench.configs]` — free-form `name = settings file`, so not a fixed struct.
         configs: BTreeMap<String, PathBuf> = [

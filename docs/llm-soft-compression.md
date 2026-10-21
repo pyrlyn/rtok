@@ -233,6 +233,10 @@ it did before and makes no model call. With it on, in `proxy.mode = "compress"`:
   byte-stable from the turn it first appears; until then the extractive view stays (fail open).
   `expand <id>` still returns the original.
 
+The flag stays off until Gate P28 passes live: `rtok bench --suite p28` (T385.9.3) runs this
+compressor against the lossless pointer, one proxy per arm; how to run it is in
+`bench/p28/README.md`.
+
 ## 9. Related docs
 
 - `src/plugins/compress/PLAN.md` — T28.0 survey and mechanism
