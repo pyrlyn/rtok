@@ -2338,7 +2338,7 @@ fn finish_commits_pushes_opens_the_pr_and_unlocks_only_the_caller_s_worktree() {
     let log = std::fs::read_to_string(tmp.join("gh.log")).unwrap();
     assert_eq!(log.matches("pr create").count(), 1, "{log}");
     assert!(
-        log.contains("pr create --head t1-fin --base main --fill"),
+        log.contains("pr create --head t1-fin --base main --fill-first"),
         "{log}"
     );
     assert!(

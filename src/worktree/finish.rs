@@ -108,7 +108,7 @@ fn open_pr(dir: &Path, branch: &str, base: &str, repo: Option<&str>) -> Result<S
     if let Some(url) = open {
         return Ok(url);
     }
-    let create = ["pr", "create", "--head", branch, "--base", base, "--fill"];
+    let create = ["pr", "create", "--head", branch, "--base", base, "--fill-first"];
     let out = gh(dir, "opening the PR…", &with_repo(&create, repo))?;
     // `gh pr create` prints progress lines before the URL.
     Ok(out.lines().last().unwrap_or_default().to_owned())
