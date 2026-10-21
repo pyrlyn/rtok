@@ -29,9 +29,34 @@ fn p95_with(
     setup: impl FnOnce(&std::path::Path),
     ok: impl Fn(&[u8]) -> bool,
 ) {
+    let Some(samples) = sample(event, tag, fixture, setup, ok) else {
+        return;
+    };
+    let p95 = common::p95(&samples);
+    eprintln!(
+        "{event}: n={N} p50 {:?} p95 {p95:?} max {:?}",
+        samples[N / 2],
+        samples[N - 1]
+    );
+    assert!(
+        p95 < P95_MAX,
+        "{event} p95 {p95:?} is not < {P95_MAX:?} (min {:?}, max {:?})",
+        samples[0],
+        samples[N - 1]
+    );
+}
+
+/// `N` sorted wall times of `rtok hook <event>`, or `None` in a debug build (see the skip line).
+fn sample(
+    event: &str,
+    tag: &str,
+    fixture: &[u8],
+    setup: impl FnOnce(&std::path::Path),
+    ok: impl Fn(&[u8]) -> bool,
+) -> Option<Vec<Duration>> {
     if cfg!(debug_assertions) {
         eprintln!("skip: T2.2 Check is `cargo test --release latency`");
-        return;
+        return None;
     }
 
     let bin = env!("CARGO_BIN_EXE_rtok");
@@ -73,20 +98,8 @@ fn p95_with(
     }
 
     samples.sort();
-    let p95 = common::p95(&samples);
-    eprintln!(
-        "{event}: n={N} p50 {:?} p95 {p95:?} max {:?}",
-        samples[N / 2],
-        samples[N - 1]
-    );
-    assert!(
-        p95 < P95_MAX,
-        "{event} p95 {p95:?} is not < {P95_MAX:?} (min {:?}, max {:?})",
-        samples[0],
-        samples[N - 1]
-    );
-
     let _ = std::fs::remove_dir_all(&tmp);
+    Some(samples)
 }
 
 #[test]
@@ -113,6 +126,38 @@ fn latency_hook_user_prompt_submit_p95_under_10ms() {
         "UserPromptSubmit",
         include_bytes!("fixtures/hooks/user_prompt_submit.json"),
     );
+}
+
+/// T921: Claude Code measured 39% of 1,354 `SessionEnd` runs over `max_ms` (p95 93 ms, from
+/// reading a long transcript for the checkpoint). The median is what `max_ms` promises; a
+/// session with a small transcript must stay under it, ending the agent and the session too.
+#[test]
+fn latency_hook_session_end_median_under_10ms() {
+    let transcript =
+        std::env::temp_dir().join(format!("rtok-latency-end-{}.jsonl", std::process::id()));
+    std::fs::write(
+        &transcript,
+        "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"fix the build\"}}\n",
+    )
+    .unwrap();
+    let fixture = serde_json::json!({
+        "hook_event_name": "SessionEnd", "session_id": "t921-end", "reason": "other",
+        "cwd": std::env::temp_dir(), "transcript_path": transcript,
+    })
+    .to_string();
+    let Some(samples) = sample(
+        "SessionEnd",
+        "",
+        fixture.as_bytes(),
+        |_| {},
+        |out| out == b"{}",
+    ) else {
+        return;
+    };
+    let p50 = samples[N / 2];
+    eprintln!("SessionEnd: n={N} p50 {p50:?} max {:?}", samples[N - 1]);
+    assert!(p50 < P95_MAX, "SessionEnd p50 {p50:?} is not < {P95_MAX:?}");
+    let _ = std::fs::remove_file(&transcript);
 }
 
 /// T201: guard's `post_tool` used to sha256 + write to disk synchronously on every cached

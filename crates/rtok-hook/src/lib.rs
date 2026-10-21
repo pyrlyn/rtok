@@ -14,6 +14,24 @@ use std::path::{Path, PathBuf};
 /// Largest body either end accepts: a PostToolUse payload carries the whole tool output.
 pub const MAX_FRAME: usize = 64 << 20;
 
+/// T921: how long one hook call may take before it prints `{}` and exits 0. Claude Code's own
+/// timeout is 5 s and a call it cancels skips rtok silently while the tool call stalls for the
+/// whole 5 s, so every path (`rtok-hook`, its `rtok hook` fallback, `rtok hook` run directly)
+/// answers before it.
+pub const DEADLINE: std::time::Duration = std::time::Duration::from_millis(3000);
+
+/// Extra time `rtok-hook` gives the `rtok hook` it started, whose own watchdog fires at
+/// [`DEADLINE`]: only a child stuck before its `main` is killed from outside.
+pub const CHILD_GRACE: std::time::Duration = std::time::Duration::from_millis(500);
+
+/// [`DEADLINE`], or `RTOK_HOOK_DEADLINE_MS` when set to a number of milliseconds (tests use it to
+/// hang a hook for a fraction of a second).
+pub fn deadline(var: impl Fn(&str) -> Option<OsString>) -> std::time::Duration {
+    var("RTOK_HOOK_DEADLINE_MS")
+        .and_then(|v| v.to_str()?.trim().parse::<u64>().ok())
+        .map_or(DEADLINE, std::time::Duration::from_millis)
+}
+
 /// Default of `core.hook_max_input_bytes` (T201, T459). It lives here because the client cannot
 /// load a config: it reads at most this much stdin and leaves a longer body to `rtok hook`, which
 /// applies the cap the user configured.
@@ -286,6 +304,14 @@ fn fnv(bytes: &[u8]) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn deadline_is_three_seconds_unless_the_variable_names_milliseconds() {
+        let with = |v: &'static str| deadline(move |_| Some(v.into()));
+        assert_eq!(deadline(|_| None), DEADLINE);
+        assert_eq!(with("250"), std::time::Duration::from_millis(250));
+        assert_eq!(with("soon"), DEADLINE);
+    }
 
     fn vars(pairs: &[(&str, &str)]) -> Vec<(OsString, OsString)> {
         pairs.iter().map(|(k, v)| (k.into(), v.into())).collect()
