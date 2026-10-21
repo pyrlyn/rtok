@@ -231,7 +231,7 @@ New bugs, dead code and moves from a read-only Cursor cloud review of `main` at 
 | T466 | P2 | move | compared | `.github/actions/rustup-toolchain-cache` → `pyrlyn/ci/.github/actions/` | Only rtok uses it (`ci.yml`, `graph-review.yml`; checked 2026-10-10 across `apps/` and `packages/`). `pyrlyn/ci` already ships `setup-rust` (mise-pinned Rust and `rust-cache`); sharing would mean folding the toolchain cache into it. No move without a new creator OK. |
 | T470 | P3 | move | suspected | `tools/test-changed.sh`, `tools/selective-check.sh` → `scoped-check` / `pyrlyn/ci` | Overlap was claimed but not diffed against cox or `pyrlyn/ci`. Compare first; move only what matches. |
 
-Already tracked here, not added again: `src/render.rs` → `change-preview` is T416.1; per-host MCP code → `crates/rtok-mcp` and the unused `rtok_mcp::ops::apply` are T277; `OPERATION_ICONS` → a shared icon crate is T436.3; the test-only `VersionFile::write`/`::new` and the stale `#[allow(dead_code)]` on `read_installed` (`src/agents/plugin_version.rs:84`, `:112`, `:268`) are open on T279.
+Already tracked here, not added again: `src/render.rs` → `change-preview` is T416.1; per-host MCP code → `crates/rtok-mcp` and the unused `rtok_mcp::ops::apply` are T277; `OPERATION_ICONS` → a shared icon crate is T436.3; the test-only `VersionFile::write`/`::new` and the stale `#[allow(dead_code)]` on `read_installed` were fixed on T279 (2026-10-21: all three are used by `agents update`).
 
 | # | Status | Priority | Complexity | Readiness | Agent |
 | --- | --- | --- | --- | --- | --- |
@@ -241,7 +241,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T275 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
 | T277 | in progress | P2 | 5 | 45% | Claude Code / sonnet-5.5 |
 | T278 | in progress | P1 | 3 | 90% | Claude Code / claude-opus-5-5 |
-| T279 | in progress | P1 | 5 | 90% | Claude Code / claude-opus-5-5 |
+| T279 | in progress | P1 | 5 | 95% | Claude Code / claude-opus-5-5 |
 | T281 | in progress | P1 | 3 | 75% | Claude Code / claude-opus-5-5 |
 | T289 | in progress | P2 | 4 | 75% | Claude Code / sonnet-5 |
 | T356 | in progress | P1 | 2 | 90% | Claude Code / claude-opus-5-5 |
@@ -863,6 +863,7 @@ Execution plan:
 4. PR 4: `docs/plugin-versions.md` with real command output, and its links (step 7).
 Each PR listed here becomes a subtask (`Tn.m`, D16) when it is claimed; this card stays the epic.
 Progress (2026-09-28): PRs 1-4 merged (docs: #465, today's behaviour). Open against this card, for the creator: the installed copy's `.rtok-plugin-version` is never read or written (`read_installed` and `VersionFile::write` are unused), so there is no legacy line from it; a missing `claude` on `PATH` prints "already current"; the dry-run reinstall wording differs from step 5; `--source local` fails from a release install; the marketplace source does not read the catalog. Only Claude is wired; Codex, Copilot and Gemini follow.
+Progress (2026-10-21): PR 5 (`feat/t279`) closes the Claude items above. `agents update` reads the installed copy's file first (`installPath`), a local install writes `+g<sha>[.dirty]` and `"source":"local"` into it, and the receipt `path` names that copy. A local rebuild reinstalls, because Claude caches by manifest version. The installed copy's manifest is not rewritten. `--dry-run` prints `would reinstall rtok@rtok from github v… (forced): <claude calls>`. A local tree outside git keeps its file version. The marketplace source refreshes the catalog once, then reads `~/.claude/plugins/marketplaces/rtok/plugins/claude/.rtok-plugin-version`. With `claude` missing, the update line now says so instead of "already current" (host detection also needs `claude`, so this is a guard). Left: Codex, Copilot and Gemini wiring, and the creator-machine Check.
 
 ### T281. Probe: tie a host session's hooks and its rtok MCP server to one agent
 
