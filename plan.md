@@ -253,7 +253,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T394 | todo | P2 | 2 | 30% | |
 | T395 | todo | P3 | 2 | 30% | |
 | T396 | todo | P3 | 2 | 90% | |
-| T398 | todo | P3 | 1 | 30% | |
+| T398 | todo | P3 | 1 | 40% | |
 | T413 | todo | P2 | 3 | 0% | |
 | T413.13 | in progress | P3 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
 | T414 | in progress | P1 | 4 | 20% | Claude Code / opus-5.5 |
@@ -1050,6 +1050,8 @@ From `research.md` §18.2 (T157): every non-interactive reader opens a relative-
 Done means: one dated row per editor in §18.2. If all pass, the `worktrees` skill and `AGENTS.md` gain the setting (T157's Check); if any fails, the failure is recorded and the setting stays off.
 
 Check: the §18.2 table has four dated rows.
+
+Progress (2026-10-21, `research.md` §18.2): an agent session could not launch any of the four (sandbox refused every editor command), so each row reads "not run" with that date, and §18.2 now holds the manual protocol plus a lead: this machine's shell resolves `/usr/bin/git` first, and a git older than 2.48 refuses `extensions.relativeWorktrees`. Left: the creator (or an unsandboxed session) runs the protocol and turns the four rows into pass or fail; the setting stays off until then.
 
 ### T413. More agent hosts: popular agents rtok does not install into yet
 

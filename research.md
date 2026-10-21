@@ -1912,11 +1912,26 @@ Scratch repositories only. `git config worktree.useRelativePaths true` followed 
 | git CLI | 2.54.0 | yes | `git status`, `git worktree list` |
 | cargo (VCS dirty check) | 1.97.1 | yes | `cargo package --list` inside the worktree reports the one uncommitted file |
 | gh | 2.101.0 | yes | `gh repo view --json name` inside the worktree resolves `pyrlyn/rtok` |
-| lazygit, delta, editors (VS Code, Zed, Cursor) | — | not tested | interactive; lazygit shells out to the git CLI, delta never opens a repository |
+| delta | — | not applicable | delta formats a diff on stdin and never opens a repository |
+| VS Code | — | not run (2026-10-21, T398) | `code` is on PATH (`/opt/homebrew/bin/code`); the T398 agent session could not start it: its sandbox refused every editor launch, `--version` included |
+| Cursor | — | not run (2026-10-21, T398) | `cursor` is on PATH (`~/.local/bin/cursor`); same refusal |
+| Zed | — | not run (2026-10-21, T398) | `zed` is on PATH (`/opt/homebrew/bin/zed`); same refusal |
+| lazygit | — | not run (2026-10-21, T398) | `lazygit` is on PATH (`/opt/homebrew/bin/lazygit`); same refusal (it needs a TTY anyway) |
 
 Move test: the parent directory holding `repo/` and `wt/` was moved with `mv a b`. With relative links, `git -C b/wt status` and `git -C b/repo worktree list` work unchanged, and `git worktree repair` is not needed. The absolute-link control breaks on the same move: `fatal: not a git repository: (null)`, and the worktree is listed as `prunable`. Renaming only one side (the repository or the worktree) breaks the relative link too, as expected.
 
 Conclusion: every non-interactive reader on this machine opens a relative-link worktree. The editors are untested. The setting stays opt-in until they are checked: the T157 Check asks for "every reader passes" before the setting is added to the `worktrees` skill and AGENTS.md.
+
+Lead from the T398 session (2026-10-21): in that session `which git` printed `/usr/bin/git` (the Xcode git), not Homebrew's. An editor that runs its own git, or `/usr/bin/git` because a Dock-launched app does not get the shell's PATH, refuses the worktree if that git is older than 2.48, which predates `extensions.relativeWorktrees`. So each editor row records which git binary the editor ran, not only the editor version.
+
+Manual protocol for the four rows (T398; scratch only, never this repository):
+
+1. `mkdir /tmp/t398 && cd /tmp/t398 && git init -q repo && git -C repo commit -q --allow-empty -m init && git -C repo config worktree.useRelativePaths true && git -C repo worktree add -q ../wt && echo x > wt/new.txt`. Then `cat wt/.git` must print `gitdir: ../repo/.git/worktrees/wt`.
+2. VS Code: `code --user-data-dir /tmp/t398/vscode --new-window /tmp/t398/wt`. Pass: Source Control shows branch `wt` and `new.txt` as untracked, and Output › Git shows no `fatal:`. The first lines of that log name the git binary and its version.
+3. Cursor: the same with `cursor --user-data-dir /tmp/t398/cursor`.
+4. Zed: `zed /tmp/t398/wt`. Pass: the git panel shows `new.txt` and the branch picker shows `wt`. `~/Library/Logs/Zed/Zed.log` has no git error for `/tmp/t398`.
+5. lazygit: `cd /tmp/t398/wt && lazygit`. Pass: it opens without an error popup, the Files panel lists `new.txt`, and staging plus committing it works.
+6. One row per editor above with `--version`, the git it ran, the date and pass or fail. Fail on any one: record the error text and keep the setting off. Then `rm -rf /tmp/t398`.
 
 ### 18.3 Hosts (vendor docs, fetched 2026-09-21, not re-verified by running each host)
 
