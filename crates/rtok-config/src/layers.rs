@@ -786,6 +786,25 @@ mod tests {
         let _ = std::fs::remove_dir_all(&home);
     }
 
+    /// T385.3: the live arms start their proxies with these (`research.md` §16.10.1); a name
+    /// that stopped resolving would silently bench the default instead.
+    #[test]
+    fn defaults_bench_arm_settings_reach_their_keys() {
+        let home = tmp("bench-arms");
+        let flags = proxy_flags(Some(8802), false, None, Some("compress".into()));
+        let cfg: Config = fig(&home, &[], flags).extract().unwrap();
+        assert_eq!(
+            (cfg.proxy.port, cfg.proxy.mode.as_str()),
+            (8802, "compress")
+        );
+        assert!(!cfg.plugins.archive.skills && !cfg.plugins.archive.live_blobs);
+        let env = [("PROXY_CONTEXT_MANAGEMENT", "true")];
+        let cfg: Config = fig(&home, &env, None).extract().unwrap();
+        assert!(cfg.proxy.context_management);
+        assert_eq!(cfg.proxy.mode, "passthrough");
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
     #[test]
     fn env_and_flags_and_legacy_and_arrays() {
         let home = tmp("env");
