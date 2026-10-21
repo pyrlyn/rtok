@@ -477,13 +477,16 @@ cmd = ""                              # підказка сімейства ко
 [worktree]                            # rtok worktree add | claim | remove | list | gc
 enabled = true                        # false: кожна команда `rtok worktree` (і list) каже, що worktree не ввімкнено, MCP не показує жодного інструмента worktree_*, а хуки Claude WorktreeCreate/WorktreeRemove роблять те, що Claude робить без rtok
 root = ".rtok/worktrees"              # де `rtok worktree add` створює worktree, як <root>/<repo>-<task>; відносний: у основному checkout; `~` розкривається
+seed = true                           # заповнити seed_dirs нового worktree із сусіднього checkout, що збирав їх останнім: copy-on-write клони (APFS, btrfs, XFS, bcachefs, ReFS, Dev Drive), інакше звичайна копія; `rtok worktree add --no-seed` пропускає це один раз
+seed_dirs = ["target", "node_modules"] # кеші збірки для засіву, відносно checkout; голе ім'я збігається й на рівень нижче (web/node_modules)
 
 [tasks]                               # адаптери задач (T441); зазвичай задаються для проєкту в .rtok.toml
 adapter = "disk"                      # disk | github | gitlab
 prefix = ""                           # префікс id задач, 1–8 ASCII-літер (R → R12, R2.1); порожньо: перша літера назви проєкту
 
 [tasks.disk]
-dir = "tasks"                         # один Markdown-файл на задачу, відносно кореня проєкту; виконані йдуть у <dir>/done
+dir = "tasks"                         # де лежать Markdown-задачі, відносно кореня проєкту
+layout = "auto"                       # files: "R12 - slug.md", виконані в <dir>/done; folders: "<id>/task.md", закрита файлом "<id>/done.md" (plan/); auto: folders, якщо <dir> уже так влаштований
 
 [tasks.github]
 repo = ""                             # owner/name; порожньо: remote origin

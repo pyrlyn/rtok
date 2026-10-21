@@ -16,4 +16,4 @@
 
 **Do not** summarise content with a model. Rewrite only payloads returned by `Wire::tool_results` (T11.4) and `Wire::skill_refs` (T61.2).
 
-**Checks**: `plan.md` T5.3, T5.4, T11.4.
+**Checks**: `plan/` T5.3, T5.4, T11.4.

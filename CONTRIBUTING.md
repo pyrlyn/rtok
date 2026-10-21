@@ -85,7 +85,7 @@ for research and investigation only after the user confirms — do not switch up
 alone. On Cursor: grok 4.6 (no fast) for planning, refactoring, bugs;
 composer 2.5 (no fast) for commands, tests, file moves, scans, web. No max
 effort or fast without permission. ≤5 agents per project unless told
-otherwise. Ask if unclear; write the execution plan into the `plan.md` card
+otherwise. Ask if unclear; write the execution plan into the task's `plan/<id>/task.md`
 before claiming. Before writing code, find the best ready library or framework
 and use it; custom code only when every ready option is worse (abandoned,
 heavier, poor fit) — say why in the commit message. A maintained dependency
@@ -135,7 +135,7 @@ the workspace, so not part of `just check`; `just fuzz` lists them, `just fuzz <
 runs one. See `fuzz/README.md`.
 
 Unit tests for logic; integration tests (`assert_cmd`, `predicates`,
-`assert_fs`, `trycmd`) for the binary, args, and output — see `plan.md` →
+`assert_fs`, `trycmd`) for the binary, args, and output — see `plan/README.md` →
 Reference / Working agreement.
 
 Prefer `crate::testutil::Vfs` (in-memory path → bytes) over host `TempDir`

@@ -1,0 +1,3 @@
+Changed rtok from the sibling-local `shell-completions` path dependency to the published crates.io `shell-completions = "0.1.0"` dependency. The Cargo.lock change adds only the registry source and checksum for version 0.1.0; no dependency versions were bumped. The package archive proof confirmed the standalone release contains 691 archive entries and 11 package members.
+
+Validation: against the registry package with `--locked`, `cargo test -p rtok --lib completions` passed 11 tests; `RUST_LOG=warn cargo test -p rtok --test cli_trycmd -- --test-threads=1` passed 4 tests; `cargo fmt --all -- --check` passed. The standalone locked archive proof resolved and built rtok with 691 archive entries and 11 package members.

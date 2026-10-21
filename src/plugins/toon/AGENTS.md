@@ -12,4 +12,4 @@
 - Original JSON is archived first; the encoded block prints the 8-character archive id (`rtok expand` resolves it). The measurement `ref_id` stays the full sha. A decision already stored is replayed as written.
 - `default_on` is `true` since T127. A user file that still sets `enabled = false` pinned the old default; `rtok doctor` notes the key and leaves the file alone.
 
-**Checks**: `plan.md` T11.7. Order: `roadmap.md` § `toon`.
+**Checks**: `plan/` T11.7. Order: `roadmap.md` § `toon`.

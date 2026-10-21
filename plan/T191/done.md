@@ -1,0 +1,7 @@
+Found 2026-09-22 in the surfaces pass: `handle_line` (`src/mcp.rs:187-200`) does `serde_json::from_str(line).ok()?` — a parse failure returns `None` and the serve loop writes nothing instead of the JSON-RPC `-32700` response; `next_line` (:120-138) silently drops any line over `MAX_LINE` (8 MiB); valid-JSON non-requests (e.g. `123`, or an object without `method`) are dropped or mis-reported as `-32601` instead of `-32600`. One torn write, garbage line or large `mem_save` body wedges the host's MCP connection forever while the process looks healthy.
+
+Plan: answer every non-notification input — `-32700` for unparseable lines, `-32600` for non-objects/missing `method`, `-32601` only for well-formed unknown methods; on the over-cap path answer an error (id `null`) instead of skipping.
+
+Check: unit tests on `handle_line` for `"{bad"` and `123` (codes −32700/−32600); `tests/mcp.rs` case sends one garbage line then a valid `tools/list` and both the error line and the tool list arrive; `just test` green.
+
+Do (2026-09-23): `handle_line` answers `-32700` (id null) for an unparseable line, `-32600` for a non-object or a request without `method`, and stays silent only for blank lines and notifications; an over-cap line comes back as a `{` stub so it answers `-32700` instead of vanishing. Check: `malformed_line_answers_parse_error`, `non_object_line_answers_invalid_request`, updated `next_line_skips_long_lines_and_survives_bad_utf8`, and `tests/mcp.rs::garbage_line_answers_parse_error_then_tools_list` green.

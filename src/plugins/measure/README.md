@@ -25,7 +25,7 @@ None beyond `[estimator]` (chars per token per class), which `--calibrate` rewri
 
 ## Tasks
 
-See `roadmap.md` § `measure`. Checks in `plan.md`.
+See `roadmap.md` § `measure`. Checks in `plan/`.
 
 T1.1 JSONL parser · T1.2 `rtok stats` · T1.3 baseline · T1.5 calibration · T5.5 cache health · T9.1 `rtok bench` · T11.6 per-API usage.
 

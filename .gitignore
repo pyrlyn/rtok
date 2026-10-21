@@ -38,3 +38,5 @@ __pycache__/
 # Build output left behind in checkouts from before T310.12 deleted the crate (#664)
 /crates/rtok-webui/target
 .zcodeignore
+# T955: the claim lock of the folder layout (tasks written by `rtok task`)
+/plan/.claim.lock

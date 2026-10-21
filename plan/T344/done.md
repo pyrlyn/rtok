@@ -1,0 +1,7 @@
+In the plan, T330 (branch `docs/plan-agents-junk`, ~line 792, from PR #541 (T330), not merged yet) says "Backwards compatible: `rtok agents junk clear` with no new flags still clears T182's `rtok-own` junk, and now also the safe kinds for every agent; `rtok agents junk clear --agent rtok` reproduces T182 exactly", and its Check requires T182's tests to "stay green unchanged". The same task adds to the `rtok` row the `.rtok-lsp-xdg` caches, `$XDG_CACHE_HOME/rtok`, every `CACHEDIR.TAG` directory and plugin staging caches as `safe` kinds (~lines 705-712). These contradict each other because `clear --yes` without flags now deletes agent data T182 never touched, and `--agent rtok` deletes more than T182 did, so neither claim of compatibility holds.
+
+Goal: research both approaches, compare trade-offs, recommend one, then update the conflicting tasks. Do not change either task before the decision.
+
+Check: the recommendation and the chosen approach are recorded in this card (or as a decision row), and every task named above is updated so the plan no longer contradicts itself.
+
+Decision (creator, 2026-10-10): the widening is deliberate. `rtok agents junk clear` without flags clears the safe kinds of every agent, and `--agent rtok` clears rtok's own safe kinds, a superset of T182. The "Backwards compatible" claim and the Check line that T182's tests stay green unchanged are gone from T330; T182's tests are updated where they pin the exact set.

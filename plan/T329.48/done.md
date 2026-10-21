@@ -1,0 +1,7 @@
+`src/tui/compare.rs` (T485) and `src/tui/exporter.rs` (T329.41) repeat the same panel plumbing: the stage enum with a background `Running(mpsc::Receiver)`, `poll`, the thread spawn, scroll keys, the pass-through of the shell's `Left`/`Right`/`q`/digit keys and the two-row layout with the hints line (jscpd lists them as clones). Extract one shared module under `src/tui/` and make both views use it; the keys, texts and behaviour stay as they are.
+
+Check: both views' tests pass unchanged; jscpd lists no clone between the two files; `just check`.
+
+Done: new `src/tui/panel.rs` holds the generic `Panel<V: View>` (stage, scroll, `key`, `poll`, `render`, `is_open`, `typing`), `Stage<A>` with `Stage::run` (the thread and the in-line run for tests), the `View` trait (the opening keys, the field keys, the prompt and running text) and the shared `edit`, `error_lines` and `no_graph`. `compare.rs` is `Compare = Panel<Typed>` and `exporter.rs` is `Exporter = Panel<Export>`; each keeps only its fields, its texts and its `body`. The test helper `render` moved to `tui::app::tests`; the views' tests and their assertions are unchanged.
+
+Result: jscpd lists no clone between `src/tui/compare.rs` and `src/tui/exporter.rs` (the one remaining compare clone is with `plugins/graph/diff.rs`, older); `cargo test -p rtok --lib tui::` 76 passed; `just check` on the final tree passed (fmt, clippy `-D warnings`, jscpd 334 clones, 1.74%, none between the two views; cargo nextest 3299 passed and 8 skipped; min-feature build).

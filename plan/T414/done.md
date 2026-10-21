@@ -1,0 +1,11 @@
+Creator request 2026-10-05: a new look for the `rtok web` SPA from the brand pack in `brand/` (tokens, logos, icons, `DESIGN.md`, on top of the `@pyrlyn/brand` base it pins). Creator decisions 2026-10-05: a restyle by the brandbook (pages and navigation stay; shell, panels, tables, KPIs and charts change); a mockup first, approved before the pages; our own `web/src/ui` React components on the brand roles (`--pyr-*`), not the base `.pyr-*` classes. Creator decisions 2026-10-05, later: UI/UX additions (grouped sidebar, command palette and shortcuts, clickable KPIs, live status with pause) and features (Δtok savings trend, table filters in the URL, CSV/JSON export), one sub-task each (T414.8–T414.14). Creator decisions 2026-10-05, later still: charts draw on canvas through ECharts 6, behind our own chart abstraction so the library can be swapped; hover shows a tooltip, and other places change live with the hover where that does not repeat the tooltip; small marks (budget grid, plugin bitset, token mix, share bars) stay DOM and share the same tooltip (T414.15, T414.16). Creator decision 2026-10-05, after the charts: open-source UI toolkits are allowed; behaviour (focus, keyboard, overlays, menus, dialogs, listboxes) comes from React Aria Components, styled by us on the `--pyr-*` roles, so the look stays ours (from T414.9 on; its `Autocomplete` serves the palette, so no `cmdk`).
+
+Source rule: `web/` holds no copy of a brand file. Tokens, fonts, icons, logos and illustrations are imported from `brand/` and `brand/node_modules/@pyrlyn/brand` at build time; anything derived (CSS, raster sizes) is produced by a program in the build, never committed by hand. `brand/README.md` "Known gaps" and `PROVENANCE.md` "Adopting in each surface" list today's copies.
+
+Check: every sub-task below is closed in `done.md`, and no file under `web/` is byte-identical to a file under `brand/` or `brand/node_modules/@pyrlyn/brand/base/`.
+
+Result (2026-10-21, Claude Code / opus-5.5): every sub-task (T414.1-T414.17) is closed in this file, T414.7 last. No file under `web/` is byte-identical to one under `brand/` or `@pyrlyn/brand/base/`: `web/src/brandSources.test.ts` (in `spa-test`) is green.
+
+Status: done 2026-10-21
+
+Model: Claude Code / opus-5.5

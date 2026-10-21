@@ -123,19 +123,48 @@ pub fn owner(
     })
 }
 
-/// Record the claim in the store; a store error only warns — the lock already holds it. An agent
-/// that takes the worktree settles its pending claim (T289.5).
-pub fn remember(store: Option<&Store>, path: &Path, agent: &str, task: &str) {
+/// T934: a claim write waits out another process's write lock for about
+/// `LOCK_ATTEMPTS × (busy_timeout + LOCK_PAUSE)` before it gives up.
+const LOCK_ATTEMPTS: u32 = 8;
+const LOCK_PAUSE: std::time::Duration = std::time::Duration::from_millis(250);
+
+/// Record the claim in the store, retrying while another process holds the write lock. A lost
+/// claim lets a second agent take the same task, so a store error that outlasts the retries
+/// fails the command; the git lock already holds the worktree, and `rtok worktree adopt` stores
+/// the claim later. An agent that takes the worktree settles its pending claim (T289.5).
+pub fn remember(store: Option<&Store>, path: &Path, agent: &str, task: &str) -> Result<()> {
+    remember_with(store, path, agent, task, LOCK_ATTEMPTS, LOCK_PAUSE)
+}
+
+fn remember_with(
+    store: Option<&Store>,
+    path: &Path,
+    agent: &str,
+    task: &str,
+    attempts: u32,
+    pause: std::time::Duration,
+) -> Result<()> {
+    let shown = path.display().to_string();
     let path = crate::fs::canon(path).to_string_lossy().into_owned();
     let Some(store) = store else {
-        return;
+        return Ok(());
     };
-    let saved = store
-        .claim_worktree(&path, agent, task)
-        .and_then(|()| store.take_pending_worktree(&path).map(drop));
-    if let Err(e) = saved {
-        crate::log::stderr_ln(&format!("warning: claim not stored: {e:#}"));
-    }
+    crate::store::retry_locked(attempts, pause, || {
+        store.claim_worktree(&path, agent, task)?;
+        store.take_pending_worktree(&path).map(drop)
+    })
+    .with_context(|| {
+        format!("claim not stored; {shown} stays locked, run `rtok worktree adopt` once the store is free")
+    })
+}
+
+/// Release the open claim on `path`, retrying like [`remember`]. An unreleased claim keeps its
+/// holder looking busy, so the caller reports a failure.
+pub fn release(store: &Store, path: &str) -> Result<()> {
+    crate::store::retry_locked(LOCK_ATTEMPTS, LOCK_PAUSE, || {
+        store.release_worktree_claim(path)
+    })
+    .context("claim not released")
 }
 
 /// `SessionStart` (T289.5): the session `agent`, whose working directory is `cwd`, takes the
@@ -188,7 +217,7 @@ fn copy_symbol_index(store: Option<&Store>, cwd: &Path, dest: &Path) {
 }
 
 /// T329.6: with `[plugins.graph] auto_add_projects`, the worktree becomes a project named by its
-/// branch. Best effort like [`remember`]: the lock and the claim already hold the worktree.
+/// branch. Best effort: the lock and the claim already hold the worktree.
 fn register_project(store: Option<&Store>, auto_add: bool, path: &Path, branch: Option<&str>) {
     let Some(store) = store.filter(|_| auto_add) else {
         return;
@@ -204,7 +233,7 @@ fn register_project(store: Option<&Store>, auto_add: bool, path: &Path, branch: 
 pub fn add(
     store: Option<&Store>,
     cwd: &Path,
-    root: &Path,
+    wt: &crate::config::Worktree,
     id: (&str, Option<&str>),
     agent: Option<&AgentDetail>,
     owner_flag: Option<String>,
@@ -212,10 +241,13 @@ pub fn add(
 ) -> Result<super::add::Plan> {
     let owner = owner(owner_flag, agent, store)?;
     let agent_id = agent.map(|a| a.id.as_str());
-    let plan = super::add::run(cwd, root, id, (&owner, agent_id))?;
+    let plan = super::add::run(cwd, &wt.root, id, (&owner, agent_id))?;
     copy_symbol_index(store, cwd, &plan.path);
+    if wt.seed {
+        super::seed::from_siblings(cwd, &plan.path, &wt.seed_dirs);
+    }
     if let Some(agent) = agent_id {
-        remember(store, &plan.path, agent, &plan.task);
+        remember(store, &plan.path, agent, &plan.task)?;
     }
     register_project(store, auto_add, &plan.path, Some(&plan.branch));
     Ok(plan)
@@ -330,7 +362,7 @@ pub fn bind(
 ) -> Result<Adopted> {
     let owner = owner(owner_flag, Some(agent), store)?;
     let done = run(path, (&owner, &agent.id), task, spare_evicting, store)?;
-    remember(store, &done.path, &agent.id, &done.task);
+    remember(store, &done.path, &agent.id, &done.task)?;
     register_project(store, auto_add, &done.path, done.branch.as_deref());
     Ok(done)
 }
@@ -459,5 +491,81 @@ mod tests {
         assert!(held.holds);
         assert_eq!(held.seen_ago, None);
         assert_eq!(held.locked(), "locked by Cursor / grok | t3 | 2026-09-22");
+    }
+}
+
+/// T934: a claim write under another process's held write lock.
+#[cfg(test)]
+mod lock_tests {
+    use super::*;
+    use crate::store::{HeldWrite, LockWait, hold_write_lock};
+    use std::time::Duration;
+
+    fn quick_store(tag: &str) -> (Store, std::path::PathBuf, String) {
+        let db = crate::testutil::tmp_dir(tag).join("rtok.db");
+        let wait = LockWait {
+            busy: Duration::from_millis(20),
+            ..LockWait::STEADY
+        };
+        let store = Store::open_with(&db, wait).unwrap();
+        let host = store.host_id("claude").unwrap().unwrap();
+        let agent = store
+            .register_agent(host, "s-lock", None, None, None)
+            .unwrap();
+        (store, db, agent)
+    }
+
+    #[test]
+    fn a_claim_waits_out_a_lock_that_ends_inside_the_retries() {
+        let (store, db, agent) = quick_store("claim-lock-ends");
+        let holder = hold_write_lock(&db, HeldWrite::Immediate, Duration::from_millis(300));
+        let path = Path::new("/w/t934");
+        remember_with(
+            Some(&store),
+            path,
+            &agent,
+            "t934",
+            100,
+            Duration::from_millis(20),
+        )
+        .unwrap();
+        holder.join().unwrap();
+        let claims = store.open_worktree_claims().unwrap();
+        assert_eq!(claims.len(), 1, "{claims:?}");
+    }
+
+    #[test]
+    fn a_claim_that_outlasts_the_retries_fails_the_command() {
+        let (store, db, agent) = quick_store("claim-lock-stays");
+        let holder = hold_write_lock(&db, HeldWrite::Immediate, Duration::from_millis(600));
+        let path = Path::new("/w/t934");
+        let err = remember_with(
+            Some(&store),
+            path,
+            &agent,
+            "t934",
+            2,
+            Duration::from_millis(5),
+        )
+        .unwrap_err();
+        let text = format!("{err:#}");
+        assert!(
+            text.contains("claim not stored") && text.contains("database is locked"),
+            "{text}"
+        );
+        holder.join().unwrap();
+        assert!(store.open_worktree_claims().unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_release_waits_out_a_lock_too() {
+        let (store, db, agent) = quick_store("release-lock-ends");
+        store.claim_worktree("/w/t934", &agent, "t934").unwrap();
+        let holder = hold_write_lock(&db, HeldWrite::Immediate, Duration::from_millis(300));
+        let started = std::time::Instant::now();
+        release(&store, "/w/t934").unwrap();
+        assert!(started.elapsed() >= Duration::from_millis(100));
+        holder.join().unwrap();
+        assert!(store.open_worktree_claims().unwrap().is_empty());
     }
 }

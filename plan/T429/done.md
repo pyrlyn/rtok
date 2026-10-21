@@ -1,0 +1,5 @@
+`rtok agents list` missed hosts whose Windows install is a `PATHEXT` shim or an `.exe` beside an extensionless app path, and `--version` never ran a `.cmd` (`CreateProcess` only appends `.exe`).
+
+PATH lookup tries every `PATHEXT` extension (default `.COM;.EXE;.BAT;.CMD`). An app path with no extension also matches `name.exe` (`~/.grok/bin/grok` → `grok.exe`). A bare name or a `.cmd`/`.bat` is version-probed through `cmd /C`. The sandbox home check is ASCII-case-insensitive. OpenCode Desktop's user-install directory is `%LOCALAPPDATA%\Programs\@opencode-aidesktop\OpenCode.exe`. Cline's desktop variant is also VS Code's `Code.exe` on Windows.
+
+Check: `find_bin_tries_pathext_and_skips_dirs_outside_the_limit`, `find_bin_limit_is_ascii_case_insensitive`, `probe_installed_matches_an_exe_beside_an_extensionless_path`, `under_keeps_a_different_case_child_of_home`, `app_version_skips_wrapper_noise_ahead_of_the_real_version` (the Windows case writes a `.cmd`). `docs/windows.md`, OpenCode, Cline and Grok READMEs name the paths. `cargo clippy --lib -- -D warnings` is clean on this machine (unix-only `LinkOutcome` variants are allowed off unix).

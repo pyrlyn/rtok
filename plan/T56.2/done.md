@@ -1,0 +1,6 @@
+**T56.2 Read/search unit tests on VFS** · D29 / T56 · `src/plugins/read/**` (tests)
+Do: hottest read/search filesystem tests on `testutil::Vfs` (pure `display_rel`, size gate, regex hits, line numbering/range, WalkBuilder twins via the T56.4 adapter, `ReadFs` twins via T56.5); polish leftover unit-level disk-only read paths.
+Check: no unit-level disk-only read/search path remains that the current architecture can carry on Vfs; suites green.
+Status: done 2026-09-18 (close-out; earlier halves landed unclaimed)
+Check result: final piece: the `read/cache.rs` re-dedup trio gained Vfs twins through `read_with` — `two_identical_reads_second_is_short_from_vfs`, `edit_fixture_between_reads_is_full_from_vfs`, `post_tool_edit_clears_hit_from_vfs` (disk twins kept). Audit of what stays disk: `read/hook.rs` tests (the production hook probes `std::fs::metadata`; swapping the hook onto `ReadFs` is T56.5's deferred follow-up, not this card), the `HostFs: WalkFs` smoke test in `walk.rs` (by design), and the disk e2e twins kept beside their Vfs twins. `nextest -E 'test(read) or package(rtok) and test(agents)'` 183/183 in the isolation worktree (HEAD `cd2c262` + own files), clippy `-D warnings` and fmt clean there.
+Model: ZCode / GLM-5.3

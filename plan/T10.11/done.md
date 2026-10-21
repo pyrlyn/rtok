@@ -1,0 +1,6 @@
+**T10.11 Cursor host: wire PostToolUse, not only beforeShellExecution** · T10.1 · `src/setup/cursor.rs`, `src/hooks/types.rs`
+Do: Cursor setup writes only `hooks.beforeShellExecution`, and `HookInput::adapt_cursor` only maps that shape onto PreToolUse. Guard's read cache and read's PostToolUse(Edit|Write) invalidation therefore never populate on Cursor. Register Cursor's after-tool / PostToolUse-equivalent hook, adapt its payload into `PostToolUse`, and keep fail-open ≤ 10 ms (D1).
+Check: Cursor-shaped after-tool stdin adapts to `PostToolUse`; after a Cursor PostToolUse(Read) the guard cache has a row; `rtok agent setup cursor --dry-run` lists the after-tool entry beside `beforeShellExecution`; `just check` green.
+Complexity: 3/5
+Status: done 2026-09-10 · Model: GLM-5.3
+Check result: green. `adapt_cursor` maps Cursor `afterShellExecution` to `PostToolUse` (`output`/`stdout` → `tool_response`); setup + `plugins/cursor/hooks/hooks.json` register `afterShellExecution` → `rtok hook PostToolUse --host cursor`. Unit tests `cursor_after_shell_maps_to_post_tool_use`, `setup_writes_after_shell_hook`; `cargo test --test cursor_plugin` green. Shell-only path (afterFileEdit/read not in this Do).

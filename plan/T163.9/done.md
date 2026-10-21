@@ -1,0 +1,5 @@
+Left over from T163.7: `usage_ctt` (`COUNT() OVER`, `ROW_NUMBER() OVER`), `session_totals`/`recent_session_totals` (four CTEs, `UNION ALL`, per-group `MAX(id)` subqueries) and `recent_calls` (correlated `MAX(id)` subquery in a `LEFT JOIN`) have no form in Diesel 2.3.13's typed DSL. They move into T163.1's `src/store/sql_ext.rs` as typed `QueryFragment`s with bound parameters, each with a comment naming the construct the DSL lacks (the rulebook's exception for statements the ORM cannot express).
+
+Check: no `sql_query` left in the three functions; tests unchanged and green; `just check`.
+
+Result: `UsageCtt`, `UsageCttTail`, `RecentSessionTotals` and `RecentCalls` are `QueryFragment`s in `sql_ext`. `usage_ctt`, `session_totals`, `recent_session_totals` and `recent_calls` contain no `sql_query`. `SessionTotals` and `CallRow` also derive `Queryable` so the positional load matches the previous column order. `cargo test -p rtok --lib store::` (59), `overview_matches_the_per_session_loop`, and clippy `-D warnings` on `--lib --tests` passed.

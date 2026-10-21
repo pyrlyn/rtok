@@ -476,13 +476,16 @@ cmd = ""                              # command family hint when the caller know
 [worktree]                            # rtok worktree add | claim | remove | list | gc
 enabled = true                        # false: every `rtok worktree` command (list too) says worktrees are not enabled, MCP lists no worktree_* tool, and Claude's WorktreeCreate/WorktreeRemove hooks do what Claude does without rtok
 root = ".rtok/worktrees"              # where `rtok worktree add` creates worktrees, as <root>/<repo>-<task>; relative: under the main checkout; `~` expands
+seed = true                           # fill a new worktree's seed_dirs from the sibling checkout that built them last: copy-on-write clones (APFS, btrfs, XFS, bcachefs, ReFS, Dev Drive), a plain copy elsewhere; `rtok worktree add --no-seed` skips it once
+seed_dirs = ["target", "node_modules"] # build caches to seed, relative to the checkout; a bare name also matches one level down (web/node_modules)
 
 [tasks]                               # task adapters (T441); usually set per project in .rtok.toml
 adapter = "disk"                      # disk | github | gitlab
 prefix = ""                           # task id prefix, 1–8 ASCII letters (R → R12, R2.1); empty: first letter of the project name
 
 [tasks.disk]
-dir = "tasks"                         # one Markdown file per task, relative to the project root; done ones go to <dir>/done
+dir = "tasks"                         # where the Markdown tasks live, relative to the project root
+layout = "auto"                       # files: "R12 - slug.md", done ones in <dir>/done; folders: "<id>/task.md", closed by "<id>/done.md" (plan/); auto: folders when <dir> holds one
 
 [tasks.github]
 repo = ""                             # owner/name; empty: the origin remote

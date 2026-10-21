@@ -1,0 +1,5 @@
+Asked for by the creator. The six TypeScript files (`plugins/opencode/*.ts`, `plugins/pi/**/*.ts`, `tests/node/fake-rtok.ts`) had no linter or formatter; their line widths and quoting differed file to file. mise pins `npm:oxlint` 1.83.0 and `npm:oxfmt` 0.68.0 (both released 2026-09-14, oxc-project — maintained). `just js` runs `oxlint --deny-warnings` and `oxfmt --check` over `git ls-files '*.ts' '*.tsx' '*.js' '*.mjs' '*.cjs'` and is part of `just check`, so CI's `check` job enforces it; `just js-fmt` rewrites. JSON is deliberately outside the file list: oxfmt would reformat the plugins' manifests (`hooks.json`, `package.json`), which tests compare byte for byte. Defaults, no config file.
+
+The one lint hit was real: `tests/node/fake-rtok.ts` used a ternary as a statement for its side effect (`no-unused-expressions`) — now `if/else`. Formatting diff is cosmetic only (100-column wrap, quote normalisation).
+
+Check: `just js` exits 0 (0 warnings, 6 files formatted); the plugin behaviour tests that drive these files (`filter::opencode_plugin_unit_test_with_api_mock`, `pi_plugin::*`, `opencode_plugin::*`) pass after the reformat; `just check` green.

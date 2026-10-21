@@ -83,4 +83,4 @@
   `tools/call` must agree (T8.9 found `impact` listed and unreachable).
 - P35: T35.4 and T35.5 done (2026-09-11). **T35.3 batched store I/O is last** (user 2026-09-11).
 
-**Checks**: `plan.md` T8.13–T8.17; earlier ones in `done.md`.
+**Checks**: `plan/` T8.13–T8.17; earlier ones in `done.md`.

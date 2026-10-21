@@ -33,8 +33,8 @@ pub fn defs() -> [ToolDef; 12] {
         },
         ToolDef {
             name: "task_status",
-            description: "Read a task's status, or set it to open, in-progress, done or closed. Finishing a task with active subtasks is refused unless force.",
-            input_schema: json!({"type":"object","properties":{"id":{"type":"string"},"status":{"type":"string"},"force":{"type":"boolean"}},"required":["id"]}),
+            description: "Read a task's status, or set it to open, in-progress, done or closed. Finishing a task with active subtasks is refused unless force. report is the closing report of a task set to done or closed (plan/ folders keep it in done.md).",
+            input_schema: json!({"type":"object","properties":{"id":{"type":"string"},"status":{"type":"string"},"force":{"type":"boolean"},"report":{"type":"string"}},"required":["id"]}),
         },
         ToolDef {
             name: "task_next",
@@ -129,7 +129,8 @@ pub fn call(cx: &Runtime, name: &str, args: &Value) -> Result<String> {
         "task_status" => {
             let status = arg(args, "status").map(str::parse::<Status>).transpose()?;
             let force = args["force"].as_bool().unwrap_or(false);
-            serde_json::to_value(project.status(&cx.store, &id(args)?, status, force)?)?
+            let report = arg(args, "report");
+            serde_json::to_value(project.status(&cx.store, &id(args)?, status, force, report)?)?
         }
         "task_next" => serde_json::to_value(project.next(&cx.store)?)?,
         "task_ready" => serde_json::to_value(project.ready(&cx.store)?)?,

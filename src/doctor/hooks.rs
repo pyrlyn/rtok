@@ -662,6 +662,7 @@ pub fn check_with_plugins(cfg: &Config, p: &Probes) -> (Vec<Problem>, Vec<(Strin
         }
     }
     plugins(cfg, p, &enabled, &claude, &mut acc);
+    host_plugin_links(cfg, &mut acc);
     let dupes = super::dupes::find(&acc.seen);
     acc.problems.extend(dupes);
     (acc.problems, acc.plugin_dirs)
@@ -776,6 +777,29 @@ fn plugins(cfg: &Config, p: &Probes, enabled: &BTreeSet<String>, claude: &Scope,
                 &scope,
                 acc,
             );
+        }
+    }
+}
+
+/// Each host plugin rtok installed by link: one whose target is gone loads nothing, and one
+/// into a versioned ketch store dangles at the next upgrade (T925). Unix only: a Windows
+/// install is a copy, and Cursor's differs from the source on purpose. The link itself is
+/// read through [`PluginLink`](rtok_agent_sdk::PluginLink), not [`Probes`].
+fn host_plugin_links(cfg: &Config, acc: &mut Acc) {
+    if !cfg!(unix) {
+        return;
+    }
+    let mut seen = BTreeSet::new();
+    for (agent, plugin) in crate::agents::plugin::all() {
+        let dest = plugin.path(cfg);
+        if !seen.insert(dest.clone()) {
+            continue;
+        }
+        if let Some(detail) = plugin.problem(cfg) {
+            acc.problems.push(Problem {
+                detail: format!("{detail}; `rtok agents install {agent}` replaces it"),
+                ..problem("stale-plugin", agent, &dest)
+            });
         }
     }
 }
@@ -1634,6 +1658,45 @@ mod tests {
             which: &m,
         };
         assert!(check_with_plugins(&cfg(), &probes).1.is_empty());
+    }
+
+    /// T925: Cursor's plugin link into a ketch store version that an upgrade removed loads
+    /// nothing; doctor says so, and says nothing once it is gone.
+    #[cfg(unix)]
+    #[test]
+    fn a_dangling_host_plugin_link_is_reported_as_a_stale_plugin() {
+        let home = std::env::temp_dir().join(format!("rtok-doctor-plugin-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        let local = home.join(".cursor/plugins/local");
+        std::fs::create_dir_all(&local).unwrap();
+        let gone = home.join(".ketch/store/rtok/v0.15.1/plugins/cursor");
+        std::os::unix::fs::symlink(&gone, local.join("rtok")).unwrap();
+        let mut c = cfg();
+        c.setup.cursor.hooks_path = home.join(".cursor/hooks.json");
+        let probes = |m: &Mock| {
+            check(
+                &c,
+                &Probes {
+                    fs: m,
+                    env: m,
+                    which: m,
+                },
+            )
+        };
+        let m = Mock::default();
+        let found = probes(&m);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].kind, "stale-plugin");
+        assert_eq!(found[0].agent, "cursor");
+        assert!(found[0].detail.contains("v0.15.1"), "{}", found[0].detail);
+        assert!(found[0].detail.contains("agents install cursor"));
+        assert!(!found[0].fixable);
+        std::fs::remove_file(local.join("rtok")).unwrap();
+        assert!(
+            probes(&m).is_empty(),
+            "nothing installed, nothing to report"
+        );
+        let _ = std::fs::remove_dir_all(&home);
     }
 
     #[test]

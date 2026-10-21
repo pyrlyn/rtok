@@ -1,0 +1,5 @@
+Epic PR 2. `Claude::apply` for both clients (`~/.claude.json`, `claude_desktop_config.json`) called `rtok_agent_sdk::register_mcp` / `unregister_mcp_ours`, so `rtok_mcp::ops::apply` had no caller. Both now build an `McpSpec` (`claude::mcp_spec_at`) and call `agents::mcp::run`, which runs `ops::apply` on a disk `Fs` over `rtok_agent_sdk::write` (atomic swap, `_backup`, dry run).
+
+Crate changes: `McpSpec` gains `launch` (absolute command, `--host <id>` pair); `ops::apply` takes the SDK `Apply` and judges removal with `rtok_agent_sdk::judge_owned` (the crate's own smaller copy is gone); `write_entry` treats a difference in the default `"type": "stdio"` alone as unchanged (T265); the strict-JSON refusal message is the SDK's (`parse_strict_json`). Report lines are the ones the hosts printed before. Other hosts and the status surface are unchanged.
+
+Check: crate table tests (launch and type tolerance; ownership x `--yes` x dry run), Claude table over both clients x install, update, remove with foreign keys kept, and a dry run that creates no file; `just check`.

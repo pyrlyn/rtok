@@ -14,7 +14,7 @@
 use std::path::PathBuf;
 
 use anyhow::Result;
-use rtok_agent_sdk::{CopyFix, KETCH_INSTALL, PluginLink, keep_bytes};
+use rtok_agent_sdk::{CopyFix, KETCH_INSTALL, LinkHealth, PluginLink, keep_bytes};
 
 use super::{apply, plugin_src};
 use crate::config::Config;
@@ -88,6 +88,25 @@ impl HostPlugin {
             }))
     }
 
+    /// What `doctor` should say about this plugin's destination (T925): a link whose target is
+    /// gone, or one that will not survive an upgrade. Absent for a healthy or foreign one.
+    pub fn problem(&self, cfg: &Config) -> Option<String> {
+        match self.link(cfg).health(keep_bytes) {
+            LinkHealth::Dangling(target) => Some(format!(
+                "{} plugin link {} points at {}, which is gone",
+                self.host,
+                self.path(cfg).display(),
+                target.display()
+            )),
+            LinkHealth::Stale(why) => Some(format!(
+                "{} plugin {} {why}",
+                self.host,
+                self.path(cfg).display()
+            )),
+            LinkHealth::Absent | LinkHealth::Foreign | LinkHealth::Current => None,
+        }
+    }
+
     fn link(&self, cfg: &Config) -> PluginLink<'static> {
         PluginLink {
             src_rel: self.src_rel,
@@ -97,6 +116,29 @@ impl HostPlugin {
             host: self.host,
         }
     }
+}
+
+/// Every host plugin installed by link or copy, with its host id, for checks that cover the
+/// whole set (T925).
+pub fn all() -> Vec<(&'static str, &'static HostPlugin)> {
+    use super::{
+        antigravity, cline, commandcode, cursor, kilo, mimo, omp, opencode, pi, vscode, zcode,
+    };
+    let mut out = vec![
+        ("antigravity", &antigravity::PLUGIN),
+        ("commandcode", &commandcode::PLUGIN),
+        ("cursor", &cursor::PLUGIN),
+        ("kilo", &kilo::PLUGIN),
+        ("mimo", &mimo::PLUGIN),
+        ("omp", &omp::PLUGIN),
+        ("opencode", &opencode::PLUGIN),
+        ("pi", &pi::PLUGIN),
+        ("vscode", &vscode::PLUGIN_STABLE),
+        ("vscode", &vscode::PLUGIN_INSIDERS),
+        ("zcode", &zcode::PLUGIN),
+    ];
+    out.extend(cline::HOOKS.iter().map(|h| ("cline", h)));
+    out
 }
 
 #[cfg(test)]

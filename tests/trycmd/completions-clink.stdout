@@ -47,8 +47,8 @@ clink.argmatcher("rtok")
         "add" .. clink.argmatcher()
           :addarg({})
           :addarg({})
-          :addflags({ "--owner" .. clink.argmatcher():addarg({}), "--agent" .. clink.argmatcher():addarg({}), "--config" .. clink.argmatcher():addarg(clink.filematches), "--help", "-h" })
-          :adddescriptions({ ["--owner"] = "Who holds it, as `<provider> / <model>`; written into the lock reason. Defaults to `<host> / <model>` of the agent", ["--agent"] = "The rtok agent id (any unique prefix) to bind it to; defaults to `RTOK_AGENT_ID`", ["--config"] = "User config file (else `RTOK_CONFIG` or `<home>/config.toml`)", ["--help"] = "Print help", ["-h"] = "Print help" }),
+          :addflags({ "--owner" .. clink.argmatcher():addarg({}), "--agent" .. clink.argmatcher():addarg({}), "--no-seed", "--config" .. clink.argmatcher():addarg(clink.filematches), "--help", "-h" })
+          :adddescriptions({ ["--owner"] = "Who holds it, as `<provider> / <model>`; written into the lock reason. Defaults to `<host> / <model>` of the agent", ["--agent"] = "The rtok agent id (any unique prefix) to bind it to; defaults to `RTOK_AGENT_ID`", ["--no-seed"] = "Do not seed `[worktree] seed_dirs` from a sibling checkout this time", ["--config"] = "User config file (else `RTOK_CONFIG` or `<home>/config.toml`)", ["--help"] = "Print help", ["-h"] = "Print help" }),
         "claim" .. clink.argmatcher()
           :addarg(clink.filematches)
           :addflags({ "--agent" .. clink.argmatcher():addarg({}), "--owner" .. clink.argmatcher():addarg({}), "--config" .. clink.argmatcher():addarg(clink.filematches), "--help", "-h" })
@@ -110,8 +110,8 @@ clink.argmatcher("rtok")
         "status" .. clink.argmatcher()
           :addarg({})
           :addarg({})
-          :addflags({ "--force", "--json", "--config" .. clink.argmatcher():addarg(clink.filematches), "--help", "-h" })
-          :adddescriptions({ ["--force"] = "Finish a parent even though subtasks are still open", ["--json"] = "Print the task as JSON", ["--config"] = "User config file (else `RTOK_CONFIG` or `<home>/config.toml`)", ["--help"] = "Print help", ["-h"] = "Print help" }),
+          :addflags({ "--force", "--report" .. clink.argmatcher():addarg({}), "--json", "--config" .. clink.argmatcher():addarg(clink.filematches), "--help", "-h" })
+          :adddescriptions({ ["--force"] = "Finish a parent even though subtasks are still open", ["--report"] = "Closing report of a task set to done or closed (`-` for stdin); the plan/ layout keeps it in done.md", ["--json"] = "Print the task as JSON", ["--config"] = "User config file (else `RTOK_CONFIG` or `<home>/config.toml`)", ["--help"] = "Print help", ["-h"] = "Print help" }),
         "next" .. clink.argmatcher()
           :addflags({ "--json", "--config" .. clink.argmatcher():addarg(clink.filematches), "--help", "-h" })
           :adddescriptions({ ["--json"] = "JSON instead of the text", ["--config"] = "User config file (else `RTOK_CONFIG` or `<home>/config.toml`)", ["--help"] = "Print help", ["-h"] = "Print help" }),

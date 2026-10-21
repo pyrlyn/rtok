@@ -1,0 +1,1 @@
+Creator request 2026-09-24: one task = one PR of ≤300 LOC (was ≤200), still ≤10 files. Changed in `AGENTS.md` (the rule) and `migration.md` (its quote). Past deviations in `done.md` and splits already written into `plan.md` cards stay as they were.

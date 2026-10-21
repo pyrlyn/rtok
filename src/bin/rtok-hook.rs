@@ -6,7 +6,9 @@
 //! `rtok hook`. It hands the call to the resident `rtok hook --serve` and prints its answer,
 //! which skips rtok's own process start. When no resident answers, or one refuses, it runs
 //! `rtok hook` itself. A resident that takes longer than [`TIMEOUT`] gets `{}` printed for it:
-//! fail open, never a hung hook.
+//! fail open, never a hung hook. T921: the whole call, stdin and the `rtok hook` fallback
+//! included, answers `{}` within [`rtok_hook::DEADLINE`] (plus [`rtok_hook::CHILD_GRACE`] for a
+//! child stuck before its own watchdog starts).
 #![forbid(unsafe_code)]
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
@@ -15,7 +17,7 @@ use std::io::{self, Read, Write};
 use std::path::PathBuf;
 use std::process::{ExitCode, Stdio};
 use std::sync::mpsc::{self, RecvTimeoutError};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use rtok_hook::Request;
 use rtok_sys::proc::{Output, ProgressRunner};
@@ -23,6 +25,7 @@ use rtok_sys::proc::{Output, ProgressRunner};
 const TIMEOUT: Duration = Duration::from_millis(50);
 
 fn main() -> ExitCode {
+    let end = Instant::now() + rtok_hook::deadline(|k| std::env::var_os(k));
     let args: Vec<OsString> = std::env::args_os().skip(1).collect();
     let home = rtok_hook::home(|k| std::env::var_os(k));
     let endpoint = home.as_deref().and_then(rtok_hook::endpoint);
@@ -35,14 +38,15 @@ fn main() -> ExitCode {
     let (Some((event, host)), Some(endpoint), Some(cwd), false) =
         (parse(&args), endpoint, cwd, host_var)
     else {
-        return rtok(&args, None);
+        return rtok(&args, None, end);
     };
     let Some(mut stream) = rtok_hook::connect(&endpoint) else {
-        return rtok(&args, None);
+        return rtok(&args, None, end);
     };
-    let mut stdin = Vec::new();
     let cap = u64::from(rtok_hook::HOOK_MAX_INPUT_BYTES);
-    let _ = io::stdin().take(cap + 1).read_to_end(&mut stdin);
+    let Some(stdin) = read_stdin(cap, end) else {
+        return fail_open();
+    };
     if stdin.len() as u64 > cap {
         // Over the default cap: the resident would only refuse it, and `rtok hook` knows the
         // configured cap. It gets the bytes already read, then the rest of the stream.
@@ -50,6 +54,7 @@ fn main() -> ExitCode {
         return rtok(
             &args,
             Some(Box::new(io::Cursor::new(stdin).chain(io::stdin()))),
+            end,
         );
     }
     let req = Request {
@@ -72,7 +77,7 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         Err(RecvTimeoutError::Timeout) => fail_open(),
-        _ => rtok(&args, Some(Box::new(io::Cursor::new(req.stdin)))),
+        _ => rtok(&args, Some(Box::new(io::Cursor::new(req.stdin))), end),
     }
 }
 
@@ -96,9 +101,22 @@ fn rtok_exe() -> PathBuf {
         .unwrap_or_else(|| name.into())
 }
 
+/// Up to `cap + 1` bytes of stdin, or `None` when the host holds it open past `end`.
+fn read_stdin(cap: u64, end: Instant) -> Option<Vec<u8>> {
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        let _ = io::stdin().take(cap + 1).read_to_end(&mut buf);
+        let _ = tx.send(buf);
+    });
+    rx.recv_timeout(end.saturating_duration_since(Instant::now()))
+        .ok()
+}
+
 /// `rtok hook <args>` with its exit code. `stdin` is the payload when this process already read
-/// some of it; otherwise `rtok` reads the host's stdin itself.
-fn rtok(args: &[OsString], stdin: Option<Box<dyn Read>>) -> ExitCode {
+/// some of it; otherwise `rtok` reads the host's stdin itself. A child still running at `end`
+/// plus [`rtok_hook::CHILD_GRACE`] is killed and answered for with `{}`.
+fn rtok(args: &[OsString], stdin: Option<Box<dyn Read + Send>>, end: Instant) -> ExitCode {
     let mut cmd = ProgressRunner::quiet(
         rtok_exe(),
         std::iter::once(OsStr::new("hook")).chain(args.iter().map(OsString::as_os_str)),
@@ -111,11 +129,27 @@ fn rtok(args: &[OsString], stdin: Option<Box<dyn Read>>) -> ExitCode {
         return fail_open();
     };
     if let (Some(mut bytes), Some(mut pipe)) = (stdin, child.stdin.take()) {
-        let _ = io::copy(&mut bytes, &mut pipe);
+        // A child that never reads must not block this process on a full pipe.
+        std::thread::spawn(move || {
+            let _ = io::copy(&mut bytes, &mut pipe);
+        });
     }
-    match child.wait().ok().and_then(|s| s.code()) {
-        Some(code) => ExitCode::from(u8::try_from(code).unwrap_or(1)),
-        None => fail_open(),
+    let give_up = end + rtok_hook::CHILD_GRACE;
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                return match status.code() {
+                    Some(code) => ExitCode::from(u8::try_from(code).unwrap_or(1)),
+                    None => fail_open(),
+                };
+            }
+            Ok(None) if Instant::now() < give_up => std::thread::sleep(Duration::from_millis(1)),
+            _ => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return fail_open();
+            }
+        }
     }
 }
 

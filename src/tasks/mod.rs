@@ -23,6 +23,7 @@ mod github_project;
 pub mod gitlab;
 mod meta;
 pub mod ops;
+pub mod plan_dir;
 mod ready;
 pub mod remote;
 pub mod run;
@@ -280,7 +281,7 @@ mod tests {
     #[case("R012")]
     #[case("R1.")]
     #[case("R1..2")]
-    #[case("R1.2.3")]
+    #[case("R1.2.3.4")]
     #[case("R-1")]
     #[case("R1a")]
     #[case("Ж1")]
@@ -306,7 +307,10 @@ mod tests {
             TaskId::new("R", 2).unwrap().child(3).unwrap().to_string(),
             "R2.3"
         );
-        assert!(sub.child(1).is_err(), "depth past {MAX_DEPTH}");
+        assert!(
+            sub.child(1).unwrap().child(1).is_err(),
+            "depth past {MAX_DEPTH}"
+        );
     }
 
     #[test]

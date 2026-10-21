@@ -1,0 +1,5 @@
+**T35.1 compile each tags query once** · T8.1 · `src/plugins/read/outline.rs`
+Do: `outline::config` compiled the language's tags query on every `tags` call. That was 19 ms of a 26.5 ms call on `graph/index.rs`, paid by each file of an index run and by each outline.
+Check: one `OnceLock` per language, kept for the process. A failed compile keeps its message, so every call gets the same `Err` and never a retry. `each_language_compiles_once` checks that two `.rs` files get the same configuration and a `.ts` file a different one. `golden_per_language` and the graph tests are unchanged: definitions 42/42, ref recall 0.305. The cold debug index of this repo fell from 3.42 s to 1.38 s and 1.30 s over two runs (127 files, 18 100 rows, 2026-09-11). The release `graph_bench` cold index of 3 000 files fell from 13.8 s to 341 ms (research.md P8c). A `TagsContext` per thread was not added: it builds a parser and a cursor and does not compile a query, so no measurement points at it.
+Complexity: 2/5
+Status: done 2026-09-11 · Model: Opus 5

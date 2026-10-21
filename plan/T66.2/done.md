@@ -1,0 +1,7 @@
+From the engram gap review (`research.md` §13). engram's Git Sync exports memories as portable chunks a second machine imports; rtok had `memory import <file.jsonl>` (T6.3) and no way to produce that file from its own store, so notes could not move between machines or be backed up outside `rtok.db`.
+Done when `rtok memory export [--project <name>]` prints one `{kind,title,body,project}` per line for every note except `checkpoint:*` rows (session-local), in id order, and an export piped into `import` on a fresh store inserts every row and a second pass skips them all (round-trip test on three notes plus one checkpoint); the CLI table in `README.md` and the plugin README name it.
+Execution plan: `Store::list_notes(project)` in `src/store/mod.rs`; `plugins/memory/export.rs` writes JSONL to a `Write`; `MemoryCmd::Export` in `cli.rs`; docs rows. Verify: fmt, clippy, `nextest -p rtok memory`.
+
+**Result (2026-09-18).** `Store::list_notes(project)` (`kind NOT LIKE 'checkpoint:%'`, id ascending), `plugins/memory/export.rs::run(cfg, project, out)` writes `serde_json` objects one per line and returns the count, `rtok memory export [--project]` on the CLI. Test `export_round_trips_through_import_without_checkpoints`: three notes + one checkpoint → three lines, `--project q` → none, import into a second store inserts 3 then skips 3. README CLI row and plugin README section added; no config key (no flag beyond `--project`). Verified with T66.1 above.
+
+---
