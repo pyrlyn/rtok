@@ -9,6 +9,7 @@
     "typecheck": "node scripts/gen-api.mjs --check && tsc --noEmit",
     "test": "vitest run --project unit",
     "test:e2e": "playwright test",
+    "screenshots": "node scripts/shoot.mjs",
     "test:stories": "vitest run --project storybook",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",

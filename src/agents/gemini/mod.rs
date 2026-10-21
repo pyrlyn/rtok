@@ -25,6 +25,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use rtok_agent_sdk::{Apply, NO_CHANGES, array_at, edit_json, object_at};
+use rtok_mcp::spec::{Client, EntryShape, McpSpec};
 use serde_json::{Value, json};
 
 use super::hook_events;
@@ -154,32 +155,16 @@ fn strip_ours(apply: &Apply, path: &Path, hooks: &mut Value, timeout_s: u64) -> 
     super::with_kept(kept, super::removed_report(removed))
 }
 
-/// The `mcpServers.rtok` entry [`register_mcp`] writes.
-fn mcp_entry(cmd: &str) -> Value {
-    json!({"command": cmd, "args": super::mcp_args("gemini")})
-}
-
-/// `mcpServers.rtok = {command, args}` — the minimal stdio shape the Gemini MCP docs show.
-pub fn register_mcp(cfg: &Config) -> Result<String> {
-    let bin = super::rtok_command();
-    rtok_agent_sdk::register_server(
-        &apply(cfg),
-        &settings_path(cfg),
+/// `mcpServers.rtok = {command, args}` in `settings.json` — the minimal stdio shape the Gemini
+/// MCP docs show; `rtok_mcp::ops` writes and removes it (T277.2).
+pub(crate) fn mcp_spec(cfg: &Config) -> McpSpec {
+    super::mcp::json_spec(
+        "gemini",
+        Client::Cli,
+        settings_path(cfg),
         "mcpServers",
-        NAME,
-        mcp_entry(&bin),
-        &super::mcp_summary(&bin, "gemini"),
-    )
-}
-
-/// Drop `mcpServers.rtok` from `settings.json`, unless the user edited it (T246.2).
-pub fn unregister_mcp(cfg: &Config) -> Result<String> {
-    super::unregister_ours(
-        cfg,
-        &settings_path(cfg),
-        "mcpServers",
-        NAME,
-        &mcp_entry("rtok"),
+        super::rtok_mcp_command(),
+        EntryShape::Command,
     )
 }
 
@@ -308,8 +293,8 @@ impl Agent for Gemini {
                 offer: plugin,
                 plugin_installed,
                 run,
-                register_mcp,
-                unregister_mcp,
+                register_mcp: |cfg| super::mcp::install(cfg, &mcp_spec(cfg)),
+                unregister_mcp: |cfg| super::mcp::remove(cfg, &mcp_spec(cfg)),
             },
             super::no_extra,
         )
@@ -357,9 +342,16 @@ mod tests {
             .to_string(),
         )
         .unwrap();
-        assert!(register_mcp(&c).unwrap().starts_with("mcpServers.rtok: "));
+        assert!(
+            crate::agents::mcp::install(&c, &mcp_spec(&c))
+                .unwrap()
+                .starts_with("mcpServers.rtok: ")
+        );
         assert!(run(&c, false).unwrap().contains("6 additions"));
-        assert_eq!(register_mcp(&c).unwrap(), NO_CHANGES);
+        assert_eq!(
+            crate::agents::mcp::install(&c, &mcp_spec(&c)).unwrap(),
+            NO_CHANGES
+        );
         assert_eq!(run(&c, false).unwrap(), NO_CHANGES);
 
         let raw_after_install = fs::read_to_string(settings_path(&c)).unwrap();
@@ -378,7 +370,10 @@ mod tests {
         assert_eq!(Gemini.installed(&c, Kind::Cli), ["hooks", "mcp"]);
 
         assert!(run(&c, true).unwrap().contains("removed"));
-        assert_eq!(unregister_mcp(&c).unwrap(), "- mcpServers.rtok");
+        assert_eq!(
+            crate::agents::mcp::remove(&c, &mcp_spec(&c)).unwrap(),
+            "- mcpServers.rtok"
+        );
         let raw = fs::read_to_string(settings_path(&c)).unwrap();
         assert!(!raw.contains("rtok hook"), "{raw}");
         let root: Value = serde_json::from_str(&raw).unwrap();
@@ -422,7 +417,7 @@ mod tests {
             Kind::Cli,
             &path,
             "mcpServers",
-            || register_mcp(&c),
+            || crate::agents::mcp::install(&c, &mcp_spec(&c)),
         );
         let _ = fs::remove_dir_all(dir);
     }

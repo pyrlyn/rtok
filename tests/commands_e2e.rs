@@ -145,7 +145,7 @@ fn hook_rewrite_of_sleep_cat_tail_runs_through_rtok() {
         .pointer("/hookSpecificOutput/updatedInput/command")
         .and_then(|x| x.as_str())
         .unwrap_or_else(|| panic!("not rewritten: {stdout}"));
-    assert!(rewritten.starts_with("rtok run -- '"), "{rewritten}");
+    assert!(rewritten.contains("rtok run -- '"), "{rewritten}");
 
     let bin = assert_cmd::cargo::cargo_bin("rtok");
     let path = format!(

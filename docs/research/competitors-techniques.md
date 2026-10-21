@@ -122,6 +122,9 @@ Pointers print 8 hex chars (T672). `stats` counts a later expand of that prefix 
 | T685 | find 33 | rtok leads | keep dir grouping but print full paths for ≤ 50 hits so the anchor check passes | 100 % paths, ≥ 69 % |
 | T686 | MCP tool catalogs | caveman 12–29 % | `rtok mcp` proxy: first sentence of descriptions, drop default/examples that duplicate type, enum compaction; recovery via archive | ≥ 30 % |
 
+`rtok report` (markdown, HTML, PDF and `--ai`) prints that same 8-character id in the
+Expand list (T913). The document and the measurement `ref_id` keep the full sha.
+
 ## sqz formatter coverage (T662)
 
 Source: [sqz `cmd_formatters/mod.rs`](https://github.com/ojuschugh1/sqz/blob/cf2b03c8072729f366e48a8a4933a421bd2a1e79/sqz_engine/src/cmd_formatters/mod.rs#L120-L180),

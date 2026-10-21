@@ -143,7 +143,7 @@ fn stored_view(archive_id: &str, pointer_len: usize, cx: &Ctx) -> Option<String>
 /// Deterministic extractive ranker — no network, no LLM (D12). Each source line shows up at
 /// most once, clipped like an archive pointer: a repeated or minified line used to outgrow the
 /// pointer, and the block then kept the pointer with no saving.
-fn extractive_summary(id: &str, text: &str) -> String {
+pub(crate) fn extractive_summary(id: &str, text: &str) -> String {
     use crate::plugins::archive::clip;
     let mut seen = std::collections::HashSet::new();
     let lines: Vec<&str> = text

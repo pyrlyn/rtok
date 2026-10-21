@@ -466,8 +466,8 @@ target/tmp/t60-2-config-init.toml
 +# shell    = ""                         # "" = $SHELL
 +# rules    = "~/.rtok/rules.toml"       # extra filter rules; missing → built-in rules/default.toml
 +# rules_dir = "~/.rtok/rules.d"         # drop-ins: every *.toml merges after rules in name order
-+# trailer  = true                       # print `[rtok <id12> · N lines]` after a cut; false = `--no-ref`
-+# trailer_min_lines = 40                # add `[rtok <id12> · N lines]` above this
++# trailer  = true                       # print `[rtok <id8> · N lines]` after a cut; false = `--no-ref`
++# trailer_min_lines = 40                # add `[rtok <id8> · N lines]` above this
 +# fail_tail_lines   = 80                # non-zero exit → last N lines verbatim
 +# never_wrap = ["rtok", "sudo"]         # first-word deny list; heredocs, `&` are always skipped
 +# interactive_stems = ["python", "node", "psql", "sqlite3", "irb", "bash", "sh", "zsh", "docker", "kubectl"]  # `-i` skips wrap only for these (docker: run/exec; kubectl: exec); `--interactive` always skips
@@ -562,7 +562,7 @@ target/tmp/t60-2-config-init.toml
 +# max_tokens = 2000                     # per response; beyond it: head + "N more, expand <id>"
 +# impact_tokens = 1500                  # impact: files grouped and ranked up to this budget, then "+K files, M refs not shown"; --all or 0 = every row
 +# map_tokens = 0                        # SessionStart repo map cap (counts toward the injection budget next to memory.recall_tokens); 0 = off
-+# map_rank   = "refs"                   # SessionStart map order: refs = references per name; pagerank = files by personalized PageRank, personalized by recently edited files and the last checkpoint after a compact
++# map_rank   = "pagerank"               # SessionStart map order: refs = references per name; pagerank = files by personalized PageRank, personalized by recently edited files and the last checkpoint after a compact
 +# body_lines = 40                       # symbol(): source lines shown per definition
 +# auto_index = true                     # every symbol/callers/impact call walks the tree; false = index once, then `rtok graph index` or the watcher
 +# backend    = "tags"                   # tags | lsp | auto | text: tags = tree-sitter index (default); lsp = language server from PATH, tags when it cannot answer; auto = per project and language, server first, tags second, text search when no grammar parses the project; text = in-process text search only (no call graph, no dead)

@@ -155,11 +155,11 @@ default.
 
 | Lever | rtok today | Gap / next step |
 | --- | --- | --- |
-| Proxy rewrites by default | `plugins.toon` and `plugins.compress` are enabled (T127), but `proxy.mode = "passthrough"` is the default, and the archive live zone, `toon` and `compress` act only in `compress` mode | Bench `compress` mode as the default proxy mode; flip it if it clears the bench (PR #562 was the first attempt at these defaults) |
+| Proxy rewrites by default | `plugins.toon` and `plugins.compress` are enabled (T127), but `proxy.mode = "passthrough"` is the default, and the archive live zone, `toon` and `compress` act only in `compress` mode | Bench `compress` mode as the default proxy mode; flip it if it clears the bench (PR #562 was the first attempt at these defaults). *Measured offline* 2026-10-21 (T385.3, `research.md` §16.10): the pointer alone touches 6.35 % of input tokens, 5.17 % of input cost after cache re-writes; the live arm is still open |
 | `tools_rewrite` (T59.5) | Off | *Measured* 6.2 % of session input on 2026-09-18 when Tool Search is off (`research.md` §2); turn on by default when `doctor` sees Tool Search disabled |
-| Context editing (T51.2) | Off | Measure with archive ids kept; candidate default for Anthropic wires |
-| Live-zone skill bodies (T61.2) | Off (`plugins.archive.skills`) | Gate on skill stats (T61.1), then default |
-| Nested JSON / `data:` blobs (T51.1) | Off (`plugins.archive.live_blobs`) | Same: bench, then default |
+| Context editing (T51.2) | Off | Measure with archive ids kept; candidate default for Anthropic wires. *Measured offline* 2026-10-21 (T385.3, `research.md` §16.10): the platform defaults would clear 22.95 % of input tokens, 20.33 % of input cost net; a quality question only the live arm answers |
+| Live-zone skill bodies (T61.2) | Off (`plugins.archive.skills`) | Gate on skill stats (T61.1), then default. *Measured offline* 2026-10-21 (T385.3, `research.md` §16.10): 0.11 % of input tokens, 0.04 % of input cost net; stays off |
+| Nested JSON / `data:` blobs (T51.1) | Off (`plugins.archive.live_blobs`) | Same: bench, then default. *Measured offline* 2026-10-21 (T385.3, `research.md` §16.10): 0 eligible blocks in 30 days; stays off |
 | Deferred tool schemas | Not built | Short tool stubs, full schema on first use, for hosts without Tool Search (`research.md` §16.3 #2). *Measured* 2026-10-11 (T385.11, `research.md` §37): 99.7 % of Claude Code sessions already defer, both vendors do it server side; not built |
 | Thinking / reasoning replay | Not built | Drop prior reasoning blocks the host re-sends where the provider allows it (`research.md` §16.3 #4); provider rules differ, needs per-wire tests. *Measured* 2026-10-11 (T385.11, `research.md` §37): replayed thinking is 11.5 % of input tokens, 3.4 % from earlier turns; dropping those nets 1.1 % to 1.6 % of input cost after cache re-creation; the earlier 0.03 % (T125) was a measurement error. Dropped; only safe route if revisited is the server-side `clear_thinking_20251015` edit |
 | Lane-aware Flex / Batch | Not built | §2 (dollars, not tokens) |
@@ -183,7 +183,8 @@ Order by expected dollars per effort; each line becomes a `plan.md` card with on
 2. **Per-lane policy** (§2 L2). Check: bulk/batch bodies byte-identical in `compress` mode.
 3. **Defaults bench**: `compress` mode, `tools_rewrite`, context editing, `skills`,
    `live_blobs` (§5). Check: `rtok bench` cost per passed task per setting, dated in
-   `research.md`.
+   `research.md`. Offline half measured 2026-10-21 (T385.3, `research.md` §16.10); the live
+   arms need the creator's API spend.
 4. **Batch observe + results usage** (§2 L3). Check: fixture results → `usage` rows.
 5. **Flex on bulk/internal** (§2 L4). Check: prepare matrix and 429 policy tests.
 6. **Per-lane cache ledger + replay byte-stability test** (§4.1). Check: per-lane hit rate in

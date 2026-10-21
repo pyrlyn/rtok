@@ -267,7 +267,11 @@ fn expand(doc: &Document) -> String {
         if exp.expanded_ids.is_empty() {
             "none".to_string()
         } else {
-            exp.expanded_ids.join(",")
+            exp.expanded_ids
+                .iter()
+                .map(|id| super::shown_archive_id(id))
+                .collect::<Vec<_>>()
+                .join(",")
         }
     );
     s

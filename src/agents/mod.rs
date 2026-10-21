@@ -1331,7 +1331,7 @@ pub(crate) fn register_local_mcp(
     key: &str,
     host: &'static str,
 ) -> Result<String> {
-    let cmd = rtok_command();
+    let cmd = rtok_mcp_command();
     let entry = local_mcp_entry(&cmd, host);
     rtok_agent_sdk::register_server(
         &apply(cfg),
@@ -1389,7 +1389,7 @@ pub(crate) fn register_stdio_mcp_in(
     key: &str,
     host: &'static str,
 ) -> Result<String> {
-    let cmd = rtok_command();
+    let cmd = rtok_mcp_command();
     rtok_agent_sdk::register_server(
         &apply(cfg),
         path,
@@ -1577,9 +1577,10 @@ pub(crate) fn print_offer(
     )
 }
 
-/// The per-host fn items [`d21_plugin_apply`] threads through: Copilot's and Gemini's own
-/// `plugin`, `plugin_installed`, `run`, `register_mcp`, `unregister_mcp` already match these
-/// signatures exactly, so a host passes them in by name.
+/// The per-host fn items [`d21_plugin_apply`] threads through: a host passes its own
+/// `plugin`, `plugin_installed`, `run`, `register_mcp`, `unregister_mcp` by name, or a
+/// closure where they need an argument (CodeBuddy's variant; Copilot's and Gemini's spec for
+/// [`mcp::run`], T277.2).
 pub(crate) struct D21Plugin {
     pub offer: fn(&Config, bool) -> Result<String>,
     pub plugin_installed: fn(&Config) -> bool,
@@ -1697,6 +1698,55 @@ pub(crate) fn resolve_rtok_command(
         return fs_kit::path::simplified(exe).to_string_lossy().into_owned();
     }
     "rtok".to_string()
+}
+
+/// Command string written into host MCP entries (T932).
+///
+/// A GUI host (Codex desktop, Cursor) is started by the OS, not a shell, so it has no
+/// `~/.ketch/bin` on PATH and a bare `rtok` fails to spawn with ENOENT. The entry names the
+/// absolute path instead: the `rtok` found on PATH, else ketch's own link. Both are links the
+/// package manager re-points on upgrade, so the entry stays current without a rewrite. Hook
+/// lines keep [`rtok_command`]: they resolve at run time in a shell and fail open.
+pub(crate) fn rtok_mcp_command() -> String {
+    #[cfg(test)]
+    return resolve_mcp_command(
+        TEST_MCP_BIN.with(|b| b.borrow().clone()),
+        Path::new("/nonexistent"),
+    );
+    #[cfg(not(test))]
+    resolve_mcp_command(find_on_path("rtok"), &home_dir())
+}
+
+/// Pure resolution used by [`rtok_mcp_command`] and unit tests. Windows keeps
+/// [`rtok_command`]: it already names the running `.exe` when PATH misses.
+pub(crate) fn resolve_mcp_command(on_path: Option<PathBuf>, home: &Path) -> String {
+    if cfg!(windows) {
+        return rtok_command();
+    }
+    let ketch = home.join(".ketch").join("bin").join("rtok");
+    on_path
+        .filter(|p| p.is_absolute())
+        .or_else(|| ketch.is_file().then_some(ketch))
+        .map_or_else(rtok_command, |p| p.to_string_lossy().into_owned())
+}
+
+#[cfg(test)]
+thread_local! {
+    static TEST_MCP_BIN: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) };
+}
+
+/// An installed `rtok` for this test thread: [`rtok_mcp_command`] names it instead of looking at
+/// the machine (T932). Per thread, so a test that wants a bare name never sees another test's file.
+#[cfg(test)]
+pub(crate) fn fake_installed_rtok() -> PathBuf {
+    let bin = std::env::temp_dir()
+        .join(format!("rtok-fake-install-{}", std::process::id()))
+        .join("bin")
+        .join("rtok");
+    std::fs::create_dir_all(bin.parent().unwrap()).unwrap();
+    std::fs::write(&bin, b"#!/bin/sh\n").unwrap();
+    TEST_MCP_BIN.with(|b| *b.borrow_mut() = Some(bin.clone()));
+    bin
 }
 
 fn bare_rtok_on_path(path: Option<&std::ffi::OsStr>) -> bool {
@@ -2134,6 +2184,31 @@ mod tests {
         assert_eq!(icon(Mode::Update), "⏫");
         assert_eq!(icon(Mode::Remove), "🧹");
         assert_eq!(icon(Mode::Replace), style::Kind::Success.emoji());
+    }
+
+    /// T932: a GUI host has no shell PATH, so the MCP command is a path, not the bare name.
+    #[cfg(unix)]
+    #[test]
+    fn resolve_mcp_command_names_an_absolute_file() {
+        let dir = std::env::temp_dir().join(format!("rtok-mcp-cmd-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let on_path = dir.join("path/rtok");
+        let ketch = dir.join(".ketch/bin/rtok");
+        let missing = || resolve_mcp_command(None, &dir);
+        assert_eq!(missing(), "rtok", "nothing installed keeps the bare name");
+        for f in [&on_path, &ketch] {
+            std::fs::create_dir_all(f.parent().unwrap()).unwrap();
+            std::fs::write(f, b"x").unwrap();
+        }
+        let got = |p: Option<&Path>| resolve_mcp_command(p.map(Path::to_path_buf), &dir);
+        assert_eq!(got(Some(&on_path)), on_path.to_string_lossy());
+        assert_eq!(
+            got(None),
+            ketch.to_string_lossy(),
+            "ketch link is the fallback"
+        );
+        assert_eq!(got(Some(Path::new("rtok"))), ketch.to_string_lossy());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

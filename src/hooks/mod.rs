@@ -1319,7 +1319,7 @@ mod tests {
             h["modifiedInput"]["command"]
                 .as_str()
                 .unwrap()
-                .starts_with("rtok run"),
+                .contains("rtok run"),
             "{v}"
         );
         assert!(h.get("updatedInput").is_none(), "{v}");
@@ -1388,7 +1388,7 @@ mod tests {
             h["updatedInput"]["command"]
                 .as_str()
                 .unwrap()
-                .starts_with("rtok run"),
+                .contains("rtok run"),
             "{h}"
         );
         for (event, name) in [
@@ -1465,7 +1465,7 @@ mod tests {
         let out = dispatch_owned_strict(&stdin, "PreToolUse", &cfg).unwrap();
         let v: serde_json::Value = serde_json::from_slice(&out).unwrap();
         let cmd = v["overrideInput"]["commands"][0].as_str().unwrap();
-        assert!(cmd.starts_with("rtok run"), "{v}");
+        assert!(cmd.contains("rtok run"), "{v}");
 
         for bad in [b"not-json".as_slice(), b"".as_slice()] {
             let mut out = Vec::new();

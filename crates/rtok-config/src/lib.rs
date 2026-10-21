@@ -1222,7 +1222,7 @@ section! {
         rules: PathBuf = p("~/.rtok/rules.toml"),
         /// Drop-in dir: every `*.toml` merges after `rules` in name order (T50.2).
         rules_dir: PathBuf = p("~/.rtok/rules.d"),
-        /// Print the `[rtok <id12> · N lines]` reference line after a cut (T661).
+        /// Print the `[rtok <id8> · N lines]` reference line after a cut (T672).
         /// `false` (`RTOK_PLUGINS_CMD_TRAILER=false`, `rtok run --no-ref`) drops it.
         trailer: bool = true,
         trailer_min_lines: u32 = 40,
@@ -1415,8 +1415,9 @@ section! {
         impact_tokens: u32 = 1500,
         map_tokens: u32 = 0,
         /// T370: how the SessionStart map orders files: `refs` counts references per name,
-        /// `pagerank` ranks files by personalized PageRank over the stored file graph.
-        map_rank: String = s("refs"),
+        /// `pagerank` ranks files by personalized PageRank over the stored file graph and falls
+        /// back to `refs` while none is stored.
+        map_rank: String = s("pagerank"),
         body_lines: u32 = 40,
         auto_index: bool = true,
         auto_add_projects: bool = true,

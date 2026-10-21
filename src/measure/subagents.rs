@@ -93,8 +93,9 @@ pub struct BriefSplitRow {
 /// zeroing the "with brief" split.
 pub const SPAWN_BRIEF_MARKER: &str = "Get the archived body with rtok expand";
 
-/// T131: does this sub-agent's first user-role message (`jsonl::Parsed::first_user_text`)
-/// carry the spawn brief's fixed instructions ([`SPAWN_BRIEF_MARKER`])?
+/// T131: does this sub-agent's `SubagentStart` context (`jsonl::Parsed::subagent_start_context`)
+/// or first user-role message (`first_user_text`) carry the spawn brief's fixed
+/// instructions ([`SPAWN_BRIEF_MARKER`])?
 pub(crate) fn has_spawn_brief(first_user_text: &str) -> bool {
     first_user_text.contains(SPAWN_BRIEF_MARKER)
 }
@@ -217,10 +218,11 @@ pub(crate) fn collect(parents: &[Parent], cutoff: SystemTime) -> Option<Subagent
                 continue;
             };
             out.count += 1;
-            let with_brief = parsed
-                .first_user_text
-                .as_deref()
-                .is_some_and(has_spawn_brief);
+            let with_brief = has_spawn_brief(&parsed.subagent_start_context)
+                || parsed
+                    .first_user_text
+                    .as_deref()
+                    .is_some_and(has_spawn_brief);
             let mut agent_read_bytes = 0u64;
             let mut agent_reread_bytes = 0u64;
             let mut agent_usage_input = 0u64;
@@ -473,8 +475,8 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// T131: one sub-agent spawned with a `SubagentStart` brief (its first user message
-    /// carries `memory::handoff`'s fixed instructions), one spawned plain — the split must
+    /// T131: one sub-agent spawned with a `SubagentStart` brief (its hook context carries
+    /// `memory::handoff`'s fixed instructions), one spawned plain — the split must
     /// keep each agent's read/re-read bytes, share, and input tokens in its own bucket.
     #[test]
     fn briefed_and_plain_subagents_split_the_reread_share() {
@@ -502,11 +504,14 @@ mod tests {
                 .join("\n"),
         )
         .unwrap();
-        // Briefed (t1): first user message carries the spawn brief's fixed instructions,
+        // Briefed (t1): the task prompt, then the brief as Claude Code 2.1.304 writes it — a
+        // `hook_additional_context` attachment of `SubagentStart`, not a user message; it
         // re-reads p.rs (4 B, parent overlap) and reads a fresh q.rs (6 B).
         let briefed: Vec<Value> = vec![
-            json!({"type":"user","message":{"role":"user","content":
-                format!("p.rs — rtok expand abc123\n{SPAWN_BRIEF_MARKER} <id>; answer with path:line citations.")}}),
+            json!({"type":"user","message":{"role":"user","content":"one"}}),
+            json!({"type":"attachment","attachment":{"type":"hook_additional_context",
+                "hookName":"SubagentStart","hookEvent":"SubagentStart","toolUseID":"t1",
+                "content":[format!("p.rs — rtok expand abc123\n{SPAWN_BRIEF_MARKER} <id>; answer with path:line citations.")]}}),
             json!({"type":"assistant","message":{"role":"assistant","content":[
                 {"type":"tool_use","id":"u1","name":"Read","input":{"file_path":"p.rs"}},
                 {"type":"tool_use","id":"u2","name":"Read","input":{"file_path":"q.rs"}}],
@@ -515,9 +520,13 @@ mod tests {
                 {"type":"tool_result","tool_use_id":"u1","content":"AAAA"},
                 {"type":"tool_result","tool_use_id":"u2","content":"QQQQQQ"}]}}),
         ];
-        // Plain (t2): an ordinary first user message, reads a fresh r.rs (3 B) — no overlap.
+        // Plain (t2): the same hook fired with only the agent id (empty ledger, no brief);
+        // reads a fresh r.rs (3 B) — no overlap.
         let plain: Vec<Value> = vec![
             json!({"type":"user","message":{"role":"user","content":"go"}}),
+            json!({"type":"attachment","attachment":{"type":"hook_additional_context",
+                "hookName":"SubagentStart","hookEvent":"SubagentStart","toolUseID":"t2",
+                "content":["rtok agent id: ed8320f8"]}}),
             json!({"type":"assistant","message":{"role":"assistant","content":[
                 {"type":"tool_use","id":"u1","name":"Read","input":{"file_path":"r.rs"}}],
                 "usage":{"input_tokens":2}}}),

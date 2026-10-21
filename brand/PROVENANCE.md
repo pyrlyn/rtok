@@ -3,8 +3,8 @@
 Moved from the pyrlyn/brand v0.3.0 README (sections "Conflicts", "Adopting in each surface" and
 "Sources"), with paths adjusted to this folder. These notes record how the locked rtok values were
 chosen; they were written against rtok `559a7a11` and the `design/web-admin` branch. Since then the web
-admin moved to React/Vite on `main` and ships `web/src/styles/tokens.css`, which equals
-`dist/legacy/tokens.css`, so the web-admin steps below are history.
+admin moved to React/Vite on `main` and now reads this folder directly (T414), so the web-admin steps
+below are history.
 
 ## Conflicts
 

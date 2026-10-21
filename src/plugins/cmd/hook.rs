@@ -185,8 +185,9 @@ pub fn pre_tool(ev: &PreToolUse<'_>, cx: &Ctx) -> Option<PreToolDecision> {
     // `--agent` token (alnum/`_`/`-` only, validated above) sits before `--` and never
     // touches the quoting that protects `cmd` on either the POSIX or Windows path.
     input["command"] = json!(format!(
-        "{}rtok run {}-- {}",
+        "{}{}rtok run {}-- {}",
         &full[..full.len() - cmd.len()],
+        crate::names::run_guard(),
         agent_flag(cx),
         super::run::wrap_quote(cmd)
     ));
@@ -220,7 +221,8 @@ mod tests {
         pre_tool(&ev, &Ctx::with_agent(&cx, agent_id))
     }
 
-    fn wrapped(d: &PreToolDecision) -> &str {
+    /// The line exactly as the hook writes it, T922 guard included.
+    fn rewritten(d: &PreToolDecision) -> &str {
         match d {
             PreToolDecision::Rewrite { input, reason } => {
                 assert_eq!(reason, "wrapped by rtok");
@@ -228,6 +230,11 @@ mod tests {
             }
             _ => panic!("{d:?}"),
         }
+    }
+
+    /// The same line minus the T922 guard, so the shape tests below keep reading `rtok run …`.
+    fn wrapped(d: &PreToolDecision) -> String {
+        rewritten(d).replacen(crate::names::run_guard(), "", 1)
     }
 
     #[test]
@@ -556,5 +563,59 @@ mod tests {
     fn main_session_git_commands_stay_wrapped() {
         let d = decide_as(None, "cd /repo && git status").unwrap();
         assert_eq!(wrapped(&d), "cd /repo && rtok run -- 'git status'");
+    }
+
+    /// T922: the line runs in the host's Bash, whose PATH may lack `rtok` even when the hook
+    /// itself found it; the original command must still run, with its own exit code.
+    #[cfg(unix)]
+    fn run_line(shell: &str, line: &str, path: &str) -> (String, i32) {
+        let out = std::process::Command::new(shell)
+            .args(["-c", line])
+            .env_clear()
+            .env("PATH", path)
+            .output()
+            .unwrap();
+        (
+            String::from_utf8_lossy(&out.stdout).into_owned(),
+            out.status.code().unwrap(),
+        )
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rewrite_runs_the_original_command_when_rtok_is_not_on_path() {
+        for shell in ["/bin/sh", "/bin/bash", "/bin/zsh"] {
+            if !std::path::Path::new(shell).exists() {
+                continue;
+            }
+            for (cmd, want) in [
+                ("echo \"it's fine\"; exit 3", ("it's fine\n", 3)),
+                ("cd / && pwd", ("/\n", 0)),
+            ] {
+                let d = decide(cmd).unwrap();
+                let got = run_line(shell, rewritten(&d), "/usr/bin:/bin");
+                assert_eq!((got.0.as_str(), got.1), want, "{shell}: {}", rewritten(&d));
+            }
+            let d = decide_as(Some("agent-a1"), "echo hi").unwrap();
+            let got = run_line(shell, rewritten(&d), "/usr/bin:/bin");
+            assert_eq!(got, ("hi\n".to_string(), 0), "{shell}: {}", rewritten(&d));
+        }
+    }
+
+    /// The guard only fills a gap: with `rtok` on PATH the real binary gets the exact argv.
+    #[cfg(unix)]
+    #[test]
+    fn rewrite_calls_rtok_untouched_when_it_is_on_path() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join(format!("rtok-t922-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let fake = dir.join("rtok");
+        std::fs::write(&fake, "#!/bin/sh\nfor a; do echo \"[$a]\"; done\n").unwrap();
+        std::fs::set_permissions(&fake, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let d = decide("echo hi").unwrap();
+        let path = format!("{}:/usr/bin:/bin", dir.display());
+        let got = run_line("/bin/sh", rewritten(&d), &path);
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(got, ("[run]\n[--]\n[echo hi]\n".to_string(), 0));
     }
 }
