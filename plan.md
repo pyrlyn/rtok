@@ -237,9 +237,9 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | --- | --- | --- | --- | --- | --- |
 | T124 | todo | P3 | 2 | 60% | |
 | T156 | in progress | P3 | 3 | 50% | Claude Code / claude-opus-5-5 |
-| T261 | in progress | P2 | 3 | 95% | Cursor / grok 4.7 |
+| T261 | in progress | P2 | 3 | 95% | Claude Code / claude-opus-5-5 |
 | T275 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
-| T277 | in progress | P2 | 5 | 30% | Claude Code / sonnet-5.5 |
+| T277 | in progress | P2 | 5 | 45% | Claude Code / sonnet-5.5 |
 | T278 | in progress | P1 | 3 | 90% | Claude Code / claude-opus-5-5 |
 | T279 | in progress | P1 | 5 | 90% | Claude Code / claude-opus-5-5 |
 | T281 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
@@ -685,6 +685,13 @@ Progress (Cursor / grok 4.7): items 1–3 already on `origin/main` via #332 — 
 
 Fold estimate (not folding): **82** `tests/*.rs` bins. macOS log `Finished test profile`: cold **2 m 05 s**, warm **1 m 16 s**. No per-binary `Linking` lines in the CI log. Fold not in this PR (82-file mechanical move; own task).
 
+Progress (Claude Code / claude-opus-5-5, 2026-10-21, local only: this agent may not edit `.github/workflows/` and has no Actions access):
+- Both blockers are gone on `main`. `just dup` passes: 408 clones, 1.79 % of lines (threshold 2). The Devin and `agents_install` Windows failures were fixed by #418 (`eaa385ea`, "Devin CI fixes"), and T425 (#759, `e37bd4cf`) replaced the wall-clock bound of `session_end_on_a_large_transcript_is_bounded` with a scaling check. `windows` runs inside `ci.yml`, which `pipeline.yml`'s `gate` needs, so every pull request merged since then has passed it.
+- The title's cause is gone: T310.12 (#664, `3f6d69e7`) deleted `crates/rtok-webui`, so `webui-check` and its 183 uncached crates no longer exist, and item 1 has nothing left to cache.
+- CI has changed shape since #411. Test binaries are built once per OS (`build-tests`, `cargo nextest archive`) and run in 2 shards (`test`, `windows`); sccache is on; `MACOS_RUNNER` can move macOS to the dedicated Mac. The #411 job timings no longer describe the critical path.
+- Item 4, re-measured on this Mac (16 cores, `cargo test --workspace --no-run --timings`, local `line-tables-only`): 129 `tests/*.rs` files (142 test executables in the workspace). Fresh `target/` (the local sccache from `mise.toml` was warm, and it does not cache the link of a test binary): `Finished` in 1 m 14 s; the 129 test units took 400.7 CPU-s (median 3.26 s) over 28 s of wall. After `touch src/lib.rs`: `Finished` in 46 s; the `rtok` lib test unit took 15 s, and the 129 test units took 360 CPU-s (median 2.98 s, smallest 1.18 s) over 25 s of wall. On a 3-core hosted macOS runner, 360 CPU-s is about 120 s, which matches the 76–125 s `Finished test profile` in #411. The fold is parked as I-139; it is not done here.
+- Left for the Check: one warm-cache `workflow_dispatch` run of `ci.yml` that is green, plus a PR comment with per-job timings against #411's table. The `save-if: … workflow_dispatch` lines in `ci.yml` (`lint` and `check` are marked "T261 experiment"; `build-tests` and `docs` have the same condition) keep manual runs warm for exactly that. Once the run is recorded, the creator decides whether they stay.
+
 ### T275. Install/update removes rtok's MCP entry from an agent's config while a plugin serves MCP (every host)
 
 Observed by the creator on 2026-09-27: rtok 0.10.0, Claude Code 2.1.267, `rtok@rtok` plugin installed. After `rtok agents update claude` the plugin (commit `12c7e91`) and its hooks are current, but rtok's MCP server is missing from Claude Desktop's MCP settings. It must be available in both Claude Desktop and Claude Code.
@@ -740,6 +747,7 @@ Execution plan (lands before T277; T277 then moves the core into its crate):
 3. PRs B-D, the other affected hosts in groups of at most 10 files: Copilot and Gemini (`d21_plugin_apply`); Cursor, Codex, VS Code; ZCode, Kimi, Grok. Each deletes that host's MCP branch and adds its table rows to the shared Vfs test.
 4. PR E: `doctor` warning (Fix 5), re-bless `docs/agents.md` and README MCP rows, then the creator-machine Check.
 Progress (2026-09-28): PR A and B-D merged for Claude, Copilot, Gemini, Codex, Cursor (#444), VS Code (#455), ZCode (#459), Kimi (#467); Grok is #468. PR E merged (#483, doctor warning). Command Code, the last host that gated MCP on its plugin, is T275.2 (2026-10-11). Left: the creator-machine Check. On 2026-10-21 T275.1's `rtok mcp ping claude --cli` and `--desktop` both answered on the creator's machine (done.md).
+Progress (2026-10-21, agent audit on `main` `0d1608a`): no code change needed. Every host this card lists, plus Command Code, Qwen and CodeBuddy, now writes its MCP entry on install and update behind `[setup] mcp`, whether or not a plugin is installed. Only `remove` takes the entry out. Evidence: Claude Desktop `claude/mod.rs:944-970`, Claude Code `:977-1001`, `d21_plugin_apply` `agents/mod.rs:1599-1627` (Copilot, Gemini, Qwen, CodeBuddy), Cursor `cursor/mod.rs:98-109`, VS Code `vscode/mod.rs:121-137`, ZCode `zcode/mod.rs:232-249`, Kimi `kimi/mod.rs:111-135`, Grok `grok/mod.rs:85-104`, Command Code `commandcode/mod.rs:94-102`, Codex `codex/mod.rs:360-383` (`run` takes only `remove`). `tests/singleton.rs` checks the one-server-per-surface rule. omp, pi and Antigravity were checked as the card asks; none matches (`research.md` §25 row). omp writes `mcpServers.rtok` on every install. pi has no MCP. Antigravity's plugin `mcp_config.json` is its only MCP path, and rtok writes no Antigravity config. One gap found, not fixed because it is unplanned: `plugins/devin/.mcp.json` still ships `mcpServers.rtok` beside the `mcp_config.json` entry that setup always writes, and §25 has no Devin row, so whether Devin merges the two is unknown. The creator decides if Devin follows D33. The Check did not run: this session's permissions blocked running any `rtok` binary and reading host files outside the worktree. Re-run protocol for the creator: (1) `rtok agents update claude --dry-run` shows no `- mcpServers.rtok` line, then `rtok agents update claude`; (2) `jq '.mcpServers.rtok' "$HOME/Library/Application Support/Claude/claude_desktop_config.json" ~/.claude.json` prints two non-null entries; (3) Claude Desktop's Settings → Developer lists rtok, and `/mcp` in the Code tab and in `claude` lists one `rtok`; (4) `rtok agents info claude` and `rtok agents list` print `mcp` for each surface whose file holds the entry; (5) after `rtok agents update cursor`, `codex` and `copilot`, the entry is still in `~/.cursor/mcp.json`, `~/.codex/config.toml` (`[mcp_servers.rtok]`) and `~/.copilot/mcp-config.json`; (6) `rtok mcp ping claude --cli` and `--desktop` succeed (T275.1). When all six pass, the card moves to `done.md`.
 Each PR listed here becomes a subtask (`Tn.m`, D16) when it is claimed; this card stays the epic.
 
 ### T277. Move rtok's MCP core into its own crate `crates/rtok-mcp`
@@ -774,7 +782,7 @@ Execution plan (after T275 PR A, which gives the core in `src/agents/mcp.rs`):
 4. PR 5: `doctor`'s MCP probe into the crate; `ping` joins when T275.1 lands.
 5. PR 6: delete leftover helpers, add the guard test against MCP keys under `src/agents/`, generate the `docs/agents.md` host table.
 Each PR listed here becomes a subtask (`Tn.m`, D16) when it is claimed; this card stays the epic.
-Progress: PR 1 merged (#437); PR 2 (Claude Code and Desktop) done as T277.1. Next: PR 3, the other hosts.
+Progress: PR 1 merged (#437); PR 2 (Claude Code and Desktop) done as T277.1; PR 3's strict-JSON half (Cursor, Copilot, Gemini, Kimi, VS Code) done as T277.2. Next: ZCode, Codex and Grok, then the unaffected hosts.
 
 ### T278. `rtok agents info <agent>` reports the real MCP state, not "mcp installed" by assumption
 
