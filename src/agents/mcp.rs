@@ -451,6 +451,62 @@ pub(crate) fn run(cfg: &Config, spec: &McpSpec, mode: McpMode) -> anyhow::Result
     Ok(report.line())
 }
 
+/// [`run`] for an `agents install|update|remove` `mode` (T277.2): remove always takes the
+/// entry out; every other mode writes it while `[setup] mcp` is on, whatever a plugin serves
+/// (T275, D33), and is `None` when it is off.
+pub(crate) fn sync(
+    cfg: &Config,
+    spec: &McpSpec,
+    mode: super::Mode,
+) -> anyhow::Result<Option<String>> {
+    let mode = match mode {
+        super::Mode::Remove => McpMode::Remove,
+        _ if !cfg.setup.mcp => return Ok(None),
+        super::Mode::Update => McpMode::Update,
+        super::Mode::Install | super::Mode::Replace => McpMode::Install,
+    };
+    run(cfg, spec, mode).map(Some)
+}
+
+/// [`run`]'s install of `spec`: the `register_mcp` a [`super::D21Plugin`] host passes, and a
+/// host test's seed.
+pub(crate) fn install(cfg: &Config, spec: &McpSpec) -> anyhow::Result<String> {
+    run(cfg, spec, McpMode::Install)
+}
+
+/// [`run`]'s remove of `spec`, [`install`]'s counterpart.
+pub(crate) fn remove(cfg: &Config, spec: &McpSpec) -> anyhow::Result<String> {
+    run(cfg, spec, McpMode::Remove)
+}
+
+/// rtok's entry `<key>.rtok` in a host's strict-JSON `file` (T277.2): started with `command`,
+/// named `--host <host>`, in the host's `shape`. Every JSON host on [`run`] builds its spec
+/// here, so a host module holds only its file, key, launch command and shape.
+pub(crate) fn json_spec(
+    host: &'static str,
+    client: Client,
+    file: PathBuf,
+    key: &str,
+    command: String,
+    shape: EntryShape,
+) -> McpSpec {
+    McpSpec {
+        host,
+        client,
+        config_path: file,
+        format: Format::Json,
+        key_path: McpSpec::key_path(key),
+        server: RTOK,
+        launch: Launch {
+            command: Some(command),
+            host_arg: true,
+        },
+        entry_shape: shape,
+        duplicate_name: DuplicateName::ShowsBoth,
+        plugin_serves: None,
+    }
+}
+
 /// The argv an entry runs: `command` plus `args`, or one `command` array.
 fn argv_of(have: &Value) -> Vec<String> {
     let strs = |v: Option<&Value>| -> Vec<String> {

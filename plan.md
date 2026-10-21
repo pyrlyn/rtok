@@ -236,12 +236,11 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | # | Status | Priority | Complexity | Readiness | Agent |
 | --- | --- | --- | --- | --- | --- |
 | T124 | todo | P3 | 2 | 60% | |
-| T131 | todo | P2 | 3 | 70% | |
 | T156 | in progress | P3 | 3 | 50% | Claude Code / claude-opus-5-5 |
-| T261 | in progress | P2 | 3 | 95% | Cursor / grok 4.7 |
+| T261 | in progress | P2 | 3 | 95% | Claude Code / claude-opus-5-5 |
 | T275 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
 | T275.1 | in progress | P2 | 3 | 80% | Cursor / grok 4.7 |
-| T277 | in progress | P2 | 5 | 30% | Claude Code / sonnet-5.5 |
+| T277 | in progress | P2 | 5 | 45% | Claude Code / sonnet-5.5 |
 | T278 | in progress | P1 | 3 | 90% | Claude Code / claude-opus-5-5 |
 | T279 | in progress | P1 | 5 | 90% | Claude Code / claude-opus-5-5 |
 | T281 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
@@ -625,23 +624,13 @@ Creator-approved (moved from `roadmap.md`, from T178). Cut another ~10 ms off th
 
 Check: p50 as Claude Code sees it is at or under 10 ms for both events on the §19.2 harness, or the measured floor and the reason are written up; `just check`.
 
-### T131. Measure the spawn brief: cost row and on/off re-read share
-Rule: a saving that is not a `Measurement` row does not exist, and the brief is a cost first. Needs T128 and T130.2.
-Plan: T130.1's hook records a `Measurement` (`plugin: "memory"`, `kind: "brief"`) with the tokens it added (before = 0, after = brief) so the cost shows as negative saving; `rtok stats` `subagents` row splits the re-read share and sub-agent input tokens by "spawned with a brief" (the brief's archive id in the sub-agent's first user message) vs without.
-Check: fixture with one briefed and one plain sub-agent asserts the split; after a dated window with the flag on, `research.md` §17 gets the measured net; default flips to on only if net tokens saved > 0 — otherwise the card closes with the number and T130 stays off.
-Progress (2026-09-25): the cost row was already recorded by T130.1 (`memory`/`brief`, before 0, after = brief tokens); `tests/hook_spawn_brief.rs` now asserts one row per fired brief and none otherwise. `rtok stats` splits the `subagents` re-read share and input tokens into `brief` / `no brief`, detected by `measure::subagents::SPAWN_BRIEF_MARKER` in a sub-agent's first user message (a `handoff.rs` test pins it inside the brief's `INSTRUCTIONS`); fixture test `briefed_and_plain_subagents_split_the_reread_share`. Left: the dated window with the flag on, the net in `research.md` §17, and the default decision.
-
-Plan: finish only the agent-doable part: confirm the fixture/cost-row tests still pass and add whatever small piece the Progress line lacks. The dated flag-on window, the `research.md` §17 net and the default decision need the creator's paid live run: leave them in the card and set the row back to `todo` at 70 %.
-
-Local attempt (2026-10-15): not possible on LM Studio (`prism-ml/bonsai-27b`): the model fails a single-turn read task, so a briefed/plain sub-agent comparison would only measure noise; nothing recorded in `research.md` §17.
-
-Remaining work needs the creator: the fixture and cost-row tests (`tests/hook_spawn_brief.rs`, `briefed_and_plain_subagents_split_the_reread_share`) are in place and pass; the dated flag-on window, the `research.md` §17 net and the default decision need a paid live run.
-
 ### T124. Realized `tools_rewrite` saving as a dated `research.md` row
 6.2 % (T59.5) is the ceiling, not a saving: no dated row shows what `[proxy.tools_rewrite]` removes with the default `max_description_tokens = 60`. Precondition, by the creator: turn it on for this machine's proxy for at least 20 sessions. Then sum the `kind = tools_rewrite` Measurement rows against session input for the same window (`rtok stats` / `rtok gain`, dated command in the row), and write one row into `research.md` §2 next to the T59.5 row; update `docs/comparison.md` only if it cites the number. If the realized share is under the 3 % gate, say so in the row and leave the default off.
 Check: the row cites the command, date, sessions, before/after tokens and the share; no number in prose without it.
 
 Progress (2026-10-15, `research.md` §2): a local reference run (20 one-request sessions through a scratch proxy to LM Studio) puts the saving at 16.2 K tokens per request (42.0 % of a bare request, API-counted); the row says it is not the gate. Left: the creator's 20 real sessions on this machine's own proxy, and an answer-quality check with truncated built-in tool descriptions. Default stays off.
+
+Autonomous attempt (2026-10-21): not doable by an agent. No `rtok proxy` was running on this machine, the worktree sandbox cannot read the machine's rtok store or run the installed `rtok`, and 20 real sessions are paid live runs by the creator. No code is missing: `[proxy.tools_rewrite]` already records `proxy` / `tools_rewrite` Measurement rows, and `rtok stats --since <N>d --plugin proxy --json` sums them for the window (`--since` takes a duration, not a date). For the creator: set `[proxy.tools_rewrite] enabled = true` on this machine's proxy, note the start date, work at least 20 normal sessions, then run that command with `<N>` covering the window and write the row into `research.md` §2 with the date, sessions, est. before/after tokens and the share of session input. Under 3 %: the row says so and the default stays off. Nothing was added to `research.md`.
 
 ### T156. Probe: `WorktreeCreate`/`WorktreeRemove` hooks and reflink-seeded `target/`
 
@@ -650,6 +639,8 @@ No product code. Two open questions from `research.md` §18.3–18.4: (1) Claude
 Plan: throwaway hook script (scratch, not committed) that logs the payloads for `claude --worktree`, a sub-agent worktree and the desktop app, and returns a path under `_worktrees/`. For (2): two fresh worktrees of this repo, one seeded with `cp -c -R target`, one cold; record wall time of `just check` and physical disk delta (`df`, not `du` — clones are double-counted) for each. Write the payloads, the numbers and the dated commands into `research.md` §18. `reflink-copy` is a new dependency: adopting it is a creator decision taken on those numbers, not part of this task.
 
 Progress (2026-09-25, `research.md` §18.4 second data point): part (2) measured. Cold `just check` took 185 s and +6.28 GiB; seeded took 371 s and +3.35 GiB. The clone skipped every dependency rebuild (≈ 23 s saved), but T236's `dunnage` pass then compressed the cloned files (≈ 215 s). Parked as I-99, with no follow-up task. Lead (unmeasured, 2026-10-08): the installed `dunnage` 0.1.0 has its own `seed` and `worktree add` subcommands (`dunnage --help`), so seeding may not need `reflink-copy`. Part (1), the hook payloads from `claude --worktree`, a sub-agent worktree and the desktop app, is still open: it needs live sessions of the creator's.
+
+Progress (2026-10-21, `research.md` §18.4, fourth attempt): nothing measured. 20 GiB were free against the 30 GiB floor, the load average was 11.7–31.5, and the agent session could not run a host. Two changes since the second data point are recorded: the pass is now `swarfr` (#622), and `just check` is selective (T420), so a re-run must time `just full-check`. A re-run protocol is written there that times `swarfr` on its own. Left: the creator's live hook run and the quiet-machine re-run.
 
 Check: `research.md` §18 gains the hook payloads and a dated table (cold vs seeded: seconds, bytes); T159's card is corrected against the recorded payloads; seeding gets a follow-up task or an `ideas.md` entry from the numbers; no file under `src/` changes.
 
@@ -679,6 +670,13 @@ Progress (Cursor / grok 4.7): items 1–3 already on `origin/main` via #332 — 
 `check (ubuntu-latest)` and `check (macos-latest)` were green both times; cold→warm job wall: ubuntu 161 s → 146 s, macOS 362 s → 222 s (see PR #411 comment).
 
 Fold estimate (not folding): **82** `tests/*.rs` bins. macOS log `Finished test profile`: cold **2 m 05 s**, warm **1 m 16 s**. No per-binary `Linking` lines in the CI log. Fold not in this PR (82-file mechanical move; own task).
+
+Progress (Claude Code / claude-opus-5-5, 2026-10-21, local only: this agent may not edit `.github/workflows/` and has no Actions access):
+- Both blockers are gone on `main`. `just dup` passes: 408 clones, 1.79 % of lines (threshold 2). The Devin and `agents_install` Windows failures were fixed by #418 (`eaa385ea`, "Devin CI fixes"), and T425 (#759, `e37bd4cf`) replaced the wall-clock bound of `session_end_on_a_large_transcript_is_bounded` with a scaling check. `windows` runs inside `ci.yml`, which `pipeline.yml`'s `gate` needs, so every pull request merged since then has passed it.
+- The title's cause is gone: T310.12 (#664, `3f6d69e7`) deleted `crates/rtok-webui`, so `webui-check` and its 183 uncached crates no longer exist, and item 1 has nothing left to cache.
+- CI has changed shape since #411. Test binaries are built once per OS (`build-tests`, `cargo nextest archive`) and run in 2 shards (`test`, `windows`); sccache is on; `MACOS_RUNNER` can move macOS to the dedicated Mac. The #411 job timings no longer describe the critical path.
+- Item 4, re-measured on this Mac (16 cores, `cargo test --workspace --no-run --timings`, local `line-tables-only`): 129 `tests/*.rs` files (142 test executables in the workspace). Fresh `target/` (the local sccache from `mise.toml` was warm, and it does not cache the link of a test binary): `Finished` in 1 m 14 s; the 129 test units took 400.7 CPU-s (median 3.26 s) over 28 s of wall. After `touch src/lib.rs`: `Finished` in 46 s; the `rtok` lib test unit took 15 s, and the 129 test units took 360 CPU-s (median 2.98 s, smallest 1.18 s) over 25 s of wall. On a 3-core hosted macOS runner, 360 CPU-s is about 120 s, which matches the 76–125 s `Finished test profile` in #411. The fold is parked as I-139; it is not done here.
+- Left for the Check: one warm-cache `workflow_dispatch` run of `ci.yml` that is green, plus a PR comment with per-job timings against #411's table. The `save-if: … workflow_dispatch` lines in `ci.yml` (`lint` and `check` are marked "T261 experiment"; `build-tests` and `docs` have the same condition) keep manual runs warm for exactly that. Once the run is recorded, the creator decides whether they stay.
 
 ### T275. Install/update removes rtok's MCP entry from an agent's config while a plugin serves MCP (every host)
 
@@ -735,6 +733,7 @@ Execution plan (lands before T277; T277 then moves the core into its crate):
 3. PRs B-D, the other affected hosts in groups of at most 10 files: Copilot and Gemini (`d21_plugin_apply`); Cursor, Codex, VS Code; ZCode, Kimi, Grok. Each deletes that host's MCP branch and adds its table rows to the shared Vfs test.
 4. PR E: `doctor` warning (Fix 5), re-bless `docs/agents.md` and README MCP rows, then the creator-machine Check.
 Progress (2026-09-28): PR A and B-D merged for Claude, Copilot, Gemini, Codex, Cursor (#444), VS Code (#455), ZCode (#459), Kimi (#467); Grok is #468. PR E merged (#483, doctor warning). Command Code, the last host that gated MCP on its plugin, is T275.2 (2026-10-11). Left: the creator-machine Check.
+Progress (2026-10-21, agent audit on `main` `0d1608a`): no code change needed. Every host this card lists, plus Command Code, Qwen and CodeBuddy, now writes its MCP entry on install and update behind `[setup] mcp`, whether or not a plugin is installed. Only `remove` takes the entry out. Evidence: Claude Desktop `claude/mod.rs:944-970`, Claude Code `:977-1001`, `d21_plugin_apply` `agents/mod.rs:1599-1627` (Copilot, Gemini, Qwen, CodeBuddy), Cursor `cursor/mod.rs:98-109`, VS Code `vscode/mod.rs:121-137`, ZCode `zcode/mod.rs:232-249`, Kimi `kimi/mod.rs:111-135`, Grok `grok/mod.rs:85-104`, Command Code `commandcode/mod.rs:94-102`, Codex `codex/mod.rs:360-383` (`run` takes only `remove`). `tests/singleton.rs` checks the one-server-per-surface rule. omp, pi and Antigravity were checked as the card asks; none matches (`research.md` §25 row). omp writes `mcpServers.rtok` on every install. pi has no MCP. Antigravity's plugin `mcp_config.json` is its only MCP path, and rtok writes no Antigravity config. One gap found, not fixed because it is unplanned: `plugins/devin/.mcp.json` still ships `mcpServers.rtok` beside the `mcp_config.json` entry that setup always writes, and §25 has no Devin row, so whether Devin merges the two is unknown. The creator decides if Devin follows D33. The Check did not run: this session's permissions blocked running any `rtok` binary and reading host files outside the worktree. Re-run protocol for the creator: (1) `rtok agents update claude --dry-run` shows no `- mcpServers.rtok` line, then `rtok agents update claude`; (2) `jq '.mcpServers.rtok' "$HOME/Library/Application Support/Claude/claude_desktop_config.json" ~/.claude.json` prints two non-null entries; (3) Claude Desktop's Settings → Developer lists rtok, and `/mcp` in the Code tab and in `claude` lists one `rtok`; (4) `rtok agents info claude` and `rtok agents list` print `mcp` for each surface whose file holds the entry; (5) after `rtok agents update cursor`, `codex` and `copilot`, the entry is still in `~/.cursor/mcp.json`, `~/.codex/config.toml` (`[mcp_servers.rtok]`) and `~/.copilot/mcp-config.json`; (6) `rtok mcp ping claude --cli` and `--desktop` succeed (T275.1). When all six pass, the card moves to `done.md`.
 Each PR listed here becomes a subtask (`Tn.m`, D16) when it is claimed; this card stays the epic.
 
 ### T275.1. `rtok mcp ping <agent>`: prove the agent's rtok MCP server is alive and answering
@@ -794,7 +793,7 @@ Execution plan (after T275 PR A, which gives the core in `src/agents/mcp.rs`):
 4. PR 5: `doctor`'s MCP probe into the crate; `ping` joins when T275.1 lands.
 5. PR 6: delete leftover helpers, add the guard test against MCP keys under `src/agents/`, generate the `docs/agents.md` host table.
 Each PR listed here becomes a subtask (`Tn.m`, D16) when it is claimed; this card stays the epic.
-Progress: PR 1 merged (#437); PR 2 (Claude Code and Desktop) done as T277.1. Next: PR 3, the other hosts.
+Progress: PR 1 merged (#437); PR 2 (Claude Code and Desktop) done as T277.1; PR 3's strict-JSON half (Cursor, Copilot, Gemini, Kimi, VS Code) done as T277.2. Next: ZCode, Codex and Grok, then the unaffected hosts.
 
 ### T278. `rtok agents info <agent>` reports the real MCP state, not "mcp installed" by assumption
 

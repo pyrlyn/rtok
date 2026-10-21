@@ -1,5 +1,38 @@
 # rtok — completed tasks
 
+### T948. `worktree gc` idle age counts build caches
+
+Found 2026-10-20 with T949 and T950: 13 worktrees of this repo held ~134 GB, nearly all `target/`, and a `worktree gc` dry run removed one. `newest_until` folded the mtimes of files under tagged cache roots into the worktree's newest mtime, so a cargo or rust-analyzer build reset gc's 24 h idle clock without anyone touching the work.
+
+`newest_until` now skips every tagged cache root (`walk`'s `sources_only`), so gc's idle age reads source files only. `usage`, `worktree list` and `worktree clean`'s per-cache ages still count the caches.
+
+Check: `newest_until_leaves_tagged_caches_out` — an old source file and a new `target/` give the source's mtime, while `usage` still reports the cache's for the worktree and for the cache root.
+
+Status: done 2026-10-20
+Model: Claude Code / claude-opus-5-5
+
+### T949. `worktree gc` keeps a merged worktree whose locking agent has ended
+
+Bug. `gc::decide` (`src/worktree/gc.rs`) counted a git lock as held unless its agent was live (`Policy::live`) or the task was done (`Entry::done`, T453). The agent's `ended_at` in the store was never read, and nothing unlocks a worktree when its session ends (`git::unlock` runs only from `remove`, `migrate` and `claim`). A merged, clean worktree locked by an ended agent therefore waited `max(idle, stale_lock)`, 7 days by default. Seen: `rtok-plan-log-triage` (merged, agent `ended`) kept with "locked by Claude …", 4–18 GB of `target/` each. On the dry run after the fix it turned out to be a finished task (T453's `Verdict::Finished`): what kept it was T948's idle clock, which its `target/` kept resetting. This rule is for a merged worktree of an ended agent whose task is not marked finished.
+
+`gc::Policy` now takes the store's ended agent ids (`Store::ended_agent_ids`, `ops::ended_ids`), the way it takes the live ones; `worktree gc` and `agents junk` both pass them. A foreign lock naming an ended agent holds a merged, clean worktree only through the idle window, then `Verdict::Reclaim` with the note "agent <id> ended". A live agent's lock, and any lock on a dirty or unmerged worktree, still holds. An idle-but-not-ended agent (`rtok-t912`) is unchanged: it still waits out `stale_lock`.
+
+Check: `an_ended_agents_lock_holds_only_through_the_idle_window` — ended and idle → reclaim; ended but busy, unreadable, also live, dirty or unmerged, and a not-ended agent → keep.
+
+Status: done 2026-10-20
+Model: Claude Code / claude-opus-5-5
+
+### T950. `worktree gc` never drops the record of a vanished worktree under a foreign lock
+
+Bug. In `gc::decide` the `held` branch ran before `match entry.state`, so a `State::Stale` record (its directory is gone) under someone else's git lock got `keep("locked by …")` on every run and never reached `Verdict::DropRecord`. Seen: `_worktrees/completions-shared/apps/rtok-completions-shared` and `_worktrees/rtok-audit-20261018` (locked by OpenAI / GPT-6, 0 B, directories missing).
+
+Choice: after `stale_lock`, not at once. Git's lock exists for a worktree on a volume that is not mounted, so a fresh lock on a missing directory may still be in use. The record has no mtime, so the lock reason's date is its age. A vanished record under a foreign lock is dropped once that date is older than `stale_lock`, or at once when the lock's agent has ended (T949). An undated or bare lock still keeps it. `remove::detach` unlocks before it removes, so `--yes` drops only that admin entry, never a blanket `prune`.
+
+Check: `an_ended_agents_lock_holds_only_through_the_idle_window` — vanished with an ended agent or an old lock → drop-record; with a recent, undated or bare lock, or a recent lock of an agent that has not ended → keep. `gc_removes_only_finished_worktrees_and_never_opens_a_foreign_lock`: a vanished worktree under a September lock is dropped and its `.git/worktrees/<id>` is gone after `gc --yes`, one locked today stays.
+
+Status: done 2026-10-20
+Model: Claude Code / claude-opus-5-5
+
 ### T911. Count re-expands of the 8-character archive id
 
 T672 prints an 8-character archive id. `stats` still treated a pointer as shown only when the id was 12–64 hex chars, and it keyed the match on the first 12. An `… omitted (expand <8>)` line or a `[rtok <8>]` trailer was invisible, so the expand that followed it was not a re-expand. A full-id expand of that same archive missed it too.
@@ -857,6 +890,18 @@ Epic PR 2. `Claude::apply` for both clients (`~/.claude.json`, `claude_desktop_c
 Crate changes: `McpSpec` gains `launch` (absolute command, `--host <id>` pair); `ops::apply` takes the SDK `Apply` and judges removal with `rtok_agent_sdk::judge_owned` (the crate's own smaller copy is gone); `write_entry` treats a difference in the default `"type": "stdio"` alone as unchanged (T265); the strict-JSON refusal message is the SDK's (`parse_strict_json`). Report lines are the ones the hosts printed before. Other hosts and the status surface are unchanged.
 
 Check: crate table tests (launch and type tolerance; ownership x `--yes` x dry run), Claude table over both clients x install, update, remove with foreign keys kept, and a dry run that creates no file; `just check`.
+
+### T277.2. Cursor, Copilot, Gemini, Kimi and VS Code write and remove rtok's MCP entry through `rtok_mcp::ops`
+
+Epic PR 3, first half: the strict-JSON hosts T275 listed as affected. Each keeps only its `McpSpec` value (`mcp_spec`); its `register_mcp`, `unregister_mcp` and `mcp_entry` are gone. `agents::mcp::json_spec` builds a strict-JSON host spec (launch command, `--host <id>`, entry shape), and Claude's `mcp_spec_at` uses it too. `agents::mcp::sync` maps `agents install|update|remove` onto `ops::Mode` behind `[setup] mcp`; Cursor, Kimi, VS Code and the Claude Desktop branch call it. Copilot and Gemini keep `d21_plugin_apply` and pass closures over `mcp::install` / `mcp::remove`, because Qwen and CodeBuddy (JSONC, not migrated) still pass their own fn items. The crate gains `EntryShape::LocalAllTools` for Copilot's `{type: "local", ..., tools: ["*"]}`.
+
+Behaviour is unchanged except one case inherited from T277.1: a `mcpServers` / `servers` value that is not an object is an error naming the file, not replaced by `{}`. ZCode (nested `mcp.servers`), Codex and Grok (TOML) are the next subtask.
+
+Check: crate test `every_entry_shape_writes_its_documented_keys`; every host's existing lifecycle (T275), legacy-upgrade (T283.2) and ownership (T246) tests pass with only their call sites changed; `just full-check`.
+
+Result: `just full-check` on macOS against `c8ceaa2d`: fmt, clippy `-D warnings`, nextest 4101 passed, 8 skipped, pytest 43 passed, `build-min`, jscpd 1.79% lines; `just docs-check` green.
+Status: done 2026-10-21
+Model: Claude Code / claude-opus-5-5
 
 ### T461. Windows resident exit condition matches Unix
 
@@ -1839,6 +1884,21 @@ Result: brief lines read `/repo/lib.rs:6-8 beta, 1-4 alpha — rtok expand <id>`
 Check: `handoff::tests::pointers_carry_enclosing_symbol_ranges_when_indexed` (`graph` feature) indexes a two-function fixture, touches a `Read` window, an `Edit` and an unindexed `notes.txt`, and asserts `lib.rs:6-8 beta, 1-4 alpha`, a bare `notes.txt` line, and a range-free brief two tokens under budget; the other seven `handoff` tests unchanged and green; `just check` green.
 
 Status: done 2026-09-24
+Model: Claude Code / claude-opus-5-5
+
+### T131. Measure the spawn brief: cost row and on/off re-read share
+
+Rule: a saving that is not a `Measurement` row does not exist, and the brief is a cost first. Needs T128 and T130.2.
+
+Plan: T130.1's hook records a `Measurement` (`plugin: "memory"`, `kind: "brief"`) with the tokens it added (before = 0, after = brief) so the cost shows as negative saving; `rtok stats` `subagents` row splits the re-read share and sub-agent input tokens by "spawned with a brief" vs without.
+
+Check: fixture with one briefed and one plain sub-agent asserts the split; after a dated window with the flag on, `research.md` §17 gets the measured net; default flips to on only if net tokens saved > 0 — otherwise the card closes with the number and T130 stays off.
+
+Progress (2026-09-25): the cost row was already recorded by T130.1; `tests/hook_spawn_brief.rs` asserts one row per fired brief and none otherwise. `rtok stats` splits the `subagents` re-read share and input tokens into `brief` / `no brief` by `measure::subagents::SPAWN_BRIEF_MARKER` (a `handoff.rs` test pins it inside the brief's `INSTRUCTIONS`); fixture test `briefed_and_plain_subagents_split_the_reread_share`. A local LM Studio attempt (2026-10-15) measured only noise.
+
+Result (2026-10-21): the dated window did not need a new paid run. T292 has had `spawn_brief` on since 2026-10-04, so this machine's transcripts already held one. Measuring it showed the split was blind: 0 of 881 sub-agents counted as briefed against 1,021 `memory`/`brief` cost rows. Claude Code 2.1.304 writes `SubagentStart` `additionalContext` as a `hook_additional_context` attachment record, not in a `user` message. `jsonl::Parsed::subagent_start_context` now collects that record, and `has_spawn_brief` checks it before the first user message. The fixture uses the real record shape, and the plain agent gets an id-only `SubagentStart` context. `jsonl::tests::subagent_start_context_comes_from_its_attachment_only` pins the parser. Measured net in `research.md` §17.5: 525 briefed vs 356 plain sub-agents. Re-read share was 6.8 % vs 4.5 % and the brief costs 198 tokens per spawn (≈ 104 K in the window), so net < 0. No default changed: D35 (creator) keeps `spawn_brief` on, and reversing it is the creator's call.
+
+Status: done 2026-10-21
 Model: Claude Code / claude-opus-5-5
 
 ### T262.1. Claude hook entries come from `plugins/claude/hooks/hooks.json`
@@ -3951,6 +4011,35 @@ Check: unit tests for the status helper (temp `Places`), the planner (install-on
 Status: done 2026-10-04 · Model: Claude Code / sonnet-5-5
 
 Result: `src/completions/picker.rs`: pure `plan(installed, chosen) -> Changes`, `list` (`--list`), `run(places, cmd, ask)` that applies the plan through `install::install`/`uninstall`, and `ask_terminal`, the `inquire` MultiSelect (pre-checked where installed; Esc and Ctrl-C are a cancel that changes nothing). `install::status` is the one installed check: the script file `uninstall` removes, with `Places::script` still the only path owner; a shell with no per-user location (Clink off Windows) is listed with `-` and never offered. `rtok completions` with no shell chooses `--list`, the picker (stdin and stdout are terminals) or an error naming `<shell>`, `--install` and `--list`, so it never waits for input. Crate: `inquire` 0.9.4 (`default-features = false`, `crossterm` only; last release 2026-02, repository active 2026-03), picked over `dialoguer` (0.12.0, 2025-08) and `cliclack` (0.5.6) because it shares the crossterm 0.29 copy `rtok tui` already links; `rust.md` and `toolchain.md` have the row. Tests: 6 unit tests in `picker.rs` (planner four ways, status, apply with a fake prompt, cancel and prompt failure touch nothing, `--list`), `tests/completions_picker_pty.rs` drives the real prompt on a pseudo-terminal (check installs, uncheck removes, Esc cancels), trycmd `completions-list` and `completions-no-shell`. The shell completion goldens and `help`/`man` goldens changed only by the new `--list` flag and the longer command doc; `completions.list` is in `config_coverage` `ALLOW_KEYS`.
+
+### T943. `rtok completions --install` works in zsh without manual steps and never goes stale
+
+Creator request 2026-10-20: after `rtok completions --install`, Tab in zsh suggested nothing.
+Three causes on the creator's machine: `~/.zfunc` was not on `fpath` (install only printed a
+hint); the installed `_rtok` was generated by an older rtok and lacked newer commands, since
+nothing rewrites it after an upgrade; `compinit -C` trusts a dump made before `_rtok` existed,
+so even a correct `fpath` is ignored until the dump is deleted.
+
+Done when, in zsh, one `rtok completions zsh --install` and a new shell give Tab completion
+with a stale `compinit -C` dump and no `.zshrc` edit; an upgraded rtok completes its new
+commands without a reinstall (bash, zsh, fish, PowerShell too); `--uninstall` removes exactly
+what was written, and other content of a touched rc file stays byte-for-byte.
+
+Result: `src/completions/install.rs`. Bash, zsh, fish and PowerShell get a wrapper of a few
+lines that runs `rtok completions <shell>` when the shell first needs it (lazy in bash, zsh and
+fish; at profile load in PowerShell, about 10 ms) and does nothing without `rtok` on `PATH`. The
+zsh wrapper calls `_rtok` itself after the `eval`, because `$funcstack[1]` is `(eval)` there and
+the generated tail would only run `compdef`. Elvish and Clink keep the static script (no shell
+here to test a wrapper). zsh also gets `.zfunc/rtok.zsh` (puts `.zfunc` on `fpath`; on the first
+prompt, once the rc files ran `compinit`, autoloads `_rtok` and runs `compdef _rtok rtok`, so an
+old `compinit -C` dump does not matter) and one guarded line sourcing it in
+`${ZDOTDIR:-~}/.zshenv`, which zsh reads before `.zshrc`. The rc line reuses the PowerShell
+profile-line helpers; the old printed `fpath` hint is gone. Tests: unit tests over a temp home
+(the three zsh files, `.zshenv` kept byte-for-byte with CRLF and no trailing newline, uninstall,
+reinstall unchanged, `ZDOTDIR`, wrappers vs static scripts, quoting); `tests/completions_shells.rs`
+drives `zsh -i` on a pty with a dump made before `_rtok` and checks `rtok work<Tab>` →
+`rtok worktree` (fails on the old install code), plus wrapper tests for bash, fish and pwsh, each
+skipped when its shell is missing. `docs/install.md` describes it; `just check`.
 
 ### T319. Ship man pages and completions in release archives
 

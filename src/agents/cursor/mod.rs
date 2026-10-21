@@ -16,6 +16,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use rtok_agent_sdk::{Apply, NO_CHANGES, array_at, edit_json, object_at};
+use rtok_mcp::spec::{Client, EntryShape, McpSpec};
 use serde_json::{Value, json};
 
 use super::hook_events;
@@ -103,11 +104,7 @@ impl Agent for Cursor {
         let mut lines = vec![run(cfg, remove || PLUGIN.ours(cfg))?, plugin];
         // MCP is independent of the plugin (T275/D33): every install/update writes
         // `mcp.json`'s `mcpServers.rtok` regardless of plugin state; only remove takes it out.
-        if remove {
-            lines.push(unregister_mcp(cfg)?);
-        } else if cfg.setup.mcp {
-            lines.push(register_mcp(cfg)?);
-        }
+        lines.extend(super::mcp::sync(cfg, &mcp_spec(cfg), mode)?);
         Ok(lines)
     }
 }
@@ -193,21 +190,17 @@ pub(crate) fn mcp_path(cfg: &Config) -> PathBuf {
     cfg.setup.cursor.hooks_path.with_file_name("mcp.json")
 }
 
-/// Register `rtok mcp` in `~/.cursor/mcp.json` (sibling of `hooks.json`).
-pub fn register_mcp(cfg: &Config) -> Result<String> {
-    let cmd = super::rtok_mcp_command();
-    rtok_agent_sdk::register_mcp(
-        &apply(cfg),
-        &mcp_path(cfg),
-        "rtok",
-        &cmd,
-        &super::mcp_args("cursor"),
+/// `mcpServers.rtok = {type: "stdio", command, args}` in `~/.cursor/mcp.json` (sibling of
+/// `hooks.json`); `rtok_mcp::ops` writes and removes it (T277.2).
+pub(crate) fn mcp_spec(cfg: &Config) -> McpSpec {
+    super::mcp::json_spec(
+        "cursor",
+        Client::Ide,
+        mcp_path(cfg),
+        "mcpServers",
+        super::rtok_mcp_command(),
+        EntryShape::TypedCommand,
     )
-}
-
-/// Drop `mcpServers.rtok` from `~/.cursor/mcp.json` (`rtok agents remove cursor`).
-pub fn unregister_mcp(cfg: &Config) -> Result<String> {
-    super::unregister_mcp_ours(cfg, &mcp_path(cfg), "rtok")
 }
 
 /// The linked Cursor plugin (D21, T10.5). Dry-run and the unaccepted offer MUST contain the
@@ -424,33 +417,6 @@ mod tests {
         let _ = fs::remove_dir_all(dir);
     }
 
-    /// T932: Cursor is started by the OS with no shell PATH, so a bare `rtok` fails to spawn;
-    /// the entry names an installed file, an older bare one is repointed, foreign servers stay.
-    #[cfg(unix)]
-    #[test]
-    fn mcp_command_is_an_absolute_existing_path() {
-        let ketch = super::super::fake_installed_rtok();
-        let dir = tmp("abs-mcp");
-        let c = cfg(dir.join("hooks.json"), false);
-        let mcp = mcp_path(&c);
-        fs::write(
-            &mcp,
-            r#"{"mcpServers":{"rtok":{"type":"stdio","command":"rtok","args":["mcp","--host","cursor"]},"other":{"command":"x"}}}"#,
-        )
-        .unwrap();
-        register_mcp(&c).unwrap();
-        let doc: Value = serde_json::from_str(&fs::read_to_string(&mcp).unwrap()).unwrap();
-        let got = doc["mcpServers"]["rtok"]["command"].as_str().unwrap();
-        assert_eq!(got, ketch.to_string_lossy());
-        assert!(
-            Path::new(got).is_absolute() && Path::new(got).is_file(),
-            "{got}"
-        );
-        assert_eq!(doc["mcpServers"]["other"], json!({"command": "x"}));
-        assert_eq!(register_mcp(&c).unwrap(), "no changes");
-        let _ = fs::remove_dir_all(dir);
-    }
-
     #[test]
     fn foreign_plugin_dir_keeps_plain_mcp_working() {
         let dir = tmp("foreign");
@@ -464,7 +430,7 @@ mod tests {
         fs::write(dest.join("mine.txt"), "not rtok's plugin").unwrap();
         // Seed a working plain install: hooks + mcpServers.rtok already present.
         run(&c, false).unwrap();
-        register_mcp(&c).unwrap();
+        crate::agents::mcp::install(&c, &mcp_spec(&c)).unwrap();
         assert!(PLUGIN.linked(&c), "the foreign dir makes linked() true");
         assert!(!PLUGIN.ours(&c), "but it is not ours");
 
@@ -511,7 +477,7 @@ mod tests {
             Kind::Desktop,
             &path,
             "mcpServers",
-            || register_mcp(&c),
+            || crate::agents::mcp::install(&c, &mcp_spec(&c)),
         );
         let _ = fs::remove_dir_all(dir);
     }

@@ -30,13 +30,15 @@ pub fn stale_lock() -> Duration {
 pub enum Verdict {
     /// Merged, clean, idle and not held by anyone else: remove the worktree.
     Remove,
-    /// Merged, clean and idle past `stale_lock` under someone else's lock (T418): the
-    /// session that took it is gone and nothing is left to lose. Holds the lock's owner.
+    /// Merged, clean and idle past `stale_lock` under someone else's lock (T418), or past the
+    /// idle window when the lock's agent has ended (T949): the session that took it is gone
+    /// and nothing is left to lose. Holds the lock's owner.
     Reclaim(String),
     /// A finished task ([`Entry::done`]), idle, that a live agent or someone else's lock
     /// would otherwise keep (T453). Holds what it overrides.
     Finished(String),
-    /// The directory is gone: drop this one record (never a blanket `prune`).
+    /// The directory is gone: drop this one record (never a blanket `prune`). Under someone
+    /// else's lock only once its agent has ended or the lock is past `stale_lock` (T950).
     DropRecord,
     Keep(String),
 }
@@ -50,6 +52,9 @@ pub struct Policy<'a> {
     pub now: SystemTime,
     /// Live rtok agents (T282): a worktree bound to one is never removed (T285).
     pub live: std::collections::HashSet<String>,
+    /// Ended rtok agents (T949): nothing unlocks a worktree when its session ends, so the lock
+    /// they left holds only through the idle window, not `stale_lock`.
+    pub ended: std::collections::HashSet<String>,
     /// Worktrees a post-create script adopted before any agent took them (T289.5): no agent
     /// to ask yet, so they are held like a live agent's.
     pub pending: Vec<PathBuf>,
@@ -79,11 +84,13 @@ pub fn decide(
     if current {
         return keep("the worktree this command runs from");
     }
-    let agent = record.owner().and_then(|o| o.agent);
-    let live = agent.filter(|a| p.live.contains(a)).map(|agent| {
-        let short: String = agent.chars().take(8).collect();
-        format!("agent {short} is live")
-    });
+    let lock = record.owner();
+    let agent = lock.as_ref().and_then(|o| o.agent.as_deref());
+    let short = |a: &str| a.chars().take(8).collect::<String>();
+    let live = agent
+        .filter(|a| p.live.contains(*a))
+        .map(|a| format!("agent {} is live", short(a)));
+    let ended = agent.filter(|a| p.ended.contains(*a)).map(short);
     let pending = || {
         let dir = crate::fs::canon(&record.path);
         p.pending.iter().any(|d| crate::fs::same_path(&dir, d))
@@ -111,11 +118,31 @@ pub fn decide(
     }
     if held {
         let owner = owner();
-        // Only a merged, clean worktree: a dirty, unmerged or vanished one may still be
-        // the only copy of someone's work, so its lock holds however old it is.
-        let fresh = p.idle.max(p.stale_lock);
+        if entry.state == State::Stale {
+            // T950: a vanished directory holds no work; the lock only waits out a holder that
+            // may still be using it from a volume that is not mounted. The record has no
+            // mtime, so the lock's own date is its age.
+            let dated = lock
+                .as_ref()
+                .and_then(|o| humantime::parse_rfc3339(&format!("{}T00:00:00Z", o.date)).ok());
+            let abandoned = dated.is_some_and(|d| p.age(d) >= p.stale_lock);
+            return match ended.is_some() || abandoned {
+                true => Verdict::DropRecord,
+                false => keep(&format!("locked{owner}")),
+            };
+        }
+        // Only a merged, clean worktree: a dirty or unmerged one may still be the only copy
+        // of someone's work, so its lock holds however old it is. An ended agent's lock is a
+        // leftover (T949): it holds only through the idle window.
+        let fresh = match ended {
+            Some(_) => p.idle,
+            None => p.idle.max(p.stale_lock),
+        };
         return match entry.state == State::Merged && age(fresh).is_some_and(|a| a >= fresh) {
-            true => Verdict::Reclaim(owner),
+            true => Verdict::Reclaim(match ended {
+                Some(a) => format!("{owner}, agent {a} ended"),
+                None => owner,
+            }),
             false => keep(&format!("locked{owner}")),
         };
     }
@@ -379,6 +406,7 @@ mod tests {
             stale_lock: Duration::from_secs(500),
             now: at(1_000),
             live: ["0193ab12-live".to_string()].into(),
+            ended: Default::default(),
             pending: Vec::new(),
         };
         let asked = std::cell::Cell::new(None);
@@ -417,6 +445,7 @@ mod tests {
             stale_lock: Duration::ZERO,
             now: at(1_000),
             live: Default::default(),
+            ended: Default::default(),
             pending: Vec::new(),
         };
         let verdict = decide(&entry, |_| None, false, &policy);
@@ -445,6 +474,7 @@ mod tests {
             stale_lock: Duration::from_secs(500),
             now: at(1_000),
             live: Default::default(),
+            ended: Default::default(),
             pending: Vec::new(),
         };
         assert_eq!(
@@ -488,6 +518,7 @@ mod tests {
             stale_lock: Duration::from_secs(500),
             now: at(1_000),
             live: ["0193ab12-live".to_string()].into(),
+            ended: Default::default(),
             pending: Vec::new(),
         };
         let got = label(decide(&entry, |_| modified.map(at), false, &policy));
@@ -522,11 +553,71 @@ mod tests {
             stale_lock: Duration::from_secs(500),
             now: at(1_000),
             live: Default::default(),
+            ended: Default::default(),
             pending: vec!["/w/parked".into()],
         };
         assert_eq!(
             label(decide(&entry, |_| modified.map(at), false, &policy)),
             want
         );
+    }
+
+    const ENDED: &str = "Claude Code / opus | t1 | 2026-10-20 | agent 0193ab12-gone";
+    const ENDED_LIVE: &str = "Claude Code / opus | t1 | 2026-10-20 | agent 0193ab12-both";
+    const UNSEEN: &str = "Claude Code / opus | t1 | 2026-10-20 | agent 0193ab12-unseen";
+    const THEIRS_RECENT: &str = "Cursor / grok | t2 | 2026-10-18";
+    const THEIRS_UNDATED: &str = "Cursor / grok | t2 | someday";
+
+    /// T949: an ended agent's lock is a leftover — it holds a merged, clean worktree only
+    /// through the idle window, not `stale_lock`; dirty or unmerged work still holds. T950: a record
+    /// whose directory is gone goes under a foreign lock once its agent has ended or the lock's
+    /// date is past `stale_lock`. `now` is 2026-10-20 12:00 UTC; `ago` is the newest file's age.
+    #[rstest]
+    #[case::ended_idle(
+        State::Merged,
+        ENDED,
+        200,
+        "reclaim: by Claude Code / opus, agent 0193ab12 ended"
+    )]
+    #[case::ended_busy(State::Merged, ENDED, 50, "keep:locked by Claude Code / opus")]
+    #[case::ended_unreadable(State::Merged, ENDED, u64::MAX, "keep:locked by Claude Code / opus")]
+    #[case::not_ended(State::Merged, UNSEEN, 200, "keep:locked by Claude Code / opus")]
+    #[case::ended_but_live(State::Merged, ENDED_LIVE, 200, "keep:agent 0193ab12 is live")]
+    #[case::ended_dirty(State::Dirty, ENDED, 200, "keep:locked by Claude Code / opus")]
+    #[case::ended_unmerged(State::Unmerged, ENDED, 200, "keep:locked by Claude Code / opus")]
+    #[case::gone_ended(State::Stale, ENDED, u64::MAX, "drop-record")]
+    #[case::gone_old_lock(State::Stale, THEIRS, u64::MAX, "drop-record")]
+    #[case::gone_recent_lock(State::Stale, THEIRS_RECENT, u64::MAX, "keep:locked by Cursor / grok")]
+    #[case::gone_undated(State::Stale, THEIRS_UNDATED, u64::MAX, "keep:locked by Cursor / grok")]
+    #[case::gone_bare(State::Stale, "", u64::MAX, "keep:locked, owner unknown")]
+    #[case::gone_not_ended(State::Stale, UNSEEN, u64::MAX, "keep:locked by Claude Code / opus")]
+    fn an_ended_agents_lock_holds_only_through_the_idle_window(
+        #[case] state: State,
+        #[case] locked: &str,
+        #[case] ago: u64,
+        #[case] want: &str,
+    ) {
+        let now = humantime::parse_rfc3339("2026-10-20T12:00:00Z").unwrap();
+        let entry = Entry {
+            record: Record {
+                branch: Some("t1".into()),
+                locked: Some(locked.into()),
+                ..Record::default()
+            },
+            state,
+            merged: state == State::Merged,
+            done: false,
+        };
+        let policy = Policy {
+            owner: Some(ME),
+            idle: Duration::from_secs(100),
+            stale_lock: Duration::from_secs(7 * 86_400),
+            now,
+            live: ["0193ab12-live".to_string(), "0193ab12-both".to_string()].into(),
+            ended: ["0193ab12-gone".to_string(), "0193ab12-both".to_string()].into(),
+            pending: Vec::new(),
+        };
+        let modified = (ago != u64::MAX).then(|| now - Duration::from_secs(ago));
+        assert_eq!(label(decide(&entry, |_| modified, false, &policy)), want);
     }
 }

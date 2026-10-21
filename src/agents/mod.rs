@@ -1577,9 +1577,10 @@ pub(crate) fn print_offer(
     )
 }
 
-/// The per-host fn items [`d21_plugin_apply`] threads through: Copilot's and Gemini's own
-/// `plugin`, `plugin_installed`, `run`, `register_mcp`, `unregister_mcp` already match these
-/// signatures exactly, so a host passes them in by name.
+/// The per-host fn items [`d21_plugin_apply`] threads through: a host passes its own
+/// `plugin`, `plugin_installed`, `run`, `register_mcp`, `unregister_mcp` by name, or a
+/// closure where they need an argument (CodeBuddy's variant; Copilot's and Gemini's spec for
+/// [`mcp::run`], T277.2).
 pub(crate) struct D21Plugin {
     pub offer: fn(&Config, bool) -> Result<String>,
     pub plugin_installed: fn(&Config) -> bool,
