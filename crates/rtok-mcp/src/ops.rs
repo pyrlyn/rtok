@@ -343,6 +343,38 @@ mod tests {
         assert_eq!(fs.read(&s.config_path).unwrap(), no_type, "file untouched");
     }
 
+    /// Each [`EntryShape`] as the host's docs spell it, and an install of it reads back as
+    /// unchanged (Copilot's `type`/`tools` pair survives the no-change comparison).
+    #[test]
+    fn every_entry_shape_writes_its_documented_keys() {
+        use serde_json::json;
+        let table = [
+            (
+                EntryShape::TypedCommand,
+                json!({"type": "stdio", "command": "rtok", "args": ["mcp"]}),
+            ),
+            (
+                EntryShape::Command,
+                json!({"command": "rtok", "args": ["mcp"]}),
+            ),
+            (
+                EntryShape::LocalAllTools,
+                json!({"type": "local", "command": "rtok", "args": ["mcp"], "tools": ["*"]}),
+            ),
+        ];
+        for (shape, want) in table {
+            let mut s = spec(Format::Json, "mcpServers");
+            s.entry_shape = shape;
+            assert_eq!(s.entry(), want, "{shape:?}");
+            let mut fs = MemFs::default();
+            for (mode, wrote) in [(Mode::Install, true), (Mode::Update, false)] {
+                let r = apply(&s, mode, &Apply::default(), &mut fs, is_rtok_bin).unwrap();
+                assert_eq!(matches!(r, Report::Wrote(_)), wrote, "{shape:?} {mode:?}");
+            }
+            assert_eq!(config::read_entry(&fs, &s).unwrap(), Some(want));
+        }
+    }
+
     /// Removal of an entry already in the file, by who owns it and how the run is set:
     /// (entry, `--yes`, dry run) -> (report prefix, entry still there).
     #[test]
