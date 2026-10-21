@@ -147,6 +147,10 @@ fn archive_summaries_are_stored_once_per_version_and_purged_with_the_archive() {
     assert!(!store.put_archive_summary(&id, "v1", "second").unwrap());
     assert!(store.put_archive_summary(&id, "v2", "other").unwrap());
     assert_eq!(
+        store.archive_summaries().unwrap(),
+        [(id.clone(), "first".into()), (id.clone(), "other".into())]
+    );
+    assert_eq!(
         store.archive_summary(&id, "v1").unwrap().as_deref(),
         Some("first")
     );

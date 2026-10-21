@@ -21,6 +21,16 @@ impl Store {
             .optional()?)
     }
 
+    /// Every stored `(archive_id, summary)`, any version, ordered by id: the Gate P28 bench
+    /// (T385.9.3) checks each one against the must-keep fixture and `expand`.
+    pub fn archive_summaries(&self) -> Result<Vec<(String, String)>> {
+        let mut conn = self.lock()?;
+        Ok(archive_summaries::table
+            .select((archive_summaries::archive_id, archive_summaries::summary))
+            .order((archive_summaries::archive_id, archive_summaries::version))
+            .load(&mut *conn)?)
+    }
+
     /// Store a summary; `true` when this call wrote it. A second writer for the same
     /// `(archive_id, version)` changes nothing: the first text is the one in the live zone.
     pub fn put_archive_summary(

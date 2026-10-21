@@ -370,7 +370,7 @@ tasks    = "bench/tasks.toml"
 runs     = 3
 dry_run  = false
 timeout_s = 900                       # на один запуск задачі
-suite    = ""                         # "" = шість задач T9.1; "graph" = T68.9 з MCP і без
+suite    = ""                         # "" = шість задач T9.1; "graph" = T68.9 з MCP і без; "p28" = T385.9.3 компресор проти lossless
 [bench.configs]                       # назва = файл налаштувань, що передається в `claude --settings`
 a = "bench/configs/legacy.json"
 b = "bench/configs/rtok.json"
