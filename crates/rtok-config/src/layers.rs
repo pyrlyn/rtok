@@ -1100,4 +1100,27 @@ mod tests {
         assert_eq!(level.2, want_source);
         let _ = std::fs::remove_dir_all(&home);
     }
+
+    /// T385.9.3: the Gate P28 arms start their proxies with these (`research.md` §16.11); a
+    /// name that stopped resolving would bench the lossless path twice.
+    #[test]
+    fn p28_bench_arm_settings_reach_their_keys() {
+        let home = tmp("p28-arms");
+        let flags = || proxy_flags(Some(8812), false, None, Some("compress".into()));
+        let cfg: Config = fig(&home, &[], flags()).extract().unwrap();
+        assert!(!cfg.plugins.compress.llm.enabled, "arm a: compressor off");
+        let env = [("PLUGINS_COMPRESS_LLM_ENABLED", "true")];
+        let cfg: Config = fig(&home, &env, flags()).extract().unwrap();
+        assert_eq!(
+            (cfg.proxy.port, cfg.proxy.mode.as_str()),
+            (8812, "compress")
+        );
+        let llm = &cfg.plugins.compress.llm;
+        assert!(llm.enabled && cfg.plugins.compress.enabled);
+        assert!(
+            llm.url.is_empty(),
+            "the compressor posts to this proxy's internal lane"
+        );
+        let _ = std::fs::remove_dir_all(&home);
+    }
 }

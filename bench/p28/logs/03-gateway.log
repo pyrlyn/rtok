@@ -1,0 +1,112 @@
+2026-10-21T09:44:09Z DEBUG gw.cache       edge cache miss for a private route, request passed through to the origin as is
+2026-10-21T09:44:15Z INFO  gw.edge        request forwarded upstream with the trace headers attached and the body streamed
+2026-10-21T09:44:17Z DEBUG gw.limits      per client window reset, no client is close to its request ceiling right now
+2026-10-21T09:44:25Z INFO  gw.edge        TLS handshake completed with the client, protocol negotiated as h2 with ALPN
+2026-10-21T09:44:34Z INFO  gw.health      upstream pool healthy, every member answered the last probe inside its deadline
+2026-10-21T09:44:38Z DEBUG gw.cache       edge cache miss for a private route, request passed through to the origin as is
+2026-10-21T09:44:47Z DEBUG gw.limits      per client window reset, no client is close to its request ceiling right now
+2026-10-21T09:44:54Z DEBUG gw.limits      per client window reset, no client is close to its request ceiling right now
+2026-10-21T09:44:58Z INFO  gw.edge        request forwarded upstream with the trace headers attached and the body streamed
+2026-10-21T09:45:07Z INFO  gw.edge        request forwarded upstream with the trace headers attached and the body streamed
+2026-10-21T09:45:08Z INFO  gw.edge        response relayed to the client, connection kept alive for the next request
+2026-10-21T09:45:10Z DEBUG gw.route       route POST /v1/ledger/postings matched the ledger service, weights unchanged
+2026-10-21T09:45:11Z INFO  gw.edge        request forwarded upstream with the trace headers attached and the body streamed
+2026-10-21T09:45:16Z WARN  gw.route       upstream reset the stream, error counted and the request retried elsewhere
+2026-10-21T09:45:21Z INFO  gw.edge        TLS handshake completed with the client, protocol negotiated as h2 with ALPN
+2026-10-21T09:45:28Z DEBUG gw.limits      per client window reset, no client is close to its request ceiling right now
+2026-10-21T09:45:35Z INFO  gw.edge        response relayed to the client, connection kept alive for the next request
+2026-10-21T09:45:38Z DEBUG gw.limits      per client window reset, no client is close to its request ceiling right now
+2026-10-21T09:45:40Z DEBUG gw.route       settlement route matched the settlement service, upstream weights unchanged
+2026-10-21T09:45:41Z DEBUG gw.route       route POST /v1/ledger/postings matched the ledger service, weights unchanged
+2026-10-21T09:45:49Z INFO  gw.edge        request forwarded upstream with the trace headers attached and the body streamed
+2026-10-21T09:45:53Z WARN  gw.route       upstream reset the stream, error counted and the request retried elsewhere
+2026-10-21T09:46:00Z INFO  gw.health      upstream pool healthy, every member answered the last probe inside its deadline
+2026-10-21T09:46:07Z INFO  gw.health      upstream pool healthy, every member answered the last probe inside its deadline
+2026-10-21T09:46:13Z INFO  gw.edge        response relayed to the client, connection kept alive for the next request
+2026-10-21T09:46:17Z INFO  gw.edge        response relayed to the client, connection kept alive for the next request
+2026-10-21T09:46:18Z DEBUG gw.route       settlement route matched the settlement service, upstream weights unchanged
+2026-10-21T09:46:23Z DEBUG gw.route       route POST /v1/ledger/postings matched the ledger service, weights unchanged
+2026-10-21T09:46:29Z INFO  gw.edge        request forwarded upstream with the trace headers attached and the body streamed
+2026-10-21T09:46:38Z WARN  gw.route       upstream reset the stream, error counted and the request retried elsewhere
+2026-10-21T09:46:42Z DEBUG gw.route       upstream picked by least connections, sticky cookie absent so no affinity applied
+2026-10-21T09:46:47Z INFO  gw.health      upstream pool healthy, every member answered the last probe inside its deadline
+2026-10-21T09:46:49Z DEBUG gw.route       upstream picked by least connections, sticky cookie absent so no affinity applied
+2026-10-21T09:46:57Z DEBUG gw.limits      per client window reset, no client is close to its request ceiling right now
+2026-10-21T09:47:03Z DEBUG gw.route       upstream picked by least connections, sticky cookie absent so no affinity applied
+2026-10-21T09:47:10Z DEBUG gw.route       upstream picked by least connections, sticky cookie absent so no affinity applied
+2026-10-21T09:47:11Z INFO  gw.edge        request forwarded upstream with the trace headers attached and the body streamed
+2026-10-21T09:47:18Z INFO  gw.health      upstream pool healthy, every member answered the last probe inside its deadline
+2026-10-21T09:47:20Z INFO  gw.edge        response relayed to the client, connection kept alive for the next request
+2026-10-21T09:47:21Z INFO  gw.edge        TLS handshake completed with the client, protocol negotiated as h2 with ALPN
+2026-10-21T09:47:27Z INFO  gw.edge        response relayed to the client, connection kept alive for the next request
+2026-10-21T09:47:36Z INFO  gw.health      upstream pool healthy, every member answered the last probe inside its deadline
+2026-10-21T09:47:37Z DEBUG gw.cache       edge cache miss for a private route, request passed through to the origin as is
+2026-10-21T09:47:38Z INFO  gw.health      upstream pool healthy, every member answered the last probe inside its deadline
+2026-10-21T09:47:40Z ERROR gw.edge        upstream timed out for request req_7f3a9c21d4, client got a gateway timeout page
+2026-10-21T09:47:49Z DEBUG gw.route       upstream picked by least connections, sticky cookie absent so no affinity applied
+2026-10-21T09:47:53Z INFO  gw.edge        TLS handshake completed with the client, protocol negotiated as h2 with ALPN
+2026-10-21T09:47:58Z INFO  gw.edge        response relayed to the client, connection kept alive for the next request
+2026-10-21T09:48:01Z INFO  gw.health      upstream pool healthy, every member answered the last probe inside its deadline
+2026-10-21T09:48:07Z INFO  gw.edge        TLS handshake completed with the client, protocol negotiated as h2 with ALPN
+2026-10-21T09:48:13Z DEBUG gw.route       settlement route matched the settlement service, upstream weights unchanged
+2026-10-21T09:48:20Z INFO  gw.edge        request forwarded upstream with the trace headers attached and the body streamed
+2026-10-21T09:48:28Z INFO  gw.edge        response relayed to the client, connection kept alive for the next request
+2026-10-21T09:48:37Z INFO  gw.edge        response relayed to the client, connection kept alive for the next request
+2026-10-21T09:48:46Z DEBUG gw.route       upstream picked by least connections, sticky cookie absent so no affinity applied
+2026-10-21T09:48:53Z INFO  gw.health      upstream pool healthy, every member answered the last probe inside its deadline
+2026-10-21T09:48:58Z DEBUG gw.cache       edge cache miss for a private route, request passed through to the origin as is
+2026-10-21T09:49:03Z INFO  gw.edge        response relayed to the client, connection kept alive for the next request
+2026-10-21T09:49:12Z INFO  gw.health      upstream pool healthy, every member answered the last probe inside its deadline
+2026-10-21T09:49:13Z DEBUG gw.route       settlement route matched the settlement service, upstream weights unchanged
+2026-10-21T09:49:19Z INFO  gw.edge        response relayed to the client, connection kept alive for the next request
+2026-10-21T09:49:26Z INFO  gw.edge        TLS handshake completed with the client, protocol negotiated as h2 with ALPN
+2026-10-21T09:49:27Z INFO  gw.edge        request forwarded upstream with the trace headers attached and the body streamed
+2026-10-21T09:49:35Z DEBUG gw.route       settlement route matched the settlement service, upstream weights unchanged
+2026-10-21T09:49:41Z DEBUG gw.route       settlement route matched the settlement service, upstream weights unchanged
+2026-10-21T09:49:49Z INFO  gw.health      upstream pool healthy, every member answered the last probe inside its deadline
+2026-10-21T09:49:50Z ERROR gw.settle      retry budget exhausted for batch bat_01HZX4M8Q2 after the settlement upstream reset
+2026-10-21T09:49:51Z INFO  gw.edge        TLS handshake completed with the client, protocol negotiated as h2 with ALPN
+2026-10-21T09:49:56Z DEBUG gw.route       settlement route matched the settlement service, upstream weights unchanged
+2026-10-21T09:50:01Z DEBUG gw.limits      per client window reset, no client is close to its request ceiling right now
+2026-10-21T09:50:04Z DEBUG gw.route       settlement route matched the settlement service, upstream weights unchanged
+2026-10-21T09:50:07Z DEBUG gw.route       settlement route matched the settlement service, upstream weights unchanged
+2026-10-21T09:50:13Z DEBUG gw.route       settlement route matched the settlement service, upstream weights unchanged
+2026-10-21T09:50:18Z INFO  gw.health      upstream pool healthy, every member answered the last probe inside its deadline
+2026-10-21T09:50:20Z INFO  gw.edge        response relayed to the client, connection kept alive for the next request
+2026-10-21T09:50:23Z INFO  gw.edge        TLS handshake completed with the client, protocol negotiated as h2 with ALPN
+2026-10-21T09:50:32Z INFO  gw.health      upstream pool healthy, every member answered the last probe inside its deadline
+2026-10-21T09:50:37Z DEBUG gw.cache       edge cache miss for a private route, request passed through to the origin as is
+2026-10-21T09:50:43Z DEBUG gw.cache       edge cache miss for a private route, request passed through to the origin as is
+2026-10-21T09:50:50Z INFO  gw.edge        request forwarded upstream with the trace headers attached and the body streamed
+2026-10-21T09:50:52Z DEBUG gw.route       upstream picked by least connections, sticky cookie absent so no affinity applied
+2026-10-21T09:50:58Z DEBUG gw.route       settlement route matched the settlement service, upstream weights unchanged
+2026-10-21T09:51:06Z DEBUG gw.cache       edge cache miss for a private route, request passed through to the origin as is
+2026-10-21T09:51:09Z INFO  gw.edge        drain finished on the old edge node, all clients moved to the new listener
+2026-10-21T09:51:15Z DEBUG gw.route       upstream picked by least connections, sticky cookie absent so no affinity applied
+2026-10-21T09:51:23Z DEBUG gw.cache       edge cache miss for a private route, request passed through to the origin as is
+2026-10-21T09:51:27Z INFO  gw.health      upstream pool healthy, every member answered the last probe inside its deadline
+2026-10-21T09:51:28Z DEBUG gw.route       upstream picked by least connections, sticky cookie absent so no affinity applied
+2026-10-21T09:51:34Z DEBUG gw.cache       edge cache miss for a private route, request passed through to the origin as is
+2026-10-21T09:51:39Z INFO  gw.edge        request forwarded upstream with the trace headers attached and the body streamed
+2026-10-21T09:51:41Z DEBUG gw.route       settlement route matched the settlement service, upstream weights unchanged
+2026-10-21T09:51:44Z DEBUG gw.route       settlement route matched the settlement service, upstream weights unchanged
+2026-10-21T09:51:49Z INFO  gw.edge        response relayed to the client, connection kept alive for the next request
+2026-10-21T09:51:57Z INFO  gw.health      upstream pool healthy, every member answered the last probe inside its deadline
+2026-10-21T09:52:04Z DEBUG gw.route       settlement route matched the settlement service, upstream weights unchanged
+2026-10-21T09:52:11Z INFO  gw.health      upstream pool healthy, every member answered the last probe inside its deadline
+2026-10-21T09:52:12Z INFO  gw.edge        response relayed to the client, connection kept alive for the next request
+2026-10-21T09:52:15Z INFO  gw.edge        response relayed to the client, connection kept alive for the next request
+2026-10-21T09:52:16Z DEBUG gw.cache       edge cache miss for a private route, request passed through to the origin as is
+2026-10-21T09:52:25Z DEBUG gw.limits      per client window reset, no client is close to its request ceiling right now
+2026-10-21T09:52:34Z INFO  gw.edge        response relayed to the client, connection kept alive for the next request
+2026-10-21T09:52:35Z DEBUG gw.cache       edge cache miss for a private route, request passed through to the origin as is
+2026-10-21T09:52:44Z DEBUG gw.limits      per client window reset, no client is close to its request ceiling right now
+2026-10-21T09:52:53Z INFO  gw.health      upstream pool healthy, every member answered the last probe inside its deadline
+2026-10-21T09:52:57Z DEBUG gw.route       settlement route matched the settlement service, upstream weights unchanged
+2026-10-21T09:53:02Z DEBUG gw.route       upstream picked by least connections, sticky cookie absent so no affinity applied
+2026-10-21T09:53:06Z DEBUG gw.route       upstream picked by least connections, sticky cookie absent so no affinity applied
+2026-10-21T09:53:07Z INFO  gw.edge        TLS handshake completed with the client, protocol negotiated as h2 with ALPN
+2026-10-21T09:53:14Z DEBUG gw.cache       edge cache miss for a private route, request passed through to the origin as is
+2026-10-21T09:53:15Z INFO  gw.edge        TLS handshake completed with the client, protocol negotiated as h2 with ALPN
+2026-10-21T09:53:17Z DEBUG gw.limits      per client window reset, no client is close to its request ceiling right now
+2026-10-21T09:53:26Z INFO  gw.edge        request forwarded upstream with the trace headers attached and the body streamed

@@ -552,4 +552,133 @@ mod tests {
         let bad = ProgressRunner::quiet("sh", ["-c", "printf partial; exit 3"]);
         assert!(run_bounded(bad, Duration::from_secs(30)).is_none());
     }
+
+    fn p28_dir() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("bench/p28")
+    }
+
+    /// T385.9.3: the Gate P28 overlay (`research.md` §16.11) runs two arms whose settings
+    /// differ only in the proxy they send `claude -p` to; the proxies differ only in the flag.
+    #[test]
+    fn p28_overlay_runs_two_arms_that_differ_only_in_their_proxy() {
+        let home = crate::testutil::tmp_dir("bench-p28");
+        let dir = p28_dir();
+        let mut c =
+            crate::config::layers::load(&home, Some(&dir.join("bench.toml")), None).unwrap();
+        let arms: Vec<&str> = c.bench.configs.keys().map(String::as_str).collect();
+        assert_eq!(arms, ["a", "b"]);
+        let mut rest = Vec::new();
+        let mut urls = Vec::new();
+        for path in c.bench.configs.values() {
+            let path = dir.join(path);
+            let body = std::fs::read(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+            let mut v: Value = serde_json::from_slice(&body).unwrap();
+            let url = v["env"]
+                .as_object_mut()
+                .unwrap()
+                .remove("ANTHROPIC_BASE_URL");
+            urls.push(url.and_then(|u| u.as_str().map(String::from)).unwrap());
+            rest.push(v);
+        }
+        assert_eq!(urls, ["http://127.0.0.1:8811", "http://127.0.0.1:8812"]);
+        assert_eq!(rest[0], rest[1], "only the proxy URL may differ");
+        c.bench.tasks = dir.join(&c.bench.tasks);
+        c.bench.dry_run = true;
+        c.bench.runs = 1;
+        assert_eq!(run(&c).unwrap().lines().count(), 6 * 2);
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    /// T385.9.3: every task's answer is a must-keep span of an archivable, non-code log (so
+    /// the compressor takes it and the guard makes its summary keep the answer) that neither
+    /// the pointer's head/tail nor the extractive view shows, and a summary carrying every span
+    /// of that log still fits under the pointer.
+    #[test]
+    fn p28_tasks_ask_for_a_must_keep_span_no_cheaper_view_shows() {
+        use crate::plugins::compress::{extractive_summary, llm::is_code, must_keep::spans};
+
+        #[derive(Deserialize)]
+        struct P28 {
+            tasks: Vec<P28Task>,
+        }
+        #[derive(Deserialize)]
+        struct P28Task {
+            id: String,
+            log: String,
+            answer: String,
+            prompt: String,
+            check: String,
+        }
+        let dir = p28_dir();
+        let cfg = Config::default();
+        let (archive, llm) = (&cfg.plugins.archive, &cfg.plugins.compress.llm);
+        let mut logs: Vec<String> = std::fs::read_dir(dir.join("logs"))
+            .unwrap()
+            .map(|e| format!("logs/{}", e.unwrap().file_name().to_string_lossy()))
+            .collect();
+        logs.sort();
+        assert_eq!(logs.len(), 8);
+        for log in &logs {
+            let text = std::fs::read_to_string(dir.join(log)).unwrap();
+            let est = crate::tokens::estimate(&text, rtok_plugin_sdk::Class::Code, &cfg.estimator);
+            assert!(
+                est >= archive.min_tokens,
+                "{log}: {est} tokens is never archived"
+            );
+            assert!(
+                !is_code(&text),
+                "{log}: code is left to the extractive view"
+            );
+            assert!(spans(&text).len() <= llm.max_spans as usize, "{log}");
+        }
+        let file: P28 = Figment::new()
+            .merge(Toml::file(dir.join("tasks.toml")))
+            .extract()
+            .unwrap();
+        assert_eq!(file.tasks.len(), 6);
+        for t in &file.tasks {
+            let id = &t.id;
+            let at: Vec<usize> = logs
+                .iter()
+                .map(|l| t.prompt.find(l.as_str()).unwrap())
+                .collect();
+            assert!(at.is_sorted(), "{id}: the prompt reads every log in order");
+            assert!(
+                logs[..3].contains(&t.log),
+                "{id}: the fact is in one of the oldest logs"
+            );
+            assert!(t.check.contains(&format!("'{}'", t.answer)), "{id}");
+            assert!(t.check.ends_with("rm -f answer.txt; exit $s"), "{id}");
+            let text = std::fs::read_to_string(dir.join(&t.log)).unwrap();
+            let lines: Vec<&str> = text.lines().collect();
+            let hits: Vec<usize> = (0..lines.len())
+                .filter(|&i| lines[i].contains(&t.answer))
+                .collect();
+            assert_eq!(hits.len(), 1, "{id}: the answer is on one line");
+            let (head, tail) = (archive.head_lines as usize, archive.tail_lines as usize);
+            assert!(
+                (head..lines.len() - tail).contains(&hits[0]),
+                "{id}: shown by the pointer"
+            );
+            assert!(
+                !extractive_summary("id", &text).contains(&t.answer),
+                "{id}: extractive view"
+            );
+            let all = spans(&text);
+            assert!(
+                all.iter().any(|s| s.text.contains(&t.answer)),
+                "{id}: not a must-keep span"
+            );
+            let kept: usize = all.iter().map(|s| s.text.len() + 2).sum();
+            let pointer: usize = lines[..head]
+                .iter()
+                .chain(&lines[lines.len() - tail..])
+                .map(|l| l.len() + 1)
+                .sum();
+            assert!(
+                kept + 80 < pointer,
+                "{id}: {kept} span bytes cannot fit under a {pointer}-byte pointer"
+            );
+        }
+    }
 }

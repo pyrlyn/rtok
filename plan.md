@@ -249,8 +249,8 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T370 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
 | T385 | in progress | P1 | 5 | 85% | Claude Code / opus-5-5 |
 | T385.3 | todo | P1 | 3 | 50% | |
-| T385.9 | in progress | P3 | 5 | 70% | Claude Code / claude-opus-5-5 |
-| T385.9.3 | todo | P3 | 2 | 10% | |
+| T385.9 | in progress | P3 | 5 | 75% | Claude Code / claude-opus-5-5 |
+| T385.9.3 | todo | P3 | 2 | 40% | |
 | T394 | todo | P2 | 2 | 20% | |
 | T395 | todo | P3 | 2 | 20% | |
 | T396 | todo | P3 | 2 | 90% | |
@@ -1016,6 +1016,8 @@ Part of T385.9, after T385.9.2. `rtok bench` cost per passed task with the compr
 Check: the dated `research.md` row with cost per passed task, pass rate and compressor tokens.
 
 Progress (2026-10-15, `research.md` §16.9): a local attempt on LM Studio (`prism-ml/bonsai-27b`) gave no evidence: the control arm returned an empty answer, and with the flag on the compressor never fired (0 summaries). Left: a bench that can pass its control (a capable model), tasks with more than `keep_turns` turns after the large results, and a compressor arm in `rtok bench`; the paid run still needs the creator.
+
+Progress (2026-10-21, `research.md` §16.11): the arm and the tasks are in. `bench/p28/` holds an `rtok bench` overlay with arms `a` (:8811, compress mode, compressor off) and `b` (:8812, plus `RTOK_PLUGINS_COMPRESS_LLM_ENABLED=true`). It has six tasks that read eight 13 KB logs one per turn and then answer from one of the first three, with checks that can fail. Tests pin the arms and show that each answer is a must-keep span that neither the pointer nor the extractive view shows. Nothing ran. Left: the paid run by the §16.11 protocol (T394), with the compressor's internal-lane cost added to arm `b` by hand.
 
 ### T394. Run the paid live benches and record them
 
