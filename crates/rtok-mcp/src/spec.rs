@@ -40,11 +40,13 @@ pub enum DuplicateName {
 }
 
 /// Whether the entry carries the `"type": "stdio"` default (Claude Code, Cursor) or omits it
-/// (a host whose schema has only one transport, so the field is redundant).
+/// (a host whose schema has only one transport, so the field is redundant). `LocalAllTools` is
+/// Copilot CLI's documented shape: `"type": "local"` and `"tools": ["*"]` around the argv.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EntryShape {
     TypedCommand,
     Command,
+    LocalAllTools,
 }
 
 /// How a host starts the server when that is not the registry's bare `rtok mcp`. A desktop app
@@ -110,12 +112,20 @@ impl McpSpec {
     /// ([`crate::config`] owns that conversion, never a caller).
     pub fn entry(&self) -> Value {
         let mut m = serde_json::Map::new();
-        if self.entry_shape == EntryShape::TypedCommand {
-            m.insert("type".into(), json!("stdio"));
+        let kind = match self.entry_shape {
+            EntryShape::TypedCommand => Some("stdio"),
+            EntryShape::LocalAllTools => Some("local"),
+            EntryShape::Command => None,
+        };
+        if let Some(kind) = kind {
+            m.insert("type".into(), json!(kind));
         }
         let (command, args) = self.argv();
         m.insert("command".into(), json!(command));
         m.insert("args".into(), json!(args));
+        if self.entry_shape == EntryShape::LocalAllTools {
+            m.insert("tools".into(), json!(["*"]));
+        }
         if !self.server.env.is_empty() {
             let env: serde_json::Map<String, Value> = self
                 .server

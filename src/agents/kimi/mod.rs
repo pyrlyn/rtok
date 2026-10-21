@@ -22,7 +22,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use rtok_agent_sdk::NO_CHANGES;
-use serde_json::{Value, json};
+use rtok_mcp::spec::{Client, EntryShape, McpSpec};
 use toml_edit::{ArrayOfTables, DocumentMut, Item, Table, value};
 
 use super::claude::{is_ours, show};
@@ -113,7 +113,7 @@ impl Agent for Kimi {
         if remove {
             let mut lines = vec![offer_plugin(cfg, true)?];
             lines.push(run(cfg, true)?);
-            lines.push(unregister_mcp(cfg)?);
+            lines.extend(super::mcp::sync(cfg, &mcp_spec(cfg), mode)?);
             return Ok(lines);
         }
         let plugin = plugin_detected(cfg);
@@ -122,9 +122,7 @@ impl Agent for Kimi {
         // independent of the plugin (T275/D33): install/update always write
         // `mcpServers.rtok` regardless of plugin state; only remove takes it out.
         let mut lines = vec![run(cfg, plugin)?];
-        if cfg.setup.mcp {
-            lines.push(register_mcp(cfg)?);
-        }
+        lines.extend(super::mcp::sync(cfg, &mcp_spec(cfg), mode)?);
         // The offer line goes first unconditionally once the plugin is already detected;
         // otherwise it follows only when something else changed and `--yes` is set — a
         // repeat install is all `NO_CHANGES` and reads back as `already installed` (every
@@ -189,27 +187,17 @@ pub fn run(cfg: &Config, remove: bool) -> Result<String> {
     Ok(report)
 }
 
-/// The `mcpServers.rtok` entry [`register_mcp`] writes.
-fn mcp_entry(cmd: &str) -> Value {
-    json!({"command": cmd, "args": super::mcp_args("kimi")})
-}
-
-/// `mcpServers.rtok = {command, args}` in `mcp.json` — Kimi's documented shape carries no `type`.
-pub fn register_mcp(cfg: &Config) -> Result<String> {
-    let cmd = super::rtok_command();
-    rtok_agent_sdk::register_server(
-        &apply(cfg),
-        &mcp_path(cfg),
+/// `mcpServers.rtok = {command, args}` in `mcp.json` — Kimi's documented shape carries no
+/// `type`; `rtok_mcp::ops` writes and removes it (T277.2).
+pub(crate) fn mcp_spec(cfg: &Config) -> McpSpec {
+    super::mcp::json_spec(
+        "kimi",
+        Client::Cli,
+        mcp_path(cfg),
         "mcpServers",
-        NAME,
-        mcp_entry(&cmd),
-        &super::mcp_summary(&cmd, "kimi"),
+        super::rtok_command(),
+        EntryShape::Command,
     )
-}
-
-/// Drop `mcpServers.rtok` from `mcp.json`, unless the user edited it (T246.2).
-pub fn unregister_mcp(cfg: &Config) -> Result<String> {
-    super::unregister_ours(cfg, &mcp_path(cfg), "mcpServers", NAME, &mcp_entry("rtok"))
 }
 
 /// An absent file is an empty document; an unreadable one is an error (never overwrite a
@@ -362,6 +350,7 @@ fn strip_ours(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     /// Shared fixture (the T86 tests below reuse it).
     fn cfg(name: &str, dry: bool) -> (Config, PathBuf) {
@@ -500,15 +489,21 @@ mod tests {
     #[test]
     fn mcp_lands_beside_the_config_without_a_type_field() {
         let (c, path) = cfg("mcp", false);
-        let first = register_mcp(&c).unwrap();
+        let first = crate::agents::mcp::install(&c, &mcp_spec(&c)).unwrap();
         assert!(first.starts_with("mcpServers.rtok: "), "{first}");
-        assert_eq!(register_mcp(&c).unwrap(), NO_CHANGES);
+        assert_eq!(
+            crate::agents::mcp::install(&c, &mcp_spec(&c)).unwrap(),
+            NO_CHANGES
+        );
         assert_eq!(mcp_path(&c), path.parent().unwrap().join("mcp.json"));
         let raw = fs::read_to_string(mcp_path(&c)).unwrap();
         assert!(!raw.contains("\"type\""), "{raw}");
         assert!(raw.contains("\"mcp\""), "{raw}");
         assert_eq!(Kimi.installed(&c, Kind::Cli), ["mcp"]);
-        assert_eq!(unregister_mcp(&c).unwrap(), "- mcpServers.rtok");
+        assert_eq!(
+            crate::agents::mcp::remove(&c, &mcp_spec(&c)).unwrap(),
+            "- mcpServers.rtok"
+        );
         assert!(!fs::read_to_string(mcp_path(&c)).unwrap().contains("rtok"));
         let _ = fs::remove_dir_all(path.parent().unwrap());
     }
@@ -659,7 +654,7 @@ command = \"/old/store/rtok/v0.1.0/rtok hook PreToolUse\"\ntimeout = 1\n\n\
             Kind::Cli,
             &path,
             "mcpServers",
-            || register_mcp(&c),
+            || crate::agents::mcp::install(&c, &mcp_spec(&c)),
         );
         let _ = fs::remove_dir_all(dir);
     }
@@ -673,8 +668,8 @@ command = \"/old/store/rtok/v0.1.0/rtok hook PreToolUse\"\ntimeout = 1\n\n\
             r#"{"mcpServers":{"other":{"command":"x"},"rtok":{"command":"rtok","args":["mcp"]}}}"#,
             "kimi",
             &["\"other\""],
-            || register_mcp(&c),
-            || unregister_mcp(&c),
+            || crate::agents::mcp::install(&c, &mcp_spec(&c)),
+            || crate::agents::mcp::remove(&c, &mcp_spec(&c)),
         );
         let _ = fs::remove_dir_all(cfg_path.parent().unwrap());
     }
