@@ -254,8 +254,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T395 | todo | P3 | 2 | 30% | |
 | T396 | todo | P3 | 2 | 90% | |
 | T398 | todo | P3 | 1 | 30% | |
-| T413 | todo | P2 | 3 | 0% | |
-| T413.13 | in progress | P3 | 2 | 0% | Claude Code / claude-sonnet-5-5 |
 | T414 | in progress | P1 | 4 | 20% | Claude Code / opus-5.5 |
 | T414.7 | in progress | P3 | 1 | 0% | MiMo / mimo |
 | T416 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
@@ -1038,34 +1036,6 @@ From `research.md` §18.2 (T157): every non-interactive reader opens a relative-
 Done means: one dated row per editor in §18.2. If all pass, the `worktrees` skill and `AGENTS.md` gain the setting (T157's Check); if any fails, the failure is recorded and the setting stays off.
 
 Check: the §18.2 table has four dated rows.
-
-### T413. More agent hosts: popular agents rtok does not install into yet
-
-Creator request 2026-10-05: add installers for popular coding agents missing from `src/agents/` (22 hosts on `9d6557c7`). One sub-task per host, one PR each. The list below is a lead, not evidence: every fact a sub-task relies on (binary, config paths, MCP entry format, hook events and payloads, plugin or extension API) is first written into `research.md` with its primary source (vendor docs or the repository's own files, URL plus date checked).
-
-Shared shape for every sub-task, per `architecture.md` "New host" and D21:
-1. Research: a `research.md` row for the host with the sources above; if a field is not documented, it stays out of the installer (never guessed).
-2. `src/agents/<host>/mod.rs` implementing `Agent` (variants, detection, files, installed modules, apply) and `README.md` with the module table and `## Docs`; registered in `HOSTS` and `host()`; `[setup.<host>]` paths in `config/default.toml`, `src/config/mod.rs`, `docs/config.md`.
-3. Reuse first: a host that forks or mirrors an existing one (named per card) shares that host's code through a helper, never a copy. Host configs: check only rtok's entry, keep the rest byte-for-byte; backups and `--dry-run` from `rtok-agent-sdk`.
-4. `docs/agents.md` row; `agents_install` matrix row (install twice / remove twice / list) against fake homes, never the real agent.
-
-5. Per-host check: the targeted tests above, `agents_doc` and `host_docs` green, `just check` green; one manual `rtok agents install <host> --dry-run` on this machine if the host is installed here, otherwise say "not installed here" in `done.md`.
-
-Check: every sub-task below is closed in `done.md` with its per-host check.
-
-
-
-
-
-### T413.13. `rtok agents install trae` — Trae
-
-Trae IDE (ByteDance). MCP; check whether its config mirrors the VS Code layout `src/agents/vscode/` already handles.
-
-Check: the T413 per-host check (step 5) for this host.
-
-Plan: Trae docs for the MCP file. Reuse the VS Code helper only if the key and path match; otherwise a thin host of its own.
-
-Finding (2026-10-12, `research.md` §32.13): Trae's docs name only a project `.trae/mcp.json`, which is the project's, and a user-level `mcp.json` behind the app's Raw Config button with no path. No installer is written until a documented user-level path exists.
 
 ### T414. Web dashboard restyle on the brand pack, built from `brand/` sources
 
