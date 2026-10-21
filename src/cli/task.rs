@@ -59,6 +59,10 @@ pub(super) enum TaskCmd {
         /// Finish a parent even though subtasks are still open
         #[arg(long)]
         force: bool,
+        /// Closing report of a task set to done or closed (`-` for stdin); the plan/ layout
+        /// keeps it in done.md
+        #[arg(long, value_name = "TEXT")]
+        report: Option<String>,
         /// Print the task as JSON
         #[arg(long)]
         json: bool,
@@ -253,11 +257,23 @@ pub(super) fn run(action: TaskCmd, config_file: Option<&std::path::Path>) -> Res
             id,
             status,
             force,
+            report,
             json,
         } => {
             let id = id_of(&id)?;
             let status = status.as_deref().map(str::parse::<Status>).transpose()?;
-            let task = crate::tasks::ops::set_status(&cfg, &open()?, &id, status, force)?;
+            let report = match report.as_deref() {
+                Some("-") => Some(std::io::read_to_string(std::io::stdin())?),
+                other => other.map(str::to_string),
+            };
+            let task = crate::tasks::ops::set_status(
+                &cfg,
+                &open()?,
+                &id,
+                status,
+                force,
+                report.as_deref(),
+            )?;
             if json {
                 print_json(&task)?;
             } else {

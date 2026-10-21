@@ -103,6 +103,9 @@ pub const HOSTS: &[&str] = &[
 /// Adapters `[tasks] adapter` accepts. `tasks::run::ADAPTERS` re-exports this.
 pub const TASK_ADAPTERS: [&str; 3] = ["disk", "github", "gitlab"];
 
+/// Layouts `[tasks.disk] layout` accepts.
+pub const TASK_LAYOUTS: [&str; 3] = ["auto", "files", "folders"];
+
 /// Plugin catalogue: `(id, default_on)`. The registry's manifests must match this list
 /// (asserted by a test in `plugins`), and [`Plugins`] has one field per id.
 pub const CATALOGUE: [(&str, bool); 13] = [
@@ -1114,10 +1117,13 @@ section! {
 }
 
 section! {
-    /// `[tasks.disk]` — one Markdown file per task.
+    /// `[tasks.disk]` — Markdown files on disk, one file or one folder per task.
     TasksDisk {
-        /// Relative to the project root; done tasks move to `<dir>/done`.
+        /// Relative to the project root; with `files`, done tasks move to `<dir>/done`.
         dir: PathBuf = p("tasks"),
+        /// `files` (`R12 - slug.md`, done ones in `<dir>/done`), `folders` (`<id>/task.md`, closed
+        /// by an `<id>/done.md`; the `plan/` layout) or `auto`: `folders` when `dir` holds one.
+        layout: String = s("auto"),
     }
 }
 
