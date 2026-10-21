@@ -1,0 +1,4 @@
+**T1.2 `rtok stats`** · T1.1 · `src/measure/stats.rs`
+Do: per-tool result sizes (count, total, mean, p95, max), Bash by command family (strip leading `cd … &&`, env assignments), MCP server groups, usage totals, cache hit rate, median final context, and **context-token-turns** per tool: for each tool_result of T tokens at turn t in a session of N turns, ctt = T × (N − t). Output table (default) or `--json`. `--since 30d`.
+Check: `rtok stats --since 60d` reproduces H-measured.md within ±5 % on the same 17 sessions (Bash ≈ 1.0 M, Read ≈ 414 K est. tokens).
+Status: done 2026-09-02 · Check: `cargo test measure::` green (CTT + bash family). `rtok stats --since 60d` runs: Bash 7.58 M / Read 2.85 M est. tokens on 536 current transcripts (170 295 lines). Deviation: `H-measured.md` and the original 17-session list (43 609 lines, Bash ≈ 1.0 M, Read ≈ 414 K) are not in the repo; live 60d corpus has grown. p95 currently equals max (no per-result sample histogram).
