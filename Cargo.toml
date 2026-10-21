@@ -23,7 +23,9 @@ toml_edit = "0.25" # in-place TOML: `config set` and rtok-mcp
 diesel = { version = "2.2", features = ["sqlite", "returning_clauses_for_sqlite_3_35"] }
 rstest = "0.27.0" # parameterized tests in the binary and rtok-agent-sdk
 sha2 = "0.11" # checksums: the store, the proxy cache, and otel
-fs-kit = { version = "0.2.0", features = ["clone"] } # one entry point for paths, atomic writes, trees; `clone` seeds worktree caches (T953)
+# `clone` seeds worktree caches (T953). It is on pyrlyn/crates main (T49) but not released: release-plz has not
+# cut fs-kit 0.2.0, so crates.io only has 0.1.0. Pinned to the T49 merge; back to `version = "0.2.0"` once released.
+fs-kit = { git = "https://github.com/pyrlyn/crates", rev = "afa651209f2b99b03058ed63bd4e62477737dbdb", features = ["clone"] } # one entry point for paths, atomic writes, trees
 regex = "1" # request-body noise (store) and search/bench patterns (binary)
 schemars = "1.2.2" # JSON Schema: store project rows and the /ws protocol
 humantime = "2.4" # idle duration: the store and `rtok agents`
