@@ -13,7 +13,7 @@ use serde_json::Value;
 use crate::names::strip_wrap;
 
 #[cfg(feature = "graph")]
-mod grep_symbol;
+pub(crate) mod grep_symbol;
 mod sed;
 mod skill;
 
