@@ -244,7 +244,7 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T278 | in progress | P1 | 3 | 90% | Claude Code / claude-opus-5-5 |
 | T279 | in progress | P1 | 5 | 90% | Claude Code / claude-opus-5-5 |
 | T281 | in progress | P1 | 3 | 70% | Claude Code / claude-opus-5-5 |
-| T289 | in progress | P2 | 4 | 75% | Claude Code / sonnet-5 |
+| T289 | in progress | P2 | 4 | 90% | Claude Code / claude-opus-5-5 |
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
 | T369.1 | todo | P3 | 1 | 0% | |
 | T370 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
@@ -934,6 +934,8 @@ Check: adopt e2e in a scratch repo with a worktree under a fake `~/.cursor/workt
 Execution (2026-10-03, Claude Code / sonnet-5): split into four PRs, each at most about 300 LOC, stacked on T288 step 4. Design decisions the card left open:
 - `adopt` is `claim` with three differences: the path defaults to the caller's worktree (cwd), `--task` names the task when the branch cannot (a detached HEAD such as Codex's `thread-N`; the directory name is the last fallback), and a worktree in a pool whose host evicts by itself (Cursor, Windsurf/Devin, Codex) gets **no git lock**, only the claim row. Reason: the card says to confirm per host whether a locked worktree breaks the host's eviction, and that needs a live run on each host (the creator's probe, like T281); until it is confirmed, a lock could stop Cursor's cap of 25 from evicting, so the safe choice is the store-only claim. `worktree list` and `gc` already read an unlocked worktree's claim row (T285), so a live agent's adopted worktree is still never collected. Flip the pool table once a host is confirmed.
 - The origin of a worktree is derived from its path (`~/.cursor/worktrees/`, `~/.windsurf/worktrees/`, `<repo>/.claude/worktrees/`, `<repo>/.kilo/worktrees/`, `$CODEX_HOME/worktrees`, `~/conductor/workspaces/`; else `rtok` under `[worktree] root`, else `other`), so no migration. The `worktree list` table already has a `source` column (source bytes), so the new field is named `origin` in the table and in `--json`.
+
+Progress (2026-10-21, `research.md` §26 "Git lock against a host's own eviction"): T289.1–T289.5 are in `done.md`, so steps 2–5 and the Check's e2e parts are shipped. Still open: step 2's per-host confirmation. Git's documented lock rules (`remove` refuses a lock without `-f -f`; `prune` never drops a locked record) mean a lock in an evicting pool either blocks the sweep or does nothing. The store-only claim in `origin::evicts` is therefore never worse, and it gives up protection only on a host whose sweep honours locks. No host was run. Agents never run one (T280), and this session's permissions blocked scratch scripts, `gh search` and web search. A re-run protocol is written there. Left: the creator's live run on Cursor, Windsurf/Devin and Codex; then flip `evicts` per host, or keep it, and close the card.
 
 ### T523. `worktree add` takes `T504 read-hook-same-path` as an id plus a slug
 
