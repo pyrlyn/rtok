@@ -127,7 +127,12 @@ impl Drop for Term {
     }
 }
 
-/// The creator's failure: `.zfunc` off `fpath` and a `compinit -C` dump made before `_rtok`
+/// Drops `fpath` dirs that already hold an `_rtok` (an rtok installed system-wide, such as by
+/// Homebrew), so neither the dump nor the shell sees one the install did not write.
+const HIDE_SYSTEM_RTOK: &str =
+    "keep=(); for d in $fpath; do [[ -e $d/_rtok ]] || keep+=($d); done; fpath=($keep)";
+
+/// The creator's failure:`.zfunc` off `fpath` and a `compinit -C` dump made before `_rtok`
 /// existed. After one install, with no `.zshrc` edit, Tab completes a subcommand.
 #[test]
 fn zsh_tab_completes_with_a_stale_compinit_dump_and_no_zshrc_edit() {
@@ -138,12 +143,14 @@ fn zsh_tab_completes_with_a_stale_compinit_dump_and_no_zshrc_edit() {
     let made = Command::new(&zsh)
         .args([
             "-fc",
-            "autoload -Uz compinit && compinit -u -d \"$HOME/dump\"",
+            &format!("{HIDE_SYSTEM_RTOK}\nautoload -Uz compinit && compinit -u -d \"$HOME/dump\""),
         ])
         .env("HOME", &home)
         .status()
         .unwrap();
     assert!(made.success());
+    // Install keeps the rest of `.zshenv`, so the interactive shell hides them too.
+    std::fs::write(home.join(".zshenv"), format!("{HIDE_SYSTEM_RTOK}\n")).unwrap();
     install(&home, "zsh");
     std::fs::write(
         home.join(".zshrc"),
@@ -151,7 +158,8 @@ fn zsh_tab_completes_with_a_stale_compinit_dump_and_no_zshrc_edit() {
     )
     .unwrap();
     let dump = std::fs::read_to_string(home.join("dump")).unwrap();
-    assert!(!dump.contains("_rtok"), "the dump must predate _rtok");
+    let stale: Vec<&str> = dump.lines().filter(|l| l.contains("_rtok")).collect();
+    assert!(stale.is_empty(), "the dump must predate _rtok: {stale:?}");
 
     let mut cmd = CommandBuilder::new(&zsh);
     cmd.arg("-i");
