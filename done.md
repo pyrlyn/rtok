@@ -53,6 +53,15 @@ Check: `cap_budget_gives_back_lines_so_the_marker_fits` — the printed id is 8 
 Status: done 2026-10-19
 Model: Cursor / grok 4.7
 
+### T914. `toon` and `json_tree` print the 8-character archive id
+
+T672 prints 8 hex chars on a compressed command. A `toon` block and a `json_tree` fold still named the archive with the full 64-character sha (`[toon <sha>]`, `[json-tree <sha>]`). That text is what an agent reads back.
+
+Both pointers now print the 8-character prefix, and the size check prices a pointer of that length. `rtok expand` resolves the prefix. The measurement `ref_id` stays the full sha. A decision already stored is replayed as written, so an old pointer is not rewritten.
+
+Check: the toon expand test and the json_tree fold test find the 8-character prefix, not the sha, and `expand` of that prefix returns the original bytes. `proxy_session_saves_over_the_floor` matches that prefix in the body upstream received.
+
+Status: done 2026-10-20
 ### T913. The report prints the 8-character archive id
 
 T672 prints 8 hex chars on a compressed command. `rtok report` still listed each frozen archive as the full 64-character sha in the Expand section (markdown, HTML, PDF and `--ai`). That text is what an agent reads back.
@@ -78,7 +87,6 @@ T672 shortened the command trailer. The archive live-zone pointer still printed 
 Check: `pointer_prints_an_8_char_id_and_the_ledger_keeps_the_full_one` — the printed id is 8 hex chars, the ledger `ref_id` is the full id, and `resolve_id` of that prefix returns the archived body. `a_stored_full_id_pointer_is_replayed_verbatim` keeps a pointer that already holds the full id. The skill pointer, the compress view and a capped MCP `expand` use the same prefix. `proxy_session_saves_over_the_floor` matches the printed prefix in the body upstream received.
 
 Status: done 2026-10-19
-Model: Cursor / grok 4.7
 
 ### T527. A worktree claim does not stay held by an agent idle for days
 

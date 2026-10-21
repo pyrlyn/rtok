@@ -1264,5 +1264,6 @@ T910: hook, skill, handoff, MCP wrap and expand omitted markers print the 8-char
 
 T911: `stats` counts a re-expand of the 8-char archive id pointers print. Done (`done.md`).
 
+T914: `toon` and `json_tree` pointers print the 8-char archive id. Done (`done.md`).
 T913: the report Expand list prints the 8-char archive id. Done (`done.md`).
 T912: guides and `rtok config init` name the 8-char trailer id. Done (`done.md`).

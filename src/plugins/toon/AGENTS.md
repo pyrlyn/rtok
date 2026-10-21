@@ -9,7 +9,7 @@
 **Invariants**
 - Lossless: encoding must round-trip; keep a decode function and a property test for it.
 - Only arrays of ≥ `min_rows` objects with identical scalar-valued keys are encoded.
-- Original JSON is archived first; the encoded block references the archive id.
+- Original JSON is archived first; the encoded block prints the 8-character archive id (`rtok expand` resolves it). The measurement `ref_id` stays the full sha. A decision already stored is replayed as written.
 - `default_on` is `true` since T127. A user file that still sets `enabled = false` pinned the old default; `rtok doctor` notes the key and leaves the file alone.
 
 **Checks**: `plan.md` T11.7. Order: `roadmap.md` § `toon`.
