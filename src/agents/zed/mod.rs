@@ -90,7 +90,7 @@ impl Agent for Zed {
 
 /// The entry setup writes: the local-server shape from the Zed MCP docs.
 fn want_entry() -> Value {
-    json!({"command": super::rtok_command(), "args": super::mcp_args("zed")})
+    json!({"command": super::rtok_mcp_command(), "args": super::mcp_args("zed")})
 }
 
 /// True when `context_servers.rtok` is an object in the document (comments allowed); a
@@ -140,7 +140,7 @@ pub fn unregister_mcp(cfg: &Config) -> Result<String> {
 pub use super::jsonc::strip_comments;
 
 fn summary() -> String {
-    let cmd = super::rtok_command();
+    let cmd = super::rtok_mcp_command();
     super::mcp_summary(&cmd, "zed")
 }
 

@@ -19,7 +19,7 @@ use rtok_agent_sdk::{KETCH_INSTALL, NO_CHANGES};
 use serde_json::{Value, json};
 use toml_edit::{Item, Table, value};
 
-use super::{Agent, Kind, Mode, Support, Variant, apply, load_toml, rtok_command};
+use super::{Agent, Kind, Mode, Support, Variant, apply, load_toml, rtok_mcp_command};
 use crate::config::Config;
 
 /// Grok Build: one CLI (`grok` on PATH, or the binary under `~/.grok` / `GROK_HOME`).
@@ -219,13 +219,13 @@ pub fn register_mcp(cfg: &Config) -> Result<String> {
         return Ok(NO_CHANGES.into());
     }
     let mut entry = Table::new();
-    entry.insert("command", value(rtok_command()));
+    entry.insert("command", value(rtok_mcp_command()));
     entry.insert(
         "args",
         value(toml_edit::Array::from_iter(super::mcp_args("grok"))),
     );
     servers.insert("rtok", entry.into());
-    let summary = super::mcp_summary(&rtok_command(), "grok");
+    let summary = super::mcp_summary(&rtok_mcp_command(), "grok");
     let report = format!("mcp_servers.rtok: {summary}");
     rtok_agent_sdk::write(&apply(cfg), path, &doc.to_string(), &report)?;
     Ok(report)
