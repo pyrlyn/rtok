@@ -548,7 +548,7 @@ head_lines = 8
 tail_lines = 4
 tiers      = false                    # багаторівневе завантаження, вмикається явно (типово вимкнено); специфікація поведінки OpenViking L0/L1/L2 — AGPL-3.0, rtok не вендорить, не лінкує й не запускає її як підпроцес (D6); відкриває нативну реалізацію в T33.2
 live_blobs = false                    # зменшувати вкладені дампи JSON + блоки data: у блоках користувача, ніколи results/system/tools/останні 2 ходи (T51.1, вмикається явно)
-skills     = true                     # архівувати тіла skills поза keep_turns (T61.2); вимикається через skills = false
+skills     = false                    # архівувати тіла skills поза keep_turns (T61.2, вмикається явно)
 
 [plugins.proxy]
 enabled = true                        # плагін proxy (фіксація використання); сам сервер — це [proxy]
