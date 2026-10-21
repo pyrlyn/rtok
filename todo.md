@@ -18,8 +18,6 @@
 - T395. One real session as one OpenTelemetry trace in SigNoz and Maple
 - T396. Verify the usage readers against real files
 - T398. Probe editors on a `worktree.useRelativePaths` worktree
-- T413. More agent hosts: popular agents rtok does not install into yet
-- T413.13. `rtok agents install trae` — Trae
 - T414. Web dashboard restyle on the brand pack, built from `brand/` sources
 - T414.7. Re-shoot `web/screenshots/`; close the web admin gap in `brand/`
 - T416. Shared `change-preview` crate for dry-run output

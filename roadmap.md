@@ -439,6 +439,14 @@ must beat, and that line is the gate text below.
 
 ---
 
+## Agent hosts
+
+T413 is closed (`done.md`). The creator approved one installer from it that is not built yet.
+
+- **Trae** (`rtok agents install trae`, ex-T413.13): the docs name only a project `.trae/mcp.json` and a user-level `mcp.json` with no path (`research.md` §32.13). Move it into `plan.md` once a vendor page, or a Trae install someone can inspect, names the user-level path. Reuse `src/agents/vscode/` only if that file uses VS Code's key and layout.
+
+---
+
 ## MCP agent link in the Claude desktop app
 
 ### T456. Claude desktop: keep the shared desktop MCP entry from shadowing the session's own rtok MCP

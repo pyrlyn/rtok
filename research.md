@@ -2913,6 +2913,7 @@ Trae IDE (ByteDance). Facts are from the vendor's docs, https://docs.trae.ai/ide
 - VS Code layout: Trae is a VS Code fork, but the docs do not say it reads VS Code's `mcp.json` or `settings.json`, so `src/agents/vscode/` cannot be reused on a guess.
 - Because the only documented user-level file has no documented path, a fixed path would be a guess; the host stays out until the docs (or a Trae install to inspect) name one.
 - 2026-10-21 (T413.13 session): re-check blocked. The session had no web access (the docs page could not be fetched) and Trae is not installed on this machine (no `/Applications/Trae.app`, `~/.trae` or `~/Library/Application Support/Trae`), so the 2026-10-12 result above still stands and no installer is written. The probe that settles it: on a machine with Trae, open the MCP panel, press **Raw Config (JSON)** and record the path of the file it opens, plus whether its servers sit under `mcpServers` (Cline shape) or `servers` (VS Code shape).
+- 2026-10-21 (T413 close): not re-checked. The closing session had no web access and no Trae install, so the 2026-10-12 result above is still the latest. The installer waits in `roadmap.md` "Agent hosts".
 
 ### 32.12 Warp (T413.12, checked 2026-10-12)
 
