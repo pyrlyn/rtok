@@ -1664,6 +1664,38 @@ Local reference run, **not the Gate P28 bench** (the creator allowed LM Studio w
 
 Why nothing can be concluded: the model gave an empty answer in both arms (pass rate 0 of 2, control included), the two runs differ in turns and in LM Studio's prompt-cache state (576 s vs 12 s), and arm B did not compress anything (the `Read` results were not eligible within the last `keep_turns = 4` turns, or the queue did not run in 8 turns). No cost per passed task, no compressor tokens. A real bench needs a model that passes the control, tasks with more than `keep_turns` turns after the large results, and an `rtok bench` arm for the compressor (`rtok bench` has none today). Gate P28 stays open and the flag stays off.
 
+### 16.10 Defaults bench, offline half: what each setting could remove (T385.3, 2026-10-21)
+
+Question (`docs/research/optimization.md` §5, T385.3): before anyone pays for live arms, how much of the input that real requests carry could each candidate default touch at all: `proxy.mode = "compress"`, `proxy.context_management`, `plugins.archive.skills`, `plugins.archive.live_blobs`. This is a ceiling on the request side, **not** the T385.3 Check: no task ran, so there is no pass rate and no cost per passed task. Every default stays as it is.
+
+**Method** (read-only, aggregates only; the §16.8 corpus rules). Every Claude Code transcript under `~/.claude/projects` modified in the last 30 days, sub-agent files as their own conversations, counting API requests stamped 2026-09-21 to 2026-10-21: 2,160 files scanned, 1,959 with requests, 204,565 requests (one per `message.id`). Denominator: each request's real usage, `input + cache_creation + cache_read` = 30.35 G tokens. Cost is in input-price units (input 1, cache write 1.25, cache read 0.1), blended 0.126 per token. Each request is rebuilt from the transcript up to it (adjacent `user` lines are one message, a `compact_boundary` empties the conversation) and every block still in it counts once per request ("resident", §16.6), at `bytes / 4` tokens. One arm per setting, each the shipped rule at `5aa4a495`:
+
+- `compress`: the `archive` pointer (`src/plugins/archive/mod.rs` `pointer`: a header line, 8 head and 4 tail lines clipped to 200 chars) on tool results at least `keep_turns` = 4 user messages old and at least `min_tokens` = 1500 tokens. `toon`, the `compress` plugin and noise stripping are not modelled, so the arm is the pointer alone.
+- `skills`: a user text block starting `Base directory for this skill: ` (`src/proxy/anthropic.rs` `skills`) at least 4 user messages old becomes a one-line pointer (about 90 bytes). Only in `compress` mode, like the pointer.
+- `live_blobs`: a user text block, not a tool result, at least 2 user messages old, at least 1500 tokens, that is `data:`, valid JSON or a base64 run over 4 KiB (`is_blob_candidate`), becomes a pointer.
+- `context_management`: what rtok arms, `{"edits": [{"type": "clear_tool_uses_20250919"}]}` with the platform defaults recorded in §16.8 (fires at 100,000 input tokens, keeps the 3 most recent tool uses, no `clear_at_least`): on a request at or over the trigger, every older tool result becomes a placeholder (taken as 40 bytes). It is armed in both proxy modes.
+
+A saved token is priced at its request's blended rate. A block that changes for the first time re-writes the rest of the conversation once at 1.25 instead of 0.1 (the prompt-cache cost, `docs/prompt-cache.md`); "net" subtracts that, an upper bound on the penalty because some of those requests were cache writes anyway. The pass was a one-off Python script, not committed.
+
+| Setting (2026-09-21 to 2026-10-21) | Blocks touched | Requests touched | Input tokens removed | Input cost, gross | Input cost, net of cache re-writes |
+| --- | --- | --- | --- | --- | --- |
+| `compress` mode (pointer only) | 11,899 results | 161,680 | 6.35 % | 6.15 % | 5.17 % |
+| `skills` (on top of `compress`) | 578 skill bodies | 36,869 | 0.11 % | 0.12 % | 0.04 % |
+| `live_blobs` (on top of `compress`) | 0 | 0 | 0.00 % | 0.00 % | 0.00 % |
+| `context_management` | 193,529 results | 155,228 | 22.95 % | 21.92 % | 20.33 % |
+| Last 7 days (2026-10-14 on), same order | 2,097 / 250 / 0 / 32,514 | 25,691 / 11,891 / 0 / 26,513 | 5.84 / 0.20 / 0.00 / 14.51 % | 5.68 / 0.20 / 0.00 / 13.89 % | 4.45 / -0.06 / 0.00 / 12.53 % |
+
+Reading it:
+
+- `compress` mode agrees with §16.8 (6.54 % eligible over 2026-09-08 to 2026-10-08, by a different script): about 6 % of input tokens and 5 % of input cost after cache re-writes, before `toon` and `compress` add their share. It is the only rewrite here whose saving is large enough to be worth a live arm on its own.
+- `live_blobs` has nothing to act on: of the 1,412 user text blocks of at least 1500 tokens in the window, none is JSON, `data:` or base64 (777 start with `T`, 473 with `A`, 95 with `<`, 5 are skill bodies). Prose and pasted logs are not blob candidates by design. No live arm is worth paying for on this workload; the setting stays off with this number.
+- `skills` is a rounding error: 0.11 % of tokens, and the cache re-write eats it (0.04 % net over 30 days, -0.06 % over 7). Skill bodies here are short (5 of 578 reach 1500 tokens). It stays off with this number.
+- `context_management` would remove the most, because over 100,000 tokens it clears every tool result but the last three, not only old large ones. That is also why the number is not a saving: the model loses results it may still need and reads them again, which only the live arm's pass rate and turn count show. It needs the live arm more than any other row.
+
+Caveats: `bytes / 4` underestimates code (about 3 chars per token), so token shares are somewhat low; the rebuilt conversation is 0.48 of real input over 30 days (0.36 over 7), the rest being system prompt and tool definitions the transcript does not hold, so the shares are of the whole request; Claude Code's own trimming, if any, is not modelled, and whether the host already sends its own `context_management` (rtok then leaves it alone) cannot be seen in a transcript; the 1 h cache TTL writes at 2x, not 1.25x, so the penalty is low for those writes; one machine, Claude Code only.
+
+What is left for T385.3 is the live half: `rtok bench` cost per passed task with each setting on and off. `rtok bench` today runs the six short tasks of `bench/tasks.toml`, whose `check` is `true`, and passes each arm as a `claude --settings` file; a task of a few small tool calls never puts a 1500-token result 4 user messages back, so neither the pointer nor the skill rule would fire (the §16.9 failure). The live run needs long tasks with real checks, one `rtok proxy` per arm on its own port and `RTOK_HOME`, and the creator's API spend (T394).
+
 ## 17. Sharing context between an agent and its sub-agents (2026-09-21)
 
 Creator request: a freshly spawned sub-agent gets none of the parent's context, reads the same files again and pays for them again. Find what rtok can apply; sub-agents stay cheap (Haiku). Method: two Haiku agents (repo inventory, web scan), one Haiku docs check, an ad-hoc scan of this machine's transcripts; synthesis in the main session. Vendor numbers stay claims.
