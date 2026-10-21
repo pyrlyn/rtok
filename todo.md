@@ -3,7 +3,6 @@
 - T156. Probe: `WorktreeCreate`/`WorktreeRemove` hooks and reflink-seeded `target/`
 - T261. CI takes ~9.5 min on macOS; the webui check recompiles 183 crates every run
 - T275. Install/update removes rtok's MCP entry from an agent's config while a plugin serves MCP (every host)
-- T275.1. `rtok mcp ping <agent>`: prove the agent's rtok MCP server is alive and answering
 - T277. Move rtok's MCP core into its own crate `crates/rtok-mcp`
 - T278. `rtok agents info <agent>` reports the real MCP state, not "mcp installed" by assumption
 - T279. One plugin version scheme for every install source (GitHub, local, marketplace), and `agents update` that skips an up-to-date plugin
