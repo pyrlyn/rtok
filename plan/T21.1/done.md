@@ -1,0 +1,6 @@
+**T21.1 the plugin offer actually asks** · T10.5 · `src/setup/mod.rs`, `src/setup/cursor.rs`, `src/setup/pi.rs`
+Do: D21 (6) says `--dry-run` prints the offer, `--yes` accepts it and the default on a TTY is a prompt; only the first two were built, so on a terminal setup declined its own offer without a word. Add one `setup::accepted(cfg, question)` — `--yes` is yes, no terminal is no, a terminal asks through dialoguer — and call it from both installers instead of their identical `if !cfg.setup.yes` blocks.
+Check: without a terminal only `--yes` accepts (the test harness *is* that case, so the existing cursor/pi tests pin the behaviour they already had); `--dry-run` still returns before anything is asked; `just check` green.
+Status: done 2026-09-09 · Model: Opus 5
+Check result: green — `without_a_terminal_only_yes_accepts` plus the 19 existing `setup::` tests unchanged, `just check` clean.
+Deviation: dialoguer over a hand-rolled `read_line`, which would have been about eight lines and no dependency. It is not smaller code that wins here but behaviour: dialoguer restores the terminal on the way out and reads Ctrl-C and EOF as a no, where a naive `read_line` treats EOF as an empty line and would take the default — accepting a symlink into the user's host config on a stream that never answered.
