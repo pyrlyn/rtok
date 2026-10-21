@@ -1,0 +1,11 @@
+**T51.3 Gemini wire in the proxy** · P3, 4/5 · `src/proxy/gemini.rs` (new), `src/proxy/wire.rs`, `src/proxy/mod.rs`, `src/config/mod.rs`, `config/default.toml`, `docs/config.md`, `tests/proxy.rs`, `tests/fixtures/proxy/gemini_generate_{body,stream}.json` (new), `tests/trycmd/config-show.stdout`
+
+From I-11. The proxy speaks Anthropic Messages and OpenAI Chat/Responses; Gemini `generateContent` / `streamGenerateContent` hosts cannot use rtok's proxy.
+
+Do: `src/proxy/gemini.rs` implements `Wire` — matches `:generateContent`/`:streamGenerateContent` path suffixes; `contents` tool results keyed by `functionResponse.name` (the API carries no stable call id; rewritten payload is `response` so the name stays visible); `usageMetadata` counters (`promptTokenCount` in, `cachedContentTokenCount` cached-read, `candidatesTokenCount` out; body object or end-scanned array, SSE events); `provider_total = input + output` (prompt already contains cached); model slug parsed from the path (the body carries none) via a new defaulted `Wire::model()`. Routes to new `[proxy] gemini_upstream` (default `https://generativelanguage.googleapis.com`; env `RTOK_PROXY_GEMINI_UPSTREAM`; no CLI flag). Shared `UsageFields` gains the `container` key (`usage` vs `usageMetadata`) instead of a fourth usage-walk copy.
+Check: `tests/proxy.rs::proxy_gemini_body_records_usage_with_cached_tokens_and_path_model` + `proxy_gemini_stream_is_byte_identical_and_records_usage` (mock on `gemini_upstream` only, Anthropic upstream dead; counters, cached tokens, model slug, `api = "gemini"`, byte-identical SSE, `calls`/`call_io`/`tokens` rows) plus `gemini.rs` unit tests (matches, path model, name-keyed results, body/array/SSE usage).
+Status: done 2026-09-17 · Model: OpenCode / Muse Spark 1.3
+
+Evidence: `cargo test --test proxy` 26 passed incl. 2 new; `cargo test --lib gemini` 5 passed, `wire` 4 passed; `--test wrap/config_coverage` + `cli_trycmd` help/version/bench/config-show green (`completions-bash` fails on T53.2's uncommitted work); `fmt --check`, `build-min`, `jscpd` green. A temporary public-API mirror (since deleted) caught and fixed one real bug while lib-test was uncompilable on others' edits (path model accepted action-less paths).
+
+Deviation: 10 files (wire + shared helper + config/docs + 2 fixtures + tests + snapshot); no new dependency.
