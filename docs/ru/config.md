@@ -604,7 +604,7 @@ enabled    = true
 max_tokens = 2000                     # per response; beyond it: head + "N more, expand <id>"
 impact_tokens = 1500                  # impact: files grouped and ranked up to this budget, then "+K files, M refs not shown"; --all or 0 = every row
 map_tokens = 0                        # SessionStart repo map cap (D5 share next to memory.recall_tokens); 0 = off until a P7 A/B passes
-map_rank   = "refs"                   # SessionStart map order: refs = references per name; pagerank = files by personalized PageRank, personalized by recently edited files and the last checkpoint after a compact
+map_rank   = "pagerank"               # SessionStart map order: refs = references per name; pagerank = files by personalized PageRank, personalized by recently edited files and the last checkpoint after a compact
 body_lines = 40                       # symbol(): source lines shown per definition
 auto_index = true                     # true = every call walks the tree; false = index once, then `rtok graph index` or the watcher (a hook-staled file reads as missing until then)
 auto_add_projects = true               # T329.6: register a directory in the project registry when a hooked session starts there, a worktree is made or adopted through `rtok worktree` (named by its branch), or a graph MCP call runs there; false = the registry changes only through the page and the CLI

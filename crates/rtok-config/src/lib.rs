@@ -1415,8 +1415,9 @@ section! {
         impact_tokens: u32 = 1500,
         map_tokens: u32 = 0,
         /// T370: how the SessionStart map orders files: `refs` counts references per name,
-        /// `pagerank` ranks files by personalized PageRank over the stored file graph.
-        map_rank: String = s("refs"),
+        /// `pagerank` ranks files by personalized PageRank over the stored file graph and falls
+        /// back to `refs` while none is stored.
+        map_rank: String = s("pagerank"),
         body_lines: u32 = 40,
         auto_index: bool = true,
         auto_add_projects: bool = true,

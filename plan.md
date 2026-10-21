@@ -247,7 +247,6 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T289 | in progress | P2 | 4 | 75% | Claude Code / sonnet-5 |
 | T356 | in progress | P1 | 2 | 5% | Claude Code / claude-opus-5-5 |
 | T369.1 | todo | P3 | 1 | 0% | |
-| T370 | in progress | P1 | 4 | 90% | Claude Code / sonnet-5.5 |
 | T385 | in progress | P1 | 5 | 20% | Claude Code / opus-5-5 |
 | T385.3 | todo | P1 | 3 | 20% | |
 | T385.9 | in progress | P3 | 5 | 70% | Claude Code / claude-opus-5-5 |
@@ -973,25 +972,6 @@ Turn `plugins.guard.grep_symbol` on for a dated window and measure the share of 
 
 Check: a dated `research.md` §29.5 row with the follow-up share and the idle-machine p95 (under 10 ms); `just check`.
 
-### T370. SessionStart repo map ranked by file-level personalized PageRank
-
-From the Empryo study (idea-only, clean-room; Empryo `repo-map.ts` PageRank and render, `repo-map-utils.ts:479-493`: damping 0.85, 20 iterations, budget 1500 / 2500 / 4000 tokens). T52.3 / I-28 ranks definitions by raw reference count (`symbol_top_refs`, `src/store/symbols.rs:614`), off by default and without a live A/B; `repo_map` (`src/plugins/graph/mod.rs:1090`) pops and re-estimates the rendered text in a loop, quadratic in the number of rows. A file graph (edge = file A references a name defined in file B, weighted by T368's IDF) with PageRank puts hub files first, and a personalization vector moves the map toward what the session is about.
-
-Plan: new `src/plugins/graph/rank.rs` — CSR adjacency from one `symbols` scan, power iteration (0.85, 20 iterations or L1 delta < 1e-6), dangling mass spread uniformly. Global ranks persisted per root in a `file_rank` table (new migration), recomputed at index end; personalized ranks are computed at SessionStart and never persisted (Empryo issue #228: a stored personalized rank leaked one session's focus into the next). Personalization: git-dirty files, the last checkpoint's paths on `compact` (`src/plugins/checkpoint.rs`), and the SessionStart `source` (`crates/rtok-plugin-sdk/src/lib.rs:274`). Render top files with their top definitions; fill the budget in one pass with a running token estimate instead of pop-and-re-estimate. Host trait method in `crates/rtok-plugin-sdk/src/host.rs` and its Runtime impl in `src/plugin.rs`. Config `plugins.graph.map_rank = "refs" | "pagerank"`, default `refs` until the check passes.
-
-Done when: with `map_rank = "pagerank"`, the SessionStart map lists files by rank under `map_tokens`, personalized by dirty files, and a stored rank never contains session state.
-
-Check: unit tests for PageRank on a 4-node graph (known stationary vector, sum = 1 ± 1e-9) and for personalization; offline backtest over the last 200 commits of this repo: recall of the commit's touched files in a `map_tokens = 1000` map, `pagerank` minus `refs` ≥ 15 pp; SessionStart hook p95 ≤ 30 ms on this repo (divan bench); `just check`.
-
-Execution plan (Claude Code / sonnet-5.5; fits one task, no split):
-1. `src/plugins/graph/rank.rs`: file graph from one grouped `symbols` scan (edge A to B when A references a name defined in B, weight = refs x ln(1 + files / files-referencing-name) / files-defining-name; T368's shared IDF table replaces it when it lands), power iteration (0.85, 20 iterations or L1 < 1e-6, dangling mass uniform) over CSR, JSON encode/decode of the graph, and a one-pass renderer with a running token estimate. No crate: the maintained graph crates have no personalized PageRank.
-2. Migration `0030_file_rank` (`file_rank (root PRIMARY KEY, graph TEXT)`): paths, global ranks, indexed mtimes, top defs per file and the edges, written at index end; a project removal drops it. Three `Symbols` host methods with default bodies (`symbol_file_scan`, `file_rank_get`, `file_rank_put`), Diesel impls in `src/store/symbols.rs`, Runtime in `src/plugin.rs`.
-3. SessionStart reads the one row and never spawns a process (D1, T428's 10 ms): personalization seeds are files whose indexed mtime is under 24 h old (only when that set is a working set, 32 files at most; a fresh clone seeds nothing) plus, on `compact`, the paths of the session's last checkpoint (`checkpoint::last_paths`). The personalized rank is computed in memory and never stored.
-4. Config `plugins.graph.map_rank = "refs" | "pagerank"` (default `refs`), `default.toml`, `docs/config.md`, trycmd and config_coverage goldens; `repo_map` branches on it, `refs` output unchanged.
-5. Tests: 4-node stationary vector, personalization, no session state in the stored row, codec round trip, budget fill, store round trip and purge, SessionStart through the hook. An ignored backtest (`cargo test --lib backtest -- --ignored --nocapture`) reproduces the numbers recorded in `research.md` section 34; a latency test measures the hook with a populated row.
-
-Progress (2026-10-06, Claude Code / sonnet-5.5): steps 1 to 5 are in. Backtest over the last 200 commits, 1000-token map: `refs` 26.7 %, `pagerank` 44.1 %, so +17.4 pp (card asks 15 pp; both halves of the history clear it). Open: the hook latency check. The host ran at a load of 30 to 50, the unmapped SessionStart hook itself missed 10 ms there (p95 13.9 ms), and the pagerank map added about 2 ms at p50 (decode 1.4 ms of a 700 KB stored graph, 20 iterations 0.33 ms). Re-run `cargo test --release --test latency session_start` on a quiet machine; the default stays `refs` until it passes.
-
 ### T385. Proxy lanes and the optimization plan from `docs/research/optimization.md`
 
 From `research.md` §31 and `docs/research/optimization.md` §6 (2026-10-04): a 12-step plan, "proposal, nothing built", which says to promote items into `plan.md` before coding. `src/proxy/` has no lane code. This card is the spec; split it into sub-tasks (T385.1 …) when claiming, one PR each, in this order:
@@ -1323,11 +1303,11 @@ Already covered: `assert_cmd`, `divan`, `httpmock`, `insta`, `rstest`,
 
 Source: study of [proxysoul/Empryo](https://github.com/proxysoul/Empryo) (formerly SoulForge) at `669ff91`. **Idea-only, clean-room: Empryo is BSL 1.1, no code copied.** Every card cites Empryo only for the idea; implementations are written from the card.
 
-Take first, in order: T369, T370, T372, T373, T374. Then T375, T377, T378 (gated on I-95). T368, T371 and T376 are done.
+Take first, in order: T369, T372, T373, T374. Then T375, T377, T378 (gated on I-95). T368, T370, T371 and T376 are done.
 
 The 14 portable ideas and where each landed:
 
-1. PageRank repo map — T370 (extends T52.3 / I-28).
+1. PageRank repo map — T370 (done; extends T52.3 / I-28).
 2. Edge confidence / name IDF — T368.
 3. Git co-change — T371 (done).
 4. Blast radius under a budget — T377.

@@ -605,7 +605,7 @@ enabled    = true
 max_tokens = 2000                     # на відповідь; понад це: head + "N more, expand <id>"
 impact_tokens = 1500                  # impact: файли згруповано й ранжовано в межах цього бюджету, далі "+K files, M refs not shown"; --all або 0 = усі рядки
 map_tokens = 0                        # обмеження карти репозиторію на SessionStart (частка D5 поряд із memory.recall_tokens); 0 = вимкнено, доки не пройде A/B P7
-map_rank   = "refs"                   # порядок карти на SessionStart: refs = посилання на ім'я; pagerank = файли за персоналізованим PageRank, персоналізованим нещодавно редагованими файлами й останнім checkpoint після compact
+map_rank   = "pagerank"               # порядок карти на SessionStart: refs = посилання на ім'я; pagerank = файли за персоналізованим PageRank, персоналізованим нещодавно редагованими файлами й останнім checkpoint після compact
 body_lines = 40                       # symbol(): скільки рядків коду показувати на визначення
 auto_index = true                     # true = кожен виклик обходить дерево; false = індексувати один раз, далі `rtok graph index` або спостерігач (файл, позначений хуком як застарілий, до того читається як відсутній)
 auto_add_projects = true               # T329.6: реєструвати каталог у реєстрі проєктів, коли там стартує сесія з хуками, створюється або приєднується worktree через `rtok worktree` (під назвою його гілки) або виконується виклик graph MCP; false = реєстр змінюється лише через сторінку й CLI
