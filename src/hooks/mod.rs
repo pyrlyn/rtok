@@ -9,6 +9,7 @@
 
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
+pub mod deadline;
 mod push;
 pub mod resident;
 pub mod types;

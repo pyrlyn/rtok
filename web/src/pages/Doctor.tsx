@@ -25,7 +25,7 @@ export function Doctor() {
 
 function DoctorBody({ snap }: { snap: Snapshot }) {
     const d = snap.doctor;
-    const checks = doctorChecks(d);
+    const checks = doctorChecks(d, snap.doctor_pending);
     const checksPanel = (
         <Panel
             title="checks"

@@ -484,7 +484,8 @@ adapter = "disk"                      # disk | github | gitlab
 prefix = ""                           # префикс id задач, 1–8 ASCII-букв (R → R12, R2.1); пусто: первая буква имени проекта
 
 [tasks.disk]
-dir = "tasks"                         # один Markdown-файл на задачу, относительно корня проекта; выполненные уходят в <dir>/done
+dir = "tasks"                         # где лежат Markdown-задачи, относительно корня проекта
+layout = "auto"                       # files: "R12 - slug.md", выполненные в <dir>/done; folders: "<id>/task.md", закрыта файлом "<id>/done.md" (plan/); auto: folders, если <dir> уже так устроен
 
 [tasks.github]
 repo = ""                             # owner/name; пусто: remote origin

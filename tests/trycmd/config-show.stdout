@@ -405,6 +405,7 @@ stats.since = 30d
 stats.transcripts_dir = ~/.claude/projects
 tasks.adapter = disk
 tasks.disk.dir = tasks
+tasks.disk.layout = auto
 tasks.export.github.repo = 
 tasks.export.linear.team = 
 tasks.github.project = 0

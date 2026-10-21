@@ -452,6 +452,7 @@ Every effective key with its origin — the `config show --sources` page.
 | stats.transcripts_dir | tests/trycmd/input/stats-price-tx | user |
 | tasks.adapter | disk | default |
 | tasks.disk.dir | tasks | default |
+| tasks.disk.layout | auto | default |
 | tasks.export.github.repo |  | default |
 | tasks.export.linear.team |  | default |
 | tasks.github.project | 0 | default |
@@ -470,7 +471,7 @@ Every effective key with its origin — the `config show --sources` page.
 | worktree.seed | true | default |
 | worktree.seed_dirs | [target, node_modules] | default |
 
-424 keys.
+425 keys.
 
 ## Doctor
 
@@ -482,7 +483,7 @@ hooks check none found
 duplicate hooks none found
 duplicate mcp servers none found
 mcp
-  rtok (40 tools, ~1070 desc tokens) [CWD]/target/[..]
+  rtok (41 tools, ~1110 desc tokens) /Users/listepo/GitHub/pyrlyn/rtok/target/debug/rtok
 proxy 
 proxy openai 
 BASH_MAX_OUTPUT_LENGTH (unset)

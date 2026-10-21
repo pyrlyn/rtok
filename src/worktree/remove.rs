@@ -217,8 +217,8 @@ pub fn for_agent(
         owner: owner.as_deref(),
     };
     let done = run(cwd, target, &who, keep_branch, store)?;
-    if let Some(Err(e)) = store.map(|s| s.release_worktree_claim(&done.path)) {
-        crate::log::stderr_ln(&format!("warning: claim not released: {e:#}"));
+    if let Some(store) = store {
+        claim::release(store, &done.path).with_context(|| format!("{} was removed", done.path))?;
     }
     Ok(done)
 }

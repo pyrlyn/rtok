@@ -181,6 +181,28 @@ pub fn is_locked(e: &dyn std::error::Error) -> bool {
     false
 }
 
+/// Run `op` again, up to `attempts` times with `pause` between, while it fails on another
+/// process's lock (T934). One `busy_timeout` is the store's steady bound; a write that must not be
+/// lost (a worktree claim) waits several of them before it gives up. Any other error returns at
+/// once. `op` must be idempotent.
+pub fn retry_locked<T>(
+    attempts: u32,
+    pause: std::time::Duration,
+    mut op: impl FnMut() -> Result<T>,
+) -> Result<T> {
+    let attempts = attempts.max(1);
+    let mut tried = 1;
+    loop {
+        match op() {
+            Err(e) if tried < attempts && is_locked(&e) => {
+                tried += 1;
+                std::thread::sleep(pause);
+            }
+            out => return out,
+        }
+    }
+}
+
 /// Unix seconds, or `0` when the clock is before the epoch. Same value `rtok_log::now` returns,
 /// so a retention cutoff does not depend on the log crate.
 pub(crate) fn unix_now() -> u64 {

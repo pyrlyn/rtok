@@ -49,51 +49,7 @@ pub(crate) fn secrets_denied() -> bool {
     DENY_SECRETS.load(Ordering::Relaxed)
 }
 
-/// A file that usually holds credentials: `.env` and its variants (templates excepted),
-/// private keys and Java keystores, `.git/config` and `.git-credentials`, direnv's `.envrc`,
-/// and the package-manager, netrc and pgpass credential files.
-pub(crate) fn is_secret(path: &Path) -> bool {
-    let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
-        return false;
-    };
-    let name = name.to_ascii_lowercase();
-    if name == ".env" {
-        return true;
-    }
-    if let Some(rest) = name.strip_prefix(".env.") {
-        return !matches!(rest, "example" | "sample" | "template" | "dist");
-    }
-    let ext = Path::new(&name).extension().and_then(|e| e.to_str());
-    if matches!(
-        ext,
-        Some("pem" | "key" | "p12" | "pfx" | "jks" | "keystore")
-    ) {
-        return true;
-    }
-    if matches!(
-        name.as_str(),
-        "id_rsa"
-            | "id_dsa"
-            | "id_ecdsa"
-            | "id_ed25519"
-            | "id_ecdsa_sk"
-            | "id_ed25519_sk"
-            | ".netrc"
-            | ".npmrc"
-            | ".pypirc"
-            | ".pgpass"
-            | ".git-credentials"
-            | ".envrc"
-            | "credentials"
-    ) {
-        return true;
-    }
-    name == "config"
-        && path
-            .parent()
-            .and_then(Path::file_name)
-            .is_some_and(|d| d == ".git")
-}
+pub(crate) use crate::fs::is_secret;
 
 /// The directories of the client's latest `roots/list` answer (replaces the previous one).
 pub fn set_client_roots(roots: Vec<PathBuf>) {
@@ -198,38 +154,6 @@ fn worktrees(cwd: &Path) -> Vec<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn secret_names_are_recognised() {
-        for p in [
-            ".env",
-            "a/.env.local",
-            "k/server.pem",
-            "x.key",
-            "h/.ssh/id_ed25519",
-            ".git/config",
-            "r/.npmrc",
-            ".aws/credentials",
-            "h/.git-credentials",
-            "p/.envrc",
-            "h/.pgpass",
-            "h/.ssh/id_ed25519_sk",
-            "android/release.jks",
-            "app.keystore",
-        ] {
-            assert!(is_secret(Path::new(p)), "{p}");
-        }
-        for p in [
-            "src/main.rs",
-            ".env.example",
-            "config",
-            "app/config",
-            "keys.rs",
-            "README.md",
-        ] {
-            assert!(!is_secret(Path::new(p)), "{p}");
-        }
-    }
     use std::process::Command;
 
     fn git(dir: &Path, args: &[&str]) {

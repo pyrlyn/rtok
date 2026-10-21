@@ -4082,6 +4082,11 @@
             }
           ]
         },
+        "doctor_pending": {
+          "description": "T945: no doctor probe has landed yet — the probe runs off the tick, so `doctor` is\n`None` without having failed; both surfaces render a placeholder, not the failure.",
+          "type": "boolean",
+          "default": false
+        },
         "error": {
           "description": "Set when the store will not open or this tick's doctor probe failed (T60.6). Both\nsurfaces render it as a banner instead of an empty page.",
           "type": [
@@ -4197,6 +4202,7 @@
         "calls",
         "sessions",
         "doctor",
+        "doctor_pending",
         "logs",
         "skills",
         "ref_ids",

@@ -1,9 +1,9 @@
 ---
-status: todo
+status: in progress
 priority: P1
 complexity: 3
-readiness: 0%
-agent:
+readiness: 70%
+agent: Claude Code / claude-sonnet-5-5
 ---
 
 # T921. Hook calls that hang until the host's 5 s timeout, and the Pre/PostToolUse/SessionEnd tail
@@ -24,3 +24,9 @@ SessionEnd meets `max_ms` at the median.
 
 Check: a test where the fallback `rtok hook` is blocked (locked store, slow plugin) and the
 caller still gets `{}` under the deadline; `tests/latency.rs` covers SessionEnd; `just check`.
+
+Plan:
+1. `rtok_hook::deadline` (3 s, `RTOK_HOOK_DEADLINE_MS` overrides it) and `hooks::deadline`: a watchdog armed first thing in `rtok hook` prints `{}` and exits 0 when the call is still running, so the direct-`rtok hook` fallback of `hooks.json` is bounded too.
+2. `rtok-hook`: bound the stdin read and the wait on the `rtok hook` fallback (killed after the deadline plus a grace).
+3. Tests: `tests/hook_deadline.rs` (host that never closes stdin; hanging fallback), `tests/latency.rs` SessionEnd median.
+4. Name the cause in `done.md` from the logs.
