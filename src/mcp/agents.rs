@@ -10,6 +10,7 @@
 use anyhow::{Result, bail};
 use serde_json::{Value, json};
 
+use super::with_agent;
 use crate::model;
 use crate::plugin::{Runtime, ToolDef};
 use crate::store::AgentDetail;
@@ -34,7 +35,9 @@ pub fn status_def() -> ToolDef {
     ToolDef {
         name: "agent_status_set",
         description: "Say what this session is busy with (max 120 chars, plain text), shown in agents_list and agent_show. Blank text (a single space) clears it.",
-        input_schema: json!({"type":"object","properties":{"text":{"type":"string"}},"required":["text"]}),
+        input_schema: with_agent(
+            json!({"type":"object","properties":{"text":{"type":"string"}},"required":["text"]}),
+        ),
     }
 }
 

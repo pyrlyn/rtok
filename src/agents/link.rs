@@ -47,6 +47,8 @@ pub enum Rule {
     Env,
     Ancestor,
     Cwd,
+    /// The call named the agent itself (T924), for a server that cannot tell its sessions apart.
+    Arg,
     /// The MCP process registered its own row (a host without hooks).
     Own,
 }
@@ -57,6 +59,7 @@ impl Rule {
             Rule::Env => "env",
             Rule::Ancestor => "ancestor",
             Rule::Cwd => "cwd",
+            Rule::Arg => "arg",
             Rule::Own => "own",
         }
     }
