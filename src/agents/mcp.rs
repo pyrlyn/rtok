@@ -324,10 +324,53 @@ pub(crate) fn status(fs: &impl Fs, s: &McpSurface) -> McpRow {
 
 /// [`status`] of every surface `agent`'s `kind` variant reads, off the real disk.
 pub(crate) fn rows(agent: &dyn super::Agent, cfg: &Config, kind: Kind) -> Vec<McpRow> {
-    surfaces(agent, cfg, kind)
+    let surfaces = surfaces(agent, cfg, kind);
+    if surfaces.is_empty() {
+        return own_row(agent, cfg, kind).into_iter().collect();
+    }
+    surfaces
         .iter()
-        .map(|s| status(&Disk, s))
+        .map(|s| spawnable(status(&Disk, s), s))
         .collect()
+}
+
+/// The one row of a host that writes an MCP entry in a shape `rtok_mcp` does not parse
+/// (Continue's and Goose's YAML items, Reasonix's `[[plugins]]` array): its own exact parser,
+/// [`super::Agent::installed`], decides `present` or `missing` for the file it writes. Such a
+/// parser has no stale state. `None` for a host without MCP (aider, pi, antigravity).
+fn own_row(agent: &dyn super::Agent, cfg: &Config, kind: Kind) -> Option<McpRow> {
+    if matches!(agent.support(kind, "mcp"), super::Support::No(_)) {
+        return None;
+    }
+    let file = agent.files(cfg, kind).into_iter().next()?;
+    let entry = if agent.installed(cfg, kind).contains(&"mcp") {
+        EntryState::Present
+    } else {
+        EntryState::Missing
+    };
+    Some(McpRow {
+        surface: kind.as_str(),
+        file: tilde(&file),
+        entry,
+        diff: None,
+        plugin: None,
+    })
+}
+
+/// T932: an entry that runs rtok can still name a command its host cannot spawn, so a present
+/// row on the real disk is stale once its command does not resolve. Apart from [`status`] because
+/// it looks at the machine's files, which a virtual config cannot stand in for.
+fn spawnable(mut row: McpRow, s: &McpSurface) -> McpRow {
+    if row.entry != EntryState::Present {
+        return row;
+    }
+    if let Ok(Some(have)) = rtok_mcp::config::read_entry(&Disk, &s.spec)
+        && let Some(why) = unresolved_command(&argv_of(&have))
+    {
+        row.entry = EntryState::Stale;
+        row.diff = Some(why);
+    }
+    row
 }
 
 /// `rtok doctor`'s MCP check (T275 Fix 5, D33): install and update always write rtok's entry
@@ -491,10 +534,8 @@ pub(crate) fn json_spec(
     }
 }
 
-/// `None` when `have` runs `rtok mcp` for `host` (any path to the rtok binary; argv as `command`
-/// plus `args`, or as one `command` array), with `--host <host>` or, as written before T283.2,
-/// without it; otherwise what it runs instead.
-fn stale_diff(have: &Value, host: &str) -> Option<String> {
+/// The argv an entry runs: `command` plus `args`, or one `command` array.
+fn argv_of(have: &Value) -> Vec<String> {
     let strs = |v: Option<&Value>| -> Vec<String> {
         v.and_then(Value::as_array)
             .map(|a| {
@@ -505,10 +546,34 @@ fn stale_diff(have: &Value, host: &str) -> Option<String> {
             })
             .unwrap_or_default()
     };
-    let argv = match have.get("command") {
+    match have.get("command") {
         Some(Value::String(c)) => [vec![c.clone()], strs(have.get("args"))].concat(),
         c => strs(c),
-    };
+    }
+}
+
+/// Why a host cannot spawn `argv[0]` (T932), `None` when it can. A bare name resolves through
+/// the PATH of whatever starts the host, and a GUI app has none of the shell's, so off Windows
+/// only an absolute path to an existing file counts. A bare name is flagged only while an
+/// install update can write something better; with no `rtok` to point at, the line would be
+/// noise. Windows keeps the user-wide PATH.
+fn unresolved_command(argv: &[String]) -> Option<String> {
+    let bin = argv.first()?;
+    let path = Path::new(bin);
+    if path.is_absolute() {
+        return (!path.is_file()).then(|| format!("runs `{bin}`, which does not exist"));
+    }
+    let fixable = Path::new(&super::rtok_mcp_command()).is_absolute();
+    (!cfg!(windows) && fixable).then(|| {
+        format!("runs bare `{bin}`, which a GUI host cannot find without the shell's PATH")
+    })
+}
+
+/// `None` when `have` runs `rtok mcp` for `host` (any path to the rtok binary; argv as `command`
+/// plus `args`, or as one `command` array), with `--host <host>` or, as written before T283.2,
+/// without it; otherwise what it runs instead.
+fn stale_diff(have: &Value, host: &str) -> Option<String> {
+    let argv = argv_of(have);
     let want_args = [RTOK.args, &["--host", host]].concat();
     let ours = argv.split_first().is_some_and(|(bin, args)| {
         let args: Vec<&str> = args.iter().map(String::as_str).collect();
@@ -898,6 +963,87 @@ mod tests {
         assert_eq!(rows[0].spec.key_path, ["mcpServers"]);
     }
 
+    /// Every host that can write MCP gets an `mcp` row: through `rtok_mcp` where it parses the
+    /// host's format, else from the host's own parser. A new host outside `surfaces` lands here
+    /// on purpose or not at all.
+    #[test]
+    fn every_mcp_host_has_a_row_source() {
+        let cfg = vfs_cfg();
+        let mut own = Vec::new();
+        for id in super::super::HOSTS {
+            let host = super::super::host(id).unwrap();
+            for v in host.variants() {
+                let mcp = !matches!(host.support(v.kind, "mcp"), super::super::Support::No(_));
+                if mcp && surfaces(host, &cfg, v.kind).is_empty() {
+                    own.push(*id);
+                }
+            }
+        }
+        own.sort_unstable();
+        own.dedup();
+        assert_eq!(own, ["continue", "goose", "reasonix"]);
+    }
+
+    /// Continue, Goose and Reasonix: `agents info` prints `mcp  cli  entry <file>` after
+    /// install and `missing` after remove, from each host's own parser.
+    #[test]
+    fn own_parser_hosts_report_entry_per_surface() {
+        type Setup = fn(&mut Config, std::path::PathBuf);
+        type Edit = fn(&Config) -> anyhow::Result<String>;
+        use super::super::{continue_dev, goose, reasonix};
+        let hosts: [(&str, &str, Setup, Edit, Edit); 3] = [
+            (
+                "continue",
+                "config.yaml",
+                |c, p| c.setup.r#continue.config_path = p,
+                continue_dev::register_mcp,
+                continue_dev::unregister_mcp,
+            ),
+            (
+                "goose",
+                "config.yaml",
+                |c, p| c.setup.goose.config_path = p,
+                goose::register_mcp,
+                goose::unregister_mcp,
+            ),
+            (
+                "reasonix",
+                "config.toml",
+                |c, p| c.setup.reasonix.dir = p.parent().unwrap().to_path_buf(),
+                reasonix::register_mcp,
+                reasonix::unregister_mcp,
+            ),
+        ];
+        for (id, file, setup, install, remove) in hosts {
+            let (cfg, path) = super::super::test_scratch_cfg(id, "t278-own", file, false, setup);
+            let host = super::super::host(id).unwrap();
+            let row = || {
+                let rows = rows(host, &cfg, Kind::Cli);
+                assert_eq!(rows.len(), 1, "{id}");
+                rows.into_iter().next().unwrap()
+            };
+            let missing = row();
+            assert_eq!(
+                (missing.surface, missing.entry, missing.plugin),
+                ("cli", EntryState::Missing, None),
+                "{id}"
+            );
+            assert_eq!(missing.text(), format!("missing ({file} has no \"rtok\")"));
+            install(&cfg).unwrap();
+            let present = row();
+            assert_eq!(present.entry, EntryState::Present, "{id}");
+            assert_eq!(present.text(), format!("entry {}", tilde(&path)));
+            assert!(lines(&[present], "").contains("mcp     cli  entry "));
+            assert!(
+                super::super::installed_modules(host, Kind::Cli, &cfg).contains(&"mcp"),
+                "{id}"
+            );
+            remove(&cfg).unwrap();
+            assert_eq!(row().entry, EntryState::Missing, "{id}");
+            let _ = fs::remove_dir_all(path.parent().unwrap());
+        }
+    }
+
     /// Amp's `"amp.mcpServers"` is one flat key; split on the dot, status would look under an
     /// `amp` object that Amp's settings file does not have and report the entry missing.
     #[test]
@@ -985,7 +1131,24 @@ mod tests {
         assert!(lines[0].contains("runs `rtok mcp --extra`"), "{lines:?}");
         assert!(lines[0].ends_with(fix), "{lines:?}");
 
-        write(serde_json::json!({"rtok": {"command": "rtok", "args": ["mcp"]}}));
+        // T932: a command a GUI host cannot spawn is stale even though it runs `rtok mcp`.
+        let installed = super::super::fake_installed_rtok();
+        for (command, why) in [
+            ("rtok", "runs bare `rtok`"),
+            (
+                "/nowhere/bin/rtok",
+                "`/nowhere/bin/rtok`, which does not exist",
+            ),
+        ] {
+            write(serde_json::json!({"rtok": {"command": command, "args": ["mcp"]}}));
+            let lines = warn(&cfg);
+            assert_eq!(lines.len(), 1, "{lines:?}");
+            assert!(lines[0].starts_with("stale: "), "{lines:?}");
+            assert!(lines[0].contains(why), "{lines:?}");
+            assert!(lines[0].ends_with(fix), "{lines:?}");
+        }
+
+        write(serde_json::json!({"rtok": {"command": installed, "args": ["mcp"]}}));
         assert!(warn(&cfg).is_empty());
 
         write(serde_json::json!({}));

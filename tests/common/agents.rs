@@ -188,7 +188,8 @@ fn raw_with_path(args: &[&str], cfg: &Path, home: &Path, path: std::ffi::OsStrin
 /// argv to `<home>/claude.log` and keeps `<config dir>/plugins/installed_plugins.json` the way
 /// `claude plugin install` / `uninstall` / `update` do (`update` fails while
 /// `<home>/fake-claude-fail-update` exists, T242.3; `install` fails while
-/// `<home>/fake-claude-fail-install` exists, T279 step 3/6 "Failure"); `codex` answers
+/// `<home>/fake-claude-fail-install` exists, T279 step 3/6 "Failure"; it records an
+/// `installPath` under the plugin cache while `<home>/fake-claude-install-path` exists); `codex` answers
 /// `--version` and edits
 /// `${CODEX_HOME:-$HOME/.codex}/config.toml`'s `[marketplaces.rtok]` / `[plugins."rtok@rtok"]`
 /// tables the way `codex plugin marketplace add|remove` / `plugin add|remove` do, including the
@@ -388,7 +389,12 @@ case "$*" in
     [ -f "$HOME/fake-claude-fail-install" ] && { echo "install failed" >&2; exit 1; }
     mkdir -p "$plugins/cache/rtok/agents"
     cp "__SCOUT_SRC__" "$plugins/cache/rtok/agents/rtok-scout.md"
-    printf '{"version":2,"plugins":{"rtok@rtok":[{"scope":"user"}]}}' > "$plugins/installed_plugins.json" ;;
+    if [ -f "$HOME/fake-claude-install-path" ]; then
+      copy="$plugins/cache/rtok/rtok/local"; mkdir -p "$copy"
+      printf '{"version":2,"plugins":{"rtok@rtok":[{"scope":"user","installPath":"%s"}]}}' "$copy" > "$plugins/installed_plugins.json"
+    else
+      printf '{"version":2,"plugins":{"rtok@rtok":[{"scope":"user"}]}}' > "$plugins/installed_plugins.json"
+    fi ;;
   "plugin uninstall rtok@rtok") rm -f "$plugins/installed_plugins.json"
     rm -rf "$plugins/cache/rtok" ;;
   "plugin update rtok@rtok")

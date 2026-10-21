@@ -3,7 +3,6 @@
 - T156. Probe: `WorktreeCreate`/`WorktreeRemove` hooks and reflink-seeded `target/`
 - T261. CI takes ~9.5 min on macOS; the webui check recompiles 183 crates every run
 - T275. Install/update removes rtok's MCP entry from an agent's config while a plugin serves MCP (every host)
-- T275.1. `rtok mcp ping <agent>`: prove the agent's rtok MCP server is alive and answering
 - T277. Move rtok's MCP core into its own crate `crates/rtok-mcp`
 - T278. `rtok agents info <agent>` reports the real MCP state, not "mcp installed" by assumption
 - T279. One plugin version scheme for every install source (GitHub, local, marketplace), and `agents update` that skips an up-to-date plugin
@@ -43,7 +42,6 @@
 - T929. Dedup stubs whose original is no longer in the agent's context (compaction, subagents)
 - T930. Read gate denies native Read for files `rtok read` cannot serve (images, paths outside roots)
 - T931. Bounded `sed -n a,bp` windows inside command chains are still elided
-- T932. Codex and Cursor MCP entries use a bare `rtok` command and fail to spawn
 - T933. Git guard still refuses `rtok run`-wrapped git (seen again 2026-10-16)
 - T934. Store "database is locked": hooks skipped, worktree claims not stored or released
 - T935. MCP `read`/`outline` fail with a bare ENOENT once the server's cwd is deleted

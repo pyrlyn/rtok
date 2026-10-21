@@ -163,7 +163,7 @@ pub(crate) fn mcp_spec(cfg: &Config) -> McpSpec {
         Client::Cli,
         settings_path(cfg),
         "mcpServers",
-        super::rtok_command(),
+        super::rtok_mcp_command(),
         EntryShape::Command,
     )
 }
