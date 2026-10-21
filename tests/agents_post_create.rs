@@ -120,7 +120,7 @@ fn cursor_creates_the_generic_key_and_removal_deletes_the_file_it_made() {
     let doc = json(&p.read(".cursor/worktrees.json"));
     assert_eq!(doc["setup-worktree"].as_array().unwrap().len(), 1);
     assert!(
-        !p.exists(".cursor/_backup"),
+        !p.exists(".cursor/.backup_configs"),
         "project files get no backup folder"
     );
 

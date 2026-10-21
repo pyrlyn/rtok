@@ -1,0 +1,57 @@
+# T385.9.3 — Gate P28: the LLM compressor against the lossless archive pointer.
+# Live spend is gated on RTOK_BENCH_LIVE; dry-run prints the schedule only.
+#
+# Each run writes every fixture body to a scratch directory, has `claude -p` read them one
+# per call with `first` first, then asks `question`. By then `first` is outside the live zone:
+# the lossless arm sees the archive pointer (head and tail lines only), the compressor arm
+# the cached summary. `expect` must match a must-keep span of `first` (checked at load).
+# Start each arm's proxy before the run (`bench/p28/README.md`); `home` is its RTOK_HOME,
+# read afterwards for compressor tokens, summaries and `expand` recovery.
+
+fixture = "../tests/fixtures/p28_must_keep.toml"
+
+[[arms]]
+id = "lossless"
+settings = "p28/lossless.json"
+home = "/tmp/rtok-p28/lossless"
+
+[[arms]]
+id = "llm"
+settings = "p28/llm.json"
+home = "/tmp/rtok-p28/llm"
+
+[[tasks]]
+id = "build-e0599"
+first = "cargo-build-errors"
+question = "Which file and line does the E0599 error point at?"
+expect = 'settle\.rs:318'
+
+[[tasks]]
+id = "test-left"
+first = "cargo-test-failure"
+question = "What `left` value did the failing fx test assertion print?"
+expect = '162\.4471'
+
+[[tasks]]
+id = "grep-settle"
+first = "grep-records"
+question = "At which line of crates/ledger/src/settle.rs did the search match?"
+expect = '402'
+
+[[tasks]]
+id = "json-settled"
+first = "json-api-response"
+question = "What is the batch's settled_minor value?"
+expect = '223750'
+
+[[tasks]]
+id = "log-addr"
+first = "service-log-trace"
+question = "Which address and port did the connection attempts fail to reach?"
+expect = '10\.20\.30\.41:5432'
+
+[[tasks]]
+id = "note-feature"
+first = "design-note-prose"
+question = "Which feature does the note say will be removed, and in which version?"
+expect = 'v0\.16\.0'

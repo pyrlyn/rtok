@@ -80,7 +80,7 @@ pub fn run(cfg: &Config, hosts: &[String], remove: bool, root: &Path) -> Result<
         );
     }
     // These files belong to the project and are normally committed, so git is the undo; a
-    // `_backup` folder beside them would only show up as untracked noise in the repository.
+    // `.backup_configs` folder beside them would only show up as untracked noise in the repository.
     let apply = Apply {
         backup: false,
         ..super::apply(cfg)

@@ -1,0 +1,49 @@
+# T385.9.3 Gate P28 tasks (research.md §16.11). Each task reads the eight 13 KB logs in
+# `logs/`, one result per turn, then asks for a fact from one of the first three: by then that
+# result sits more than `keep_turns` turns back, so `archive` has pointed at it and, in arm `b`,
+# the compressor has had turns to summarise it. The fact is a must-keep span placed outside the
+# pointer's head and tail and outside the extractive view, so arm `a` must re-read or expand.
+# `check` exits with the grep's status and removes `answer.txt` for the next arm.
+# `log` and `answer` are read only by `bench::tests` (the bench ignores them).
+
+[[tasks]]
+id = "error-code"
+log = "logs/01-api.log"
+answer = "E4127"
+prompt = "Read logs/01-api.log, logs/02-db.log, logs/03-gateway.log, logs/04-worker.log, logs/05-build.log, logs/06-api.log, logs/07-db.log and logs/08-worker.log in that order, one Read call per file and one file per turn, each in full. Only after all eight, find the decline code the acquirer gave on the ERROR line of logs/01-api.log and write just that code to answer.txt."
+check = "grep -qF 'E4127' answer.txt; s=$?; rm -f answer.txt; exit $s"
+
+[[tasks]]
+id = "slow-query"
+log = "logs/01-api.log"
+answer = "4812"
+prompt = "Read logs/01-api.log, logs/02-db.log, logs/03-gateway.log, logs/04-worker.log, logs/05-build.log, logs/06-api.log, logs/07-db.log and logs/08-worker.log in that order, one Read call per file and one file per turn, each in full. Only after all eight, find how many milliseconds the slowest query in logs/01-api.log took and write just the number to answer.txt."
+check = "grep -qF '4812' answer.txt; s=$?; rm -f answer.txt; exit $s"
+
+[[tasks]]
+id = "db-addr"
+log = "logs/02-db.log"
+answer = "10.20.30.41:5432"
+prompt = "Read logs/01-api.log, logs/02-db.log, logs/03-gateway.log, logs/04-worker.log, logs/05-build.log, logs/06-api.log, logs/07-db.log and logs/08-worker.log in that order, one Read call per file and one file per turn, each in full. Only after all eight, find the address (ip:port) the database pool in logs/02-db.log failed to connect to and write just that address to answer.txt."
+check = "grep -qF '10.20.30.41:5432' answer.txt; s=$?; rm -f answer.txt; exit $s"
+
+[[tasks]]
+id = "config-path"
+log = "logs/02-db.log"
+answer = "deploy/settler/limits.toml"
+prompt = "Read logs/01-api.log, logs/02-db.log, logs/03-gateway.log, logs/04-worker.log, logs/05-build.log, logs/06-api.log, logs/07-db.log and logs/08-worker.log in that order, one Read call per file and one file per turn, each in full. Only after all eight, find the path of the config file that logs/02-db.log failed to parse and write just that path to answer.txt."
+check = "grep -qF 'deploy/settler/limits.toml' answer.txt; s=$?; rm -f answer.txt; exit $s"
+
+[[tasks]]
+id = "request-id"
+log = "logs/03-gateway.log"
+answer = "req_7f3a9c21d4"
+prompt = "Read logs/01-api.log, logs/02-db.log, logs/03-gateway.log, logs/04-worker.log, logs/05-build.log, logs/06-api.log, logs/07-db.log and logs/08-worker.log in that order, one Read call per file and one file per turn, each in full. Only after all eight, find the id of the request that timed out in logs/03-gateway.log and write just that id to answer.txt."
+check = "grep -qF 'req_7f3a9c21d4' answer.txt; s=$?; rm -f answer.txt; exit $s"
+
+[[tasks]]
+id = "batch-id"
+log = "logs/03-gateway.log"
+answer = "bat_01HZX4M8Q2"
+prompt = "Read logs/01-api.log, logs/02-db.log, logs/03-gateway.log, logs/04-worker.log, logs/05-build.log, logs/06-api.log, logs/07-db.log and logs/08-worker.log in that order, one Read call per file and one file per turn, each in full. Only after all eight, find the id of the batch whose retry budget ran out in logs/03-gateway.log and write just that id to answer.txt."
+check = "grep -qF 'bat_01HZX4M8Q2' answer.txt; s=$?; rm -f answer.txt; exit $s"

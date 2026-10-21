@@ -102,6 +102,8 @@ and the compress view do too (T909). A decision already stored is replayed as wr
 The command trailer has printed that id since T672. The hook budget marker, skill deny,
 handoff brief, MCP wrap trailer and the expand omitted-line marker do too (T910). A stored measurement keeps the full id.
 
+Pointers print 8 hex chars (T672). `stats` counts a later expand of that prefix (T911).
+
 | # | Category (uses) | Best rival | rtok design (better, not copied) | Target |
 |---|---|---|---|---|
 | T672 | all (link line) | sqz `§ref§` ~13 tok | one short id `[rtok 1a2b3c4d · 111 lines]`, expand by prefix | −75 tok/call |
@@ -119,6 +121,9 @@ handoff brief, MCP wrap trailer and the expand omitted-line marker do too (T910)
 | T684 | wc 102, cargo test/build/clippy | rtk / sqz | wc: drop padding, keep `total`; cargo: #1077 + group warnings by lint code `unused_imports ×12 (files…)` | ≥ rtk |
 | T685 | find 33 | rtok leads | keep dir grouping but print full paths for ≤ 50 hits so the anchor check passes | 100 % paths, ≥ 69 % |
 | T686 | MCP tool catalogs | caveman 12–29 % | `rtok mcp` proxy: first sentence of descriptions, drop default/examples that duplicate type, enum compaction; recovery via archive | ≥ 30 % |
+
+`rtok report` (markdown, HTML, PDF and `--ai`) prints that same 8-character id in the
+Expand list (T913). The document and the measurement `ref_id` keep the full sha.
 
 ## sqz formatter coverage (T662)
 
@@ -152,3 +157,5 @@ The full list stays behind `expand <id>`.
 - Anchor check from #1076 (`bench/c14`): 100 % of hashes (7-char prefix), paths and WARN/ERROR lines.
 - Exit status and stderr unchanged on failure.
 - Output never has more tokens than raw (o200k_base).
+
+`toon` and `json_tree` pointers print that same 8-character id (T914). A decision already stored is replayed as written. The measurement `ref_id` stays the full sha.

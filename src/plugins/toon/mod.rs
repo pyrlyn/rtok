@@ -106,11 +106,14 @@ fn rewrite_block(
     let keys = tabular_keys(&table, min_rows)?;
     let rows = table.as_array()?;
     let encoded = encode(rows, &keys);
-    // The pointer carries the full archive id; a table that is already compact can come out
-    // larger than the JSON it replaces. Decide before anything is written, so a skipped block
-    // leaves no archive decision behind.
+    // The pointer prints the 8-character id `rtok expand` resolves (T914). A table that is
+    // already compact can still come out larger than the JSON it replaces. Decide before
+    // anything is written, so a skipped block leaves no archive decision behind.
     let est_before = cx.estimate(&orig, Class::Code);
-    let est_pointer = cx.estimate(&format!("{PREFIX}{}]\n", "0".repeat(64)), Class::Code);
+    let est_pointer = cx.estimate(
+        &format!("{PREFIX}{}]\n", "0".repeat(crate::names::MIN_PREFIX)),
+        Class::Code,
+    );
     if est_pointer + cx.estimate(&encoded, Class::Code) >= est_before {
         return None;
     }
@@ -118,7 +121,10 @@ fn rewrite_block(
         .put_archive(orig.as_bytes())
         .map_err(|e| cx.log("error", "plugin", "toon", &format!("put: {e}")))
         .ok()?;
-    let replacement = format!("{PREFIX}{archive_id}]\n{encoded}");
+    let replacement = format!(
+        "{PREFIX}{}]\n{encoded}",
+        crate::names::short_id(&archive_id)
+    );
     cx.put_archive_decision(tool_use_id, &archive_id, &replacement)
         .map_err(|e| cx.log("error", "plugin", "toon", &format!("decision: {e}")))
         .ok()?;
@@ -573,12 +579,13 @@ mod tests {
         assert_eq!(archived, text.as_bytes());
     }
 
-    /// Compact JSON with short cells is smaller than pointer + TOON: leave it, write nothing.
+    /// Two compact rows are still larger as an 8-character pointer plus TOON than as JSON.
+    /// Three rows of the same shape now save, so the size gate is this smaller table.
     #[test]
     fn a_table_that_would_grow_is_left_alone() {
         use rtok_plugin_sdk::Archive;
-        let cx = cx("grow", true, 3);
-        let table = json!([{"a":1,"b":2,"c":3},{"a":4,"b":5,"c":6},{"a":7,"b":8,"c":9}]);
+        let cx = cx("grow", true, 2);
+        let table = json!([{"a":1,"b":2,"c":3},{"a":4,"b":5,"c":6}]);
         let mut body = json!({"messages":[{"role":"user","content":[{"type":"tool_result",
             "tool_use_id":"t","content": table.to_string()}]}]});
         let original = body.clone();
@@ -625,6 +632,13 @@ mod tests {
             .as_str()
             .unwrap()
             .to_string();
+        let shown = crate::names::short_id(&archive_id);
+        assert_eq!(archive_id.len(), 64);
+        assert!(encoded.starts_with(&format!("[toon {shown}]")), "{encoded}");
+        assert!(
+            !encoded.contains(&archive_id),
+            "the pointer prints the prefix, not the sha"
+        );
 
         let mut second = tool_req(table.clone());
         filter(&mut second, &Ctx::new(&cx));
@@ -636,7 +650,7 @@ mod tests {
             "decision must be deterministic"
         );
 
-        expand::fetch(&cx, &archive_id).unwrap();
+        expand::fetch(&cx, shown).unwrap();
         let expand_rows: Vec<_> = cx
             .store
             .list_measurements("toon")

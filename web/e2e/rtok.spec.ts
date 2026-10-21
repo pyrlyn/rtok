@@ -267,8 +267,12 @@ test("offline takes the whole screen when the server stops; Reconnect brings it 
   await expect(nav).toHaveCount(0);
   await expect(connection).toHaveCount(0);
   await expect(reconnect).toBeEnabled();
+  // A server that is down is a plain disconnect, not a token problem (T944).
+  await expect(page.getByText("The connection to rtok was lost.")).toBeVisible();
 
   await rtok.start();
+  // The tab's token is the old run's: the next retry is refused, and `/auth` says why (T944).
+  await expect(page.getByText(/rtok web was restarted/)).toBeVisible({ timeout: 15_000 });
   // A restart issues a new token (S2); the open tab is handed it as a reload with it would be.
   await page.evaluate((t) => globalThis.sessionStorage.setItem("rtok.web.token", t), rtok.token);
   // Reconnect skips the client's backoff (capped at 10 s, web/src/api/ws.ts). An automatic retry

@@ -13,7 +13,7 @@ import {
   WRITE_TIMEOUT_MS,
   type Api,
 } from "./query";
-import { connectSample, isSampleRequested, sampleSnapshot } from "./sample";
+import { connectSample, isSampleRequested, sampleConnect, sampleSnapshot } from "./sample";
 import type { Snapshot } from "./snapshot.gen";
 import type { Connect, Connection, Frame, Handlers } from "./ws";
 
@@ -274,6 +274,35 @@ describe("?sample source", () => {
       false,
     ]);
     expect(sampleSnapshot.plugins[1]?.enabled).toBe(false);
+  });
+
+  // T414.7: the state screenshots come from these, with no server.
+  const opened = async (search: string) => {
+    const api = createApi(queryClient, sampleConnect(search));
+    api.open();
+    await Promise.resolve();
+    expect(queryClient.getQueryData(connectionKey)).toBe("open");
+    return queryClient.getQueryData<Snapshot>(snapshotKey);
+  };
+
+  test("?sample=empty has no calls", async () => {
+    const snap = await opened("?sample=empty");
+    expect(snap?.calls).toEqual([]);
+    expect(snap?.plugins).toEqual(sampleSnapshot.plugins);
+  });
+
+  test("?sample=error carries a snapshot error", async () => {
+    expect((await opened("?sample=error"))?.error).toBe("sample: the store did not open");
+  });
+
+  test("?sample=loading opens the link and sends no snapshot", async () => {
+    expect(await opened("?sample=loading")).toBeUndefined();
+  });
+
+  test("any other ?sample value is the full fixture", async () => {
+    expect(sampleConnect("?sample")).toBe(connectSample);
+    expect(sampleConnect("?sample=toString")).toBe(connectSample);
+    expect((await opened("?sample=1"))?.calls).toEqual(sampleSnapshot.calls);
   });
 
   test("refuses a key outside the plugin allowlist", async () => {

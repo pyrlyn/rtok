@@ -3819,6 +3819,7 @@ fn c() {}
         let (mut rt, dir) = cx("map-on");
         rt.cwd = Some(dir.to_string_lossy().into_owned());
         rt.config.plugins.graph.map_tokens = 2000;
+        rt.config.plugins.graph.map_rank = "refs".into();
         seed_map(&rt, &dir);
         let a = start(&rt).expect("map on");
         let b = start(&rt).expect("map on again");

@@ -741,64 +741,67 @@ pub fn skills_from(
     }
 }
 
-/// T63.1 / T227: one transcript scan feeds both the Skills page (T61.3 listing joined
-/// to T61.1 resident/invocations) and the Stats page ([`stats_page_text`]) — cached
-/// briefly so `rtok tui` / `rtok web` ticks do not re-parse every transcript every two
-/// seconds, the same shape as [`doctor_for_snapshot`]'s cache. `rtok stats` itself
-/// still goes through [`stats_report`] uncached.
-#[allow(clippy::type_complexity)]
-fn stats_skills(
-    cfg: &Config,
-) -> (
+/// How long a snapshot may reuse the last transcript scan (T947). One scan of a month of
+/// Claude transcripts takes minutes on a busy machine, so `DOCTOR_SNAPSHOT_TTL` would keep
+/// a scan running almost nonstop; skill counts and token totals move slowly anyway.
+const STATS_TTL: Duration = Duration::from_secs(300);
+
+/// What [`stats_skills`] hands the snapshot: skill rows, input tokens, whether a scan
+/// landed, and the Stats page text.
+type StatsSkills = (
     Option<BTreeMap<String, stats::SkillRow>>,
     u64,
     bool,
     Option<String>,
-) {
+);
+
+/// T63.1 / T227: one transcript scan feeds both the Skills page (T61.3 listing joined
+/// to T61.1 resident/invocations) and the Stats page ([`stats_page_text`]). T947: the scan
+/// runs in [`Background`], never on the tick — the snapshot ships the last known scan, or
+/// "reading transcripts…" before the first one lands. `rtok stats` itself still goes
+/// through [`stats_report`] uncached.
+fn stats_skills(cfg: &Config) -> StatsSkills {
     if cfg!(test) {
         return (None, 0, false, None);
     }
-    use std::sync::OnceLock;
-    struct Entry {
-        at: Instant,
-        key: String,
-        skills: Option<BTreeMap<String, stats::SkillRow>>,
-        usage_input: u64,
-        scanned: bool,
-        text: Option<String>,
-    }
-    static CACHE: OnceLock<Mutex<Option<Entry>>> = OnceLock::new();
+    static STATS: Background<(String, StatsSkills)> = Background::new();
     let key = format!("{}{}", cfg.stats.transcripts_dir.display(), cfg.stats.since);
-    let lock = CACHE.get_or_init(|| Mutex::new(None));
-    if let Ok(guard) = lock.lock()
-        && let Some(e) = guard.as_ref()
-        && e.key == key
-        && e.at.elapsed() < DOCTOR_SNAPSHOT_TTL
-    {
-        return (e.skills.clone(), e.usage_input, e.scanned, e.text.clone());
+    let cfg = cfg.clone();
+    stats_skills_from(&STATS, key, move || read_stats_skills(&cfg))
+}
+
+/// [`stats_skills`] over any cache and scan, so a test can pass a scan that blocks.
+/// A cached scan of another `transcripts_dir`/`since` is dropped, not shown.
+fn stats_skills_from(
+    cache: &'static Background<(String, StatsSkills)>,
+    key: String,
+    read: impl FnOnce() -> StatsSkills + Send + 'static,
+) -> StatsSkills {
+    let scan_key = key.clone();
+    match cache.get(STATS_TTL, move || (scan_key, read())) {
+        Some((k, scan)) if k == key => scan,
+        landed => {
+            if landed.is_some() {
+                cache.forget();
+            }
+            (None, 0, false, Some("reading transcripts…\n".into()))
+        }
     }
+}
+
+/// The scan behind [`stats_skills`], synchronous.
+fn read_stats_skills(cfg: &Config) -> StatsSkills {
     // T227: cost costs no network (`[stats.prices]` is a local table), so the page
     // always carries it — `rtok stats` still needs `--price` to print it.
     let mut priced = cfg.clone();
     priced.stats.price = true;
-    let (skills, usage_input, scanned, text) = match stats_report(&priced) {
+    match stats_report(&priced) {
         Ok(report) => {
             let text = Some(stats_page_text(cfg, &report));
             (report.skills, report.usage_input, true, text)
         }
         Err(_) => (None, 0, false, None),
-    };
-    if let Ok(mut guard) = lock.lock() {
-        *guard = Some(Entry {
-            at: Instant::now(),
-            key,
-            skills: skills.clone(),
-            usage_input,
-            scanned,
-            text: text.clone(),
-        });
     }
-    (skills, usage_input, scanned, text)
 }
 
 /// The Stats page (T227): [`stats_skills`]'s one scan rendered as `rtok stats

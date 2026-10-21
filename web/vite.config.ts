@@ -29,6 +29,7 @@ export default defineConfig({
     proxy: {
       "/ws": { target: "http://127.0.0.1:3333", ws: true },
       "/health": { target: "http://127.0.0.1:3333" },
+      "/auth": { target: "http://127.0.0.1:3333" },
     },
   },
   test: {

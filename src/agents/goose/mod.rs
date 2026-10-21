@@ -25,7 +25,7 @@ use serde_json::{Map, Value, json};
 use super::yaml_text::{eol_of, indent_of, read_or_empty, scalar, skippable, splice, text};
 use super::{
     Agent, Kind, Mode, Support, Variant, apply, apply_mcp_only, is_rtok_bin, mcp_args, mcp_summary,
-    rtok_command, support_mcp_only,
+    rtok_mcp_command, support_mcp_only,
 };
 use crate::config::Config;
 
@@ -176,7 +176,7 @@ pub fn register_mcp(cfg: &Config) -> Result<String> {
     let path = config_path(cfg);
     let raw = read_or_empty(&path)?;
     validate(&raw, &path)?;
-    let (cmd, eol) = (rtok_command(), eol_of(&raw));
+    let (cmd, eol) = (rtok_mcp_command(), eol_of(&raw));
     let lines: Vec<&str> = raw.split_inclusive('\n').collect();
     let body = match locate(&lines)? {
         Some(Found {
@@ -317,7 +317,7 @@ mod tests {
             "    enabled: true\n\nGOOSE_MODE",
             &format!(
                 "    enabled: true\n{}\nGOOSE_MODE",
-                render(2, &rtok_command(), "\n")
+                render(2, &rtok_mcp_command(), "\n")
             ),
         );
         assert_eq!(body, want);

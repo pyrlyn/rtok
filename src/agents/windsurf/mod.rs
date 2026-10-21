@@ -111,7 +111,7 @@ mod tests {
             out,
             format!(
                 "mcpServers.rtok: {} mcp --host windsurf",
-                super::super::rtok_command()
+                super::super::rtok_mcp_command()
             )
         );
         assert!(!path.exists());

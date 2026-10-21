@@ -287,18 +287,38 @@ fn plugin_update(cfg: &Config) -> Result<String> {
     }
 }
 
-/// Codex CLI: `[mcp_servers.rtok]` and, with `--proxy`, `[model_providers.rtok]`.
+/// Codex CLI and app: `[mcp_servers.rtok]` and, with `--proxy`, `[model_providers.rtok]`.
 pub struct Codex;
 
-static VARIANTS: [Variant; 1] = [Variant {
-    kind: Kind::Cli,
-    name: "Codex",
-    bins: &["codex"],
-    apps: &[],
-}];
+static VARIANTS: [Variant; 2] = [
+    Variant {
+        kind: Kind::Cli,
+        name: "Codex",
+        bins: &["codex"],
+        apps: &[],
+    },
+    // The desktop app ships as `ChatGPT.app` (bundle id `com.openai.codex`, research §40.1);
+    // `Codex.app` covers builds from before the rename.
+    Variant {
+        kind: Kind::Desktop,
+        name: "Codex App",
+        bins: &[],
+        apps: &[
+            "/Applications/ChatGPT.app",
+            "~/Applications/ChatGPT.app",
+            "/Applications/Codex.app",
+            "~/Applications/Codex.app",
+        ],
+    },
+];
 
 impl Agent for Codex {
     super::agent_identity!("codex");
+
+    /// The app reads the CLI's `~/.codex` files, so one apply covers both.
+    fn shared(&self) -> bool {
+        true
+    }
 
     fn support(&self, _kind: Kind, module: &str) -> Support {
         match module {
@@ -417,21 +437,32 @@ fn insert_ours(doc: &mut DocumentMut, path: impl std::fmt::Display) -> Result<St
     };
     // No bare `[mcp_servers]` header: Codex's own files only carry the per-server tables.
     servers.set_implicit(true);
+    let cmd = super::rtok_mcp_command();
     if let Some(ours) = servers
         .get_mut(NAME)
         .and_then(Item::as_table_mut)
         .filter(|t| is_ours(t))
     {
-        // An entry written before T528 gains the key; a value the user chose stays.
-        if ours.contains_key(APPROVAL_KEY) {
-            return Ok(NO_CHANGES.into());
+        let mut changes = Vec::new();
+        // T932: an entry written before it names a bare `rtok` a GUI Codex cannot spawn. Only
+        // that exact value moves; a command the user chose stays.
+        if cmd != "rtok" && ours.get("command").and_then(Item::as_str) == Some("rtok") {
+            ours["command"] = value(cmd.as_str());
+            changes.push(format!("~ [mcp_servers.rtok] command = \"{cmd}\""));
         }
-        ours[APPROVAL_KEY] = value(APPROVAL);
-        return Ok(format!(
-            "+ [mcp_servers.rtok] {APPROVAL_KEY} = \"{APPROVAL}\""
-        ));
+        // An entry written before T528 gains the key; a value the user chose stays.
+        if !ours.contains_key(APPROVAL_KEY) {
+            ours[APPROVAL_KEY] = value(APPROVAL);
+            changes.push(format!(
+                "+ [mcp_servers.rtok] {APPROVAL_KEY} = \"{APPROVAL}\""
+            ));
+        }
+        return Ok(if changes.is_empty() {
+            NO_CHANGES.into()
+        } else {
+            changes.join("\n")
+        });
     }
-    let cmd = super::rtok_command();
     let mut entry = Table::new();
     entry["command"] = value(cmd.as_str());
     let args = Array::from_iter(super::mcp_args("codex"));
@@ -628,6 +659,22 @@ mod tests {
         (c, path)
     }
 
+    /// T912: the desktop app ships as `ChatGPT.app` (bundle id `com.openai.codex`), so
+    /// `agents update codex` saw only the CLI.
+    #[test]
+    fn the_desktop_variant_is_detected_from_its_app_and_shares_the_cli_files() {
+        let v = &Codex.variants()[1];
+        assert_eq!((v.kind, v.name), (Kind::Desktop, "Codex App"));
+        assert!(v.bins.is_empty());
+        assert!(v.apps.contains(&"/Applications/ChatGPT.app"));
+        assert!(v.apps.contains(&"/Applications/Codex.app"));
+        assert!(Codex.shared());
+
+        let (c, path) = cfg("desktop", false);
+        assert_eq!(Codex.files(&c, Kind::Desktop), Codex.files(&c, Kind::Cli));
+        let _ = fs::remove_dir_all(path.parent().unwrap());
+    }
+
     #[test]
     fn dry_run_shows_one_block_and_touches_nothing() {
         let (c, path) = cfg("dry", true);
@@ -656,6 +703,52 @@ mod tests {
         let err = run(&c, false).unwrap_err();
         assert!(err.to_string().contains("config.toml"), "{err}");
         assert_eq!(fs::read(&path).unwrap(), original, "file untouched");
+        let _ = fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    /// T932: Codex desktop is started by the OS with no shell PATH, so a bare `rtok` fails to
+    /// spawn; the entry names an installed file, and an older bare one is repointed to it.
+    #[cfg(unix)]
+    #[test]
+    fn the_written_command_is_an_absolute_existing_path() {
+        let ketch = super::super::fake_installed_rtok();
+        let (c, path) = cfg("abs-command", false);
+        run(&c, false).unwrap();
+        let command = |raw: &str| {
+            let doc: toml_edit::DocumentMut = raw.parse().unwrap();
+            doc["mcp_servers"]["rtok"]["command"]
+                .as_str()
+                .unwrap()
+                .to_string()
+        };
+        let got = command(&fs::read_to_string(&path).unwrap());
+        assert_eq!(got, ketch.to_string_lossy());
+        assert!(
+            Path::new(&got).is_absolute() && Path::new(&got).is_file(),
+            "{got}"
+        );
+
+        let legacy = "# mine\n[mcp_servers.other]\ncommand = \"x\"\n\n[mcp_servers.rtok]\ncommand = \"rtok\"\nargs = [\"mcp\", \"--host\", \"codex\"]\ndefault_tools_approval_mode = \"writes\"\n";
+        fs::write(&path, legacy).unwrap();
+        assert_eq!(
+            run(&c, false).unwrap(),
+            format!("~ [mcp_servers.rtok] command = \"{got}\"")
+        );
+        let raw = fs::read_to_string(&path).unwrap();
+        assert_eq!(
+            raw,
+            legacy.replace("command = \"rtok\"", &format!("command = \"{got}\""))
+        );
+        assert_eq!(run(&c, false).unwrap(), NO_CHANGES);
+
+        let chosen = legacy.replace("command = \"rtok\"", "command = \"/opt/mine/rtok\"");
+        fs::write(&path, &chosen).unwrap();
+        assert_eq!(
+            run(&c, false).unwrap(),
+            NO_CHANGES,
+            "a path the user chose stays"
+        );
+        assert_eq!(fs::read_to_string(&path).unwrap(), chosen);
         let _ = fs::remove_dir_all(path.parent().unwrap());
     }
 

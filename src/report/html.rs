@@ -179,7 +179,7 @@ pub fn render(doc: &Document) -> String {
         } else {
             exp.expanded_ids
                 .iter()
-                .map(|id| format!("<code>{}</code>", esc(id)))
+                .map(|id| format!("<code>{}</code>", esc(super::shown_archive_id(id))))
                 .collect::<Vec<_>>()
                 .join(", ")
         };
