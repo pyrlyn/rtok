@@ -13,7 +13,7 @@ use serde_json::Value;
 use crate::names::strip_wrap;
 
 #[cfg(feature = "graph")]
-mod grep_symbol;
+pub(crate) mod grep_symbol;
 mod sed;
 mod skill;
 
@@ -67,7 +67,8 @@ impl Plugin for Guard {
         if n > i64::from(window) {
             return None;
         }
-        let reason = format!("duplicate; rtok expand {id}");
+        let shown = crate::names::short_id(&id);
+        let reason = format!("duplicate; rtok expand {shown}");
         // AGENTS: denial Measurement carries the avoided result size (archive bytes).
         // Never deny without a retrievable original (lossless + fail open). Metadata only:
         // reading a possibly-megabyte body would break the ≤ 10 ms hook budget (T55.16).
@@ -626,6 +627,13 @@ mod tests {
         assert_eq!(k("rtok run --agent sub_1 -- 'ls'"), k("ls"));
         assert_eq!(
             k("cd /a && rtok run --agent sub_1 -- 'ls'"),
+            k("cd /a && ls")
+        );
+        // T922: the POSIX `command -v rtok` guard leads the wrapper and is not part of the key.
+        let guard = crate::names::run_guard();
+        assert_eq!(k(&format!("{guard}rtok run -- 'ls'")), k("ls"));
+        assert_eq!(
+            k(&format!("cd /a && {guard}rtok run --agent sub_1 -- 'ls'")),
             k("cd /a && ls")
         );
         assert_eq!(k("rtok run --agent ../x -- 'ls'"), None);

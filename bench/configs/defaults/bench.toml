@@ -1,0 +1,12 @@
+# T385.3 live arms (research.md §47). Run from the repo root (paths are cwd-relative):
+#   rtok --config bench/configs/defaults/bench.toml bench --tasks <six-task file>
+# Each arm is a `claude --settings` file pointing at its own `rtok proxy`. An overlay cannot
+# drop the built-in `a` and `b` arms (maps merge), so the first two arms reuse those names.
+# `skills` and `live_blobs` have no arm: §16.10 found too little for them to act on.
+[bench]
+tasks = "bench/tasks.toml"     # placeholder checks (`true`): pass `--tasks` for a live run
+
+[bench.configs]
+a       = "bench/configs/defaults/a-off.json"       # :8801 passthrough (today's default)
+b       = "bench/configs/defaults/b-compress.json"  # :8802 mode = compress
+context = "bench/configs/defaults/context.json"     # :8803 passthrough + context_management

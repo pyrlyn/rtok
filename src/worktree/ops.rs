@@ -28,13 +28,16 @@ pub fn add(
     slug: Option<&str>,
     owner: Option<String>,
     agent: Option<&str>,
+    no_seed: bool,
 ) -> Result<Plan> {
     let store = opened(cfg);
     let agent = claim::caller(store.as_ref(), agent)?;
+    let mut wt = cfg.worktree.clone();
+    wt.seed &= !no_seed;
     claim::add(
         store.as_ref(),
         cwd,
-        &cfg.worktree.root,
+        &wt,
         (task, slug),
         agent.as_ref(),
         owner,
@@ -126,6 +129,18 @@ pub fn remove(
     )
 }
 
+pub fn finish(
+    cfg: &Config,
+    path: &Path,
+    agent: Option<&str>,
+    owner: Option<String>,
+    opts: &super::finish::Options,
+) -> Result<super::finish::Finished> {
+    let store = opened(cfg);
+    let agent = claim::caller(store.as_ref(), agent)?;
+    super::finish::for_agent(store.as_ref(), path, (agent.as_ref(), owner), opts)
+}
+
 pub fn whoami(cfg: &Config, cwd: &Path) -> Whoami {
     let store = opened(cfg);
     // An unknown `RTOK_AGENT_ID` still leaves the root and the cwd worth printing.
@@ -178,6 +193,14 @@ pub fn live_ids(cfg: &Config) -> HashSet<String> {
     Store::open(&cfg.core.db_path)
         .and_then(|s| s.live_agents(&cfg.agents.idle))
         .map(|agents| agents.into_iter().map(|a| a.id).collect())
+        .unwrap_or_default()
+}
+
+/// Ended agent ids for `worktree gc` (T949). No store means none ended, so every lock holds.
+pub fn ended_ids(cfg: &Config) -> HashSet<String> {
+    Store::open(&cfg.core.db_path)
+        .and_then(|s| s.ended_agent_ids())
+        .map(|ids| ids.into_iter().collect())
         .unwrap_or_default()
 }
 

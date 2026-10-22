@@ -71,7 +71,19 @@ pub fn resolve_lock(lock_text: &str, name: &str) -> Option<(String, String)> {
     lock.package
         .into_iter()
         .find(|p| p.name == name)
+        .filter(|p| safe_part(&p.name) && safe_part(&p.version))
         .map(|p| (p.name, p.version))
+}
+
+/// A crate name or version as crates.io allows them. `Cargo.lock` comes from the checkout, and
+/// both end up in the docs.rs URL and in `<home>/docs/<name>/<version>`: a version of `../..`
+/// or `/abs` would write outside the docs cache.
+fn safe_part(s: &str) -> bool {
+    !s.is_empty()
+        && !s.starts_with('.')
+        && s.bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b"._+-".contains(&b))
+        && !s.contains("..")
 }
 
 fn lock_path() -> PathBuf {
@@ -411,6 +423,21 @@ checksum = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         let (name, ver) = resolve_lock(LOCK, "serde").expect("serde in lock");
         assert_eq!((name.as_str(), ver.as_str()), ("serde", "1.0.210"));
         assert!(resolve_lock(LOCK, "nope").is_none());
+    }
+
+    /// Audit 2026-10-19: a lock entry's version became a path under the docs cache unchecked.
+    #[test]
+    fn resolve_lock_refuses_path_like_names_and_versions() {
+        for (n, v) in [
+            ("evil", "../../../tmp/x"),
+            ("evil", "/tmp/x"),
+            ("evil", "1.0/../x"),
+        ] {
+            let lock = format!("version = 4\n[[package]]\nname = \"{n}\"\nversion = \"{v}\"\n");
+            assert!(resolve_lock(&lock, n).is_none(), "{v}");
+        }
+        let ok = "version = 4\n[[package]]\nname = \"a_b-c\"\nversion = \"1.0.0-rc.1+g1\"\n";
+        assert!(resolve_lock(ok, "a_b-c").is_some());
     }
 
     #[test]

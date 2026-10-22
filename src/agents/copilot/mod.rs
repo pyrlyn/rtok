@@ -15,6 +15,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use rtok_agent_sdk::{Apply, NO_CHANGES, edit_json};
+use rtok_mcp::spec::{Client, EntryShape, McpSpec};
 use serde_json::{Value, json};
 
 use super::hook_events;
@@ -114,8 +115,8 @@ impl Agent for Copilot {
                 offer: plugin,
                 plugin_installed,
                 run,
-                register_mcp,
-                unregister_mcp,
+                register_mcp: |cfg| super::mcp::install(cfg, &mcp_spec(cfg)),
+                unregister_mcp: |cfg| super::mcp::remove(cfg, &mcp_spec(cfg)),
             },
             skill_sync,
         )
@@ -210,27 +211,17 @@ fn remove_file(apply: &Apply, path: &Path) -> Result<String> {
     Ok(report)
 }
 
-/// The `mcpServers.rtok` entry [`register_mcp`] writes.
-fn mcp_entry(cmd: &str) -> Value {
-    json!({"type": "local", "command": cmd, "args": super::mcp_args("copilot"), "tools": ["*"]})
-}
-
-/// `mcpServers.rtok = {type: "local", command, args, tools: ["*"]}` in `mcp-config.json`.
-pub fn register_mcp(cfg: &Config) -> Result<String> {
-    let cmd = super::rtok_command();
-    rtok_agent_sdk::register_server(
-        &apply(cfg),
-        &mcp_path(cfg),
+/// `mcpServers.rtok = {type: "local", command, args, tools: ["*"]}` in `mcp-config.json`;
+/// `rtok_mcp::ops` writes and removes it (T277.2).
+pub(crate) fn mcp_spec(cfg: &Config) -> McpSpec {
+    super::mcp::json_spec(
+        "copilot",
+        Client::Cli,
+        mcp_path(cfg),
         "mcpServers",
-        NAME,
-        mcp_entry(&cmd),
-        &super::mcp_summary(&cmd, "copilot"),
+        super::rtok_mcp_command(),
+        EntryShape::LocalAllTools,
     )
-}
-
-/// Drop `mcpServers.rtok` from `mcp-config.json`, unless the user edited it (T246.2).
-pub fn unregister_mcp(cfg: &Config) -> Result<String> {
-    super::unregister_ours(cfg, &mcp_path(cfg), "mcpServers", NAME, &mcp_entry("rtok"))
 }
 
 const PLUGIN_SRC: &str = "plugins/copilot";
@@ -395,7 +386,11 @@ mod tests {
         let (mut c, dir) = cfg("single", false);
         c.setup.yes = true;
         assert!(run(&c, false).unwrap().starts_with("+ "));
-        assert!(register_mcp(&c).unwrap().starts_with("mcpServers.rtok: "));
+        assert!(
+            crate::agents::mcp::install(&c, &mcp_spec(&c))
+                .unwrap()
+                .starts_with("mcpServers.rtok: ")
+        );
         fake_plugin(&c);
         let lines = Copilot.apply(&c, Kind::Cli, Mode::Install).unwrap();
         assert!(
@@ -435,7 +430,7 @@ mod tests {
             Kind::Cli,
             &path,
             "mcpServers",
-            || register_mcp(&c),
+            || crate::agents::mcp::install(&c, &mcp_spec(&c)),
         );
         let _ = fs::remove_dir_all(dir);
     }
@@ -443,16 +438,22 @@ mod tests {
     #[test]
     fn mcp_entry_is_local_with_all_tools_and_the_app_reports_no_hooks() {
         let (c, dir) = cfg("mcp", false);
-        let first = register_mcp(&c).unwrap();
+        let first = crate::agents::mcp::install(&c, &mcp_spec(&c)).unwrap();
         assert!(first.starts_with("mcpServers.rtok: "), "{first}");
-        assert_eq!(register_mcp(&c).unwrap(), NO_CHANGES);
+        assert_eq!(
+            crate::agents::mcp::install(&c, &mcp_spec(&c)).unwrap(),
+            NO_CHANGES
+        );
         let doc: Value = serde_json::from_str(&fs::read_to_string(mcp_path(&c)).unwrap()).unwrap();
         let rtok = &doc["mcpServers"]["rtok"];
         assert_eq!(rtok["type"], "local");
         assert_eq!(rtok["args"], json!(["mcp", "--host", "copilot"]));
         assert_eq!(rtok["tools"], json!(["*"]));
         assert_eq!(Copilot.installed(&c, Kind::Desktop), ["mcp"]);
-        assert_eq!(unregister_mcp(&c).unwrap(), "- mcpServers.rtok");
+        assert_eq!(
+            crate::agents::mcp::remove(&c, &mcp_spec(&c)).unwrap(),
+            "- mcpServers.rtok"
+        );
         assert!(!fs::read_to_string(mcp_path(&c)).unwrap().contains("rtok"));
 
         assert!(matches!(Copilot.support(Kind::Cli, "hooks"), Support::Yes));

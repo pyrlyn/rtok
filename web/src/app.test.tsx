@@ -35,6 +35,8 @@ function mount(connect: Connect, path = "/overview") {
 afterEach(() => {
     cleanup();
     localStorage.clear();
+    sessionStorage.clear();
+    vi.unstubAllGlobals();
     document.documentElement.removeAttribute("data-theme");
 });
 
@@ -116,6 +118,28 @@ describe("shared states", () => {
         expect(await screen.findByText("Offline")).toBeTruthy();
         expect(screen.queryByText("Loading")).toBeNull();
         expect(screen.queryByRole("navigation")).toBeNull();
+    });
+
+    test("offline with no token in the page shows the token hint (T944)", async () => {
+        mount(server("closed"));
+        expect(await screen.findByText(/needs its access token/)).toBeTruthy();
+    });
+
+    test("offline with a token the server accepts stays a plain disconnect (T944)", async () => {
+        sessionStorage.setItem("rtok.web.token", "good");
+        const probe = vi.fn(async () => new Response(null, { status: 204 }));
+        vi.stubGlobal("fetch", probe);
+        mount(server("closed"));
+        await waitFor(() => expect(probe).toHaveBeenCalled());
+        expect(await screen.findByText("The connection to rtok was lost.")).toBeTruthy();
+        expect(screen.queryByText(/web-token/)).toBeNull();
+    });
+
+    test("offline with a stale token says rtok web was restarted (T944)", async () => {
+        sessionStorage.setItem("rtok.web.token", "stale");
+        vi.stubGlobal("fetch", async () => new Response(null, { status: 401 }));
+        mount(server("closed"));
+        expect(await screen.findByText(/restarted/)).toBeTruthy();
     });
 
     // First link closes; the button's link then pushes `next` (T407).

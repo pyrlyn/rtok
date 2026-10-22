@@ -1,0 +1,5 @@
+**T34.1 store: concurrent writers, atomic purge, literal read-cache prefix** · T0.3 · `src/store/mod.rs`
+Do: hooks, `rtok mcp`, `rtok proxy` and the detached otel flush share one SQLite file with the default `busy_timeout` of 0, so an overlapping write failed with "database is locked" (the Ubuntu CI flake). `purge_calls_older_than` ran four statements outside a transaction and hit the `calls` foreign keys from `usage`, `measurements` and child calls after the first deletes had committed. `clear_read_cache` matched `LIKE 'path\t%'`, so `_`, `%` and ASCII case in a file name cleared other files' cache rows. `spill` and `put_archive` each wrote the archive file and row, one of them labelled every archive `cmd`.
+Check: `busy_timeout = 1000` on open; purge in one transaction with one cutoff, detaching ledger rows (a saving outlives its call); a `substr` prefix compare; one `write_archive`. Tests `purge_drops_old_calls_and_detaches_their_ledger_rows`, `clear_read_cache_drops_only_that_path_and_its_mode_keys`.
+Complexity: 3/5
+Status: done 2026-09-10 · Model: Opus 5

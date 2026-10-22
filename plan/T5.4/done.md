@@ -1,0 +1,4 @@
+**T5.4 `expand` through the proxy** · T5.3, T4.1 · `src/plugins/archive.rs`
+Do: MCP `expand(id, lines?)` returns the archived original (from T5.3 store); mark id as expanded → T5.3 stops rewriting it from the next request on. Track expand rate.
+Check: expand → next fixture request contains the original block again.
+Status: done 2026-09-02 · Check: `expand_freezes_the_id_so_the_original_is_sent_again` — rewrite → `expand::fetch(id)` returns the original bytes and freezes the decision → the next 6-turn request carries turn 1 verbatim while turn 2 stays a pointer; `archive_decision_counts` = (2, 1); one `expand` measurement per freeze, none on a repeat. `make check` green (115 tests). Deviation: the shared fetch lives in `src/expand.rs` (`expand::fetch`, used by both `rtok expand` and the MCP `expand` tool), not `src/plugins/archive.rs`; expand rate is reported by `rtok stats --plugin archive` as `decisions` / `expanded` / `expand_rate` from `archive_decisions`.

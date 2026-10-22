@@ -1,0 +1,7 @@
+`research.md` §2 (T59.5 row): 8,951 MCP description tokens × 40,402 turns = 6.2 % of session input on a host without Tool Search — the largest measured share with a shipped lever that is off by default. `doctor` already prints `mcp_tool_search likely disabled` and per-server `desc tokens` (`src/doctor.rs` `render`), and stops there. Add one advice line when all hold: Tool Search likely disabled, rtok's proxy is a hop in the Anthropic chain, `proxy.tools_rewrite.enabled = false`, and the summed description tokens are above a threshold (config key under `[doctor]`, default from the 3 % gate). The line names the total and the config key; per T59.7 it never says "saves N". Same field in the JSON report.
+
+Plan: field + advice line in `src/doctor.rs` (`Report`, `render`), threshold key under `[doctor]` in `src/config/mod.rs` + `config/default.toml`; bless trycmd config fixtures; unit tests on `render` for each condition.
+
+Check: unit tests on `Report::render` for the four conditions (line present only when all hold); `just test` green; ≤ 100 LOC.
+
+Done: `Report.tools_rewrite_advice` + pure `tools_rewrite_advice()`; rtok counts as a hop when the chain (loopback hops print as the bare port) has `proxy.port` or `localhost:<port>`. New key `doctor.tools_rewrite_min_desc_tokens` (default 2000). Unit tests: the positive case (loopback and `localhost:`) and one per failing condition; `cargo nextest run --lib doctor report` 49 passed; clippy clean.

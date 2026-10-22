@@ -4,7 +4,7 @@ stdout = """
 target/tmp/t60-2-config-init.toml
 --- a/target/tmp/t60-2-config-init.toml
 +++ b/target/tmp/t60-2-config-init.toml
-@@ -0,0 +1,603 @@
+@@ -0,0 +1,606 @@
 +# rtok configuration. Every CLI flag has a key here; flags and RTOK_* env vars override.
 +# Precedence: defaults < this file < <git root>/.rtok.toml < env < flags.
 +# Docs: docs/config.md. Check: `rtok config validate`. Where a value came from: `rtok config show --sources`.
@@ -314,7 +314,7 @@ target/tmp/t60-2-config-init.toml
 +# runs     = 3
 +# dry_run  = false
 +# timeout_s = 900                       # per task run
-+# suite    = ""                         # "" = the six default tasks; "graph" = with and without MCP
++# suite    = ""                         # "" = the six default tasks; "graph" = with and without MCP; "p28" = compressor vs lossless (bench/p28.toml)
 +# [bench.configs]                       # name = settings file passed to `claude --settings`
 +# a = "bench/configs/legacy.json"
 +# b = "bench/configs/rtok.json"
@@ -332,7 +332,7 @@ target/tmp/t60-2-config-init.toml
 +[setup]                               # rtok agents install / remove <host>
 +# dry_run      = false
 +# yes          = false                  # required by --replace
-+# backup       = true                   # _backup/<name>.bak-<ts> beside each file, before install and uninstall touch it
++# backup       = true                   # .backup_configs/<name>.bak-<ts> beside each file, before install and uninstall touch it
 +# backup_files = 5                      # .bak-* generations kept per file; older ones are deleted (0 = keep all)
 +# hook_timeout_s = 5                    # timeout written into each hook entry
 +# modes        = []                     # e.g. ["terse", "yagni"]   (--mode)
@@ -425,13 +425,16 @@ target/tmp/t60-2-config-init.toml
 +[worktree]                            # rtok worktree add | list | gc
 +# enabled = true                        # false: rtok worktree and MCP worktree_* are off; Claude's worktree hooks act as without rtok
 +# root = ".rtok/worktrees"              # where `rtok worktree add` creates worktrees, as <root>/<repo>-<task>; relative: under the main checkout
++# seed = true                          # fill a new worktree's seed_dirs from the sibling that built them last, by copy-on-write clone (--no-seed)
++# seed_dirs = ["target", "node_modules"] # build caches to seed, relative to the checkout; a bare name also matches one level down
 +
 +[tasks]                               # task adapters; usually set per project in .rtok.toml
 +# adapter = "disk"                      # disk | github | gitlab
 +# prefix  = ""                          # task id prefix (R → R12); empty: first letter of the project name
 +
 +[tasks.disk]
-+# dir = "tasks"                         # one Markdown file per task, relative to the project root; done ones go to <dir>/done
++# dir = "tasks"                         # where the Markdown tasks live, relative to the project root
++# layout = "auto"                       # files: "R12 - slug.md", done ones in <dir>/done; folders: "<id>/task.md", closed by "<id>/done.md" (plan/); auto: folders when <dir> holds one
 +
 +[tasks.github]
 +# repo    = ""                          # owner/name; empty: the origin remote
@@ -466,8 +469,8 @@ target/tmp/t60-2-config-init.toml
 +# shell    = ""                         # "" = $SHELL
 +# rules    = "~/.rtok/rules.toml"       # extra filter rules; missing → built-in rules/default.toml
 +# rules_dir = "~/.rtok/rules.d"         # drop-ins: every *.toml merges after rules in name order
-+# trailer  = true                       # print `[rtok <id12> · N lines]` after a cut; false = `--no-ref`
-+# trailer_min_lines = 40                # add `[rtok <id12> · N lines]` above this
++# trailer  = true                       # print `[rtok <id8> · N lines]` after a cut; false = `--no-ref`
++# trailer_min_lines = 40                # add `[rtok <id8> · N lines]` above this
 +# fail_tail_lines   = 80                # non-zero exit → last N lines verbatim
 +# never_wrap = ["rtok", "sudo"]         # first-word deny list; heredocs, `&` are always skipped
 +# interactive_stems = ["python", "node", "psql", "sqlite3", "irb", "bash", "sh", "zsh", "docker", "kubectl"]  # `-i` skips wrap only for these (docker: run/exec; kubectl: exec); `--interactive` always skips
@@ -562,7 +565,7 @@ target/tmp/t60-2-config-init.toml
 +# max_tokens = 2000                     # per response; beyond it: head + "N more, expand <id>"
 +# impact_tokens = 1500                  # impact: files grouped and ranked up to this budget, then "+K files, M refs not shown"; --all or 0 = every row
 +# map_tokens = 0                        # SessionStart repo map cap (counts toward the injection budget next to memory.recall_tokens); 0 = off
-+# map_rank   = "refs"                   # SessionStart map order: refs = references per name; pagerank = files by personalized PageRank, personalized by recently edited files and the last checkpoint after a compact
++# map_rank   = "pagerank"               # SessionStart map order: refs = references per name; pagerank = files by personalized PageRank, personalized by recently edited files and the last checkpoint after a compact
 +# body_lines = 40                       # symbol(): source lines shown per definition
 +# auto_index = true                     # every symbol/callers/impact call walks the tree; false = index once, then `rtok graph index` or the watcher
 +# backend    = "tags"                   # tags | lsp | auto | text: tags = tree-sitter index (default); lsp = language server from PATH, tags when it cannot answer; auto = per project and language, server first, tags second, text search when no grammar parses the project; text = in-process text search only (no call graph, no dead)
@@ -608,7 +611,7 @@ target/tmp/t60-2-config-init.toml
 +[plugins.wasm]
 +# enabled = false
 +# dir = "~/.rtok/plugins"
-1 file changed, 603 insertions(+)
+1 file changed, 606 insertions(+)
 """
 
 # Hermetic by construction: isolated HOME/RTOK_HOME, inherit = false.

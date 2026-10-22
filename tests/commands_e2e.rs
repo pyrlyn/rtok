@@ -145,7 +145,7 @@ fn hook_rewrite_of_sleep_cat_tail_runs_through_rtok() {
         .pointer("/hookSpecificOutput/updatedInput/command")
         .and_then(|x| x.as_str())
         .unwrap_or_else(|| panic!("not rewritten: {stdout}"));
-    assert!(rewritten.starts_with("rtok run -- '"), "{rewritten}");
+    assert!(rewritten.contains("rtok run -- '"), "{rewritten}");
 
     let bin = assert_cmd::cargo::cargo_bin("rtok");
     let path = format!(
@@ -526,7 +526,9 @@ fn doctor_fix_removes_only_the_broken_hook_after_a_backup() {
         "{after}"
     );
     assert!(!after.contains("gone.sh"), "{after}");
-    let backups: Vec<_> = fs::read_dir(claude.join("_backup")).unwrap().collect();
+    let backups: Vec<_> = fs::read_dir(claude.join(".backup_configs"))
+        .unwrap()
+        .collect();
     assert_eq!(backups.len(), 1);
     let bak = backups[0].as_ref().unwrap().path();
     assert_eq!(fs::read_to_string(bak).unwrap(), raw);

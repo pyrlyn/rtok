@@ -394,7 +394,7 @@ fn freed(rows: &[KindRow], review: bool) -> u64 {
 
 /// The folders a host's own config files sit in, under the home `Roots` names only: a marker
 /// such as Claude Desktop's config has a fixed platform path no fixture can redirect, and a test
-/// must not size the real one. rtok keeps its `_backup` copies of those files there (T249).
+/// must not size the real one. rtok keeps its `.backup_configs` copies of those files there (T249).
 fn marker_dirs(a: &dyn Agent, cfg: &Config, roots: &Roots) -> Vec<PathBuf> {
     let mut dirs: Vec<PathBuf> = a
         .variants()

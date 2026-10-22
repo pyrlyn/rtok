@@ -1,0 +1,7 @@
+Found 2026-09-22 in the core pass: `apply` (`src/plugins/inject/mod.rs:112-152`) only drops whole candidates once `used >= budget`; a single candidate larger than `budget_tokens` is emitted whole. `modes_text` (:81-108) reads `modes_dir/<name>.md` with an uncapped `read_to_string`, so a large mode file becomes an equally large `additionalContext` and blows the ≤ 10 ms budget too. Every other offering source self-caps (`checkpoint_tokens`, `recall_tokens`, `map_tokens`, `spawn_brief_tokens`); the contract boundary does not. Breaks D5 ("per-turn token cap (default 800)").
+
+Plan: fit each accepted candidate to the remaining room (`crate::plugin::fit_budget`), marking what does not fit with the existing `dropped:` marker; cap each mode file by bytes/estimate before offering.
+
+Check: an injection of 10× `budget_tokens` returns `additionalContext` with `estimate <= budget_tokens`; a 1 MB `modes_dir/big.md` stays under budget and byte-stable across two runs; `just test` green.
+
+Do (2026-09-23): `inject::apply` emits a candidate within budget whole (T2.4 behaviour kept) and fits one larger than `budget_tokens` to the room left with `fit_budget`, naming the rest with the existing `dropped:<plugin>:<est>` marker. `modes_text` reads each mode file through a byte cap (`budget × estimator.prose + 1`) and fits it to the budget, so a 1 MB mode file is never read whole. Check: `single_10x_candidate_fits_budget_and_marks_dropped`, `one_mb_mode_file_stays_under_budget_and_stable` green.

@@ -24,6 +24,11 @@ once `web.host` is bound beyond loopback.
   and removes it from the address bar. The header wins if both are present.
 - **Check.** Constant-time comparison (`subtle`). A missing or wrong token gets `401` before the
   `Origin` check and before the upgrade.
+- **Why offline (T944).** A browser WebSocket reports a `401` as a bare close, the same as a
+  server that is down. `GET /auth` runs the same token and `Origin` checks without the upgrade:
+  `204` when admitted, `401`/`403` otherwise. When the link closes, the SPA shows a hint to open
+  the page with `?token=$(cat ~/.rtok/web-token)` if it has no token, or says `rtok web` was
+  restarted if `/auth` answers `401`; anything else stays the plain "connection lost".
 - **Remote hosts.** There is no file on another machine, so no token: remote clients stay out.
   The non-loopback bind refusal is unchanged: `web.host` beyond loopback still needs
   `RTOK_WEB_ALLOW_REMOTE=1`. (With that opt-in the page and `/health` are still served to the
@@ -44,6 +49,7 @@ open "http://127.0.0.1:3333/?token=$(cat ~/.rtok/web-token)"
 
 `tests/web_token.rs` runs the real binary: file created `0600` (Unix) / ACL names only the
 current user (Windows); a client with the file's token connects; no or wrong token gets 401;
-a restart changes the token and the old one fails; a non-loopback bind is refused without
+a restart changes the token and the old one fails; `/auth` answers 401 without or with a wrong token, 204
+with the file's token and 403 for a foreign `Origin`; a non-loopback bind is refused without
 `RTOK_WEB_ALLOW_REMOTE=1`; another OS user cannot open the file (real open as `nobody` when run
 as root, otherwise skipped with a message and the mode bits asserted instead).

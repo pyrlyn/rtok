@@ -16,6 +16,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use rtok_agent_sdk::{Apply, NO_CHANGES, array_at, edit_json, object_at};
+use rtok_mcp::spec::{Client, EntryShape, McpSpec};
 use serde_json::{Value, json};
 
 use super::hook_events;
@@ -103,11 +104,7 @@ impl Agent for Cursor {
         let mut lines = vec![run(cfg, remove || PLUGIN.ours(cfg))?, plugin];
         // MCP is independent of the plugin (T275/D33): every install/update writes
         // `mcp.json`'s `mcpServers.rtok` regardless of plugin state; only remove takes it out.
-        if remove {
-            lines.push(unregister_mcp(cfg)?);
-        } else if cfg.setup.mcp {
-            lines.push(register_mcp(cfg)?);
-        }
+        lines.extend(super::mcp::sync(cfg, &mcp_spec(cfg), mode)?);
         Ok(lines)
     }
 }
@@ -193,21 +190,17 @@ pub(crate) fn mcp_path(cfg: &Config) -> PathBuf {
     cfg.setup.cursor.hooks_path.with_file_name("mcp.json")
 }
 
-/// Register `rtok mcp` in `~/.cursor/mcp.json` (sibling of `hooks.json`).
-pub fn register_mcp(cfg: &Config) -> Result<String> {
-    let cmd = super::rtok_command();
-    rtok_agent_sdk::register_mcp(
-        &apply(cfg),
-        &mcp_path(cfg),
-        "rtok",
-        &cmd,
-        &super::mcp_args("cursor"),
+/// `mcpServers.rtok = {type: "stdio", command, args}` in `~/.cursor/mcp.json` (sibling of
+/// `hooks.json`); `rtok_mcp::ops` writes and removes it (T277.2).
+pub(crate) fn mcp_spec(cfg: &Config) -> McpSpec {
+    super::mcp::json_spec(
+        "cursor",
+        Client::Ide,
+        mcp_path(cfg),
+        "mcpServers",
+        super::rtok_mcp_command(),
+        EntryShape::TypedCommand,
     )
-}
-
-/// Drop `mcpServers.rtok` from `~/.cursor/mcp.json` (`rtok agents remove cursor`).
-pub fn unregister_mcp(cfg: &Config) -> Result<String> {
-    super::unregister_mcp_ours(cfg, &mcp_path(cfg), "rtok")
 }
 
 /// The linked Cursor plugin (D21, T10.5). Dry-run and the unaccepted offer MUST contain the
@@ -238,7 +231,13 @@ pub fn plugin_dest(cfg: &Config) -> PathBuf {
 /// linking or unlinking never touches `mcp.json` — [`Agent::apply`] registers or
 /// unregisters `mcpServers.rtok` there on its own, plugin state notwithstanding.
 pub fn offer_plugin(cfg: &Config, remove: bool) -> Result<String> {
-    PLUGIN.offer_with(cfg, remove, windows_copy)
+    // The POSIX resolver lines stay on Unix, where the copy (T925) stands in for a link.
+    let fix: rtok_agent_sdk::CopyFix = if cfg!(windows) {
+        windows_copy
+    } else {
+        rtok_agent_sdk::keep_bytes
+    };
+    PLUGIN.offer_with(cfg, remove, fix)
 }
 
 fn insert_ours(root: &mut Value) -> String {
@@ -437,7 +436,7 @@ mod tests {
         fs::write(dest.join("mine.txt"), "not rtok's plugin").unwrap();
         // Seed a working plain install: hooks + mcpServers.rtok already present.
         run(&c, false).unwrap();
-        register_mcp(&c).unwrap();
+        crate::agents::mcp::install(&c, &mcp_spec(&c)).unwrap();
         assert!(PLUGIN.linked(&c), "the foreign dir makes linked() true");
         assert!(!PLUGIN.ours(&c), "but it is not ours");
 
@@ -484,7 +483,7 @@ mod tests {
             Kind::Desktop,
             &path,
             "mcpServers",
-            || register_mcp(&c),
+            || crate::agents::mcp::install(&c, &mcp_spec(&c)),
         );
         let _ = fs::remove_dir_all(dir);
     }

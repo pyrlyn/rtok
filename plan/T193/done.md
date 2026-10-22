@@ -1,0 +1,7 @@
+Found 2026-09-22 in the surfaces pass, confirmed by grep (`src/web/mod.rs` contains no `Origin` check): `ws_upgrade` (:241-246) validates nothing and the server binds `127.0.0.1` — reachable from any page the operator visits. A hostile page can open `ws://127.0.0.1:<port>/ws`, read every snapshot (sessions, calls, logs), pull raw archived tool output via `{"expand":"<id>"}` (secrets, code) and write the config through `{"set": …}` (guard on/off, plugin toggles) — `inbound` (:283-310) has no gate of its own. Store confidentiality and config integrity are open to cross-site abuse.
+
+Plan: reject upgrades whose `Origin` host does not match the request `Host` in `ws_upgrade` (keep header-less clients for tests/CLI); `inbound` mutations then sit behind the same gate.
+
+Check: `ws_upgrade_rejects_foreign_origin` — `Origin: http://evil.example` refused, same-origin and header-less upgrades succeed; `ws_set_accepts_plugin_enabled` and `ws_expand_returns_payload_and_unknown_id` stay green; `just test` green.
+
+Do (2026-09-23): `ws_upgrade` answers 403 when a present `Origin` host differs from `Host`. Review fix: an equal pair is also refused unless `Host` is an IP literal or `localhost`, because a DNS-rebinding page sends matching names. Header-less clients keep working. Check: `tests/web.rs::ws_upgrade_rejects_foreign_origin` (403 / 101 / 101) and `web::tests::origin_gate_blocks_cross_site_and_rebinding` green.

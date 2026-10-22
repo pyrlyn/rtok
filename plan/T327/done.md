@@ -1,0 +1,5 @@
+Found by the 2026-10-01 bug hunt. `graph::lsp::kind_name` mapped LSP SymbolKind 11 to "enum" and left 10 unmapped (LSP 3.17: 10 = Enum, 11 = Interface); `graph::dead_candidates` scanned only the 3 lines above a fn for `#[test]`/`#[cfg(test)]`, so `#[rstest]` with `#[case]` rows, `#[test]` under further attributes and `#[tokio::test]` read as dead; `archive::rewrite_skill` cut the wire `tool_use_id` at byte 12 and panicked inside a multi-byte char; `memory::render_title_index` returned a lone over-long title past its cap.
+
+Fix: `kind_name` follows the spec; a `has_test_attr` helper walks the whole attribute/comment block above a definition (`#[test`, `#[cfg(test`, `#[rstest`, `#[case`, any `::test`); the skill id is cut on chars; a lone overflowing title is halved until the index fits, and dropped only if an empty title still does not.
+
+Check: `kind_name_follows_the_lsp_symbol_kind_numbers`, `dead_lists_only_the_private_orphan` (new `param.rs` fixture), `a_non_ascii_skill_id_is_shortened_on_a_char_boundary`, `a_single_long_title_cannot_break_the_index_cap`; `just check`.

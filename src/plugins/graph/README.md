@@ -44,7 +44,7 @@ body_lines = 40
 
 ## Tasks
 
-See `roadmap.md` § `graph`. Checks in `plan.md`.
+See `roadmap.md` § `graph`. Checks in `plan/`.
 
 T8.1 symbol index · T8.2 MCP tools · T8.3 per-root scoping · T8.4 stat-gated freshness ·
 T8.8 labelled hit rate · T8.5 call edges · T8.6 definition bodies · T8.7 `impact` ·

@@ -160,7 +160,7 @@ rows).\n"
         } else {
             exp.expanded_ids
                 .iter()
-                .map(|id| cell(id))
+                .map(|id| cell(super::shown_archive_id(id)))
                 .collect::<Vec<_>>()
                 .join(", ")
         };
@@ -279,6 +279,32 @@ mod tests {
             "very large numbers: {out}"
         );
         insta::assert_snapshot!("one_row", out);
+    }
+
+    #[test]
+    fn a_full_archive_id_in_the_expand_list_prints_eight_hex_chars() {
+        let mut doc = fixtures::one_row();
+        let id = "ab".repeat(32);
+        doc.ledgers.expand.expanded_ids = vec![id.clone()];
+        let short = crate::names::short_id(&id);
+        let out = render(&doc);
+        assert!(out.contains(&format!("Expanded: {short}.")), "{out}");
+        assert!(!out.contains(&id), "{out}");
+        let html = crate::report::html::render(&doc);
+        assert!(html.contains(&format!("<code>{short}</code>")), "{html}");
+        assert!(!html.contains(&id), "{html}");
+        let ai = crate::report::ai::render(&doc, &crate::config::Config::default());
+        assert!(ai.contains(&format!("expanded_ids={short}")), "{ai}");
+        assert!(!ai.contains(&id), "{ai}");
+        let pdf = crate::report::pdf::render(&doc);
+        assert!(
+            pdf.windows(short.len()).any(|w| w == short.as_bytes()),
+            "pdf dropped the prefix"
+        );
+        assert!(
+            !pdf.windows(id.len()).any(|w| w == id.as_bytes()),
+            "pdf kept the full sha"
+        );
     }
 
     #[test]

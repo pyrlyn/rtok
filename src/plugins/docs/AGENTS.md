@@ -14,4 +14,4 @@
 - A query that returns snippets records `plugin: "docs"`, `kind: "query"`. No saving claim without that row.
 - Tools listed in `mcp_tools()` are routed in `src/mcp.rs` `invoke`.
 
-**Checks**: `plan.md` T455.
+**Checks**: `plan/` T455.

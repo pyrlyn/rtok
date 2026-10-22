@@ -115,6 +115,11 @@ spa-e2e: spa-build && spa-e2e-run
 spa-e2e-run:
     {{npm}} --prefix web run test:e2e
 
+# T414.7: re-shoots web/screenshots/ from the built SPA on `?sample` data (Chromium, as spa-stories).
+# Not in any gate: it rewrites tracked files.
+spa-screenshots: spa-build
+    {{npm}} --prefix web run screenshots
+
 # T183: tools/publish_marketplace's own test suite (no network, no real `gh`).
 python:
     {{pytest}} tools/tests
@@ -186,9 +191,9 @@ pypi-publish *flags:
 
 # CI's `docs` job runs only this on a docs-only pull request (`docs-only` in .github/infra.yml);
 # `just test` runs the same tests otherwise.
-# the tests that validate Markdown (plan.md/todo.md ids and Check: lines, ideas.md, docs/, ...)
+# the tests that validate Markdown (plan/ task folders and Check: lines, ideas.md, docs/, ...)
 docs-check:
-    {{cargo}} test -p rtok --test plan_unique_ids --test ideas_md --test docs_structure \
+    {{cargo}} test -p rtok --test plan_dir --test ideas_md --test docs_structure \
         --test host_docs --test public_numbers --test toolchain_rows \
         --test plugin_plans --test report --test agents_doc --test agents_worktrees \
         --test stats_model

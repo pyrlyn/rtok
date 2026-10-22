@@ -1,0 +1,9 @@
+T329 §1 and the storage half of §2, with no CLI, links or page (those are T329.2 onward). Migration `0027_projects` creates `projects` (id, canonical root, optional display name, origin `manual|session|worktree|mcp|reference`, created and last-used times, `selected`) with a partial unique index so at most one row is selected, and backfills one project per root already in the symbol index, the most recently indexed one selected, so an existing store keeps working. `Store` gets `register_project`, `projects`, `project`, `project_by_root`, `rename_project`, `selected_project`, `select_project`, `resolve_project` and `remove_project`.
+
+Execution: `migrations/0027_projects/up.sql`, `src/store/projects.rs` (new), `schema.rs`, `schema_snapshot.txt`. Roots are canonicalised with `graph::index::canon`, the key the symbol index already uses, so symlinks and `..` spellings are one project and the first origin stands. "Missing" is read from the filesystem on every call, never stored. `resolve_project(cwd)` keeps a live stored selection, otherwise selects the cwd's registered project and reports `fell_back` when it replaced a stored selection that is gone. `remove_project` drops the project's `symbols`, `extractor` and `symbol_stale` rows and the registry row in one transaction and never touches files.
+
+Check: `projects::tests` (dedup through symlink and `..`, selection exclusivity and unknown id, rename, missing, cwd fallback, remove leaving other roots' index alone) and `migration_0027_registers_the_roots_the_store_already_indexed` (previous-schema db, selected = newest `indexed_at`, empty store gets no project); schema snapshot re-blessed; `just check`.
+
+Deviations: none from the card; the registry stores no index status (rows, files, pending, watch, last error), which T329.2 computes from the index when it lists projects.
+
+Status: done 2026-10-03 · Model: Claude Code / sonnet-5

@@ -50,7 +50,7 @@ pub struct Cache {
 
 pub fn usage(dir: &Path) -> Usage {
     let mut total = Usage::default();
-    let _ = walk(dir, true, None, &mut total, None, &|_| false);
+    let _ = walk(dir, true, false, None, &mut total, None, &|_| false);
     total
 }
 
@@ -59,18 +59,21 @@ pub fn usage(dir: &Path) -> Usage {
 /// so a caller that decides "idle" from them must keep the cache.
 pub fn usage_until(dir: &Path, deadline: std::time::Instant) -> (Usage, bool) {
     let mut total = Usage::default();
-    let cut = walk(dir, true, None, &mut total, Some(deadline), &|_| false);
+    let cut = walk(dir, true, false, None, &mut total, Some(deadline), &|_| {
+        false
+    });
     (total, cut.is_break())
 }
 
-/// The newest mtime [`usage`] would report for `dir`, except that the walk ends at the first
-/// file whose mtime satisfies `enough`. `gc` only asks whether a worktree was touched within
-/// its idle window, which one recent file answers; `enough` must hold for every later mtime
-/// too, so that it holds for the newest exactly when it holds for this answer.
-/// `None` when the walk could not read everything and found no file that settles it.
+/// The newest mtime of `dir`'s source files — tagged cache roots left out (T948), since a
+/// cargo or rust-analyzer build rewrites `target/` without anyone touching the work — except
+/// that the walk ends at the first file whose mtime satisfies `enough`. `gc` only asks whether
+/// a worktree was touched within its idle window, which one recent file answers; `enough` must
+/// hold for every later mtime too, so that it holds for the newest exactly when it holds for
+/// this answer. `None` when the walk could not read everything and found no file that settles it.
 pub fn newest_until(dir: &Path, enough: impl Fn(SystemTime) -> bool) -> Option<SystemTime> {
     let mut total = Usage::default();
-    let settled = walk(dir, true, None, &mut total, None, &enough).is_break();
+    let settled = walk(dir, true, true, None, &mut total, None, &enough).is_break();
     total.modified.filter(|_| settled || !total.incomplete)
 }
 
@@ -88,10 +91,12 @@ fn missed(total: &mut Usage, cache: Option<usize>, err: Option<&std::io::Error>)
 
 /// `cache` indexes `total.caches` once the walk is inside a tagged root. The listing in hand
 /// answers "is there a `.git` or a `CACHEDIR.TAG` here", so most directories cost one
-/// `read_dir` and no probes; only a name that is present gets checked on disk.
+/// `read_dir` and no probes; only a name that is present gets checked on disk. `sources_only`
+/// skips every tagged cache root.
 fn walk(
     dir: &Path,
     root: bool,
+    sources_only: bool,
     cache: Option<usize>,
     total: &mut Usage,
     deadline: Option<std::time::Instant>,
@@ -126,8 +131,12 @@ fn walk(
     if !root && git && dir.join(".git").exists() {
         return ControlFlow::Continue(());
     }
+    let tagged = cache.is_none() && tag && is_cache_dir(dir);
+    if tagged && sources_only {
+        return ControlFlow::Continue(());
+    }
     let cache = cache.or_else(|| {
-        (tag && is_cache_dir(dir)).then(|| {
+        tagged.then(|| {
             let root = Cache {
                 path: dir.to_path_buf(),
                 bytes: 0,
@@ -149,7 +158,15 @@ fn walk(
             }
         };
         if kind.is_dir() {
-            walk(&entry.path(), false, cache, total, deadline, enough)?;
+            walk(
+                &entry.path(),
+                false,
+                sources_only,
+                cache,
+                total,
+                deadline,
+                enough,
+            )?;
             continue;
         }
         let meta = match entry.metadata() {
@@ -481,8 +498,33 @@ mod tests {
         // The root's newest file is at most as new as the worktree's newest file.
         assert!(root.modified.is_some() && root.modified <= used.modified);
         assert_eq!(usage(&dir.join("missing")), Usage::default());
-        // Nothing is ever enough: the whole walk, the same newest mtime.
-        assert_eq!(newest_until(&dir, |_| false), used.modified);
+    }
+
+    /// T948: a build that rewrites `target/` is not work, so gc's idle age reads source files
+    /// only; `usage` (what `worktree list` and `clean` show) still counts the cache's mtimes.
+    #[test]
+    fn newest_until_leaves_tagged_caches_out() {
+        let dir = tmp_dir("wt-t948-sources");
+        create_dir_all(dir.join("target/debug")).unwrap();
+        write(dir.join("a.rs"), b"x").unwrap();
+        write(dir.join("target/CACHEDIR.TAG"), CACHEDIR_SIGNATURE).unwrap();
+        write(dir.join("target/debug/bin"), b"x").unwrap();
+        let old = UNIX_EPOCH + std::time::Duration::from_secs(1_000);
+        let new = UNIX_EPOCH + std::time::Duration::from_secs(2_000);
+        let touch = |p: PathBuf, t| {
+            let f = std::fs::OpenOptions::new().write(true).open(p).unwrap();
+            f.set_modified(t).unwrap();
+        };
+        touch(dir.join("a.rs"), old);
+        touch(dir.join("target/CACHEDIR.TAG"), new);
+        touch(dir.join("target/debug/bin"), new);
+        // Nothing is ever enough: the whole walk.
+        let sources = newest_until(&dir, |_| false);
+        let used = usage(&dir);
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(sources, Some(old));
+        assert_eq!(used.modified, Some(new));
+        assert_eq!(used.caches[0].modified, Some(new));
     }
 
     /// `gc`'s question: the walk stops at the first file young enough, and that file

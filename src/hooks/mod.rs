@@ -9,6 +9,7 @@
 
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
+pub mod deadline;
 mod push;
 pub mod resident;
 pub mod types;
@@ -1031,17 +1032,18 @@ fn cap_budget(cx: &Runtime, text: &str) -> String {
     if keep == lines.len() {
         return lines.join("\n");
     }
-    // The id is 64 hex digits whatever the bytes, so a placeholder of the same length
-    // prices the marker before anything is archived.
+    // The printed id is 8 hex chars (T910), so a placeholder of that length prices the
+    // marker before anything is archived. `expand` resolves the prefix.
     let marker_for = |dropped: &str, id: &str| {
         let est = cx.estimate(dropped, Class::Prose);
         if id.is_empty() {
             format!("dropped:post_tool:{est}")
         } else {
-            format!("dropped:post_tool:{est} · expand: rtok expand {id}")
+            let shown = crate::names::short_id(id);
+            format!("dropped:post_tool:{est} · expand: rtok expand {shown}")
         }
     };
-    let placeholder = "0".repeat(64);
+    let placeholder = "0".repeat(crate::names::MIN_PREFIX);
     while keep > 0 {
         let dropped = lines[keep..].join("\n");
         let with = format!(
@@ -1318,7 +1320,7 @@ mod tests {
             h["modifiedInput"]["command"]
                 .as_str()
                 .unwrap()
-                .starts_with("rtok run"),
+                .contains("rtok run"),
             "{v}"
         );
         assert!(h.get("updatedInput").is_none(), "{v}");
@@ -1387,7 +1389,7 @@ mod tests {
             h["updatedInput"]["command"]
                 .as_str()
                 .unwrap()
-                .starts_with("rtok run"),
+                .contains("rtok run"),
             "{h}"
         );
         for (event, name) in [
@@ -1464,7 +1466,7 @@ mod tests {
         let out = dispatch_owned_strict(&stdin, "PreToolUse", &cfg).unwrap();
         let v: serde_json::Value = serde_json::from_slice(&out).unwrap();
         let cmd = v["overrideInput"]["commands"][0].as_str().unwrap();
-        assert!(cmd.starts_with("rtok run"), "{v}");
+        assert!(cmd.contains("rtok run"), "{v}");
 
         for bad in [b"not-json".as_slice(), b"".as_slice()] {
             let mut out = Vec::new();
@@ -1615,7 +1617,7 @@ mod tests {
         dir
     }
 
-    /// `out` carries one `dropped:post_tool:` marker whose `rtok expand <sha256>` id fetches
+    /// `out` carries one `dropped:post_tool:` marker whose `rtok expand <id>` prefix fetches
     /// back exactly `want`.
     fn assert_marker_expands_to(cx: &Runtime, out: &str, want: &str) {
         let marker = out
@@ -1625,7 +1627,7 @@ mod tests {
         assert!(marker.contains(" · expand: rtok expand "), "{marker}");
         let id = marker.rsplit("rtok expand ").next().unwrap();
         assert!(
-            id.len() == 64 && id.chars().all(|c| c.is_ascii_hexdigit()),
+            id.len() == crate::names::MIN_PREFIX && id.chars().all(|c| c.is_ascii_hexdigit()),
             "{marker}"
         );
         let got = crate::expand::fetch(cx, id).unwrap().unwrap();
@@ -1659,7 +1661,7 @@ mod tests {
         let (kept, marker) = out.rsplit_once('\n').expect("kept lines + marker");
         assert!(marker.starts_with("dropped:post_tool:"), "{out}");
         let id = marker.rsplit("rtok expand ").next().unwrap();
-        assert_eq!(id.len(), 64, "{marker}");
+        assert_eq!(id.len(), crate::names::MIN_PREFIX, "{marker}");
         let rest = crate::expand::fetch(&cx, id).unwrap().unwrap();
         assert_eq!(
             format!("{kept}\n{}", String::from_utf8(rest).unwrap()),

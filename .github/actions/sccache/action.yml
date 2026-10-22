@@ -27,6 +27,23 @@ inputs:
 runs:
   using: composite
   steps:
+    # Explicit local cache location and size (also used as sccache's local fallback when R2 is
+    # not configured). macOS self-hosted: the default Mozilla.sccache dir, so the existing cache
+    # is reused; Linux: /var/cache/sccache, or $RUNNER_TEMP when that is not writable.
+    - name: sccache local dir
+      shell: bash
+      run: |
+        if [ "$RUNNER_OS" = "macOS" ]; then
+          dir="$HOME/Library/Caches/Mozilla.sccache"
+        elif [ "$RUNNER_OS" = "Linux" ] && { mkdir -p /var/cache/sccache 2>/dev/null || sudo -n install -d -o "$(id -u)" -g "$(id -g)" /var/cache/sccache 2>/dev/null; } && [ -w /var/cache/sccache ]; then
+          dir=/var/cache/sccache
+        else
+          dir="$RUNNER_TEMP/sccache"
+        fi
+        mkdir -p "$dir"
+        echo "SCCACHE_DIR=$dir" >> "$GITHUB_ENV"
+        echo "SCCACHE_CACHE_SIZE=${SCCACHE_CACHE_SIZE:-15G}" >> "$GITHUB_ENV"
+
     - name: sccache configuration
       id: cfg
       shell: bash
@@ -40,9 +57,15 @@ runs:
           echo "enabled=true" >> "$GITHUB_OUTPUT"
         else
           echo "enabled=false" >> "$GITHUB_OUTPUT"
-          # mise may have exported its own sccache as the wrapper; without a backend, drop it.
-          echo "RUSTC_WRAPPER=" >> "$GITHUB_ENV"
-          echo "::notice::sccache is off: the R2 secrets or variables are not available here"
+          if [ "$RUNNER_ENVIRONMENT" = "self-hosted" ] && command -v sccache >/dev/null 2>&1; then
+            # Persistent machine: the local disk cache in SCCACHE_DIR pays off across runs.
+            echo "RUSTC_WRAPPER=sccache" >> "$GITHUB_ENV"
+            echo "::notice::sccache uses the local disk cache in $SCCACHE_DIR (R2 not configured)"
+          else
+            # mise may have exported its own sccache as the wrapper; without a backend, drop it.
+            echo "RUSTC_WRAPPER=" >> "$GITHUB_ENV"
+            echo "::notice::sccache is off: the R2 secrets or variables are not available here"
+          fi
         fi
 
     - if: steps.cfg.outputs.enabled == 'true'
@@ -69,3 +92,15 @@ runs:
           echo "AWS_SECRET_ACCESS_KEY=$SECRET_ACCESS_KEY"
           if [ "$READ_ONLY" = "true" ]; then echo "SCCACHE_S3_RW_MODE=READ_ONLY"; fi
         } >> "$GITHUB_ENV"
+
+    # Fresh server with the settings above (a stale server keeps its old dir/size) and zeroed
+    # stats, so the post-build `sccache --show-stats` covers this job only.
+    - name: sccache init
+      shell: bash
+      run: |
+        if [ "${RUSTC_WRAPPER:-}" = "sccache" ] && command -v sccache >/dev/null 2>&1; then
+          sccache --stop-server >/dev/null 2>&1 || true
+          mkdir -p "$SCCACHE_DIR"
+          sccache --start-server
+          sccache --zero-stats
+        fi

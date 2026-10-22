@@ -15,6 +15,7 @@ use super::adapter::{Filter, Taken, TaskAdapter, set_status};
 use super::disk::DiskAdapter;
 use super::github::{self, GithubAdapter};
 use super::gitlab::{self, GitlabAdapter};
+use super::plan_dir::PlanDirAdapter;
 use super::ready::{self, active_blocker, find_cycles, holder_is_stale, select_ready};
 use super::remote;
 use super::{
@@ -49,12 +50,51 @@ pub struct Shown {
     pub subtasks: Vec<TaskId>,
 }
 
+/// The disk adapter for `[tasks.disk]`: `auto` follows what `dir` already holds, and an empty or
+/// new directory starts in the file layout, so no existing project changes under its feet.
+fn disk_adapter(cfg: &crate::config::TasksDisk, root: &Path) -> Box<dyn TaskAdapter> {
+    let dir = root.join(&cfg.dir);
+    let folders = match cfg.layout.as_str() {
+        "folders" => true,
+        "files" => false,
+        _ => PlanDirAdapter::holds_folders(&dir),
+    };
+    if folders {
+        Box::new(PlanDirAdapter::new(dir))
+    } else {
+        Box::new(DiskAdapter::new(dir))
+    }
+}
+
 /// `checkout`, not `main`: `.rtok.toml` and the disk adapter's directory are checked-in files,
 /// so each linked worktree has its own; the store identity is [`project_key`](crate::project::project_key).
 fn checkout_of(cwd: &Path, what: &str) -> Result<PathBuf> {
     ProjectRoot::find(cwd)
         .map(|r| r.checkout)
         .with_context(|| format!("{what}: not inside a git checkout"))
+}
+
+/// T952.2: close `task` in the project of `main` when its task store has it active, after the
+/// worktree's PR merged. `None` for an id it does not know (a `plan.md` project: the `done.md`
+/// move rode in the PR) or one already closed. The disk adapter writes in `main`, as
+/// `rtok task status <id> done` run there would.
+pub fn close_if_active(
+    store: &Store,
+    cfg: &crate::config::Tasks,
+    main: &Path,
+    task: &str,
+) -> Result<Option<String>> {
+    let Ok(id) = task.parse::<TaskId>() else {
+        return Ok(None);
+    };
+    let project = Project::open(cfg, main)?;
+    match project.adapter().get(&id)? {
+        Some(t) if t.status.is_active() => {
+            project.status(store, &id, Some(Status::Done), false, None)?;
+            Ok(Some(id.to_string()))
+        }
+        _ => Ok(None),
+    }
 }
 
 impl Project {
@@ -66,7 +106,7 @@ impl Project {
         let name = crate::project::project_name(cwd);
         let prefix = resolve_prefix(&cfg.prefix, name.as_deref())?;
         let adapter: Box<dyn TaskAdapter> = match cfg.adapter.as_str() {
-            "disk" => Box::new(DiskAdapter::new(root.join(&cfg.disk.dir))),
+            "disk" => disk_adapter(&cfg.disk, &root),
             "github" => {
                 let repo = github::repo(&cfg.github.repo, &key)?;
                 let token = remote::token(
@@ -169,17 +209,25 @@ impl Project {
     }
 
     /// `status <id> [<status>]`: set the status when given, else read it. Finishing a task
-    /// drops its claim row, so SessionStart stops naming it.
+    /// drops its claim row, so SessionStart stops naming it. A `report` is the closing report of
+    /// a task that is finishing.
     pub fn status(
         &self,
         store: &Store,
         id: &TaskId,
         status: Option<Status>,
         force: bool,
+        report: Option<&str>,
     ) -> Result<Task> {
+        if report.is_some() && status.is_none_or(|s| s.is_active()) {
+            bail!("rtok task: a report goes with the status done or closed");
+        }
         match status {
             Some(s) => {
                 let task = set_status(self.adapter(), id, s, force)?;
+                if let Some(report) = report {
+                    self.adapter.write_report(id, report)?;
+                }
                 if !s.is_active() {
                     store.clear_task_claim(&self.key, &id.to_string())?;
                 }
@@ -1016,7 +1064,7 @@ mod claim_tests {
         assert!(ready.iter().all(|item| item.task.id != id("R2")));
         let next = p.claim(&store, None, &live).unwrap();
         assert_ne!(next.task.id, id("R2"));
-        p.status(&store, &id("R1"), Some(Status::Done), true)
+        p.status(&store, &id("R1"), Some(Status::Done), true, None)
             .unwrap();
         assert!(
             store

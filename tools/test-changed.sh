@@ -21,7 +21,7 @@
 # cheap, but running all of it is not: the TUI tests alone take ~75s of the ~76s wall clock.
 #
 # Markdown goes through the same name match rather than being ignored: `docs/agents.md` reaches
-# the host-docs test, `plan.md` reaches the plugin-plan test, and a doc nothing asserts on
+# the host-docs test, `plan/<id>/task.md` reaches the plan tests, and a doc nothing asserts on
 # selects nothing but the unit tests.
 #
 # This is the selection behind `just check` (T420) and `just test-changed`. Targets are picked by

@@ -128,7 +128,7 @@ Options:
       --json           JSON instead of the table
       --fix            Clean up broken hooks and duplicate hooks and MCP entries: a terminal gets a
                        checklist, a pipe the diff; --yes writes without asking
-      --yes            With --fix: write the changes (a copy goes to `_backup/` first)
+      --yes            With --fix: write the changes (a copy goes to `.backup_configs/` first)
       --dry-run        With --fix --yes: print the diffs and write nothing
       --stat           With --fix: stat lines and totals instead of the diffs (a dry run)
       --only <ONLY>    With --fix: limit it to these problems (repeatable; default: all of them)
@@ -1233,6 +1233,9 @@ Commands:
   remove   Remove your own finished worktree: unlock, `git worktree remove`, delete the branch when
            merged, release the claim; refuses dirty or current worktrees, and a foreign lock unless
            the task is finished (merged, clean, with commits of its own)
+  finish   Hand your task worktree to review: commit what is left, push, open or reuse the PR, ask
+           for squash auto-merge, then unlock. Refuses the main checkout, another agent's lock and
+           credential files; never closes the task
   list     Every worktree and orphan with its owner, state, source and build-cache bytes
   whoami   Your agent, where new worktrees go, the worktree you are in and the ones you hold
   gc       Remove merged, clean, idle worktrees with their branches; drop records of deleted ones
@@ -1331,6 +1334,7 @@ Options:
                        Defaults to `<host> / <model>` of the agent
       --agent <AGENT>  The rtok agent id (any unique prefix) to bind it to; defaults to
                        `RTOK_AGENT_ID`
+      --no-seed        Do not seed `[worktree] seed_dirs` from a sibling checkout this time
   -h, --help           Print help
 
 $ rtok worktree claim --help
@@ -1367,6 +1371,27 @@ Options:
                        <model>` of the agent
       --json           Print the result as JSON
   -h, --help           Print help
+
+$ rtok worktree finish --help
+Hand your task worktree to review: commit what is left, push, open or reuse the PR, ask for squash
+auto-merge, then unlock. Refuses the main checkout, another agent's lock and credential files; never
+closes the task
+
+Usage: rtok worktree finish [OPTIONS] [PATH]
+
+Arguments:
+  [PATH]  The worktree, or a directory inside it; defaults to the current directory
+
+Options:
+      --config <PATH>      User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
+  -m, --message <MESSAGE>  Commit message for uncommitted work; defaults to `<task>: <branch slug>`
+      --repo <REPO>        `owner/name` for gh, when the `origin` URL does not name the repository
+      --no-auto-merge      Open the PR without auto-merge
+      --agent <AGENT>      The rtok agent id (any unique prefix); defaults to `RTOK_AGENT_ID`
+      --owner <OWNER>      The owner an old lock names, as `<provider> / <model>`. Defaults to
+                           `<host> / <model>` of the agent
+      --json               JSON instead of the text lines
+  -h, --help               Print help
 
 $ rtok worktree remove --help
 Remove your own finished worktree: unlock, `git worktree remove`, delete the branch when merged,
@@ -1475,6 +1500,8 @@ Arguments:
 Options:
       --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
       --force          Finish a parent even though subtasks are still open
+      --report <TEXT>  Closing report of a task set to done or closed (`-` for stdin); the plan/
+                       layout keeps it in done.md
       --json           Print the task as JSON
   -h, --help           Print help
 

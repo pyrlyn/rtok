@@ -49,7 +49,7 @@ skill_max_bytes = 8192
 
 ## Tasks
 
-See `roadmap.md` § `guard`. Checks in `plan.md`.
+See `roadmap.md` § `guard`. Checks in `plan/`.
 
 T2.6 deny duplicate Read/Bash within `window_turns` when an archive id exists.
 T62.1 digest a skill body over `skill_max_bytes` (opt-in).

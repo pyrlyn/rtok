@@ -29,6 +29,8 @@ pub mod http;
 
 mod agents;
 mod messages;
+#[cfg(feature = "read")]
+mod paths;
 mod tasks;
 mod worktrees;
 
@@ -58,8 +60,22 @@ fn whoami_def() -> ToolDef {
     ToolDef {
         name: "whoami",
         description: "This session's rtok agent: id, short id, host, host session, cwd, how it was linked, claimed worktrees. An error when no agent is linked yet.",
-        input_schema: json!({"type":"object","properties":{}}),
+        input_schema: with_agent(json!({"type":"object","properties":{}})),
     }
+}
+
+/// T924: the optional `agent` argument of every tool that acts as the session's agent. A shared
+/// server (Claude desktop's) cannot be told its session by environment, so the caller names it.
+pub(crate) fn with_agent(mut schema: Value) -> Value {
+    schema["properties"]["agent"] = json!({"type":"string","description":"your agent id or prefix (whoami), when the server cannot tell which session you are"});
+    schema
+}
+
+/// T924: the optional `repo` argument of the `worktree_*` tools, for a server running in a
+/// different repository from its caller.
+pub(crate) fn with_repo(mut schema: Value) -> Value {
+    schema["properties"]["repo"] = json!({"type":"string","description":"path of your repository, when the server runs elsewhere"});
+    schema
 }
 
 /// Serve MCP on stdin/stdout until EOF.
@@ -91,6 +107,14 @@ pub fn run(cfg: &Config) -> Result<()> {
         if let Ok(root) = std::env::current_dir() {
             let (cx, stop) = (&server.cx, &stop);
             s.spawn(move || crate::plugins::graph::health::run(cx, Some(&root), stop));
+        }
+        // T952.2: close the task, then remove the worktree, once a finished PR merges.
+        if server.cx.config.worktree.enabled {
+            let (cx, stop) = (&server.cx, &stop);
+            let close = move |main: &std::path::Path, task: &str| {
+                crate::tasks::run::close_if_active(&cx.store, &cx.config.tasks, main, task)
+            };
+            s.spawn(move || crate::worktree::reap::run(&cx.store, &close, stop));
         }
         // T329.8: register, link and index what the project's manifests reference, off the
         // request path so `initialize` and the first tool call are not delayed. Detached with its
@@ -358,6 +382,10 @@ struct Server {
     agent: Mutex<Option<(String, link::Rule)>>,
     /// Unix seconds this process started: a cwd candidate must have been seen since.
     started: i64,
+    /// T923: the linked agent's registered cwd and when it was read, so a call from an unlinked
+    /// shared server does not redo the link rules every time.
+    #[cfg(feature = "read")]
+    caller: Mutex<Option<(std::time::Instant, Option<std::path::PathBuf>)>>,
 }
 
 impl Server {
@@ -398,6 +426,10 @@ impl Server {
             Listed {
                 plugin: "mcp",
                 def: worktrees::remove_def(),
+            },
+            Listed {
+                plugin: "mcp",
+                def: worktrees::finish_def(),
             },
             Listed {
                 plugin: "mcp",
@@ -468,6 +500,8 @@ impl Server {
             roots_capable: AtomicBool::new(false),
             agent: Mutex::new(None),
             started: crate::log::now() as i64,
+            #[cfg(feature = "read")]
+            caller: Mutex::new(None),
         })
     }
 
@@ -510,35 +544,87 @@ impl Server {
     /// `invoke` plus the tools that need this process's own state.
     fn invoke_text(&self, name: &str, args: &Value) -> (String, bool) {
         let own = match name {
-            "whoami" => self.whoami(),
+            "whoami" => self.whoami(args),
             "worktree_add" => self
-                .agent()
+                .agent_for(args)
                 .and_then(|(agent, _)| worktrees::add(&self.cx, &agent, args)),
             "worktree_remove" => self
-                .agent()
+                .agent_for(args)
                 .and_then(|(agent, _)| worktrees::remove(&self.cx, &agent, args)),
-            "worktree_adopt" => self
+            "worktree_finish" => self
                 .agent()
+                .and_then(|(agent, _)| worktrees::finish(&self.cx, &agent, args)),
+            "worktree_adopt" => self
+                .agent_for(args)
                 .and_then(|(agent, _)| worktrees::adopt(&self.cx, &agent, args)),
             "agent_send" => self
-                .agent()
+                .agent_for(args)
                 .and_then(|(agent, _)| messages::send(&self.cx, &agent, args)),
             "agent_inbox" => self
-                .agent()
+                .agent_for(args)
                 .and_then(|(agent, _)| messages::inbox(&self.cx, &agent, args)),
             "agents_list" => agents::list(&self.cx, args),
             "agent_show" => agents::show(&self.cx, args),
             "agent_status_set" => self
-                .agent()
+                .agent_for(args)
                 .and_then(|(agent, _)| agents::set_status(&self.cx, &agent, args)),
-            "worktree_list" => worktrees::list(&self.cx),
+            "worktree_list" => worktrees::list(&self.cx, args),
             n if n.starts_with("task_") => tasks::call(&self.cx, n, args),
-            _ => return invoke_text(&self.cx, name, args),
+            _ => return self.invoke_rooted(name, args),
         };
         match own {
             Ok(t) => (t, true),
             Err(e) => (e.to_string(), false),
         }
+    }
+
+    /// `invoke_text`, with the relative paths of `read`, `search`, `tree` and `outline` resolved
+    /// against the caller's root (T923) and the answer naming that root where a wrong one shows.
+    #[cfg(feature = "read")]
+    fn invoke_rooted(&self, name: &str, args: &Value) -> (String, bool) {
+        if !paths::is_rooted(name) {
+            return invoke_text(&self.cx, name, args);
+        }
+        let guard = std::env::current_dir()
+            .ok()
+            .zip(self.caller_dir())
+            .and_then(|(cwd, dir)| crate::plugins::read::roots::enter_caller(&cwd, &dir));
+        let args = paths::anchor_outline(name, args);
+        let (text, ok) = invoke_text(&self.cx, name, &args);
+        (paths::annotate(name, &args, text, ok, guard.is_some()), ok)
+    }
+
+    #[cfg(not(feature = "read"))]
+    fn invoke_rooted(&self, name: &str, args: &Value) -> (String, bool) {
+        invoke_text(&self.cx, name, args)
+    }
+
+    /// The registered cwd of the agent this process serves, if any: where its relative paths
+    /// start. Untrusted until `enter_caller` accepts it.
+    #[cfg(feature = "read")]
+    fn caller_dir(&self) -> Option<std::path::PathBuf> {
+        const TTL: std::time::Duration = std::time::Duration::from_secs(5);
+        if let Ok(g) = self.caller.lock()
+            && let Some((at, dir)) = g.as_ref()
+            && at.elapsed() < TTL
+        {
+            return dir.clone();
+        }
+        let dir = match self.link() {
+            link::Link::Linked { id, .. } => self
+                .cx
+                .store
+                .agent_detail(&id)
+                .ok()
+                .flatten()
+                .and_then(|d| d.cwd)
+                .map(std::path::PathBuf::from),
+            _ => None,
+        };
+        if let Ok(mut g) = self.caller.lock() {
+            *g = Some((std::time::Instant::now(), dir.clone()));
+        }
+        dir
     }
 
     /// The agent this session is linked to, or the reason it is not.
@@ -551,7 +637,7 @@ impl Server {
                     .map(|i| i.chars().take(8).collect::<String>())
                     .collect();
                 bail!(
-                    "ambiguous: agents {} share this cwd; use RTOK_AGENT_ID",
+                    "ambiguous: agents {} share this cwd; pass `agent` with the id of yours (whoami)",
                     short.join(", ")
                 );
             }
@@ -559,7 +645,7 @@ impl Server {
                 "not linked to an agent session: this rtok mcp process is under no live {} \
                  session and in none's cwd, so one app likely shares it across sessions \
                  (Claude desktop's claude_desktop_config.json entry); use `rtok agents` and \
-                 `rtok worktree` from the agent's shell",
+                 `rtok worktree` from the agent's shell, or pass `agent` (your id, see agents_list)",
                 self.cx.config.hook.host
             ),
             link::Link::None => bail!("not linked to an agent session"),
@@ -570,8 +656,46 @@ impl Server {
         Ok((d, rule))
     }
 
-    fn whoami(&self) -> Result<String> {
-        let (d, rule) = self.agent()?;
+    /// [`Self::agent`], or the live agent of this host that the call names in `agent` (T924).
+    /// A link that cannot be wrong (the session's own env var or row) is never overridden: the
+    /// argument is for a link that is missing, ambiguous or a guess from the cwd.
+    fn agent_for(&self, args: &Value) -> Result<(crate::store::AgentDetail, link::Rule)> {
+        let Some(want) = args
+            .get("agent")
+            .and_then(Value::as_str)
+            .filter(|s| !s.is_empty())
+        else {
+            return self.agent();
+        };
+        let id = self
+            .cx
+            .store
+            .resolve_agent(want)
+            .map_err(|e| anyhow::anyhow!("agent {want}: {e}"))?;
+        if let link::Link::Linked { id: mine, rule } = self.link()
+            && rule.is_stable()
+            && mine != id
+        {
+            bail!(
+                "this session is agent {}; `agent` {want} is another session's",
+                crate::store::short_agent_id(&mine)
+            );
+        }
+        let Some(d) = self.cx.store.agent_detail(&id)? else {
+            bail!("agent {want}: unknown");
+        };
+        let same_host = self.cx.store.host_id(&d.host)? == self.cx.host_id();
+        if !same_host || d.ended_at.is_some() || d.parent_id.is_some() {
+            bail!(
+                "agent {want} is not a live session of {}",
+                self.cx.config.hook.host
+            );
+        }
+        Ok((d, link::Rule::Arg))
+    }
+
+    fn whoami(&self, args: &Value) -> Result<String> {
+        let (d, rule) = self.agent_for(args)?;
         let id = &d.id;
         let worktrees: Vec<String> = self
             .cx
@@ -1112,6 +1236,7 @@ mod tests {
     const WRITING_TOOLS: &[&str] = &[
         "worktree_add",
         "worktree_remove",
+        "worktree_finish",
         "worktree_adopt",
         "agent_send",
         "agent_status_set",
@@ -1337,6 +1462,29 @@ mod tests {
                 .contains("path outside cwd"),
             "{v}"
         );
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// T923: a relative path that misses names the root it was resolved against, so an agent
+    /// in another checkout sees the server's root instead of concluding the file is gone.
+    #[cfg(feature = "read")]
+    #[test]
+    fn a_missed_relative_read_names_the_root_it_used() {
+        let (cfg, dir) = tmp("names-root");
+        let server = Server::new(&cfg).unwrap();
+        let (is_error, text) = call_text(&server, "read", json!({"path": "no/such/file.rs"}));
+        let root = std::env::current_dir().unwrap();
+        assert!(is_error, "{text}");
+        assert!(
+            text.ends_with(&format!(
+                "(relative paths resolved against {})",
+                root.display()
+            )),
+            "{text}"
+        );
+        let abs_path = root.join("no").join("such").join("abs.rs");
+        let (_, abs) = call_text(&server, "read", json!({"path": abs_path}));
+        assert!(!abs.contains("resolved against"), "{abs}");
         let _ = fs::remove_dir_all(dir);
     }
 
@@ -1820,6 +1968,103 @@ mod tests {
         }
         let (is_err, text) = whoami_over_rpc(&server);
         assert!(is_err && text.starts_with("ambiguous: agents "), "{text}");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    fn call_over_rpc(server: &Server, name: &str, args: Value) -> (bool, String) {
+        let init = r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{}}}"#;
+        assert!(server.handle_line(init).is_some());
+        let call = json!({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":name,"arguments":args}});
+        let v: Value =
+            serde_json::from_str(&server.handle_line(&call.to_string()).unwrap()).unwrap();
+        (
+            v["result"]["isError"] == true,
+            v["result"]["content"][0]["text"]
+                .as_str()
+                .unwrap_or_default()
+                .to_string(),
+        )
+    }
+
+    #[test]
+    fn an_ambiguous_cwd_is_resolved_by_the_agent_argument() {
+        let (mut cfg, dir) = tmp("whoami-arg");
+        cfg.hook.host = "claude".into();
+        let server = Server::new(&cfg).unwrap();
+        let host = server.cx.host_id().unwrap();
+        let ids: Vec<String> = ["sess-a", "sess-b"]
+            .iter()
+            .map(|s| {
+                server
+                    .cx
+                    .store
+                    .register_agent(host, s, None, Some(&cwd_string()), None)
+                    .unwrap()
+            })
+            .collect();
+        let (is_err, text) = whoami_over_rpc(&server);
+        assert!(is_err && text.contains("pass `agent`"), "{text}");
+        let (is_err, text) = call_over_rpc(&server, "whoami", json!({"agent": &ids[1][..8]}));
+        assert!(!is_err, "{text}");
+        let v: Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(
+            (v["id"].as_str(), v["rule"].as_str()),
+            (Some(ids[1].as_str()), Some("arg"))
+        );
+        let (is_err, text) = call_over_rpc(&server, "whoami", json!({"agent": "zzzz"}));
+        assert!(is_err && text.starts_with("agent zzzz:"), "{text}");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn the_agent_argument_never_overrides_the_sessions_own_link() {
+        let (mut cfg, dir) = tmp("whoami-arg-own");
+        cfg.hook.host = "zed".into();
+        let server = Server::new(&cfg).unwrap();
+        let host = server.cx.host_id().unwrap();
+        let other = server
+            .cx
+            .store
+            .register_agent(host, "someone-else", None, Some("/elsewhere"), None)
+            .unwrap();
+        let (is_err, text) = call_over_rpc(&server, "whoami", json!({"agent": &other[..8]}));
+        assert!(is_err && text.contains("another session's"), "{text}");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn worktree_add_refuses_a_repository_that_is_not_the_callers() {
+        let (mut cfg, dir) = tmp("worktree-wrong-repo");
+        cfg.hook.host = "claude".into();
+        let server = Server::new(&cfg).unwrap();
+        let host = server.cx.host_id().unwrap();
+        // The caller works in `theirs`; the server runs in this test's own checkout.
+        let theirs = dir.join("theirs");
+        fs::create_dir_all(theirs.join(".git")).unwrap();
+        let id = server
+            .cx
+            .store
+            .register_agent(host, "sess-a", None, theirs.to_str(), None)
+            .unwrap();
+        let (is_err, text) =
+            call_over_rpc(&server, "worktree_add", json!({"task": "T1", "agent": id}));
+        assert!(
+            is_err && text.contains("not yours") && text.contains("pass `repo`"),
+            "{text}"
+        );
+        let (is_err, text) = call_over_rpc(
+            &server,
+            "worktree_add",
+            json!({"task": "T1", "agent": id, "repo": "/"}),
+        );
+        assert!(is_err, "{text}");
+        // The caller's own repository passes the check; git then has nothing to branch from.
+        let (_, text) = call_over_rpc(
+            &server,
+            "worktree_add",
+            json!({"task": "T1", "agent": id, "repo": theirs.to_str().unwrap()}),
+        );
+        assert!(!text.contains("not yours"), "{text}");
         let _ = fs::remove_dir_all(dir);
     }
 

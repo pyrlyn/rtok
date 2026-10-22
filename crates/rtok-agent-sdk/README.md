@@ -7,8 +7,8 @@ Five hosts ship in rtok — Claude Code, Cursor, Codex, OpenCode, pi — and eac
 file in a different format. What they share is the contract around the edit, and that is this
 crate:
 
-- **Reversible** — `backup` copies a file to `_backup/<name>.bak-<unix-seconds>` before the first
-  write; identical bytes already in `_backup/` skip a new copy.
+- **Reversible** — `backup` copies a file to `.backup_configs/<name>.bak-<unix-seconds>` before the first
+  write; identical bytes already in `.backup_configs/` skip a new copy.
 - **Idempotent** — a second apply returns `NO_CHANGES` and writes nothing.
 - **Dry-runnable** — `--dry-run` produces the same report and touches nothing at all.
 - **Offered, never forced** — `PluginLink` prompts on a terminal, declines itself anywhere else

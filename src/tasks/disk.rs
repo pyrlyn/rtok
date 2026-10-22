@@ -58,7 +58,7 @@ struct Head {
 /// released by the kernel when the process dies), and the file is never unlinked, so a late
 /// release cannot remove a successor's lock.
 #[derive(Debug)]
-struct DiskGuard {
+pub(super) struct DiskGuard {
     _file: File,
 }
 
@@ -229,7 +229,7 @@ impl TaskAdapter for DiskAdapter {
 /// An exclusive `flock` on the stable `<dir>/.claim.lock`, polled for a bounded time. A holder
 /// that is paused keeps the lock, so a waiter gets the "locked" error instead of racing it; a
 /// crashed holder's lock is released by the OS, so no leftover file ever blocks a claim.
-fn lock_claim(dir: &Path) -> Result<DiskGuard> {
+pub(super) fn lock_claim(dir: &Path) -> Result<DiskGuard> {
     std::fs::create_dir_all(dir).with_context(|| format!("disk tasks: {}", dir.display()))?;
     let path = dir.join(".claim.lock");
     let file = OpenOptions::new()
@@ -249,7 +249,7 @@ fn lock_claim(dir: &Path) -> Result<DiskGuard> {
     bail!("disk tasks: {} is locked", path.display())
 }
 
-fn now() -> i64 {
+pub(super) fn now() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |d| d.as_secs() as i64)

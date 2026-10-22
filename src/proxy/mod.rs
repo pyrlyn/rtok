@@ -486,6 +486,7 @@ async fn handle(state: Arc<ProxyState>, req: Request<Body>) -> AxumResponse {
     let upstream = match result {
         Ok(r) => r,
         Err(e) => {
+            let e = upstream_error(e);
             if plain {
                 let model = request_model(&request_body);
                 live::push(live::LiveCall {
@@ -1364,6 +1365,12 @@ fn hop_by_hop(name: &str) -> bool {
 /// A lane at its in-flight cap with a full queue (T385.7). `429` + `Retry-After` rather than
 /// `503`: the provider SDKs already back off and retry on it, and it says "you, slow down",
 /// which is what a lane over its own cap is.
+/// A transport error without its URL. reqwest prints the full target, query included, and
+/// Gemini callers put the API key in `?key=`: it must not reach the log or the store.
+fn upstream_error(e: reqwest::Error) -> reqwest::Error {
+    e.without_url()
+}
+
 fn queue_full(message: &str) -> AxumResponse {
     let mut response = error_response(StatusCode::TOO_MANY_REQUESTS, message);
     response
@@ -1418,6 +1425,23 @@ mod tests {
     /// The proxy's rows come out of the same funnel as the plugin's, shaped exactly as
     /// `insert_log` left them (T24.1). `logs.call_id` is a foreign key, so the session and
     /// the `calls` row come first — the order `record` uses on every request.
+    /// Audit 2026-10-19: a failed upstream call logged reqwest's error text, which names the
+    /// whole URL, so a Gemini `?key=` landed in the log. The logged text drops the URL.
+    #[tokio::test]
+    async fn upstream_errors_never_carry_the_query_key() {
+        let free = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = free.local_addr().unwrap().port();
+        drop(free);
+        let url = format!("http://127.0.0.1:{port}/v1beta/models/m:generateContent?key=SECRETKEY");
+        let err = reqwest::Client::new().get(&url).send().await.unwrap_err();
+        assert!(
+            err.to_string().contains("SECRETKEY"),
+            "reqwest stopped naming the URL"
+        );
+        let text = upstream_error(err).to_string();
+        assert!(!text.contains("SECRETKEY"), "{text}");
+    }
+
     #[test]
     fn proxy_log_rows_keep_their_shape_through_the_funnel() {
         let dir = std::env::temp_dir().join(format!("rtok-proxy-log-{}", std::process::id()));

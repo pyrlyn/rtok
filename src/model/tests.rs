@@ -770,3 +770,92 @@ fn config_page_reads_the_selected_config_file() {
         .unwrap_or_else(|| panic!("no tasks.prefix row: {text}"));
     assert!(line.contains('Z') && !line.contains('A'), "{line}");
 }
+
+/// T945: on a cold transcript cache the doctor probe parses every transcript, and the first
+/// `/ws` snapshot of `rtok web` waited minutes for it. The probe here blocks until released;
+/// the snapshot's doctor must not wait.
+#[test]
+fn doctor_for_snapshot_never_waits_on_the_probe() {
+    use std::sync::mpsc;
+    static CACHE: Background<(String, Option<doctor::Report>)> = Background::new();
+    let cx = Runtime::in_memory("dash").unwrap();
+    let report = doctor(&cx.config).expect("doctor page");
+    let want = report.to_text();
+    let (release, blocked) = mpsc::channel::<()>();
+    let (sent, got) = mpsc::channel();
+    std::thread::spawn(move || {
+        let first = doctor_from(&CACHE, "a".into(), move || {
+            let _ = blocked.recv();
+            Some(report)
+        });
+        let _ = sent.send(first);
+    });
+    let first = got
+        .recv_timeout(Duration::from_secs(1))
+        .expect("the snapshot waited on the doctor probe");
+    assert!(
+        first.0.is_none() && first.1,
+        "pending before the probe lands"
+    );
+
+    release.send(()).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        let now = doctor_from(&CACHE, "a".into(), || None);
+        if !now.1 {
+            assert_eq!(now.0.map(|r| r.to_text()), Some(want));
+            break;
+        }
+        assert!(Instant::now() < deadline, "the probe never landed");
+        std::thread::sleep(Duration::from_millis(10));
+    }
+
+    let other = doctor_from(&CACHE, "b".into(), || None);
+    assert!(
+        other.0.is_none() && other.1,
+        "a report for other doctor paths is not shown"
+    );
+}
+
+/// T947: a transcript scan that takes minutes held every `/ws` snapshot of `rtok web` until
+/// it finished. The scan here blocks until released; the snapshot's stats must not wait.
+#[test]
+fn stats_skills_never_waits_on_the_transcript_scan() {
+    use std::sync::mpsc;
+    static CACHE: Background<(String, StatsSkills)> = Background::new();
+    let (release, blocked) = mpsc::channel::<()>();
+    let (sent, got) = mpsc::channel();
+    std::thread::spawn(move || {
+        let first = stats_skills_from(&CACHE, "dir30d".into(), move || {
+            let _ = blocked.recv();
+            (None, 7, true, Some("scanned\n".into()))
+        });
+        let _ = sent.send(first);
+    });
+    let first = got
+        .recv_timeout(Duration::from_secs(1))
+        .expect("the snapshot waited on the transcript scan");
+    assert_eq!(first.3.as_deref(), Some("reading transcripts…\n"));
+    assert!(!first.2, "no scan has landed yet");
+
+    release.send(()).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        let now = stats_skills_from(&CACHE, "dir30d".into(), || {
+            (None, 0, true, Some("rescanned\n".into()))
+        });
+        if now.2 {
+            assert_eq!((now.1, now.3.as_deref()), (7, Some("scanned\n")));
+            break;
+        }
+        assert!(Instant::now() < deadline, "the scan never landed");
+        std::thread::sleep(Duration::from_millis(10));
+    }
+
+    let other = stats_skills_from(&CACHE, "dir7d".into(), || (None, 1, true, None));
+    assert_eq!(
+        other.3.as_deref(),
+        Some("reading transcripts…\n"),
+        "a scan for another window is not shown"
+    );
+}

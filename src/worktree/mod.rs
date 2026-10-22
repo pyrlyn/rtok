@@ -9,6 +9,7 @@
 pub mod add;
 pub mod claim;
 pub mod clean;
+pub mod finish;
 pub mod gc;
 pub mod git;
 pub mod host;
@@ -16,7 +17,9 @@ pub mod list;
 pub mod migrate;
 pub mod ops;
 pub mod origin;
+pub mod reap;
 pub mod remove;
+pub mod seed;
 pub mod whoami;
 
 /// What every `rtok worktree …` command answers while `[worktree] enabled = false` (T410).

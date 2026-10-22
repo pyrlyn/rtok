@@ -272,6 +272,7 @@ pub fn app_with_assets(state: Arc<DashState>, assets: spa::Assets) -> Router {
     Router::new()
         .route("/health", get(health))
         .route("/ws", get(ws_upgrade))
+        .route("/auth", get(auth_probe))
         .with_state(state)
         .fallback_service(spa::router(assets))
 }
@@ -285,24 +286,44 @@ async fn health(State(state): State<Arc<DashState>>) -> Json<Value> {
     }))
 }
 
+/// The `/ws` gate: the S2 token, then the origin. `Err` is the status to refuse with.
+fn admitted(state: &DashState, headers: &HeaderMap, uri: &Uri) -> Result<(), StatusCode> {
+    if let Some(expected) = &state.token {
+        let ok = token::presented(headers, uri.query())
+            .is_some_and(|got| token::matches(expected, &got));
+        if !ok {
+            return Err(StatusCode::UNAUTHORIZED);
+        }
+    }
+    if !origin_allowed(headers) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    Ok(())
+}
+
 async fn ws_upgrade(
     headers: HeaderMap,
     uri: Uri,
     ws: WebSocketUpgrade,
     State(state): State<Arc<DashState>>,
 ) -> impl IntoResponse {
-    if let Some(expected) = &state.token {
-        let ok = token::presented(&headers, uri.query())
-            .is_some_and(|got| token::matches(expected, &got));
-        if !ok {
-            return StatusCode::UNAUTHORIZED.into_response();
-        }
-    }
-    if !origin_allowed(&headers) {
-        return StatusCode::FORBIDDEN.into_response();
+    if let Err(status) = admitted(&state, &headers, &uri) {
+        return status.into_response();
     }
     ws.on_upgrade(move |socket| socket_loop(socket, state))
         .into_response()
+}
+
+/// T944: the `/ws` gate without the upgrade. A browser WebSocket sees a 401 as a bare close, so
+/// the SPA asks here whether its token is the reason it is offline.
+async fn auth_probe(
+    headers: HeaderMap,
+    uri: Uri,
+    State(state): State<Arc<DashState>>,
+) -> StatusCode {
+    admitted(&state, &headers, &uri)
+        .err()
+        .unwrap_or(StatusCode::NO_CONTENT)
 }
 
 /// Browsers send `Origin` on cross-site WebSocket upgrades; non-browser clients
@@ -706,8 +727,8 @@ fn import_reply(req: model::ImportRequest) -> String {
     match req {}
 }
 
-/// T331.12: the `doctor --fix` checklist for the page. The upgrade's origin guard covers it like
-/// `set`; only `apply` writes, through the engine's backup and refusals.
+/// T331.12: the `doctor --fix` checklist for the page. The upgrade's token and origin checks
+/// (S2) cover it like `set`; only `apply` writes, through the engine's backup and refusals.
 fn doctor_reply(state: &DashState, r: &DoctorRequest) -> String {
     let cfg = state
         .cfg
@@ -729,7 +750,7 @@ fn doctor_reply(state: &DashState, r: &DoctorRequest) -> String {
     .to_json()
 }
 
-/// T330.7: "clear safe junk" for the Hosts page. The upgrade's origin guard covers it like `set`;
+/// T330.7: "clear safe junk" for the Hosts page. The upgrade's token and origin checks cover it;
 /// only `apply` removes, through the same plan, re-checks and refusals as `agents junk clear`.
 fn junk_reply(state: &DashState, r: &JunkRequest) -> String {
     let cfg = state

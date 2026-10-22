@@ -173,7 +173,7 @@ _arguments "${_arguments_options[@]}" : /
 '--instructions[Also run the instruction-file audit]' /
 '(--fix)--json[JSON instead of the table]' /
 '--fix[Clean up broken hooks and duplicate hooks and MCP entries/: a terminal gets a checklist, a pipe the diff; --yes writes without asking]' /
-'--yes[With --fix/: write the changes (a copy goes to /`_backup//` first)]' /
+'--yes[With --fix/: write the changes (a copy goes to /`.backup_configs//` first)]' /
 '--dry-run[With --fix --yes/: print the diffs and write nothing]' /
 '--stat[With --fix/: stat lines and totals instead of the diffs (a dry run)]' /
 '-h[Print help]' /
@@ -200,6 +200,7 @@ _arguments "${_arguments_options[@]}" : /
 '--owner=[Who holds it, as /`<provider> / <model>/`; written into the lock reason. Defaults to /`<host> / <model>/` of the agent]:OWNER:_default' /
 '--agent=[The rtok agent id (any unique prefix) to bind it to; defaults to /`RTOK_AGENT_ID/`]:AGENT:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
+'--no-seed[Do not seed /`/[worktree/] seed_dirs/` from a sibling checkout this time]' /
 '-h[Print help]' /
 '--help[Print help]' /
 ':task -- Task id, e.g. `t158`; directory `<repo>-<task>`, branch `<task>/[-<slug>/]`:_default' /
@@ -239,6 +240,21 @@ _arguments "${_arguments_options[@]}" : /
 '-h[Print help]' /
 '--help[Print help]' /
 ':target -- The worktree'/''s path, or its task id (the lock'/''s task or the branch `<task>/[-<slug>/]`):_default' /
+&& ret=0
+;;
+(finish)
+_arguments "${_arguments_options[@]}" : /
+'-m+[Commit message for uncommitted work; defaults to /`<task>/: <branch slug>/`]:MESSAGE:_default' /
+'--message=[Commit message for uncommitted work; defaults to /`<task>/: <branch slug>/`]:MESSAGE:_default' /
+'--repo=[/`owner/name/` for gh, when the /`origin/` URL does not name the repository]:REPO:_default' /
+'--agent=[The rtok agent id (any unique prefix); defaults to /`RTOK_AGENT_ID/`]:AGENT:_default' /
+'--owner=[The owner an old lock names, as /`<provider> / <model>/`. Defaults to /`<host> / <model>/` of the agent]:OWNER:_default' /
+'--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
+'--no-auto-merge[Open the PR without auto-merge]' /
+'--json[JSON instead of the text lines]' /
+'-h[Print help]' /
+'--help[Print help]' /
+'::path -- The worktree, or a directory inside it; defaults to the current directory:_files' /
 && ret=0
 ;;
 (list)
@@ -319,6 +335,10 @@ _arguments "${_arguments_options[@]}" : /
 && ret=0
 ;;
 (remove)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
+(finish)
 _arguments "${_arguments_options[@]}" : /
 && ret=0
 ;;
@@ -404,6 +424,7 @@ _arguments "${_arguments_options[@]}" : /
 ;;
 (status)
 _arguments "${_arguments_options[@]}" : /
+'--report=[Closing report of a task set to done or closed (/`-/` for stdin); the plan/ layout keeps it in done.md]:TEXT:_default' /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '--force[Finish a parent even though subtasks are still open]' /
 '--json[Print the task as JSON]' /
@@ -2771,6 +2792,10 @@ _arguments "${_arguments_options[@]}" : /
 _arguments "${_arguments_options[@]}" : /
 && ret=0
 ;;
+(finish)
+_arguments "${_arguments_options[@]}" : /
+&& ret=0
+;;
 (list)
 _arguments "${_arguments_options[@]}" : /
 && ret=0
@@ -5053,6 +5078,7 @@ _rtok__subcmd__help__subcmd__worktree_commands() {
 'claim:Bind an existing worktree to an agent/: rewrites its lock only when unlocked or already yours' /
 'adopt:Bind the worktree you are in (made by a host'/''s own tool) to your agent. A worktree in a pool its host evicts (Cursor, Codex, Windsurf, Devin) is claimed in the store only. With no agent (a post-create script) the one live agent of that host in the repository takes it; with none or several the claim waits for the next agent that adopts or starts there' /
 'remove:Remove your own finished worktree/: unlock, /`git worktree remove/`, delete the branch when merged, release the claim; refuses dirty or current worktrees, and a foreign lock unless the task is finished (merged, clean, with commits of its own)' /
+'finish:Hand your task worktree to review/: commit what is left, push, open or reuse the PR, ask for squash auto-merge, then unlock. Refuses the main checkout, another agent'/''s lock and credential files; never closes the task' /
 'list:Every worktree and orphan with its owner, state, source and build-cache bytes' /
 'whoami:Your agent, where new worktrees go, the worktree you are in and the ones you hold' /
 'gc:Remove merged, clean, idle worktrees with their branches; drop records of deleted ones' /
@@ -5080,6 +5106,11 @@ _rtok__subcmd__help__subcmd__worktree__subcmd__claim_commands() {
 _rtok__subcmd__help__subcmd__worktree__subcmd__clean_commands() {
     local commands; commands=()
     _describe -t commands 'rtok help worktree clean commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__help__subcmd__worktree__subcmd__finish_commands] )) ||
+_rtok__subcmd__help__subcmd__worktree__subcmd__finish_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok help worktree finish commands' commands "$@"
 }
 (( $+functions[_rtok__subcmd__help__subcmd__worktree__subcmd__gc_commands] )) ||
 _rtok__subcmd__help__subcmd__worktree__subcmd__gc_commands() {
@@ -5635,6 +5666,7 @@ _rtok__subcmd__worktree_commands() {
 'claim:Bind an existing worktree to an agent/: rewrites its lock only when unlocked or already yours' /
 'adopt:Bind the worktree you are in (made by a host'/''s own tool) to your agent. A worktree in a pool its host evicts (Cursor, Codex, Windsurf, Devin) is claimed in the store only. With no agent (a post-create script) the one live agent of that host in the repository takes it; with none or several the claim waits for the next agent that adopts or starts there' /
 'remove:Remove your own finished worktree/: unlock, /`git worktree remove/`, delete the branch when merged, release the claim; refuses dirty or current worktrees, and a foreign lock unless the task is finished (merged, clean, with commits of its own)' /
+'finish:Hand your task worktree to review/: commit what is left, push, open or reuse the PR, ask for squash auto-merge, then unlock. Refuses the main checkout, another agent'/''s lock and credential files; never closes the task' /
 'list:Every worktree and orphan with its owner, state, source and build-cache bytes' /
 'whoami:Your agent, where new worktrees go, the worktree you are in and the ones you hold' /
 'gc:Remove merged, clean, idle worktrees with their branches; drop records of deleted ones' /
@@ -5664,6 +5696,11 @@ _rtok__subcmd__worktree__subcmd__clean_commands() {
     local commands; commands=()
     _describe -t commands 'rtok worktree clean commands' commands "$@"
 }
+(( $+functions[_rtok__subcmd__worktree__subcmd__finish_commands] )) ||
+_rtok__subcmd__worktree__subcmd__finish_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok worktree finish commands' commands "$@"
+}
 (( $+functions[_rtok__subcmd__worktree__subcmd__gc_commands] )) ||
 _rtok__subcmd__worktree__subcmd__gc_commands() {
     local commands; commands=()
@@ -5676,6 +5713,7 @@ _rtok__subcmd__worktree__subcmd__help_commands() {
 'claim:Bind an existing worktree to an agent/: rewrites its lock only when unlocked or already yours' /
 'adopt:Bind the worktree you are in (made by a host'/''s own tool) to your agent. A worktree in a pool its host evicts (Cursor, Codex, Windsurf, Devin) is claimed in the store only. With no agent (a post-create script) the one live agent of that host in the repository takes it; with none or several the claim waits for the next agent that adopts or starts there' /
 'remove:Remove your own finished worktree/: unlock, /`git worktree remove/`, delete the branch when merged, release the claim; refuses dirty or current worktrees, and a foreign lock unless the task is finished (merged, clean, with commits of its own)' /
+'finish:Hand your task worktree to review/: commit what is left, push, open or reuse the PR, ask for squash auto-merge, then unlock. Refuses the main checkout, another agent'/''s lock and credential files; never closes the task' /
 'list:Every worktree and orphan with its owner, state, source and build-cache bytes' /
 'whoami:Your agent, where new worktrees go, the worktree you are in and the ones you hold' /
 'gc:Remove merged, clean, idle worktrees with their branches; drop records of deleted ones' /
@@ -5704,6 +5742,11 @@ _rtok__subcmd__worktree__subcmd__help__subcmd__claim_commands() {
 _rtok__subcmd__worktree__subcmd__help__subcmd__clean_commands() {
     local commands; commands=()
     _describe -t commands 'rtok worktree help clean commands' commands "$@"
+}
+(( $+functions[_rtok__subcmd__worktree__subcmd__help__subcmd__finish_commands] )) ||
+_rtok__subcmd__worktree__subcmd__help__subcmd__finish_commands() {
+    local commands; commands=()
+    _describe -t commands 'rtok worktree help finish commands' commands "$@"
 }
 (( $+functions[_rtok__subcmd__worktree__subcmd__help__subcmd__gc_commands] )) ||
 _rtok__subcmd__worktree__subcmd__help__subcmd__gc_commands() {

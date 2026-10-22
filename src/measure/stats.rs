@@ -99,6 +99,10 @@ pub struct Report {
     /// T383: native Reads the read hook denied, and what followed. Absent when none.
     #[serde(default, skip_serializing_if = "ReadDenyRow::is_empty")]
     pub read_deny: ReadDenyRow,
+    /// T369.1: native Greps the guard answered from the symbol index, and the follow-ups on
+    /// the same name. Absent when none.
+    #[serde(default, skip_serializing_if = "GrepSymbolRow::is_empty")]
+    pub grep_symbol: GrepSymbolRow,
     /// T65.1: tool_result bytes whose SHA-256 matches an earlier result in the
     /// same session. Absent when none, so the goldens hold.
     #[serde(default, skip_serializing_if = "RepeatRow::is_empty")]
@@ -211,6 +215,24 @@ pub struct ReadDenyRow {
 }
 
 impl ReadDenyRow {
+    fn is_empty(&self) -> bool {
+        self.calls == 0
+    }
+}
+
+/// T369.1: native `Grep`s the guard answered from the symbol index (`grep_symbol = true`).
+/// `followed`: answers after which the agent still looked within the next
+/// [`DENY_FOLLOW_CALLS`] tool calls — a `Grep` or shell `rg`/`grep` naming the same symbol,
+/// or a `Read` (native or rtok MCP) of a file the answer listed. The card's bar is
+/// `followed / calls` at most 25 %.
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GrepSymbolRow {
+    pub calls: u64,
+    pub tokens: u64,
+    pub followed: u64,
+}
+
+impl GrepSymbolRow {
     fn is_empty(&self) -> bool {
         self.calls == 0
     }
@@ -559,6 +581,16 @@ impl Report {
             s.push_str(&format!(
                 "read deny calls {}  tokens {}  then rtok read {}  then native Read {}  then ToolSearch {}\n",
                 d.calls, d.tokens, d.then_mcp, d.then_native, d.then_toolsearch
+            ));
+        }
+        if self.grep_symbol.calls > 0 {
+            let g = &self.grep_symbol;
+            s.push_str(&format!(
+                "grep symbol answers {}  tokens {}  then same-name Grep/Read {} ({:.1}%)\n",
+                g.calls,
+                g.tokens,
+                g.followed,
+                pct(g.followed, g.calls)
             ));
         }
         if !self.repeat_reads.is_empty() {
@@ -1160,7 +1192,7 @@ pub fn collect(dir: &Path, since: Duration, plugin: &str, replay: Replay) -> Res
             report.malformed += 1;
             continue;
         };
-        report.compact += compact_events(&p);
+        report.compact += parsed.compactions.len() as u64;
         if let Some(stem) = p.file_stem().and_then(OsStr::to_str) {
             report.session_stems.push(stem.to_string());
         }
@@ -1202,20 +1234,6 @@ pub fn collect(dir: &Path, since: Duration, plugin: &str, replay: Replay) -> Res
     Ok(report)
 }
 
-fn compact_events(path: &Path) -> u64 {
-    let Ok(text) = std::fs::read_to_string(path) else {
-        return 0;
-    };
-    text.lines().filter(|line| is_compact_line(line)).count() as u64
-}
-
-fn is_compact_line(line: &str) -> bool {
-    let Ok(v) = serde_json::from_str::<Value>(line) else {
-        return false;
-    };
-    super::jsonl::is_compact_boundary(&v)
-}
-
 fn fold_session(
     parsed: &Parsed,
     plugin: &str,
@@ -1248,6 +1266,7 @@ fn fold_session(
     fold_read_delta(&mut report.read_delta, parsed);
     fold_read_whole(&mut report.read_whole, parsed, replay);
     fold_read_deny(&mut report.read_deny, parsed);
+    fold_grep_symbol(&mut report.grep_symbol, parsed);
     fold_repeat(&mut report.repeat, parsed);
     fold_repeat_reads(&mut report.repeat_reads, parsed);
     fold_expand_after(&mut report.expand_after, parsed);
@@ -1470,13 +1489,21 @@ fn fold_repeat(row: &mut RepeatRow, parsed: &Parsed) {
 /// T176: walk tool uses in order. A result naming an archive id (`(expand <id>)`,
 /// `expand: rtok expand <id>`) makes it shown; a later `rtok expand <id>` Bash call or MCP
 /// `expand` of a shown id is a re-expand — the bytes the cut made the agent fetch again.
+/// `<id>` is the printed prefix ([`crate::names::MIN_PREFIX`] hex chars, T672) or any longer one.
 fn fold_expand_after(row: &mut ExpandAfterRow, parsed: &Parsed) {
     static NAMED: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
-        regex::Regex::new(r"(?:expand:? (?:rtok expand )?|\[rtok )([0-9a-f]{12,64})\b")
-            .expect("static regex")
+        regex::Regex::new(&format!(
+            r"(?:expand:? (?:rtok expand )?|\[rtok )([0-9a-f]{{{min},64}})\b",
+            min = crate::names::MIN_PREFIX
+        ))
+        .expect("static regex")
     });
     static CALLED: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
-        regex::Regex::new(r"rtok expand ([0-9a-f]{12,64})").expect("static regex")
+        regex::Regex::new(&format!(
+            r"rtok expand ([0-9a-f]{{{min},64}})",
+            min = crate::names::MIN_PREFIX
+        ))
+        .expect("static regex")
     });
     let results: BTreeMap<&str, &str> = parsed
         .tool_results
@@ -1498,9 +1525,10 @@ fn fold_expand_after(row: &mut ExpandAfterRow, parsed: &Parsed) {
         } else {
             None
         };
-        // T661: the trailer names a 12-char prefix; key every id by it so a full-id
-        // expand still matches a prefix-shown result and vice versa.
-        let key = |id: &str| id[..id.len().min(12)].to_string();
+        // Pointers print `names::MIN_PREFIX` hex chars (T672). Key every id by that
+        // prefix so a full-id expand still matches a short id in the result, and the
+        // other way around. A 12-char prefix from an older transcript still matches.
+        let key = |id: &str| id[..id.len().min(crate::names::MIN_PREFIX)].to_string();
         if let Some(seen) = asked.and_then(|id| shown.get_mut(&key(id))) {
             row.calls += 1;
             row.bytes += content.len() as u64;
@@ -1598,14 +1626,19 @@ fn fold_read_whole(row: &mut ReadWholeRow, parsed: &Parsed, rp: Replay) {
 /// How many tool calls after a deny count as "what the agent did next".
 const DENY_FOLLOW_CALLS: usize = 3;
 
-/// T383: see [`ReadDenyRow`]. The result text is the hook's reason, possibly behind a host
-/// prefix, so it is matched by substring; without the `read` plugin there is no hook to match.
-fn fold_read_deny(row: &mut ReadDenyRow, parsed: &Parsed) {
-    let results: BTreeMap<&str, &str> = parsed
+/// Each tool result's text by the id of the call it answers.
+fn result_texts(parsed: &Parsed) -> BTreeMap<&str, &str> {
+    parsed
         .tool_results
         .iter()
         .map(|r| (r.tool_use_id.as_str(), r.content.as_str()))
-        .collect();
+        .collect()
+}
+
+/// T383: see [`ReadDenyRow`]. The result text is the hook's reason, possibly behind a host
+/// prefix, so it is matched by substring; without the `read` plugin there is no hook to match.
+fn fold_read_deny(row: &mut ReadDenyRow, parsed: &Parsed) {
+    let results = result_texts(parsed);
     for (i, u) in parsed.tool_uses.iter().enumerate() {
         let Some(text) = results.get(u.id.as_str()) else {
             continue;
@@ -1640,6 +1673,64 @@ fn fold_read_deny(row: &mut ReadDenyRow, parsed: &Parsed) {
 
 fn is_rtok_mcp_read(name: &str) -> bool {
     mcp_group(name) == Some("rtok") && name.ends_with("__read")
+}
+
+/// T369.1: see [`GrepSymbolRow`]. The answer is found by its head line, the name by the
+/// hook's own classifier, the listed files by the `path::name#kind@line` id that opens each
+/// definition. Without `guard` and `graph` there is no hook to match.
+#[cfg(all(feature = "guard", feature = "graph"))]
+fn fold_grep_symbol(row: &mut GrepSymbolRow, parsed: &Parsed) {
+    use crate::plugins::graph::parse_symbol_id;
+    use crate::plugins::guard::grep_symbol::{ANSWERED, symbol_name};
+    let results = result_texts(parsed);
+    for (i, u) in parsed.tool_uses.iter().enumerate() {
+        if u.name != "Grep" {
+            continue;
+        }
+        let Some(text) = results.get(u.id.as_str()).filter(|t| t.contains(ANSWERED)) else {
+            continue;
+        };
+        let Some(name) = symbol_name(&u.input) else {
+            continue;
+        };
+        row.calls += 1;
+        row.tokens += est_tokens(text.len() as u64);
+        let files: Vec<String> = text
+            .lines()
+            .filter_map(|l| parse_symbol_id(l.split_whitespace().next()?))
+            .map(|(path, ..)| path)
+            .collect();
+        if parsed.tool_uses[i + 1..]
+            .iter()
+            .take(DENY_FOLLOW_CALLS)
+            .any(|n| same_name_follow_up(n, name, &files))
+        {
+            row.followed += 1;
+        }
+    }
+}
+
+#[cfg(not(all(feature = "guard", feature = "graph")))]
+fn fold_grep_symbol(_row: &mut GrepSymbolRow, _parsed: &Parsed) {}
+
+/// A search naming `name` (substring, so a longer name that contains it counts too) or a read
+/// of one of `files` (index-relative paths, so a suffix match).
+#[cfg(all(feature = "guard", feature = "graph"))]
+fn same_name_follow_up(n: &jsonl::ToolUse, name: &str, files: &[String]) -> bool {
+    let text = |key: &str| n.input.get(key).and_then(Value::as_str).unwrap_or("");
+    match n.name.as_str() {
+        "Grep" => text("pattern").contains(name),
+        "Bash" => {
+            let cmd = text("command");
+            matches!(bash_family(cmd).as_str(), "rg" | "grep") && cmd.contains(name)
+        }
+        tool if tool == "Read" || is_rtok_mcp_read(tool) => tool_path(&n.input).is_some_and(|p| {
+            files
+                .iter()
+                .any(|f| p == f || p.ends_with(&format!("/{f}")))
+        }),
+        _ => false,
+    }
 }
 
 #[cfg(feature = "read")]
@@ -1732,11 +1823,7 @@ type Last = (String, Option<u64>, Option<u64>, bool);
 /// caller ([`collect`]) from [`super::subagents`], the only place that can see it.
 #[cfg(feature = "read")]
 fn fold_repeat_reads(row: &mut RepeatReadsRow, parsed: &Parsed) {
-    let results: BTreeMap<&str, &str> = parsed
-        .tool_results
-        .iter()
-        .map(|r| (r.tool_use_id.as_str(), r.content.as_str()))
-        .collect();
+    let results = result_texts(parsed);
     let saw_rtok = results.values().any(|c| has_rtok_marker(c));
     let mut paths: Vec<Last> = Vec::new();
     for u in &parsed.tool_uses {
@@ -2571,8 +2658,7 @@ mod tests {
         use crate::plugins::read::hook::REASON;
         let dir = tempfile_dir();
         let deny = format!("PreToolUse:Read hook error: {REASON}");
-        let call = |id: &str, name: &str, input: Value| json!({"type":"assistant","message":{"id":format!("m{id}"),"content":[{"type":"tool_use","id":id,"name":name,"input":input}]}});
-        let result = |id: &str, body: &str| json!({"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":id,"content":body}]}});
+        let (call, result) = (tool_call, tool_result);
         let lines = [
             call("t1", "Read", json!({"file_path":"src/a.rs"})),
             result("t1", &deny),
@@ -2628,11 +2714,55 @@ mod tests {
             "{table}"
         );
         fs::remove_dir_all(&dir).ok();
+        assert_absent_when_empty("read deny", "read_deny");
+    }
+
+    /// T369.1: Greps the guard answered are counted; one is followed when, within the next
+    /// three calls, the agent reads a listed file or searches the name again (`Grep` or shell
+    /// `rg`); a search four calls later, another file and a Grep that really ran do not count.
+    #[cfg(all(feature = "guard", feature = "graph"))]
+    #[test]
+    fn grep_symbol_counts_answers_and_same_name_follow_ups() {
+        use crate::plugins::guard::grep_symbol::ANSWERED;
         let dir = tempfile_dir();
-        let none = write_and_collect(&dir, "empty.jsonl", &[]);
-        assert!(!none.to_table().contains("read deny"));
-        assert!(!serde_json::to_string(&none).unwrap().contains("read_deny"));
+        let answer = |name: &str, path: &str| {
+            format!(
+                "Grep `{name}` {ANSWERED}: 1 def, 2 refs (`callers`)\n\
+                 {path}::{name}#function@1 {path}:1 function\npub fn {name}() {{}}\n"
+            )
+        };
+        let (call, result) = (tool_call, tool_result);
+        let lib = answer("parse_since", "src/lib.rs");
+        let other = answer("other_fn", "src/b.rs");
+        let lines = [
+            call("t1", "Grep", json!({"pattern":"fn parse_since"})),
+            result("t1", &lib),
+            call("t2", "Read", json!({"file_path":"/proj/src/lib.rs"})),
+            call("t3", "Grep", json!({"pattern":"\\bparse_since\\("})),
+            result("t3", &lib),
+            call("t4", "Bash", json!({"command":"ls"})),
+            call("t5", "Bash", json!({"command":"rg -n parse_since src"})),
+            call("t6", "Grep", json!({"pattern":"other_fn"})),
+            result("t6", &other),
+            call("t7", "mcp__rtok__read", json!({"path":"/proj/src/c.rs"})),
+            call("t8", "Bash", json!({"command":"echo other_fn"})),
+            call("t9", "Bash", json!({"command":"ls"})),
+            call("t10", "Grep", json!({"pattern":"other_fn"})),
+            result("t10", "src/b.rs:1:pub fn other_fn() {}"),
+        ];
+        let r = write_and_collect(&dir, "grep.jsonl", &lines);
+        let g = &r.grep_symbol;
+        let tokens = 2 * est_tokens(lib.len() as u64) + est_tokens(other.len() as u64);
+        assert_eq!((g.calls, g.tokens, g.followed), (3, tokens, 2));
+        let table = r.to_table();
+        assert!(
+            table.contains(&format!(
+                "grep symbol answers 3  tokens {tokens}  then same-name Grep/Read 2 (66.7%)"
+            )),
+            "{table}"
+        );
         fs::remove_dir_all(&dir).ok();
+        assert_absent_when_empty("grep symbol", "grep_symbol");
     }
 
     #[test]
@@ -2804,6 +2934,46 @@ mod tests {
         fs::remove_dir_all(&dir).ok();
     }
 
+    /// T911: T672 prints 8 hex chars. The counter used to require 12, so a pointer
+    /// the agent actually sees was invisible, and a later full-id expand did not match it.
+    #[test]
+    fn expand_right_after_counts_the_eight_char_id_pointers_print() {
+        let dir = tempfile_dir();
+        let full = "ab".repeat(32);
+        let short = crate::names::short_id(&full);
+        assert_eq!(short.len(), crate::names::MIN_PREFIX);
+        let other = "cd".repeat(32);
+        let tiny = "abc1234";
+        assert!(tiny.len() < crate::names::MIN_PREFIX);
+        let shown = format!("[rtok {short} · 9 lines]");
+        let tiny_body = format!("… 1 lines omitted (expand {tiny})");
+        let lines = [
+            json!({"type":"assistant","message":{"id":"m1","content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"ls"}}]}}),
+            json!({"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":shown}]}}),
+            json!({"type":"assistant","message":{"id":"m2","content":[{"type":"tool_use","id":"t2","name":"Bash","input":{"command":format!("rtok expand {short}")}}]}}),
+            json!({"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t2","content":"restored"}]}}),
+            json!({"type":"assistant","message":{"id":"m3","content":[{"type":"tool_use","id":"t3","name":"mcp__rtok__expand","input":{"id":full}}]}}),
+            json!({"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t3","content":"more"}]}}),
+            json!({"type":"assistant","message":{"id":"m4","content":[{"type":"tool_use","id":"t4","name":"Bash","input":{"command":"cat f"}}]}}),
+            json!({"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t4","content":tiny_body}]}}),
+            json!({"type":"assistant","message":{"id":"m5","content":[{"type":"tool_use","id":"t5","name":"Bash","input":{"command":format!("rtok expand {tiny}")}}]}}),
+            json!({"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t5","content":"too-short"}]}}),
+            json!({"type":"assistant","message":{"id":"m6","content":[{"type":"tool_use","id":"t6","name":"mcp__rtok__expand","input":{"id":other}}]}}),
+            json!({"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t6","content":"other"}]}}),
+        ];
+        let r = write_and_collect(&dir, "e.jsonl", &lines);
+        let d = &r.expand_after;
+        assert_eq!(
+            (d.calls, d.bytes, d.shown_bytes),
+            (
+                2,
+                "restored".len() as u64 + "more".len() as u64,
+                shown.len() as u64
+            )
+        );
+        fs::remove_dir_all(&dir).ok();
+    }
+
     #[test]
     fn archive_replay_keeps_young_turns_and_shrinks_old_ones() {
         let rp = Replay {
@@ -2852,6 +3022,28 @@ mod tests {
             replay_ctt(&content, tokens, 5, rp),
             tokens * 2 + pointer * 3
         );
+    }
+
+    /// T946: the count comes from the single `parse_path` pass, so one undecodable line no
+    /// longer zeroes the file's compactions the way the old `read_to_string` re-read did.
+    #[test]
+    fn compactions_survive_a_non_utf8_line() {
+        let dir = tempfile_dir();
+        let mut body = Vec::new();
+        body.extend_from_slice(b"{\"type\":\"system\",\"subtype\":\"compact_boundary\"}\n");
+        body.extend_from_slice(b"{\"type\":\"user\",\"message\":\"\xff\xfe\"}\n");
+        body.extend_from_slice(b"  {\"type\":\"system\",\"subtype\":\"compact_boundary\"}  \n");
+        body.extend_from_slice(b"{\"type\":\"assistant\",\"message\":{\"content\":\"ok\"}}\n");
+        std::fs::write(dir.join("s.jsonl"), body).unwrap();
+        let r = collect(
+            &dir,
+            Duration::from_secs(86400 * 60),
+            "",
+            Replay::from_cfg(&Config::default()),
+        )
+        .unwrap();
+        assert_eq!((r.sessions, r.compact, r.malformed), (1, 2, 1));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -2969,6 +3161,28 @@ mod tests {
             "{}",
             report.to_table()
         );
+    }
+
+    /// One transcript line: an assistant message calling `name` with `input`.
+    #[cfg(any(feature = "read", all(feature = "guard", feature = "graph")))]
+    fn tool_call(id: &str, name: &str, input: Value) -> Value {
+        json!({"type":"assistant","message":{"id":format!("m{id}"),"content":[{"type":"tool_use","id":id,"name":name,"input":input}]}})
+    }
+
+    /// One transcript line: the result `body` of call `id`.
+    #[cfg(any(feature = "read", all(feature = "guard", feature = "graph")))]
+    fn tool_result(id: &str, body: &str) -> Value {
+        json!({"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":id,"content":body}]}})
+    }
+
+    /// An empty transcript prints no `label` line and has no `key` in `--json`.
+    #[cfg(any(feature = "read", all(feature = "guard", feature = "graph")))]
+    fn assert_absent_when_empty(label: &str, key: &str) {
+        let dir = tempfile_dir();
+        let none = write_and_collect(&dir, "empty.jsonl", &[]);
+        assert!(!none.to_table().contains(label));
+        assert!(!serde_json::to_string(&none).unwrap().contains(key));
+        fs::remove_dir_all(&dir).ok();
     }
 
     /// Write `lines` to the dir's transcript and collect the report — the tail

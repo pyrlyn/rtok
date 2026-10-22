@@ -369,7 +369,7 @@ tasks    = "bench/tasks.toml"
 runs     = 3
 dry_run  = false
 timeout_s = 900                       # per task run
-suite    = ""                         # "" = T9.1 six tasks; "graph" = T68.9 with/without MCP
+suite    = ""                         # "" = T9.1 six tasks; "graph" = T68.9 with/without MCP; "p28" = T385.9.3 compressor vs lossless
 [bench.configs]                       # name = settings file passed to `claude --settings`
 a = "bench/configs/legacy.json"
 b = "bench/configs/rtok.json"
@@ -476,13 +476,16 @@ cmd = ""                              # command family hint when the caller know
 [worktree]                            # rtok worktree add | claim | remove | list | gc
 enabled = true                        # false: every `rtok worktree` command (list too) says worktrees are not enabled, MCP lists no worktree_* tool, and Claude's WorktreeCreate/WorktreeRemove hooks do what Claude does without rtok
 root = ".rtok/worktrees"              # where `rtok worktree add` creates worktrees, as <root>/<repo>-<task>; relative: under the main checkout; `~` expands
+seed = true                           # fill a new worktree's seed_dirs from the sibling checkout that built them last: copy-on-write clones (APFS, btrfs, XFS, bcachefs, ReFS, Dev Drive), a plain copy elsewhere; `rtok worktree add --no-seed` skips it once
+seed_dirs = ["target", "node_modules"] # build caches to seed, relative to the checkout; a bare name also matches one level down (web/node_modules)
 
 [tasks]                               # адаптеры задач (T441); обычно задаются для проекта в .rtok.toml
 adapter = "disk"                      # disk | github | gitlab
 prefix = ""                           # префикс id задач, 1–8 ASCII-букв (R → R12, R2.1); пусто: первая буква имени проекта
 
 [tasks.disk]
-dir = "tasks"                         # один Markdown-файл на задачу, относительно корня проекта; выполненные уходят в <dir>/done
+dir = "tasks"                         # где лежат Markdown-задачи, относительно корня проекта
+layout = "auto"                       # files: "R12 - slug.md", выполненные в <dir>/done; folders: "<id>/task.md", закрыта файлом "<id>/done.md" (plan/); auto: folders, если <dir> уже так устроен
 
 [tasks.github]
 repo = ""                             # owner/name; пусто: remote origin
@@ -517,8 +520,8 @@ rewrite  = true                       # PreToolUse(Bash) → `rtok run -- …`
 shell    = ""                         # "" = $SHELL
 rules    = "~/.rtok/rules.toml"       # extra filter rules; missing → built-in rules/default.toml
 rules_dir = "~/.rtok/rules.d"         # drop-ins: every *.toml merges after rules in name order (T50.2)
-trailer  = true                       # print `[rtok <id12> · N lines]` after a cut; false = `--no-ref`
-trailer_min_lines = 40                # add `[rtok <id12> · N lines]` above this
+trailer  = true                       # print `[rtok <id8> · N lines]` after a cut; false = `--no-ref`
+trailer_min_lines = 40                # add `[rtok <id8> · N lines]` above this
 fail_tail_lines   = 80                # non-zero exit → last N lines verbatim
 never_wrap = ["rtok", "sudo"]         # first-word deny list; heredocs, `&`, -i are always skipped
 
@@ -547,7 +550,7 @@ head_lines = 8
 tail_lines = 4
 tiers      = false                    # opt-in tiered loading (default off); OpenViking L0/L1/L2 behaviour spec is AGPL-3.0 — rtok does not vendor, link, or subprocess it (D6); gates native impl in T33.2
 live_blobs = false                    # shrink nested JSON dumps + data: blobs in user blocks, never results/system/tools/last-2-turns (T51.1, opt-in)
-skills     = true                     # archive skill bodies outside keep_turns (T61.2); off with skills = false
+skills     = false                    # archive skill bodies outside keep_turns (T61.2, opt-in)
 
 [plugins.proxy]
 enabled = true                        # the proxy plugin (usage capture); the server itself is [proxy]
@@ -604,7 +607,7 @@ enabled    = true
 max_tokens = 2000                     # per response; beyond it: head + "N more, expand <id>"
 impact_tokens = 1500                  # impact: files grouped and ranked up to this budget, then "+K files, M refs not shown"; --all or 0 = every row
 map_tokens = 0                        # SessionStart repo map cap (D5 share next to memory.recall_tokens); 0 = off until a P7 A/B passes
-map_rank   = "refs"                   # SessionStart map order: refs = references per name; pagerank = files by personalized PageRank, personalized by recently edited files and the last checkpoint after a compact
+map_rank   = "pagerank"               # SessionStart map order: refs = references per name; pagerank = files by personalized PageRank, personalized by recently edited files and the last checkpoint after a compact
 body_lines = 40                       # symbol(): source lines shown per definition
 auto_index = true                     # true = every call walks the tree; false = index once, then `rtok graph index` or the watcher (a hook-staled file reads as missing until then)
 auto_add_projects = true               # T329.6: register a directory in the project registry when a hooked session starts there, a worktree is made or adopted through `rtok worktree` (named by its branch), or a graph MCP call runs there; false = the registry changes only through the page and the CLI

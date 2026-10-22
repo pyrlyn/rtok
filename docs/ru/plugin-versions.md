@@ -11,8 +11,9 @@ lang: ru
 (и все остальные хосты) несут файл версии, но сохраняют прежнее поведение `agents update`;
 они последуют позже.
 
-Каждый пример ниже — реальный запуск rtok 0.10.0 с одноразовым `HOME` и заглушкой
-`claude` первой в `PATH` (настоящий Claude Code не участвует). `--cli --no-restart` ограничивают запуск
+Каждый пример ниже — реальный запуск rtok 0.10.0 (или 0.17.0-alpha.3, где об этом сказано
+в выводе) с одноразовым `HOME` и заглушкой `claude` первой в `PATH` (настоящий Claude Code
+не участвует). `--cli --no-restart` ограничивают запуск
 CLI Claude Code; каждый отчёт сокращён до заголовка, строк плагина и ошибок.
 
 ## Зачем
@@ -45,7 +46,7 @@ $ cat plugins/claude/.rtok-plugin-version
 | `schema` | Версия формата. rtok читает только `1` и отклоняет любое другое значение с ошибкой, называющей файл. |
 | `plugin` | Имя каталога хоста (`claude`, `codex`, …). |
 | `version` | SemVer; равна версии в `Cargo.toml` этого коммита. Некорректная версия — ошибка, называющая файл. |
-| `source` | Необязательное поле, зарезервировано для локальной установки (`github`, `local`, `marketplace`). В закоммиченных файлах его никогда нет. |
+| `source` | Необязательное поле: `local` в установленной копии, которую записала локальная установка. В закоммиченных файлах его никогда нет. |
 
 Хосты с файлом: `claude`, `codebuddy`, `codex`, `copilot`, `cursor`, `devin`, `gemini`, `grok`, `kimi`,
 `opencode`, `pi`, `zcode`. У `cline` нет собственного манифеста, а в манифесте `antigravity` нет
@@ -55,9 +56,18 @@ $ cat plugins/claude/.rtok-plugin-version
 
 Эти файлы пишет только релиз ([Выпуск релиза](#выпуск-релиза)). Файл лежит в корне плагина,
 поэтому любой источник копирует его вместе с плагином в установку хоста (для Claude — в его кеш
-плагинов в `~/.claude/plugins/cache/rtok/`). rtok пока не читает файл обратно из
-установленной копии и не записывает в неё копию с `+g<sha>`: для локальной сборки строка сборки хранится
-только в квитанции.
+плагинов в `~/.claude/plugins/cache/rtok/`). `agents update` сначала читает установленную версию
+из этой копии. Затем локальная установка переписывает файл копии, записывая в него строку сборки и
+`"source":"local"` (rtok 0.17.0-alpha.3, из checkout с незакоммиченными изменениями):
+
+```text
+$ cat ~/.claude/plugins/cache/rtok/rtok/local/.rtok-plugin-version
+{"schema":1,"plugin":"claude","version":"0.17.0-alpha.3+g3ccd3a28.dirty","source":"local"}
+```
+
+rtok никогда не пишет в checkout: когда Claude запускает плагин прямо из локального дерева,
+файл той копии не читается, и за неё говорит квитанция. `version` в манифесте внутри
+установленной копии остаётся таким, как был закоммичен.
 
 ## Квитанция `plugins.json`
 
@@ -69,37 +79,31 @@ rtok хранит по одной строке на хост с тем, что �
 | Linux | `$XDG_STATE_HOME/rtok/plugins.json`, иначе `~/.local/state/rtok/plugins.json` |
 | Windows | `%LOCALAPPDATA%\rtok\plugins.json`, иначе `%USERPROFILE%\AppData\Local\rtok\plugins.json` |
 
-После обновления из GitHub (домашний путь сокращён до `~`):
+После локальной установки из checkout с незакоммиченными изменениями (rtok 0.17.0-alpha.3; домашний путь и
+путь checkout сокращены):
 
 ```json
 {
   "claude": {
-    "source": "github",
-    "ref": "v0.10.0",
-    "marketplace": "rtok",
-    "path": "~/.claude/plugins/installed_plugins.json",
-    "version": "0.10.0",
-    "installed_at": "2026-09-27T20:17:52Z"
+    "source": "local",
+    "ref": "<checkout>/plugins/claude",
+    "path": "~/.claude/plugins/cache/rtok/rtok/local",
+    "version": "0.17.0-alpha.3+g3ccd3a28.dirty",
+    "installed_at": "2026-10-21T01:55:49Z"
   }
 }
 ```
+
+Строка GitHub вместо этого содержит `"ref": "v<version>"` и `"marketplace": "rtok"`.
 
 | Поле | Значение |
 | --- | --- |
 | `source` | `github`, `local` или `marketplace`. |
 | `ref` | `v<version>` для GitHub и marketplace; путь к локальному дереву плагина для локальной установки. |
 | `marketplace` | `rtok` для GitHub и marketplace; отсутствует для local. |
-| `path` | Запись хоста, в которой видна установка (для Claude — `installed_plugins.json`). |
+| `path` | Установленная копия: для Claude — `installPath` из `installed_plugins.json`, иначе `~/.claude/plugins/cache/rtok/rtok`. Строки, записанные до 0.17, называют сам `installed_plugins.json`; тогда поиск пропускает файл версии. |
 | `version` | Установленная версия; локальная установка добавляет `+g<sha>` или `+g<sha>.dirty`. |
 | `installed_at` | UTC, RFC 3339, с точностью до секунды. |
-
-Строка локальной установки из checkout с незакоммиченными изменениями (путь checkout сокращён):
-
-```json
-    "source": "local",
-    "ref": "<checkout>/plugins/claude",
-    "version": "0.10.0+g84a4b607.dirty",
-```
 
 Строка записывается после успешной установки, переустановки или обновления на месте и не трогается при
 `--dry-run` и при любом сбое `claude`, который ничего не удалил. Она удаляется, когда переустановка
@@ -114,17 +118,21 @@ rtok хранит по одной строке на хост с тем, что �
 | Источник | На что указывает marketplace `rtok` | Доступная версия |
 | --- | --- | --- |
 | GitHub | `pyrlyn/rtok` | собственная версия запущенного rtok |
-| Marketplace | `pyrlyn/rtok` | собственная версия запущенного rtok |
-| Local | дерево плагина, которое находит rtok (`plugins/claude` рядом с бинарником, в префиксе `share/rtok`, в хранилище ketch или в checkout исходников) | `.rtok-plugin-version` этого дерева плюс `+g<sha>[.dirty]` из `git describe --always --dirty` |
+| Marketplace | `pyrlyn/rtok` | checkout каталога Claude, `~/.claude/plugins/marketplaces/rtok/plugins/claude/.rtok-plugin-version`, читается после `claude plugin marketplace update rtok`; версия запущенного rtok, если файла нет |
+| Local | дерево плагина, которое находит rtok (`plugins/claude` рядом с бинарником, в префиксе `share/rtok`, в хранилище ketch или в checkout исходников) | `.rtok-plugin-version` этого дерева плюс `+g<sha>[.dirty]` из `git describe --always --dirty`; вне checkout git (`plugins/` установленного rtok) — версия из файла как есть |
 
-GitHub и marketplace не требуют сетевого вызова: релиз держит каждый файл версии равным
-`Cargo.toml`, поэтому тег `v<version>`, соответствующий бинарнику, несёт ровно эту версию. Отличаться от бинарника может
-только локальное дерево, поэтому только оно читается с диска. Сегодня GitHub и marketplace
-различаются лишь записанным источником.
+GitHub не требует сетевого вызова: релиз держит каждый файл версии равным
+`Cargo.toml`, поэтому тег `v<version>`, соответствующий бинарнику, несёт ровно эту версию. Marketplace
+следует каталогу, который может опережать бинарник: настоящий `agents update` один раз обновляет его
+перед чтением (и не обновляет повторно для обновления на месте); `--dry-run` читает
+каталог в том виде, в каком он лежит на диске. Локальное дерево читается с диска.
 
-Установленная версия берётся из строки квитанции, иначе из собственной записи Claude
-(`~/.claude/plugins/installed_plugins.json`, `plugins["rtok@rtok"][0].version`), если она в формате
-SemVer, иначе `0.0.0`. Считается, что у Claude плагин есть, когда этот файл содержит `rtok@rtok`.
+Установленная версия берётся из `.rtok-plugin-version` установленной копии (каталог, который называет
+`installPath` в `~/.claude/plugins/installed_plugins.json`, иначе папка кеша с именем по `version`
+записи), затем из строки квитанции, затем из собственной записи Claude
+(`plugins["rtok@rtok"][0].version`), если она в формате SemVer, иначе `0.0.0`. Файл версии, который
+не разбирается, — ошибка с его именем; `--force` переустанавливает поверх него. Считается, что у Claude
+плагин есть, когда `installed_plugins.json` содержит `rtok@rtok`.
 
 Запись `rtok` в `~/.claude/plugins/known_marketplaces.json` сверяется с выбранным
 источником: `{"source":"github","repo":"pyrlyn/rtok"}` для GitHub и marketplace,
@@ -153,12 +161,14 @@ pyrlyn/rtok && claude plugin install rtok@rtok` (Codex: то же с `codex plug
 | `--force` | переустановка | `plugin uninstall`, затем как выше |
 | Источник изменился или запись marketplace устарела | переустановка | `plugin uninstall`, `plugin marketplace remove rtok` и `add` (если запись не актуальна), `plugin install` |
 | Доступная новее | обновление на месте | `plugin marketplace update rtok`, `plugin update rtok@rtok` |
-| Та же базовая версия, другие метаданные сборки | обновление на месте | как выше |
+| Та же базовая версия, другие метаданные сборки | обновление на месте; переустановка для локального источника | как выше; local: как для `--force` |
 | Устаревшая установка: квитанции нет, запись хоста `0.0.1` или не SemVer (`0.0.0`) | обновление на месте (старше любого релиза) | как выше |
 | Совпадают версия и метаданные сборки | пропуск | нет |
 | Доступная старше | пропуск с предупреждением | нет |
 
-Если обновление на месте не удалось, rtok переходит к переустановке и добавляет ошибку к выводу.
+Если обновление на месте не удалось, rtok переходит к переустановке и добавляет ошибку к выводу. Новая
+локальная сборка всегда переустанавливается: базовая версия у неё прежняя, а Claude кеширует по версии
+манифеста, поэтому `claude plugin update` оставил бы старую копию.
 
 Устаревшая установка обновляется один раз и записывает квитанцию; повторный запуск не вызывает ни одной команды `claude`:
 
@@ -171,7 +181,9 @@ CLI: Claude Code — already current
 ```
 
 `--dry-run` показывает решение и ничего не записывает. Обновление или пропуск называют версию;
-установка или переустановка печатают команды `claude`, которые были бы выполнены:
+установка или переустановка печатают `would install|reinstall rtok@rtok from <source> v<version>`,
+причину (`forced`, `source changed from … to …`, `stale marketplace`, `new local build`) и команды
+`claude`, которые были бы выполнены (второй запуск — rtok 0.17.0-alpha.3):
 
 ```text
 $ rtok agents update claude --cli --no-restart --dry-run
@@ -179,7 +191,7 @@ CLI: Claude Code — dry run, nothing written
 plugin rtok@rtok 0.10.0 up to date (github)
 $ rtok agents update claude --cli --no-restart --dry-run --force
 CLI: Claude Code — dry run, nothing written
-offer plugins/claude → claude plugin uninstall rtok@rtok && claude plugin install rtok@rtok ketch install pyrlyn/rtok
+would reinstall rtok@rtok from github v0.17.0-alpha.3 (forced): claude plugin uninstall rtok@rtok && claude plugin install rtok@rtok
 ```
 
 Более старая доступная версия (квитанция на `0.11.0`, rtok на `0.10.0`) остаётся на месте:
@@ -193,16 +205,16 @@ plugin rtok@rtok: available 0.10.0 is older than installed 0.11.0
 `--force` переустанавливает независимо от версий, включая понижение, и перезаписывает квитанцию.
 `--source github|local|marketplace` сравнивает с этим источником вместо записанного;
 другой источник означает переустановку, и квитанция переключается на него. После этого новый локальный
-коммит или правка отслеживаемого файла — это обновление на месте (второй запуск ниже был после
-правки):
+коммит или правка отслеживаемого файла меняет строку сборки и вызывает такую же переустановку; та же
+сборка пропускается (rtok 0.17.0-alpha.3, путь checkout сокращён):
 
 ```text
+$ rtok agents update claude --cli --no-restart --dry-run --source local
+CLI: Claude Code — dry run, nothing written
+would reinstall rtok@rtok from local v0.17.0-alpha.3+g3ccd3a28.dirty (source changed from github to local): claude plugin uninstall rtok@rtok && claude plugin marketplace remove rtok && claude plugin marketplace add <checkout>/plugins/claude && claude plugin install rtok@rtok
 $ rtok agents update claude --cli --no-restart --source local
 CLI: Claude Code
 + plugin plugins/claude → rtok@rtok
-$ rtok agents update claude --cli --no-restart
-CLI: Claude Code
-~ plugin rtok@rtok updated to 0.10.0+g84a4b607.dirty
 ```
 
 **Когда переустановка не удалась.** Сбой `claude` до того, как что-либо было удалено, сохраняет старый плагин
@@ -302,7 +314,8 @@ exit=10
 **Почему это работает офлайн.** Доступная версия — собственная версия запущенного бинарника: тег или
 запись каталога, соответствующие этой сборке, несут тот же `.rtok-plugin-version`
 (это обеспечивает `tools/plugin-versions.sh --check`), поэтому спрашивать сервер не у кого. Отличаться от бинарника
-может только локальная копия репозитория, и её читает `update`; `outdated` — нет.
+могут только локальный checkout и обновлённый каталог marketplace; их читает `update`,
+а `outdated` — нет.
 Команда никогда ничего не меняет: чтобы действовать по списку, выполните строку `run:`, которую она печатает.
 
 ## Установленная версия в `agents list`
@@ -367,10 +380,10 @@ CLI: Claude Code — dry run, nothing written
 ~ plugin rtok@rtok → 0.10.0 (claude plugin marketplace update rtok && claude plugin update rtok@rtok)
 ```
 
-Если пробный запуск хочет обновить, а настоящий запуск говорит `already current`, значит, `claude` нет в
-`PATH`: обновление пропускается, а квитанция остаётся как была. Добавьте `claude` в `PATH` и запустите
-снова. Если пробный запуск говорит `up to date`, но копия, которую запускает Claude, старая, значит, квитанция неверна
-(rtok доверяет ей больше, чем установленной копии): `rtok agents update claude --force`.
+Если настоящий запуск печатает `claude failed: claude not found on PATH`, ничего не изменилось, а
+квитанция осталась как была. Добавьте `claude` в `PATH` и запустите снова. Если пробный запуск
+говорит `up to date`, но копия, которую запускает Claude, старая, значит, неверен файл версии
+установленной копии или квитанция: `rtok agents update claude --force`.
 
 **Устаревшая установка.** У установки, сделанной до rtok 0.10.0, нет квитанции, а запись хоста —
 `0.0.1` (или вовсе не SemVer). Первый `rtok agents update claude` обновляет её один раз и записывает
@@ -393,6 +406,9 @@ $ echo $?
 tools/plugin-versions.sh --set "$(grep -m1 '^version = ' Cargo.toml | cut -d'"' -f2)"
 ```
 
-**`--source local` падает с `git describe`.** Локальный источник читает метаданные сборки из
-git, поэтому ему нужно, чтобы дерево плагина находилось внутри checkout git; `plugins/` установленного rtok —
-не такой checkout. Запустите бинарник rtok, собранный из checkout, или используйте `--source github`.
+**`--source local` из установленного rtok.** Локальный источник читает метаданные сборки из
+`git describe`. `plugins/` установленного rtok — не checkout git, поэтому его версия — это файл
+дерева как он закоммичен, без строки сборки: установка работает офлайн, но более поздняя сборка с
+той же версией считается актуальной. Используйте `--force` для переустановки или запустите бинарник rtok,
+собранный из checkout. `--source local` падает, только когда в найденном дереве нет
+`.rtok-plugin-version`; ошибка называет файл.

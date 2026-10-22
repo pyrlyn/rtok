@@ -5,7 +5,7 @@
 //! T130: `SubagentStart` spawn brief. `research.md` §17.3(2) picked `SubagentStart`'s
 //! `additionalContext` over `PreToolUse`'s `updatedInput`, which
 //! <https://code.claude.com/docs/en/hooks> (checked 2026-09-22) documents as ignored by the
-//! `Agent`/`Task` tools — see `plan.md` T130.1.
+//! `Agent`/`Task` tools — see `plan/T130.1/`.
 
 use assert_cmd::Command as AssertCmd;
 use serde_json::{Value, json};

@@ -1,0 +1,10 @@
+Found in a review of `src/proxy/semantic_cache.rs`: `block_text`'s `tool_use` arm hashed only `id` and `name`, never `input`, so two requests differing solely in an earlier tool call's arguments hashed equal; its `_ => String::new()` fallback made every other block kind (`thinking`, `redacted_thinking`, `server_tool_use`, `web_search_tool_result`, …) contribute nothing; and `messages_text` dropped an OpenAI Chat assistant message's `tool_calls` (a sibling of `content`, not covered by it) and any message with no `content` key at all (the `?` on `m.get("content")` discarded the whole message, `tool_call_id` on `tool` messages too). Two different conversations could collide on the cache key and the proxy would replay a wrong cached answer.
+
+Plan: fold `canonical_json(input)` into the `tool_use` contribution; make the fallback arm serialize `canonical_json(b)` for unknown block kinds instead of an empty string; in `messages_text`, treat a missing `content` as empty text and append the canonicalized `tool_calls` and `tool_call_id` when present.
+
+Check: `tool_use_input_joins_the_cache_key`, `thinking_block_joins_the_cache_key`, `openai_tool_calls_join_the_cache_key` — bodies differing only there hash differently, key order inside `tool_use` input does not; existing `tool_use_ids_join_the_cache_key` and the rest of `mod tests` stay green; `just test` green.
+
+Result: `block_text`'s `tool_use` arm now appends `canonical_json(input)`, serialized; its fallback arm serializes `canonical_json(b)` for any other block kind instead of returning an empty string. `messages_text` defaults a missing `content` to empty text rather than dropping the message via `?`, and appends the canonicalized `tool_calls` and the `tool_call_id` string when either is present. Tests: `tool_use_input_joins_the_cache_key` (differing input, and identical input under different key order), `thinking_block_joins_the_cache_key`, `openai_tool_calls_join_the_cache_key`; `cargo test --lib semantic_cache` and `cargo clippy --lib --tests -- -D warnings` green.
+
+Status: done 2026-09-28
+Model: Claude Code / claude-sonnet-5

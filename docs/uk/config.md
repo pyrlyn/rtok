@@ -370,7 +370,7 @@ tasks    = "bench/tasks.toml"
 runs     = 3
 dry_run  = false
 timeout_s = 900                       # на один запуск задачі
-suite    = ""                         # "" = шість задач T9.1; "graph" = T68.9 з MCP і без
+suite    = ""                         # "" = шість задач T9.1; "graph" = T68.9 з MCP і без; "p28" = T385.9.3 компресор проти lossless
 [bench.configs]                       # назва = файл налаштувань, що передається в `claude --settings`
 a = "bench/configs/legacy.json"
 b = "bench/configs/rtok.json"
@@ -477,13 +477,16 @@ cmd = ""                              # підказка сімейства ко
 [worktree]                            # rtok worktree add | claim | remove | list | gc
 enabled = true                        # false: кожна команда `rtok worktree` (і list) каже, що worktree не ввімкнено, MCP не показує жодного інструмента worktree_*, а хуки Claude WorktreeCreate/WorktreeRemove роблять те, що Claude робить без rtok
 root = ".rtok/worktrees"              # де `rtok worktree add` створює worktree, як <root>/<repo>-<task>; відносний: у основному checkout; `~` розкривається
+seed = true                           # заповнити seed_dirs нового worktree із сусіднього checkout, що збирав їх останнім: copy-on-write клони (APFS, btrfs, XFS, bcachefs, ReFS, Dev Drive), інакше звичайна копія; `rtok worktree add --no-seed` пропускає це один раз
+seed_dirs = ["target", "node_modules"] # кеші збірки для засіву, відносно checkout; голе ім'я збігається й на рівень нижче (web/node_modules)
 
 [tasks]                               # адаптери задач (T441); зазвичай задаються для проєкту в .rtok.toml
 adapter = "disk"                      # disk | github | gitlab
 prefix = ""                           # префікс id задач, 1–8 ASCII-літер (R → R12, R2.1); порожньо: перша літера назви проєкту
 
 [tasks.disk]
-dir = "tasks"                         # один Markdown-файл на задачу, відносно кореня проєкту; виконані йдуть у <dir>/done
+dir = "tasks"                         # де лежать Markdown-задачі, відносно кореня проєкту
+layout = "auto"                       # files: "R12 - slug.md", виконані в <dir>/done; folders: "<id>/task.md", закрита файлом "<id>/done.md" (plan/); auto: folders, якщо <dir> уже так влаштований
 
 [tasks.github]
 repo = ""                             # owner/name; порожньо: remote origin
@@ -518,8 +521,8 @@ rewrite  = true                       # PreToolUse(Bash) → `rtok run -- …`
 shell    = ""                         # "" = $SHELL
 rules    = "~/.rtok/rules.toml"       # додаткові правила фільтрування; якщо немає → вбудований rules/default.toml
 rules_dir = "~/.rtok/rules.d"         # drop-in-файли: кожен *.toml об'єднується після rules у порядку назв (T50.2)
-trailer  = true                       # друкувати `[rtok <id12> · N lines]` після скорочення; false = `--no-ref`
-trailer_min_lines = 40                # додавати `[rtok <id12> · N lines]` понад це
+trailer  = true                       # друкувати `[rtok <id8> · N lines]` після скорочення; false = `--no-ref`
+trailer_min_lines = 40                # додавати `[rtok <id8> · N lines]` понад це
 fail_tail_lines   = 80                # ненульовий код виходу → останні N рядків дослівно
 never_wrap = ["rtok", "sudo"]         # список заборонених перших слів; heredoc, `&`, -i завжди пропускаються
 
@@ -548,7 +551,7 @@ head_lines = 8
 tail_lines = 4
 tiers      = false                    # багаторівневе завантаження, вмикається явно (типово вимкнено); специфікація поведінки OpenViking L0/L1/L2 — AGPL-3.0, rtok не вендорить, не лінкує й не запускає її як підпроцес (D6); відкриває нативну реалізацію в T33.2
 live_blobs = false                    # зменшувати вкладені дампи JSON + блоки data: у блоках користувача, ніколи results/system/tools/останні 2 ходи (T51.1, вмикається явно)
-skills     = true                     # архівувати тіла skills поза keep_turns (T61.2); вимикається через skills = false
+skills     = false                    # архівувати тіла skills поза keep_turns (T61.2, вмикається явно)
 
 [plugins.proxy]
 enabled = true                        # плагін proxy (фіксація використання); сам сервер — це [proxy]
@@ -605,7 +608,7 @@ enabled    = true
 max_tokens = 2000                     # на відповідь; понад це: head + "N more, expand <id>"
 impact_tokens = 1500                  # impact: файли згруповано й ранжовано в межах цього бюджету, далі "+K files, M refs not shown"; --all або 0 = усі рядки
 map_tokens = 0                        # обмеження карти репозиторію на SessionStart (частка D5 поряд із memory.recall_tokens); 0 = вимкнено, доки не пройде A/B P7
-map_rank   = "refs"                   # порядок карти на SessionStart: refs = посилання на ім'я; pagerank = файли за персоналізованим PageRank, персоналізованим нещодавно редагованими файлами й останнім checkpoint після compact
+map_rank   = "pagerank"               # порядок карти на SessionStart: refs = посилання на ім'я; pagerank = файли за персоналізованим PageRank, персоналізованим нещодавно редагованими файлами й останнім checkpoint після compact
 body_lines = 40                       # symbol(): скільки рядків коду показувати на визначення
 auto_index = true                     # true = кожен виклик обходить дерево; false = індексувати один раз, далі `rtok graph index` або спостерігач (файл, позначений хуком як застарілий, до того читається як відсутній)
 auto_add_projects = true               # T329.6: реєструвати каталог у реєстрі проєктів, коли там стартує сесія з хуками, створюється або приєднується worktree через `rtok worktree` (під назвою його гілки) або виконується виклик graph MCP; false = реєстр змінюється лише через сторінку й CLI

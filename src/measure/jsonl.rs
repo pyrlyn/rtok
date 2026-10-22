@@ -85,11 +85,14 @@ pub struct Parsed {
     /// T392: the next turn index at each `compact_boundary`; a tool_use whose turn is at or
     /// past an entry ran after that compaction.
     pub compactions: Vec<u32>,
-    /// T131: the first `user`-role turn's flattened content, whole. This is where a
-    /// `SubagentStart` spawn brief's `additionalContext` lands in a sub-agent's own
-    /// transcript — whether Claude wraps it as its own record ahead of the task prompt or
-    /// folds it into that prompt, either shape is turn 0 (`ingest`'s `is_turn` counts both).
+    /// T131: the first `user`-role turn's flattened content, whole — the fallback for a
+    /// host that folds a spawn brief into the task prompt.
     pub first_user_text: Option<String>,
+    /// T131: every `SubagentStart` hook's `additionalContext`, joined. Claude Code 2.1.304
+    /// writes it as its own `attachment` record (`hook_additional_context`, `hookEvent:
+    /// SubagentStart`) after the task prompt, never inside a `user` message, so
+    /// `first_user_text` alone never saw a spawn brief (research.md §17.5).
+    pub subagent_start_context: String,
     seen_ids: HashSet<String>,
 }
 
@@ -184,6 +187,17 @@ fn ingest(v: &Value, out: &mut Parsed) {
     }
     if ty == "user" && turn == 0 && out.first_user_text.is_none() {
         out.first_user_text = Some(flatten_content(msg.get("content")));
+    }
+    if ty == "attachment"
+        && let Some(a) = v.get("attachment")
+        && a.get("type").and_then(Value::as_str) == Some("hook_additional_context")
+        && a.get("hookEvent").and_then(Value::as_str) == Some("SubagentStart")
+    {
+        if !out.subagent_start_context.is_empty() {
+            out.subagent_start_context.push('\n');
+        }
+        out.subagent_start_context
+            .push_str(&flatten_content(a.get("content")));
     }
     if ty == "user"
         && v.get("isMeta").and_then(Value::as_bool).unwrap_or(false)
@@ -524,6 +538,30 @@ mod tests {
         assert_eq!(p.thinking[0].bytes, 14);
         assert_eq!(p.thinking[1].bytes, 1);
         assert_eq!(p.duplicates, 1);
+    }
+
+    /// T131: only a `SubagentStart` hook's `additionalContext` attachment is kept; another
+    /// event's context and a `hook_success` attachment are not, and nothing becomes a turn.
+    #[test]
+    fn subagent_start_context_comes_from_its_attachment_only() {
+        let att = |kind: &str, event: &str, text: &str| {
+            json!({"type": "attachment", "attachment": {"type": kind, "hookEvent": event,
+                "content": [text]}})
+            .to_string()
+        };
+        let p = parse_jsonl(
+            &[
+                json!({"type": "user", "message": {"role": "user", "content": "task"}}).to_string(),
+                att("hook_success", "SubagentStart", "ok"),
+                att("hook_additional_context", "SessionStart", "recall"),
+                att("hook_additional_context", "SubagentStart", "id"),
+                att("hook_additional_context", "SubagentStart", "brief"),
+            ]
+            .join("\n"),
+        );
+        assert_eq!(p.subagent_start_context, "id\nbrief");
+        assert_eq!(p.first_user_text.as_deref(), Some("task"));
+        assert_eq!(p.turns, 1);
     }
 
     #[test]

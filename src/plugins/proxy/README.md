@@ -30,7 +30,7 @@ Code; `rtok doctor` flags this.
 
 ## Tasks
 
-See `roadmap.md` § `proxy`. Checks in `plan.md`.
+See `roadmap.md` § `proxy`. Checks in `plan/`.
 
 T5.1 passthrough · T5.2 lifecycle/health/setup · T5.5 cache-health report (with `measure`) ·
 T11.1 `Wire` adapter · T11.2 OpenAI Chat · T11.3 OpenAI Responses · T11.5 OpenAI host setup.

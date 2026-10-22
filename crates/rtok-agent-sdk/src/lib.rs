@@ -53,7 +53,7 @@ pub const OWNED_MARKER: &str = ".rtok-owned";
 pub struct Apply {
     /// Describe the change and write nothing.
     pub dry_run: bool,
-    /// Copy each file to `_backup/<name>.bak-<unix-seconds>` before the first write to it.
+    /// Copy each file to `.backup_configs/<name>.bak-<unix-seconds>` before the first write to it.
     pub backup: bool,
     /// Newest `.bak-*` generations kept per file after a backup; `0` keeps all.
     pub backup_files: usize,
@@ -74,9 +74,22 @@ impl Apply {
 }
 
 /// Directory name next to a host config that holds undo copies.
-pub const BACKUP_DIR: &str = "_backup";
+pub const BACKUP_DIR: &str = ".backup_configs";
 
-/// Copy `path` to `_backup/<name>.bak-<unix-seconds>` beside it. `None` when there is no file
+/// The folder rtok wrote its copies to before T911. Nothing is written there any more, but the
+/// copies a user already has stay rtok's own: listed by the cap, never taken for foreign junk.
+pub const LEGACY_BACKUP_DIR: &str = "_backup";
+
+/// Every folder name rtok's own copies may sit in, the current one first.
+pub const BACKUP_DIRS: [&str; 2] = [BACKUP_DIR, LEGACY_BACKUP_DIR];
+
+/// True when `dir` is named like a folder of rtok's own copies, current or legacy.
+pub fn is_backup_dir(dir: &Path) -> bool {
+    dir.file_name()
+        .is_some_and(|d| BACKUP_DIRS.iter().any(|b| d == *b))
+}
+
+/// Copy `path` to `.backup_configs/<name>.bak-<unix-seconds>` beside it. `None` when there is no file
 /// yet, or when a generation of that same name already holds the same bytes — a second install
 /// or uninstall of unchanged content is the same undo. Another file's copy never counts: its
 /// own retention cap could prune it, taking this file's only undo bytes along (T569).
@@ -97,15 +110,15 @@ pub fn backup(path: &Path, keep: usize) -> Result<Option<PathBuf>> {
     Ok(bak)
 }
 
-/// Delete the oldest `_backup/<name>.bak-<ts>[-<n>]` generations beside `kept` — a copy
+/// Delete the oldest `.backup_configs/<name>.bak-<ts>[-<n>]` generations beside `kept` — a copy
 /// [`backup`] returned — until `keep` remain. `kept` itself is never deleted; `0` keeps all.
-/// Only regular files with that exact name shape inside a `_backup` folder are candidates.
+/// Only regular files with that exact name shape inside a [`BACKUP_DIRS`] folder are candidates.
 /// Best effort: an fs error leaves the rest in place and is not reported.
 pub fn prune_backups(kept: &Path, keep: usize) {
     let (Some(dir), Some(file)) = (kept.parent(), kept.file_name().and_then(OsStr::to_str)) else {
         return;
     };
-    if keep == 0 || dir.file_name().is_none_or(|d| d != BACKUP_DIR) {
+    if keep == 0 || !is_backup_dir(dir) {
         return;
     }
     let Some((name, _)) = file.rsplit_once(".bak-") else {
@@ -120,11 +133,11 @@ pub fn prune_backups(kept: &Path, keep: usize) {
     }
 }
 
-/// The generations in the `_backup` folder `dir` that a cap of `keep` has no room for: per base
-/// name, all but the newest `keep`, oldest first. Read-only, the listing twin of
+/// The generations in the [`BACKUP_DIRS`] folder `dir` that a cap of `keep` has no room for: per
+/// base name, all but the newest `keep`, oldest first. Read-only, the listing twin of
 /// [`prune_backups`] for a cap lowered after the copies were taken; `0` keeps all.
 pub fn stale_backups(dir: &Path, keep: usize) -> Vec<PathBuf> {
-    if keep == 0 || dir.file_name().is_none_or(|d| d != BACKUP_DIR) {
+    if keep == 0 || !is_backup_dir(dir) {
         return Vec::new();
     }
     let mut names: Vec<String> = fs::read_dir(dir)
@@ -756,7 +769,10 @@ impl PluginLink<'_> {
             return false;
         };
         if meta.file_type().is_symlink() {
+            // A link into a versioned store is replaced by a copy even when it still
+            // resolves: it dangles at the next upgrade (T925).
             return self.dest.exists()
+                && !in_versioned_store(&self.src)
                 && fs::read_link(&self.dest).is_ok_and(|target| target == self.src);
         }
         if meta.file_type().is_file() {
@@ -764,6 +780,51 @@ impl PluginLink<'_> {
         }
         meta.is_dir() && tree_copies_with(&self.src, &self.dest, fix, Path::new(""))
     }
+
+    /// What an rtok-owned plugin destination needs, for `doctor` (T925). A foreign or absent
+    /// destination is nobody's problem here. `fix` is [`Self::run_with`]'s.
+    pub fn health(&self, fix: CopyFix) -> LinkHealth {
+        let Ok(meta) = self.dest.symlink_metadata() else {
+            return LinkHealth::Absent;
+        };
+        if !self.ours() {
+            return LinkHealth::Foreign;
+        }
+        if meta.file_type().is_symlink() {
+            let target = fs::read_link(&self.dest).unwrap_or_default();
+            if !self.dest.exists() {
+                return LinkHealth::Dangling(target);
+            }
+            return if in_versioned_store(&target) {
+                LinkHealth::Stale(format!(
+                    "links into {}, which an upgrade removes",
+                    target.display()
+                ))
+            } else {
+                LinkHealth::Current
+            };
+        }
+        if self.up_to_date(fix) {
+            LinkHealth::Current
+        } else {
+            LinkHealth::Stale(format!("a copy that differs from {}", self.src.display()))
+        }
+    }
+}
+
+/// [`PluginLink::health`]'s verdict on the destination.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LinkHealth {
+    /// Nothing is installed there.
+    Absent,
+    /// Something that is not rtok's sits there; left alone.
+    Foreign,
+    /// Working and current.
+    Current,
+    /// A symlink whose target is gone; the target as written.
+    Dangling(PathBuf),
+    /// Works now but will not survive an upgrade, or is an older copy; why.
+    Stale(String),
 }
 
 /// What [`SkillCopy::run`] will do given destination state. Pure so `Vfs` tests
@@ -1028,10 +1089,28 @@ pub fn keep_bytes(_: &Path, bytes: Vec<u8>) -> Vec<u8> {
     bytes
 }
 
-/// Install the plugin tree at `dest`: symlink on Unix, owned copy elsewhere.
+/// True when `path` sits under a ketch version directory, `…/store/<package>/v<version>/…`.
+/// ketch removes that directory on the next upgrade, so nothing outside it may point in (T925).
+pub fn in_versioned_store(path: &Path) -> bool {
+    let parts: Vec<_> = path.components().map(|c| c.as_os_str()).collect();
+    parts.windows(3).any(|w| {
+        w[0] == "store"
+            && w[2]
+                .to_str()
+                .and_then(|v| v.strip_prefix('v'))
+                .is_some_and(|v| v.starts_with(|c: char| c.is_ascii_digit()))
+    })
+}
+
+/// Install the plugin tree at `dest`: a symlink on Unix, an owned copy elsewhere — and on
+/// Unix too when `src` lives in a versioned ketch store, whose directory an upgrade removes
+/// and leaves the link dangling (T925).
 fn install_plugin(src: &Path, dest: &Path, fix: CopyFix) -> Result<()> {
     #[cfg(unix)]
     {
+        if in_versioned_store(src) {
+            return copy_owned_with(src, dest, fix);
+        }
         let _ = fix;
         std::os::unix::fs::symlink(src, dest)
             .with_context(|| format!("symlink {} → {}", src.display(), dest.display()))
@@ -1303,10 +1382,13 @@ mod tests {
     }
 
     /// The listing twin of `prune_backups`: per base name all but the newest `keep`, foreign
-    /// names and other folders never, and `0` keeps every copy.
-    #[test]
-    fn stale_backups_lists_only_generations_past_the_cap() {
-        let dir = tmp("stale-backups").join(BACKUP_DIR);
+    /// names and other folders never, and `0` keeps every copy. A `_backup` folder an older rtok
+    /// left is listed the same way, or a lowered cap could never clean it (T911).
+    #[rstest]
+    fn stale_backups_lists_only_generations_past_the_cap(
+        #[values(".backup_configs", "_backup")] folder: &str,
+    ) {
+        let dir = tmp(&format!("stale-backups{folder}")).join(folder);
         fs::create_dir_all(&dir).unwrap();
         for f in [
             "a.json.bak-1",
@@ -1330,8 +1412,21 @@ mod tests {
         assert!(names(0).is_empty() && names(3).is_empty());
         assert!(
             stale_backups(dir.parent().unwrap(), 1).is_empty(),
-            "not a _backup folder"
+            "not a backup folder"
         );
+    }
+
+    /// The folder name is the user-visible contract (T911): a new copy goes to
+    /// `.backup_configs/`, never to the legacy `_backup/`.
+    #[test]
+    fn backup_writes_to_backup_configs_not_the_legacy_folder() {
+        let dir = tmp("backup-configs-dir");
+        let path = dir.join("settings.json");
+        fs::write(&path, "v0").unwrap();
+        let bak = backup(&path, 0).unwrap().expect("a copy");
+        assert_eq!(bak.parent().unwrap(), dir.join(".backup_configs"));
+        assert!(!dir.join("_backup").exists());
+        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
@@ -1513,7 +1608,7 @@ mod tests {
         );
         want.sort();
         assert_eq!(names(&backup), want);
-        // 0 keeps all; a copy outside a `_backup` folder prunes nothing.
+        // 0 keeps all; a copy outside a backup folder prunes nothing.
         prune_backups(&kept, 0);
         prune_backups(&dir.join("settings.json.bak-99"), 1);
         assert_eq!(names(&backup), want);
@@ -1816,6 +1911,89 @@ mod tests {
         );
         assert_eq!(fs::read_link(&dest).unwrap(), new_src);
         assert_eq!(link.run(&YES, false).unwrap(), NO_CHANGES);
+    }
+
+    #[rstest]
+    #[case("/h/.ketch/store/rtok/v0.17.0-alpha.2/plugins/cursor", true)]
+    #[case("/h/.ketch/store/rtok/v0.15.1", true)]
+    #[case("/h/.ketch/store/rtok/current/plugins/cursor", false)]
+    #[case("/h/.ketch/store/v/plugins", false)]
+    #[case("/h/src/rtok/plugins/cursor", false)]
+    #[case("/h/store/rtok", false)]
+    fn a_versioned_ketch_store_path_is_recognised(#[case] path: &str, #[case] want: bool) {
+        assert_eq!(in_versioned_store(Path::new(path)), want, "{path}");
+    }
+
+    /// T925: a plugin shipped from a versioned ketch store is copied, so removing the old
+    /// store version in an upgrade leaves the install working instead of dangling.
+    #[cfg(unix)]
+    #[test]
+    fn plugin_from_a_versioned_store_survives_the_store_version_being_removed() {
+        let dir = tmp("store-copy");
+        let version = dir.join("store/rtok/v1");
+        let src = version.join("plugins/demo");
+        fs::create_dir_all(&src).unwrap();
+        fs::write(src.join("plugin.json"), "{}").unwrap();
+        let dest = dir.join("host/plugins/rtok");
+        let link = demo_link(src, dest.clone());
+        assert!(link.run(&YES, false).unwrap().starts_with("+ plugin"));
+        assert!(
+            !fs::symlink_metadata(&dest)
+                .unwrap()
+                .file_type()
+                .is_symlink(),
+            "a copy, not a link into the store"
+        );
+        assert_eq!(link.health(keep_bytes), LinkHealth::Current);
+        fs::remove_dir_all(&version).unwrap();
+        assert_eq!(fs::read_to_string(dest.join("plugin.json")).unwrap(), "{}");
+        assert!(link.ours(), "and the copy is still rtok's to remove");
+    }
+
+    /// T925: a link made before the copy rule, still resolving, is replaced by a copy on
+    /// the next install rather than left to dangle at the next upgrade.
+    #[cfg(unix)]
+    #[test]
+    fn an_existing_link_into_a_versioned_store_is_replaced_by_a_copy() {
+        let dir = tmp("store-link");
+        let src = dir.join("store/rtok/v1/plugins/demo");
+        fs::create_dir_all(&src).unwrap();
+        fs::write(src.join("plugin.json"), "{}").unwrap();
+        fs::create_dir_all(dir.join("host")).unwrap();
+        let dest = dir.join("host/rtok");
+        std::os::unix::fs::symlink(&src, &dest).unwrap();
+        let link = demo_link(src, dest.clone());
+        assert!(matches!(link.health(keep_bytes), LinkHealth::Stale(_)));
+        assert!(link.run(&YES, false).unwrap().starts_with("+ plugin"));
+        assert!(dest.join("plugin.json").is_file());
+        assert!(
+            !fs::symlink_metadata(&dest)
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+        assert_eq!(link.run(&YES, false).unwrap(), NO_CHANGES);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn health_names_a_dangling_link_and_leaves_foreign_and_absent_alone() {
+        let dir = tmp("health");
+        let src = dir.join("plugins/demo");
+        fs::create_dir_all(&src).unwrap();
+        fs::create_dir_all(dir.join("host/foreign")).unwrap();
+        fs::write(dir.join("host/foreign/own.txt"), "x").unwrap();
+        let absent = demo_link(src.clone(), dir.join("host/none"));
+        assert_eq!(absent.health(keep_bytes), LinkHealth::Absent);
+        let foreign = demo_link(src.clone(), dir.join("host/foreign"));
+        assert_eq!(foreign.health(keep_bytes), LinkHealth::Foreign);
+        let dest = dir.join("host/rtok");
+        let gone = dir.join("store/rtok/v0.15.1/plugins/demo");
+        std::os::unix::fs::symlink(&gone, &dest).unwrap();
+        assert_eq!(
+            demo_link(src, dest).health(keep_bytes),
+            LinkHealth::Dangling(gone)
+        );
     }
 
     /// T164: an owned copy (the non-Unix install shape) left over from an older version —

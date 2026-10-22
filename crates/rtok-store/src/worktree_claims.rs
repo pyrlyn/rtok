@@ -76,29 +76,61 @@ impl Store {
                 worktree_claims::task.eq(task),
                 worktree_claims::claimed_at.eq(unixepoch().assume_not_null()),
                 worktree_claims::released_at.eq(None::<i64>),
+                worktree_claims::finished_at.eq(None::<i64>),
             ))
             .execute(&mut *conn)?;
         Ok(())
     }
 
-    /// `rtok worktree remove` (T286): the open claim on `path`, if any, is released.
-    /// SQL equality misses a `\\?\` prefix and Windows case, so the match is [`crate::same_path`].
-    pub fn release_worktree_claim(&self, path: &str) -> Result<()> {
-        // A worktree that goes has nobody left to take it (T289.5).
-        self.take_pending_worktree(path)?;
+    /// `rtok worktree finish` (T952.2): the open claim on `path` waits for its PR to merge.
+    /// `false` when `path` has no open claim, so nothing will remove it after the merge.
+    pub fn finish_worktree_claim(&self, path: &str) -> Result<bool> {
+        let hit = self.open_claim_paths(path)?;
+        let mut conn = self.lock()?;
+        let marked = diesel::update(
+            worktree_claims::table
+                .filter(worktree_claims::path.eq_any(hit))
+                .filter(worktree_claims::released_at.is_null()),
+        )
+        .set(worktree_claims::finished_at.eq(unixepoch()))
+        .execute(&mut *conn)?;
+        Ok(marked > 0)
+    }
+
+    /// `(path, task)` of every open claim `finish` handed to review (T952.2).
+    pub fn finished_worktree_claims(&self) -> Result<Vec<(String, String)>> {
+        let mut conn = self.lock()?;
+        Ok(worktree_claims::table
+            .filter(worktree_claims::released_at.is_null())
+            .filter(worktree_claims::finished_at.is_not_null())
+            .select((worktree_claims::path, worktree_claims::task))
+            .load(&mut *conn)?)
+    }
+
+    /// Stored paths of the open claims naming `path`. SQL equality misses a `\\?\` prefix and
+    /// Windows case, so the match is [`crate::same_path`].
+    fn open_claim_paths(&self, path: &str) -> Result<Vec<String>> {
         let mut conn = self.lock()?;
         let open: Vec<String> = worktree_claims::table
             .filter(worktree_claims::released_at.is_null())
             .select(worktree_claims::path)
             .load(&mut *conn)?;
         let want = std::path::Path::new(path);
-        let hit: Vec<String> = open
+        Ok(open
             .into_iter()
             .filter(|stored| crate::same_path(std::path::Path::new(stored), want))
-            .collect();
+            .collect())
+    }
+
+    /// `rtok worktree remove` (T286): the open claim on `path`, if any, is released.
+    pub fn release_worktree_claim(&self, path: &str) -> Result<()> {
+        // A worktree that goes has nobody left to take it (T289.5).
+        self.take_pending_worktree(path)?;
+        let hit = self.open_claim_paths(path)?;
         if hit.is_empty() {
             return Ok(());
         }
+        let mut conn = self.lock()?;
         diesel::update(
             worktree_claims::table
                 .filter(worktree_claims::path.eq_any(hit))
@@ -244,6 +276,29 @@ mod tests {
         store.release_worktree_claim("/w/x").unwrap();
         assert_eq!(store.open_worktree_claims().unwrap(), [("/w/y".into(), a)]);
         assert_eq!(store.session_model("s-a").unwrap(), None);
+    }
+
+    /// T952.2: only finished open claims wait for the merge; a new claim on the path starts over.
+    #[test]
+    fn a_finished_claim_is_listed_until_released_or_claimed_again() {
+        let store = Store::open_in_memory().unwrap();
+        let claude = store.host_id("claude").unwrap().unwrap();
+        let a = store
+            .register_agent(claude, "s-a", None, None, None)
+            .unwrap();
+        store.claim_worktree("/w/x", &a, "t1").unwrap();
+        store.claim_worktree("/w/y", &a, "t2").unwrap();
+        assert!(store.finish_worktree_claim("/w/x").unwrap());
+        assert!(!store.finish_worktree_claim("/w/z").unwrap());
+        assert_eq!(
+            store.finished_worktree_claims().unwrap(),
+            [("/w/x".into(), "t1".into())]
+        );
+        store.claim_worktree("/w/x", &a, "t1").unwrap();
+        assert!(store.finished_worktree_claims().unwrap().is_empty());
+        assert!(store.finish_worktree_claim("/w/y").unwrap());
+        store.release_worktree_claim("/w/y").unwrap();
+        assert!(store.finished_worktree_claims().unwrap().is_empty());
     }
 
     /// T660.5: a moved worktree keeps its claim and its parked row; a stale row at the target

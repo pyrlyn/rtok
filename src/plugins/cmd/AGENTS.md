@@ -42,7 +42,7 @@ T386 peels `mise exec`/`mise x` when the command is after `--` (or `-c`), and
 `python|python3|py -m`, and `cmd /c`. `mise run` / `just <recipe>` use an echoed line
 (`[task] $ …`, a recipe line) with that same peel. No visible inner command stays on argv[0].
 
-**Checks**: `plan.md` T3.1–T3.6. Golden tests live in `tests/cmd_golden/*.{in,out}`. Each `.in`
+**Checks**: `plan/` T3.1–T3.6. Golden tests live in `tests/cmd_golden/*.{in,out}`. Each `.in`
 carries an `argv:` / `exit:` / `min_saving: <percent>` header before `---` (T238); the golden
 test in `formatters.rs` fails a file below its floor, one whose output outgrows its input, or
 one missing `min_saving:`.

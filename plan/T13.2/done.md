@@ -1,0 +1,4 @@
+**T13.2 schema 0002 + models** · T13.1 · `migrations/0002.sql`, `src/store/schema.rs`, `src/store/models.rs` (also `architecture.md` §7, mechanical)
+Do: apply the DDL above. Diesel `table!` + structs with associations (`Call` belongs_to host/provider/model/session, `has_many` tokens/logs, `has_one` call_io). `PRAGMA foreign_keys=ON` on open. Update `architecture.md` §7 table list to match. Do not drop `events`.
+Check: `cargo test store::` → migrate twice is 0; `sqlite_master` contains `hosts,providers,models,sessions,calls,call_io,tokens,logs`; seed `hosts` has 6 rows; inserting a `calls` row with a bad `host_id` fails.
+Status: done 2026-09-02 · Check green (`schema_0002_seeds_hosts_and_rejects_bad_fk`). Deviations: `tokens.tokens` column is `n_tokens` in Diesel (`#[sql_name = "tokens"]`) because `table!` forbids a column named like its table; `architecture.md` §7 already listed the 0002 tables — added `call_id` on `measurements`/`usage`.

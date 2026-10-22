@@ -23,6 +23,9 @@ pub(super) enum WorktreeCmd {
         /// The rtok agent id (any unique prefix) to bind it to; defaults to `RTOK_AGENT_ID`
         #[arg(long)]
         agent: Option<String>,
+        /// Do not seed `[worktree] seed_dirs` from a sibling checkout this time
+        #[arg(long)]
+        no_seed: bool,
     },
     /// Bind an existing worktree to an agent: rewrites its lock only when unlocked or already yours
     Claim {
@@ -77,6 +80,32 @@ pub(super) enum WorktreeCmd {
         #[arg(long)]
         dry_run: bool,
         /// JSON instead of the text line
+        #[arg(long)]
+        json: bool,
+    },
+    /// Hand your task worktree to review: commit what is left, push, open or reuse the PR, ask
+    /// for squash auto-merge, then unlock. Refuses the main checkout, another agent's lock and
+    /// credential files; never closes the task
+    Finish {
+        /// The worktree, or a directory inside it; defaults to the current directory
+        path: Option<PathBuf>,
+        /// Commit message for uncommitted work; defaults to `<task>: <branch slug>`
+        #[arg(short, long)]
+        message: Option<String>,
+        /// `owner/name` for gh, when the `origin` URL does not name the repository
+        #[arg(long)]
+        repo: Option<String>,
+        /// Open the PR without auto-merge
+        #[arg(long)]
+        no_auto_merge: bool,
+        /// The rtok agent id (any unique prefix); defaults to `RTOK_AGENT_ID`
+        #[arg(long)]
+        agent: Option<String>,
+        /// The owner an old lock names, as `<provider> / <model>`. Defaults to `<host> / <model>`
+        /// of the agent
+        #[arg(long)]
+        owner: Option<String>,
+        /// JSON instead of the text lines
         #[arg(long)]
         json: bool,
     },
@@ -164,6 +193,7 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: WorktreeCmd) -> Result<
             slug,
             owner,
             agent,
+            no_seed,
         } => {
             let cfg = Config::load_with(config_file.as_deref(), None)?;
             let cwd = std::env::current_dir()?;
@@ -174,6 +204,7 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: WorktreeCmd) -> Result<
                 slug.as_deref(),
                 owner,
                 agent.as_deref(),
+                no_seed,
             )?;
             crate::agents::task_list::write_for(&cwd, &plan.path, &plan.task);
             println!("{}", plan.path.display());
@@ -242,6 +273,34 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: WorktreeCmd) -> Result<
 
             Ok(())
         }
+        WorktreeCmd::Finish {
+            path,
+            message,
+            repo,
+            no_auto_merge,
+            agent,
+            owner,
+            json,
+        } => {
+            let cfg = Config::load_with(config_file.as_deref(), None)?;
+            let opts = crate::worktree::finish::Options {
+                message,
+                repo,
+                no_auto_merge,
+            };
+            let path = match path {
+                Some(path) => path,
+                None => std::env::current_dir()?,
+            };
+            let done = crate::worktree::ops::finish(&cfg, &path, agent.as_deref(), owner, &opts)?;
+            if json {
+                print_json(&done)?;
+            } else {
+                print!("{}", done.to_text());
+            }
+
+            Ok(())
+        }
         WorktreeCmd::Whoami { json } => {
             let cfg = Config::load_with(config_file.as_deref(), None)?;
             let cwd = std::env::current_dir()?;
@@ -286,6 +345,7 @@ pub(super) fn run(config_file: &Option<PathBuf>, action: WorktreeCmd) -> Result<
                 stale_lock: crate::store::parse_idle_from(&stale_lock, "--stale-lock")?,
                 now: std::time::SystemTime::now(),
                 live,
+                ended: crate::worktree::ops::ended_ids(&cfg),
                 pending: crate::worktree::ops::pending_paths(&cfg),
             };
             let outcomes = gc::run(&std::env::current_dir()?, &policy, yes)?;

@@ -1,0 +1,11 @@
+`research.md` §28.4 F20, creator go-ahead 2026-10-11 (it was under T441 §13 "Out of scope"). A read-only board in `rtok web`: one column per status (open, in progress, done, closed), a card per task with id, title, parent, the `needs`/priority/conflict/parallel markers and the external link, for the project the page is opened for. Data comes from the same adapter and JSON shape as `rtok task list --all --json`; nothing on the page writes tasks.
+
+Done when: the page lists the tasks of a fixture project in the right columns, works in dark and light themes at 375 and 1280 px, has a keyboard-navigable list view, and shows an empty state when the project has no `[tasks]` section.
+
+Check: the API route test, the SPA unit and story tests, `just spa-test`, `just js`, `just spa-stories`, `just spa-e2e`, `just check`.
+
+Result: `rtok web` has a read-only Tasks page (`g b`, Monitor group) and `rtok tui` a `tasks` tab, both fed by `src/model/tasks.rs`, which calls the same `Project::adapter().list(&filter(&[], true, None)?)` as `rtok task list --all --json` for the project the process runs in. One column per status; each card shows id, title, parent, assignee, the issue link (only `http(s)` links reach the page) and the priority/needs/conflicts/parallel markers; a keyboard-navigable list view with a detail panel and a filter box. A project without a `[tasks]` section gets an empty state pointing at `rtok task init`; an unreachable adapter is a message on the page. Done and closed are capped at the newest 50 each; disk is re-read every 5 s, remote adapters every 120 s, off the tick. The page rides the `/ws` snapshot like Usage instead of a separate `/api/tasks` route: the server has only `/health`, `/ws` and the SPA, the origin guard sits on `/ws`, and D23 parity needs the TUI body anyway. Config is read with `layers::load` (never writes a stray `config.toml`). Tests: 7 unit tests in `src/model/tasks.rs`, the TUI tab test, `web/src/pages/tasks.test.tsx`, 9 stories (dark/light, 375 px no-overflow, list, filter, empty, no `[tasks]`, reading, failed), e2e smoke and board tests; docs en/ru/uk; icon `brand/icons/ui/tasks.svg`.
+
+Status: done 2026-10-11
+
+Model: Claude Code / claude-sonnet-5-5

@@ -51,8 +51,8 @@ Plain HTML has no module resolution: link `brand/node_modules/@pyrlyn/brand/dist
 before `brand/dist/tokens.css`. UI icons: `@pyrlyn/brand/base/icons/ui/*.svg`; rtok's own: `icons/ui/` (product UI icons the base does not have) and `icons/feature/` (marketing).
 
 The flat `--rtok-*` build (`dist/legacy/tokens.css`, `tailwind-v4.css`, `components.css` with `.rtok-*`
-classes) is generated from the same sources; `dist/legacy/tokens.css` is byte for byte the body of
-`web/src/styles/tokens.css` that the web admin ships today.
+classes) is generated from the same sources. The web admin (`web/`) imports `dist/tokens.css` and the base
+fonts at build time and holds no copy of a brand file (T414).
 
 
 ## Layout

@@ -67,8 +67,21 @@ export interface Check {
   field: string;
 }
 
-/** Doctor rows derived from `Report` (admin.js `doctorChecks`); `null` is a failed probe. */
-export function doctorChecks(d: Report | null): Check[] {
+/**
+ * Doctor rows derived from `Report` (admin.js `doctorChecks`); `null` is a failed probe, unless
+ * `pending`: the first probe has not landed yet (T945).
+ */
+export function doctorChecks(d: Report | null, pending = false): Check[] {
+  if (!d && pending) {
+    return [
+      {
+        st: "skip",
+        label: "doctor probe",
+        detail: "running doctor…",
+        field: "Snapshot.doctor_pending",
+      },
+    ];
+  }
   if (!d) {
     return [
       {
@@ -228,7 +241,7 @@ export function overview(snap: Snapshot) {
     live: snap.sessions.filter((s) => s.ended_at == null).length,
     hosts: new Set(snap.sessions.map((s) => s.host)).size,
     enabled: snap.plugins.filter((p) => p.enabled).length,
-    checks: doctorChecks(snap.doctor),
+    checks: doctorChecks(snap.doctor, snap.doctor_pending),
     recent: recentSessions(snap.sessions),
   };
 }

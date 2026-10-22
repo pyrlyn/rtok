@@ -1,0 +1,5 @@
+Left over from T329.32. A button on each part of the graph page (the explorer and the live canvas) maximises it to fill the page and restores; the choice follows the existing splitter and hide-toggle conventions (keyboard reachable, remembered or not as the splitter is). Web-only: the TUI has one pane per screen already.
+
+Check: maximising either part fills the page and restores; Escape restores; Vitest, stories (axe) and Playwright; `just check`.
+
+Result: `live/Maximise.tsx` (`useMaximised`, `MaximisablePart`) gives each part a pressed `Chip` ("Maximise explorer" / "Restore live graph"); a maximised part is a fixed overlay over the page rather than a remounted tree, so the explorer keeps its zoom and layout, and Escape restores unless something else already used it. The choice is deliberately not remembered, so a page never opens with a hidden part. Landed on main with #993 (`1839ad321`); the earlier branch version (`cdab19cb5`, a remembered `MAX_KEY` in `Split.tsx`) was dropped in the merge. Covered by `Maximise.test.tsx`, the `Split` story `Maximised` (axe) and a Playwright case.

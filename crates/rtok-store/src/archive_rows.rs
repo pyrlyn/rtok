@@ -397,7 +397,7 @@ impl Store {
     }
 
     /// Every archive id starting with `prefix` (hex only, so `LIKE` has no wildcards to
-    /// escape), at most `limit`. T661: `rtok expand` takes the 12-char trailer prefix.
+    /// escape), at most `limit`. T672: `rtok expand` takes the 8-char trailer prefix.
     pub fn archive_ids_with_prefix(&self, prefix: &str, limit: i64) -> Result<Vec<String>> {
         if prefix.is_empty() || !prefix.bytes().all(|b| b.is_ascii_hexdigit()) {
             return Ok(Vec::new());

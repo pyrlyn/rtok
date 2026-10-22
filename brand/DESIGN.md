@@ -3,8 +3,7 @@
 Only what is specific to rtok. Everything else (type, space, motion, interaction, components,
 icons) is the [Pyrlyn base layer](https://github.com/pyrlyn/brand/blob/v0.3.0/base/DESIGN.md) from `@pyrlyn/brand` (pinned in `package.json`). Tokens: [`tokens.json`](tokens.json) (extends
 `@pyrlyn/brand/base/tokens.json`), built to `dist/tokens.css` by `node build.mjs`. The flat build
-`dist/legacy/tokens.css` (`--rtok-*`, byte for byte what `web/src/styles/tokens.css` ships today) carries
-the same values.
+`dist/legacy/tokens.css` (`--rtok-*`) carries the same values.
 
 One brand across every rtok surface: the web admin, the rtok docs site and the rtok page on the
 Pyrlyn landing. Origin: the v3-B brand pack (pyrlyn/brand v0.3.0 `brands/rtok/sources/rtok-brand-v3-B-tokens/`), updated to the

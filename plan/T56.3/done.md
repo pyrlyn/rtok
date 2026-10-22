@@ -1,0 +1,6 @@
+**T56.3 cmd/setup path tests on VFS** · D29 / T56 · `src/plugins/cmd/**`, `src/agents/**` (tests)
+Do: quoting tests stay pure strings; rules/settings loaders and agent hook writers gain `Vfs` twins where practical; MCP register stays disk (SDK write path).
+Check: no host unit test writes hook files to real disk; the real-binary install matrix stays disk e2e by D29.
+Status: done 2026-09-18 (close-out; earlier halves landed unclaimed)
+Check result: audit closes the "more hosts (cursor/codex/…) if needed" remainder as not needed: `agents/*` unit tests carry zero host-disk writes — claude (7) and kimi (5) hold the Vfs hook-writer twins, every other host has no hook-writer unit tests on disk (their coverage is `tests/agents_install.rs`, a real-binary e2e matrix D29 keeps on disk; it ran green in the same worktree pass as T56.2). Cursor writes through the same `insert_ours`/`strip_ours` helpers the claude twins already cover, so a cursor twin would re-test covered code; codex TOML editing is e2e-covered. `cmd`: the `rules.rs` loader keeps its `*_from_vfs` twins; `run.rs`/`formatters.rs` tests exercise the real archive store and read `tests/cmd_golden` fixture files — repo data, not temp state, so Vfs adds nothing there. No code change in this close-out; evidence is the green 183/183 scope run above.
+Model: ZCode / GLM-5.3

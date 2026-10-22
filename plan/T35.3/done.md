@@ -1,0 +1,5 @@
+**T35.3 batched store I/O for the index** · T35.2 · `src/store/symbols.rs`, `src/plugins/graph/index.rs`, `src/plugin.rs`, `crates/rtok-plugin-sdk/src/host.rs`
+Do: measure first. Then one query for the root's `(path, sha, mtime, size)` instead of a `symbol_stat` per file; multi-row INSERTs chunked under SQLite's variable limit; one DELETE for vanished paths. `graph-lbug` keeps its own path.
+Check: `symbol_stats` loads every file stat in one DISTINCT query; cold `run_with` stages writes and flushes them through `replace_symbol_files` in transactions of 64 files with multi-row INSERTs chunked at 90 rows; `delete_symbols_missing` issues one `DELETE` (or `eq_any` for partial roots). Twelve `index` tests and `graph_truth` stay green; release `graph_bench` cold index of 3 000 files still yields 9 000 rows. Measured on this machine before patch (release, three runs): 251–328 ms (median 309 ms). After: 153–223 ms (median 197 ms, −36 %). Debug `labelled_symbols_are_found` cold index 380 ms (high run-to-run variance on this host). `graph-lbug` untouched.
+Complexity: 2/5
+Status: done 2026-09-12 · Model: Composer 2.5
