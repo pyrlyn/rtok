@@ -17,7 +17,7 @@ The run ([`bump.yml`](../.github/workflows/bump.yml) → pyrlyn/ci `bump.yml`):
    `Cargo.lock`, `CHANGELOG.md` and every plugin version file
    ([Plugin versions: Releasing](plugin-versions.md#releasing)). Nothing is pushed to `main`.
 2. The commit goes to `release/bump-v<version>` and a pull request into `main` is opened with
-   `RELEASE_PLZ_TOKEN`, so the PR's own CI runs and reports the required `gate` check.
+   `RELEASE_PLZ_TOKEN`, so the PR's own CI runs and reports the required `pipeline / gate` check.
 3. When every required check is green, bump rebase-merges the PR with `GITHUB_TOKEN` (not a
    ruleset bypass actor, so the `protect-main` rules decide) and reads back the commit that
    landed on `main` (rebase gives it a new SHA; its tree must equal the tested one).
