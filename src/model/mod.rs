@@ -1093,7 +1093,7 @@ fn services_page_text(cfg: &Config) -> Option<String> {
 
 /// The Worktrees page (T232): [`crate::worktree::list::rows`]'s rows rendered
 /// through its own [`crate::worktree::list::to_table`] — the exact `worktree list`
-/// table (path, branch, owner, state, age, `target/` size), so `worktree list` can
+/// table (path, branch, owner, state, age, source size; build caches unsized, T936), so `worktree list` can
 /// join `COMMAND_PAGES`; `gc`/`clean` stay CLI-only verdicts, not model data.
 /// `usage` walks every worktree's file tree — real cost in a checkout with a built
 /// `target/`, tens of seconds in this one — far too slow for a 2 s tick, so this

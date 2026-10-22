@@ -1233,7 +1233,7 @@ Commands:
   remove   Remove your own finished worktree: unlock, `git worktree remove`, delete the branch when
            merged, release the claim; refuses dirty or current worktrees, and a foreign lock unless
            the task is finished (merged, clean, with commits of its own)
-  list     Every worktree and orphan with its owner, state, source and build-cache bytes
+  list     Every worktree and orphan with its owner, state and source bytes
   whoami   Your agent, where new worktrees go, the worktree you are in and the ones you hold
   gc       Remove merged, clean, idle worktrees with their branches; drop records of deleted ones
   clean    Delete idle tagged build caches (`CACHEDIR.TAG`) and keep the worktrees; dry run without
@@ -1246,14 +1246,16 @@ Options:
   -h, --help           Print help
 
 $ rtok worktree list --help
-Every worktree and orphan with its owner, state, source and build-cache bytes
+Every worktree and orphan with its owner, state and source bytes
 
 Usage: rtok worktree list [OPTIONS]
 
 Options:
       --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
       --json           JSON instead of the table
+      --sizes          Also walk every build cache for its bytes (slow with large target/ folders)
   -h, --help           Print help
+
 
 $ rtok worktree whoami --help
 Your agent, where new worktrees go, the worktree you are in and the ones you hold
