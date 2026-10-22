@@ -11,7 +11,7 @@ explicit config files, safe project settings and linked-worktree discovery retai
 No dependencies or schema fields were added. See the config guides for settings that must
 move from project files to trusted sources.
 
-Commit: `9bc0659f5` (`fix: T961 restrict sensitive project configuration`).
+Commit: `f94a7a21f` (`fix: T961 restrict sensitive project configuration`).
 
 Check: three new regression tests, all 98 config tests and 2 plan-layout tests passed;
 normalized `just check` selected full-check and exited 0: 4,191 Rust tests and 43 Python

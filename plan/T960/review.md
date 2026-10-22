@@ -43,8 +43,9 @@ version for Unix `O_NOFOLLOW`; no new crate version or custom system-call wrappe
 
 1. **Project trust and an egress preview** (A10, existing proposal): before allowing a
    checkout's configuration to change endpoints or execute an extractor, show the requested
-   destinations and actions and record explicit trust by canonical project. The high-severity
-   project-config issue remains outside this patch; it needs coordinated config-layer work.
+   destinations and actions and record explicit trust by canonical project. A10 was outside
+   T960's scope and is fixed by T961's project-source restrictions in the combined branch.
+   An interactive trust/egress preview remains a proposal.
 2. **A security view in `doctor`** (I-S1/A14, existing proposals): show network exposure,
    authentication and legacy file permissions together, with a concrete dry-run of repairs.
 3. **Rotation health reporting** (new proposal): expose skipped/failed rotations and current
