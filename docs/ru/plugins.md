@@ -22,7 +22,7 @@ lang: ru
 | [`guard`](../../src/plugins/guard/README.md) | — | PreToolUse |
 | [`memory`](../../src/plugins/memory/README.md) | claude-mem | MCP, PreCompact |
 | [`graph`](../../src/plugins/graph/README.md) | codebase-memory-mcp | MCP |
-| [`toon`](../../src/plugins/toon/README.md) | — | MCP |
+| [`toon`](../../src/plugins/toon/README.md) | — | proxy, MCP `expand` |
 
 ## Отключение плагинов
 

@@ -58,4 +58,5 @@ T70.2 pi `context` carrier.
 
 ## Status
 
-Manifest only. First task: T5.3 (after T5.1 proxy).
+Implemented: live-zone rewrite (T5.3), `expand` through the proxy (T5.4), across wires
+(T11.4), pi `context` carrier (T70.2).
