@@ -6,7 +6,7 @@ prompt cache.
 | | |
 |---|---|
 | Surfaces | proxy `compress` mode; MCP `expand`; `rtok archive rewrite --stdin` (pi `context`) |
-| Spec | the `spec (replaces)` column of the catalogue in `plan.md` §1 |
+| Spec | the **Replaces** column of [`docs/plugins.md`](../../../docs/plugins.md) |
 | Default | on (active only when the proxy runs in `compress` mode, or when a carrier invokes it) |
 
 ## Mechanism

@@ -6,7 +6,7 @@ a block is rewritten only when the fold estimates fewer tokens than the JSON it 
 | | |
 |---|---|
 | Surfaces | proxy `compress` mode (`proxy_filter`); `rtok mcp -- <server>` wrapper (foreign server's tool results) |
-| Spec | the `spec (replaces)` column of the catalogue in `plan.md` §1 |
+| Spec | the **Replaces** column of [`docs/plugins.md`](../../../docs/plugins.md) |
 | Default | **off** |
 
 ## Mechanism

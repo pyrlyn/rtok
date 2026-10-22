@@ -6,7 +6,7 @@ rewritten only when the encoding is smaller than the JSON it replaces.
 | | |
 |---|---|
 | Surfaces | proxy `compress` mode (`proxy_filter`); MCP `expand` returns the original |
-| Spec | the `spec (replaces)` column of the catalogue in `plan.md` §1 |
+| Spec | the **Replaces** column of [`docs/plugins.md`](../../../docs/plugins.md) |
 | Default | on |
 
 ## Mechanism

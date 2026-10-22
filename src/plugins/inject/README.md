@@ -6,7 +6,7 @@ something to the model at those points goes through here, under one budget.
 | | |
 |---|---|
 | Surfaces | SessionStart, UserPromptSubmit hooks |
-| Spec | the `spec (replaces)` column of the catalogue in `plan.md` §1 |
+| Spec | the **Replaces** column of [`docs/plugins.md`](../../../docs/plugins.md) |
 | Default | on |
 
 ## Mechanism
