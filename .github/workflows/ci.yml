@@ -151,11 +151,6 @@ jobs:
       # T310.9: build.rs embeds web/dist, so build the SPA before cargo; without it the binary
       # carries the "UI not built" page and the SPA-serving tests only see the placeholder.
       - run: just spa-install spa-build
-      # Self-hosted runners keep ./target between runs: emptied before each build (sccache refills
-      # it), removed and recreated when it holds more than 3 entries. Stays ./target because later
-      # steps (e2e, examples) and the nextest archive expect target/debug.
-      - if: runner.environment == 'self-hosted'
-        run: python3 tools/ci/prep_target_dir.py target
       # The suite itself runs in `build-tests` + `test` below (archive, 2 shards per OS); this job
       # keeps what needs the real binary: the Playwright e2e and the examples.
       - run: mise exec -- cargo build -q
@@ -212,11 +207,6 @@ jobs:
         with:
           save-if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
       - run: just spa-install spa-build
-      # Self-hosted runners keep ./target between runs: emptied before each build (sccache refills
-      # it), removed and recreated when it holds more than 3 entries. Stays ./target because later
-      # steps (e2e, examples) and the nextest archive expect target/debug.
-      - if: runner.environment == 'self-hosted'
-        run: python3 tools/ci/prep_target_dir.py target
       - run: mise exec -- cargo nextest archive --workspace --archive-file nextest-archive.tar.zst
       - if: always() && env.RUSTC_WRAPPER == 'sccache'
         run: sccache --show-stats
