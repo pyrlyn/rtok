@@ -171,6 +171,7 @@ Project programs and direct packages from the manifests.
 | tree-sitter-tags | local | https://crates.io/crates/tree-sitter-tags | Rust dependency |
 | tree-sitter-typescript | local | https://crates.io/crates/tree-sitter-typescript | Rust dependency |
 | trycmd | local | https://crates.io/crates/trycmd | Full CLI command-output fixtures in tests/trycmd/ |
+| d2-render | local (dev) | https://github.com/pyrlyn/crates/tree/main/rust/d2-render | Renders docs/architecture/*.d2 to SVG in-process (native backend, no d2 binary); source-hash stamps for the freshness gate in tests/diagrams.rs (T959) |
 | pulldown-cmark | local (dev) | https://crates.io/crates/pulldown-cmark | CommonMark parse of README and docs in tests/docs_structure.rs: unclosed fences, skipped heading levels (T359) |
 | tokio-tungstenite | local | https://crates.io/crates/tokio-tungstenite | WebSocket client for the `rtok web` e2e (tests/web_e2e.rs) |
 | toml | local | https://crates.io/crates/toml | Cargo.lock `[[package]]` parse for `docs_resolve` (already in the lock via figment) |

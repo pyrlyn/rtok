@@ -946,6 +946,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "d2-render"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "916799563cb7e1393117c6b9d5c110e635df44431fc18a6ed883185ba89ac447"
+dependencies = [
+ "sha2 0.10.9",
+ "tempfile",
+]
+
+[[package]]
 name = "darling"
 version = "0.21.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4322,6 +4332,7 @@ dependencies = [
  "clap",
  "clap_mangen",
  "crossterm",
+ "d2-render",
  "divan",
  "env_logger",
  "figment",
