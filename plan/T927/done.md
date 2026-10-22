@@ -17,7 +17,7 @@
   row of the shortened result.
 - `src/plugins/memory/AGENTS.md`: the observation invariant states the no-row rule.
 
-PR: https://github.com/pyrlyn/rtok/pull/PR_NUMBER
+PR: https://github.com/pyrlyn/rtok/pull/1258
 
 ## Checked
 
