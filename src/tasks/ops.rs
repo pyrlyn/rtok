@@ -34,8 +34,9 @@ pub fn set_status(
     id: &TaskId,
     status: Option<Status>,
     force: bool,
+    report: Option<&str>,
 ) -> Result<Task> {
-    project.status(&store(cfg)?, id, status, force)
+    project.status(&store(cfg)?, id, status, force, report)
 }
 
 pub fn sync(cfg: &Config, project: &Project) -> Result<SyncReport> {

@@ -1,5 +1,5 @@
 # Dependabot pull requests: merge patch-level updates once this commit's pipeline.yml run (the
-# repository's full CI behind `gate`, started by the pull request itself) is green. The CI is
+# repository's full CI, started by the pull request itself) is green. The CI is
 # not run a second time here. pyrlyn/ci's dependabot-automerge.yml:
 # - waits for pipeline.yml on the head commit and refuses unless its latest run succeeded;
 # - squash-merges `version-update:semver-patch` pinned to that commit (never --auto, never

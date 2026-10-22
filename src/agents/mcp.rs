@@ -1133,6 +1133,8 @@ mod tests {
 
         // T932: a command a GUI host cannot spawn is stale even though it runs `rtok mcp`.
         let installed = super::super::fake_installed_rtok();
+        // Windows keeps the user-wide PATH (bare names pass) and `/nowhere` is not absolute there.
+        #[cfg(not(windows))]
         for (command, why) in [
             ("rtok", "runs bare `rtok`"),
             (

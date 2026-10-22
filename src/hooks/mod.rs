@@ -9,6 +9,7 @@
 
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
+pub mod deadline;
 mod push;
 pub mod resident;
 pub mod types;
@@ -683,7 +684,15 @@ pub fn dispatch(stdin: &[u8], input: &HookInput, cx: &Runtime) -> Vec<u8> {
             // by its `agent_id`) — reuse the id `register_agent` above already resolved,
             // rather than upserting the row a second time.
             if let Some(id) = &agent {
-                let _ = cx.store.end_agent(id, now);
+                // T958: the lock that names this agent, after the row is ended. A
+                // sub-agent shares the parent's cwd, so its id does not match and
+                // the parent's lock stays while the parent is live. A busy store
+                // defers this whole event below, and the child unlocks.
+                if cx.store.end_agent(id, now).is_ok()
+                    && let Some(cwd) = cx.cwd.as_deref()
+                {
+                    let _ = crate::worktree::git::unlock_ended(std::path::Path::new(cwd), id);
+                }
             }
             if cx
                 .store

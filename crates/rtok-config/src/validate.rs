@@ -832,6 +832,10 @@ fn check_leaf(
                 let all = super::TASK_ADAPTERS.join(", ");
                 errors.push(format!("{at}: {dotted} must be one of {all}"));
             }
+            "tasks.disk.layout" if !super::TASK_LAYOUTS.contains(&s) => {
+                let all = super::TASK_LAYOUTS.join(", ");
+                errors.push(format!("{at}: {dotted} must be one of {all}"));
+            }
             // Empty means "the project name's first letter"; anything else must parse as ids.
             "tasks.prefix" if !s.is_empty() => {
                 if let Err(e) = rtok_plugin_sdk::check_task_prefix(s) {
@@ -1152,6 +1156,7 @@ mod tests {
         let path = dir.join("c.toml");
         for (body, key) in [
             ("adapter = \"jira\"", "tasks.adapter"),
+            ("[tasks.disk]\nlayout = \"tree\"", "tasks.disk.layout"),
             ("prefix = \"R2\"", "tasks.prefix"),
             ("prefix = \"TOOLONGPX\"", "tasks.prefix"),
         ] {

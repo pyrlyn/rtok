@@ -559,7 +559,10 @@ mod tests {
         write(dir.join("target/debug/bin"), b"x").unwrap();
         let old = UNIX_EPOCH + std::time::Duration::from_secs(1_000);
         let new = UNIX_EPOCH + std::time::Duration::from_secs(2_000);
-        let touch = |p: PathBuf, t| std::fs::File::open(p).unwrap().set_modified(t).unwrap();
+        let touch = |p: PathBuf, t| {
+            let f = std::fs::OpenOptions::new().write(true).open(p).unwrap();
+            f.set_modified(t).unwrap();
+        };
         touch(dir.join("a.rs"), old);
         touch(dir.join("target/CACHEDIR.TAG"), new);
         touch(dir.join("target/debug/bin"), new);

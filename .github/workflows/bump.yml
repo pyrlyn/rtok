@@ -4,7 +4,7 @@
 #
 # pyrlyn/ci's bump.yml runs `tools/release.sh <level> --local` (one `release: vX.Y.Z` commit),
 # pushes it to `release/bump-vX.Y.Z` and opens a PR into main with RELEASE_PLZ_TOKEN, so the PR's
-# own CI runs and reports the required `gate` check. Once it is green, bump rebase-merges the PR
+# own CI runs and reports the required `pipeline / gate` check. Once it is green, bump rebase-merges the PR
 # with GITHUB_TOKEN (no ruleset bypass), reads back the commit that landed on main, tags it,
 # creates a draft Release and dispatches release.yml (dist, `create-release = false`) on the tag,
 # which uploads the archives and undrafts it. Red checks, a timeout or a failed merge close the
@@ -51,7 +51,7 @@ jobs:
       prerelease: false
       release-script: tools/release.sh
       mise-install-args: rust git-cliff
-      # Reports `gate` (the protect-main required check) when dispatched.
+      # Reports `pipeline / gate` (the protect-main required check) when dispatched.
       ci-workflows: pipeline.yml
       release-workflows: release.yml
     secrets:

@@ -160,9 +160,9 @@ fn remove(p: &Payload, store: Option<&Store>) -> Result<String> {
     let done = remove::run(main, &p.worktree_path, &who, keep_branch, store);
     match &done {
         Ok(removed) => {
-            let released = store.map(|s| s.release_worktree_claim(&removed.path));
+            let released = store.map(|s| super::claim::release(s, &removed.path));
             if let Some(Err(e)) = released {
-                crate::log::stderr_ln(&format!("warning: claim not released: {e:#}"));
+                crate::log::stderr_ln(&format!("warning: {e:#}"));
             }
         }
         Err(_) => forget_caches(main, path),

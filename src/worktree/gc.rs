@@ -52,8 +52,9 @@ pub struct Policy<'a> {
     pub now: SystemTime,
     /// Live rtok agents (T282): a worktree bound to one is never removed (T285).
     pub live: std::collections::HashSet<String>,
-    /// Ended rtok agents (T949): nothing unlocks a worktree when its session ends, so the lock
-    /// they left holds only through the idle window, not `stale_lock`.
+    /// Ended rtok agents (T949): a lock SessionEnd did not release (T958 failed, or the
+    /// agent ended before it) holds a merged, clean worktree only through the idle window,
+    /// not `stale_lock`.
     pub ended: std::collections::HashSet<String>,
     /// Worktrees a post-create script adopted before any agent took them (T289.5): no agent
     /// to ask yet, so they are held like a live agent's.

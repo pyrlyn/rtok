@@ -137,6 +137,27 @@ pub fn unlock(repo: &Path, worktree: &Path) -> Result<()> {
     git_ok(repo, &["worktree", "unlock", path_arg(worktree)?]).map(drop)
 }
 
+/// T958: release the lock that names `agent` on the worktree `cwd` is in.
+/// One `git worktree unlock`, and only then. A lock that names someone else, or
+/// no agent, stays. Missing checkout or lock is not an error: SessionEnd fails open.
+pub fn unlock_ended(cwd: &Path, agent: &str) -> Result<()> {
+    let Some((root, admin)) = super::locked_by(cwd, agent)
+        .and_then(|root| super::checkout_of(&root).map(|(_, admin)| (root, admin)))
+    else {
+        return Ok(());
+    };
+    // A linked worktree's `commondir` points at the main `.git`. Unlock from that
+    // repository; the main checkout's own lock has no `commondir`.
+    let repo = std::fs::read_to_string(admin.join("commondir"))
+        .ok()
+        .and_then(|common| {
+            let git_dir = admin.join(common.trim());
+            git_dir.parent().map(std::path::Path::to_path_buf)
+        })
+        .unwrap_or_else(|| root.clone());
+    unlock(&repo, &root)
+}
+
 /// `git worktree move`, never forced: git refuses a locked worktree and one with submodules.
 pub fn move_to(repo: &Path, from: &Path, to: &Path) -> Result<()> {
     let name = from.file_name().unwrap_or_default().to_string_lossy();
@@ -171,6 +192,49 @@ pub fn fetch(repo: &Path, base: &str) -> Result<()> {
     };
     let label = format!("fetching {branch}…");
     git_slow(repo, &label, &["fetch", "--quiet", "origin", branch]).map(drop)
+}
+
+/// The paths `git add -A` would stage, deletions left out: a deleted file cannot leak.
+/// `--porcelain -z` keeps names raw; a rename's or copy's second field is its source.
+pub fn pending_paths(worktree: &Path) -> Result<Vec<String>> {
+    let out = git_ok(
+        worktree,
+        &["status", "--porcelain", "-z", "--untracked-files=all"],
+    )?;
+    let mut fields = out.stdout.split(|b| *b == 0).filter(|f| f.len() > 3);
+    let mut paths = Vec::new();
+    while let Some(field) = fields.next() {
+        let (xy, path) = field.split_at(3);
+        if matches!(xy[0], b'R' | b'C') {
+            fields.next();
+        }
+        if !xy[..2].contains(&b'D') {
+            paths.push(String::from_utf8_lossy(path).into_owned());
+        }
+    }
+    Ok(paths)
+}
+
+/// `git add -A` and one commit with `message`; the repository's own hooks and identity apply.
+pub fn commit_all(worktree: &Path, message: &str) -> Result<()> {
+    git_ok(worktree, &["add", "-A"])?;
+    git_slow(
+        worktree,
+        "committing…",
+        &["commit", "--quiet", "-m", message],
+    )
+    .map(drop)
+}
+
+/// `git push -u origin <branch>`: the upstream is set so a later plain `git push` lands here.
+pub fn push(worktree: &Path, branch: &str) -> Result<()> {
+    let label = format!("pushing {branch}…");
+    git_slow(
+        worktree,
+        &label,
+        &["push", "--quiet", "-u", "origin", branch],
+    )
+    .map(drop)
 }
 
 /// One locked worktree on a new branch with no upstream: a bare `git push` from it

@@ -231,7 +231,13 @@ pub fn plugin_dest(cfg: &Config) -> PathBuf {
 /// linking or unlinking never touches `mcp.json` — [`Agent::apply`] registers or
 /// unregisters `mcpServers.rtok` there on its own, plugin state notwithstanding.
 pub fn offer_plugin(cfg: &Config, remove: bool) -> Result<String> {
-    PLUGIN.offer_with(cfg, remove, windows_copy)
+    // The POSIX resolver lines stay on Unix, where the copy (T925) stands in for a link.
+    let fix: rtok_agent_sdk::CopyFix = if cfg!(windows) {
+        windows_copy
+    } else {
+        rtok_agent_sdk::keep_bytes
+    };
+    PLUGIN.offer_with(cfg, remove, fix)
 }
 
 fn insert_ours(root: &mut Value) -> String {

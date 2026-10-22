@@ -49,6 +49,7 @@ const AGENT_BOUND: &[&str] = &[
     "whoami",
     "worktree_add",
     "worktree_remove",
+    "worktree_finish",
     "worktree_adopt",
     "agent_send",
     "agent_inbox",

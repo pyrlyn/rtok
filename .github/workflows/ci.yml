@@ -1,13 +1,13 @@
 name: ci
 
 # Pull requests against main are the review gate: the `protect-main` ruleset requires a green
-# `gate` before merge. A red main push (merge skew or a flake) is fixed forward; T502 retired
+# `pipeline / gate` before merge. A red main push (merge skew or a flake) is fixed forward; T502 retired
 # the auto-revert job (T84), whose push to main that ruleset rejects. Draft PRs are skipped so
 # half-finished work does not burn runners. `workflow_dispatch` remains for manual runs
 # (release branches, one-off checks).
 on:
   # Push to main, non-draft pull requests and the weekly schedule run this through
-  # pipeline.yml (`workflow_call`), in parallel with the other checks and behind its `gate` job.
+  # pipeline.yml (`workflow_call`), in parallel with pyrlyn/ci's checks (`pipeline / gate`).
   workflow_call:
     inputs:
       docs-only:
@@ -55,7 +55,7 @@ jobs:
       value: ${{ steps.r.outputs.value }}
     steps:
       - id: r
-        uses: pyrlyn/ci/.github/actions/macos-runner@4b5b5470544893cd515b88c751e92728341c6daa # main
+        uses: pyrlyn/ci/.github/actions/macos-runner@main
         with:
           runner: ${{ vars.MACOS_RUNNER }}
           value: '["macos-latest"]'
@@ -72,7 +72,7 @@ jobs:
       contents: read
       actions: write # cancel-run
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # Rust toolchain from the last run; mise then skips `rustup toolchain install`.
       - id: rustup
         uses: ./.github/actions/rustup-toolchain-cache
@@ -110,14 +110,13 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        os: ${{ fromJSON(vars.MACOS_CI_DISABLED == 'true' && '["ubuntu-latest"]' || '["ubuntu-latest", "macos-latest"]') }}
+        os: [ubuntu-latest]
     permissions:
       contents: read
       actions: write # cancel-run
-    needs: macos-runner
-    runs-on: ${{ startsWith(matrix.os, 'macos') && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON(needs.macos-runner.outputs.value)[0] || matrix.os }}
+    runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # Rust toolchain from the last run; mise then skips `rustup toolchain install`.
       - id: rustup
         uses: ./.github/actions/rustup-toolchain-cache
@@ -152,11 +151,6 @@ jobs:
       # T310.9: build.rs embeds web/dist, so build the SPA before cargo; without it the binary
       # carries the "UI not built" page and the SPA-serving tests only see the placeholder.
       - run: just spa-install spa-build
-      # Self-hosted runners keep ./target between runs: emptied before each build (sccache refills
-      # it), removed and recreated when it holds more than 3 entries. Stays ./target because later
-      # steps (e2e, examples) and the nextest archive expect target/debug.
-      - if: runner.environment == 'self-hosted'
-        run: python3 tools/ci/prep_target_dir.py target
       # The suite itself runs in `build-tests` + `test` below (archive, 2 shards per OS); this job
       # keeps what needs the real binary: the Playwright e2e and the examples.
       - run: mise exec -- cargo build -q
@@ -186,15 +180,14 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        os: ${{ fromJSON(vars.MACOS_CI_DISABLED == 'true' && '["ubuntu-latest"]' || '["ubuntu-latest", "macos-latest"]') }}
-    needs: macos-runner
-    runs-on: ${{ startsWith(matrix.os, 'macos') && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON(needs.macos-runner.outputs.value)[0] || matrix.os }}
+        os: [ubuntu-latest]
+    runs-on: ${{ matrix.os }}
     permissions:
       contents: read
       actions: write # cancel-run
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: rustup
         uses: ./.github/actions/rustup-toolchain-cache
       - uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
@@ -214,11 +207,6 @@ jobs:
         with:
           save-if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
       - run: just spa-install spa-build
-      # Self-hosted runners keep ./target between runs: emptied before each build (sccache refills
-      # it), removed and recreated when it holds more than 3 entries. Stays ./target because later
-      # steps (e2e, examples) and the nextest archive expect target/debug.
-      - if: runner.environment == 'self-hosted'
-        run: python3 tools/ci/prep_target_dir.py target
       - run: mise exec -- cargo nextest archive --workspace --archive-file nextest-archive.tar.zst
       - if: always() && env.RUSTC_WRAPPER == 'sccache'
         run: sccache --show-stats
@@ -236,24 +224,24 @@ jobs:
 
   # The suite, split over 2 shards per OS (nextest `--partition count:i/n`) from the archive.
   test:
-    needs: [build-tests, macos-runner]
+    needs: build-tests
     if: >-
       (github.event_name != 'pull_request' || !github.event.pull_request.draft)
       && !inputs.docs-only
     strategy:
       fail-fast: true
       matrix:
-        os: ${{ fromJSON(vars.MACOS_CI_DISABLED == 'true' && '["ubuntu-latest"]' || '["ubuntu-latest", "macos-latest"]') }}
+        os: [ubuntu-latest]
         partition: [1, 2]
         partitions: [2]
     name: test (${{ matrix.os }}, ${{ matrix.partition }}/${{ matrix.partitions }})
-    runs-on: ${{ startsWith(matrix.os, 'macos') && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON(needs.macos-runner.outputs.value)[0] || matrix.os }}
+    runs-on: ${{ matrix.os }}
     permissions:
       contents: read
       actions: write # cancel-run
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: rustup
         uses: ./.github/actions/rustup-toolchain-cache
       - uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
@@ -284,20 +272,27 @@ jobs:
       - if: failure() && github.event_name == 'pull_request'
         uses: pyrlyn/ci/.github/actions/cancel-run@main
 
-  # The Windows test binaries are built once here and archived (`cargo nextest archive`); the
-  # `windows` shards below only download the archive and run their partition, so the build is
-  # no longer repeated per shard. Archive and run share one runner OS and target.
-  windows-build:
+  # Only Linux is required. The Windows and macOS jobs are optional (`continue-on-error`, no
+  # cancel-run), so their failure never fails this workflow, `pipeline / gate` or a release.
+  # Each runs only the tests that exist for its platform (`cfg(windows)` / `cfg(target_os =
+  # "macos")`, picked by the nextest filter `-E`); everything else, lint and clippy included,
+  # runs on ubuntu. `--no-tests=pass` keeps an empty selection green. Keep both filters in sync
+  # when a platform-only test is added or renamed.
+  windows:
     if: >-
       (github.event_name != 'pull_request' || !github.event.pull_request.draft)
       && !inputs.docs-only
+    continue-on-error: true
     runs-on: windows-latest
     permissions:
       contents: read
-      actions: write # cancel-run
+    # A hung test is killed by nextest's `terminate-after`; this caps everything else.
     timeout-minutes: 30
+    env:
+      PLATFORM_TESTS: >-
+        binary(windows_ci) | test(write_replaces_a_readonly_file) | test(release_matches_a_verbatim_prefix) | test(desktop_path_lives_under_appdata_on_windows) | test(find_bin_limit_is_ascii_case_insensitive) | test(under_keeps_a_different_case_child_of_home) | test(receipt_path_on_windows) | test(windows_path_identity_folds_verbatim_prefix_and_ascii_case) | test(cmd_exe_gets_the_body_verbatim) | test(path_from_file_uri_strips_slash_before_drive) | test(normalize_keeps_windows_drive_prefix) | test(under_ascii_case_insensitive_matches_windows_prefix) | test(resolved_drops_the_verbatim_prefix) | test(powershell_hooks_resolve_rtok_then_ketch_then_fail_open_silently) | test(token_file_acl_names_only_the_current_user)
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: rustup
         uses: ./.github/actions/rustup-toolchain-cache
       - uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
@@ -308,82 +303,49 @@ jobs:
           bucket: ${{ vars.SCCACHE_BUCKET }}
           endpoint: ${{ vars.SCCACHE_ENDPOINT }}
           read-only: ${{ github.event_name == 'pull_request' }}
-      - if: steps.rustup.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v6
-        with:
-          path: ${{ steps.rustup.outputs.path }}
-          key: ${{ steps.rustup.outputs.key }}
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - run: mise exec -- cargo nextest archive --workspace --archive-file nextest-archive.tar.zst
-      - uses: actions/upload-artifact@v7
-        with:
-          name: nextest-archive-windows
-          path: nextest-archive.tar.zst
-          retention-days: 1
-          if-no-files-found: error
-      # T902: `cfg(windows)` code is invisible to the ubuntu `lint` job, so its lint debt (the
-      # T273/T274 class) only showed up in the first local Windows gate. Same flags as
-      # `just lint`: libs and bins keep the `Command::new` ban, tests are exempt (T276.6).
-      - run: mise exec -- cargo clippy --workspace --all-targets --all-features --exclude rtok-wasm-demo-guest -- -D warnings -A clippy::disallowed_methods
-      - run: mise exec -- cargo clippy --workspace --lib --bins --all-features --exclude rtok-wasm-demo-guest -- -D warnings
-      - if: failure() && github.event_name == 'pull_request'
-        uses: pyrlyn/ci/.github/actions/cancel-run@main
+      - run: mise exec -- cargo nextest run --workspace --no-tests=pass -E "$env:PLATFORM_TESTS"
 
-  # T44.4: the agent installers write Windows paths and `%APPDATA%` files; run the suite there.
-  # T83.4: a gate like `check` — a Windows-only failure fails the run.
-  # The suite run (~250 s) outweighs the build (~85 s) on this runner, so it is split across
-  # `partitions` runners with nextest `--partition count:i/n`. `windows-build` archives the test
-  # binaries once and every shard runs its share from that archive;
-  # the job still fails if any shard fails.
-  windows:
-    needs: windows-build
+  # Steps stay bash-3.2 safe (the dedicated Mac's /bin/bash).
+  macos:
+    needs: macos-runner
     if: >-
       (github.event_name != 'pull_request' || !github.event.pull_request.draft)
       && !inputs.docs-only
-    strategy:
-      fail-fast: true
-      matrix:
-        partition: [1, 2]
-        partitions: [2]
-    name: windows (${{ matrix.partition }}/${{ matrix.partitions }})
-    runs-on: windows-latest
+      && vars.MACOS_CI_DISABLED != 'true'
+    continue-on-error: true
+    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON(needs.macos-runner.outputs.value)[0] || 'macos-latest' }}
     permissions:
       contents: read
-      actions: write # cancel-run
-    # A hung test is killed by nextest's `terminate-after`; this caps everything else.
     timeout-minutes: 30
+    env:
+      PLATFORM_TESTS: >-
+        test(receipt_path_on_macos) | test(a_path_on_an_unmounted_volume_is_broken)
     steps:
-      - uses: actions/checkout@v7
-      # Rust toolchain from the last run; mise then skips `rustup toolchain install`.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: rustup
         uses: ./.github/actions/rustup-toolchain-cache
       - uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
-      - if: steps.rustup.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v6
+      - uses: ./.github/actions/sccache
         with:
-          path: ${{ steps.rustup.outputs.path }}
-          key: ${{ steps.rustup.outputs.key }}
-      # tests/deps.rs runs `cargo metadata --offline`; nothing was built here, so fetch the crates.
-      - run: mise exec -- cargo fetch --locked
-      - uses: actions/download-artifact@v8
+          access-key-id: ${{ secrets.R2_ACCESS_KEY_ID }}
+          secret-access-key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          bucket: ${{ vars.SCCACHE_BUCKET }}
+          endpoint: ${{ vars.SCCACHE_ENDPOINT }}
+          read-only: ${{ github.event_name == 'pull_request' }}
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          name: nextest-archive-windows
-      # Extracted into the checkout, not a temp dir: the tests call env!("CARGO_BIN_EXE_rtok"), a path
-      # fixed at build time under ./target.
-      - run: >-
-          mise exec -- cargo nextest run --archive-file nextest-archive.tar.zst
-          --workspace-remap .
-          --extract-to . --extract-overwrite
-          --partition count:${{ matrix.partition }}/${{ matrix.partitions }}
-      - if: failure() && github.event_name == 'pull_request'
-        uses: pyrlyn/ci/.github/actions/cancel-run@main
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - if: runner.environment == 'self-hosted'
+        run: python3 tools/ci/prep_target_dir.py target
+      - run: mise exec -- cargo nextest run --workspace --no-tests=pass -E "$PLATFORM_TESTS"
 
   # T310.11: the admin SPA in web/ (the `just spa-*` recipes). oxlint and oxfmt already cover
   # web/ in `lint` (`just js` lints every tracked .ts/.tsx), so they are not run twice. The
   # Playwright run against the real binary (T310.10) is a step of the ubuntu `check` job, which
-  # already builds that binary. Like `lint`, `check` and `windows` it runs on every change but a
+  # already builds that binary. Like `lint` and `check` it runs on every change but a
   # docs-only one (`docs` below): a Rust-only change leaves this job warm in cache.
   spa:
     if: >-

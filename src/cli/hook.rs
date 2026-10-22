@@ -4,6 +4,7 @@
 
 use crate::config::Config;
 use crate::config::layers;
+use crate::hooks::deadline::{self, Gate};
 use anyhow::Result;
 use std::io::{self, Write};
 use std::path::PathBuf;
@@ -40,11 +41,24 @@ pub(super) fn run(config_file: &Option<PathBuf>, args: Args) -> Result<()> {
             Ok(())
         }
         Args { event, host, .. } => {
+            let event = event.unwrap_or_default();
+            // T921: armed before the config loads and stdin is read, the two places a hook can
+            // hang without ever reaching the dispatcher.
+            let gate = Gate::default();
+            let limit = rtok_hook::deadline(|k| std::env::var_os(k));
+            let _watchdog = deadline::arm_stdout(&event, limit, &gate);
             let mut cfg =
                 Config::load_lenient(config_file.as_deref(), layers::hook_host_flag(host));
             cfg.hook_client_pid = Some(std::process::id());
-            crate::hooks::run(&event.unwrap_or_default(), io::stdin(), io::stdout(), &cfg);
-            let _ = io::stdout().flush();
+            let mut out = Vec::new();
+            crate::hooks::run(&event, io::stdin(), &mut out, &cfg);
+            if gate.claim() {
+                let _ = io::stdout().write_all(&out);
+                let _ = io::stdout().flush();
+            } else {
+                // The watchdog is printing `{}` and exits the process; do not add a second answer.
+                std::thread::park_timeout(std::time::Duration::from_secs(1));
+            }
 
             Ok(())
         }
