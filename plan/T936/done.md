@@ -46,4 +46,4 @@ cache for the `list` state column.
 
 `list::tests::usage_sources_skips_tagged_caches`, `list::tests::an_unsized_row_has_no_cache_bytes_in_the_table`,
 `tests/worktree.rs::list_splits_cache_from_source_and_reports_an_orphan` (default `null`, `--sizes`
-bytes), `just check`.
+bytes), `just check` (4190 tests passed, 8 skipped).
