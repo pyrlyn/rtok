@@ -1642,9 +1642,12 @@ mod tests {
         assert!(body.contains("cargo test"), "{body}");
         assert!(!body.contains("sk-ant-"), "{body}");
         assert!(body.len() <= 400, "{}", body.len());
+        // T927: storing an observation is not a saving, so it writes no row, not even a cost.
         let rows = cx.store.list_measurements("memory").unwrap();
-        assert_eq!(rows.iter().filter(|r| r.kind == "observe").count(), 1);
+        assert_eq!(rows.iter().filter(|r| r.kind == "observe").count(), 0);
         assert_eq!(rows.iter().filter(|r| r.kind == "obs_get").count(), 1);
+        let totals = cx.store.measurement_totals().unwrap();
+        assert!(!totals.iter().any(|t| t.kind == "observe"), "{totals:?}");
     }
 
     #[test]
@@ -1663,8 +1666,6 @@ mod tests {
         assert!(Memory.post_tool(&ev, &Ctx::new(&cx)).is_none());
         let hits = cx.store.search_observations(None, "cargo", 5).unwrap();
         assert_eq!(hits.len(), 1, "{hits:?}");
-        let rows = cx.store.list_measurements("memory").unwrap();
-        assert_eq!(rows.iter().filter(|r| r.kind == "observe").count(), 1);
     }
 
     #[test]

@@ -5,7 +5,7 @@ Five MCP tools instead of seventy-eight, and no per-turn banner.
 | | |
 |---|---|
 | Surfaces | MCP `read`, `search`, `tree`; PreToolUse(Read) advice |
-| Spec | the `spec (replaces)` column of the catalogue in `plan.md` §1 |
+| Spec | the **Replaces** column of [`docs/plugins.md`](../../../docs/plugins.md) |
 | Default | on |
 
 ## Tools
