@@ -49,7 +49,7 @@ hook methods.
 | Box | Code |
 | --- | --- |
 | MCP routing | `src/mcp.rs` (`invoke`, `docs_resolve`, `docs_query`, `docs_get`) |
-| Tool definitions | `src/plugins/docs/mod.rs` (`Docs::mcp_tools`) |
+| Tool definitions | `src/plugins/docs/mod.rs` (`DocsPlugin::mcp_tools`) |
 | `ingest_llms` | `src/plugins/docs/mod.rs` (`ingest_llms`, `split_llms`, `local_version`) |
 | `resolve_lock` | `src/plugins/docs/mod.rs` (`resolve_lock`, `safe_part`) |
 | Query and budget | `src/plugins/docs/mod.rs` (`docs_query`); `crates/rtok-store/src/docs.rs` (`search_doc_items`) |

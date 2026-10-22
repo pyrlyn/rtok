@@ -12,7 +12,7 @@ lang: ru
 
 ## Пошагово
 
-1. **Вызов инструмента приходит.** Claude Code запускает `PreToolUse`; pi и OpenCode запрашивают `rtok guard check` (`guard::check`), который строит то же событие `PreToolUse` и возвращает JSON `{"allow": ...}`. `Guard::pre_tool` диспетчеризует по имени инструмента.
+1. **Вызов инструмента приходит.** Claude Code запускает `PreToolUse`; pi и OpenCode запрашивают `rtok guard check` (`guard::check`), который строит то же событие `PreToolUse` и возвращает JSON `{"allow": ...}`. `GuardPlugin::pre_tool` диспетчеризует по имени инструмента.
 2. **Навык.** `skill::digest` возвращает `None`, пока `[plugins.guard] skills` не равно true. Он разрешает `SKILL.md` только по имени навыка (`resolve` отвергает `/`, `\` и `..`), а `decide` позволяет навыку загрузиться целиком, если тело укладывается в `skill_max_bytes` или его frontmatter называет `allowed-tools`, `model`, `context` или `agent`. Иначе он архивирует тело и отклоняет вызов с картой заголовков и `[rtok <id> · N lines · expand: rtok expand <id>]`, записывая `Measurement { kind: "skill" }`.
 3. **Grep.** При включённой функции `graph` и `grep_symbol = true` `grep_symbol::answer` классифицирует шаблон через `symbol_name`, ищет имя в индексе через `symbol_defs` (никогда не индексируя на пути хука) и отклоняет вызов с определениями, когда их от одного до пяти и каждое всё ещё совпадает со строкой файла. Всё остальное передаётся в `native_redirect`, который при `deny_grep_glob = true` и включённом плагине `read` отклоняет `Grep`/`Glob` и указывает на MCP `search` / `tree` (`kind: "native_deny"`).
 4. **Повторный Read или Bash.** `cache_key` строит ключ: `read\t<path>` (плюс суффикс диапазона для `offset`/`limit`/`pages`) или `bash\t<cwd>\t<normalised command>` только для команды, которая лишь читает, с суффиксом id субагента, если он есть. `get_read_cache` находит прежнее попадание, `calls_since` измеряет его возраст относительно `window_turns`, а `archive_size` подтверждает, что оригинал ещё существует. Отказ: `duplicate; rtok expand <id>`, с `Measurement { kind: "guard" }`, в котором указано число сэкономленных байт.
@@ -24,7 +24,7 @@ lang: ru
 
 | Блок | Код |
 | --- | --- |
-| `Guard::pre_tool` / `post_tool` / `pre_compact` / `session_start` | `src/plugins/guard/mod.rs` (`impl Plugin for Guard`) |
+| `GuardPlugin::pre_tool` / `post_tool` / `pre_compact` / `session_start` | `src/plugins/guard/mod.rs` (`impl Plugin for GuardPlugin`) |
 | `rtok guard check` | `src/cli/guard.rs`, `src/plugins/guard/mod.rs` (`check`) |
 | `cache_key`, `read_only`, `norm_cmd` | `src/plugins/guard/mod.rs`, `src/plugins/guard/sed.rs` (`script_read_only`) |
 | `native_redirect` | `src/plugins/guard/mod.rs` |

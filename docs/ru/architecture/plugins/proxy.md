@@ -35,7 +35,7 @@ lang: ru
 | Адаптеры провода | `src/proxy/wire.rs`, `anthropic.rs`, `openai_chat.rs`, `openai_responses.rs`, `gemini.rs` |
 | Семантический кэш | `src/proxy/semantic_cache.rs`, `src/proxy/mod.rs` (`cache_response`) |
 | Разветвление, finish | `src/proxy/mod.rs` (`handle`, `finish`, `record_usage`) |
-| Манифест | `src/plugins/proxy/mod.rs` (`Proxy`) |
+| Манифест | `src/plugins/proxy/mod.rs` (`ProxyPlugin`) |
 | Конфигурация | `crates/rtok-config/` (`[proxy]`, `[proxy.lanes.<lane>]`, `[plugins.proxy]`) |
 | Таблицы | `crates/rtok-store/` (`calls`, `call_io`, `usage`, `tokens`, `measurements`) |
 

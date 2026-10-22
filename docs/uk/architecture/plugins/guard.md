@@ -18,7 +18,7 @@ lang: uk
 
 1. **Надходить виклик інструмента.** Claude Code запускає `PreToolUse`; pi і OpenCode
    викликають `rtok guard check` (`guard::check`), який будує ту саму подію `PreToolUse` і
-   повертає JSON `{"allow": ...}`. `Guard::pre_tool` розподіляє за іменем інструмента.
+   повертає JSON `{"allow": ...}`. `GuardPlugin::pre_tool` розподіляє за іменем інструмента.
 2. **Скіл.** `skill::digest` повертає `None`, якщо не ввімкнено `[plugins.guard] skills = true`.
    Він визначає `SKILL.md` лише за іменем скілу (`resolve` відхиляє `/`, `\` і `..`), а `decide`
    дозволяє скілу завантажитися повністю, якщо тіло вміщується в `skill_max_bytes` або його
@@ -51,7 +51,7 @@ lang: uk
 
 | Блок | Код |
 | --- | --- |
-| `Guard::pre_tool` / `post_tool` / `pre_compact` / `session_start` | `src/plugins/guard/mod.rs` (`impl Plugin for Guard`) |
+| `GuardPlugin::pre_tool` / `post_tool` / `pre_compact` / `session_start` | `src/plugins/guard/mod.rs` (`impl Plugin for GuardPlugin`) |
 | `rtok guard check` | `src/cli/guard.rs`, `src/plugins/guard/mod.rs` (`check`) |
 | `cache_key`, `read_only`, `norm_cmd` | `src/plugins/guard/mod.rs`, `src/plugins/guard/sed.rs` (`script_read_only`) |
 | `native_redirect` | `src/plugins/guard/mod.rs` |

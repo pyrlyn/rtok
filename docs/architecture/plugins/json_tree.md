@@ -12,7 +12,7 @@ the fold is estimated cheaper than the JSON it replaces.
 
 ## Walkthrough
 
-1. **Two entry points.** In `compress` mode the proxy calls `JsonTree::proxy_filter` on each
+1. **Two entry points.** In `compress` mode the proxy calls `JsonTreePlugin::proxy_filter` on each
    request. Separately, `mcp::wrap::shorten_result` (`src/mcp/wrap.rs`) calls `fold_json` on an MCP
    tool result that is over the rule's `max_lines`. Both do nothing unless
    `[plugins.json_tree] enabled` is true.
@@ -38,7 +38,7 @@ the fold is estimated cheaper than the JSON it replaces.
 
 | Box | Code |
 | --- | --- |
-| `proxy_filter` | `src/plugins/json_tree/mod.rs` (`impl Plugin for JsonTree`) |
+| `proxy_filter` | `src/plugins/json_tree/mod.rs` (`impl Plugin for JsonTreePlugin`) |
 | `outside_live_zone` | `src/plugins/archive/mod.rs` (`outside_live_zone`) |
 | `rewrite_block`, `measurement` | `src/plugins/json_tree/mod.rs` |
 | `fold_json`, `fold_json_with` | `src/plugins/json_tree/mod.rs` (`tally`, `collect_bodies`, `render`) |

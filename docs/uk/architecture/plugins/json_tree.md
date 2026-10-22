@@ -16,7 +16,7 @@ lang: uk
 
 ## Покроково
 
-1. **Дві точки входу.** У режимі `compress` проксі викликає `JsonTree::proxy_filter` для кожного
+1. **Дві точки входу.** У режимі `compress` проксі викликає `JsonTreePlugin::proxy_filter` для кожного
    запиту. Окремо `mcp::wrap::shorten_result` (`src/mcp/wrap.rs`) викликає `fold_json` для
    результату інструмента MCP, якщо він перевищує `max_lines` правила. Обидва нічого не роблять,
    доки `[plugins.json_tree] enabled` не має значення true.
@@ -45,7 +45,7 @@ lang: uk
 
 | Блок | Код |
 | --- | --- |
-| `proxy_filter` | `src/plugins/json_tree/mod.rs` (`impl Plugin for JsonTree`) |
+| `proxy_filter` | `src/plugins/json_tree/mod.rs` (`impl Plugin for JsonTreePlugin`) |
 | `outside_live_zone` | `src/plugins/archive/mod.rs` (`outside_live_zone`) |
 | `rewrite_block`, `measurement` | `src/plugins/json_tree/mod.rs` |
 | `fold_json`, `fold_json_with` | `src/plugins/json_tree/mod.rs` (`tally`, `collect_bodies`, `render`) |

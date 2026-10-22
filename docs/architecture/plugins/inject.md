@@ -18,7 +18,7 @@ the configured prompt modes) and writes the checkpoint at `PreCompact`.
 2. **Extra offerings join.** The dispatcher adds the agent id line (SessionStart and SubagentStart),
    the claimed-task line (SessionStart and PostCompact) and pending messages (UserPromptSubmit),
    all of which ride the same budget.
-3. **`Inject::session_start` picks its text.** On `compact` it asks `checkpoint::offer` for this
+3. **`InjectPlugin::session_start` picks its text.** On `compact` it asks `checkpoint::offer` for this
    session's checkpoint; on `startup`, when `[plugins.memory] startup_recall` is on, it asks
    `checkpoint::offer_session` for the project's last session handoff. Either one is priority 9.
 4. **Modes are appended.** `modes_text` takes `[plugins.inject] modes`, falling back to
@@ -32,7 +32,7 @@ the configured prompt modes) and writes the checkpoint at `PreCompact`.
 6. **A measurement is recorded.** `Measurement { kind: "inject" }` carries the offered and emitted
    bytes and estimates; `ref_id` holds the first dropped marker. With no offerings at all, nothing
    is recorded.
-7. **PreCompact saves.** `Inject::pre_compact` calls `checkpoint::save`, which streams the
+7. **PreCompact saves.** `InjectPlugin::pre_compact` calls `checkpoint::save`, which streams the
    transcript and upserts a `notes` row with kind `checkpoint:<session>`; SessionEnd writes the
    `session:<session>` row that `offer_session` reads later.
 
@@ -41,7 +41,7 @@ the configured prompt modes) and writes the checkpoint at `PreCompact`.
 | Box | Code |
 | --- | --- |
 | `hooks::inject_event` | `src/hooks/mod.rs` (`inject_event`) |
-| `Inject::session_start`, `pre_compact` | `src/plugins/inject/mod.rs` (`impl Plugin for Inject`) |
+| `InjectPlugin::session_start`, `pre_compact` | `src/plugins/inject/mod.rs` (`impl Plugin for InjectPlugin`) |
 | `modes_text`, `read_mode`, `builtin` | `src/plugins/inject/mod.rs` |
 | `inject::apply` | `src/plugins/inject/mod.rs` (`apply`) |
 | `checkpoint::offer`, `offer_session`, `save` | `src/plugins/checkpoint.rs` |

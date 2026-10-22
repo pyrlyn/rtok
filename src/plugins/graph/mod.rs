@@ -59,9 +59,9 @@ thread_local! {
     pub(crate) static SYMBOL_SRC_READS: AtomicUsize = const { AtomicUsize::new(0) };
 }
 
-pub struct Graph;
+pub struct GraphPlugin;
 
-impl Plugin for Graph {
+impl Plugin for GraphPlugin {
     fn manifest(&self) -> Manifest {
         Manifest {
             id: "graph",
@@ -2786,7 +2786,7 @@ mod tests {
     #[test]
     fn graph_surface_is_seven_tools_under_budget() {
         let (cx, dir) = cx("surface");
-        let tools = Graph.mcp_tools();
+        let tools = GraphPlugin.mcp_tools();
         assert_eq!(tools.len(), 7);
         let est = |d: &str| crate::tokens::estimate(d, Class::Prose, &cx.config.estimator);
         let n: u32 = tools.iter().map(|t| est(t.description)).sum();
@@ -3776,7 +3776,7 @@ fn c() {}
     }
 
     fn start(rt: &crate::plugin::Runtime) -> Option<Injection> {
-        Graph.session_start(&SessionStart { source: "startup" }, &Ctx::new(rt))
+        GraphPlugin.session_start(&SessionStart { source: "startup" }, &Ctx::new(rt))
     }
 
     #[test]

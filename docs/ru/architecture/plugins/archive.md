@@ -12,7 +12,7 @@ lang: ru
 
 ## Пошагово
 
-1. **Носитель передаёт запрос.** При `proxy.mode = "compress"` прокси запускает `Plugin::proxy_filter` каждого включённого плагина; `Archive::proxy_filter` сразу возвращает управление, если режим не `compress`. Без прокси pi вызывает событие `context`, и расширение запускает `rtok archive rewrite --stdin`, который вызывает `archive::pi::rewrite_stdin`. Оба носителя используют одни и те же функции `rewrite` и `rewrite_blobs`; `pi::tool_results` и `pi::live_blobs` лишь приводят массив сообщений pi к нормализованному для провода виду (`ToolResultRef`, `BlobRef`).
+1. **Носитель передаёт запрос.** При `proxy.mode = "compress"` прокси запускает `Plugin::proxy_filter` каждого включённого плагина; `ArchivePlugin::proxy_filter` сразу возвращает управление, если режим не `compress`. Без прокси pi вызывает событие `context`, и расширение запускает `rtok archive rewrite --stdin`, который вызывает `archive::pi::rewrite_stdin`. Оба носителя используют одни и те же функции `rewrite` и `rewrite_blobs`; `pi::tool_results` и `pi::live_blobs` лишь приводят массив сообщений pi к нормализованному для провода виду (`ToolResultRef`, `BlobRef`).
 2. **Выбор полос.** `rewrite(req.tool_results(), cx)` выполняется всегда. `rewrite_blobs` запускается только когда `[plugins.archive] live_blobs` равно true, а `rewrite_skills` — только когда `skills` равно true; оба выключены по умолчанию.
 3. **Остаться за пределами живой зоны.** `outside_live_zone` отбрасывает каждый результат, у которого `turn` меньше `keep_turns`. `toon` вызывает ту же функцию, так что граница определяется один раз.
 4. **Посмотреть ранее принятое решение.** `rewrite_block` вызывает `cx.archive_decision(tool_use_id)`. Раскрытый id или строка, указатель которой начинается с префикса `toon` или `json_tree`, не трогается (эти плагины разделяют `archive_decisions` и уже измерили свою экономию). Любой другой сохранённый указатель воспроизводится как записан и измеряется заново.
@@ -26,7 +26,7 @@ lang: ru
 
 | Блок | Код |
 | --- | --- |
-| `Archive::proxy_filter`, проверка режима | `src/plugins/archive/mod.rs` (`Archive`, `proxy_filter`) |
+| `ArchivePlugin::proxy_filter`, проверка режима | `src/plugins/archive/mod.rs` (`ArchivePlugin`, `proxy_filter`) |
 | Носитель pi | `src/plugins/archive/pi.rs` (`rewrite_stdin`, `tool_results`, `live_blobs`); `src/cli/archive.rs` |
 | Полосы | `src/plugins/archive/mod.rs` (`rewrite`, `rewrite_blobs`, `rewrite_skills`) |
 | Граница живой зоны | `src/plugins/archive/mod.rs` (`outside_live_zone`) |

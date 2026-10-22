@@ -62,7 +62,7 @@ those tools. Every shortening is lossless through `expand <id>`.
 | identical_result | `src/plugin.rs` (`identical_result`) |
 | cap | `src/plugins/read/mod.rs` (`cap`, `cap_recording`, `cap_impl`) |
 | search / tree | `src/plugins/read/search.rs` (`search`, `tree`, `text_files`) |
-| Manifest | `src/plugins/read/mod.rs` (`Read`: `Surface::Mcp`, `Surface::Hook`) |
+| Manifest | `src/plugins/read/mod.rs` (`ReadPlugin`: `Surface::Mcp`, `Surface::Hook`) |
 | Config | `crates/rtok-config/` (`[plugins.read]`) |
 | Tables | `crates/rtok-store/` (`read_cache`, `archive`, `measurements`) |
 

@@ -17,7 +17,7 @@ lang: uk
 ## Покроково
 
 1. **Носій передає запит.** У `proxy.mode = "compress"` проксі викликає `Plugin::proxy_filter`
-   кожного ввімкненого плагіна; `Archive::proxy_filter` повертається одразу, якщо режим не
+   кожного ввімкненого плагіна; `ArchivePlugin::proxy_filter` повертається одразу, якщо режим не
    `compress`. Без проксі pi спрацьовує своєю подією `context`, а розширення викликає
    `rtok archive rewrite --stdin`, який запускає `archive::pi::rewrite_stdin`. Обидва носії
    використовують одні й ті самі функції `rewrite` і `rewrite_blobs`; `pi::tool_results` і
@@ -54,7 +54,7 @@ lang: uk
 
 | Блок | Код |
 | --- | --- |
-| `Archive::proxy_filter`, перевірка режиму | `src/plugins/archive/mod.rs` (`Archive`, `proxy_filter`) |
+| `ArchivePlugin::proxy_filter`, перевірка режиму | `src/plugins/archive/mod.rs` (`ArchivePlugin`, `proxy_filter`) |
 | носій pi | `src/plugins/archive/pi.rs` (`rewrite_stdin`, `tool_results`, `live_blobs`); `src/cli/archive.rs` |
 | Смуги | `src/plugins/archive/mod.rs` (`rewrite`, `rewrite_blobs`, `rewrite_skills`) |
 | Межа живої зони | `src/plugins/archive/mod.rs` (`outside_live_zone`) |

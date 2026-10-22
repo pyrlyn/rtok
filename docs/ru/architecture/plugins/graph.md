@@ -12,7 +12,7 @@ lang: ru
 
 ## Пошагово
 
-1. **Вызов входит.** Инструменты MCP `symbol`, `callers`, `impact`, `outline`, `explore`, `graph_diff` и `graph_export` перечислены в `Graph::mcp_tools` и направляются в `invoke` в `src/mcp.rs`. Эта ветка регистрирует проект (`auto_add_project`), открывает запись `graph_events` (`events::Call`), разрешает область проекта через `scope::resolve` (запрошенный проект плюс проекты, с которыми он связан), а затем добавляет в начало ответа `health::notice`. Подкоманды `rtok graph` (`index`, `status`, `dead`, `impact`, `review`, `affected`, `diff`, `export`, `projects`) попадают в тот же код из `src/cli/graph.rs`.
+1. **Вызов входит.** Инструменты MCP `symbol`, `callers`, `impact`, `outline`, `explore`, `graph_diff` и `graph_export` перечислены в `GraphPlugin::mcp_tools` и направляются в `invoke` в `src/mcp.rs`. Эта ветка регистрирует проект (`auto_add_project`), открывает запись `graph_events` (`events::Call`), разрешает область проекта через `scope::resolve` (запрошенный проект плюс проекты, с которыми он связан), а затем добавляет в начало ответа `health::notice`. Подкоманды `rtok graph` (`index`, `status`, `dead`, `impact`, `review`, `affected`, `diff`, `export`, `projects`) попадают в тот же код из `src/cli/graph.rs`.
 2. **Индексация по запросу.** Каждый запрос сначала вызывает `index_for`: при `auto_index = true` он запускает `index::run`, иначе `index::ensure` индексирует корень без строк один раз. `walk::Matcher` обходит дерево по правилам игнорирования, настройкам включения и исключения и карте расширений; стат-проверка пропускает файл, у которого не изменились mtime и размер, а sha-проверка — файл, у которого не изменился sha256. Изменённые файлы разбираются параллельно вместе с запросами тегов, общими с плагином `read`, а каждая запись остаётся в одном потоке: `replace_symbol_files`, `delete_symbols_missing`, `rebuild_symbol_idf`. Изменившийся отпечаток экстрактора удаляет строки корня и переиндексирует его с нуля.
 3. **Граф файлов обновляется.** Когда запуск изменил корень, `rank::refresh` перестраивает документ PageRank файлов (`file_rank`, с парами совместных изменений git из `kv` как дополнительными рёбрами), чтобы SessionStart мог ранжировать файлы, не сканируя `symbols`.
 4. **Свежесть без разбора.** `PostToolUse` для `Edit` или `Write` вызывает только `mark_symbols_stale`, который удаляет строки этого файла и отмечает его в `symbol_stale`. Когда `[plugins.graph] watch` не равно `off`, `watch::run_scope` — поток внутри `rtok mcp`, который вызывает `index::run_changed` по событиям файлов, так что писатель по-прежнему один.
@@ -27,7 +27,7 @@ lang: ru
 
 | Блок | Код |
 | --- | --- |
-| Плагин `Graph`, `mcp_tools`, `post_tool`, `session_start` | `src/plugins/graph/mod.rs` |
+| Плагин `GraphPlugin`, `mcp_tools`, `post_tool`, `session_start` | `src/plugins/graph/mod.rs` |
 | Маршрутизация MCP, `events::Call`, `health::notice` | `src/mcp.rs` (`invoke`), `src/plugins/graph/events.rs`, `health.rs` |
 | `rtok graph` | `src/cli/graph.rs` (`GraphCmd`) |
 | `index_for`, `index::run`, `run_changed`, `ensure` | `src/plugins/graph/mod.rs`, `src/plugins/graph/index.rs` |

@@ -33,9 +33,9 @@ pub mod search;
 #[cfg(test)]
 pub(crate) mod walk;
 
-pub struct Read;
+pub struct ReadPlugin;
 
-impl Plugin for Read {
+impl Plugin for ReadPlugin {
     fn manifest(&self) -> Manifest {
         Manifest {
             id: "read",

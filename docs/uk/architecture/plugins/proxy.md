@@ -62,7 +62,7 @@ HTTP-переходом, до якого хост звертається чер�
 | Адаптери дроту | `src/proxy/wire.rs`, `anthropic.rs`, `openai_chat.rs`, `openai_responses.rs`, `gemini.rs` |
 | Семантичний кеш | `src/proxy/semantic_cache.rs`, `src/proxy/mod.rs` (`cache_response`) |
 | Розгалуження, finish | `src/proxy/mod.rs` (`handle`, `finish`, `record_usage`) |
-| Маніфест | `src/plugins/proxy/mod.rs` (`Proxy`) |
+| Маніфест | `src/plugins/proxy/mod.rs` (`ProxyPlugin`) |
 | Конфігурація | `crates/rtok-config/` (`[proxy]`, `[proxy.lanes.<lane>]`, `[plugins.proxy]`) |
 | Таблиці | `crates/rtok-store/` (`calls`, `call_io`, `usage`, `tokens`, `measurements`) |
 

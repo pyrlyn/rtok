@@ -17,7 +17,7 @@ lang: uk
 ## Покроково
 
 1. **Проксі пропонує результати інструментів.** `rtok proxy` будує `WireRequest`;
-   `Toon::proxy_filter` одразу повертається, коли `[plugins.toon] enabled` має значення false
+   `ToonPlugin::proxy_filter` одразу повертається, коли `[plugins.toon] enabled` має значення false
    (у маніфесті `default_on: true`).
 2. **Живу зону пропущено.** `rewrite` бере `min_rows` з конфігурації й пропускає результати
    через `archive::outside_live_zone`, тож останні `[plugins.archive] keep_turns` ходів
@@ -45,7 +45,7 @@ lang: uk
 
 | Блок | Код |
 | --- | --- |
-| Toon::proxy_filter, увімкнено? | `src/plugins/toon/mod.rs` (`Toon::proxy_filter`) |
+| ToonPlugin::proxy_filter, увімкнено? | `src/plugins/toon/mod.rs` (`ToonPlugin::proxy_filter`) |
 | outside_live_zone | `src/plugins/archive/` (`outside_live_zone`, `block_text`) |
 | archive_decision | `src/plugins/toon/mod.rs` (`rewrite_block`, `skips_foreign_pointer`, `PREFIX`) |
 | tabular_keys | `src/plugins/toon/mod.rs` (`tabular_keys`) |

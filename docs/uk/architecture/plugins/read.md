@@ -70,7 +70,7 @@ PreToolUse спрямовує хост від нативного `Read` вели
 | identical_result | `src/plugin.rs` (`identical_result`) |
 | Обмеження | `src/plugins/read/mod.rs` (`cap`, `cap_recording`, `cap_impl`) |
 | search / tree | `src/plugins/read/search.rs` (`search`, `tree`, `text_files`) |
-| Маніфест | `src/plugins/read/mod.rs` (`Read`: `Surface::Mcp`, `Surface::Hook`) |
+| Маніфест | `src/plugins/read/mod.rs` (`ReadPlugin`: `Surface::Mcp`, `Surface::Hook`) |
 | Конфігурація | `crates/rtok-config/` (`[plugins.read]`) |
 | Таблиці | `crates/rtok-store/` (`read_cache`, `archive`, `measurements`) |
 

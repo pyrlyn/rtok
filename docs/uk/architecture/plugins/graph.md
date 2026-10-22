@@ -18,7 +18,7 @@ lang: uk
 ## Покроково
 
 1. **Надходить виклик.** Інструменти MCP `symbol`, `callers`, `impact`, `outline`, `explore`,
-   `graph_diff` і `graph_export` перелічує `Graph::mcp_tools` і маршрутизує `src/mcp.rs`
+   `graph_diff` і `graph_export` перелічує `GraphPlugin::mcp_tools` і маршрутизує `src/mcp.rs`
    `invoke`. Ця гілка реєструє проєкт (`auto_add_project`), відкриває запис `graph_events`
    (`events::Call`), визначає область проєкту через `scope::resolve` (запитаний проєкт плюс
    проєкти, з якими він пов'язаний) і пізніше додає на початок `health::notice`. Підкоманди
@@ -68,7 +68,7 @@ lang: uk
 
 | Блок | Код |
 | --- | --- |
-| Плагін `Graph`, `mcp_tools`, `post_tool`, `session_start` | `src/plugins/graph/mod.rs` |
+| Плагін `GraphPlugin`, `mcp_tools`, `post_tool`, `session_start` | `src/plugins/graph/mod.rs` |
 | Маршрутизація MCP, `events::Call`, `health::notice` | `src/mcp.rs` (`invoke`), `src/plugins/graph/events.rs`, `health.rs` |
 | `rtok graph` | `src/cli/graph.rs` (`GraphCmd`) |
 | `index_for`, `index::run`, `run_changed`, `ensure` | `src/plugins/graph/mod.rs`, `src/plugins/graph/index.rs` |

@@ -36,7 +36,7 @@ lang: ru
 | identical_result | `src/plugin.rs` (`identical_result`) |
 | Ограничение | `src/plugins/read/mod.rs` (`cap`, `cap_recording`, `cap_impl`) |
 | search / tree | `src/plugins/read/search.rs` (`search`, `tree`, `text_files`) |
-| Манифест | `src/plugins/read/mod.rs` (`Read`: `Surface::Mcp`, `Surface::Hook`) |
+| Манифест | `src/plugins/read/mod.rs` (`ReadPlugin`: `Surface::Mcp`, `Surface::Hook`) |
 | Конфигурация | `crates/rtok-config/` (`[plugins.read]`) |
 | Таблицы | `crates/rtok-store/` (`read_cache`, `archive`, `measurements`) |
 

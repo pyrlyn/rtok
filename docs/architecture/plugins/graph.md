@@ -13,7 +13,7 @@ capped at `plugins.graph.max_tokens`, and the uncut text stays reachable through
 ## Walkthrough
 
 1. **A call enters.** The MCP tools `symbol`, `callers`, `impact`, `outline`, `explore`,
-   `graph_diff` and `graph_export` are listed by `Graph::mcp_tools` and routed in `src/mcp.rs`
+   `graph_diff` and `graph_export` are listed by `GraphPlugin::mcp_tools` and routed in `src/mcp.rs`
    `invoke`. That arm registers the project (`auto_add_project`), opens a `graph_events` record
    (`events::Call`), resolves the project scope with `scope::resolve` (the project asked for plus the
    projects it links to), and later prepends `health::notice`. The `rtok graph` subcommands (`index`,
@@ -60,7 +60,7 @@ capped at `plugins.graph.max_tokens`, and the uncut text stays reachable through
 
 | Box | Code |
 | --- | --- |
-| `Graph` plugin, `mcp_tools`, `post_tool`, `session_start` | `src/plugins/graph/mod.rs` |
+| `GraphPlugin`, `mcp_tools`, `post_tool`, `session_start` | `src/plugins/graph/mod.rs` |
 | MCP routing, `events::Call`, `health::notice` | `src/mcp.rs` (`invoke`), `src/plugins/graph/events.rs`, `health.rs` |
 | `rtok graph` | `src/cli/graph.rs` (`GraphCmd`) |
 | `index_for`, `index::run`, `run_changed`, `ensure` | `src/plugins/graph/mod.rs`, `src/plugins/graph/index.rs` |

@@ -29,9 +29,9 @@ use rtok_plugin_sdk::{
 
 pub mod pi;
 
-pub struct Archive;
+pub struct ArchivePlugin;
 
-impl Plugin for Archive {
+impl Plugin for ArchivePlugin {
     fn manifest(&self) -> Manifest {
         Manifest {
             id: "archive",

@@ -12,7 +12,7 @@ lang: ru
 
 ## Пошагово
 
-1. **Хук видит вызов Bash.** `Cmd::pre_tool` вызывает `hook::pre_tool`, который сразу возвращает управление, если инструмент не `Bash` или `[plugins.cmd] rewrite` не равно true. Путь хука не обходит файловую систему и не запускает подпроцессов.
+1. **Хук видит вызов Bash.** `CmdPlugin::pre_tool` вызывает `hook::pre_tool`, который сразу возвращает управление, если инструмент не `Bash` или `[plugins.cmd] rewrite` не равно true. Путь хука не обходит файловую систему и не запускает подпроцессов.
 2. **Решить, оборачивать ли.** `skip_wrap_host` отказывается от команды, первое слово которой есть в `never_wrap` (по умолчанию `rtok`, `sudo`), от команды с here-document (`<<`), от команды с завершающим `&`, а также от `--interactive` или `-i` для основы, перечисленной в `interactive_stems`. `changes_shell_state` отказывается от `cd`, `export`, `source` и других встроенных команд, действие которых потерялось бы в дочерней оболочке, а также от голого присваивания. Команда субагента, которая запускает `git`, никогда не оборачивается (`runs_git`). Ведущие переходы `cd <dir> &&` снимаются через `guard::strip_cd_hop` и остаются вне обёртки.
 3. **Переписать.** Хук возвращает `PreToolDecision::Rewrite` с `<run_guard>rtok run [--agent <id>] -- '<cmd>'`. Guard (`names::run_guard`) заставляет POSIX-оболочку хоста выполнить исходную команду, если `rtok` нет в её `PATH`. `--agent` передаёт проверенный id субагента, чтобы указатели дедупликации оставались внутри одного контекста.
 4. **Запустить.** `run::run` выбирает оболочку (`[plugins.cmd] shell`, затем окружение, затем оболочка хоста по умолчанию), запускает команду через `capture_body`, который ограничивает захваченные байты и добавляет уведомление, если обрезал, и сохраняет код возврата. `rtok filter --archive` (OpenCode) попадает сразу в `emit_filtered` с готовой нагрузкой.
@@ -29,7 +29,7 @@ lang: ru
 
 | Блок | Код |
 | --- | --- |
-| `Cmd::pre_tool` и проверка обёртки | `src/plugins/cmd/hook.rs` (`pre_tool`, `skip_wrap_host`, `changes_shell_state`) |
+| `CmdPlugin::pre_tool` и проверка обёртки | `src/plugins/cmd/hook.rs` (`pre_tool`, `skip_wrap_host`, `changes_shell_state`) |
 | Текст переписывания | `src/plugins/cmd/run.rs` (`wrap_quote`), `src/names.rs` (`run_guard`) |
 | `rtok run` | `src/plugins/cmd/run.rs` (`run`, `capture_body`); `src/cli/run_cmd.rs` |
 | `rtok filter --archive` | `src/cli/run_cmd.rs` (`filter`) |

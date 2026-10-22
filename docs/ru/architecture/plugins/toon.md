@@ -12,7 +12,7 @@ lang: ru
 
 ## Пошагово
 
-1. **Прокси предлагает результаты инструментов.** `rtok proxy` строит `WireRequest`; `Toon::proxy_filter` сразу возвращает управление, когда `[plugins.toon] enabled` равно false (в манифесте `default_on: true`).
+1. **Прокси предлагает результаты инструментов.** `rtok proxy` строит `WireRequest`; `ToonPlugin::proxy_filter` сразу возвращает управление, когда `[plugins.toon] enabled` равно false (в манифесте `default_on: true`).
 2. **Живая зона пропускается.** `rewrite` берёт `min_rows` из конфигурации и пропускает результаты через `archive::outside_live_zone`, так что последние `[plugins.archive] keep_turns` ходов остаются побайтно идентичными.
 3. **Сохранённое решение побеждает.** `rewrite_block` читает текст результата инструмента через `archive::block_text` (или JSON голого массива) и ищет `cx.archive_decision(tool_use_id)`. Раскрытый id или указатель, записанный `archive` или `json_tree` (`skips_foreign_pointer`), не трогается. Указатель, который начинается с `[toon `, воспроизводится как записан и измеряется как строка `toon`/`encode`.
 4. **Только однородные таблицы подходят.** `tabular_keys` принимает массив не менее чем из `min_rows` объектов (ключ конфигурации `min_rows`), у которых не меньше трёх ключей, одинаковые наборы ключей и только скалярные значения, и чьи ключи не требуют кавычек.
@@ -24,7 +24,7 @@ lang: ru
 
 | Блок | Код |
 | --- | --- |
-| Toon::proxy_filter, включён? | `src/plugins/toon/mod.rs` (`Toon::proxy_filter`) |
+| ToonPlugin::proxy_filter, включён? | `src/plugins/toon/mod.rs` (`ToonPlugin::proxy_filter`) |
 | outside_live_zone | `src/plugins/archive/` (`outside_live_zone`, `block_text`) |
 | archive_decision | `src/plugins/toon/mod.rs` (`rewrite_block`, `skips_foreign_pointer`, `PREFIX`) |
 | tabular_keys | `src/plugins/toon/mod.rs` (`tabular_keys`) |

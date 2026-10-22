@@ -14,7 +14,7 @@ instead. The original stays in the archive, and the view always ends with `expan
 
 1. **Run after archive.** The proxy runs the `proxy_filter` of every enabled plugin on the
    parsed request. `archive` runs first and leaves `[archived <id8>: ...]` pointers in old
-   tool results; `Compress::proxy_filter` then returns early unless
+   tool results; `CompressPlugin::proxy_filter` then returns early unless
    `[plugins.compress] enabled` is true and `proxy.mode` is `compress`.
 2. **Stay outside the live zone.** `compress::rewrite` reuses `archive::outside_live_zone`, so
    the last `[plugins.archive] keep_turns` turns are never touched.
@@ -55,7 +55,7 @@ instead. The original stays in the archive, and the view always ends with `expan
 
 | Box | Code |
 | --- | --- |
-| `Compress::proxy_filter` | `src/plugins/compress/mod.rs` (`Compress`, `proxy_filter`) |
+| `CompressPlugin::proxy_filter` | `src/plugins/compress/mod.rs` (`CompressPlugin`, `proxy_filter`) |
 | `archive::proxy_filter`, `outside_live_zone` | `src/plugins/archive/mod.rs` |
 | `summarize_block`, `stored_view` | `src/plugins/compress/mod.rs` |
 | `extractive_summary` | `src/plugins/compress/mod.rs` (uses `archive::clip`) |

@@ -12,7 +12,7 @@ lang: ru
 
 ## Пошагово
 
-1. **Две точки входа.** В режиме `compress` прокси вызывает `JsonTree::proxy_filter` для каждого запроса. Отдельно `mcp::wrap::shorten_result` (`src/mcp/wrap.rs`) вызывает `fold_json` для результата инструмента MCP, который больше `max_lines` правила. Оба ничего не делают, пока `[plugins.json_tree] enabled` не равно true.
+1. **Две точки входа.** В режиме `compress` прокси вызывает `JsonTreePlugin::proxy_filter` для каждого запроса. Отдельно `mcp::wrap::shorten_result` (`src/mcp/wrap.rs`) вызывает `fold_json` для результата инструмента MCP, который больше `max_lines` правила. Оба ничего не делают, пока `[plugins.json_tree] enabled` не равно true.
 2. **Только старые результаты.** Путь прокси проходит через `archive::outside_live_zone`, который отбрасывает последние `[plugins.archive] keep_turns` ходов, так что результаты, с которыми работает модель, не трогаются.
 3. **Сохранённое решение побеждает.** `rewrite_block` читает `archive_decision(tool_use_id)`. Блок, который модель уже раскрыла или который уже обработал `toon`, остаётся без изменений; уже сохранённый указатель `json_tree` воспроизводится как записан, так что префикс запроса остаётся побайтно стабильным.
 4. **Свёртка.** Текст разбирается, затем `fold_json` возвращает `None` для значения меньше `MIN_BYTES`, для значения без вложенного объекта или для значения, которое принимает `toon::tabular_keys` (однородная таблица — это область toon). Иначе `tally` считает повторяющиеся значения-объекты и массивы в id `V-`, `collect_bodies` считает повторяющиеся тела элементов (игнорируя ключи идентичности `id` и `name` и `children`) в id `EL-`, а `render` печатает `VARS:`, `ELEMENTS:` и дерево с `template=EL-...`.
@@ -24,7 +24,7 @@ lang: ru
 
 | Блок | Код |
 | --- | --- |
-| `proxy_filter` | `src/plugins/json_tree/mod.rs` (`impl Plugin for JsonTree`) |
+| `proxy_filter` | `src/plugins/json_tree/mod.rs` (`impl Plugin for JsonTreePlugin`) |
 | `outside_live_zone` | `src/plugins/archive/mod.rs` (`outside_live_zone`) |
 | `rewrite_block`, `measurement` | `src/plugins/json_tree/mod.rs` |
 | `fold_json`, `fold_json_with` | `src/plugins/json_tree/mod.rs` (`tally`, `collect_bodies`, `render`) |

@@ -12,7 +12,7 @@ wrapped command is preserved.
 
 ## Walkthrough
 
-1. **The hook sees a Bash call.** `Cmd::pre_tool` calls `hook::pre_tool`, which returns early
+1. **The hook sees a Bash call.** `CmdPlugin::pre_tool` calls `hook::pre_tool`, which returns early
    unless the tool is `Bash` and `[plugins.cmd] rewrite` is true. The hook path does no
    filesystem walk and starts no subprocess.
 2. **Decide whether to wrap.** `skip_wrap_host` refuses a command whose first word is in
@@ -69,7 +69,7 @@ wrapped command is preserved.
 
 | Box | Code |
 | --- | --- |
-| `Cmd::pre_tool` and wrap gate | `src/plugins/cmd/hook.rs` (`pre_tool`, `skip_wrap_host`, `changes_shell_state`) |
+| `CmdPlugin::pre_tool` and wrap gate | `src/plugins/cmd/hook.rs` (`pre_tool`, `skip_wrap_host`, `changes_shell_state`) |
 | Rewrite text | `src/plugins/cmd/run.rs` (`wrap_quote`), `src/names.rs` (`run_guard`) |
 | `rtok run` | `src/plugins/cmd/run.rs` (`run`, `capture_body`); `src/cli/run_cmd.rs` |
 | `rtok filter --archive` | `src/cli/run_cmd.rs` (`filter`) |
