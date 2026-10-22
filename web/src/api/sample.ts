@@ -182,6 +182,7 @@ export const sampleSnapshot: Snapshot = {
   ],
   config: configText,
   doctor,
+  doctor_pending: false,
   graph: graphText,
   projects: [
     project(1, "rtok", {

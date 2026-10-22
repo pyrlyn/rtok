@@ -16,7 +16,8 @@ stubs from MCP `read`.
   creator allowed revisiting T127's session-only scoping (2026-10-21).
 - **Not done here ("a").** The creator also wants the caller passed in so the parent keeps its own
   stubs; that is T929.1 (a hook-added `agent` argument; the fallback above stays under it). It
-  needs a hook matcher per host, installed and checked by `agents install` and `doctor`, so it gets its own change.
+  needs a hook matcher per host, installed and checked by `agents install` and `doctor`, so it
+  gets its own change.
 - **Known gap.** A capped body archived by MCP `read` under context `None` before a sub-agent
   appeared can still match a later `identical_result` from the native hooks of the parent; the
   compaction reset covers it, the sub-agent window does not.

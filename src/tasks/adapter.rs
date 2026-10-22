@@ -89,6 +89,11 @@ pub trait TaskAdapter: Send {
     fn write_status(&self, id: &TaskId, status: Status) -> Result<Task>;
     /// The highest id with `prefix`, done ones included: seeding and collision checks.
     fn max_id(&self, prefix: &str) -> Result<Option<TaskId>>;
+    /// Record why a finished task is finished. Only the folder layout of the disk adapter keeps a
+    /// report (`done.md`); the others refuse instead of dropping the text.
+    fn write_report(&self, _id: &TaskId, _report: &str) -> Result<()> {
+        bail!("{} tasks: a closing report is not stored", self.name())
+    }
     /// Items the adapter holds that no id names, for `rtok task sync`. Reads only. Files on
     /// disk are the ids, so only remote adapters have any.
     fn unlabelled(&self) -> Result<Vec<Stray>> {

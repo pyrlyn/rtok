@@ -10,8 +10,8 @@ use std::str::FromStr;
 use anyhow::Result;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-/// Subtasks go one level deep (`R2.1`) until a second level is asked for (T441 §5).
-pub const MAX_DEPTH: usize = 2;
+/// Subtasks go two levels deep (`R2.1.3`): the project's own plan has such ids (T955).
+pub const MAX_DEPTH: usize = 3;
 
 /// Longest prefix accepted. A short project tag (`R`, `AT`) keeps ids readable in titles.
 pub const MAX_PREFIX: usize = rtok_plugin_sdk::TASK_PREFIX_MAX;

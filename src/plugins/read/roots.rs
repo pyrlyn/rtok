@@ -11,6 +11,7 @@
 //! other directory stay outside; `plugins.read.allow_paths` remains the manual escape hatch.
 //! Nothing here runs unless `rtok mcp` called [`enable`], so hooks never spawn git.
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -48,51 +49,7 @@ pub(crate) fn secrets_denied() -> bool {
     DENY_SECRETS.load(Ordering::Relaxed)
 }
 
-/// A file that usually holds credentials: `.env` and its variants (templates excepted),
-/// private keys and Java keystores, `.git/config` and `.git-credentials`, direnv's `.envrc`,
-/// and the package-manager, netrc and pgpass credential files.
-pub(crate) fn is_secret(path: &Path) -> bool {
-    let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
-        return false;
-    };
-    let name = name.to_ascii_lowercase();
-    if name == ".env" {
-        return true;
-    }
-    if let Some(rest) = name.strip_prefix(".env.") {
-        return !matches!(rest, "example" | "sample" | "template" | "dist");
-    }
-    let ext = Path::new(&name).extension().and_then(|e| e.to_str());
-    if matches!(
-        ext,
-        Some("pem" | "key" | "p12" | "pfx" | "jks" | "keystore")
-    ) {
-        return true;
-    }
-    if matches!(
-        name.as_str(),
-        "id_rsa"
-            | "id_dsa"
-            | "id_ecdsa"
-            | "id_ed25519"
-            | "id_ecdsa_sk"
-            | "id_ed25519_sk"
-            | ".netrc"
-            | ".npmrc"
-            | ".pypirc"
-            | ".pgpass"
-            | ".git-credentials"
-            | ".envrc"
-            | "credentials"
-    ) {
-        return true;
-    }
-    name == "config"
-        && path
-            .parent()
-            .and_then(Path::file_name)
-            .is_some_and(|d| d == ".git")
-}
+pub(crate) use crate::fs::is_secret;
 
 /// The directories of the client's latest `roots/list` answer (replaces the previous one).
 pub fn set_client_roots(roots: Vec<PathBuf>) {
@@ -120,6 +77,66 @@ pub(crate) fn dynamic(cwd: &Path) -> Vec<PathBuf> {
     roots
 }
 
+thread_local! {
+    /// The directory the current tool call's relative paths resolve against, when the server
+    /// knows the caller works somewhere other than its own cwd (T923). Per thread, so two
+    /// concurrent calls never see each other's root.
+    static CALLER: RefCell<Option<PathBuf>> = const { RefCell::new(None) };
+}
+
+/// Restores the previous caller root when the tool call ends.
+pub(crate) struct CallerGuard(Option<PathBuf>);
+
+impl Drop for CallerGuard {
+    fn drop(&mut self) {
+        CALLER.with(|c| *c.borrow_mut() = self.0.take());
+    }
+}
+
+/// The caller's root for this call, when [`enter_caller`] set one.
+pub(crate) fn caller_root() -> Option<PathBuf> {
+    CALLER.with(|c| c.borrow().clone())
+}
+
+/// Whether `dir`'s repository has a linked worktree besides `dir` itself, so a relative path
+/// answered from `dir` could have been meant for another checkout.
+pub(crate) fn has_other_worktrees(dir: &Path) -> bool {
+    worktrees(dir).len() > 1
+}
+
+/// The base of relative paths: the caller's root for this call, else the process cwd.
+pub(crate) fn cwd() -> std::io::Result<PathBuf> {
+    match caller_root() {
+        Some(dir) => Ok(dir),
+        None => std::env::current_dir(),
+    }
+}
+
+/// Makes `dir` the base of relative paths until the guard drops, if the path guard would
+/// accept it from a server running in `server_cwd`: inside it, or inside a worktree of its
+/// repository or a client root's. A caller root comes from a hook-registered agent row, which
+/// is untrusted, so anything else (a missing directory, `/`, an unrelated project) is ignored.
+pub(crate) fn enter_caller(server_cwd: &Path, dir: &Path) -> Option<CallerGuard> {
+    let dir = fs_kit::path::canonicalize(dir)
+        .ok()
+        .filter(|d| d.is_dir())?;
+    let canon = |p: &Path| fs_kit::path::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+    let client = lock(&CLIENT).clone();
+    let known = std::iter::once(server_cwd)
+        .chain(client.iter().map(PathBuf::as_path))
+        .flat_map(|d| std::iter::once(d.to_path_buf()).chain(worktrees(d)));
+    // `/` and `$HOME` (Claude.app launches the server there) would admit every directory.
+    let home = std::env::home_dir();
+    if !known
+        .map(|r| canon(&r))
+        .filter(|r| !crate::fs::is_unwalkable_root(r, home.as_deref()))
+        .any(|r| dir.starts_with(&r))
+    {
+        return None;
+    }
+    Some(CallerGuard(CALLER.with(|c| c.borrow_mut().replace(dir))))
+}
+
 fn worktrees(cwd: &Path) -> Vec<PathBuf> {
     if let Some((at, list)) = lock(&WORKTREES).get(cwd)
         && at.elapsed() < WORKTREE_TTL
@@ -137,38 +154,6 @@ fn worktrees(cwd: &Path) -> Vec<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn secret_names_are_recognised() {
-        for p in [
-            ".env",
-            "a/.env.local",
-            "k/server.pem",
-            "x.key",
-            "h/.ssh/id_ed25519",
-            ".git/config",
-            "r/.npmrc",
-            ".aws/credentials",
-            "h/.git-credentials",
-            "p/.envrc",
-            "h/.pgpass",
-            "h/.ssh/id_ed25519_sk",
-            "android/release.jks",
-            "app.keystore",
-        ] {
-            assert!(is_secret(Path::new(p)), "{p}");
-        }
-        for p in [
-            "src/main.rs",
-            ".env.example",
-            "config",
-            "app/config",
-            "keys.rs",
-            "README.md",
-        ] {
-            assert!(!is_secret(Path::new(p)), "{p}");
-        }
-    }
     use std::process::Command;
 
     fn git(dir: &Path, args: &[&str]) {
@@ -248,6 +233,46 @@ mod tests {
         );
         assert!(super::super::resolve(&other, &files[2], &[]).is_err());
         set_client_roots(Vec::new());
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn relative_paths_follow_the_caller_worktree_not_the_server_checkout() {
+        use rtok_plugin_sdk::Ctx;
+        let (base, main, wt, other) = repo("caller");
+        std::fs::write(wt.join("a.txt"), "edited in the worktree\n").unwrap();
+        let (rt, dir) = crate::plugins::read::tests::cx("callerroot");
+        let cx = Ctx::new(&rt);
+        // The server runs in `main`; the caller works in `wt`.
+        let guard = enter_caller(&main, &wt).expect("sibling worktree is accepted");
+        assert_eq!(cwd().unwrap(), wt);
+        let read = crate::plugins::read::read(&cx, "a.txt", "full", None).unwrap();
+        assert!(read.contains("edited in the worktree"), "{read}");
+        let hits = crate::plugins::read::search::search(&cx, "edited", "", None).unwrap();
+        assert!(hits.contains("a.txt:1:"), "{hits}");
+        let tree = crate::plugins::read::search::tree(&cx, ".", None).unwrap();
+        assert!(tree.contains("a.txt"), "{tree}");
+        drop(guard);
+        assert_eq!(cwd().unwrap(), std::env::current_dir().unwrap());
+        let _ = std::fs::remove_dir_all(base);
+        let _ = std::fs::remove_dir_all(dir);
+        let _ = other;
+    }
+
+    #[test]
+    fn a_caller_root_outside_the_server_project_is_refused() {
+        let (base, main, _wt, other) = repo("callerbad");
+        // A hook-registered cwd is untrusted: an unrelated directory, `/` and a missing
+        // path must not become the base of relative reads.
+        for dir in [other.as_path(), Path::new("/"), &base.join("gone")] {
+            assert!(enter_caller(&main, dir).is_none(), "{}", dir.display());
+        }
+        let sub = main.join("sub");
+        std::fs::create_dir_all(&sub).unwrap();
+        assert!(
+            enter_caller(&main, &sub).is_some(),
+            "subdirectory of the project"
+        );
         let _ = std::fs::remove_dir_all(base);
     }
 }

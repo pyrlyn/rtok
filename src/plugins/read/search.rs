@@ -101,7 +101,7 @@ pub(crate) fn text_files(
 /// `path:line: snippet` rows, at most `max` (default `plugins.read.search_max`).
 pub fn search(cx: &Ctx, pattern: &str, path: &str, max: Option<u32>) -> Result<String> {
     let cfg = cx.plugin_config::<crate::config::Read>("read");
-    let cwd = std::env::current_dir()?;
+    let cwd = super::roots::cwd()?;
     // A pathless search from `$HOME` or `/` (those roots are refused) searches the client
     // root that lies in a repository, instead of failing on the launch cwd.
     let no_path = path.is_empty() || path == ".";
@@ -152,7 +152,7 @@ pub fn search(cx: &Ctx, pattern: &str, path: &str, max: Option<u32>) -> Result<S
 /// Compact listing `path size` down to `depth` (default `plugins.read.tree_depth`).
 pub fn tree(cx: &Ctx, path: &str, depth: Option<u32>) -> Result<String> {
     let cfg = cx.plugin_config::<crate::config::Read>("read");
-    let cwd = std::env::current_dir()?;
+    let cwd = super::roots::cwd()?;
     let root = resolve(
         &cwd,
         Path::new(if path.is_empty() { "." } else { path }),

@@ -9,6 +9,7 @@
 pub mod add;
 pub mod claim;
 pub mod clean;
+pub mod finish;
 pub mod gc;
 pub mod git;
 pub mod host;
@@ -16,6 +17,7 @@ pub mod list;
 pub mod migrate;
 pub mod ops;
 pub mod origin;
+pub mod reap;
 pub mod remove;
 pub mod seed;
 pub mod whoami;
@@ -141,6 +143,42 @@ impl Owner {
             None => base,
         }
     }
+}
+
+/// The worktree root that contains `cwd`, and its git admin directory.
+/// `None` when `cwd` is not inside a checkout. A relative `gitdir:` resolves
+/// against the worktree (`worktree.useRelativePaths`).
+pub(crate) fn checkout_of(cwd: &Path) -> Option<(PathBuf, PathBuf)> {
+    let mut dir = cwd.to_path_buf();
+    loop {
+        let dot = dir.join(".git");
+        if dot.is_dir() {
+            return Some((dir, dot));
+        }
+        if let Ok(text) = std::fs::read_to_string(&dot)
+            && let Some(admin) = text.trim().strip_prefix("gitdir:")
+        {
+            let admin = Path::new(admin.trim());
+            let admin = if admin.is_absolute() {
+                admin.to_path_buf()
+            } else {
+                dir.join(admin)
+            };
+            return Some((dir, admin));
+        }
+        if !dir.pop() {
+            return None;
+        }
+    }
+}
+
+/// The worktree root whose lock names `agent`. Any other lock, or none, is `None`,
+/// so a sub-agent that shares its parent's checkout does not take the parent's lock.
+pub(crate) fn locked_by(cwd: &Path, agent: &str) -> Option<PathBuf> {
+    let (root, admin) = checkout_of(cwd)?;
+    let reason = std::fs::read_to_string(admin.join("locked")).ok()?;
+    let owner = Owner::parse(reason.trim())?;
+    (owner.agent.as_deref() == Some(agent)).then_some(root)
 }
 
 impl Record {
@@ -302,6 +340,28 @@ pub fn inventory_with<X: Send>(
 mod tests {
     use super::*;
     use rstest::rstest;
+
+    #[test]
+    fn locked_by_matches_only_the_agent_named_on_the_lock() {
+        let dir = crate::testutil::tmp_dir("t958-lock");
+        let (_main, wt) = crate::testutil::worktree_layout(&dir);
+        let gitdir = std::fs::read_to_string(wt.join(".git")).unwrap();
+        let admin = PathBuf::from(gitdir.trim().strip_prefix("gitdir:").unwrap().trim());
+        let reason = "Grok / grok-4.7 | t958 | 2026-10-22 | agent aaaa-1";
+        std::fs::write(admin.join("locked"), format!("{reason}\n")).unwrap();
+        assert_eq!(locked_by(&wt, "aaaa-1").as_deref(), Some(wt.as_path()));
+        assert!(locked_by(&wt, "bbbb-2").is_none());
+        let sub = wt.join("src");
+        std::fs::create_dir(&sub).unwrap();
+        assert_eq!(locked_by(&sub, "aaaa-1").as_deref(), Some(wt.as_path()));
+        std::fs::write(
+            admin.join("locked"),
+            "Grok / grok-4.7 | t958 | 2026-10-22\n",
+        )
+        .unwrap();
+        assert!(locked_by(&wt, "aaaa-1").is_none());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn porcelain_z_keeps_raw_paths_reasons_and_every_flag() {

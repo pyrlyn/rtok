@@ -1,9 +1,9 @@
 ---
-status: todo
+status: in progress
 priority: P1
 complexity: 3
-readiness: 0%
-agent:
+readiness: 10%
+agent: Claude Code / claude-sonnet-5-5
 ---
 
 # T924. MCP `worktree_*` tools: worktree in the wrong repo, agent ambiguity the agent cannot resolve
@@ -22,3 +22,11 @@ the ambiguity message names the argument to pass.
 
 Check: MCP tests for the wrong-repo refusal and for an ambiguous cwd resolved by `agent`;
 `just check`.
+
+Plan: `with_agent`/`with_repo` schema helpers in `src/mcp.rs`; `Server::agent_for` takes an
+optional `agent` (id or prefix) for every tool that acts as the session's agent, never over a
+stable (env/own) link, only a live same-host main agent; the ambiguity message names `agent`.
+`worktree_add` checks that the target repository is the repository of the agent's recorded
+cwd and refuses otherwise; `worktree_add`/`list`/`remove` take `repo`. Files: `src/mcp.rs`,
+`src/mcp/{worktrees,messages,agents}.rs`, `src/agents/link.rs`. Verify: MCP tests for the
+wrong-repo refusal and for an ambiguous cwd resolved by `agent`; `just check`.
