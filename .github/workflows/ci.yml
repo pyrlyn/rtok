@@ -72,11 +72,11 @@ jobs:
       contents: read
       actions: write # cancel-run
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # Rust toolchain from the last run; mise then skips `rustup toolchain install`.
       - id: rustup
         uses: ./.github/actions/rustup-toolchain-cache
-      - uses: jdx/mise-action@v5
+      - uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
       - uses: ./.github/actions/sccache
         with:
           access-key-id: ${{ secrets.R2_ACCESS_KEY_ID }}
@@ -84,7 +84,7 @@ jobs:
           bucket: ${{ vars.SCCACHE_BUCKET }}
           endpoint: ${{ vars.SCCACHE_ENDPOINT }}
           read-only: ${{ github.event_name == 'pull_request' }}
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           # T261 experiment: also save on the branch's manual runs to measure a warm cache.
           save-if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
@@ -116,12 +116,12 @@ jobs:
       actions: write # cancel-run
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # Rust toolchain from the last run; mise then skips `rustup toolchain install`.
       - id: rustup
         uses: ./.github/actions/rustup-toolchain-cache
       # Installs the Rust version pinned in mise.toml — same toolchain as local.
-      - uses: jdx/mise-action@v5
+      - uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
       - uses: ./.github/actions/sccache
         with:
           access-key-id: ${{ secrets.R2_ACCESS_KEY_ID }}
@@ -134,7 +134,7 @@ jobs:
         with:
           path: ${{ steps.rustup.outputs.path }}
           key: ${{ steps.rustup.outputs.key }}
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           # Skip slow cache upload on PRs; restore still works from main keys.
           # T261 experiment: also save on the branch's manual runs to measure a warm cache.
@@ -143,7 +143,7 @@ jobs:
       # the mise cache above (keyed on mise.toml); this keeps vitest's own cacheDir
       # (`vitest.config.mjs`) warm, keyed on the plugin sources.
       - if: runner.os == 'Linux'
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: target/vitest
           key: vitest-${{ runner.os }}-${{ hashFiles('mise.toml', 'vitest.config.mjs', 'plugins/**/*.ts') }}
@@ -163,7 +163,7 @@ jobs:
       # SPA embedded. In the `spa` job it would need its own Rust toolchain and a cold cargo build;
       # here the cargo cache is already warm, and only Chromium is added.
       - if: runner.os == 'Linux'
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}
@@ -192,10 +192,10 @@ jobs:
       actions: write # cancel-run
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: rustup
         uses: ./.github/actions/rustup-toolchain-cache
-      - uses: jdx/mise-action@v5
+      - uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
       - uses: ./.github/actions/sccache
         with:
           access-key-id: ${{ secrets.R2_ACCESS_KEY_ID }}
@@ -208,7 +208,7 @@ jobs:
         with:
           path: ${{ steps.rustup.outputs.path }}
           key: ${{ steps.rustup.outputs.key }}
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
       - run: just spa-install spa-build
@@ -251,10 +251,10 @@ jobs:
       actions: write # cancel-run
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: rustup
         uses: ./.github/actions/rustup-toolchain-cache
-      - uses: jdx/mise-action@v5
+      - uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
       - if: steps.rustup.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6
         with:
@@ -262,7 +262,7 @@ jobs:
           key: ${{ steps.rustup.outputs.key }}
       # The host plugin tests (vitest) run on Linux only; keep vitest's cacheDir warm as in `check`.
       - if: runner.os == 'Linux'
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: target/vitest
           key: vitest-${{ runner.os }}-${{ hashFiles('mise.toml', 'vitest.config.mjs', 'plugins/**/*.ts') }}
@@ -302,10 +302,10 @@ jobs:
       PLATFORM_TESTS: >-
         binary(windows_ci) | test(write_replaces_a_readonly_file) | test(release_matches_a_verbatim_prefix) | test(desktop_path_lives_under_appdata_on_windows) | test(find_bin_limit_is_ascii_case_insensitive) | test(under_keeps_a_different_case_child_of_home) | test(receipt_path_on_windows) | test(windows_path_identity_folds_verbatim_prefix_and_ascii_case) | test(cmd_exe_gets_the_body_verbatim) | test(path_from_file_uri_strips_slash_before_drive) | test(normalize_keeps_windows_drive_prefix) | test(under_ascii_case_insensitive_matches_windows_prefix) | test(resolved_drops_the_verbatim_prefix) | test(powershell_hooks_resolve_rtok_then_ketch_then_fail_open_silently) | test(token_file_acl_names_only_the_current_user)
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: rustup
         uses: ./.github/actions/rustup-toolchain-cache
-      - uses: jdx/mise-action@v5
+      - uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
       - uses: ./.github/actions/sccache
         with:
           access-key-id: ${{ secrets.R2_ACCESS_KEY_ID }}
@@ -313,7 +313,7 @@ jobs:
           bucket: ${{ vars.SCCACHE_BUCKET }}
           endpoint: ${{ vars.SCCACHE_ENDPOINT }}
           read-only: ${{ github.event_name == 'pull_request' }}
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: mise exec -- cargo nextest run --workspace --no-tests=pass -E "$env:PLATFORM_TESTS"
@@ -334,10 +334,10 @@ jobs:
       PLATFORM_TESTS: >-
         test(receipt_path_on_macos) | test(a_path_on_an_unmounted_volume_is_broken)
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: rustup
         uses: ./.github/actions/rustup-toolchain-cache
-      - uses: jdx/mise-action@v5
+      - uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
       - uses: ./.github/actions/sccache
         with:
           access-key-id: ${{ secrets.R2_ACCESS_KEY_ID }}
@@ -345,7 +345,7 @@ jobs:
           bucket: ${{ vars.SCCACHE_BUCKET }}
           endpoint: ${{ vars.SCCACHE_ENDPOINT }}
           read-only: ${{ github.event_name == 'pull_request' }}
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - if: runner.environment == 'self-hosted'
@@ -371,17 +371,17 @@ jobs:
       # which would also try to install the Rust and Go toolchains of mise.toml.
       NPM: npm
     steps:
-      - uses: actions/checkout@v7
-      - uses: jdx/mise-action@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
         with:
           install_args: just node
-      - uses: actions/cache@v6
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.npm
           key: npm-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}
           restore-keys: npm-${{ runner.os }}-
       # Keyed on the lockfile because it pins the Playwright version, which pins the browser build.
-      - uses: actions/cache@v6
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}
@@ -413,11 +413,11 @@ jobs:
       # which would also try to install the rest of mise.toml.
       CARGO: cargo
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # Rust toolchain from the last run; mise then skips `rustup toolchain install`.
       - id: rustup
         uses: ./.github/actions/rustup-toolchain-cache
-      - uses: jdx/mise-action@v5
+      - uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
         with:
           install_args: just rust
       - uses: ./.github/actions/sccache
@@ -432,7 +432,7 @@ jobs:
         with:
           path: ${{ steps.rustup.outputs.path }}
           key: ${{ steps.rustup.outputs.key }}
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
       - run: just docs-check
@@ -447,10 +447,10 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: jdx/mise-action@v5
+      - uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
         with:
           # Only what the check needs, not every tool in mise.toml; mise makes sccache an install
           # dependency of every cargo: tool, so it has to come along.
