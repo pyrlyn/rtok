@@ -59,7 +59,7 @@ request before it leaves.
 | wire adapters | `src/proxy/wire.rs`, `anthropic.rs`, `openai_chat.rs`, `openai_responses.rs`, `gemini.rs` |
 | semantic cache | `src/proxy/semantic_cache.rs`, `src/proxy/mod.rs` (`cache_response`) |
 | tee, finish | `src/proxy/mod.rs` (`handle`, `finish`, `record_usage`) |
-| Manifest | `src/plugins/proxy/mod.rs` (`Proxy`) |
+| Manifest | `src/plugins/proxy/mod.rs` (`ProxyPlugin`) |
 | Config | `crates/rtok-config/` (`[proxy]`, `[proxy.lanes.<lane>]`, `[plugins.proxy]`) |
 | Tables | `crates/rtok-store/` (`calls`, `call_io`, `usage`, `tokens`, `measurements`) |
 

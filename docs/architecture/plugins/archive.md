@@ -13,7 +13,7 @@ bytes and the provider's prompt cache stays valid.
 ## Walkthrough
 
 1. **A carrier hands over the request.** In `proxy.mode = "compress"` the proxy runs
-   `Plugin::proxy_filter` of every enabled plugin; `Archive::proxy_filter` returns early
+   `Plugin::proxy_filter` of every enabled plugin; `ArchivePlugin::proxy_filter` returns early
    unless the mode is `compress`. Without a proxy, pi fires its `context` event and the
    extension shells out to `rtok archive rewrite --stdin`, which calls
    `archive::pi::rewrite_stdin`. Both carriers use the same `rewrite` and `rewrite_blobs`
@@ -49,7 +49,7 @@ bytes and the provider's prompt cache stays valid.
 
 | Box | Code |
 | --- | --- |
-| `Archive::proxy_filter`, mode check | `src/plugins/archive/mod.rs` (`Archive`, `proxy_filter`) |
+| `ArchivePlugin::proxy_filter`, mode check | `src/plugins/archive/mod.rs` (`ArchivePlugin`, `proxy_filter`) |
 | pi carrier | `src/plugins/archive/pi.rs` (`rewrite_stdin`, `tool_results`, `live_blobs`); `src/cli/archive.rs` |
 | Lanes | `src/plugins/archive/mod.rs` (`rewrite`, `rewrite_blobs`, `rewrite_skills`) |
 | Live-zone boundary | `src/plugins/archive/mod.rs` (`outside_live_zone`) |

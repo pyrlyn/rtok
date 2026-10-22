@@ -12,7 +12,7 @@ smaller.
 
 ## Walkthrough
 
-1. **The proxy offers tool results.** `rtok proxy` builds a `WireRequest`; `Toon::proxy_filter`
+1. **The proxy offers tool results.** `rtok proxy` builds a `WireRequest`; `ToonPlugin::proxy_filter`
    returns at once when `[plugins.toon] enabled` is false (the manifest has `default_on: true`).
 2. **Live zone is skipped.** `rewrite` takes `min_rows` from config and passes the results
    through `archive::outside_live_zone`, so the last `[plugins.archive] keep_turns` turns stay
@@ -40,7 +40,7 @@ smaller.
 
 | Box | Code |
 | --- | --- |
-| Toon::proxy_filter, enabled? | `src/plugins/toon/mod.rs` (`Toon::proxy_filter`) |
+| ToonPlugin::proxy_filter, enabled? | `src/plugins/toon/mod.rs` (`ToonPlugin::proxy_filter`) |
 | outside_live_zone | `src/plugins/archive/` (`outside_live_zone`, `block_text`) |
 | archive_decision | `src/plugins/toon/mod.rs` (`rewrite_block`, `skips_foreign_pointer`, `PREFIX`) |
 | tabular_keys | `src/plugins/toon/mod.rs` (`tabular_keys`) |

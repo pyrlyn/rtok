@@ -16,7 +16,7 @@ lang: uk
 
 ## Покроково
 
-1. **Хук бачить виклик Bash.** `Cmd::pre_tool` викликає `hook::pre_tool`, який повертається
+1. **Хук бачить виклик Bash.** `CmdPlugin::pre_tool` викликає `hook::pre_tool`, який повертається
    одразу, якщо інструмент не `Bash` або `[plugins.cmd] rewrite` не має значення true. Шлях
    хука не обходить файлову систему і не запускає підпроцеси.
 2. **Вирішити, чи загортати.** `skip_wrap_host` відмовляє команді, перше слово якої є в
@@ -73,7 +73,7 @@ lang: uk
 
 | Блок | Код |
 | --- | --- |
-| `Cmd::pre_tool` і шлюз обгортання | `src/plugins/cmd/hook.rs` (`pre_tool`, `skip_wrap_host`, `changes_shell_state`) |
+| `CmdPlugin::pre_tool` і шлюз обгортання | `src/plugins/cmd/hook.rs` (`pre_tool`, `skip_wrap_host`, `changes_shell_state`) |
 | Текст переписування | `src/plugins/cmd/run.rs` (`wrap_quote`), `src/names.rs` (`run_guard`) |
 | `rtok run` | `src/plugins/cmd/run.rs` (`run`, `capture_body`); `src/cli/run_cmd.rs` |
 | `rtok filter --archive` | `src/cli/run_cmd.rs` (`filter`) |

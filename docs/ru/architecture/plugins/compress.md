@@ -12,7 +12,7 @@ lang: ru
 
 ## Пошагово
 
-1. **Работает после archive.** Прокси запускает `proxy_filter` каждого включённого плагина над разобранным запросом. `archive` идёт первым и оставляет указатели `[archived <id8>: ...]` в старых результатах инструментов; затем `Compress::proxy_filter` сразу возвращает управление, если только `[plugins.compress] enabled` не равно true и `proxy.mode` не равно `compress`.
+1. **Работает после archive.** Прокси запускает `proxy_filter` каждого включённого плагина над разобранным запросом. `archive` идёт первым и оставляет указатели `[archived <id8>: ...]` в старых результатах инструментов; затем `CompressPlugin::proxy_filter` сразу возвращает управление, если только `[plugins.compress] enabled` не равно true и `proxy.mode` не равно `compress`.
 2. **Остаться за пределами живой зоны.** `compress::rewrite` повторно использует `archive::outside_live_zone`, поэтому последние `[plugins.archive] keep_turns` ходов никогда не трогаются.
 3. **Проверить блок.** `summarize_block` читает `cx.archive_decision(tool_use_id)`. Он продолжает, только если решение существует, не раскрыто, его указатель начинается с `[archived ` и текст блока всё ещё равен этому сохранённому указателю. Всё остальное не трогается.
 4. **Выбрать вид.** Если включён `[plugins.compress.llm] enabled` и для пары `(archive_id, version)` в `archive_summaries` сохранена сводка, `stored_view` строит `[compress <id8>]`, `type: tool_output`, `summary: ...`, `expand(<id8>)`. Иначе `extractive_summary` читает оригинал через `cx.get_archive` и строит заголовок, повествование из следующих трёх различных строк, до трёх фактов (сначала строки ошибок) и до трёх строк файлов; строки фактов и файлов обрезаются через `archive::clip`.
@@ -28,7 +28,7 @@ lang: ru
 
 | Блок | Код |
 | --- | --- |
-| `Compress::proxy_filter` | `src/plugins/compress/mod.rs` (`Compress`, `proxy_filter`) |
+| `CompressPlugin::proxy_filter` | `src/plugins/compress/mod.rs` (`CompressPlugin`, `proxy_filter`) |
 | `archive::proxy_filter`, `outside_live_zone` | `src/plugins/archive/mod.rs` |
 | `summarize_block`, `stored_view` | `src/plugins/compress/mod.rs` |
 | `extractive_summary` | `src/plugins/compress/mod.rs` (использует `archive::clip`) |

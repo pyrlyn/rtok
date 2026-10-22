@@ -42,7 +42,7 @@ and the `rtok stats` / `rtok bench` commands that call into them. It never sits 
 
 | Box | Code |
 | --- | --- |
-| measure plugin manifest | `src/plugins/measure/mod.rs` (`Measure`) |
+| measure plugin manifest | `src/plugins/measure/mod.rs` (`MeasurePlugin`) |
 | `jsonl::parse_path` | `src/measure/jsonl.rs` (`Parsed`, `parse_jsonl`, `parse_dir`) |
 | `stats::collect` | `src/measure/stats.rs` (`collect`, `Report`, `bash_family`) |
 | attach steps | `src/measure/stats.rs` (`attach_api`, `attach_lanes`, `attach_bash_cmd`, `attach_codex`, `attach_costs`) |

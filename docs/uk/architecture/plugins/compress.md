@@ -19,7 +19,7 @@ lang: uk
 
 1. **Запуск після archive.** Проксі запускає `proxy_filter` кожного ввімкненого плагіна над
    розібраним запитом. `archive` працює першим і лишає вказівники `[archived <id8>: ...]` у
-   старих результатах інструментів; далі `Compress::proxy_filter` повертається одразу, якщо
+   старих результатах інструментів; далі `CompressPlugin::proxy_filter` повертається одразу, якщо
    `[plugins.compress] enabled` не має значення true або `proxy.mode` не є `compress`.
 2. **Лишатися поза живою зоною.** `compress::rewrite` повторно використовує
    `archive::outside_live_zone`, тож останні `[plugins.archive] keep_turns` ходів ніколи не
@@ -59,7 +59,7 @@ lang: uk
 
 | Блок | Код |
 | --- | --- |
-| `Compress::proxy_filter` | `src/plugins/compress/mod.rs` (`Compress`, `proxy_filter`) |
+| `CompressPlugin::proxy_filter` | `src/plugins/compress/mod.rs` (`CompressPlugin`, `proxy_filter`) |
 | `archive::proxy_filter`, `outside_live_zone` | `src/plugins/archive/mod.rs` |
 | `summarize_block`, `stored_view` | `src/plugins/compress/mod.rs` |
 | `extractive_summary` | `src/plugins/compress/mod.rs` (використовує `archive::clip`) |

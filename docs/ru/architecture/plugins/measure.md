@@ -24,7 +24,7 @@ lang: ru
 
 | Блок | Код |
 | --- | --- |
-| Манифест плагина measure | `src/plugins/measure/mod.rs` (`Measure`) |
+| Манифест плагина measure | `src/plugins/measure/mod.rs` (`MeasurePlugin`) |
 | `jsonl::parse_path` | `src/measure/jsonl.rs` (`Parsed`, `parse_jsonl`, `parse_dir`) |
 | `stats::collect` | `src/measure/stats.rs` (`collect`, `Report`, `bash_family`) |
 | Шаги присоединения | `src/measure/stats.rs` (`attach_api`, `attach_lanes`, `attach_bash_cmd`, `attach_codex`, `attach_costs`) |

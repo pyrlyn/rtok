@@ -14,7 +14,7 @@ from the symbol index.
 
 1. **A tool call arrives.** Claude Code runs `PreToolUse`; pi and OpenCode ask `rtok guard check`
    (`guard::check`), which builds the same `PreToolUse` event and returns `{"allow": ...}` JSON.
-   `Guard::pre_tool` dispatches on the tool name.
+   `GuardPlugin::pre_tool` dispatches on the tool name.
 2. **Skill.** `skill::digest` returns `None` unless `[plugins.guard] skills = true`. It resolves
    `SKILL.md` from the skill name only (`resolve` rejects `/`, `\` and `..`), and `decide` lets
    the skill load whole when the body is within `skill_max_bytes` or its frontmatter names
@@ -47,7 +47,7 @@ from the symbol index.
 
 | Box | Code |
 | --- | --- |
-| `Guard::pre_tool` / `post_tool` / `pre_compact` / `session_start` | `src/plugins/guard/mod.rs` (`impl Plugin for Guard`) |
+| `GuardPlugin::pre_tool` / `post_tool` / `pre_compact` / `session_start` | `src/plugins/guard/mod.rs` (`impl Plugin for GuardPlugin`) |
 | `rtok guard check` | `src/cli/guard.rs`, `src/plugins/guard/mod.rs` (`check`) |
 | `cache_key`, `read_only`, `norm_cmd` | `src/plugins/guard/mod.rs`, `src/plugins/guard/sed.rs` (`script_read_only`) |
 | `native_redirect` | `src/plugins/guard/mod.rs` |

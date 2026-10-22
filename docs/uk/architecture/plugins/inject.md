@@ -23,7 +23,7 @@ lang: uk
 2. **Долучаються додаткові пропозиції.** Диспетчер додає рядок id агента (SessionStart і
    SubagentStart), рядок прикріпленого завдання (SessionStart і PostCompact) та очікувані
    повідомлення (UserPromptSubmit); усі вони йдуть під тим самим бюджетом.
-3. **`Inject::session_start` вибирає свій текст.** На `compact` він запитує у
+3. **`InjectPlugin::session_start` вибирає свій текст.** На `compact` він запитує у
    `checkpoint::offer` контрольну точку цієї сесії; на `startup`, коли ввімкнено
    `[plugins.memory] startup_recall`, запитує у `checkpoint::offer_session` передачу останньої
    сесії проєкту. Будь-який із цих текстів має пріоритет 9.
@@ -40,7 +40,7 @@ lang: uk
 6. **Записується вимірювання.** `Measurement { kind: "inject" }` несе розміри запропонованих і
    виведених байтів та оцінки; `ref_id` містить перший маркер відкинутого. Якщо пропозицій немає
    взагалі, нічого не записується.
-7. **PreCompact зберігає.** `Inject::pre_compact` викликає `checkpoint::save`, який читає
+7. **PreCompact зберігає.** `InjectPlugin::pre_compact` викликає `checkpoint::save`, який читає
    транскрипт потоком і оновлює рядок `notes` виду `checkpoint:<session>`; SessionEnd записує
    рядок `session:<session>`, який `offer_session` читає пізніше.
 
@@ -49,7 +49,7 @@ lang: uk
 | Блок | Код |
 | --- | --- |
 | `hooks::inject_event` | `src/hooks/mod.rs` (`inject_event`) |
-| `Inject::session_start`, `pre_compact` | `src/plugins/inject/mod.rs` (`impl Plugin for Inject`) |
+| `InjectPlugin::session_start`, `pre_compact` | `src/plugins/inject/mod.rs` (`impl Plugin for InjectPlugin`) |
 | `modes_text`, `read_mode`, `builtin` | `src/plugins/inject/mod.rs` |
 | `inject::apply` | `src/plugins/inject/mod.rs` (`apply`) |
 | `checkpoint::offer`, `offer_session`, `save` | `src/plugins/checkpoint.rs` |
