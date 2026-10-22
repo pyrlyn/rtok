@@ -261,6 +261,7 @@ _arguments "${_arguments_options[@]}" : /
 _arguments "${_arguments_options[@]}" : /
 '--config=[User config file (else /`RTOK_CONFIG/` or /`<home>/config.toml/`)]:PATH:_files' /
 '--json[JSON instead of the table]' /
+'--sizes[Also walk every build cache for its bytes (slow with large target/ folders)]' /
 '-h[Print help]' /
 '--help[Print help]' /
 && ret=0
@@ -5079,7 +5080,7 @@ _rtok__subcmd__help__subcmd__worktree_commands() {
 'adopt:Bind the worktree you are in (made by a host'/''s own tool) to your agent. A worktree in a pool its host evicts (Cursor, Codex, Windsurf, Devin) is claimed in the store only. With no agent (a post-create script) the one live agent of that host in the repository takes it; with none or several the claim waits for the next agent that adopts or starts there' /
 'remove:Remove your own finished worktree/: unlock, /`git worktree remove/`, delete the branch when merged, release the claim; refuses dirty or current worktrees, and a foreign lock unless the task is finished (merged, clean, with commits of its own)' /
 'finish:Hand your task worktree to review/: commit what is left, push, open or reuse the PR, ask for squash auto-merge, then unlock. Refuses the main checkout, another agent'/''s lock and credential files; never closes the task' /
-'list:Every worktree and orphan with its owner, state, source and build-cache bytes' /
+'list:Every worktree and orphan with its owner, state and source bytes' /
 'whoami:Your agent, where new worktrees go, the worktree you are in and the ones you hold' /
 'gc:Remove merged, clean, idle worktrees with their branches; drop records of deleted ones' /
 'clean:Delete idle tagged build caches (/`CACHEDIR.TAG/`) and keep the worktrees; dry run without /`--yes/`' /
@@ -5667,7 +5668,7 @@ _rtok__subcmd__worktree_commands() {
 'adopt:Bind the worktree you are in (made by a host'/''s own tool) to your agent. A worktree in a pool its host evicts (Cursor, Codex, Windsurf, Devin) is claimed in the store only. With no agent (a post-create script) the one live agent of that host in the repository takes it; with none or several the claim waits for the next agent that adopts or starts there' /
 'remove:Remove your own finished worktree/: unlock, /`git worktree remove/`, delete the branch when merged, release the claim; refuses dirty or current worktrees, and a foreign lock unless the task is finished (merged, clean, with commits of its own)' /
 'finish:Hand your task worktree to review/: commit what is left, push, open or reuse the PR, ask for squash auto-merge, then unlock. Refuses the main checkout, another agent'/''s lock and credential files; never closes the task' /
-'list:Every worktree and orphan with its owner, state, source and build-cache bytes' /
+'list:Every worktree and orphan with its owner, state and source bytes' /
 'whoami:Your agent, where new worktrees go, the worktree you are in and the ones you hold' /
 'gc:Remove merged, clean, idle worktrees with their branches; drop records of deleted ones' /
 'clean:Delete idle tagged build caches (/`CACHEDIR.TAG/`) and keep the worktrees; dry run without /`--yes/`' /
@@ -5714,7 +5715,7 @@ _rtok__subcmd__worktree__subcmd__help_commands() {
 'adopt:Bind the worktree you are in (made by a host'/''s own tool) to your agent. A worktree in a pool its host evicts (Cursor, Codex, Windsurf, Devin) is claimed in the store only. With no agent (a post-create script) the one live agent of that host in the repository takes it; with none or several the claim waits for the next agent that adopts or starts there' /
 'remove:Remove your own finished worktree/: unlock, /`git worktree remove/`, delete the branch when merged, release the claim; refuses dirty or current worktrees, and a foreign lock unless the task is finished (merged, clean, with commits of its own)' /
 'finish:Hand your task worktree to review/: commit what is left, push, open or reuse the PR, ask for squash auto-merge, then unlock. Refuses the main checkout, another agent'/''s lock and credential files; never closes the task' /
-'list:Every worktree and orphan with its owner, state, source and build-cache bytes' /
+'list:Every worktree and orphan with its owner, state and source bytes' /
 'whoami:Your agent, where new worktrees go, the worktree you are in and the ones you hold' /
 'gc:Remove merged, clean, idle worktrees with their branches; drop records of deleted ones' /
 'clean:Delete idle tagged build caches (/`CACHEDIR.TAG/`) and keep the worktrees; dry run without /`--yes/`' /

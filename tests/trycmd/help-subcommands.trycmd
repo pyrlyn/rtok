@@ -1236,7 +1236,7 @@ Commands:
   finish   Hand your task worktree to review: commit what is left, push, open or reuse the PR, ask
            for squash auto-merge, then unlock. Refuses the main checkout, another agent's lock and
            credential files; never closes the task
-  list     Every worktree and orphan with its owner, state, source and build-cache bytes
+  list     Every worktree and orphan with its owner, state and source bytes
   whoami   Your agent, where new worktrees go, the worktree you are in and the ones you hold
   gc       Remove merged, clean, idle worktrees with their branches; drop records of deleted ones
   clean    Delete idle tagged build caches (`CACHEDIR.TAG`) and keep the worktrees; dry run without
@@ -1249,13 +1249,14 @@ Options:
   -h, --help           Print help
 
 $ rtok worktree list --help
-Every worktree and orphan with its owner, state, source and build-cache bytes
+Every worktree and orphan with its owner, state and source bytes
 
 Usage: rtok worktree list [OPTIONS]
 
 Options:
       --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
       --json           JSON instead of the table
+      --sizes          Also walk every build cache for its bytes (slow with large target/ folders)
   -h, --help           Print help
 
 $ rtok worktree whoami --help

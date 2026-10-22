@@ -178,7 +178,7 @@ fn list_splits_cache_from_source_and_reports_an_orphan() {
     // `$HOME` stays outside it: the `[worktree] enabled` gate loads the config first, and a
     // fresh `~/.rtok` inside `wt-cache` would make it dirty.
     let home = tmp.join("home");
-    let rows = json_in(&home, &cache, &["worktree", "list", "--json"]);
+    let rows = json_in(&home, &cache, &["worktree", "list", "--json", "--sizes"]);
     let row = |name: &str| by_name(&rows, name);
     assert_eq!(rows.as_array().unwrap().len(), 4, "{rows}");
     assert_eq!(row("work")["state"], "main");
@@ -202,6 +202,13 @@ fn list_splits_cache_from_source_and_reports_an_orphan() {
     assert!(table.starts_with("path "), "{table}");
     assert!(table.contains(" orphan "), "{table}");
     assert!(table.contains("4 worktrees: "), "{table}");
+    assert!(table.contains("build cache not sized (--sizes)"), "{table}");
+
+    // T936: without `--sizes` the build cache is not walked, so it has no bytes to report.
+    let plain = json_in(&home, &cache, &["worktree", "list", "--json"]);
+    let plain = by_name(&plain, "wt-cache").clone();
+    assert!(plain["cache_bytes"].is_null(), "{plain}");
+    assert!(plain["source_bytes"].as_u64().unwrap() < 4096, "{plain}");
 
     let outside = rtok(&tmp, &["worktree", "list"]);
     assert!(!outside.status.success());
