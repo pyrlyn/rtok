@@ -27,4 +27,8 @@ Files: `crates/rtok-store/src/{cache,lib,agents}.rs`, `crates/rtok-plugin-sdk/sr
 
 Checked: store tests (forget, reclaim, no takeover by another session, sub-agent row), hook tests
 for all three compaction events and a non-compact SessionStart, a read test (first and repeat read
-whole in a session with a sub-agent), `just check`.
+whole in a session with a sub-agent); `graph_truth`; lib tests of `rtok`, `rtok-store` and
+`rtok-plugin-sdk` (2966 passed); the `justfile` clippy gates and `cargo fmt --check`. A local
+`just check` ran out of disk twice, so CI on the PR is the full run.
+
+PR: https://github.com/pyrlyn/rtok/pull/1259
