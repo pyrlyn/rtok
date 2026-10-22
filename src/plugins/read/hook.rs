@@ -62,7 +62,9 @@ pub fn pre_tool(ev: &PreToolUse<'_>, cx: &Ctx) -> Option<PreToolDecision> {
         return None;
     }
     if recently_edited(cx, path) {
+        // T929: with a sub-agent in the session the id may name a body this window never saw.
         if cfg.delta
+            && !cx.shared_session()
             && let Some(id) = last_read_id(cx, path)
         {
             let t = tool(cx);

@@ -669,6 +669,19 @@ impl ReadCache for Runtime {
             .read_cache_keys(&self.session)
             .map_err(Into::into)
     }
+
+    fn forget_seen(&self, context: Option<&str>) -> Result<()> {
+        self.store
+            .forget_seen(&self.session, context)
+            .map_err(Into::into)
+    }
+
+    fn shared_session(&self) -> bool {
+        // Fails closed: an unreadable store counts as shared, so no pointer is guessed.
+        self.store
+            .session_has_subagent(&self.session)
+            .unwrap_or(true)
+    }
 }
 
 impl Ledger for Runtime {
