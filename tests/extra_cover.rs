@@ -35,6 +35,9 @@ fn tmp(name: &str) -> PathBuf {
 fn cmd(args: &[&str], home: &Path) -> AssertCmd {
     let mut c = AssertCmd::cargo_bin("rtok").unwrap();
     c.args(args).env("RTOK_HOME", home).env("HOME", home);
+    // T921's hook deadline would answer `{}` on a slow CI host (cold store on Windows); these
+    // tests check the hook's decision, not its latency.
+    c.env("RTOK_HOOK_DEADLINE_MS", "60000");
     c
 }
 
