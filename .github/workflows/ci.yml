@@ -1,13 +1,13 @@
 name: ci
 
 # Pull requests against main are the review gate: the `protect-main` ruleset requires a green
-# `gate` before merge. A red main push (merge skew or a flake) is fixed forward; T502 retired
+# `pipeline / gate` before merge. A red main push (merge skew or a flake) is fixed forward; T502 retired
 # the auto-revert job (T84), whose push to main that ruleset rejects. Draft PRs are skipped so
 # half-finished work does not burn runners. `workflow_dispatch` remains for manual runs
 # (release branches, one-off checks).
 on:
   # Push to main, non-draft pull requests and the weekly schedule run this through
-  # pipeline.yml (`workflow_call`), in parallel with the other checks and behind its `gate` job.
+  # pipeline.yml (`workflow_call`), in parallel with pyrlyn/ci's checks (`pipeline / gate`).
   workflow_call:
     inputs:
       docs-only:
