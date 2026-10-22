@@ -6973,7 +6973,7 @@ dependencies = [
  "ppv-lite86",
  "proc-macro2",
  "quote",
- "rand 0.9.5",
+ "rand 0.10.2",
  "rand_chacha",
  "regex-automata",
  "regex-syntax",
