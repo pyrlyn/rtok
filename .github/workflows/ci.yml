@@ -331,6 +331,47 @@ jobs:
       - if: failure() && github.event_name == 'pull_request'
         uses: pyrlyn/ci/.github/actions/cancel-run@main
 
+  # Optional macOS mirror of `windows-build`: archive the test binaries and run clippy with the
+  # same flags on the dedicated Mac (xcode-27-local, same macos-runner choice as `check`).
+  # Non-blocking by design: `continue-on-error` keeps a failure out of this workflow's result,
+  # so `pipeline / gate` (and the release behind it) still pass; no cancel-run on failure, and
+  # the check is not in the protect-main required checks. Steps stay bash-3.2 safe.
+  macos-build:
+    needs: macos-runner
+    if: >-
+      (github.event_name != 'pull_request' || !github.event.pull_request.draft)
+      && !inputs.docs-only
+      && vars.MACOS_CI_DISABLED != 'true'
+    continue-on-error: true
+    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON(needs.macos-runner.outputs.value)[0] || 'macos-latest' }}
+    permissions:
+      contents: read
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - id: rustup
+        uses: ./.github/actions/rustup-toolchain-cache
+      - uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
+      - uses: ./.github/actions/sccache
+        with:
+          access-key-id: ${{ secrets.R2_ACCESS_KEY_ID }}
+          secret-access-key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          bucket: ${{ vars.SCCACHE_BUCKET }}
+          endpoint: ${{ vars.SCCACHE_ENDPOINT }}
+          read-only: ${{ github.event_name == 'pull_request' }}
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - run: mise exec -- cargo nextest archive --workspace --archive-file nextest-archive.tar.zst
+      - uses: actions/upload-artifact@v7
+        with:
+          name: nextest-archive-macos
+          path: nextest-archive.tar.zst
+          retention-days: 1
+          if-no-files-found: error
+      - run: mise exec -- cargo clippy --workspace --all-targets --all-features --exclude rtok-wasm-demo-guest -- -D warnings -A clippy::disallowed_methods
+      - run: mise exec -- cargo clippy --workspace --lib --bins --all-features --exclude rtok-wasm-demo-guest -- -D warnings
+
   # T44.4: the agent installers write Windows paths and `%APPDATA%` files; run the suite there.
   # T83.4: a gate like `check` — a Windows-only failure fails the run.
   # The suite run (~250 s) outweighs the build (~85 s) on this runner, so it is split across
