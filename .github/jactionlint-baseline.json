@@ -218,38 +218,6 @@
       "message": "action \"pyrlyn/ci/.github/actions/cancel-run@main\" must be pinned to a full-length commit SHA like \"{owner}/{repo}@{sha}\" because the \"unpinned-uses\" rule is enabled"
     },
     {
-      "file": ".github/workflows/competitor-bench.yml",
-      "rule": "unpinned-uses",
-      "fingerprint": "c63faebe3d4b3de9",
-      "context": "64a7c95b399f8b27",
-      "occurrence": 0,
-      "message": "action \"actions/checkout@v4\" must be pinned to a full-length commit SHA like \"{owner}/{repo}@{sha}\" because the \"unpinned-uses\" rule is enabled"
-    },
-    {
-      "file": ".github/workflows/competitor-bench.yml",
-      "rule": "artipacked",
-      "fingerprint": "e941c884afcd68dd",
-      "context": "5daafa57dbdb2b94",
-      "occurrence": 0,
-      "message": "actions/checkout leaves the GITHUB_TOKEN in the git config of the workspace, where a later step such as an artifact upload can publish it. set \"persist-credentials: false\" under \"with:\" unless a later step needs to push"
-    },
-    {
-      "file": ".github/workflows/competitor-bench.yml",
-      "rule": "unpinned-uses",
-      "fingerprint": "9acf03a5e1c97111",
-      "context": "2858864698f02f2a",
-      "occurrence": 0,
-      "message": "action \"actions/setup-python@v5\" must be pinned to a full-length commit SHA like \"{owner}/{repo}@{sha}\" because the \"unpinned-uses\" rule is enabled"
-    },
-    {
-      "file": ".github/workflows/competitor-bench.yml",
-      "rule": "unpinned-uses",
-      "fingerprint": "d20e8be84cd4a942",
-      "context": "287303de6a294874",
-      "occurrence": 0,
-      "message": "action \"actions/upload-artifact@v4\" must be pinned to a full-length commit SHA like \"{owner}/{repo}@{sha}\" because the \"unpinned-uses\" rule is enabled"
-    },
-    {
       "file": ".github/workflows/dependabot.yml",
       "rule": "unpinned-uses",
       "fingerprint": "11bdbe923603cd9b",
