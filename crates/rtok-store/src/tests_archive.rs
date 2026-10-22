@@ -316,6 +316,62 @@ fn archive_in_session_scopes_by_context_within_one_session() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// T929: a compaction forgets what a context was shown. The forgotten body is no dedup target
+/// any more, stays readable for `expand`, and printing it again hands it back to the session.
+#[test]
+fn forget_seen_ends_dedup_for_that_context_and_a_reprint_reclaims_the_row() {
+    let dir = std::env::temp_dir().join(format!("rtok-t929-forget-{}", std::process::id()));
+    let store = Store::open_in_memory().unwrap();
+    let main = store
+        .put_archive_for("s", b"main-body", &dir, None)
+        .unwrap();
+    let sub = store
+        .put_archive_for("s", b"sub-body", &dir, Some("agent-a"))
+        .unwrap();
+    store.put_read_cache("s", "/a", "h", Some(&main)).unwrap();
+    store.put_read_cache("other", "/a", "h", None).unwrap();
+
+    store.forget_seen("s", None).unwrap();
+
+    assert_eq!(store.archive_in_session("s", &main, None).unwrap(), None);
+    assert!(
+        store.get_archive(&main, Some(&dir)).unwrap().is_some(),
+        "still expandable"
+    );
+    assert!(
+        store
+            .archive_in_session("s", &sub, Some("agent-a"))
+            .unwrap()
+            .is_some(),
+        "another context's window was not compacted"
+    );
+    assert!(store.get_read_cache("s", "/a").unwrap().is_none());
+    assert!(store.get_read_cache("other", "/a").unwrap().is_some());
+
+    store
+        .put_archive_for("s", b"main-body", &dir, None)
+        .unwrap();
+    assert!(
+        store
+            .archive_in_session("s", &main, None)
+            .unwrap()
+            .is_some()
+    );
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// T929: another session's identical body is not reclaimed by a reprint.
+#[test]
+fn a_forgotten_row_is_not_taken_over_by_another_session() {
+    let dir = std::env::temp_dir().join(format!("rtok-t929-owner-{}", std::process::id()));
+    let store = Store::open_in_memory().unwrap();
+    let sha = store.put_archive_for("a", b"same", &dir, None).unwrap();
+    store.forget_seen("a", None).unwrap();
+    store.put_archive_for("b", b"same", &dir, None).unwrap();
+    assert_eq!(store.archive_in_session("b", &sha, None).unwrap(), None);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
 /// T210: `measurements` is never pruned (`purge_calls_older_than` keeps it forever), and
 /// `archive_in_session`'s correlated subquery scans it by `(session, ts)` on every dedup
 /// hit. `EXPLAIN QUERY PLAN` on the query's real shape (mirroring the Diesel-generated

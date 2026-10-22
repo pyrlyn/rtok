@@ -113,6 +113,20 @@ fn resolve_session(
     "unknown".into()
 }
 
+/// T929: a compaction drops what the window had been shown, so its re-read cache and archive
+/// pointers go too and the next identical result is printed whole. Hosts differ on which event
+/// they send (Claude: PreCompact, PostCompact and SessionStart `compact`; Cursor: PreCompact;
+/// Codex and Devin: PostCompact), and the reset is idempotent, so every one of them does it.
+fn forget_after_compaction(input: &HookInput, cx: &Runtime) {
+    let compacting = matches!(input.hook_event_name.as_str(), "PreCompact" | "PostCompact")
+        || input
+            .session_start()
+            .is_some_and(|ev| ev.source == "compact");
+    if compacting {
+        let _ = crate::plugin::ReadCache::forget_seen(cx, agent_parent_key(input));
+    }
+}
+
 /// T282: the sub-agent key `register_agent`/`end_agent` upsert against — the host's own
 /// `agent_id` (`HookInput`, `research.md` §17.2), or `None` for the main window. An empty
 /// string round-trips from a host that sends the field but leaves it blank, so it is treated
@@ -594,6 +608,7 @@ pub fn dispatch(stdin: &[u8], input: &HookInput, cx: &Runtime) -> Vec<u8> {
             None
         }
     };
+    forget_after_compaction(input, cx);
     let out = match input.hook_event_name.as_str() {
         "PreToolUse" => pre_tool(input, cx, &registry),
         "PostToolUse" => post_tool(input, cx, &registry, agent.as_deref()),
@@ -1729,6 +1744,59 @@ mod tests {
             s.split_once('\n').map_or("", |(_, rest)| rest)
         }
         assert_eq!(after_first_line(cursor_ctx), after_first_line(claude_ctx));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// T929: an identical result is a pointer before a compaction and the whole body after it,
+    /// whichever event the host sends; an event that is not a compaction changes nothing.
+    #[rstest::rstest]
+    #[case::pre_compact("PreCompact", serde_json::json!({"trigger": "auto"}), true)]
+    #[case::post_compact("PostCompact", serde_json::json!({"trigger": "auto"}), true)]
+    #[case::session_start_compact("SessionStart", serde_json::json!({"source": "compact"}), true)]
+    #[case::session_start_resume("SessionStart", serde_json::json!({"source": "resume"}), false)]
+    fn a_compaction_ends_dedup_and_the_re_read_cache(
+        #[case] event: &str,
+        #[case] extra: serde_json::Value,
+        #[case] forgets: bool,
+    ) {
+        let dir = std::env::temp_dir().join(format!(
+            "rtok-t929-{event}-{forgets}-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        let cfg = crate::testutil::config_in(&dir);
+        let body = "a body long enough to be worth a pointer, repeated: ".repeat(4);
+        let open = || crate::plugin::Runtime::open(cfg.clone(), "s929").unwrap();
+        let seen = || {
+            let cx = open();
+            cx.store
+                .put_archive_for("s929", body.as_bytes(), &cfg.core.archive_dir, None)
+                .unwrap();
+            cx.store.put_read_cache("s929", "/a", "h", None).unwrap();
+        };
+        let pointer = || crate::plugin::identical_result(&open(), "read", body.as_bytes(), None);
+
+        seen();
+        assert!(pointer().is_some(), "before the compaction: a pointer");
+
+        let mut input = serde_json::json!({
+            "hook_event_name": event, "session_id": "s929", "cwd": dir.display().to_string(),
+        });
+        input
+            .as_object_mut()
+            .unwrap()
+            .extend(extra.as_object().unwrap().clone());
+        let mut out = Vec::new();
+        run(event, input.to_string().as_bytes(), &mut out, &cfg);
+
+        assert_eq!(pointer().is_none(), forgets, "{event}");
+        assert_eq!(
+            open().store.get_read_cache("s929", "/a").unwrap().is_none(),
+            forgets,
+            "{event}"
+        );
+        seen();
+        assert!(pointer().is_some(), "printed again: pointers resume");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
