@@ -15,6 +15,8 @@ target is not met on this repository; the floor is below.
 - Docs (`docs/`, `docs/ru/`, `docs/uk/` `agents-and-worktrees.md`), the completions snapshots and
   the `help-subcommands` case follow the new flag.
 
+PR: https://github.com/pyrlyn/rtok/pull/1260
+
 ## Timings
 
 Debug builds, run from the main checkout with 38 worktrees (15.4 GB of source files, 94 GB of
