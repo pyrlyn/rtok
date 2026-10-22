@@ -1800,7 +1800,7 @@ mod tests {
 
         assert_eq!(pointer().is_none(), forgets, "{event}");
         assert_eq!(
-            open().store.get_read_cache("s929", "/a").unwrap().is_none(),
+            open().store.read_cache_keys("s929").unwrap().is_empty(),
             forgets,
             "{event}"
         );
