@@ -31,7 +31,9 @@ sonarcloud:
   coverage-command: just test-cov
   soft-fail: false
 
-# License files against pyrlyn/ci's canonical ones (replaces license-check.yml).
+# License files against pyrlyn/ci's canonical ones (replaces license-check.yml): pyrlyn/ci's
+# reusable license-check.yml, on ubuntu-latest only (never Windows or macOS, pyrlyn/ci#102).
+# Defaults: this repository's entry in licenses/targets.yml, checked at the repository root.
 license:
   enabled: true
 
