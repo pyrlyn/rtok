@@ -457,11 +457,11 @@ mod tests {
         std::fs::write(&zshenv, mine).unwrap();
 
         let lines = install(Shell::Zsh, cmd(), &p).unwrap();
-        let init = p.home.join(".zfunc/rtok.zsh");
+        let init = p.home.join(".zfunc").join("rtok.zsh");
         assert_eq!(
             lines,
             [
-                format!("wrote {}", p.home.join(".zfunc/_rtok").display()),
+                format!("wrote {}", p.home.join(".zfunc").join("_rtok").display()),
                 format!("wrote {}", init.display()),
                 format!("wrote {}", zshenv.display()),
             ]

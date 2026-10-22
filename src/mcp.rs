@@ -1482,7 +1482,8 @@ mod tests {
             )),
             "{text}"
         );
-        let (_, abs) = call_text(&server, "read", json!({"path": "/no/such/file.rs"}));
+        let abs_path = root.join("no").join("such").join("abs.rs");
+        let (_, abs) = call_text(&server, "read", json!({"path": abs_path}));
         assert!(!abs.contains("resolved against"), "{abs}");
         let _ = fs::remove_dir_all(dir);
     }
