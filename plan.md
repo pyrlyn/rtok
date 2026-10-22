@@ -144,6 +144,9 @@ Already tracked here, not added again: `src/render.rs` → `change-preview` is T
 | T525 | in progress | P2 | 3 | 0% | MiMo / mimo |
 | T666.2 | todo | P2 | 3 | 0% | |
 | T687 | todo | P2 | 4 | 0% | |
+| T949 | todo | P1 | 2 | 0% | |
+| T950 | todo | P2 | 2 | 0% | |
+| T951 | todo | P1 | 2 | 0% | |
 
 
 
@@ -168,6 +171,30 @@ Creator-approved (moved from `roadmap.md`, from T178). Cut another ~10 ms off th
 **Status (2026-10-16).** Not started on code: no idle machine to measure on. The rerun script and the reasoning for the first step are `research.md` §46. Needs a quiet machine (load average near zero), not a creator decision.
 
 Check: p50 as Claude Code sees it is at or under 10 ms for both events on the §19.2 harness, or the measured floor and the reason are written up; `just check`.
+
+### T949. `worktree gc` keeps a merged worktree whose locking agent has ended
+
+Bug. `gc::decide` (`src/worktree/gc.rs`) counts a git lock as held unless its agent is live (`Policy::live`) or the task is done (`Entry::done`, T453). The agent's `ended_at` in the store is never read, and nothing unlocks a worktree when its session ends (`git::unlock` runs only from `remove`, `migrate` and `claim`). A merged, clean worktree locked by an ended agent therefore waits `max(idle, stale_lock)`, which is 7 days by default (`STALE_LOCK_DEFAULT`). Seen: `rtok-plan-log-triage` (merged, agent `ended`) and `rtok-t912` (merged, agent idle) are both kept with "locked by Claude …". Each holds 4–18 GB of `target/`. The fix is in progress in the gc session on branch `t948-gc-ended-locks`. The lifecycle side, where the lock outlives the agent, is T951.
+
+Done: an ended, non-live agent's lock on a merged, clean worktree is reclaimed once the idle window passes (`Verdict::Reclaim`). A live agent's lock, and any lock on a dirty or unmerged worktree, still holds.
+
+Check: rstest cases in `gc.rs` for ended+merged → remove, live → keep, ended+unmerged → keep; `just check`.
+
+### T951. Ending an agent leaves its worktree locked
+
+Bug. SessionEnd (`src/hooks/mod.rs`, `"SessionEnd"` arm) stamps the agent's `ended_at` through `Store::end_agent` and ends the session, but leaves the worktree the agent claimed locked. `git::unlock` runs only from `worktree remove`, `migrate` and `claim` (`src/worktree/{remove,migrate,claim}.rs`). Every ended agent therefore leaves a git lock that still names it, and `gc` treats that lock as held (see T949). Seen: `rtok-plan-log-triage` (agent `ended`, lock reason "Claude Code / claude-opus-5-5 | plan-log-triage | … | agent 126b1714…"). The exception is T453: a finished task (`Entry::done`) is removed despite the lock, which is how `rtok-t904` went.
+
+Done: when an agent's row is ended, the lock that names that agent is released, or rewritten as an ownerless "ended" record, on the worktree it held. A lock that names another agent or no agent is left alone. SessionEnd stays fail-open and inside the hook budget: the unlock is one `git worktree unlock`, deferred like `end_session` when the store is busy. Sub-agents that share the parent's worktree do not unlock it while the parent is live.
+
+Check: a hook test where SessionEnd for agent A unlocks A's worktree and leaves B's lock; a sub-agent's SessionEnd leaves the parent's lock; `worktree gc` dry run then removes A's merged, clean, idle worktree; `just check`.
+
+### T950. `worktree gc` never drops the record of a vanished worktree under a foreign lock
+
+Bug. In `gc::decide` the `held` branch runs before `match entry.state`, so a `State::Stale` record (its directory is gone) under someone else's git lock gets `keep("locked by …")` on every run and never reaches `Verdict::DropRecord`. The comment says a vanished worktree "may still be the only copy of someone's work", but a missing directory holds no work. Seen: `_worktrees/completions-shared/apps/rtok-completions-shared` and `_worktrees/rtok-audit-20261018` (locked by OpenAI / GPT-6, 0 B, directories missing) are listed as `stale` and kept forever.
+
+Done: a stale record under a foreign lock is dropped. Either it is dropped at once (`git worktree unlock` and then removing only that admin entry, never a blanket `prune`), or after `stale_lock`, whichever the creator picks. The choice is written in the card before the code.
+
+Check: an rstest case in `gc.rs` for Stale + foreign lock → `drop-record`; an integration test where the worktree directory is deleted under a lock and `gc --yes` removes its `.git/worktrees/<id>`; `just check`.
 
 ### T131. Measure the spawn brief: cost row and on/off re-read share
 Rule: a saving that is not a `Measurement` row does not exist, and the brief is a cost first. Needs T128 and T130.2.

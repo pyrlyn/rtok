@@ -33,3 +33,6 @@
 - T525. SubagentStart and PreCompact under the 10 ms hook budget
 - T666.2. Provider-backed memory extractor (blocked on the creator)
 - T687. Hooks: PreToolUse/PostToolUse p50 to 10 ms
+- T949. `worktree gc` keeps a merged worktree whose locking agent has ended
+- T950. `worktree gc` never drops the record of a vanished worktree under a foreign lock
+- T951. Ending an agent leaves its worktree locked
