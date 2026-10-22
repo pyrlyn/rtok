@@ -137,6 +137,27 @@ pub fn unlock(repo: &Path, worktree: &Path) -> Result<()> {
     git_ok(repo, &["worktree", "unlock", path_arg(worktree)?]).map(drop)
 }
 
+/// T958: release the lock that names `agent` on the worktree `cwd` is in.
+/// One `git worktree unlock`, and only then. A lock that names someone else, or
+/// no agent, stays. Missing checkout or lock is not an error: SessionEnd fails open.
+pub fn unlock_ended(cwd: &Path, agent: &str) -> Result<()> {
+    let Some((root, admin)) = super::locked_by(cwd, agent)
+        .and_then(|root| super::checkout_of(&root).map(|(_, admin)| (root, admin)))
+    else {
+        return Ok(());
+    };
+    // A linked worktree's `commondir` points at the main `.git`. Unlock from that
+    // repository; the main checkout's own lock has no `commondir`.
+    let repo = std::fs::read_to_string(admin.join("commondir"))
+        .ok()
+        .and_then(|common| {
+            let git_dir = admin.join(common.trim());
+            git_dir.parent().map(std::path::Path::to_path_buf)
+        })
+        .unwrap_or_else(|| root.clone());
+    unlock(&repo, &root)
+}
+
 /// `git worktree move`, never forced: git refuses a locked worktree and one with submodules.
 pub fn move_to(repo: &Path, from: &Path, to: &Path) -> Result<()> {
     let name = from.file_name().unwrap_or_default().to_string_lossy();
