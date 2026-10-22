@@ -3,11 +3,20 @@
 Principle: everything that can be built, checked or tested on Linux runs on Linux
 (`ubuntu-latest`). Windows and macOS runners keep only what exists or matters only on that
 platform. The Windows and macOS test jobs themselves are kept; they are optional
-(`continue-on-error`), so only Linux decides `pipeline / gate`.
+(`continue-on-error`), so they never fail the `ci` workflow.
 
 The shared checks come from [pyrlyn/ci](https://github.com/pyrlyn/ci) through
 `.github/workflows/pipeline.yml` and `.github/infra.yml`; their runner defaults are set there
 (pyrlyn/ci#103: OS-independent jobs default to `ubuntu-latest`, `CI_RUNNER` still overrides).
+
+## Gate
+
+`pipeline / gate` (the protect-main required check) is pyrlyn/ci's gate job. It covers
+pyrlyn/ci's own jobs (config, CodeQL, Semgrep, actionlint, license, commits, no-pinned-ci, ...),
+not this repository's `ci.yml` jobs; the bump and Dependabot flows wait for the whole
+`pipeline.yml` run instead. With pyrlyn/ci#103 the gate fails only when a needed job's result
+is `failure`: `skipped` and `cancelled` pass. A run cancelled before anything failed (a newer
+push, a manual or scripted cancel) therefore passes the gate.
 
 ## Per job
 
