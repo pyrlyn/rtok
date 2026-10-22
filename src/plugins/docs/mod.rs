@@ -42,7 +42,7 @@ impl Plugin for Docs {
             ToolDef {
                 name: "docs_query",
                 description: "FTS snippets for one cached crate version; ids only, docs_get loads a body.",
-                input_schema: json!({"type":"object","properties":{"name":{"type":"string"},"version":{"type":"string"},"query":{"type":"string"}},"required":["name","query"]}),
+                input_schema: json!({"type":"object","properties":{"name":{"type":"string"},"version":{"type":"string"},"query":{"type":"string"},"question":{"type":"string","description":"alias of query"},"userQuery":{"type":"string","description":"alias of query"}},"required":["name"],"anyOf":[{"required":["query"]},{"required":["question"]},{"required":["userQuery"]}]}),
             },
             ToolDef {
                 name: "docs_get",

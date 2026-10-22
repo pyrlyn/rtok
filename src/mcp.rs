@@ -52,7 +52,7 @@ fn ping_def() -> ToolDef {
     ToolDef {
         name: "ping",
         description: "Alive check. Returns MCP <agent> жив for the host display name.",
-        input_schema: json!({"type":"object","properties":{"agent":{"type":"string"}},"required":["agent"]}),
+        input_schema: json!({"type":"object","properties":{"agent":{"type":"string"}}}),
     }
 }
 
@@ -280,10 +280,30 @@ fn negotiate_protocol_version(requested: &Value) -> ProtocolVersion {
 /// an `isError` `CallToolResult` carrying the message, not a protocol-level error object —
 /// so every client sees it whether or not it inspects JSON-RPC error codes. The `required`
 /// list lives once, on each tool's own `input_schema` (`mcp_tools()`); this reads that
-/// instead of hand-maintaining a second, driftable copy per tool.
+/// instead of hand-maintaining a second, driftable copy per tool. An `anyOf` of required
+/// sets is the alias form (T928): one satisfied branch is enough, and a call that matches
+/// none reports the first branch.
 fn missing_required(schema: &Value, args: &Value) -> Option<String> {
-    let required = schema.get("required")?.as_array()?;
-    let props = schema.get("properties");
+    if let Some(msg) = missing_fields(schema.get("required"), schema.get("properties"), args) {
+        return Some(msg);
+    }
+    let branches = schema.get("anyOf").and_then(Value::as_array)?;
+    let mut first = None;
+    for branch in branches {
+        let props = branch.get("properties").or(schema.get("properties"));
+        match missing_fields(branch.get("required"), props, args) {
+            None => return None,
+            Some(msg) if first.is_none() => first = Some(msg),
+            Some(_) => {}
+        }
+    }
+    first
+}
+
+/// The first required field that is missing or the wrong JSON type. `None` when there is
+/// no `required` list, or every field in it is present.
+fn missing_fields(required: Option<&Value>, props: Option<&Value>, args: &Value) -> Option<String> {
+    let required = required?.as_array()?;
     for field in required.iter().filter_map(Value::as_str) {
         let kind = props
             .and_then(|p| p.get(field))
@@ -314,7 +334,9 @@ fn missing_required(schema: &Value, args: &Value) -> Option<String> {
 /// The arguments a tool call is validated and run with — the one place they are normalised
 /// (`call_tool` and the one-shot `call` both go through it): `null` becomes `{}`, and
 /// `search`'s `query` is accepted as `pattern` — the key agents most often send it under
-/// (T353). The advertised schema keeps `pattern` only; an alias is tolerated, not promoted.
+/// (T353). `docs_query`'s `question` or `userQuery` is accepted as `query`. The advertised
+/// schema lists each alias in `anyOf`, so a client accepts the call before it arrives
+/// (T928). An explicit canonical key wins.
 fn prepare_args(name: &str, args: &Value) -> Value {
     let mut args = if args.is_null() {
         json!({})
@@ -1660,6 +1682,92 @@ mod tests {
             &json!({"name": "serde", "query": "a", "question": "b"}),
         );
         assert_eq!(a["query"], "a", "explicit query wins");
+    }
+
+    /// T928: a client validates `tools/list` before `prepare_args`. Each alias that rename
+    /// accepts is already valid; a call that names none of them is not. `ping`'s `agent`
+    /// is optional on the schema and on the call.
+    #[test]
+    fn advertised_schema_accepts_each_prepare_args_alias() {
+        let (mut cfg, dir) = tmp("mcp-alias-schema");
+        cfg.plugins.docs.enabled = true;
+        let server = Server::new(&cfg).unwrap();
+        let listed: Value = serde_json::from_str(
+            &server
+                .handle_line(r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#)
+                .unwrap(),
+        )
+        .unwrap();
+        let tools = listed["result"]["tools"].as_array().unwrap();
+        let schema = |name: &str| -> Value {
+            tools
+                .iter()
+                .find(|t| t["name"] == name)
+                .unwrap_or_else(|| panic!("tools/list has no {name}"))["inputSchema"]
+                .clone()
+        };
+
+        let search = schema("search");
+        let check = jsonschema::validator_for(&search).unwrap();
+        for args in [
+            json!({"query": "needle"}),
+            json!({"pattern": "needle"}),
+            json!({"query": "needle", "path": "src", "max": 5}),
+        ] {
+            if let Err(e) = check.validate(&args) {
+                panic!("search {args} rejected: {e}");
+            }
+            assert!(
+                missing_required(&search, &prepare_args("search", &args)).is_none(),
+                "{args}"
+            );
+        }
+        for args in [json!({}), json!({"path": "src"})] {
+            assert!(
+                check.validate(&args).is_err(),
+                "search {args} passed the schema"
+            );
+            let msg = missing_required(&search, &prepare_args("search", &args)).unwrap();
+            assert!(msg.contains("pattern"), "{msg}");
+        }
+
+        let ping = schema("ping");
+        let check = jsonschema::validator_for(&ping).unwrap();
+        assert!(check.validate(&json!({})).is_ok());
+        assert!(check.validate(&json!({"agent": "Claude Code"})).is_ok());
+        assert!(missing_required(&ping, &json!({})).is_none());
+        let line = r#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"ping","arguments":{}}}"#;
+        let v: Value = serde_json::from_str(&server.handle_line(line).unwrap()).unwrap();
+        assert_eq!(v["result"]["isError"], false, "{v}");
+        assert_eq!(v["result"]["content"][0]["text"], "MCP  жив");
+
+        #[cfg(feature = "docs")]
+        {
+            let docs = schema("docs_query");
+            let check = jsonschema::validator_for(&docs).unwrap();
+            for args in [
+                json!({"name": "serde", "query": "Deserialize"}),
+                json!({"name": "serde", "question": "Deserialize"}),
+                json!({"name": "serde", "userQuery": "Deserialize"}),
+            ] {
+                if let Err(e) = check.validate(&args) {
+                    panic!("docs_query {args} rejected: {e}");
+                }
+                assert!(
+                    missing_required(&docs, &prepare_args("docs_query", &args)).is_none(),
+                    "{args}"
+                );
+            }
+            assert!(check.validate(&json!({"name": "serde"})).is_err());
+            assert!(check.validate(&json!({"question": "Deserialize"})).is_err());
+            let msg = missing_required(
+                &docs,
+                &prepare_args("docs_query", &json!({"name": "serde"})),
+            )
+            .unwrap();
+            assert!(msg.contains("query"), "{msg}");
+        }
+        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]

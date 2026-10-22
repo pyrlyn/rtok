@@ -71,7 +71,7 @@ impl Plugin for Read {
             ToolDef {
                 name: "search",
                 description: "Regex search files; path:line: snippet, max hits. From a worktree, pass absolute paths.",
-                input_schema: json!({"type":"object","properties":{"pattern":{"type":"string"},"path":{"type":"string"},"max":{"type":"integer"}},"required":["pattern"]}),
+                input_schema: json!({"type":"object","properties":{"pattern":{"type":"string"},"query":{"type":"string","description":"alias of pattern"},"path":{"type":"string"},"max":{"type":"integer"}},"anyOf":[{"required":["pattern"]},{"required":["query"]}]}),
             },
             ToolDef {
                 name: "tree",
