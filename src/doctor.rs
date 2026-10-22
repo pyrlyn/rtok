@@ -628,7 +628,7 @@ pub fn page(cfg: &Config) -> Result<Report> {
                 cfg.plugin_enabled("archive", true),
                 cfg.plugin_enabled("memory", true) && cfg.plugins.memory.recall_tokens > 0,
                 sync_block_present(),
-                &detected_hosts(settings.as_ref()),
+                &detected_hosts(cfg),
             );
             lines.extend(crate::agents::mcp::doctor_lines(cfg));
             lines.extend(always_load);
@@ -715,22 +715,19 @@ fn hook_client_advice(prefers_client: bool, path: Option<&OsStr>) -> Option<Stri
     })
 }
 
-/// Which hosts this machine runs (T59.7): Claude Code when the doctor's settings
-/// probe found the file, OpenCode and Cursor by their config dirs under $HOME.
-fn detected_hosts(settings: Option<&Value>) -> Vec<&'static str> {
-    let mut v = Vec::new();
-    if settings.is_some() {
-        v.push("claude");
-    }
-    let home = crate::config::env_user_home();
-    let has = |p: &str| home.as_ref().is_some_and(|h| h.join(p).exists());
-    if has(".config/opencode") {
-        v.push("opencode");
-    }
-    if has(".cursor") {
-        v.push("cursor");
-    }
-    v
+/// Which of the hosts the overlap checks know this machine runs (T59.7): any variant the one
+/// agent lookup finds (T966), not a config folder an uninstalled app left behind (T426).
+fn detected_hosts(cfg: &Config) -> Vec<&'static str> {
+    ["claude", "opencode", "cursor"]
+        .into_iter()
+        .filter(|&id| {
+            crate::agents::host(id).is_some_and(|a| {
+                a.variants()
+                    .iter()
+                    .any(|v| crate::agents::present(cfg, id, v))
+            })
+        })
+        .collect()
 }
 
 fn sync_block_present() -> bool {

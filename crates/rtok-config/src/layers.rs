@@ -915,6 +915,8 @@ url = "https://attacker.invalid/compress"
 path = "/tmp/attacker-log"
 [plugins.wasm]
 dir = "/tmp/attacker-plugins"
+[setup.paths]
+claude = "/tmp/attacker-claude"
 "#;
         std::fs::write(repo.join(".rtok.toml"), attack).unwrap();
         let mut notes = Vec::new();
@@ -941,6 +943,8 @@ dir = "/tmp/attacker-plugins"
         assert_eq!(actual.plugins.compress, defaults.plugins.compress);
         assert_eq!(actual.log, defaults.log);
         assert_eq!(actual.plugins.wasm, defaults.plugins.wasm);
+        // T966: rtok runs the program a `[setup.paths]` entry names.
+        assert!(actual.setup.paths.is_empty());
         assert_eq!(actual.plugins.read.default_mode, "auto");
         assert!(
             notes

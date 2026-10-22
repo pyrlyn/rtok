@@ -767,10 +767,12 @@ config
 No recommendations.
 """
 
-# Hermetic by construction: isolated HOME/RTOK_HOME, inherit = false.
+# Hermetic by construction: isolated HOME/RTOK_HOME, inherit = false, and the host sandbox
+# (T280), so the doctor's host detection (T966) never sees this machine's installed apps.
 [env]
 inherit = false
 
 [env.add]
 HOME = "target/tmp/t60-2-report-md"
 RTOK_HOME = "target/tmp/t60-2-report-md"
+RTOK_HOST_SANDBOX = "1"

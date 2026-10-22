@@ -408,6 +408,8 @@ hook_timeout_s = 5                    # тайм-аут, що записуєть
 modes        = []                     # наприклад ["terse", "yagni"]   (--mode)
 mcp          = true                   # також зареєструвати MCP-сервер   (--mcp)
 proxy        = false                  # також задати base URL           (--proxy)
+[setup.paths]                         # хост = "шлях": де застосунок хоста, коли rtok не знаходить його сам (T966; `agents install|update|info` питає і пропонує зберегти)
+# напр. claude = "~/.local/bin/claude" # CLI-бінарник або десктопний застосунок (`/Applications/Claude.app`, `claude.exe`)
 [setup.claude]
 settings_path = "~/.claude/settings.json"
 [setup.cursor]

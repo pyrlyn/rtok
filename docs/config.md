@@ -408,6 +408,8 @@ hook_timeout_s = 5                    # timeout written into each hook entry
 modes        = []                     # e.g. ["terse", "yagni"]   (--mode)
 mcp          = true                   # also register the MCP server   (--mcp)
 proxy        = false                  # also set the base URL          (--proxy)
+[setup.paths]                         # host = "path": where a host app is when rtok cannot find it (T966; `agents install|update|info` asks and offers to save)
+# e.g. claude = "~/.local/bin/claude"   # a CLI binary, or a desktop app (`/Applications/Claude.app`, `claude.exe`)
 [setup.claude]
 settings_path = "~/.claude/settings.json"
 [setup.cursor]
