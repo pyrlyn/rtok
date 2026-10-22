@@ -17,7 +17,7 @@
 # Runs first so rust-cache keys on this rustc. Only `rust` is installed; the other
 # mise tools are not needed to build, except `node` for the SPA. rustfmt and clippy come from mise.toml.
 - name: Install Rust from mise.toml
-  uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+  uses: jdx/mise-action@v4
   with:
     install_args: rust node
     cache_key_prefix: mise-v1-release
@@ -40,7 +40,7 @@
       || { echo "rustc is not the mise.toml pin $version" >&2; exit 1; }
 
 - name: Cache Cargo build
-  uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+  uses: Swatinem/rust-cache@v2
   with:
     shared-key: release-dist
     # Release builds are rare; always save so the next cut is warm.
