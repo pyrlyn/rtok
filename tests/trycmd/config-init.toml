@@ -4,7 +4,7 @@ stdout = """
 target/tmp/t60-2-config-init.toml
 --- a/target/tmp/t60-2-config-init.toml
 +++ b/target/tmp/t60-2-config-init.toml
-@@ -0,0 +1,608 @@
+@@ -0,0 +1,610 @@
 +# rtok configuration. Every CLI flag has a key here; flags and RTOK_* env vars override.
 +# Precedence: defaults < this file < <git root>/.rtok.toml < env < flags.
 +# Project TOML and project .env cannot set sensitive destinations, commands or paths;
@@ -340,6 +340,8 @@ target/tmp/t60-2-config-init.toml
 +# modes        = []                     # e.g. ["terse", "yagni"]   (--mode)
 +# mcp          = true                   # also register the MCP server   (--mcp)
 +# proxy        = false                  # also set the base URL          (--proxy)
++[setup.paths]                         # host = "path": where a host app is when rtok cannot find it (`agents install|update|info` asks and offers to save)
++# e.g. claude = "~/.local/bin/claude"   # a CLI binary, or a desktop app (`/Applications/Claude.app`, `claude.exe`)
 +[setup.claude]
 +# settings_path = "~/.claude/settings.json"
 +[setup.cursor]
@@ -613,7 +615,7 @@ target/tmp/t60-2-config-init.toml
 +[plugins.wasm]
 +# enabled = false
 +# dir = "~/.rtok/plugins"
-1 file changed, 608 insertions(+)
+1 file changed, 610 insertions(+)
 """
 
 # Hermetic by construction: isolated HOME/RTOK_HOME, inherit = false.

@@ -566,9 +566,11 @@ fn agent_row(
     v: &crate::agents::Variant,
     cfg: &Config,
 ) -> AgentListRow {
-    let present = crate::agents::present(v);
-    let app = crate::agents::app_path(v).map(|p| p.display().to_string());
-    let version = app.as_ref().map(|_| crate::agents::app_version(v));
+    let app = crate::agents::locate(cfg, a.id(), v).map(|p| p.display().to_string());
+    let present = app.is_some();
+    let version = app
+        .as_ref()
+        .map(|_| crate::agents::app_version(cfg, a.id(), v));
     let config = a
         .files(cfg, v.kind)
         .iter()

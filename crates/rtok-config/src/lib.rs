@@ -782,6 +782,10 @@ section! {
         /// recorded one. Validated by `agents::plugin_version::Source`'s `FromStr`, not here,
         /// so this section stays free of that module's types.
         source: Option<String> = None,
+        /// `[setup.paths]` (T966): `host = "path"` for a host app rtok cannot find on its own —
+        /// its CLI binary, or its desktop app (an `.app` bundle or `.exe`). Read first by
+        /// `agents::locate`; `agents install|update|info <host>` offers to save it here.
+        paths: BTreeMap<String, PathBuf> = BTreeMap::new(),
         claude: SetupClaude = SetupClaude::default(),
         cursor: SetupCursor = SetupCursor::default(),
         codex: SetupCodex = SetupCodex::default(),
@@ -1860,6 +1864,12 @@ impl Config {
                 .configs
                 .iter_mut()
                 .map(|(k, v)| (format!("bench.configs.{k}").into(), v)),
+        );
+        out.extend(
+            self.setup
+                .paths
+                .iter_mut()
+                .map(|(k, v)| (format!("setup.paths.{k}").into(), v)),
         );
         out.extend(
             self.plugins

@@ -605,8 +605,9 @@ fn prompt(question: &str, default: bool) -> bool {
     }
 }
 
-/// Enter takes `default`; explicit y/yes accept; anything else declines.
-fn answer(line: &str, default: bool) -> bool {
+/// Enter takes `default`; explicit y/yes accept; anything else declines. Public so the binary's
+/// own line questions (T966: an agent's path) answer the same way.
+pub fn answer(line: &str, default: bool) -> bool {
     match line.trim().to_ascii_lowercase().as_str() {
         "" => default,
         a => matches!(a, "y" | "yes"),
