@@ -4489,6 +4489,7 @@ version = "0.0.1"
 name = "rtok-log"
 version = "0.0.1"
 dependencies = [
+ "rustix",
  "workspace-hack",
 ]
 
