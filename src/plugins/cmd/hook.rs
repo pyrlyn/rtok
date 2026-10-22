@@ -554,7 +554,7 @@ mod tests {
     /// from the main session, which has no guard, keep their wrap.
     #[test]
     fn weft_2026_10_16_refused_commands_are_never_wrapped() {
-        let wt = "/Users/listepo/GitHub/listepo/_worktrees/weft-agent-a10131a73e855515f";
+        let wt = "/work/_worktrees/weft-agent-a10131a73e855515f";
         let cmds = [
             "git fetch origin -q && git checkout -q -B t105.17-winui-keywords origin/main && git log --oneline -3 && ls && grep -n \"T105.17\" -A12 plan.md | head -40".to_string(),
             "git fetch origin -q && git checkout -q -B t105.17-winui-keywords origin/main && git log --oneline -3".to_string(),
