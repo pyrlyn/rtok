@@ -4377,7 +4377,7 @@ dependencies = [
  "tiktoken-rs",
  "tokio",
  "tokio-tungstenite 0.30.0",
- "toml 0.8.23",
+ "toml 0.9.12+spec-1.1.0",
  "toml_edit 0.25.16+spec-1.1.0",
  "trash",
  "tree-sitter",
@@ -5732,10 +5732,12 @@ version = "0.9.12+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf92845e79fc2e2def6a5d828f0801e29a2f8acc037becc5ab08595c7d5e9863"
 dependencies = [
+ "indexmap",
  "serde_core",
  "serde_spanned 1.1.2",
  "toml_datetime 0.7.5+spec-1.1.0",
  "toml_parser",
+ "toml_writer",
  "winnow 0.7.15",
 ]
 
