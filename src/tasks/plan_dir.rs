@@ -613,7 +613,10 @@ mod tests {
         std::fs::create_dir_all(dir.join("T4")).unwrap();
         std::fs::write(dir.join("T4/task.md"), HAND_MADE).unwrap();
         let err = disk.list(&Filter::default()).unwrap_err();
-        assert!(format!("{err:#}").contains("T4/task.md"), "{err:#}");
+        assert!(
+            format!("{err:#}").contains(&format!("T4{}task.md", std::path::MAIN_SEPARATOR)),
+            "{err:#}"
+        );
         assert!(format!("{err:#}").contains("heading"), "{err:#}");
         let _ = std::fs::remove_dir_all(dir.parent().unwrap());
     }

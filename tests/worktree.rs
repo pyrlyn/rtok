@@ -2241,6 +2241,7 @@ esac
 }
 
 /// `rtok worktree add <task> <slug>` in `work` as `agent`; the new worktree's path.
+#[cfg(unix)]
 fn add_as(tmp: &Path, work: &Path, agent: &str, task: &str, slug: &str) -> std::path::PathBuf {
     let out = rtok_as(
         tmp,
