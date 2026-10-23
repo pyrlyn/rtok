@@ -117,6 +117,7 @@ cjk   = 1.0
 [hook]                                # rtok hook <event>
 host      = "claude"                  # claude | cursor | copilot | devin | cline — payload field mapping (T10.1, T46.3, T87, T94)
 max_ms    = 10                        # soft budget; over it, the event is logged as slow
+slow_warn_s = 300                     # one slow warning per event per this many seconds, with the count and worst time; 0 = every slow call
 fail_open = true                      # any error → `{}` and exit 0; false only for debugging
 
 [agents]                              # the rtok agent registry (T282, D34); see agents-and-worktrees.md

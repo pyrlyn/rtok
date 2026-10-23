@@ -112,6 +112,7 @@ Every effective key with its origin — the `config show --sources` page.
 | hook.fail_open | true | default |
 | hook.host | claude | default |
 | hook.max_ms | 10 | default |
+| hook.slow_warn_s | 300 | default |
 | log.files | 5 | default |
 | log.level | info | default |
 | log.lines | 200 | default |
@@ -471,7 +472,7 @@ Every effective key with its origin — the `config show --sources` page.
 | worktree.seed | true | default |
 | worktree.seed_dirs | [target, node_modules] | default |
 
-425 keys.
+426 keys.
 
 ## Doctor
 
