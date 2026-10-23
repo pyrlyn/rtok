@@ -1326,8 +1326,9 @@ Create the worktree for a task: one location, one name, one locked owner; prints
 Usage: rtok worktree add [OPTIONS] <TASK> [SLUG]
 
 Arguments:
-  <TASK>  Task id, e.g. `t158`; directory `<repo>-<task>`, branch `<task>[-<slug>]`
-  [SLUG]  Optional branch suffix
+  <TASK>  Task id, e.g. `t158`, or `t158 read-hook-same-path` as one argument; directory
+          `<repo>-<task>`, branch `<task>[-<slug>]`
+  [SLUG]  Optional branch suffix (spaces become dashes, as in the one-argument form)
 
 Options:
       --config <PATH>  User config file (else `RTOK_CONFIG` or `<home>/config.toml`)
