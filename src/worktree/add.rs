@@ -295,6 +295,13 @@ pub fn run<'a>(
         std::fs::create_dir_all(root)
             .with_context(|| format!("cannot create {}", root.display()))?;
     }
+    // `plan` checked this before the fetch; another add of the same task may have made it since,
+    // and the rollback below must never remove a directory this call did not create.
+    ensure!(
+        !plan.path.exists(),
+        "{} already exists: one worktree per task",
+        plan.path.display()
+    );
     let mut undo = Undo::default();
     // Recorded before the call: git may die with the branch made and the directory half-filled.
     if !git::has_branch(main, &plan.branch) {
