@@ -12,6 +12,7 @@ use anyhow::{Context, Result, bail, ensure};
 use rtok_config::root::{ProjectRoot, contain, resolved};
 
 use super::{Owner, git};
+use crate::store::Store;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Plan {
@@ -173,18 +174,118 @@ pub(super) fn today() -> Result<String> {
     Ok(crate::log::stamp(now.as_secs())[..10].to_string())
 }
 
+/// The two effects a healthy test machine cannot cause: a nearly full volume, and a
+/// `git worktree add` that dies half-way.
+#[derive(Clone, Copy)]
+pub struct Seams {
+    /// Free bytes on the volume that holds an existing path.
+    pub free_bytes: fn(&Path) -> std::io::Result<u64>,
+    /// `git worktree add` for `(repo, path, branch, lock reason, base)`.
+    pub create: fn(&Path, &Path, &str, &str, &str) -> Result<()>,
+}
+
+impl Seams {
+    pub const HOST: Self = Self {
+        free_bytes: rtok_sys::free_bytes,
+        create: git::add_locked,
+    };
+}
+
+/// Refuses when the volume that would hold `path` has less than `min_mib` MiB free. `path` does
+/// not exist yet, so the nearest ancestor that does stands for its volume. A reading that fails
+/// lets the add go on: an unknown is no reason to block work.
+fn ensure_room(seams: &Seams, path: &Path, min_mib: u32) -> Result<()> {
+    let Some(on) = path
+        .ancestors()
+        .find(|p| p.exists())
+        .filter(|_| min_mib > 0)
+    else {
+        return Ok(());
+    };
+    let free = match (seams.free_bytes)(on) {
+        Ok(free) => free >> 20,
+        Err(e) => {
+            crate::log::stderr_ln(&format!(
+                "warning: free space of {} unknown: {e}",
+                on.display()
+            ));
+            return Ok(());
+        }
+    };
+    ensure!(
+        free >= u64::from(min_mib),
+        "only {free} MiB free for {}, below `[worktree] min_free_mib` = {min_mib}; free disk space or lower it (0 turns the check off)",
+        path.display()
+    );
+    Ok(())
+}
+
+/// What a failed add takes back: the branch, the worktree and the claim this call made, in
+/// reverse order, unless [`Undo::keep`] says the add went through. A branch or directory that
+/// was there before the call is never recorded, so it stays.
+#[derive(Default)]
+pub struct Undo<'a> {
+    steps: Vec<Step<'a>>,
+}
+
+enum Step<'a> {
+    Branch { repo: PathBuf, name: String },
+    Worktree { repo: PathBuf, path: PathBuf },
+    Claim { store: &'a Store, path: String },
+}
+
+impl<'a> Undo<'a> {
+    /// Records a claim in the store, to be released on a failure.
+    pub fn claim(&mut self, store: &'a Store, path: &Path) {
+        let path = crate::fs::canon(path).to_string_lossy().into_owned();
+        self.steps.push(Step::Claim { store, path });
+    }
+
+    /// The add went through; nothing is taken back.
+    pub fn keep(mut self) {
+        self.steps.clear();
+    }
+}
+
+impl Drop for Undo<'_> {
+    fn drop(&mut self) {
+        for step in self.steps.drain(..).rev() {
+            let done = match &step {
+                Step::Claim { store, path } => super::claim::release(store, path),
+                Step::Worktree { repo, path } => {
+                    // A lock outlives a failed add: `prune` leaves a locked record alone.
+                    let _ = git::unlock(repo, path);
+                    fs_kit::tree::remove_any(path)
+                        .map_err(Into::into)
+                        .and_then(|()| git::prune(repo))
+                }
+                Step::Branch { repo, name } if git::has_branch(repo, name) => {
+                    git::delete_branch(repo, name)
+                }
+                Step::Branch { .. } => Ok(()),
+            };
+            if let Err(e) = done {
+                crate::log::stderr_ln(&format!("warning: add not fully undone: {e:#}"));
+            }
+        }
+    }
+}
+
 /// Creates the worktree and returns its plan. A failed fetch is an error: branching
-/// from a stale base is how a finished task gets rebuilt on old code.
-pub fn run(
+/// from a stale base is how a finished task gets rebuilt on old code. A failure here leaves
+/// nothing behind; the caller keeps the [`Undo`] until its own steps are done.
+pub fn run<'a>(
     cwd: &Path,
-    root: &Path,
+    wt: &crate::config::Worktree,
+    seams: Seams,
     id: (&str, Option<&str>),
     owner: (&str, Option<&str>),
-) -> Result<Plan> {
+) -> Result<(Plan, Undo<'a>)> {
     let worktrees = git::list(cwd)?;
     let main = &worktrees.first().context("git lists no worktree")?.path;
     let temp = [std::env::temp_dir(), "/tmp".into()];
-    let plan = plan(main, root, &temp, id, owner, &today()?)?;
+    let plan = plan(main, &wt.root, &temp, id, owner, &today()?)?;
+    ensure_room(&seams, &plan.path, wt.min_free_mib)?;
     let base = git::default_base(main);
     git::fetch(main, &base)?;
     if crate::fs::path_starts_with(&resolved(&plan.path), &resolved(main)) {
@@ -194,8 +295,27 @@ pub fn run(
         std::fs::create_dir_all(root)
             .with_context(|| format!("cannot create {}", root.display()))?;
     }
-    git::add_locked(main, &plan.path, &plan.branch, &plan.reason, &base)?;
-    Ok(plan)
+    // `plan` checked this before the fetch; another add of the same task may have made it since,
+    // and the rollback below must never remove a directory this call did not create.
+    ensure!(
+        !plan.path.exists(),
+        "{} already exists: one worktree per task",
+        plan.path.display()
+    );
+    let mut undo = Undo::default();
+    // Recorded before the call: git may die with the branch made and the directory half-filled.
+    if !git::has_branch(main, &plan.branch) {
+        undo.steps.push(Step::Branch {
+            repo: main.clone(),
+            name: plan.branch.clone(),
+        });
+    }
+    undo.steps.push(Step::Worktree {
+        repo: main.clone(),
+        path: plan.path.clone(),
+    });
+    (seams.create)(main, &plan.path, &plan.branch, &plan.reason, &base)?;
+    Ok((plan, undo))
 }
 
 #[cfg(test)]

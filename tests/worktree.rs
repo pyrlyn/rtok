@@ -778,6 +778,164 @@ fn add_binds_the_worktree_to_the_calling_agent() {
     );
 }
 
+/// T970: `worktree add` on stand-ins for a full volume and for a `git worktree add` that dies
+/// half-way; what it left, as (worktree directories, local branches named `t970*`).
+mod all_or_nothing {
+    use super::*;
+    use rtok::worktree::add::Seams;
+    use rtok::worktree::claim::add_with;
+
+    const ME: &str = "Claude Code / sonnet";
+
+    fn plenty(_: &Path) -> std::io::Result<u64> {
+        Ok(u64::MAX)
+    }
+    fn nearly_full(_: &Path) -> std::io::Result<u64> {
+        Ok(100 << 20)
+    }
+    fn unreadable(_: &Path) -> std::io::Result<u64> {
+        Err(std::io::Error::other("no statvfs here"))
+    }
+    /// git got as far as the branch and a half-filled directory, then the disk was full.
+    fn dies_half_made(
+        repo: &Path,
+        path: &Path,
+        branch: &str,
+        _: &str,
+        base: &str,
+    ) -> anyhow::Result<()> {
+        run(repo, &["branch", "--no-track", branch, base]);
+        std::fs::create_dir_all(path.join("src"))?;
+        std::fs::write(path.join("src/half.rs"), "x")?;
+        anyhow::bail!("git worktree add: No space left on device")
+    }
+    /// The worktree is complete and locked; the failure comes after it.
+    fn dies_after_creating(
+        repo: &Path,
+        path: &Path,
+        branch: &str,
+        reason: &str,
+        base: &str,
+    ) -> anyhow::Result<()> {
+        git::add_locked(repo, path, branch, reason, base)?;
+        anyhow::bail!("No space left on device")
+    }
+
+    fn seams(
+        free: fn(&Path) -> std::io::Result<u64>,
+        create: fn(&Path, &Path, &str, &str, &str) -> anyhow::Result<()>,
+    ) -> Seams {
+        Seams {
+            free_bytes: free,
+            create,
+        }
+    }
+
+    fn add(work: &Path, seams: Seams, floor: u32) -> anyhow::Result<rtok::worktree::add::Plan> {
+        let mut wt = rtok::config::Config::default().worktree;
+        wt.min_free_mib = floor;
+        add_with(
+            seams,
+            None,
+            work,
+            &wt,
+            ("t970", Some("x")),
+            (None, Some(ME.into())),
+            false,
+        )
+    }
+
+    fn left(work: &Path) -> (usize, String) {
+        let dirs = std::fs::read_dir(work.join(".rtok/worktrees")).map_or(0, Iterator::count);
+        (dirs, run(work, &["branch", "--list", "t970*"]))
+    }
+
+    #[test]
+    fn a_nearly_full_volume_is_refused_before_anything_is_made() {
+        let tmp = rtok::testutil::tmp_dir("worktree-add-full");
+        let work = common::git::repo(&tmp);
+        let err = add(&work, seams(nearly_full, git::add_locked), 2048).unwrap_err();
+        let text = err.to_string();
+        assert!(!text.contains('\n'), "{text}");
+        for want in ["100 MiB free", "min_free_mib", "2048"] {
+            assert!(text.contains(want), "{text}");
+        }
+        assert_eq!(
+            (inventory(&work).unwrap().len(), left(&work)),
+            (1, (0, String::new()))
+        );
+        assert!(!work.join(".rtok").exists(), "not even the root directory");
+
+        // 0 turns the check off; a reading that fails never blocks.
+        for (free, floor) in [
+            (nearly_full as fn(&Path) -> _, 0),
+            (unreadable, 2048),
+            (plenty, 2048),
+        ] {
+            let plan = add(&work, seams(free, git::add_locked), floor).unwrap();
+            assert!(plan.path.is_dir());
+            run(&work, &["worktree", "unlock", plan.path.to_str().unwrap()]);
+            run(&work, &["worktree", "remove", plan.path.to_str().unwrap()]);
+            run(&work, &["branch", "-D", &plan.branch]);
+        }
+    }
+
+    #[test]
+    fn a_git_step_that_dies_leaves_no_directory_branch_or_lock_and_the_task_can_be_retried() {
+        let tmp = rtok::testutil::tmp_dir("worktree-add-dies");
+        let work = common::git::repo(&tmp);
+        for create in [dies_half_made, dies_after_creating] {
+            let err = add(&work, seams(plenty, create), 2048).unwrap_err();
+            assert!(err.to_string().contains("No space left"), "{err:#}");
+            assert_eq!(left(&work), (0, String::new()));
+            assert_eq!(inventory(&work).unwrap().len(), 1);
+            assert_eq!(
+                run(&work, &["worktree", "list", "--porcelain"])
+                    .matches("worktree ")
+                    .count(),
+                1
+            );
+        }
+        let retry = add(&work, Seams::HOST, 2048).unwrap();
+        assert!(retry.path.is_dir());
+    }
+
+    #[test]
+    fn a_branch_that_was_there_before_stays() {
+        let tmp = rtok::testutil::tmp_dir("worktree-add-branch");
+        let work = common::git::repo(&tmp);
+        run(&work, &["branch", "t970-x"]);
+        let err = add(&work, Seams::HOST, 2048).unwrap_err();
+        assert!(format!("{err:#}").contains("t970-x"), "{err:#}");
+        assert_eq!(left(&work).1.trim(), "t970-x");
+        assert_eq!(left(&work).0, 0);
+    }
+
+    #[test]
+    fn an_undone_claim_is_released_and_a_kept_one_is_not() {
+        let tmp = rtok::testutil::tmp_dir("worktree-add-claim");
+        let (store, ids) = agents(&tmp, &["sess-undo"]);
+        let path = tmp.join("wt");
+        std::fs::create_dir_all(&path).unwrap();
+        for keep in [false, true] {
+            store
+                .claim_worktree(&stored_claim_path(&path), &ids[0], "t970")
+                .unwrap();
+            let mut undo = rtok::worktree::add::Undo::default();
+            undo.claim(&store, &path);
+            if keep {
+                undo.keep();
+            } else {
+                drop(undo);
+            }
+            assert_eq!(
+                store.open_worktree_claims().unwrap().len(),
+                usize::from(keep)
+            );
+        }
+    }
+}
+
 /// T285: `claim` takes an unlocked worktree or its own old lock, never another owner's or
 /// another agent's.
 #[test]
@@ -2018,11 +2176,11 @@ fn a_new_worktree_inherits_no_symbol_rows_under_rtok() {
         &work,
         &rtok::config::Worktree {
             root: tmp.join("_worktrees"),
+            min_free_mib: 0,
             ..Default::default()
         },
         ("t1", None),
-        None,
-        Some(ME.into()),
+        (None, Some(ME.into())),
         false,
     )
     .unwrap();

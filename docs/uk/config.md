@@ -497,6 +497,7 @@ enabled = true                        # false: кожна команда `rtok w
 root = ".rtok/worktrees"              # де `rtok worktree add` створює worktree, як <root>/<repo>-<task>; відносний: у основному checkout; `~` розкривається
 seed = true                           # заповнити seed_dirs нового worktree із сусіднього checkout, що збирав їх останнім: copy-on-write клони (APFS, btrfs, XFS, bcachefs, ReFS, Dev Drive), інакше звичайна копія; `rtok worktree add --no-seed` пропускає це один раз
 seed_dirs = ["target", "node_modules"] # кеші збірки для засіву, відносно checkout; голе ім'я збігається й на рівень нижче (web/node_modules)
+min_free_mib = 2048                    # `rtok worktree add` refuses when the target volume has less free space than this, in MiB (a full disk leaves a half-made worktree); 0 turns the check off
 
 [tasks]                               # адаптери задач (T441); зазвичай задаються для проєкту в .rtok.toml
 adapter = "disk"                      # disk | github | gitlab

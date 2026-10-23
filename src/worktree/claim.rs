@@ -153,6 +153,20 @@ fn remember_with(
     pause: std::time::Duration,
 ) -> Result<()> {
     let shown = path.display().to_string();
+    store_claim(store, path, agent, task, attempts, pause).with_context(|| {
+        format!("claim not stored; {shown} stays locked, run `rtok worktree adopt` once the store is free")
+    })
+}
+
+/// [`remember`] without the advice: a caller that takes the worktree back words its own.
+fn store_claim(
+    store: Option<&Store>,
+    path: &Path,
+    agent: &str,
+    task: &str,
+    attempts: u32,
+    pause: std::time::Duration,
+) -> Result<()> {
     let path = crate::fs::canon(path).to_string_lossy().into_owned();
     let Some(store) = store else {
         return Ok(());
@@ -161,9 +175,7 @@ fn remember_with(
         store.claim_worktree(&path, agent, task)?;
         store.take_pending_worktree(&path).map(drop)
     })
-    .with_context(|| {
-        format!("claim not stored; {shown} stays locked, run `rtok worktree adopt` once the store is free")
-    })
+    .map_err(Into::into)
 }
 
 /// Release the open claim on `path`, retrying like [`remember`]. An unreleased claim keeps its
@@ -243,21 +255,47 @@ pub fn add(
     cwd: &Path,
     wt: &crate::config::Worktree,
     id: (&str, Option<&str>),
-    agent: Option<&AgentDetail>,
-    owner_flag: Option<String>,
+    who: (Option<&AgentDetail>, Option<String>),
+    auto_add: bool,
+) -> Result<super::add::Plan> {
+    add_with(super::add::Seams::HOST, store, cwd, wt, id, who, auto_add)
+}
+
+/// [`add`] on stand-ins for the volume and for git. All or nothing (T970): a step that fails
+/// after the worktree exists takes back the worktree, its branch and the claim.
+pub fn add_with(
+    seams: super::add::Seams,
+    store: Option<&Store>,
+    cwd: &Path,
+    wt: &crate::config::Worktree,
+    id: (&str, Option<&str>),
+    (agent, owner_flag): (Option<&AgentDetail>, Option<String>),
     auto_add: bool,
 ) -> Result<super::add::Plan> {
     let owner = owner(owner_flag, agent, store)?;
     let agent_id = agent.map(|a| a.id.as_str());
-    let plan = super::add::run(cwd, &wt.root, id, (&owner, agent_id))?;
+    let (plan, mut undo) = super::add::run(cwd, wt, seams, id, (&owner, agent_id))?;
+    if let Some(agent) = agent_id {
+        if let Some(store) = store {
+            undo.claim(store, &plan.path);
+        }
+        store_claim(
+            store,
+            &plan.path,
+            agent,
+            &plan.task,
+            LOCK_ATTEMPTS,
+            LOCK_PAUSE,
+        )
+        .with_context(|| format!("claim not stored; {} removed again", plan.path.display()))?;
+    }
+    // Both are best effort, so the claim goes first: it is the one step that can still fail.
     copy_symbol_index(store, cwd, &plan.path);
     if wt.seed {
         super::seed::from_siblings(cwd, &plan.path, &wt.seed_dirs);
     }
-    if let Some(agent) = agent_id {
-        remember(store, &plan.path, agent, &plan.task)?;
-    }
     register_project(store, auto_add, &plan.path, Some(&plan.branch));
+    undo.keep();
     Ok(plan)
 }
 

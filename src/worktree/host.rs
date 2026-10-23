@@ -102,8 +102,7 @@ fn create(p: &Payload, cfg: &Config, store: Option<&Store>) -> Result<PathBuf> {
         cwd,
         &cfg.worktree,
         (&p.name, None),
-        agent.as_ref(),
-        owner,
+        (agent.as_ref(), owner),
         auto_add,
     )?;
     Ok(native(plan.path))

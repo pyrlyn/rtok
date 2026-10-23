@@ -497,6 +497,7 @@ enabled = true                        # false: every `rtok worktree` command (li
 root = ".rtok/worktrees"              # where `rtok worktree add` creates worktrees, as <root>/<repo>-<task>; relative: under the main checkout; `~` expands
 seed = true                           # fill a new worktree's seed_dirs from the sibling checkout that built them last: copy-on-write clones (APFS, btrfs, XFS, bcachefs, ReFS, Dev Drive), a plain copy elsewhere; `rtok worktree add --no-seed` skips it once
 seed_dirs = ["target", "node_modules"] # build caches to seed, relative to the checkout; a bare name also matches one level down (web/node_modules)
+min_free_mib = 2048                    # `rtok worktree add` refuses when the target volume has less free space than this, in MiB (a full disk leaves a half-made worktree); 0 turns the check off
 
 [tasks]                               # task adapters (T441); usually set per project in .rtok.toml
 adapter = "disk"                      # disk | github | gitlab

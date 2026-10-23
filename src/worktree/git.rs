@@ -179,6 +179,17 @@ pub fn delete_branch(repo: &Path, branch: &str) -> Result<()> {
     git_ok(repo, &["branch", "-D", "--", branch]).map(drop)
 }
 
+/// Whether the local branch `branch` exists.
+pub fn has_branch(repo: &Path, branch: &str) -> bool {
+    let name = format!("refs/heads/{branch}");
+    git(repo, &["show-ref", "--verify", "-q", &name]).is_ok_and(|out| out.status.success())
+}
+
+/// Drops the records of worktrees whose directory is gone; a locked one stays.
+pub fn prune(repo: &Path) -> Result<()> {
+    git_ok(repo, &["worktree", "prune"]).map(drop)
+}
+
 /// From the local remote-tracking ref: no network on this path.
 pub fn has_remote_branch(repo: &Path, branch: &str) -> bool {
     let name = format!("refs/remotes/origin/{branch}");
