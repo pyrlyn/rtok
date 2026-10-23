@@ -65,6 +65,7 @@ filter.cmd =
 hook.fail_open = true
 hook.host = claude
 hook.max_ms = 10
+hook.slow_warn_s = 300
 log.files = 5
 log.level = info
 log.lines = 200

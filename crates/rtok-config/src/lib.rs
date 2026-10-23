@@ -219,6 +219,9 @@ section! {
     Hook {
         host: String = s("claude"),
         max_ms: u64 = 10,
+        /// T969: seconds between two slow-hook warnings of one event; the warning carries the
+        /// count and the worst time since the last. `0` warns on every slow call.
+        slow_warn_s: u64 = 300,
         fail_open: bool = true,
     }
 }
