@@ -1078,6 +1078,10 @@ section! {
         /// Build caches to seed, relative to the checkout. A bare name also matches one level
         /// down (`node_modules` takes `web/node_modules`).
         seed_dirs: Vec<String> = strs(&["target", "node_modules"]),
+        /// `worktree add` refuses when the volume that would hold the worktree has less free
+        /// space than this many MiB (T970): a full disk leaves a half-made worktree. 0 turns the
+        /// check off.
+        min_free_mib: u32 = 2048,
     }
 }
 

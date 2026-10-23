@@ -420,6 +420,7 @@ ui.emoji = true
 web.host = 127.0.0.1
 web.port = 3333
 worktree.enabled = true
+worktree.min_free_mib = 2048
 worktree.root = .rtok/worktrees
 worktree.seed = true
 worktree.seed_dirs = [target, node_modules]

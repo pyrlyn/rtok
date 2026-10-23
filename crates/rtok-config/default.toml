@@ -424,6 +424,7 @@
 # root = ".rtok/worktrees"              # where `rtok worktree add` creates worktrees, as <root>/<repo>-<task>; relative: under the main checkout
 # seed = true                          # fill a new worktree's seed_dirs from the sibling that built them last, by copy-on-write clone (--no-seed)
 # seed_dirs = ["target", "node_modules"] # build caches to seed, relative to the checkout; a bare name also matches one level down
+# min_free_mib = 2048                   # `worktree add` refuses below this much free space on the target volume, in MiB; 0 = no check
 
 [tasks]                               # task adapters; usually set per project in .rtok.toml
 # adapter = "disk"                      # disk | github | gitlab
