@@ -168,7 +168,7 @@ exceeded `core.call_io_inline_bytes` were never stored and show up as `unreadabl
 Pick the next rule family from the top rows.
 
 `rtok bench` runs two host configurations over the fixed task set in `bench/tasks.toml` and
-compares them.
+compares them. How to run every suite and read the results: [bench/README.md](../bench/README.md).
 
 ## Graph call events
 
