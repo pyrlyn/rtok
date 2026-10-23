@@ -86,6 +86,14 @@ pub fn caller(store: Option<&Store>, flag: Option<&str>) -> Result<Option<AgentD
         (None, Some(env)) => (env, false),
         (None, None) => return Ok(None),
     };
+    // T973: agents copy a plan's `agent: <provider> / <model>` into the flag; "unknown" alone
+    // never told them it wants an id.
+    if explicit && raw.contains(['/', ' ']) {
+        bail!(
+            "--agent {raw}: not an rtok agent id (that looks like a plan's `<provider> / <model>`); \
+             pass your id or a prefix of it, see `rtok agents whoami`"
+        );
+    }
     let found = store
         .context("no store")
         .and_then(|s| s.agent_detail(&s.resolve_agent(&raw)?).map_err(Into::into));
@@ -449,6 +457,18 @@ mod tests {
             locked: Some(format!("claude | t1 | 2026-10-01 | agent {agent}")),
             ..Record::default()
         }
+    }
+
+    #[test]
+    fn an_agent_flag_holding_a_provider_and_model_says_it_wants_an_id() {
+        let err = caller(None, Some("OpenAI / GPT-6"))
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.starts_with("--agent OpenAI / GPT-6: not an rtok agent id")
+                && err.contains("rtok agents whoami"),
+            "{err}"
+        );
     }
 
     #[test]

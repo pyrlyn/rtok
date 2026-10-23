@@ -670,7 +670,17 @@ impl Server {
                  `rtok worktree` from the agent's shell, or pass `agent` (your id, see agents_list)",
                 self.cx.config.hook.host
             ),
-            link::Link::None => bail!("not linked to an agent session"),
+            link::Link::None if !self.cx.config.agents.enabled => bail!(
+                "not linked to an agent session: the agent registry is off ([agents] enabled = false)"
+            ),
+            // T973: the bare refusal was the most common MCP error of 2026-10-22, and agents
+            // retried the same call with nothing to change.
+            link::Link::None => bail!(
+                "not linked to an agent session: no live {} agent has run a hook in this \
+                 directory since this server started; retry after your next tool call, check the \
+                 hooks with `rtok doctor`, or pass `agent` (your id, see agents_list)",
+                self.cx.config.hook.host
+            ),
         };
         let Some(d) = self.cx.store.agent_detail(&id)? else {
             bail!("not linked to an agent session");
@@ -2048,7 +2058,12 @@ mod tests {
         cfg.hook.host = "claude".into();
         let server = Server::new(&cfg).unwrap();
         let (is_err, text) = whoami_over_rpc(&server);
-        assert!(is_err && text == "not linked to an agent session", "{text}");
+        assert!(
+            is_err
+                && text.starts_with("not linked to an agent session: no live claude agent")
+                && text.contains("pass `agent`"),
+            "{text}"
+        );
         let host = server.cx.host_id().unwrap();
         server
             .cx
@@ -2196,7 +2211,12 @@ mod tests {
             .set_agent_last_seen(&a, crate::log::now() as i64 - 500)
             .unwrap();
         let (is_err, text) = whoami_over_rpc(&server);
-        assert!(is_err && text == "not linked to an agent session", "{text}");
+        assert!(
+            is_err
+                && text.starts_with("not linked to an agent session: no live")
+                && text.contains("pass `agent`"),
+            "{text}"
+        );
         let _ = fs::remove_dir_all(dir);
     }
 
@@ -2276,7 +2296,10 @@ mod tests {
         cfg.agents.enabled = false;
         let server = Server::new(&cfg).unwrap();
         let (is_err, text) = whoami_over_rpc(&server);
-        assert!(is_err && text == "not linked to an agent session", "{text}");
+        assert!(
+            is_err && text.ends_with("the agent registry is off ([agents] enabled = false)"),
+            "{text}"
+        );
         let _ = fs::remove_dir_all(dir);
     }
 }
