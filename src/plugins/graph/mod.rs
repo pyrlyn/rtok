@@ -1742,6 +1742,14 @@ fn outline_in(cx: &Ctx, root: &Path, path: &str) -> Result<String> {
     } else {
         None
     };
+    if let Some(abs) = abs.as_deref()
+        && !abs.exists()
+    {
+        let hint = crate::plugins::read::roots::moved_hint(root, abs);
+        if !hint.is_empty() {
+            anyhow::bail!("No such file or directory: {path}{hint}");
+        }
+    }
     text_or(
         cx,
         root,
