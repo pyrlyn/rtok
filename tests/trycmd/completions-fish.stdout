@@ -122,6 +122,7 @@ duplicate-hooks/t''
 duplicate-mcp/t''
 stale-skills/t''"
 complete -c rtok -n "__fish_rtok_using_subcommand doctor" -l agent -d 'Check (and with --fix, repair) the hooks of one host only (an id of `rtok agents list`)' -r
+complete -c rtok -n "__fish_rtok_using_subcommand doctor" -l project -d 'Add setup advice for the git checkout holding PATH (default: the working directory): language servers, graph index, instruction files, plugins left off' -r -F
 complete -c rtok -n "__fish_rtok_using_subcommand doctor" -l config -d 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)' -r -F
 complete -c rtok -n "__fish_rtok_using_subcommand doctor" -l instructions -d 'Also run the instruction-file audit'
 complete -c rtok -n "__fish_rtok_using_subcommand doctor" -l json -d 'JSON instead of the table'
