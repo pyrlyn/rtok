@@ -15,6 +15,7 @@ just = "1.58.0"
 hk = "2.5.0" # runs jactionlint as a pre-push hook (hk.pkl); `mise x -- hk install --mise`
 shellcheck = "0.11.0" # used by jactionlint for run: scripts
 node = "26.8.2" # jscpd, oxlint, oxfmt and vitest run on it; nothing in the binary does
+"npm:agent-browser" = "0.39.2" # browser automation CLI for agents: drive the rtok web app in a real browser
 python = "3.14.7" # T183: tools/publish_marketplace and its tests
 uv = "0.12.19" # resolves the pipx: tool backend on Windows, where pipx itself has no build
 "pipx:pytest" = "9.1.1" # T183: `just python` runs tools/tests
