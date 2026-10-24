@@ -8,8 +8,7 @@
 //! step comes back as [`StoreWarning`].
 
 #![forbid(unsafe_code)]
-// Clippy 1.99 lints the `field: field` code diesel's `QueryableByName` derive expands to, and an
-// allow on the struct does not reach the generated impl.
+// Clippy 1.99 flags the field inits that `#[derive(QueryableByName)]` expands to; the source has none.
 #![allow(clippy::redundant_field_names)]
 
 /// `bail!` that returns [`StoreError`], not `anyhow::Error`. `anyhow::bail!` returns
