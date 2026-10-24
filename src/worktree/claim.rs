@@ -112,7 +112,8 @@ pub fn caller(store: Option<&Store>, flag: Option<&str>) -> Result<Option<AgentD
 }
 
 /// `--owner`, else `<host> / <model>` of the agent (`<host>` alone while no call has named
-/// a model), else an error: without an agent the owner is the only name a lock has.
+/// a model), else (T988) `RTOK_OWNER`, else the login user: a hook that runs before its
+/// session has an agent id still gets a worktree. The lock then names no agent, so it holds.
 pub fn owner(
     flag: Option<String>,
     agent: Option<&AgentDetail>,
@@ -122,7 +123,12 @@ pub fn owner(
         return Ok(owner);
     }
     let Some(agent) = agent else {
-        bail!("--owner is required when no agent is known (--agent or RTOK_AGENT_ID)");
+        let owner = ["RTOK_OWNER", "USER", "USERNAME"]
+            .into_iter()
+            .find_map(|key| std::env::var(key).ok().filter(|v| !v.trim().is_empty()))
+            .unwrap_or_else(|| "unknown".to_string());
+        crate::log::stderr_ln(&format!("warning: no agent bound; owner `{owner}`"));
+        return Ok(owner);
     };
     let model = store.and_then(|s| s.session_model(&agent.host_session_id).ok().flatten());
     Ok(match model {

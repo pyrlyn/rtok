@@ -109,12 +109,30 @@ fn rtok_as(
     args: &[&str],
     stdin: &[u8],
 ) -> std::process::Output {
+    rtok_env(home, cwd, agent, &[], args, stdin)
+}
+
+/// [`rtok_as`] with extra variables: `Some` sets one, `None` removes it.
+fn rtok_env(
+    home: &Path,
+    cwd: &Path,
+    agent: Option<&str>,
+    vars: &[(&str, Option<&str>)],
+    args: &[&str],
+    stdin: &[u8],
+) -> std::process::Output {
     use std::io::Write as _;
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_rtok"));
     match agent {
         Some(id) => cmd.env("RTOK_AGENT_ID", id),
         None => cmd.env_remove("RTOK_AGENT_ID"),
     };
+    for (key, value) in vars {
+        match value {
+            Some(v) => cmd.env(key, v),
+            None => cmd.env_remove(key),
+        };
+    }
     let mut child = cmd
         .current_dir(cwd)
         .env("HOME", home)
@@ -736,8 +754,8 @@ fn lock_of(work: &Path, name: &str) -> rtok::worktree::Owner {
 }
 
 /// T285: `add` binds the worktree to the calling agent — `RTOK_AGENT_ID` or `--agent` — in
-/// a v2 lock and a claim row; the owner defaults to the agent's host; no agent, no owner is
-/// an error.
+/// a v2 lock and a claim row; the owner defaults to the agent's host; with no agent and no
+/// owner, `RTOK_OWNER` or the login user holds a lock that names no agent (T988).
 #[test]
 fn add_binds_the_worktree_to_the_calling_agent() {
     let tmp = rtok::testutil::tmp_dir("worktree-add-agent");
@@ -777,16 +795,43 @@ fn add_binds_the_worktree_to_the_calling_agent() {
     let lock = lock_of(&work, "rtok-t10");
     assert_eq!((lock.owner.as_str(), lock.agent.as_deref()), (ME, Some(me)));
 
-    let bare = rtok_as(&tmp, &work, None, &["worktree", "add", "t11"], b"");
-    assert!(String::from_utf8_lossy(&bare.stderr).contains("--owner is required"));
+    // T988: no agent and no `--owner` — `RTOK_OWNER`, else the login user, else `unknown`,
+    // with a warning; the lock names no agent and still holds against one.
+    let cases = [
+        ("t11", [Some("tester"), None, None], "tester"),
+        ("t12", [Some("tester"), None, Some("Hook / x")], "Hook / x"),
+        ("t13", [None, Some("winner"), Some("")], "winner"),
+        ("t14", [None, None, None], "unknown"),
+    ];
+    for (task, [user, username, owner_var], want) in cases {
+        let vars = [
+            ("USER", user),
+            ("USERNAME", username),
+            ("RTOK_OWNER", owner_var),
+        ];
+        let bare = rtok_env(&tmp, &work, None, &vars, &["worktree", "add", task], b"");
+        let err = String::from_utf8_lossy(&bare.stderr);
+        assert!(bare.status.success(), "{err}");
+        assert!(
+            err.contains(&format!("warning: no agent bound; owner `{want}`")),
+            "{err}"
+        );
+        let lock = lock_of(&work, &format!("rtok-{task}"));
+        assert_eq!((lock.owner.as_str(), lock.agent.as_deref()), (want, None));
+    }
+    let theirs = rtok_as(&tmp, &work, Some(me), &["worktree", "add", "t11"], b"");
+    let err = String::from_utf8_lossy(&theirs.stderr);
+    assert!(!theirs.status.success(), "{err}");
+    assert!(err.contains("locked by tester"), "{err}");
+
     let unknown = [
-        "worktree", "add", "t11", "--agent", "ffffffff", "--owner", ME,
+        "worktree", "add", "t15", "--agent", "ffffffff", "--owner", ME,
     ];
     let unknown = rtok_as(&tmp, &work, None, &unknown, b"");
     assert!(String::from_utf8_lossy(&unknown.stderr).contains("--agent ffffffff: unknown"));
     assert_eq!(
         inventory(&work).unwrap().len(),
-        3,
+        7,
         "a refused add creates nothing"
     );
 }
