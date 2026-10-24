@@ -166,6 +166,7 @@ Register-ArgumentCompleter -Native -CommandName 'rtok' -ScriptBlock {
         'rtok;doctor' {
             [CompletionResult]::new('--only', '--only', [CompletionResultType]::ParameterName, 'With --fix: limit it to these problems (repeatable; default: all of them)')
             [CompletionResult]::new('--agent', '--agent', [CompletionResultType]::ParameterName, 'Check (and with --fix, repair) the hooks of one host only (an id of `rtok agents list`)')
+            [CompletionResult]::new('--project', '--project', [CompletionResultType]::ParameterName, 'Add setup advice for the git checkout holding PATH (default: the working directory): language servers, graph index, instruction files, plugins left off')
             [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'User config file (else `RTOK_CONFIG` or `<home>/config.toml`)')
             [CompletionResult]::new('--instructions', '--instructions', [CompletionResultType]::ParameterName, 'Also run the instruction-file audit')
             [CompletionResult]::new('--json', '--json', [CompletionResultType]::ParameterName, 'JSON instead of the table')
