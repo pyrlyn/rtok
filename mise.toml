@@ -23,3 +23,8 @@ run = "python3 scripts/smart.py test --affected"
 [tasks.build-affected]
 description = "Assemble changed modules and their dependents only"
 run = "python3 scripts/smart.py build --affected"
+
+# Dev-only coverage (scripts/coverage.py, docs/toolchain.md). Never used by product or release builds.
+[tasks.coverage]
+description = "Line coverage: Kover (JVM build of common-only modules) + llvm-cov for the vendored tree-sitter C"
+run = "python3 scripts/coverage.py --c"

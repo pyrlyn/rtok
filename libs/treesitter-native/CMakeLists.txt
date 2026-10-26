@@ -23,3 +23,8 @@ foreach(row IN LISTS rows)
   target_sources(rtok_ts PRIVATE $<TARGET_OBJECTS:g_${name}>)
 endforeach()
 target_compile_options(rtok_ts PRIVATE -w)
+# Dev-only (`mise run coverage`): source-based coverage of the tree-sitter runtime.
+option(RTOK_TS_COVERAGE "Instrument the runtime for llvm-cov" OFF)
+if(RTOK_TS_COVERAGE)
+  set_source_files_properties(${VENDOR}/tree-sitter/lib/src/lib.c PROPERTIES COMPILE_OPTIONS "-fprofile-instr-generate;-fcoverage-mapping")
+endif()
