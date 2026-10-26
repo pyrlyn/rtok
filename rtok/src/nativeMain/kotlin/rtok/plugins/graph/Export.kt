@@ -420,8 +420,8 @@ object ExportView {
         return (if (q.pretty) Projects.pretty.encodeToString(Export.serializer(), e) else compact.encodeToString(Export.serializer(), e)) + "\n"
     }
 
-    /** SVG comes from `draw.rs` (not ported yet); PNG needs a rasterizer, which needs a dependency. */
-    var draw: ((Export, Boolean) -> String)? = null
+    /** SVG comes from [Draw]; PNG needs a rasterizer, which needs a dependency. */
+    var draw: ((Export, Boolean) -> String)? = Draw::svg
 
     fun render(
         rt: Runtime,
