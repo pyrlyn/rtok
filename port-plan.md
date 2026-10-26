@@ -1,0 +1,64 @@
+# rtok → Kotlin/Native port plan
+
+Source: `apps/rtok` (Rust, ~200k lines incl. tests; `src/` 166k, crates 31k). Target: this repo.
+Goal: behavior- and structure-preserving port; CLI flags, output formats, config (TOML) and
+on-disk formats (SQLite ledger `rtok.db`, payload files) stay interchangeable with Rust rtok.
+**Excluded:** TUI (`src/tui`, ratatui/crossterm UI, `rtok tui`) and web UI (`src/web`,
+`crates/rtok-webui`, `rtok web`, `rtok dashboard`, `agents/junk_web.rs`).
+
+## Structure mirror
+| Rust crate / dir | Gradle module | Kotlin package |
+|---|---|---|
+| crates/rtok-plugin-sdk | `:rtok-plugin-sdk` | `rtok.plugin.sdk` |
+| crates/rtok-config | `:rtok-config` | `rtok.config` |
+| crates/rtok-log | `:rtok-log` | `rtok.log` |
+| crates/rtok-hook | `:rtok-hook` | `rtok.hook` |
+| crates/rtok-store | `:rtok-store` | `rtok.store` |
+| crates/rtok-sys | `:rtok-sys` | `rtok.sys` (cinterop/posix) |
+| crates/rtok-mcp | `:rtok-mcp` | `rtok.mcp` |
+| crates/rtok-agent-sdk | `:rtok-agent-sdk` | `rtok.agent.sdk` |
+| src/ (binary) | `:rtok` | `rtok.<module>` one package per `src/<dir>` |
+| crates/rtok-wasm-demo-guest | — | excluded (wasm guest, no Kotlin/Native equivalent needed) |
+
+## Library mapping
+clap→Clikt; serde/serde_json→kotlinx.serialization; toml/toml_edit/figment→ktoml (+ own layering);
+tokio→kotlinx.coroutines; axum/reqwest/rmcp→Ktor server CIO + client (Curl/Darwin engines);
+diesel sqlite→SQLDelight native driver or sqlx4k (schema copied verbatim from `schema_snapshot.txt`);
+fs-kit/same-file/trash→okio + posix; sha2→okio ByteString.sha256; regex→kotlin.text.Regex;
+globset/ignore→own glob matcher; zstd/tree-sitter→cinterop to C libs; uuid→kotlin.uuid;
+jiff/humantime→kotlinx-datetime; shlex→own; wasmi→not portable (see risks).
+
+## Phases (commit per phase; `./gradlew macosArm64Test` green each phase)
+### Phase 0 — scaffolding
+- [ ] Gradle KMP build, modules above, targets macosArm64/linuxX64/linuxArm64 (+mingwX64 if deps allow)
+- [ ] PORTING.md inventory, README stub
+- Acceptance: `./gradlew build` produces `rtok.kexe`; empty test suite green.
+### Phase 1 — pure core (no IO)
+- [ ] plugin-sdk `Class`; config `Estimator`; `tokens.rs` (estimate, tokens_saved) + tests
+- [ ] `modes/` compress_prose (Lite/Full/Ultra), YAGNI ladder + all unit tests
+- Acceptance: every Rust unit test of these files translated and passing.
+### Phase 2 — rtok-config + rtok-log
+- [ ] TOML layers (defaults → user → project → env → flags), root discovery, since, validate + tests
+- [ ] rtok-log append/format (same log line format & file path) + tests
+### Phase 3 — rtok-hook protocol + `rtok hook`
+- [ ] host hook JSON in/out types (Claude Code etc.), deadline, push/resident + tests
+### Phase 4 — rtok-store (SQLite ledger)
+- [ ] migrations identical to Rust; ledger/call_log/archive/payload-by-id; retention + tests
+### Phase 5 — reduction plugins (src/plugins: compress, json_tree, toon, read, cmd, inject, guard, memory, measure, docs, archive, checkpoint)
+### Phase 6 — CLI surface (src/cli: stats, info, expand, filter, run, config, logs, report, completions, man)
+### Phase 7 — proxy (Anthropic/OpenAI chat+responses/Gemini wire, route, gate, semantic cache) via Ktor
+### Phase 8 — MCP server (rtok-mcp, src/mcp) stdio + HTTP
+### Phase 9 — agents install/uninstall/doctor for all hosts (src/agents, src/doctor)
+### Phase 10 — graph (tree-sitter cinterop), otel export, worktree/task/batch/demon/bench
+### Phase 11 — docs (how it works, enable/disable, test, limitations) and size/test report
+
+## Test-porting
+Each Rust `#[cfg(test)]` module → `src/commonTest` in the matching module; `tests/*.rs` (138 files)
+→ `:rtok` integration tests driving the built binary. Track count in PORTING.md.
+
+## Risks / non-portable
+- wasmi plugin host (`plugins/wasm.rs`): no Kotlin/Native wasm runtime; would need wasm3/wamr cinterop.
+- tree-sitter: 13 grammars need cinterop + vendored C sources per target.
+- rustls/webpki: replaced by platform TLS (Darwin/Curl engines) — behaviour differs.
+- printpdf/resvg (report PDF/SVG): no native equivalent; report limited to text/JSON.
+- Scope: ~200k lines; full parity is a multi-month effort (see PORTING.md for live status).
