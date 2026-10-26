@@ -14,7 +14,7 @@ import rtok.store.projects
 /** What the check remembers between rounds; one per hosting process. */
 class Health(
     /** Manifest reference warnings of a root (project refs discovery); only `…, not found` ones alert. */
-    private val refWarnings: (String) -> List<String> = { emptyList() },
+    private val refWarnings: (String) -> List<String> = { rtok.project.Refs.discover(it).warnings },
 ) {
     private class Streak(var bad: Int = 0, var good: Int = 0, var alert: Alert? = null)
 

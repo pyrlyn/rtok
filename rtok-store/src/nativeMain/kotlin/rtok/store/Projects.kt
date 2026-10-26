@@ -98,3 +98,14 @@ fun Store.removeProject(id: Int): Boolean = conn { db ->
         true
     }
 }
+
+private val TOOL_HOOKS = listOf("PreToolUse", "PostToolUse", "AfterMCPExecution")
+
+/** Drop `session` projects whose sessions never ran a tool hook or an MCP call; returns how many. */
+fun Store.dropToollessSessionProjects(): Int {
+    val used = conn { db ->
+        db.query("SELECT DISTINCT s.cwd FROM sessions s JOIN calls c ON c.session_id = s.id WHERE c.name IN (?, ?, ?) OR c.surface = 'mcp'",
+            *TOOL_HOOKS.toTypedArray(), map = { it.stringOrNull(0) })
+    }.filterNotNull().map(::canonRoot).toSet()
+    return projects().filter { it.origin == Origin.Session && it.root !in used }.count { removeProject(it.id) }
+}
