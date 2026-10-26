@@ -93,10 +93,21 @@ private fun okioLikeRead(f: CPointer<FILE>): ByteArray {
     return out
 }
 
-fun writeString(path: String, text: String) {
+fun writeString(path: String, text: String) = writeBytes(path, text.encodeToByteArray())
+
+/** Create or truncate [path] with [b]. */
+fun writeBytes(path: String, b: ByteArray) {
     val f = fopen(path, "wb") ?: throw IoException(IoException.Kind.Other, "$path: errno $errno")
-    try { val b = text.encodeToByteArray(); if (b.isNotEmpty()) b.usePinned { fwrite(it.addressOf(0), 1u, b.size.convert(), f) } } finally { fclose(f) }
+    try { if (b.isNotEmpty()) b.usePinned { fwrite(it.addressOf(0), 1u, b.size.convert(), f) } } finally { fclose(f) }
 }
+
+/** Rust `Path::is_file`: exists (following links) and is a regular file. */
+fun isFile(p: String): Boolean = memScoped { val st = alloc<stat>(); stat(p, st.ptr) == 0 && (st.st_mode.toInt() and S_IFMT) == S_IFREG }
+
+fun removeFile(p: String) { if (unlink(p) != 0) throw IoException(if (errno == ENOENT) IoException.Kind.NotFound else IoException.Kind.Other, "$p: errno $errno") }
+
+/** `std::env::set_current_dir`. */
+fun setCwd(p: String) { if (chdir(p) != 0) throw IoException(IoException.Kind.Other, "$p: errno $errno") }
 
 fun createDirAll(dir: String) {
     var cur = ""
