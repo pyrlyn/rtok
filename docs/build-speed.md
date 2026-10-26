@@ -56,3 +56,19 @@ logs `Caching disabled ... 'release binaries are not cached'`.
 **Retention (infra, not this repo).** An R2 lifecycle rule deletes entries older than 7-14 days. R2 has no
 size quota, so a pruning job also deletes the oldest entries first until the bucket is under
 `rtok.remoteCache.maxTotalSize` (`gradle.properties`, currently `10GB`). Both jobs are managed by Ansible in `pyrlyn/infra`.
+
+## Release binary size
+
+Configured via `diffuser.releaseSize=all` in `gradle.properties` (logic in ci-diffuser `NativeConventionPlugin`), release executables only (debug/test binaries untouched).
+K/N release already links in LTO mode (all modules optimized together), so no extra LTO flag.
+
+| option | flag | rtok size | link (median of 3) |
+|---|---|---|---|
+| baseline | – | 17.87 MB | 101 s |
+| `small` | `-Xbinary=smallBinary=true` (Oz) | 15.28 MB | 79 s |
+| `strip` | `-Wl,-dead_strip,-x,-S` (macOS) / `-Wl,--gc-sections,-s` (Linux) | 12.90 MB | 96 s |
+| `latin1` | `-Xbinary=latin1Strings=true` | 17.44 MB | 97 s |
+| all (default) | all of the above | 9.95 MB | 86 s |
+
+`rtok --version` startup (hyperfine, 50 runs): 7.0 ms baseline vs 7.1 ms all, within noise.
+Pick a subset with `-Pdiffuser.releaseSize=none|all|small,strip,latin1`.
