@@ -20,6 +20,10 @@ sealed class OptSpec(
         help: String = "",
         val metavar: String = "VALUE",
         global: Boolean = false,
+        /** Repeatable (clap `Vec<T>`): every value is read with [Invocation.values]. */
+        val repeat: Boolean = false,
+        /** A one-letter alias such as `o` for `-o`. */
+        val short: Char? = null,
     ) : OptSpec(name, help, global)
 }
 
@@ -47,6 +51,9 @@ class Invocation(
     fun flag(name: String) = name in flags
 
     fun value(name: String): String? = values[name]
+
+    /** Every value of a repeatable option, in order. */
+    fun values(name: String): List<String> = lists["--$name"].orEmpty()
 
     fun arg(name: String): String? = args[name]
 
@@ -76,6 +83,8 @@ class CommandSpec(
     val options: List<OptSpec> = emptyList(),
     val args: List<ArgSpec> = emptyList(),
     val subcommands: List<CommandSpec> = emptyList(),
+    /** A command with subcommands that also runs [action] when none is given (`rtok graph projects`). */
+    val runsBare: Boolean = false,
     val action: (Invocation) -> Unit = {},
 )
 
