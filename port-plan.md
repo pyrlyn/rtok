@@ -760,3 +760,13 @@ Next, in order:
   flag unless shared). `Agent.pluginServesMcp` = Rust `plugin_surfaces` ∋ Mcp (codebuddy, gemini, antigravity, pi, devin).
 - Tests: McpDoctorTest 2. `rtok doctor` itself is not ported yet; it calls `McpDoctor.doctorLines` when it lands.
 - Stop point: next `rtok mcp ping` process side, then `rtok agents` CLI.
+
+## Session: `rtok mcp ping` process side + `rtok mcp --host` (mcp/ping.rs, doctor.rs mcp_roundtrip, cli/mcp.rs)
+- `rtok.mcp.Roundtrip` (doctor `mcp_roundtrip` over `PipedChild`: handshake, `tools/list`, optional call id 3, deadline),
+  `rtok.mcp.PingRun` (`namedHosts`, `select`, `check` headless-chat or server-only, cursor-agent→agent fallback,
+  `probeServer`/`pingReply`, `renderText`, `rowJson`, `captureCli`), CLI `rtok mcp ping [agent] [--cli] [--desktop]
+  [--timeout SECS] [--json]`.
+- Found and fixed: `rtok mcp` had no `--host` (T283.1), so every entry the installers write (`mcp --host <host>`) failed
+  to start; `--host` now overlays `[hook] host` like `rtok hook --host`.
+- Tests: PingRunTest 6, McpPingE2eSpec 2 (live spawn of the built binary through a Windsurf config).
+- Stop point: next `rtok agents` CLI (list/install/update/remove/doctor over `Agents`), then phase 10 leftovers.
