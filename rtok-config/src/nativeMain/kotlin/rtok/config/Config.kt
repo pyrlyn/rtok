@@ -65,6 +65,9 @@ data class Config(
         }
     }))
 
+    /** This config without the `core.session_env` fallback (the resident hook names the session per request). */
+    fun withoutSessionEnv(): Config = keep(copy(core = core.copy(sessionEnv = "")))
+
     /** Carries the non-file fields over to a modified copy. */
     internal fun keep(c: Config): Config = c.also {
         it.home = home; it.loadedFrom = loadedFrom; it.notes = notes; it.pluginReceiptPath = pluginReceiptPath; it.hookClientPid = hookClientPid

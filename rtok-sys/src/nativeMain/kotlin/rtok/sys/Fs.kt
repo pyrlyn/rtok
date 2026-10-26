@@ -195,3 +195,23 @@ fun readPrefix(path: String, limit: Long): ByteArray? {
         return all
     } finally { fclose(f) }
 }
+
+/** Appends [text] to [path], creating it (Rust `OpenOptions::new().create(true).append(true)`). */
+fun appendString(path: String, text: String) {
+    val f = platform.posix.fopen(path, "a") ?: throw IoException(IoException.Kind.Other, "cannot open $path")
+    try { platform.posix.fputs(text, f) } finally { platform.posix.fclose(f) }
+}
+
+/** Reads at most [limit] bytes from file descriptor [fd] (Rust `Read::take(limit).read_to_end`). */
+@OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
+fun readFdBounded(fd: Int, limit: Long): ByteArray {
+    val out = Bytes(); val buf = ByteArray(64 * 1024); var left = limit
+    while (left > 0) {
+        val want = minOf(buf.size.toLong(), left).toInt()
+        val n = buf.usePinned { platform.posix.read(fd, it.addressOf(0), want.convert()) }.toInt()
+        if (n < 0) { if (platform.posix.errno == platform.posix.EINTR) continue; throw IoException(IoException.Kind.Other, "read errno ${platform.posix.errno}") }
+        if (n == 0) break
+        out.write(buf, n); left -= n
+    }
+    return out.toByteArray()
+}

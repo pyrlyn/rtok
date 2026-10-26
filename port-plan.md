@@ -63,8 +63,9 @@ jiff/humantime→kotlinx-datetime; shlex→own; wasmi→not portable (see risks)
 - [ ] Docs: `docs/<feature>.md` (how it works, enable, disable, test, limitations) + README section
 - [x] host hook JSON in/out types + adapters for 9 hosts (`hooks/Types.kt`, `Names.kt`) — 18/18 types.rs tests
 - [x] deadline.rs (3/3 tests), resident.rs server + `bind_private` (1/1 + 1 new socket round-trip test), process `environ()` + `flock` lock in rtok-sys (2 new)
-- [ ] push.rs (agent message push; needs Phase 4 store + render + plugin runtime)
-- [ ] hooks/mod.rs dispatch (55 tests; needs Phase 5 plugins) and `rtok hook` command
+- [x] push.rs — agent message push + render frame (5 tests)
+- [x] hooks/mod.rs dispatch + `rtok hook` (+ `--serve` wiring) — 26 of 55 tests (host shapers 8, session/slow 6, cap_budget 3, push 5, strict/oversize/malformed 3, activity 1)
+  - pending: 29 dispatch tests that need codex/cursor/cline fixtures, agent registration rows, worktree, otel, MCP wrap; `HookLinks` no-ops for worktree/otel/MCP until those phases
 ### Phase 4 — rtok-store (SQLite ledger) ✅
 - [x] prerequisite: full rtok-plugin-sdk contract (Plugin, Ctx, Host traits, wire refs, MemoryHost) — 9 tests
 - [x] Tests: port matching Rust unit + integration tests to kotlin.test; phase done only when they pass on the Mac (`./gradlew macosArm64Test`)
@@ -167,7 +168,7 @@ jiff/humantime→kotlinx-datetime; shlex→own; wasmi→not portable (see risks)
 | tooling | Kotest RenderSpec 1 | 1 |
 | 6 (partial) | Kotest CliSpec 17, toml-ktoml trailing newline 1 (e2e 11 counted separately) | 18 |
 | 5 wasm | wasm host 5, registry 1, Chasm adapter 3 | 9 |
-| **total** | | **559** (table predates later phases; live totals: PORTING.md, 929 unit + 26 CLI + 14 e2e) |
+| **total** | | **559** (table predates later phases; live totals: PORTING.md, 955 unit + 26 CLI + 14 e2e) |
 
 ## Test-porting
 Each Rust `#[cfg(test)]` module → `src/commonTest` in the matching module; `tests/*.rs` (138 files)
@@ -189,3 +190,17 @@ Each Rust `#[cfg(test)]` module → `src/commonTest` in the matching module; `te
 - Measured on M3 Max, release link, Kotlin 2.4.21: without the host 8,958,312 B / 50 s; with Chasm wired in 17,092,616 B / 125 s (+8.1 MB, +75 s).
   Fuel: 1M units of an endless loop trap after ~60 ms (debug test binary), so the 100M per-call budget is ~6 s debug worst case.
 - Baseline before Chasm: release rtok.kexe is 8,739,016 B; release link takes 58 s.
+
+## Session 2026-10-26 (afternoon) — where the port stands
+Done today: Kotlin 2.4.21 / latest libs (e8c5c7a), mise toolchain (e0ad1be), Chasm adapter (7b4e2d5),
+WASM plugin host (0c55807), hooks dispatcher + push + `rtok hook` (119c63c), smart test/build tasks (dfdb3cb).
+Next, in order:
+1. Phase 10 tree-sitter: `libs/treesitter` interface + `libs/treesitter-native` (cinterop over the vendored
+   tree-sitter runtime + grammars; one registry with extension mappings and queries). Grammars: every
+   grammar repo in github.com/tree-sitter, plus tree-sitter-grammars/tree-sitter-kotlin and the maintained
+   Dart and Swift grammars. Measure size/build-time impact per grammar.
+2. read plugin (101 tests), graph (275 tests incl. the memory handoff test), guard grep_symbol (8),
+   cmd catfile (4) + cat re-read delta (1).
+3. docs fetch with zstd behind our own interface; memory status, sync --stat, MCP wiring (Phase 8).
+4. Remaining hooks tests (29) once worktree/otel/MCP land (`HookLinks`).
+5. Final stage: completeness pass against Rust + code review (no separate preview deliverable).
