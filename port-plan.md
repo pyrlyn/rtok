@@ -528,3 +528,11 @@ Next, in order:
   Immutable kotlinx JSON: keys keep insertion order (Rust serde_json sorts them; same semantics, other byte order).
 - Tests: 7 (5 ported from claude/mod.rs, 2 own).
 - Stop point: next 3b-3c = `d21_plugin_apply` + qwen, then gemini (own BeforeTool/ms form).
+
+## Session: agents chunk 3b-3c — D21 plugin apply + qwen
+- `D21Plugin.kt` (`D21Plugin`, `d21_plugin_apply`, `no_extra` as the default `extra`), `Qwen.kt` (settings.json
+  Claude-layout hooks via `ClaudeHooks`, stdio MCP, `qwen extensions link` behind `--yes`, `QWEN_HOME` for a moved
+  dir); registered in `Agents`.
+- Tests: 4 (3 ported, 1 own); `extension_hooks_follow_the_event_table` reads the Rust tree's plugins/qwen, not ported.
+- Stop point: next 3b-3d = gemini (own BeforeTool/ms hook form, `extensions link`), then codewhale, commandcode,
+  copilot, devin, kimi.
