@@ -73,12 +73,15 @@ class IoException(val kind: Kind, message: String) : Exception(message) {
 }
 
 /** Whole file as UTF-8. */
-fun readToString(path: String): String {
+fun readToString(path: String): String = readBytes(path).decodeToString()
+
+/** Whole file. */
+fun readBytes(path: String): ByteArray {
     val f = fopen(path, "rb") ?: throw IoException(if (errno == ENOENT) IoException.Kind.NotFound else IoException.Kind.Other, "$path: errno $errno")
     try {
         val st = memScoped { val s = alloc<stat>(); fstat(fileno(f), s.ptr); s.st_mode.toInt() and S_IFMT }
         if (st == S_IFDIR) throw IoException(IoException.Kind.Other, "$path is a directory")
-        val out = okioLikeRead(f); return out.decodeToString()
+        return okioLikeRead(f)
     } finally { fclose(f) }
 }
 

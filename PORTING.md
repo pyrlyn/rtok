@@ -16,9 +16,11 @@ Plan and per-phase checklist: [port-plan.md](port-plan.md).
 | crates/rtok-log | `rtok-log/nativeMain/Log.kt` | ✅ | 12 → 12 |
 | crates/rtok-hook | `rtok-hook` (common `Hook.kt`, native `Connect.kt`) | ✅ (unix only) | 5 → 5 (+1 new) |
 | crates/rtok-store handle/lib/migrations | `rtok-store/nativeMain` `Db.kt`, `Store.kt`, `Migrations.kt` (+ generated `Migrations.gen.kt`) | ✅ | 2 → 10 (+Db 2) |
-| crates/rtok-store sanitize, hook_fields (pure) | `Sanitize.kt`, `SerdeJson.kt`, `HookFields.kt` | ✅ | 11 → 11, 3 → 3 |
-| crates/rtok-store retention, cache, kv | `Retention.kt`, `Cache.kt`, `Kv.kt` | 🟡 code ported, DB-backed tests wait for call_log | |
-| crates/rtok-store remaining 30 files | `:rtok-store` | ⬜ | |
+| crates/rtok-store sanitize, hook_fields (pure) | `Sanitize.kt`, `SerdeJson.kt`, `HookFields.kt` | ✅ | 11 → 11, 7 → 7 |
+| crates/rtok-store retention, cache, kv | `Retention.kt`, `Cache.kt`, `Kv.kt` | ✅ | tests_schema 7 of 9 → 5 (+archive purge) |
+| crates/rtok-store call_log, measure_rows, session_rows, archive_rows, note_store, observations, archive_summaries, models | `CallLog.kt`, `MeasureRows.kt`, `SessionRows.kt`, `ArchiveRows.kt`, `NoteStore.kt`, `Observations.kt`, `Models.kt`, `Rows.kt` | ✅ | tests_store 31 → 31 |
+| crates/rtok-store otel, task_id, task_claims, task_counters | `Otel.kt`, `TaskId.kt`, `Tasks.kt` | ✅ | 8 → 8, 6 → 7 |
+| crates/rtok-store note_files, messages, agents, worktree_*, projects, project_links, symbols, symbol_graph, docs, embed, graph_events, host_usage (+ tests_archive) | `:rtok-store` | ⬜ | |
 | crates/rtok-sys | `:rtok-sys` | ⬜ (module currently hosts `rtok.sys.Fs`, the fs-kit replacement) | |
 | fs-kit (external crate) path helpers | `rtok-sys/nativeMain/Fs.kt` | 🟡 normalize/canon/ancestors/starts_with | via root tests |
 | crates/rtok-mcp | `:rtok-mcp` | ⬜ | |
@@ -39,7 +41,7 @@ Plan and per-phase checklist: [port-plan.md](port-plan.md).
 | src/web, agents/junk_web.rs, `rtok web/tui/dashboard` | – | ❌ excluded (web) | |
 | tests/*.rs (138 integration files) | `:rtok` commonTest | ⬜ | 0 / ~138 files |
 
-Totals: 198 Kotlin tests passing on macosArm64 (see port-plan.md for the per-phase table).
+Totals: 253 Kotlin tests passing on macosArm64 (see port-plan.md for the per-phase table).
 
 | Rust | Kotlin | Status | Tests |
 |---|---|---|---|
