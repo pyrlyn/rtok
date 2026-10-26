@@ -577,3 +577,14 @@ Next, in order:
 - Tests: 6 (all Rust cases but the PreCompact dispatcher one; the T275 lifecycle spelled out inline).
 - Deferred: `skill::sync` tail, `assert_json_entry_lifecycle` helper.
 - Stop point: next = TOML `[[array-of-tables]]` editor check, then codewhale + kimi (or group 3c).
+
+## Session: libs/toml-aot — lossless TOML table / array-of-tables editor
+- Checked first: no popular, maintained Kotlin Multiplatform TOML library edits while keeping comments. ktoml (in use)
+  only encodes/decodes; tomlkt is the same; toml-edit-kotlin (a KMP port of toml_edit) has 0 stars, no release and is
+  marked in progress, so it does not qualify.
+- New leaf module `:toml-aot` (`libs/toml-aot`, package `tomlaot`, no dependencies): `TomlDoc` (`parse`, `arrayOfTables`,
+  `table`, `shape`, `retain`, `push`, `ensureTable`, byte-for-byte `toString`), `TomlTable` (`keys`, `size`, `get`/`str`/
+  `int`, in-place `set` keeping the line's comment), `TomlValue` (Str/Int/Bool/Raw, basic-string quoting). Comment and
+  blank lines before a header go with that table (toml_edit decor); multi-line strings and arrays never read as headers.
+- Tests: 10.
+- Stop point: next = codewhale (`[hooks] enabled` + `[[hooks.hooks]]`), then kimi (`[[hooks]]`).
