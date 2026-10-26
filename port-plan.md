@@ -536,3 +536,11 @@ Next, in order:
 - Tests: 4 (3 ported, 1 own); `extension_hooks_follow_the_event_table` reads the Rust tree's plugins/qwen, not ported.
 - Stop point: next 3b-3d = gemini (own BeforeTool/ms hook form, `extensions link`), then codewhale, commandcode,
   copilot, devin, kimi.
+
+## Session: agents chunk 3b-3d — gemini (and the shared extension-host shape)
+- `ExtensionHost.kt` (`ExtensionSpec`, `ExtensionHost`): settings.json hooks + stdio `mcpServers.rtok` + D21
+  `extensions link` behind `--yes`, home variable for a moved dir. `Qwen` now sits on it; `Gemini.kt` adds Gemini's
+  own `HookForm` (Gemini event key, `hook <ClaudeEvent> --host gemini`, no matcher, `timeout` in ms,
+  `GEMINI_CLI_HOME`); registered in `Agents`.
+- Tests: 5 (3 ported, 2 own); support/t275/hooks_doc stay in the Rust tree (Hosts/plugins).
+- Stop point: next 3b-3e = codewhale, commandcode, copilot, then devin, kimi.
