@@ -82,7 +82,7 @@ object StdioMcp {
     ): String = HostJson.unregisterOwned(applyOf(cfg), path, key, "rtok", entry("rtok", host), ::isRtokBin)
 }
 
-/** A host whose only module is `mcp`: one JSON file, rtok's stdio entry under [key]. */
+/** A host whose only module is `mcp` (any variant: Windsurf is desktop-only): one JSON file, rtok's stdio entry under [key]. */
 class McpOnlyAgent(
     override val id: String,
     private val path: (Config) -> String,
@@ -132,6 +132,7 @@ object Agents {
             McpOnlyAgent("openhands", { it.setup.openhands.mcpPath }),
             McpOnlyAgent("roo", { McpFiles.BY_HOST.getValue("roo")(it, Kind.Cli).path }),
             McpOnlyAgent("warp", { it.setup.warp.mcpPath }),
+            McpOnlyAgent("windsurf", { it.setup.windsurf.configPath }),
         )
 
     private val BY_ID: Map<String, Agent> = MCP_ONLY.associateBy { it.id }

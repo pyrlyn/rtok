@@ -476,3 +476,10 @@ Next, in order:
 - Stop point: next host group 3b — JSON hook hosts (windsurf, cline, qwen, gemini, codewhale, commandcode, copilot,
   devin, kimi), then 3c (opencode/mimo/kilo/zcode/zed/amp/omp/pi/aider/continue/goose/reasonix/antigravity/vscode/
   codebuddy) and 3d (claude, cursor, codex, grok).
+
+## Session: agents chunk 3b-1 — windsurf (MCP-only, desktop)
+- `windsurf` joins `Agents.MCP_ONLY` (`setup.windsurf.config_path`, stdio entry); McpOnlyAgentTest now covers 9 hosts.
+- Group 3b split further: the hook hosts (cline, qwen, gemini, codewhale, commandcode, copilot, devin, kimi) need
+  `hook_events.rs` (host event table) and `HostPlugin` (plugin-file copy + `ours`/`offer`) first.
+- Stop point: next 3b-2 = `hook_events.rs` + `HostPlugin`, then cline; 3b-3 = JSON settings hooks (gemini, qwen,
+  codewhale, commandcode, copilot, devin, kimi).
