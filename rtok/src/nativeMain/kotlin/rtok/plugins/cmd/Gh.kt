@@ -7,13 +7,17 @@ private const val BEFORE = 2
 private const val AFTER = 4
 
 object Gh {
-    fun format(argv: List<String>, output: String): String? {
-        val got = when (argv.getOrNull(1) to (argv.getOrNull(2) ?: return null)) {
-            "pr" to "view", "issue" to "view" -> view(output)
-            "pr" to "checks" -> checks(output)
-            "run" to "view" -> runLog(output)
-            else -> null
-        } ?: return null
+    fun format(
+        argv: List<String>,
+        output: String,
+    ): String? {
+        val got =
+            when (argv.getOrNull(1) to (argv.getOrNull(2) ?: return null)) {
+                "pr" to "view", "issue" to "view" -> view(output)
+                "pr" to "checks" -> checks(output)
+                "run" to "view" -> runLog(output)
+                else -> null
+            } ?: return null
         return got.takeIf { it.encodeToByteArray().size < output.encodeToByteArray().size }
     }
 
@@ -22,18 +26,32 @@ object Gh {
     internal fun view(output: String): String? {
         val lines = output.rustLines()
         if (lines.firstOrNull()?.let { FIELD.containsMatchIn(it) } != true) return null
-        val out = ArrayList<String>(); var inBody = false; var blank = false
+        val out = ArrayList<String>()
+        var inBody = false
+        var blank = false
         for (raw in lines) {
             val line = raw.trimEnd()
             when {
                 inBody -> {
-                    if (line.isEmpty()) { blank = true; continue }
+                    if (line.isEmpty()) {
+                        blank = true
+                        continue
+                    }
                     if (blank && out.isNotEmpty()) out += ""
-                    blank = false; out += line
+                    blank = false
+                    out += line
                 }
-                line == "--" -> { inBody = true; out += line }
+
+                line == "--" -> {
+                    inBody = true
+                    out += line
+                }
+
                 FIELD.containsMatchIn(raw) && raw.indexOf('\t').let { it >= 0 && raw.substring(it + 1).isBlank() } -> {}
-                else -> out += line
+
+                else -> {
+                    out += line
+                }
             }
         }
         return out.joinToString("\n")
@@ -64,16 +82,30 @@ object Gh {
             if (last != null && last.first == head) last.second += text else steps += head to mutableListOf(text)
         }
         if (steps.isEmpty()) return null
-        val out = ArrayList<String>(); var quiet = 0; var quietLines = 0
+        val out = ArrayList<String>()
+        var quiet = 0
+        var quietLines = 0
         for ((head, lines) in steps) {
             val hits = lines.indices.filter { PROBLEM.containsMatchIn(lines[it]) }
-            if (hits.isEmpty()) { quiet++; quietLines += lines.size; continue }
+            if (hits.isEmpty()) {
+                quiet++
+                quietLines += lines.size
+                continue
+            }
             val keep = BooleanArray(lines.size)
             for (i in hits) for (k in maxOf(0, i - BEFORE) until minOf(i + AFTER + 1, lines.size)) keep[k] = true
             out += "## $head"
             var gap = false
             for ((i, line) in lines.withIndex()) {
-                if (keep[i]) { if (gap) { out += "  …"; gap = false }; out += line } else gap = true
+                if (keep[i]) {
+                    if (gap) {
+                        out += "  …"
+                        gap = false
+                    }
+                    out += line
+                } else {
+                    gap = true
+                }
             }
         }
         if (quiet > 0) out += "$quiet steps without errors ($quietLines lines)"

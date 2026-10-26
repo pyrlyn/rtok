@@ -11,17 +11,26 @@ fun parentOf(pid: Int): Int? {
     if (viaKernel >= 0) return viaKernel
     val stat = runCatching { readToString("/proc/$pid/stat") }.getOrNull() ?: return null
     // `comm` (field 2) may hold spaces and parentheses, so fields count from the last `)`.
-    return stat.substring(stat.lastIndexOf(')') + 1).trim().split(Regex("\\s+")).getOrNull(1)?.toIntOrNull()
+    return stat
+        .substring(stat.lastIndexOf(')') + 1)
+        .trim()
+        .split(Regex("\\s+"))
+        .getOrNull(1)
+        ?.toIntOrNull()
 }
 
 /** Up to [max] ancestors of [pid], nearest first; stops at init (1), a loop or an unknown parent. */
-fun processAncestors(pid: Int, max: Int): List<Int> {
+fun processAncestors(
+    pid: Int,
+    max: Int,
+): List<Int> {
     val chain = ArrayList<Int>()
     var at = pid
     while (chain.size < max) {
         val p = parentOf(at) ?: break
         if (p <= 1 || p == pid || p in chain) break
-        chain += p; at = p
+        chain += p
+        at = p
     }
     return chain
 }

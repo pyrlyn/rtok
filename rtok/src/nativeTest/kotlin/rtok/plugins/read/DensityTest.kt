@@ -3,17 +3,19 @@ package rtok.plugins.read
 import kotlin.test.*
 
 class DensityTest {
-    private fun fixture() = buildString {
-        for (i in 0 until 60) {
-            append("    let value = self.cache.get(&key).cloned();\n")
-            append("    if value.is_none() { return None; }\n")
-            if (i == 30) append("    let quota = billing::remaining_quota(account_id)?;\n")
+    private fun fixture() =
+        buildString {
+            for (i in 0 until 60) {
+                append("    let value = self.cache.get(&key).cloned();\n")
+                append("    if value.is_none() { return None; }\n")
+                if (i == 30) append("    let quota = billing::remaining_quota(account_id)?;\n")
+            }
         }
-    }
 
     @Test fun keepsTheRareLineAndDropsRepeatsFirst() {
         val out = renderDensity(fixture(), 0.2)
-        assertTrue("billing::remaining_quota" in out, out); assertTrue("lines omitted" in out, out)
+        assertTrue("billing::remaining_quota" in out, out)
+        assertTrue("lines omitted" in out, out)
         assertTrue(out.length < fixture().length / 3, "${out.length} B")
     }
 

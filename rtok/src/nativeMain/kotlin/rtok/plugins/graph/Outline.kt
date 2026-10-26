@@ -16,7 +16,11 @@ import rtok.plugins.read.resolve
 
 object Outline {
     /** `outline(path)`: the `read` plugin's `map` mode, capped like the other tools. */
-    fun outlineIn(cx: Ctx, root: String, path: String): String {
+    fun outlineIn(
+        cx: Ctx,
+        root: String,
+        path: String,
+    ): String {
         // The path guard runs outside the door: a refused path is an error to report, not a server failure.
         val abs = if (GraphCore.modeOf(cx, root) != Mode.Tags) resolve(root, path, readCfg(cx).allowPaths) else null
         if (abs != null && !rtok.sys.exists(abs)) {
@@ -36,7 +40,11 @@ object Outline {
     }
 
     /** T665: `outline` narrowed to one kind (`fn`, `struct`, …), the word after any `pub…` marker. */
-    fun ofKind(text: String, path: String, kind: String): String {
+    fun ofKind(
+        text: String,
+        path: String,
+        kind: String,
+    ): String {
         if (kind.isEmpty()) return text
         val kept = text.lines().filter { l -> l.split(' ', '\t').filter { it.isNotEmpty() }.firstOrNull { !it.startsWith("pub") } == kind }
         return if (kept.isEmpty()) "no $kind in $path" else kept.joinToString("\n")
@@ -44,20 +52,31 @@ object Outline {
 
     /** `name`, or `names` when the caller asks for several. */
     fun symbolArgNames(args: JsonObject): List<String> {
-        (args["names"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content?.ifEmpty { null } }
-            ?.takeIf { it.isNotEmpty() }?.let { return it }
+        (args["names"] as? JsonArray)
+            ?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content?.ifEmpty { null } }
+            ?.takeIf { it.isNotEmpty() }
+            ?.let { return it }
         return listOf(str(args["name"]))
     }
 
     internal fun str(e: JsonElement?) = (e as? JsonPrimitive)?.takeIf { it.isString }?.content.orEmpty()
 
     /** `index <stored> head <live>` per root whose indexed commit is not HEAD; empty otherwise. */
-    fun headStalePrefix(cx: Ctx, roots: List<String>): String = buildString {
-        for (root in roots) {
-            val raw = runCatching { cx.pluginStateGet("graph", Index.headKey(root)) }.getOrNull() ?: continue
-            val stored = runCatching { Json.decodeFromString(Index.IndexedHead.serializer(), raw).head }.getOrNull()?.ifEmpty { null } ?: continue
-            val live = Git.stdout(root, listOf("rev-parse", "HEAD"))?.decodeToString()?.trim()?.ifEmpty { null } ?: continue
-            if (stored != live) append("index $stored head $live\n")
+    fun headStalePrefix(
+        cx: Ctx,
+        roots: List<String>,
+    ): String =
+        buildString {
+            for (root in roots) {
+                val raw = runCatching { cx.pluginStateGet("graph", Index.headKey(root)) }.getOrNull() ?: continue
+                val stored = runCatching { Json.decodeFromString(Index.IndexedHead.serializer(), raw).head }.getOrNull()?.ifEmpty { null } ?: continue
+                val live =
+                    Git
+                        .stdout(root, listOf("rev-parse", "HEAD"))
+                        ?.decodeToString()
+                        ?.trim()
+                        ?.ifEmpty { null } ?: continue
+                if (stored != live) append("index $stored head $live\n")
+            }
         }
-    }
 }

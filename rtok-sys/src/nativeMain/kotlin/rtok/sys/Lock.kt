@@ -1,4 +1,5 @@
 @file:OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
+
 package rtok.sys
 
 import platform.posix.*
@@ -7,7 +8,10 @@ import platform.posix.*
 fun tryLockExclusive(path: String): Int? {
     val fd = open(path, O_CREAT or O_WRONLY, 0x1a4) // 0644
     if (fd < 0) throw IoException(IoException.Kind.Other, "cannot open $path")
-    if (flock(fd, LOCK_EX or LOCK_NB) != 0) { close(fd); return null }
+    if (flock(fd, LOCK_EX or LOCK_NB) != 0) {
+        close(fd)
+        return null
+    }
     return fd
 }
 
@@ -15,8 +19,20 @@ fun tryLockExclusive(path: String): Int? {
 class Mutex {
     private val held = kotlin.concurrent.AtomicInt(0)
 
-    fun lock() { while (!held.compareAndSet(0, 1)) usleep(50u) }
-    fun unlock() { held.value = 0 }
+    fun lock() {
+        while (!held.compareAndSet(0, 1)) usleep(50u)
+    }
 
-    inline fun <T> hold(body: () -> T): T { lock(); try { return body() } finally { unlock() } }
+    fun unlock() {
+        held.value = 0
+    }
+
+    inline fun <T> hold(body: () -> T): T {
+        lock()
+        try {
+            return body()
+        } finally {
+            unlock()
+        }
+    }
 }

@@ -6,14 +6,24 @@ package rtok.sys
 fun String.asciiLowercase(): String = buildString(length) { for (c in this@asciiLowercase) append(if (c in 'A'..'Z') c + 32 else c) }
 
 /** Rust `str::cmp`: code-point (= UTF-8 byte) order. */
-fun compareUtf8(a: String, b: String): Int {
-    var i = 0; var j = 0
+fun compareUtf8(
+    a: String,
+    b: String,
+): Int {
+    var i = 0
+    var j = 0
     while (i < a.length && j < b.length) {
-        val ca = a.codePointAt(i); val cb = b.codePointAt(j)
+        val ca = a.codePointAt(i)
+        val cb = b.codePointAt(j)
         if (ca != cb) return ca.compareTo(cb)
-        i += if (ca > 0xFFFF) 2 else 1; j += if (cb > 0xFFFF) 2 else 1
+        i += if (ca > 0xFFFF) 2 else 1
+        j += if (cb > 0xFFFF) 2 else 1
     }
-    return when { i < a.length -> 1; j < b.length -> -1; else -> 0 }
+    return when {
+        i < a.length -> 1
+        j < b.length -> -1
+        else -> 0
+    }
 }
 
 /** Comparator form of [compareUtf8]. */
@@ -34,33 +44,64 @@ fun String.rustLines(): List<String> {
 
 /** Unicode scalar values (Rust `chars()`), each as a 1- or 2-unit string. */
 fun String.scalarList(): List<String> {
-    val out = ArrayList<String>(length); var i = 0
-    while (i < length) { val n = if (this[i].isHighSurrogate() && i + 1 < length && this[i + 1].isLowSurrogate()) 2 else 1; out += substring(i, i + n); i += n }
+    val out = ArrayList<String>(length)
+    var i = 0
+    while (i < length) {
+        val n = if (this[i].isHighSurrogate() && i + 1 < length && this[i + 1].isLowSurrogate()) 2 else 1
+        out += substring(i, i + n)
+        i += n
+    }
     return out
 }
 
 /** The first [n] Unicode scalar values (Rust `chars().take(n)`). */
-fun String.takeScalars(n: Int): String { var i = 0; var k = 0
-    while (i < length && k < n) { i += if (this[i].isHighSurrogate() && i + 1 < length && this[i + 1].isLowSurrogate()) 2 else 1; k++ }
-    return substring(0, i) }
-
-/** `serde_json::to_string(&str)`: `"`, `\`, \b \f \n \r \t, other C0 controls as lowercase `\u00xx`; nothing else escaped. */
-fun jsonQuote(s: String): String = buildString(s.length + 2) {
-    append('"')
-    for (c in s) when (c) {
-        '"' -> append("\\\""); '\\' -> append("\\\\"); '\n' -> append("\\n"); '\r' -> append("\\r"); '\t' -> append("\\t")
-        '\b' -> append("\\b"); '\u000C' -> append("\\f")
-        else -> if (c < ' ') append("\\u00").append(c.code.toString(16).padStart(2, '0')) else append(c)
+fun String.takeScalars(n: Int): String {
+    var i = 0
+    var k = 0
+    while (i < length && k < n) {
+        i += if (this[i].isHighSurrogate() && i + 1 < length && this[i + 1].isLowSurrogate()) 2 else 1
+        k++
     }
-    append('"')
+    return substring(0, i)
 }
 
+/** `serde_json::to_string(&str)`: `"`, `\`, \b \f \n \r \t, other C0 controls as lowercase `\u00xx`; nothing else escaped. */
+fun jsonQuote(s: String): String =
+    buildString(s.length + 2) {
+        append('"')
+        for (c in s) {
+            when (c) {
+                '"' -> append("\\\"")
+                '\\' -> append("\\\\")
+                '\n' -> append("\\n")
+                '\r' -> append("\\r")
+                '\t' -> append("\\t")
+                '\b' -> append("\\b")
+                '\u000C' -> append("\\f")
+                else -> if (c < ' ') append("\\u00").append(c.code.toString(16).padStart(2, '0')) else append(c)
+            }
+        }
+        append('"')
+    }
+
 /** Unicode scalar values in this string, as Rust's `chars().count()` counts them. */
-fun String.scalarCount(): Int { var n = 0; var i = 0
-    while (i < length) { i += if (this[i].isHighSurrogate() && i + 1 < length && this[i + 1].isLowSurrogate()) 2 else 1; n++ }
-    return n }
+fun String.scalarCount(): Int {
+    var n = 0
+    var i = 0
+    while (i < length) {
+        i += if (this[i].isHighSurrogate() && i + 1 < length && this[i + 1].isLowSurrogate()) 2 else 1
+        n++
+    }
+    return n
+}
 
 /** The last [n] Unicode scalar values (the whole string when it is shorter). */
-fun String.takeLastScalars(n: Int): String { var i = length; var k = 0
-    while (i > 0 && k < n) { i -= if (this[i - 1].isLowSurrogate() && i - 2 >= 0 && this[i - 2].isHighSurrogate()) 2 else 1; k++ }
-    return substring(i) }
+fun String.takeLastScalars(n: Int): String {
+    var i = length
+    var k = 0
+    while (i > 0 && k < n) {
+        i -= if (this[i - 1].isLowSurrogate() && i - 2 >= 0 && this[i - 2].isHighSurrogate()) 2 else 1
+        k++
+    }
+    return substring(i)
+}

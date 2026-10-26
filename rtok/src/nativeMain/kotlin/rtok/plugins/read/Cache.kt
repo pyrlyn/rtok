@@ -12,9 +12,19 @@ object ReadCache {
     /** Also matched by `measure::stats` to recognise a result that carries rtok's own trace. */
     const val DEDUP_PREFIX = "unchanged id "
 
-    fun key(path: String, mode: String, range: String?) = "$path\t$mode\t${range.orEmpty()}"
+    fun key(
+        path: String,
+        mode: String,
+        range: String?,
+    ) = "$path\t$mode\t${range.orEmpty()}"
 
-    fun hit(cx: Ctx, key: String, path: String, body: ByteArray, forceDelta: Boolean): String? {
+    fun hit(
+        cx: Ctx,
+        key: String,
+        path: String,
+        body: ByteArray,
+        forceDelta: Boolean,
+    ): String? {
         val id = runCatching { cx.getReadCache(key) }.getOrNull()?.first ?: return null
         val prev = runCatching { cx.getArchive(id) }.getOrNull() ?: return null
         if (prev.contentEquals(body)) return dedupLine(cx, id, body)
@@ -31,8 +41,17 @@ object ReadCache {
         val max = cfg.maxChars.toInt()
         if (msg.scalarCount() > max) msg = Expand.cut(msg, "\n… archived $newShown …\n", max)
         runCatching {
-            cx.record(Measurement("read", "delta", body.size.toULong(), msg.encodeToByteArray().size.toULong(),
-                cx.estimate(after, Class.Code), cx.estimate(msg, Class.Code), newId))
+            cx.record(
+                Measurement(
+                    "read",
+                    "delta",
+                    body.size.toULong(),
+                    msg.encodeToByteArray().size.toULong(),
+                    cx.estimate(after, Class.Code),
+                    cx.estimate(msg, Class.Code),
+                    newId,
+                ),
+            )
         }
         return msg
     }
@@ -40,23 +59,43 @@ object ReadCache {
     private fun ByteArray.utf8OrNull() = runCatching { decodeToString(throwOnInvalidSequence = true) }.getOrNull()
 
     /** The 8-character prefix every other pointer prints (T672, T906); the row keeps the full id. */
-    private fun dedupLine(cx: Ctx, id: String, body: ByteArray): String {
+    private fun dedupLine(
+        cx: Ctx,
+        id: String,
+        body: ByteArray,
+    ): String {
         val msg = DEDUP_PREFIX + rtok.shortId(id)
         runCatching {
-            cx.record(Measurement("read", "dedup", body.size.toULong(), msg.encodeToByteArray().size.toULong(),
-                cx.estimate(body.utf8OrNull().orEmpty(), Class.Code), cx.estimate(msg, Class.Code), id))
+            cx.record(
+                Measurement(
+                    "read",
+                    "dedup",
+                    body.size.toULong(),
+                    msg.encodeToByteArray().size.toULong(),
+                    cx.estimate(body.utf8OrNull().orEmpty(), Class.Code),
+                    cx.estimate(msg, Class.Code),
+                    id,
+                ),
+            )
         }
         return msg
     }
 
-    fun remember(cx: Ctx, key: String, body: ByteArray): String {
+    fun remember(
+        cx: Ctx,
+        key: String,
+        body: ByteArray,
+    ): String {
         val id = cx.putArchive(body)
         cx.putReadCache(key, hexSha256(body), id)
         return id
     }
 
     /** With `delta` off, an Edit/Write of a file drops its cached reads so the next read is fresh. */
-    fun invalidate(ev: PostToolUse, cx: Ctx) {
+    fun invalidate(
+        ev: PostToolUse,
+        cx: Ctx,
+    ) {
         if (readCfg(cx).delta) return
         if (ev.toolName != "Edit" && ev.toolName != "Write") return
         val path = pathArg(ev.toolInput) ?: return

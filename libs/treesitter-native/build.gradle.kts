@@ -9,14 +9,17 @@ val cmakeDir = layout.buildDirectory.dir("cmake")
 val cCoverage = providers.environmentVariable("RTOK_TS_COVERAGE").orNull == "1"
 val fetchGrammars by tasks.registering(Exec::class) {
     description = "Downloads the pinned tree-sitter runtime and grammars (grammars.json) into build/vendor."
-    inputs.file("grammars.json"); inputs.file(rootDir.resolve("scripts/grammars.py"))
+    inputs.file("grammars.json")
+    inputs.file(rootDir.resolve("scripts/grammars.py"))
     outputs.dir(vendor)
     commandLine("python3", rootDir.resolve("scripts/grammars.py").absolutePath, "fetch")
 }
 val buildGrammars by tasks.registering(Exec::class) {
     description = "Builds librtok_ts.a (runtime + grammars + grammar table) with CMake/Ninja."
     dependsOn(fetchGrammars)
-    inputs.dir(vendor); inputs.file("CMakeLists.txt"); inputs.dir("src/nativeInterop/c")
+    inputs.dir(vendor)
+    inputs.file("CMakeLists.txt")
+    inputs.dir("src/nativeInterop/c")
     outputs.dir(cmakeDir)
     workingDir(projectDir)
     inputs.property("coverage", cCoverage)
@@ -34,13 +37,29 @@ configure<KotlinMultiplatformExtension> {
     }
 }
 // The static library is embedded in the cinterop klib, so it is an input of the cinterop task.
-tasks.matching { it.name.startsWith("cinteropTs") }.configureEach { dependsOn(buildGrammars); inputs.file(cmakeDir.map { it.file("librtok_ts.a") }) }
+tasks.matching { it.name.startsWith("cinteropTs") }.configureEach {
+    dependsOn(buildGrammars)
+    inputs.file(cmakeDir.map { it.file("librtok_ts.a") })
+}
 
 /** clang's profile runtime, needed only when the runtime is instrumented. */
 fun clangProfileRuntime(): String {
-    val dir = providers.exec { commandLine("xcrun", "clang", "-print-resource-dir") }.standardOutput.asText.get().trim()
+    val dir =
+        providers
+            .exec { commandLine("xcrun", "clang", "-print-resource-dir") }
+            .standardOutput.asText
+            .get()
+            .trim()
     return "$dir/lib/darwin/libclang_rt.profile_osx.a"
 }
-if (cCoverage) tasks.withType<org.jetbrains.kotlin.gradle.targets.native.tasks.KotlinNativeTest>().configureEach {
-    environment("LLVM_PROFILE_FILE", layout.buildDirectory.file("coverage/ts-%p.profraw").get().asFile.absolutePath)
+if (cCoverage) {
+    tasks.withType<org.jetbrains.kotlin.gradle.targets.native.tasks.KotlinNativeTest>().configureEach {
+        environment(
+            "LLVM_PROFILE_FILE",
+            layout.buildDirectory
+                .file("coverage/ts-%p.profraw")
+                .get()
+                .asFile.absolutePath,
+        )
+    }
 }

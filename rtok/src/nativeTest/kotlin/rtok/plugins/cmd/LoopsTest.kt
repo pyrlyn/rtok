@@ -26,7 +26,10 @@ class LoopsTest {
 
     @Test fun aNumberThatGoesUpAndDownShowsItsSmallestAndLargest() = assertEquals("took # ms ×4 (vals: 3..9)", Loops.collapse("took 5 ms\ntook 9 ms\ntook 3 ms\ntook 7 ms\n"))
 
-    @Test fun twoLinesAreLeftAlone() { assertNull(Loops.collapse("poll 1\npoll 2\n")); assertNull(Loops.collapse("")) }
+    @Test fun twoLinesAreLeftAlone() {
+        assertNull(Loops.collapse("poll 1\npoll 2\n"))
+        assertNull(Loops.collapse(""))
+    }
 
     @Test fun idsAndTimestampsAreFieldsToo() {
         val raw = "12:00:01 job 9f8e7d6c5b4a ready\n12:00:02 job 1a2b3c4d5e6f ready\n12:00:03 job aabbccddeeff ready\n"

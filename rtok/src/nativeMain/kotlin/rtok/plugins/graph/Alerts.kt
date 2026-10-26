@@ -19,19 +19,38 @@ import rtok.store.projectLinks
 import rtok.store.projects
 
 @Serializable
-enum class AlertKind(val words: String, val effect: String) {
-    @SerialName("missing") Missing("missing", "results exclude"),
-    @SerialName("unreachable") Unreachable("unreachable", "results exclude"),
-    @SerialName("backend_down") BackendDown("backend down", "answered from the tags index for"),
-    @SerialName("link_broken") LinkBroken("link broken", "the broken link leaves out a project of"),
+enum class AlertKind(
+    val words: String,
+    val effect: String,
+) {
+    @SerialName("missing")
+    Missing("missing", "results exclude"),
+
+    @SerialName("unreachable")
+    Unreachable("unreachable", "results exclude"),
+
+    @SerialName("backend_down")
+    BackendDown("backend down", "answered from the tags index for"),
+
+    @SerialName("link_broken")
+    LinkBroken("link broken", "the broken link leaves out a project of"),
 }
 
 /** One raised alert, as stored and as `graph projects --json` / `doctor --json` print it. */
 @Serializable
-data class Alert(val kind: AlertKind, val project: String, val root: String, val since: Long, val detail: String)
+data class Alert(
+    val kind: AlertKind,
+    val project: String,
+    val root: String,
+    val since: Long,
+    val detail: String,
+)
 
 /** A project of a scope and the names from the scope's start to it. */
-data class Reached(val project: Project, val chain: List<String>)
+data class Reached(
+    val project: Project,
+    val chain: List<String>,
+)
 
 object Alerts {
     private val list = ListSerializer(Alert.serializer())
@@ -40,48 +59,75 @@ object Alerts {
     fun key(root: String) = "alerts:$root"
 
     /** The alerts some process raised for the project registered at [root]. */
-    fun mirrored(cx: Ctx, root: String): List<Alert> =
-        runCatching { cx.pluginStateGet("graph", key(root))?.let { json.decodeFromString(list, it) } }.getOrNull().orEmpty()
+    fun mirrored(
+        cx: Ctx,
+        root: String,
+    ): List<Alert> = runCatching { cx.pluginStateGet("graph", key(root))?.let { json.decodeFromString(list, it) } }.getOrNull().orEmpty()
 
     /** A lost write is rewritten by the next check that sees a difference. */
-    fun store(cx: Ctx, root: String, alerts: List<Alert>) { runCatching { cx.pluginStateSet("graph", key(root), Json.encodeToString(list, alerts)) } }
+    fun store(
+        cx: Ctx,
+        root: String,
+        alerts: List<Alert>,
+    ) {
+        runCatching { cx.pluginStateSet("graph", key(root), Json.encodeToString(list, alerts)) }
+    }
 
     /** Every alert on the registry, for `rtok doctor`. */
     fun all(rt: Runtime): List<Alert> {
         val cx = Ctx(rt)
-        return runCatching { rt.store.projects() }.getOrDefault(emptyList()).flatMap { mirrored(cx, it.root) }
+        return runCatching { rt.store.projects() }
+            .getOrDefault(emptyList())
+            .flatMap { mirrored(cx, it.root) }
             .sortedWith(compareBy<Alert> { it.kind }.thenBy { it.root })
     }
 
     @OptIn(ExperimentalForeignApi::class)
-    fun hhmm(ts: Long): String = memScoped {
-        val t = alloc<time_tVar>(); t.value = ts
-        val out = alloc<tm>()
-        if (localtime_r(t.ptr, out.ptr) == null) "?" else "${out.tm_hour.toString().padStart(2, '0')}:${out.tm_min.toString().padStart(2, '0')}"
-    }
+    fun hhmm(ts: Long): String =
+        memScoped {
+            val t = alloc<time_tVar>()
+            t.value = ts
+            val out = alloc<tm>()
+            if (localtime_r(t.ptr, out.ptr) == null) "?" else "${out.tm_hour.toString().padStart(2, '0')}:${out.tm_min.toString().padStart(2, '0')}"
+        }
 
     /** One line per kind: projects hit by the same problem at once read as one line. */
-    fun describe(kind: AlertKind, group: List<Pair<Alert, List<String>>>, notice: Boolean): String {
+    fun describe(
+        kind: AlertKind,
+        group: List<Pair<Alert, List<String>>>,
+        notice: Boolean,
+    ): String {
         val since = hhmm(group.minOf { it.first.since })
         val names = group.joinToString(", ") { it.first.project }
         val one = group.singleOrNull()
-        val line = StringBuilder(
-            if (one != null && one.second.size > 2) "${one.second.joinToString(" to ")}: ${one.first.project} ${kind.words}" else "$names ${kind.words}",
-        )
+        val line =
+            StringBuilder(
+                if (one != null && one.second.size > 2) "${one.second.joinToString(" to ")}: ${one.first.project} ${kind.words}" else "$names ${kind.words}",
+            )
         line.append(" since $since")
         line.append(if (one != null) " (${one.first.detail})" else " (${group.size} projects)")
         if (notice) line.append("; ${kind.effect} $names")
         return line.toString()
     }
 
-    fun grouped(alerts: List<Pair<Alert, List<String>>>, notice: Boolean): List<String> =
-        alerts.groupBy { it.first.kind }.entries.sortedBy { it.key }.map { (k, g) -> describe(k, g, notice) }
+    fun grouped(
+        alerts: List<Pair<Alert, List<String>>>,
+        notice: Boolean,
+    ): List<String> =
+        alerts
+            .groupBy { it.first.kind }
+            .entries
+            .sortedBy { it.key }
+            .map { (k, g) -> describe(k, g, notice) }
 
     /** The lines `rtok doctor` prints. */
     fun texts(alerts: List<Alert>): List<String> = grouped(alerts.map { it to emptyList() }, false)
 
     /** [start] and what it links to, level by level; a missing project stays in. */
-    fun reach(store: Store, start: Project): List<Reached> {
+    fun reach(
+        store: Store,
+        start: Project,
+    ): List<Reached> {
         val byId = store.projects().associateBy { it.id }
         val links = store.projectLinks()
         val seen = hashSetOf(start.id)
@@ -99,10 +145,18 @@ object Alerts {
     }
 
     /** The notice that heads a graph answer for the scope of [project] (else the project at [cwd]). */
-    fun notice(rt: Runtime, project: String?, cwd: String): String? {
+    fun notice(
+        rt: Runtime,
+        project: String?,
+        cwd: String,
+    ): String? {
         if (!rt.config.plugins.graph.alerts) return null
-        val start = if (!project.isNullOrEmpty()) runCatching { Projects.resolve(rt.store, project) }.getOrNull() ?: return null
-        else runCatching { rt.store.projectByRoot(cwd) }.getOrNull() ?: return null
+        val start =
+            if (!project.isNullOrEmpty()) {
+                runCatching { Projects.resolve(rt.store, project) }.getOrNull() ?: return null
+            } else {
+                runCatching { rt.store.projectByRoot(cwd) }.getOrNull() ?: return null
+            }
         val cx = Ctx(rt)
         val reached = runCatching { reach(rt.store, start) }.getOrNull() ?: return null
         val found = reached.flatMap { r -> mirrored(cx, r.project.root).map { it to r.chain } }

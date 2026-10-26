@@ -13,20 +13,48 @@ object Languages {
     val treeSitter: TreeSitter get() = NativeTreeSitter
 
     /** File suffix (and the Rust config grammar keys) → tree-sitter grammar name. */
-    private val byKey: Map<String, String> = buildMap {
-        fun put(grammar: String, vararg keys: String) { for (k in keys) this[k] = grammar }
-        put("rust", "rs", "rust"); put("typescript", "ts", "mts", "cts", "typescript"); put("tsx", "tsx")
-        put("javascript", "js", "mjs", "cjs", "jsx", "javascript"); put("python", "py", "pyi", "python")
-        put("dart", "dart"); put("c", "c", "h"); put("go", "go"); put("java", "java")
-        put("kotlin", "kt", "kts", "kotlin"); put("swift", "swift"); put("c_sharp", "cs", "csharp", "c_sharp")
-        put("ruby", "rb", "ruby"); put("php", "php")
-        // Parse-only grammars (stripped mode, node walks): no tags query bundled or composed.
-        put("cpp", "cc", "cpp", "cxx", "hpp", "hh", "hxx"); put("scala", "scala", "sc"); put("haskell", "hs")
-        put("julia", "jl"); put("ocaml", "ml"); put("ocaml_interface", "mli"); put("bash", "sh", "bash")
-        put("css", "css"); put("html", "html", "htm"); put("json", "json"); put("verilog", "v", "sv")
-        put("agda", "agda"); put("fluent", "ftl"); put("ql", "ql"); put("ql_dbscheme", "dbscheme")
-        put("embedded_template", "erb", "ejs"); put("regex", "regex"); put("jsdoc", "jsdoc")
-    }
+    private val byKey: Map<String, String> =
+        buildMap {
+            fun put(
+                grammar: String,
+                vararg keys: String,
+            ) {
+                for (k in keys) this[k] = grammar
+            }
+            put("rust", "rs", "rust")
+            put("typescript", "ts", "mts", "cts", "typescript")
+            put("tsx", "tsx")
+            put("javascript", "js", "mjs", "cjs", "jsx", "javascript")
+            put("python", "py", "pyi", "python")
+            put("dart", "dart")
+            put("c", "c", "h")
+            put("go", "go")
+            put("java", "java")
+            put("kotlin", "kt", "kts", "kotlin")
+            put("swift", "swift")
+            put("c_sharp", "cs", "csharp", "c_sharp")
+            put("ruby", "rb", "ruby")
+            put("php", "php")
+            // Parse-only grammars (stripped mode, node walks): no tags query bundled or composed.
+            put("cpp", "cc", "cpp", "cxx", "hpp", "hh", "hxx")
+            put("scala", "scala", "sc")
+            put("haskell", "hs")
+            put("julia", "jl")
+            put("ocaml", "ml")
+            put("ocaml_interface", "mli")
+            put("bash", "sh", "bash")
+            put("css", "css")
+            put("html", "html", "htm")
+            put("json", "json")
+            put("verilog", "v", "sv")
+            put("agda", "agda")
+            put("fluent", "ftl")
+            put("ql", "ql")
+            put("ql_dbscheme", "dbscheme")
+            put("embedded_template", "erb", "ejs")
+            put("regex", "regex")
+            put("jsdoc", "jsdoc")
+        }
 
     /** Grammars that produce tags (the outline/graph languages). */
     private val tagged = setOf("rust", "typescript", "tsx", "javascript", "python", "dart", "c", "go", "java", "kotlin", "swift", "c_sharp", "ruby", "php")

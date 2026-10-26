@@ -16,6 +16,7 @@ object Python {
     }
 
     private fun progress(line: String) = PROGRESS.containsMatchIn(line.trimEnd())
+
     private fun totals(line: String) = TOTALS.containsMatchIn(line.trim())
 
     private enum class Section { Header, Kept }
@@ -60,9 +61,12 @@ object Python {
     /** Fold runs of identical traceback frames into one plus a repeat count. */
     fun collapseFrames(output: String): String {
         val lines = output.rustLines()
-        val out = ArrayList<String>(lines.size); var i = 0
+        val out = ArrayList<String>(lines.size)
+        var i = 0
         while (i < lines.size) {
-            val line = lines[i]; out += line; i++
+            val line = lines[i]
+            out += line
+            i++
             if (!line.startsWith("Traceback (most recent call last):")) continue
             val start = i
             while (i < lines.size && lines[i].startsWith(' ')) i++
@@ -74,7 +78,8 @@ object Python {
     private fun fold(frames: List<String>): List<String> {
         val groups = ArrayList<MutableList<String>>()
         for (l in frames) if (l.startsWith("  File ") || groups.isEmpty()) groups += mutableListOf(l) else groups.last() += l
-        val out = ArrayList<String>(); var k = 0
+        val out = ArrayList<String>()
+        var k = 0
         while (k < groups.size) {
             var run = 1
             while (k + run < groups.size && groups[k + run] == groups[k]) run++
