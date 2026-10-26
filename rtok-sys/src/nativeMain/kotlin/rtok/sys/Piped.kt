@@ -20,6 +20,7 @@ class PipedChild private constructor(
     private var head = 0
     private var status: Int? = null
     private var reaped = false
+    private var closeWhenDrained = false
 
     /** Bytes still queued for the child's stdin. */
     val pending: Int get() = queue.sumOf { it.size } - head
@@ -31,6 +32,45 @@ class PipedChild private constructor(
         flush()
         return inFd >= 0
     }
+
+    /** Closes stdin once every queued byte is written (Rust dropping the child's stdin handle). */
+    fun finishInput() {
+        closeWhenDrained = true
+        flush()
+    }
+
+    /**
+     * Blocks until stdout or [fd] (ignored when negative) is readable or hung up, writing queued stdin meanwhile.
+     * The first flag is stdout, the second [fd]; read stdout with [read] afterwards.
+     */
+    fun awaitReadable(fd: Int): Pair<Boolean, Boolean> =
+        memScoped {
+            if (outFd < 0) return true to false
+            val fds = allocArray<pollfd>(3)
+            while (true) {
+                val writing = inFd >= 0 && queue.isNotEmpty()
+                fds[0].fd = outFd
+                fds[0].events = POLLIN.toShort()
+                fds[0].revents = 0
+                fds[1].fd = fd
+                fds[1].events = POLLIN.toShort()
+                fds[1].revents = 0
+                fds[2].fd = if (writing) inFd else -1
+                fds[2].events = POLLOUT.toShort()
+                fds[2].revents = 0
+                val r = poll(fds, 3u, -1)
+                if (r < 0 && errno != EINTR) return true to false
+                if (r <= 0) continue
+                if (fds[2].revents.toInt() != 0) {
+                    if (fds[2].revents.toInt() and (POLLERR or POLLHUP) != 0) closeInput() else flush()
+                }
+                val child = fds[0].revents.toInt() != 0
+                val other = fd >= 0 && fds[1].revents.toInt() != 0
+                if (child || other) return child to other
+            }
+            @Suppress("UNREACHABLE_CODE")
+            true to false
+        }
 
     /** Writes queued bytes until the pipe would block; a broken pipe closes stdin. */
     private fun flush() {
@@ -48,6 +88,7 @@ class PipedChild private constructor(
                 head = 0
             }
         }
+        if (closeWhenDrained && queue.isEmpty()) closeInput()
     }
 
     private fun closeInput() {
@@ -110,6 +151,19 @@ class PipedChild private constructor(
         return status
     }
 
+    /** Blocks until the child exits and reaps it (Rust `wait`): the code, or -signal. */
+    fun waitExit(): Int {
+        if (!reaped) {
+            memScoped {
+                val st = alloc<IntVar>()
+                while (waitpid(pid, st.ptr, 0) < 0) if (errno != EINTR) return -1
+                reaped = true
+                status = decodeStatus(st.value)
+            }
+        }
+        return status ?: -1
+    }
+
     /** Kills and reaps the child and closes both pipes (Rust `kill` + `wait`). */
     fun kill() {
         closeInput()
@@ -145,6 +199,7 @@ class PipedChild private constructor(
             cwd: String? = null,
             extraEnv: Map<String, String> = emptyMap(),
             stderrPath: String? = null,
+            inheritStderr: Boolean = false,
         ): PipedChild =
             memScoped {
                 // A peer that exits must fail the write, not kill rtok (Rust ignores SIGPIPE at startup).
@@ -156,13 +211,15 @@ class PipedChild private constructor(
                 posix_spawn_file_actions_init(actions.ptr)
                 posix_spawn_file_actions_adddup2(actions.ptr, inPipe[0], 0)
                 posix_spawn_file_actions_adddup2(actions.ptr, outPipe[1], 1)
-                posix_spawn_file_actions_addopen(
-                    actions.ptr,
-                    2,
-                    stderrPath ?: "/dev/null",
-                    O_WRONLY or O_CREAT or O_TRUNC,
-                    MODE_644.convert(),
-                )
+                if (!inheritStderr) {
+                    posix_spawn_file_actions_addopen(
+                        actions.ptr,
+                        2,
+                        stderrPath ?: "/dev/null",
+                        O_WRONLY or O_CREAT or O_TRUNC,
+                        MODE_644.convert(),
+                    )
+                }
                 for (fd in listOf(inPipe[0], inPipe[1], outPipe[0], outPipe[1])) posix_spawn_file_actions_addclose(actions.ptr, fd)
                 cwd?.let { rtok_spawn_addchdir(actions.ptr, it) }
                 val argv = allocArrayOf((listOf(program) + args).map { it.cstr.ptr } + listOf(null))

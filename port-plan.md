@@ -388,4 +388,16 @@ Next, in order:
 - Tests: LinkTest (19), AgentsTest (5), AgentToolsTest (6). Full suite: 1491, 0 failures. Detekt: test-only
   MagicNumber/TooManyFunctions baselined.
 - Deferred: hookless host table (agent registry), `rtok agents` CLI commands on this model.
-- Stop point: next `--http`, `rtok mcp ping`, `mcp -- <cmd>` wrapper, server background jobs; then otel.
+- Stop point (superseded below): next `--http`, `rtok mcp ping`, `mcp -- <cmd>` wrapper, server background jobs; then otel.
+
+## Session: MCP chunk 3 — `rtok mcp -- <server>` wrapper (wrap.rs)
+- `rtok.mcp.FrameReader`/`Framing` (wrap.rs `read_frame`/`write_frame`, fed incrementally: line JSON, `Content-Length`,
+  Raw for malformed/oversized/short headers), `rtok.mcp.Wrap` (`run`, `Pending` note/take, `shortenResult` with the
+  `[mcp]` cmd rule, archive + expand trailer, json_tree fold). Single-threaded poll loop over our stdin and the
+  server's stdout: `PipedChild` gains `inheritStderr`, `awaitReadable`, `finishInput`, `waitExit`.
+- CLI: `rtok mcp -- <argv>` (variadic `server`), `--call` with a wrapped server is refused like Rust.
+- Tests: WrapTest (10: the 8 Rust cases + byte-at-a-time feed + isError), e2e wrapper spec (cut + pass-through + exit code).
+  Full suite: 1501 unit/CLI, 0 failures; e2e 16.
+- Ivan approved ktor-server (CIO, pinned) for `--http`, behind our own HTTP server interface in its own module.
+- Stop point: next `rtok mcp --http` (mcp/http.rs), then agent host registry → `rtok mcp ping` → HookSupport → `rtok agents`
+  CLI; server background jobs; otel.

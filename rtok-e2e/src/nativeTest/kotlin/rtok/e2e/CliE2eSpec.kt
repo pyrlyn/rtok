@@ -152,4 +152,29 @@ class CliE2eSpec :
                 }
             }
         }
+        context("mcp -- <server> wrapper") {
+            // A foreign stdio server: answers `tools/call` with 200 lines, echoes every other request, exits 3.
+            val server =
+                "import json,sys\n" +
+                    "for l in sys.stdin:\n" +
+                    "    m=json.loads(l)\n" +
+                    "    r={'content':[{'type':'text','text':''.join('line %d\\n'%i for i in range(200))}]} if m.get('method')=='tools/call' else {}\n" +
+                    "    print(json.dumps({'jsonrpc':'2.0','id':m['id'],'result':r}),flush=True)\n" +
+                    "sys.exit(3)\n"
+            test("long tool results are cut with an expand trailer, others pass byte-exact, the exit code is the server's") {
+                Sandbox("mcp-wrap").use { s ->
+                    writeString("${s.root}/srv.py", server)
+                    val input =
+                        """{"jsonrpc":"2.0","id":1,"method":"ping"}""" + "\n" +
+                            """{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"list"}}""" + "\n"
+                    s.rtok("mcp", "--", "python3", "${s.root}/srv.py", stdin = input).also {
+                        it.code shouldBe 3
+                        val lines = it.out.lines()
+                        lines[0] shouldBe """{"jsonrpc": "2.0", "id": 1, "result": {}}"""
+                        lines[1] shouldContain "expand: rtok expand "
+                        lines[1] shouldNotContain "line 150"
+                    }
+                }
+            }
+        }
     })
