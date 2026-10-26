@@ -43,7 +43,7 @@ class RuntimeTest {
 
     /** T644: a closed in-memory runtime leaves no directory behind. */
     @Test fun aClosedInMemoryRuntimeLeavesNoDirectory() {
-        val cx = Runtime.inMemory("t644")
+        installDb(); val cx = Runtime.inMemory("t644")
         val dir = parent(cx.config.log.path)!!
         assertTrue(isDir(dir))
         cx.close()
@@ -85,4 +85,4 @@ class RuntimeTest {
 }
 
 /** An in-memory runtime closed (scratch dir removed) after [body]. */
-private fun mem(session: String, body: (Runtime) -> Unit) = Runtime.inMemory(session).use(body)
+private fun mem(session: String, body: (Runtime) -> Unit) { installDb(); Runtime.inMemory(session).use(body) }

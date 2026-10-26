@@ -100,7 +100,9 @@ jiff/humantime→kotlinx-datetime; shlex→own; wasmi→not portable (see risks)
 - [x] registry (`plugins/Registry.kt`, dispatch order) + measure + proxy manifests + `render.plugins_table` + `skip_word` — 3 (+1); catalogue test is an ordered-subset check until every plugin is in
 - [x] prerequisite: src/project.rs (project name/key/dir) — 13
 - [x] prerequisite: src/plugin.rs `Runtime` host over Store + log::record — 5
-- [ ] archive (1450 lines) — 24
+- [x] archive (1450 lines) — 24
+  - CLI testing: `archive rewrite --stdin` — Kotest ArchiveCliSpec 5 + e2e ArchiveE2eSpec 3
+  - pending: 3 wire-fixture tests (Phase 7 wires), P33 CTT gate (Phase 6 measure::jsonl)
 - [ ] toon (674) — 10
 - [ ] json_tree (1237) — 15
 - [ ] compress (1075) — 16
@@ -154,12 +156,12 @@ jiff/humantime→kotlinx-datetime; shlex→own; wasmi→not portable (see risks)
 | 2 | log 12, root 7, lib 33, layers 20 (rstest cases folded), validate 27, change-preview 4, since 5 (new) | 108 |
 | 3 (partial) | types 18, deadline 3, resident 1 (+1 new), sys environ/lock 2 new — dispatch 55 waits for Phase 5 | 25 |
 | 4 | plugin-sdk 9, sha256 1, db 2, handle 10, sanitize 11, hook_fields 7, store 31, otel 8, tasks 7, retention 5, archive 29, agents 14, worktree 9, note_files+host_usage 5, humantime 3, messages 8, projects 7, symbols 10, retention +2, sys text 2, project_links 5, driver 1, cli adapter 1, graph 7, docs 2, embed 17 | 213 |
-| 5 (partial) | registry 3 (+1 skip_word), project 13, runtime 8 (6 ported + defer, fit_budget) | 25 |
+| 5 (partial) | registry 3 (+1 skip_word), project 13, runtime 8 (6 ported + defer, fit_budget), archive 16 + pi 4 + ArchiveCliSpec 5 | 50 |
 | tooling | toml-ktoml 12, rtok-config −1 (own TOML parser test removed) | 11 |
 | tooling | db-room 5 (+3; 2 moved from store) | 3 |
 | tooling | Kotest RenderSpec 1 | 1 |
 | 6 (partial) | Kotest CliSpec 17, toml-ktoml trailing newline 1 (e2e 11 counted separately) | 18 |
-| **total** | | **433** |
+| **total** | | **458** |
 
 ## Test-porting
 Each Rust `#[cfg(test)]` module → `src/commonTest` in the matching module; `tests/*.rs` (138 files)

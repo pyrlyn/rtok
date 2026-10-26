@@ -12,12 +12,14 @@ val CONFIG_OPT = OptSpec.Value("config", "Config file (else `<home>/config.toml`
 val RTOK = CommandSpec(
     name = "rtok", help = "Token reduction for coding agents (rtok $VERSION)",
     options = listOf(CONFIG_OPT),
-    subcommands = listOf(PLUGINS, CONFIG),
+    subcommands = listOf(PLUGINS, CONFIG, ARCHIVE),
 )
 
 object StdIo : CliIo {
     override fun out(text: String) { print(text) }
     override fun err(text: String) = rtok.sys.eprint(text)
+    override fun readStdin() = rtok.sys.readFd(0)
+    override fun writeBytes(bytes: ByteArray) = rtok.sys.writeFd(1, bytes)
 }
 
 /** Runs the CLI; the process exit code. */

@@ -12,6 +12,7 @@ import rtok.config.leaf
 import rtok.plugin.sdk.*
 import rtok.store.*
 import rtok.sys.createDirAll
+import rtok.sys.scalarList
 import rtok.sys.pid
 import rtok.sys.removeDirAll
 import rtok.sys.tempDir
@@ -20,7 +21,7 @@ import rtok.sys.tempDir
 fun fitBudget(cx: rtok.plugin.sdk.Host, text: String, cls: Class, budget: UInt): String {
     val est = cx.estimate(text, cls)
     if (est <= budget) return text
-    val cps = text.scalars()
+    val cps = text.scalarList()
     val keep = (cps.size.toULong() * budget.toULong() / est.toULong()).toInt()
     var n = keep
     var out = cps.join(n)
@@ -28,11 +29,6 @@ fun fitBudget(cx: rtok.plugin.sdk.Host, text: String, cls: Class, budget: UInt):
     return out
 }
 
-private fun String.scalars(): List<String> {
-    val out = ArrayList<String>(length); var i = 0
-    while (i < length) { val n = if (this[i].isHighSurrogate() && i + 1 < length) 2 else 1; out += substring(i, i + n); i += n }
-    return out
-}
 private fun List<String>.join(n: Int) = subList(0, n).joinToString("")
 
 /**

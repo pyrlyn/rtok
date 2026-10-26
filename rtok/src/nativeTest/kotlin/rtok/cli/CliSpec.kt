@@ -10,15 +10,16 @@ import rtok.VERSION
 import rtok.sys.*
 
 /** Captures what a command prints. */
-class CaptureIo : CliIo {
+class CaptureIo(private val stdin: ByteArray = ByteArray(0)) : CliIo {
     val out = StringBuilder(); val err = StringBuilder()
     override fun out(text: String) { out.append(text) }
     override fun err(text: String) { err.append(text) }
+    override fun readStdin() = stdin
 }
 
 data class Ran(val code: Int, val out: String, val err: String)
 
-fun cli(vararg args: String, spec: CommandSpec = RTOK): Ran { val io = CaptureIo(); val code = cliParser.run(spec, arrayOf(*args), io); return Ran(code, io.out.toString(), io.err.toString()) }
+fun cli(vararg args: String, spec: CommandSpec = RTOK, stdin: String = ""): Ran { rtok.support.installDb(); val io = CaptureIo(stdin.encodeToByteArray()); val code = cliParser.run(spec, arrayOf(*args), io); return Ran(code, io.out.toString(), io.err.toString()) }
 
 /** Runs [body] with `RTOK_HOME` pointing at a fresh directory (unset again after). */
 fun <T> withHome(tag: String, body: (String) -> T): T {

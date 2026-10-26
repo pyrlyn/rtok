@@ -150,3 +150,17 @@ fun fileStat(p: String): Pair<Long, Long>? = memScoped {
 /** Write [text] to stderr unbuffered (stdout stays Kotlin's `print`). */
 @OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
 fun eprint(text: String) { platform.posix.fputs(text, platform.posix.stderr); platform.posix.fflush(platform.posix.stderr) }
+
+/** Everything readable from [fd] until EOF (stdin = 0). */
+fun readFd(fd: Int): ByteArray = memScoped {
+    val out = ArrayList<Byte>(); val buf = allocArray<ByteVar>(65536)
+    while (true) { val n = read(fd, buf, 65536.convert()).toInt(); if (n <= 0) break; for (i in 0 until n) out += buf[i] }
+    out.toByteArray()
+}
+
+/** Writes all of [bytes] to [fd] (stdout = 1), flushing stdio first so ordering holds. */
+fun writeFd(fd: Int, bytes: ByteArray) {
+    fflush(null)
+    var off = 0
+    bytes.usePinned { p -> while (off < bytes.size) { val n = write(fd, p.addressOf(off), (bytes.size - off).convert()).toInt(); if (n <= 0) break; off += n } }
+}

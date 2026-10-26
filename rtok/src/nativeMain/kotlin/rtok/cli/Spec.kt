@@ -24,6 +24,8 @@ class Invocation(private val flags: Set<String>, private val values: Map<String,
     }
     /** The global `--config PATH`. */
     val configFile: String? get() = value("config")
+    /** The merged config for `--config` (or the default home). */
+    fun loadConfig(): rtok.config.Config = rtok.config.Config.loadWith(configFile, null)
 }
 
 /** One (sub)command: name, help, options, positionals, children, and what it does once parsed. */
@@ -42,6 +44,10 @@ interface CliIo {
     fun err(text: String)
     fun println(text: String = "") = out(text + "\n")
     fun eprintln(text: String = "") = err(text + "\n")
+    /** All of stdin (carriers such as `archive rewrite --stdin`). */
+    fun readStdin(): ByteArray = ByteArray(0)
+    /** Raw bytes to stdout, unchanged (an echoed input must stay byte-identical). */
+    fun writeBytes(bytes: ByteArray) = out(bytes.decodeToString())
 }
 
 /** A command failed: printed as `Error: <message>` with exit [code] (Rust: anyhow from main → 1). */

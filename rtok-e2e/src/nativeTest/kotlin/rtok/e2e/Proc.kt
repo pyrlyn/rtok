@@ -14,16 +14,18 @@ private var seq = 0
 fun q(s: String) = "'" + s.replace("'", "'\\''") + "'"
 
 /** Runs [argv] in [cwd] with [env] added (a null value unsets); captures stdout/stderr through files. */
-fun sh(argv: List<String>, cwd: String, env: Map<String, String?> = emptyMap()): Proc {
+fun sh(argv: List<String>, cwd: String, env: Map<String, String?> = emptyMap(), stdin: String? = null): Proc {
     val tag = "${tempDir()}/rtok-e2e-io-${pid()}-${seq++}"
+    stdin?.let { writeString("$tag.in", it) }
+    val input = if (stdin != null) "<${q("$tag.in")}" else "</dev/null"
     val unset = env.filterValues { it == null }.keys.joinToString(" ") { "-u $it" }
     val set = env.entries.filter { it.value != null }.joinToString(" ") { (k, v) -> "$k=${q(v!!)}" }
     val envPart = "$unset $set"
-    val cmd = "cd ${q(cwd)} && env $envPart ${argv.joinToString(" ") { q(it) }} >${q("$tag.out")} 2>${q("$tag.err")}"
+    val cmd = "cd ${q(cwd)} && env $envPart ${argv.joinToString(" ") { q(it) }} $input >${q("$tag.out")} 2>${q("$tag.err")}"
     val status = platform.posix.system(cmd)
     val code = (status shr 8) and 0xff
     val p = Proc(code, readToString("$tag.out"), readToString("$tag.err"))
-    platform.posix.remove("$tag.out"); platform.posix.remove("$tag.err")
+    platform.posix.remove("$tag.out"); platform.posix.remove("$tag.err"); platform.posix.remove("$tag.in")
     return p
 }
 
@@ -37,7 +39,7 @@ class Sandbox(tag: String) : AutoCloseable {
     private val env get() = mapOf("RTOK_HOME" to home, "HOME" to user, "RTOK_CONFIG" to null, "NO_COLOR" to "1",
         "GIT_CONFIG_GLOBAL" to "/dev/null", "GIT_AUTHOR_NAME" to "e2e", "GIT_AUTHOR_EMAIL" to "e2e@x", "GIT_COMMITTER_NAME" to "e2e", "GIT_COMMITTER_EMAIL" to "e2e@x")
 
-    fun rtok(vararg args: String, cwd: String = root) = sh(listOf(RTOK) + args, cwd, env)
+    fun rtok(vararg args: String, cwd: String = root, stdin: String? = null) = sh(listOf(RTOK) + args, cwd, env, stdin)
     fun git(cwd: String, vararg args: String) = sh(listOf("git", "-c", "protocol.file.allow=always") + args, cwd, env).also {
         check(it.code == 0) { "git ${args.joinToString(" ")} failed: ${it.err}" }
     }

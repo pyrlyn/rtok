@@ -167,5 +167,8 @@ class Ctx(val host: Capabilities, private val agent: String? = null) : Capabilit
         return runCatching { SECTION_JSON.decodeFromJsonElement(de, v) }.getOrDefault(default)
     }
 
-    companion object { val SECTION_JSON = Json { ignoreUnknownKeys = true; isLenient = false; coerceInputValues = false } }
+    companion object {
+        /** Sections arrive as the config's snake_case JSON (serde's field names). */
+        @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
+        val SECTION_JSON = Json { namingStrategy = JsonNamingStrategy.SnakeCase; ignoreUnknownKeys = true; isLenient = false; coerceInputValues = false } }
 }

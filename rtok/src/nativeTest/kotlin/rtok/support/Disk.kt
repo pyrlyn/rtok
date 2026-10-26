@@ -3,15 +3,13 @@ package rtok.support
 import rtok.db.Db
 import rtok.sys.*
 
-/** Every test binary installs the app's SQLite adapter before any test runs. */
-@OptIn(ExperimentalStdlibApi::class)
-@EagerInitialization
-private val installDriver = Db.installIfAbsent(rtok.db.room.RoomDbDriver)
+/** The app's SQLite adapter, as `main` installs it; every helper that opens a store calls this first. */
+fun installDb() = Db.installIfAbsent(rtok.db.room.RoomDbDriver)
 
 private var nextTmp = 0
 
 /** Port of testutil.rs `tmp_dir`: a fresh, empty directory under `$TMPDIR`. */
-fun tmpDir(tag: String): String = "${tempDir()}/rtok-$tag-${pid()}-${nextTmp++}".also { removeDirAll(it); createDirAll(it) }
+fun tmpDir(tag: String): String = installDb().let { "${tempDir()}/rtok-$tag-${pid()}-${nextTmp++}".also { removeDirAll(it); createDirAll(it) } }
 
 /** Port of testutil.rs `worktree_layout`: `dir/repo` and its linked worktree `dir/wt/repo-t1`, without git. */
 fun worktreeLayout(dir: String): Pair<String, String> {

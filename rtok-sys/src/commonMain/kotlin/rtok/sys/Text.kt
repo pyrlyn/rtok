@@ -24,3 +24,22 @@ private fun String.codePointAt(i: Int): Int {
     if (c.isHighSurrogate() && i + 1 < length && this[i + 1].isLowSurrogate()) return 0x10000 + ((c.code - 0xD800) shl 10) + (this[i + 1].code - 0xDC00)
     return c.code
 }
+
+/** Rust `str::lines`: split on `\n`, drop one trailing `\r` per line, no empty last line after a final `\n`. */
+fun String.rustLines(): List<String> {
+    if (isEmpty()) return emptyList()
+    val parts = split('\n').let { if (endsWith('\n')) it.dropLast(1) else it }
+    return parts.map { it.removeSuffix("\r") }
+}
+
+/** Unicode scalar values (Rust `chars()`), each as a 1- or 2-unit string. */
+fun String.scalarList(): List<String> {
+    val out = ArrayList<String>(length); var i = 0
+    while (i < length) { val n = if (this[i].isHighSurrogate() && i + 1 < length && this[i + 1].isLowSurrogate()) 2 else 1; out += substring(i, i + n); i += n }
+    return out
+}
+
+/** The first [n] Unicode scalar values (Rust `chars().take(n)`). */
+fun String.takeScalars(n: Int): String { var i = 0; var k = 0
+    while (i < length && k < n) { i += if (this[i].isHighSurrogate() && i + 1 < length && this[i + 1].isLowSurrogate()) 2 else 1; k++ }
+    return substring(0, i) }
