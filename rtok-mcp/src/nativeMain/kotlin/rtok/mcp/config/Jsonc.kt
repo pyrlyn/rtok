@@ -1,6 +1,6 @@
 // JSONC reading (agents/jsonc.rs `parse`, `strip_comments`): comments and trailing commas, nothing else
-// of JSON5. Lookup and validation only; the surgical editor is a later chunk.
-package rtok.agents
+// of JSON5. Lookup and validation; the surgical editor is `JsoncEdit`.
+package rtok.mcp.config
 
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement

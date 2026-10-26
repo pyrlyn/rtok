@@ -6,8 +6,8 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import rtok.agents.Jsonc
 import rtok.config.Toml
+import rtok.mcp.config.Jsonc
 
 /** Command line taken from a host config. Never a path this binary invented. */
 data class Launch(

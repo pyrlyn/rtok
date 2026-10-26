@@ -432,3 +432,13 @@ Next, in order:
 - Tests: PingConfigTest (3, incl. the Rust per-host fixture case), JsoncTest (2). Full suite 1521, 0 failures.
 - Stop point: next ping process side (`probe` via doctor mcp_roundtrip, headless `capture`, `select`/report/JSON, CLI)
   which needs per-host `files`/`installed` from agents chunk 2.
+
+## Session: agents chunk 2a — MCP config core (crates/rtok-mcp)
+- New module `:rtok-mcp` (registry.rs, spec.rs, config.rs, status.rs, ops.rs): `McpSpec`, `McpFs`, `McpConfig`
+  (strict JSON / JSONC / TOML), `JsoncEdit` (lossless JSONC property set/remove), `TomlEdit` (`[<key>.rtok]` table,
+  implicit parents, one-line inline entries), `status`, `apply` + `Report`. `Jsonc` moved here from `rtok.agents`.
+- `:rtok-agent-sdk` Owned.kt: `parseStrictJson`, `judgeOwned`, `keepEdited`, `runsBin`, `withoutDefaultType`,
+  `confirmed`/`accepted`/`answer`.
+- Tests: OpsTest 8 (7 Rust + strict-JSON refusal), EditorsTest 4, JsoncTest 2 (moved). docs/mcp-config.md.
+- Stop point: next agents/mcp.rs (`McpSurface`, `McpRow`, per-host `surfaces`, doctor lines, `run`/`sync`) over the
+  36 hosts' paths, then per-host files/installed/apply, `find_bin`, `app_version`; then the ping process side.
