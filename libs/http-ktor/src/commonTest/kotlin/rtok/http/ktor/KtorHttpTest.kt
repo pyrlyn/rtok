@@ -47,6 +47,21 @@ class KtorHttpTest {
             assertEquals(json, body)
         }
 
+    @Test fun aGetSendsItsHeadersAndReturnsTheBytes() =
+        runBlocking {
+            var seen: io.ktor.client.request.HttpRequestData? = null
+            client { req ->
+                seen = req
+                respond(byteArrayOf(1, 2, 3), HttpStatusCode.OK)
+            }.use { c ->
+                val r = c.get(HttpRequest("http://x/crate/serde/1.0.0/json.zst", listOf("user-agent" to "rtok/t")))
+                assertEquals(200, r.status)
+                assertContentEquals(byteArrayOf(1, 2, 3), r.body)
+            }
+            assertEquals(HttpMethod.Get, seen!!.method)
+            assertEquals("rtok/t", seen!!.headers["User-Agent"])
+        }
+
     @Test fun aNonSuccessStatusIsAResponseNotAnException() =
         runBlocking {
             client { respond("overloaded", HttpStatusCode.ServiceUnavailable) }.use { c ->

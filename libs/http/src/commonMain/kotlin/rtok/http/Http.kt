@@ -36,6 +36,9 @@ class HttpException(
 interface HttpClient : AutoCloseable {
     /** POST [req]; a non-2xx status is a response, not an exception. Throws [HttpException] otherwise. */
     suspend fun post(req: HttpRequest): HttpResponse
+
+    /** GET [req] (its body is ignored); errors as for [post]. */
+    suspend fun get(req: HttpRequest): HttpResponse = throw HttpException(HttpException.Kind.Io, "GET is not supported by this client")
 }
 
 /** Builds clients; the composition root picks the engine adapter. */

@@ -2,13 +2,21 @@
 // index (T455), and the workspace's `llms.txt` as crate `llms`.
 package rtok.plugins.docs
 
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.*
+import rtok.config.Config
 import rtok.config.Toml
+import rtok.http.HttpClientFactory
+import rtok.http.HttpRequest
+import rtok.http.HttpSettings
+import rtok.http.ktor.KtorHttp
 import rtok.log.now
 import rtok.plugin.Runtime
 import rtok.plugin.sdk.*
 import rtok.store.*
 import rtok.sys.*
+import rtok.zstd.ZstdDecoder
+import rtok.zstd.native.NativeZstd
 
 object DocsPlugin : Plugin {
     override fun manifest() = Manifest("docs", listOf(Surface.Mcp, Surface.Cli), false)
@@ -237,6 +245,25 @@ fun fetchCrate(
     val count = rt.store.replaceDocCrate(n, ver, sha, formatVersion, now(), items)
     return "cached $n $ver ($count items)"
 }
+
+private const val FETCH_TIMEOUT_MS = 30_000L
+
+/** One GET with rtok's user agent and a 30 s cap (Rust `http_get`). */
+fun httpGet(
+    url: String,
+    http: HttpClientFactory = KtorHttp.FACTORY,
+): Pair<Int, ByteArray> =
+    http.create(HttpSettings(FETCH_TIMEOUT_MS, FETCH_TIMEOUT_MS, FETCH_TIMEOUT_MS)).use { c ->
+        val r = runBlocking { c.get(HttpRequest(url, listOf("user-agent" to "rtok/${rtok.VERSION}"))) }
+        r.status to r.body
+    }
+
+/** `rtok docs fetch <name>`: the only network path of the plugin. */
+fun runFetch(
+    cfg: Config,
+    name: String,
+    zstd: ZstdDecoder = NativeZstd(),
+): String = Runtime.open(cfg, "docs").use { fetchCrate(it, name, ::httpGet, zstd::decodeAll) }
 
 /** Rust prints the `u16` status code bare. */
 private fun statusLine(code: Int) = code.toString()

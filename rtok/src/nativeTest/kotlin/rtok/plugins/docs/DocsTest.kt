@@ -205,4 +205,17 @@ class DocsTest {
             assertTrue(exists("${rt.config.home}/docs/serde/1.0.210/rustdoc.json.zst.sha256"))
             assertEquals(39 to listOf(Triple("serde::Deserialize", "trait", "Deserialize docs")), indexRustdoc(Json.parseToJsonElement(json)))
         }
+
+    /** The real decoder on a real `.json.zst` body (`zstd -19` of a one-item rustdoc JSON). */
+    @OptIn(kotlin.io.encoding.ExperimentalEncodingApi::class)
+    @Test
+    fun fetchDecodesARealZstdBody() =
+        withRuntime("docs-fetch-zstd", on()) { rt ->
+            rt.config.home = tmpDir("docs-home-zstd")
+            val body =
+                kotlin.io.encoding.Base64
+                    .decode("KLUv/QRoBQMAIgYUF4BtDnjxEZKCR4hodT5iBLA2CI+Kiaxo3X1OGgPwnDQm5VX3na51x7NHmavjOWmzdJOzuHqyTb6Bf3gBgz88L25BV8SAf5ryZoS45WxT/gIEAFp5GYKBCaB0rkkGd2Yeaw==")
+            val out = withLockCwd(LOCK) { fetchCrate(rt, "serde", { 200 to body }, rtok.zstd.native.NativeZstd()::decodeAll) }
+            assertEquals("cached serde 1.0.210 (1 items)", out)
+        }
 }

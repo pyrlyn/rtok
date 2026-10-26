@@ -336,3 +336,13 @@ Next, in order:
 - Deferred: start `Watch.runScope` from `rtok mcp` when `[plugins.graph] watch = "notify"` (MCP wiring).
 - Stop point: next docs zstd; then memory status, sync --stat, MCP, otel, worktree, task, batch, bench, hook
   dispatcher tests; release re-measure, completeness pass.
+
+## Session 2026-10-26 (night) — docs fetch + zstd
+- `:zstd` (interface `ZstdDecoder`, `ZstdException`) + `:zstd-native` (zstd 1.5.7 pinned in `zstd.json` by
+  tarball sha256, fetched into build/vendor; lib/common + lib/decompress compiled without asm/threads into
+  librtok_zstd.a; streaming `decodeAll` over concatenated frames with a 2 GiB cap) + NativeZstdTest (6).
+- `rtok.http.HttpClient.get` (Ktor `send` shared by post/get) + test; `docs.httpGet` (rtok UA, 30 s),
+  `docs.runFetch`, CLI `rtok docs fetch <name>` (cli/docs.rs). DocsTest +1 (real zstd body).
+  Live check: `rtok docs fetch zstd` in a copy of the Rust Cargo.lock → `cached zstd 0.14.2 (60 items)`.
+- Stop point: next memory status; then sync --stat, MCP, otel, worktree, task, batch, bench, hook dispatcher
+  tests; release re-measure, completeness pass.

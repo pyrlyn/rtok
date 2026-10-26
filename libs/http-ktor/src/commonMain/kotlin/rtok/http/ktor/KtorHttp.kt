@@ -6,6 +6,7 @@ import io.ktor.client.network.sockets.ConnectTimeoutException
 import io.ktor.client.network.sockets.SocketTimeoutException
 import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.client.plugins.HttpTimeout
+import io.ktor.client.request.get
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsBytes
@@ -37,13 +38,23 @@ class KtorHttp(
         }
 
     override suspend fun post(req: HttpRequest): HttpResponse =
+        send(req) {
+            client.post(req.url) {
+                // Raw headers: Ktor must not merge or re-case what the caller set (auth included).
+                req.headers.forEach { (k, v) -> headers.append(k, v) }
+                setBody(req.body)
+            }
+        }
+
+    override suspend fun get(req: HttpRequest): HttpResponse = send(req) { client.get(req.url) { req.headers.forEach { (k, v) -> headers.append(k, v) } } }
+
+    /** One request with every transport failure mapped to an [HttpException] kind. */
+    private suspend fun send(
+        req: HttpRequest,
+        call: suspend () -> io.ktor.client.statement.HttpResponse,
+    ): HttpResponse =
         try {
-            val resp =
-                client.post(req.url) {
-                    // Raw headers: Ktor must not merge or re-case what the caller set (auth included).
-                    req.headers.forEach { (k, v) -> headers.append(k, v) }
-                    setBody(req.body)
-                }
+            val resp = call()
             HttpResponse(resp.status.value, resp.bodyAsBytes())
         } catch (e: HttpRequestTimeoutException) {
             throw HttpException(HttpException.Kind.RequestTimeout, "request timeout: ${req.url}", e)
