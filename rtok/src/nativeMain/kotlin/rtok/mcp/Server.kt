@@ -26,6 +26,8 @@ class Listed(
 class Server(
     val cx: Runtime,
     val listed: List<Listed>,
+    /** The registered cwd of the agent this process serves (mcp.rs `caller_dir`); none until the agent link lands. */
+    private val callerDir: () -> String? = { null },
 ) : AutoCloseable {
     /** `initialize` declared `capabilities.roots`. */
     private val rootsCapable = AtomicInt(0)
@@ -131,10 +133,30 @@ class Server(
             when {
                 found == null -> Protocol.unknownTool(name).message.orEmpty() to false
                 missing != null -> "invalid params: $missing" to false
-                else -> Tools.invokeText(cx, name, args)
+                else -> invokeRooted(name, args)
             }
         runCatching { Record.call(cx, found?.plugin ?: "archive", name, args, answer.first) }
         return answer
+    }
+
+    /** [Tools.invokeText] with `read`/`search`/`tree`/`outline` paths resolved against the caller's root (T923). */
+    private fun invokeRooted(
+        name: String,
+        args: JsonObject,
+    ): Pair<String, Boolean> {
+        if (!Paths.isRooted(name)) return Tools.invokeText(cx, name, args)
+        val guard =
+            callerDir()?.let {
+                rtok.plugins.read.Roots
+                    .enterCaller(rtok.sys.cwd(), it)
+            }
+        try {
+            val anchored = Paths.anchorOutline(name, args)
+            val (text, ok) = Tools.invokeText(cx, name, anchored)
+            return Paths.annotate(name, anchored, text, ok, guard != null) to ok
+        } finally {
+            guard?.close()
+        }
     }
 
     override fun close() = cx.close()
