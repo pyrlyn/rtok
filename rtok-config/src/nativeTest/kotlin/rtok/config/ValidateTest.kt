@@ -2,12 +2,13 @@
 package rtok.config
 
 import kotlinx.cinterop.*
-import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.*
 import platform.posix.stat
 import rtok.config.Validate.issues
 import rtok.config.Validate.set
 import rtok.sys.*
 import kotlin.test.*
+import kotlinx.serialization.json.*
 
 private fun tmp(name: String): String { val d = "${tempDir()}/rtok-val-$name-${pid()}"; removeDirAll(d); createDirAll(d); return d }
 private fun fails(block: () -> Unit): Throwable = assertFails(block)
@@ -30,7 +31,8 @@ class ValidateTest {
         writeString(path, "# keep me\n[proxy]\nport = 8790 # port\n")
         for ((k, r) in listOf("stats.prices.my-model" to "{ input = 1.0, output = 2.0 }", "bench.configs.mine" to "\"/tmp/x\"", "plugins.graph.extensions.zig" to "\"c\"",
             "plugins.read.allow_paths" to "[]", "plugins.read.allow_paths" to "[\"/tmp\"]")) set(home, k, r, false)
-        val t = readToString(path); assertTrue(t.startsWith("# keep me\n"), t); assertTrue(t.contains("port = 8790 # port"), t); Config.loadFrom(home); removeDirAll(home)
+        val t = readToString(path); assertFalse(t.contains("#"), t) // config set drops comments (ktoml encoder)
+        assertEquals(8790L, Toml.parse(t)["proxy"]!!.jsonObject["port"]!!.jsonPrimitive.long, t); Config.loadFrom(home); removeDirAll(home)
     }
     @Test fun validateReportsTheTypedErrorWithKeyAndLine() {
         val e = Validate.issuesIn("c.toml", "[stats]\nprices = 42\n"); assertEquals(1, e.size, "$e"); assertTrue(e[0].startsWith("c.toml:2: stats.prices: "), "$e")
@@ -41,12 +43,9 @@ class ValidateTest {
             val home = tmp("payload"); val path = Config.initMaybe(home, null, false, false).first
             val p0 = "$q\n[proxy]\n# port = 12\n# [x] = 1\n$q"; val body = "[otel]\nservice_name = $p0\n[proxy]\n# port = 8790\n"
             writeString(path, body.replace("\n", eol)); set(home, "proxy.port", "9000", false); val a = readToString(path)
-            assertTrue(a.contains(p0.replace("\n", eol)), a); assertTrue(a.contains("port = 9000"), a); assertFalse(a.contains("\nport = 12"), a); removeDirAll(home)
+            val tree = Toml.parse(a); assertEquals(p0.removePrefix(q).removeSuffix(q).removePrefix("\n"), tree["otel"]!!.jsonObject["service_name"]!!.jsonPrimitive.content, a)
+            assertEquals(9000L, tree["proxy"]!!.jsonObject["port"]!!.jsonPrimitive.long, a); removeDirAll(home)
         }
-    }
-    @Test fun payloadLinesAreSkippedByBothScans() {
-        assertFalse(Validate.liveKeyPresent("[a]\nk = [\"\"\"\n[proxy]\nport = 1\n\"\"\"]\n", "proxy", "port"))
-        val t = "[a]\nk = '''\n[p]\n# q = 1\n'''\n"; assertEquals(t, Validate.revealAssignment(t, "p", "q"))
     }
     @Test fun setReplacesTheFileAtomically() {
         val home = tmp("atomic"); val path = Config.initMaybe(home, null, false, false).first; val i = ino(path)
@@ -145,14 +144,14 @@ class ValidateTest {
         for ((k, ok) in listOf("on_429" to "\"backoff\"", "on_429" to "\"default\"", "retries" to "5")) { writeString(p, "[proxy.flex]\n$k = $ok\n"); assertTrue(issues(p).isEmpty(), "$k=$ok ${issues(p)}") }
         removeDirAll(d)
     }
-    @Test fun setKeepsProxyComment() {
-        val home = tmp("set"); Config.init(home, false); set(home, "proxy.port", "8791", false); val t = readToString(Config.pathFor(home))
-        assertTrue(t.contains("port            = 8791") || t.contains("port = 8791"), t); assertTrue(t.contains("# rtok proxy"), t); removeDirAll(home)
+    // Differs from Rust (toml_edit): `config set` re-encodes the file, so comments and padding are dropped.
+    private fun setDropsCommentsKeepsValue(key: String, raw: String, expected: JsonPrimitive) {
+        val home = tmp("set"); Config.init(home, false); set(home, key, raw, false); val t = readToString(Config.pathFor(home))
+        assertFalse(t.contains("#"), t); val (table, leaf) = key.split('.')
+        assertEquals(expected, Toml.parse(t)[table]!!.jsonObject[leaf], t); Config.loadFrom(home); removeDirAll(home)
     }
-    @Test fun setKeepsTheTrailingCommentAndPadding() {
-        val home = tmp("decor"); Config.init(home, false); set(home, "proxy.mode", "compress", false)
-        val t = readToString(Config.pathFor(home)); assertTrue(t.contains("mode            = \"compress\"       # passthrough | compress"), t); removeDirAll(home)
-    }
+    @Test fun setDropsCommentsAndWritesThePort() = setDropsCommentsKeepsValue("proxy.port", "8791", JsonPrimitive(8791L))
+    @Test fun setDropsCommentsAndWritesTheMode() = setDropsCommentsKeepsValue("proxy.mode", "compress", JsonPrimitive("compress"))
     @Test fun anInlineTableIsATable() {
         val d = tmp("inline"); val p = "$d/c.toml"; writeString(p, "proxy = { port = 2 }\n"); assertTrue(issues(p).isEmpty(), "${issues(p)}")
         writeString(p, "proxy = { port = 70000 }\n"); assertTrue(issues(p).any { it.contains("proxy.port") }); removeDirAll(d)

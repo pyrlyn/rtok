@@ -12,14 +12,14 @@ interface TomlDocument {
     val root: JsonObject
     /** 1-based line where [dotted] key or table was defined; 1 when unknown. */
     fun lineOf(dotted: String): Int
-    /** 0-based indices of the lines after the opening line of every multi-line string. */
-    val multilineStringLines: Set<Int>
 }
 
 interface TomlReader {
     /** @throws TomlException on invalid TOML. */
     fun read(text: String): TomlDocument
     fun parse(text: String): JsonObject = read(text).root
+    /** Serialize a tree back to TOML. Comments and original formatting are not preserved. */
+    fun write(root: JsonObject): String
 }
 
 /** Scalar kind checks on trees produced by any [TomlReader] (TOML keeps 1 and 1.0 apart). */

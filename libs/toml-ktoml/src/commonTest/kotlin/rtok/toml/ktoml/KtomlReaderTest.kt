@@ -13,8 +13,19 @@ class KtomlReaderTest {
     @Test fun arrays() { val r = p("a = [1, 2]\nb = [[1], [\"x\"]]\nc = [\n  \"m\",\n  \"n\",\n]\n"); assertEquals(2, r["a"]!!.jsonArray.size); assertEquals(2, r["b"]!!.jsonArray.size); assertEquals(2, r["c"]!!.jsonArray.size) }
     @Test fun arrayOfTables() { val r = p("[[g]]\nn = 1\n[[g]]\nn = 2\n"); assertEquals(2, r["g"]!!.jsonArray.size) }
     @Test fun datetimeAsString() { val r = p("d = 1979-05-27T07:32:00Z\n"); assertTrue(r["d"]!!.jsonPrimitive.content.startsWith("1979-05-27")) }
-    @Test fun multiline() { val d = KtomlReader.read("a = \"\"\"\nx\ny\n\"\"\"\nb = 1\n"); assertEquals(setOf(1, 2, 3), d.multilineStringLines); assertEquals("x\ny\n", d.root["a"]!!.jsonPrimitive.content) }
+    @Test fun multiline() { assertEquals("x\ny\n", KtomlReader.parse("a = \"\"\"\nx\ny\n\"\"\"\nb = 1\n")["a"]!!.jsonPrimitive.content) }
     @Test fun lines() { val d = KtomlReader.read("# c\na = 1\n\n[t]\nk = 2\n"); assertEquals(2, d.lineOf("a")); assertEquals(4, d.lineOf("t")); assertEquals(5, d.lineOf("t.k")) }
     @Test fun errorHasLine() { val e = assertFailsWith<TomlException> { KtomlReader.read("a = 1\nb = = 2\n") }; println("ERR: " + e.message); assertTrue(e.message!!.contains("2")) }
     @Test fun duplicateKeyRejected() { assertFailsWith<TomlException> { KtomlReader.read("a = 1\na = 2\n") } }
+}
+
+class KtomlWriterTest {
+    @Test fun roundTrip() {
+        val src = "# c\ntop = \"s\"\nn = 3\nf = 1.5\nb = true\nlist = [1, 2]\n[t]\nk = \"v\"\n[t.u]\nz = 1\n[[g]]\nn = 1\n[[g]]\nn = 2\n"
+        val tree = KtomlReader.parse(src)
+        val out = KtomlReader.write(tree)
+        println("OUT:\n$out")
+        assertEquals(tree, KtomlReader.parse(out))
+        assertFalse(out.contains("# c"))
+    }
 }

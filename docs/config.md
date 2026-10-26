@@ -18,8 +18,9 @@ lists every leaf with its value and layer; `otel.headers` and `mcp.token` print 
 
 `Validate.issues` checks a file against the schema and reports `path:line: key: message`
 (enum choices, ranges, URLs, globs, since windows, task prefix, `agents.junk.extra`).
-`config set KEY VALUE` edits the file line by line (keeps comments and padding, reveals a commented
-default), validates the result, prints a unified diff, and replaces the file atomically (temp + rename).
+`config set KEY VALUE` parses the file, sets the value in the tree (refusing to write through a scalar:
+`X is not a table`), re-encodes the whole file with the TOML backend (ktoml, see `docs/toml.md`), validates
+the result, prints a unified diff, and replaces the file atomically (temp + rename).
 
 ## Enable / disable
 Always on. Use `--config FILE` to point at another user file; delete `.rtok.toml` to drop project overrides.
@@ -30,5 +31,6 @@ Always on. Use `--config FILE` to point at another user file; delete `.rtok.toml
 ## Limitations vs Rust
 - Error texts come from kotlinx.serialization, not figment/serde; the key and line are the same.
 - Process env is read for known leaf keys and aliases only (no `environ` enumeration on macOS).
-- `config set` uses a line-based editor instead of toml_edit; exotic layouts (dotted keys inside
-  inline tables) may be appended as a new assignment instead of edited in place.
+- `config set` does **not** preserve comments, padding or key order layout: the file is re-encoded by
+  ktoml (Rust uses toml_edit and keeps them). Commented defaults from `config init` disappear after the
+  first `config set`.

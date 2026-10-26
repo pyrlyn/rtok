@@ -17,10 +17,12 @@ object KtomlReader : TomlReader {
         val file = try { parser.parseString(text) } catch (e: Exception) { throw TomlException("TOML parse error: ${e.message}", e) }
         val lines = HashMap<String, Int>()
         val root = TreeBuilder(lines).obj(file.children, emptyList())
-        return Doc(root, lines, MultilineSpans.of(text))
+        return Doc(root, lines)
     }
 
-    private class Doc(override val root: JsonObject, private val lines: Map<String, Int>, override val multilineStringLines: Set<Int>) : TomlDocument {
+    override fun write(root: JsonObject): String = try { KtomlWriter.write(root) } catch (e: Exception) { throw TomlException("TOML write error: ${e.message}", e) }
+
+    private class Doc(override val root: JsonObject, private val lines: Map<String, Int>) : TomlDocument {
         override fun lineOf(dotted: String) = lines[dotted] ?: 1
     }
 }
@@ -68,22 +70,5 @@ private class TreeBuilder(val lines: MutableMap<String, Int>) {
         is List<*> -> JsonArray(x.map { item(it) })
         is TomlNode -> obj(x.children, emptyList())
         else -> JsonPrimitive(x?.toString())
-    }
-}
-
-/** Line spans of `"""`/`'''` strings (ktoml only reports the opening line). */
-internal object MultilineSpans {
-    fun of(text: String): Set<Int> {
-        val out = HashSet<Int>(); val lines = text.split('\n'); var i = 0
-        while (i < lines.size) {
-            val code = lines[i].trimStart()
-            val delim = if (code.startsWith("#")) null else listOf("\"\"\"", "'''").filter { code.contains(it) }.minByOrNull { code.indexOf(it) }
-            if (delim != null) {
-                val rest = code.substring(code.indexOf(delim) + 3)
-                if (!rest.contains(delim)) { var j = i + 1; while (j < lines.size) { out += j; if (lines[j].contains(delim)) break; j++ }; i = j }
-            }
-            i++
-        }
-        return out
     }
 }

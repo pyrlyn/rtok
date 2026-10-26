@@ -13,6 +13,7 @@ typealias TomlDoc = TomlDocument
 object Toml {
     var reader: TomlReader = KtomlReader
     fun parse(text: String) = reader.parse(text)
+    fun write(root: kotlinx.serialization.json.JsonObject) = reader.write(root)
     fun parseDoc(text: String): TomlDoc = reader.read(text)
     fun isInteger(p: kotlinx.serialization.json.JsonPrimitive) = TomlValues.isInteger(p)
     fun isFloat(p: kotlinx.serialization.json.JsonPrimitive) = TomlValues.isFloat(p)
