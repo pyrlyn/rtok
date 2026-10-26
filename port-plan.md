@@ -93,6 +93,7 @@ jiff/humantime→kotlinx-datetime; shlex→own; wasmi→not portable (see risks)
 - [x] docs/store.md: layout, driver adapter, schema-drift check, limitations
 - [x] config TOML via ktoml (Ivan approved) behind `libs/toml` (`TomlReader`/writer interface) + `libs/toml-ktoml` adapter; own Toml.kt and line editor removed (branch eval/ktoml, rebased + fast-forwarded) — toml-ktoml 12, rtok-config 92 → 91
 - [x] SQLite via androidx.sqlite (Room KMP driver layer, bundled) behind `libs/db` interface + `libs/db-room` adapter; cinterop removed; schema drift tests unchanged and passing — db-room 5 (2 moved from store DbTest)
+- [x] tooling: Kotest 6.2.6 (+KSP) next to kotlin.test, one root convention; Kotlin 2.2.20 → 2.2.21 (docs/testing.md) — RenderSpec 1
 - [x] tooling: Dokka 2 API docs, one root convention, `./gradlew dokkaGenerate` → `build/dokka/html` (docs/api-docs.md); not part of build/test
 
 ### Phase 5 — reduction plugins (src/plugins: compress, json_tree, toon, read, cmd, inject, guard, memory, measure, docs, archive, checkpoint)
@@ -153,7 +154,8 @@ jiff/humantime→kotlinx-datetime; shlex→own; wasmi→not portable (see risks)
 | 5 (partial) | registry 3 (+1 skip_word), project 13 | 17 |
 | tooling | toml-ktoml 12, rtok-config −1 (own TOML parser test removed) | 11 |
 | tooling | db-room 5 (+3; 2 moved from store) | 3 |
-| **total** | | **406** |
+| tooling | Kotest RenderSpec 1 | 1 |
+| **total** | | **407** |
 
 ## Test-porting
 Each Rust `#[cfg(test)]` module → `src/commonTest` in the matching module; `tests/*.rs` (138 files)
