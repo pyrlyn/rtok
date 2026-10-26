@@ -1,4 +1,4 @@
-// Port of the MCP-only host tests (augment, crush, droid, junie, kiro, openhands, roo, warp mod.rs) and the shared
+// Port of the MCP-only host tests (augment, crush, droid, junie, kiro, openhands, roo, warp, windsurf mod.rs) and the shared
 // `assert_stdio_mcp_roundtrip` / `assert_mcp_only_apply_idempotent` bodies in agents/mod.rs.
 package rtok.agents
 
@@ -42,6 +42,7 @@ class McpOnlyAgentTest {
                     openhands = s.openhands.copy(mcpPath = "$dir/openhands.json"),
                     roo = s.roo.copy(mcpPath = "$dir/roo.json"),
                     warp = s.warp.copy(mcpPath = "$dir/warp.json"),
+                    windsurf = s.windsurf.copy(configPath = "$dir/windsurf.json"),
                 ),
         ) to dir
     }
@@ -74,6 +75,7 @@ class McpOnlyAgentTest {
                 "openhands" to ".openhands/mcp.json",
                 "roo" to "rooveterinaryinc.roo-cline/settings/mcp_settings.json",
                 "warp" to ".warp/.mcp.json",
+                "windsurf" to ".codeium/windsurf/mcp_config.json",
             )
         for (a in Agents.MCP_ONLY) assertTrue(a.mcpPath(c).endsWith(want.getValue(a.id)), "${a.id}: ${a.mcpPath(c)}")
     }
