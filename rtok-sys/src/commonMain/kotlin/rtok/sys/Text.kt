@@ -43,3 +43,14 @@ fun String.scalarList(): List<String> {
 fun String.takeScalars(n: Int): String { var i = 0; var k = 0
     while (i < length && k < n) { i += if (this[i].isHighSurrogate() && i + 1 < length && this[i + 1].isLowSurrogate()) 2 else 1; k++ }
     return substring(0, i) }
+
+/** `serde_json::to_string(&str)`: `"`, `\`, \b \f \n \r \t, other C0 controls as lowercase `\u00xx`; nothing else escaped. */
+fun jsonQuote(s: String): String = buildString(s.length + 2) {
+    append('"')
+    for (c in s) when (c) {
+        '"' -> append("\\\""); '\\' -> append("\\\\"); '\n' -> append("\\n"); '\r' -> append("\\r"); '\t' -> append("\\t")
+        '\b' -> append("\\b"); '\u000C' -> append("\\f")
+        else -> if (c < ' ') append("\\u00").append(c.code.toString(16).padStart(2, '0')) else append(c)
+    }
+    append('"')
+}
