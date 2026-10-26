@@ -25,10 +25,11 @@ Plan and per-phase checklist: [port-plan.md](port-plan.md).
 | crates/rtok-store project_links | `ProjectLinks.kt` | ✅ | 5 → 5 |
 | (adapters) SQLite driver, Clikt | `Db.kt` + `driver/Sqlite3Db.kt`; `cli/Mod.kt` + `cli/clikt/CliktAdapter.kt` | ✅ | new: 1 + 1 |
 | crates/rtok-store symbol_graph, graph_events | `SymbolGraph.kt`, `GraphEvents.kt` (+ `chunkedIn` in `SqlExt.kt`) | ✅ | 3 → 3, 3 → 4 |
+| crates/rtok-store docs | `Docs.kt` | ✅ | 0 → 2 (new) |
 | crates/rtok-store messages | `Messages.kt` | ✅ | 7 → 8 |
 | humantime crate (dependency) | `libs/humantime` (`:humantime`) | ✅ own module | 0 → 3 |
 | crates/rtok-store tests_archive (archive rows, retention, schema drift vs schema_snapshot.txt) | `ArchiveTest.kt` + fixtures | ✅ | 22 → 29 |
-| crates/rtok-store docs, embed | `:rtok-store` | ⬜ | |
+| crates/rtok-store embed | `:rtok-store` | ⬜ | |
 | crates/rtok-sys | `:rtok-sys` | ⬜ (module currently hosts `rtok.sys.Fs`, the fs-kit replacement) | |
 | fs-kit (external crate) path helpers | `rtok-sys/nativeMain/Fs.kt` | 🟡 normalize/canon/ancestors/starts_with | via root tests |
 | crates/rtok-mcp | `:rtok-mcp` | ⬜ | |
@@ -49,7 +50,7 @@ Plan and per-phase checklist: [port-plan.md](port-plan.md).
 | src/web, agents/junk_web.rs, `rtok web/tui/dashboard` | – | ❌ excluded (web) | |
 | tests/*.rs (138 integration files) | `:rtok` commonTest | ⬜ | 0 / ~138 files |
 
-Totals: 356 Kotlin tests passing on macosArm64 (see port-plan.md for the per-phase table).
+Totals: 358 Kotlin tests passing on macosArm64 (see port-plan.md for the per-phase table).
 
 | Rust | Kotlin | Status | Tests |
 |---|---|---|---|
