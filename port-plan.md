@@ -512,3 +512,11 @@ Next, in order:
 - `VersionKey` (SemVer precedence, from #58) moved out of `rtok/agents/PluginSrc.kt` into the leaf module `:semver`
   (`libs/semver`, package `semver`, no dependencies); `PluginSrc` imports it. Test moved and extended: 1 → 3.
 - Stop point: next 3b-3a = shared helpers from agents/mod.rs, then gemini + qwen.
+
+## Session: agents chunk 3b-3a — shared host helpers (agents/mod.rs)
+- `rtok/agents/HostHelpers.kt`: `HookLine` (`shell_quote_bin`, `rtok_command` — bare `rtok` on unix, `rtok_hook_bin`,
+  `hook_resolver`, `unquote_bin`), `StripReport` (`takes_hook`, `removed_report`, `with_kept`), `HostCli` (`cli_label`,
+  `run_cli`), `PluginOffers` (`manifest_names`, `PluginOffer`, `offer_plugin`, `print_offer`). `run_cli` returns null
+  on success, else the failure text (`CliCall`). rtok-sys `ProgressRunner.env` (Rust `.env`) for the config-dir override.
+- Tests: 13 (2 ported `shell_quote_bin_*`, 11 own).
+- Stop point: next 3b-3b = gemini + qwen (JSON settings hooks), then codewhale, commandcode, copilot, devin, kimi.
