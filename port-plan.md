@@ -238,5 +238,6 @@ Next, in order:
   compiled on the calling thread before the workers start.
 - Rank refresh goes through `FileRanks` (no-op `FileRanks.None` until rank.rs lands; set `Index.ranks`).
 - `Resolve.kt` (resolve.rs, 1 test), `Tally.kt` (tally.rs, 4 tests; `@ThreadLocal` record).
-- Stop point: next `text.rs`, then `cochange.rs` + `rank.rs` (enables the 2 pending
-  index rank tests), then mod.rs tools.
+- Stop point (main 683ebd3, 1173 tests green): next `cochange.rs` + `rank.rs` (set `Index.ranks`; enables the 2
+  pending index rank tests), then the mod.rs core types (`Filter`, `Mode`, `ExploreParts`, `backend_name`) that
+  `text.rs` needs, then `text.rs`, `capability.rs`, the rest of mod.rs and the other submodules.
