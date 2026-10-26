@@ -48,4 +48,10 @@ class BoundedTest {
         """echo a\;b c""" to listOf(listOf("echo", "a;b", "c")),
         "cargo test \\\n --all" to listOf(listOf("cargo", "test", "--all")),
     ).forEach { (cmd, want) -> assertEquals(want, Bounded.stages(cmd), cmd) }
+
+    /** Regression: escapes and quotes with no `Char?` in the lexer (release build crashed on `rtok run cat <file>`). */
+    @Test fun lexHandlesEscapesQuotesAndATrailingBackslash() {
+        assertEquals(listOf(listOf(listOf("cat", "it's", "a b", "x\\"))), Bounded.lex("cat it\\'s \"a b\" x\\"))
+        assertEquals(listOf(listOf(listOf("cat", "/tmp/c.txt"))), Bounded.lex("cat /tmp/c.txt"))
+    }
 }

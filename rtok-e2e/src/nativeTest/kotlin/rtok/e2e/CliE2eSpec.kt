@@ -11,6 +11,12 @@ private fun pluginRow(out: String, id: String) = out.lines().first { it.startsWi
 
 class CliE2eSpec : FunSpec({
     context("binary basics") {
+        test("rtok run cat <file> prints the file (release build once failed: Unexpected receiver type: kotlin.Char)") {
+            Sandbox("run-cat").use { s ->
+                writeString("${s.root}/c.txt", "a\nb\n")
+                s.rtok("run", "cat", "${s.root}/c.txt").also { it.err shouldBe ""; it.code shouldBe 0; it.out shouldBe "a\nb\n" }
+            }
+        }
         test("--version prints the crate version and exits 0") {
             Sandbox("version").use { s -> s.rtok("--version").also { it.code shouldBe 0; it.out shouldStartWith "rtok 0."; it.err shouldBe "" } }
         }

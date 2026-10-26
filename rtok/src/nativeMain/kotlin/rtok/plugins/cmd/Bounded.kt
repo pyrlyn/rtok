@@ -46,14 +46,18 @@ object Bounded {
     internal fun stages(snippet: String): List<List<String>> = lex(snippet).flatten()
 
     /** Lists (`&&`, `||`, `;`, newline) of pipelines (`|`, `|&`) of stages (words). */
+    private const val NONE = '\u0000'
+
     internal fun lex(s: String): List<List<List<String>>> {
         val lists = mutableListOf(mutableListOf(mutableListOf<String>()))
-        var word: StringBuilder? = null; var quote: Char? = null; var i = 0
+        // No `Char?` here: the K/N release optimizer turned a boxed `Char?` passed to `StringBuilder.append`
+        // into "Unexpected receiver type: kotlin.Char" (`rtok run cat <file>`); `NONE` marks "no char".
+        var word: StringBuilder? = null; var quote = NONE; var i = 0
         fun w() = word ?: StringBuilder().also { word = it }
         while (i < s.length) {
-            val c = s[i++]; val peek = s.getOrNull(i)
-            if (quote != null) {
-                if (c == quote) quote = null
+            val c = s[i++]; val peek = if (i < s.length) s[i] else NONE
+            if (quote != NONE) {
+                if (c == quote) quote = NONE
                 else if (quote == '"' && c == '\\') {
                     // Inside double quotes only `"` `\` `$` `` ` `` escape (and `\`-newline continues); other `\` stays.
                     when (peek) { '"', '\\', '$', '`' -> { i++; w().append(peek) }; '\n' -> i++; else -> w().append(c) }
@@ -64,7 +68,7 @@ object Bounded {
                 // Backslash-newline outside quotes is line continuation, not a separator.
                 c == '\\' && peek == '\n' -> { i++; null }
                 // Any other escaped char is a plain word char: `it\'s` must not open a quote.
-                c == '\\' -> { w().append(if (peek != null) { i++; peek } else '\\'); continue }
+                c == '\\' -> { if (peek != NONE) { i++; w().append(peek) } else w().append('\\'); continue }
                 c == '\'' || c == '"' -> { quote = c; w(); continue }
                 c == '|' && peek == '|' -> true
                 c == '&' && peek == '&' -> true
@@ -76,7 +80,7 @@ object Bounded {
             val stages = lists.last()
             word?.let { stages.last() += it.toString(); word = null }
             if (sep != null) {
-                if (s.getOrNull(i) == '|' || s.getOrNull(i) == '&') i++
+                if (i < s.length && (s[i] == '|' || s[i] == '&')) i++
                 if (sep) lists += mutableListOf(mutableListOf<String>()) else stages += mutableListOf<String>()
             }
         }
