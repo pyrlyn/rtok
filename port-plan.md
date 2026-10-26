@@ -568,3 +568,12 @@ Next, in order:
   `plugins/commandcode` linked to `<dir>/plugins/rtok` behind `--yes`; registered in `Agents`.
 - Tests: 9 (all Rust cases but the dispatcher payload one). Deferred: `skill::sync` (with skills).
 - Stop point: next = copilot (hooks/rtok.json, `mcp-config.json` LocalAllTools, `copilot plugin`), then TOML editor check.
+
+## Session: agents chunk 3b-3g — copilot (and the MCP run path)
+- `McpRun.kt` (agents/mcp.rs `Writer`, `run`, `sync`, `install`, `remove`): rtok-mcp `apply` on the real disk through the
+  SDK `write` (atomic, backup, dry run). `Copilot.kt`: rtok-owned `hooks/rtok.json` (`version: 1`, bash + PowerShell
+  resolvers, `timeoutSec`, removed with a backup), `mcp-config.json` `LocalAllTools` entry via `McpRun`, `copilot plugin
+  install|uninstall` behind `--yes` as the D21 hooks unit (`COPILOT_HOME` for a moved dir); registered in `Agents`.
+- Tests: 6 (all Rust cases but the PreCompact dispatcher one; the T275 lifecycle spelled out inline).
+- Deferred: `skill::sync` tail, `assert_json_entry_lifecycle` helper.
+- Stop point: next = TOML `[[array-of-tables]]` editor check, then codewhale + kimi (or group 3c).
