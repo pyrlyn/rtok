@@ -249,6 +249,7 @@ Next, in order:
 - On-disk compat: `file_rank` JSON keeps the serde field names; the cochange `kv` doc keeps `pairs` as `[a,b,n]`.
 - `Alerts.kt` (health.rs Kind/Alert/mirrored/all/describe/texts/reach/notice), `Score.kt` (health/score.rs), `Projects.resolve`; 6 tests. The checker loop (`Health` tick/backoff/run) is next.
 - `HealthCheck.kt` (health.rs Health findings/backend backoff/tick/load/recovered/persist, scope_of, run loop); 6 tests. Manifest ref discovery (project::refs) is an injected `refWarnings` until it is ported; backend backoff tests wait for lsp.rs; stat has no 2 s timeout thread.
+- `Projects.kt` (projects.rs rows/render/run/preview, `ProjectAction`), `Jobs.kt` (jobs.rs worker re-index), `rtok.table` (render.rs); 6 tests.
 - Stop point: next the mod.rs core types (`Filter`, `Mode`, `ExploreParts`, `backend_name`), then `text.rs`,
   `capability.rs`, the rest of mod.rs and the other submodules.
 
