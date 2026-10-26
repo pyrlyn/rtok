@@ -53,7 +53,7 @@ class CommandCode(
                 cfg.setup.mcp -> StdioMcp.register(cfg, mcpPath(cfg), HOST)
                 else -> null
             }
-        return listOfNotNull(run(cfg, remove), PLUGIN.offer(cfg, remove, plugins), mcp)
+        return listOfNotNull(run(cfg, remove), PLUGIN.offer(cfg, remove, plugins), mcp, Skills.sync(HOST, cfg, remove, plugins))
     }
 
     companion object {

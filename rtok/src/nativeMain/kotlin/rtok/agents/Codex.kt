@@ -23,6 +23,7 @@ import tomlaot.TomlValue
 
 class Codex(
     val plugin: CodexPlugin = CodexPlugin(),
+    private val plugins: PluginSource = ShippedPlugins,
 ) : Agent {
     override val id = HOST
 
@@ -57,7 +58,7 @@ class Codex(
         val head = if (update) plugin.update(cfg) else plugin.offer(cfg, remove)
         // On the way out the provider block goes whether or not `--proxy` asked for it.
         val proxy = if (remove || cfg.setup.proxy) CodexProxy.run(cfg, remove) else null
-        return listOfNotNull(head, runMcp(cfg, remove), runHooks(cfg, remove || CodexPlugin.installed(cfg)), proxy)
+        return listOfNotNull(head, runMcp(cfg, remove), runHooks(cfg, remove || CodexPlugin.installed(cfg)), proxy, Skills.sync(HOST, cfg, remove, plugins))
     }
 
     companion object {

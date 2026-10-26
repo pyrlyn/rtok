@@ -24,7 +24,7 @@ class Pi(
         cfg: Config,
         kind: Kind,
         mode: Mode,
-    ): List<String> = listOf(PLUGIN.offer(cfg, mode == Mode.Remove, plugins))
+    ): List<String> = listOf(PLUGIN.offer(cfg, mode == Mode.Remove, plugins), Skills.sync(id, cfg, mode == Mode.Remove, plugins))
 
     companion object {
         /** The extension tree pi and oh my pi both load. */

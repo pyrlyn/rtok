@@ -72,7 +72,8 @@ class OpenCode(
         mode: Mode,
     ): List<String> {
         val c = forKind(cfg, kind)
-        return listOf(runProxy(c, mode == Mode.Remove)) + OpenCodeFamily.apply(c, mode, mcpSpec(c), PLUGIN, plugins)
+        return listOf(runProxy(c, mode == Mode.Remove)) + OpenCodeFamily.apply(c, mode, mcpSpec(c), PLUGIN, plugins) +
+            Skills.sync(HOST, c, mode == Mode.Remove, plugins)
     }
 
     companion object {

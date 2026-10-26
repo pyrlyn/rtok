@@ -3,7 +3,7 @@
 // `claude_desktop_config.json`, with the absolute binary. `plugins/claude` comes from the GitHub marketplace
 // `pyrlyn/rtok` through `claude plugin …`, by default once `claude` is on PATH; while installed it is the only hook
 // path (D21), MCP stays independent (T275); `agents update` takes the version decision ([ClaudeUpdate]). `--replace` runs
-// [ClaudeMigrate]. Not yet ported: skill sync.
+// [ClaudeMigrate]; the shipped skills through [Skills].
 package rtok.agents
 
 import kotlinx.serialization.json.Json
@@ -56,15 +56,15 @@ class Claude(
     ): List<String> =
         when {
             kind == Kind.Desktop -> {
-                listOf(McpRun.sync(cfg, mcpSpec(cfg, kind), mode) ?: NO_CHANGES)
+                listOf(McpRun.sync(cfg, mcpSpec(cfg, kind), mode) ?: NO_CHANGES, skills(cfg, mode == Mode.Remove))
             }
 
             mode == Mode.Remove -> {
-                listOf(plugin(cfg, true), run(cfg, true), McpRun.remove(cfg, mcpSpec(cfg, kind)), proxy(cfg, true))
+                listOf(plugin(cfg, true), run(cfg, true), McpRun.remove(cfg, mcpSpec(cfg, kind)), proxy(cfg, true), skills(cfg, true))
             }
 
             mode == Mode.Replace -> {
-                listOf(ClaudeMigrate.run(cfg))
+                listOf(ClaudeMigrate.run(cfg), skills(cfg, false))
             }
 
             else -> {
@@ -74,9 +74,15 @@ class Claude(
                     run(cfg, pluginInstalled(cfg)),
                     if (cfg.setup.mcp) McpRun.install(cfg, mcpSpec(cfg, kind)) else null,
                     if (cfg.setup.proxy) proxy(cfg, false) else null,
+                    skills(cfg, false),
                 )
             }
         }
+
+    private fun skills(
+        cfg: Config,
+        remove: Boolean,
+    ) = Skills.sync(HOST, cfg, remove, plugins)
 
     /** Offer, install or uninstall `plugins/claude` from the GitHub marketplace (T115, T139). */
     fun plugin(

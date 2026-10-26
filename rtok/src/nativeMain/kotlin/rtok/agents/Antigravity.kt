@@ -29,7 +29,12 @@ class Antigravity(
         mode: Mode,
     ): List<String> {
         val remove = mode == Mode.Remove
-        return listOf(if (kind == Kind.Cli) offerCli(cfg, remove) else PLUGIN.offer(cfg, remove, plugins))
+        // T91.2: the hub skills go to each variant's own global skill root.
+        return if (kind == Kind.Cli) {
+            listOf(offerCli(cfg, remove), Skills.sync("antigravity-cli", cfg, remove, plugins))
+        } else {
+            listOf(PLUGIN.offer(cfg, remove, plugins), Skills.sync("antigravity", cfg, remove, plugins))
+        }
     }
 
     private fun offerCli(
