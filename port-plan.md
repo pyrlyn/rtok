@@ -465,3 +465,14 @@ Next, in order:
   (with `rtok agents` CLI); `run_cli` (with plugin offers).
 - Stop point: next per-host `files`/`installed`/`apply` (Agent interface over the 36 hosts), then `doctor_lines` +
   MCP `run`/`sync`, ping process side, `rtok agents` CLI.
+
+## Session: agents chunk 3a — Agent contract + MCP-only hosts (augment, crush, droid, junie, kiro, openhands, roo, warp)
+- `:rtok-agent-sdk` `HostJson` (lib.rs `read_json`/`write_json`/`edit_json`, `register_server`, `unregister_server`,
+  `unregister_owned`; the two-space pretty printer, now shared with rtok-mcp's `McpConfig`).
+- `rtok.agents.Agent` (`files`/`installed`/`apply`), `Mode`, `applyOf(cfg)`, `StdioMcp` (register/unregister in a key),
+  `McpOnlyAgent` (`mcp_only_file!`, `installed_mcp_only`, `apply_mcp_only`), `Agents` registry (8 hosts).
+- Tests: McpOnlyAgentTest 7 (the Rust per-host default-path, dry-run, stdio roundtrip and apply-idempotent cases run
+  over all 8 hosts, plus foreign-entry leave and `[setup] mcp = false`).
+- Stop point: next host group 3b — JSON hook hosts (windsurf, cline, qwen, gemini, codewhale, commandcode, copilot,
+  devin, kimi), then 3c (opencode/mimo/kilo/zcode/zed/amp/omp/pi/aider/continue/goose/reasonix/antigravity/vscode/
+  codebuddy) and 3d (claude, cursor, codex, grok).
