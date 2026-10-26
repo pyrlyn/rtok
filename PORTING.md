@@ -57,6 +57,7 @@ Plan and per-phase checklist: [port-plan.md](port-plan.md).
 | src/modes/ladder.rs | `rtok/…/rtok/modes/Ladder.kt` | ✅ | 3 → 3 |
 | src/modes/compress.rs | `rtok/…/rtok/modes/Compress.kt` | ✅ | 16 → 16 |
 | src/cli (32 files, 30 subcommands) | `rtok/…/rtok/cli` | 🟡 root command only (Clikt) | |
+| src/plugins/read outline.rs, density.rs | `rtok/plugins/read/Outline.kt`, `Languages.kt`, `Density.kt` over `libs/treesitter` + `libs/treesitter-native` (34 grammars) | 🟡 rest of read pending | 10 + 4 (+7 adapter, +5 walk) |
 | src/plugins (compress, json_tree, toon, read, cmd, inject, guard, memory, measure, docs, archive, checkpoint, graph, proxy, wasm) | `rtok.plugins` | ⬜ | |
 | src/proxy | `rtok.proxy` (Ktor) | ⬜ | |
 | src/mcp | `rtok.mcp` | ⬜ | |

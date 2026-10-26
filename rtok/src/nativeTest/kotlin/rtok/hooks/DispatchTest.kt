@@ -9,6 +9,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import rtok.config.Config
 import rtok.config.envVar
+import rtok.sys.tempDir
 import rtok.plugin.Runtime
 import rtok.plugin.sdk.Class
 import rtok.store.inbox
@@ -55,16 +56,16 @@ class DispatchTest {
     }
 
     @Test fun malformedStdinIsEmptyObject() {
-        assertEquals("{}", run("PreToolUse", { "not-json".encodeToByteArray() }, Config()).decodeToString())
+        assertEquals("{}", run("PreToolUse", { "not-json".encodeToByteArray() }, testConfig()).decodeToString())
     }
 
     @Test fun strictPathThrowsOnMalformedStdin() {
-        val cfg = Config().let { it.copy(hook = it.hook.copy(failOpen = false)) }
+        val cfg = testConfig().let { it.copy(hook = it.hook.copy(failOpen = false)) }
         assertTrue("bad stdin" in assertFailsWith<HookError> { run("PreToolUse", { "not-json".encodeToByteArray() }, cfg) }.message!!)
     }
 
     @Test fun oversizedStdinFailsOpen() {
-        val cfg = Config().let { it.copy(core = it.core.copy(hookMaxInputBytes = 4u)) }
+        val cfg = testConfig().let { it.copy(core = it.core.copy(hookMaxInputBytes = 4u)) }
         assertEquals("{}", run("PreToolUse", { "{\"a\":1}".encodeToByteArray() }, cfg).decodeToString())
     }
 
@@ -251,3 +252,6 @@ class DispatchTest {
         assertNull(agentActivity(HookInput.parse("""{"hook_event_name":"Stop"}""")))
     }
 }
+
+/** Default config finished under a temp home, so error logs never land in a literal `./~`. */
+private fun testConfig(): Config = Config().finish("${tempDir()}/rtok-dispatch-test")

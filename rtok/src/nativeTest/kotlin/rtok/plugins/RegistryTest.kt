@@ -3,7 +3,12 @@ package rtok.plugins
 import kotlin.test.*
 import rtok.config.CATALOGUE
 import rtok.config.Config
+import rtok.sys.tempDir
+
 import rtok.plugin.sdk.*
+
+/** A finished default config: `~` expanded under a temp home, so nothing is written to a literal `./~`. */
+private fun cfg(): Config = Config().finish("${tempDir()}/rtok-registry-test")
 
 class RegistryTest {
     /** Rust checks equality with the catalogue; until Phase 5 ends the registry is an ordered subset. */
@@ -26,7 +31,7 @@ class RegistryTest {
             override fun manifest() = Manifest("ext", listOf(Surface.Mcp), true)
             override fun dashboardPage() = DashboardPage("Ext", "An out-of-tree plugin.", false)
         }
-        assertEquals(listOf("ext"), Registry.fromPlugins(listOf(ext), Config()).enabled().map { it.manifest().id })
+        assertEquals(listOf("ext"), Registry.fromPlugins(listOf(ext), cfg()).enabled().map { it.manifest().id })
     }
 
     @Test fun skipWordHandlesQuotes() {
@@ -38,7 +43,7 @@ class RegistryTest {
     // Registry half of Rust `from_plugins_loads_demo_and_records_measurement`.
     @Test fun fromPluginsLoadsWasmDemo() {
         val dir = rtok.config.envVar("RTOK_WASM_FIXTURES")!!
-        val base = Config()
+        val base = cfg()
         val cfg = base.copy(plugins = base.plugins.copy(wasm = rtok.config.Wasm(enabled = true, dir = dir)))
         assertEquals(listOf("wasm-demo"), Registry.fromPlugins(emptyList(), cfg).enabled().map { it.manifest().id })
         assertTrue(Registry.fromPlugins(emptyList(), base).enabled().isEmpty())

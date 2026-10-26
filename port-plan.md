@@ -204,3 +204,19 @@ Next, in order:
 3. docs fetch with zstd behind our own interface; memory status, sync --stat, MCP wiring (Phase 8).
 4. Remaining hooks tests (29) once worktree/otel/MCP land (`HookLinks`).
 5. Final stage: completeness pass against Rust + code review (no separate preview deliverable).
+
+## Session 2026-10-26 (evening) — where the port stopped
+Done: tree-sitter interface + native adapter with 34 grammars (PR #3), `mise run coverage` (PR #4),
+read `outline.rs` (10 tests) and `density.rs` (4), rtok-sys gitignore walk (5), review fixes (this PR).
+Decision: Dropbox affectedmoduledetector rejected (archived, breaks the configuration cache, Android task
+names only); `scripts/smart.py` stays (docs/toolchain.md).
+Release binary: unchanged so far (17.9 MB) — no CLI/MCP path calls the read plugin yet, so K/N and ld
+strip the grammars; measure again once `read`/`graph` are wired (all grammars = 70 MB of objects).
+Next, in order (exact stop point: read plugin, after density + walk):
+1. read: `roots.rs` (client roots, secrets, moved hint), `search.rs` (search/tree over `rtok.sys.walk`),
+   `cache.rs` (re-read delta), `mod.rs` (read_with, cap_recording, resolve), `hook.rs`; needs `expand`
+   (`parse_range`, `slice_lines`). Remaining read tests: 101 − 14.
+2. graph (275 tests; 20k Rust lines), grep_symbol (8), catfile (4) + cat re-read delta (1).
+3. docs fetch + zstd behind an interface; memory status, sync --stat, MCP wiring; otel, worktree/task/batch/bench;
+   29 hook dispatch tests; worktree host events via `rtok hook`.
+4. Completeness pass against Rust and final code review.
