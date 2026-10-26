@@ -214,9 +214,19 @@ Release binary: unchanged so far (17.9 MB) — no CLI/MCP path calls the read pl
 strip the grammars; measure again once `read`/`graph` are wired (all grammars = 70 MB of objects).
 Read plugin finished (PR feat/read-rest): `Read.kt`, `Roots.kt`, `Search.kt`, `Cache.kt`, `Hook.kt`,
 `rtok/Expand.kt` + `rtok expand`, `rtok/worktree/Git.kt` (porcelain list), `HostPaths.kt`; 84 read + 27 expand tests.
+Graph started (PR feat/graph-walk-index): `rtok/plugins/graph/Walk.kt` (`Matcher`, walk.rs, 5 tests).
+Exact stop point: graph `index.rs` (Report, run/run_with/run_changed, extractor fingerprint, SYMBOL_BATCH_FILES
+batching; needs a per-core parse worker pool and `outline` symbol rows with span/sig/doc) is next, then
+text, resolve, tally, mod.rs tools, and the rest in dependency order (events, rank, blast, follow, drill, scope,
+diff, export, health, lsp, watch, review, draw, capability, cochange, projects, jobs, status).
+Release binary after read: 17.97 MB, `linkReleaseExecutableMacosArm64` 125 s wall (incl. compile); the grammars
+are still stripped because no CLI/MCP path calls `read`/`outline` until `rtok mcp` dispatches the read tools.
 Next, in order:
 1. (done) read.
 2. graph (275 tests; 20k Rust lines), grep_symbol (8), catfile (4) + cat re-read delta (1).
 3. docs fetch + zstd behind an interface; memory status, sync --stat, MCP wiring; otel, worktree/task/batch/bench;
    29 hook dispatch tests; worktree host events via `rtok hook`.
 4. Completeness pass against Rust and final code review.
+
+- Fixed (#9): release-only K/N crash `Unexpected receiver type: kotlin.Char` in `rtok run cat` (boxed `Char?` in `Bounded.lex`). `./gradlew e2eTest -Pe2e.release` runs e2e against the release binary.
+- Stop point: graph `Walk.kt` (Matcher) is merged with #9; next is `index.rs`, then text, resolve, tally, mod.rs.
