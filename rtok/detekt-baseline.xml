@@ -33,6 +33,7 @@
     <ID>ComplexCondition:Tables.kt:Tables$!u.contains("FILESYSTEM") || !(u.contains("MOUNTED") || u.contains("CAPACITY") || u.contains("USE%"))</ID>
     <ID>ComplexCondition:Tables.kt:Tables$cols.firstOrNull() != "NAME" || cols.none { it == "STATUS" || it == "READY" || it == "AGE" }</ID>
     <ID>ComplexCondition:ToonTest.kt:brace &lt; 0 || !s.startsWith('[') || !s.substring(0, brace).endsWith(']') || !s.endsWith('}')</ID>
+    <ID>ComplexCondition:Watch.kt:Watch$gitPath(p) || matcher.inLinkedWorktree(p) || (ignored(ig, root, p) &amp;&amp; !matcher.isIncluded(p))</ID>
     <ID>CyclomaticComplexMethod:Blast.kt:Blast$fun render: String</ID>
     <ID>CyclomaticComplexMethod:Bounded.kt:Bounded$internal fun lex: List&lt;List&lt;List&lt;String>>></ID>
     <ID>CyclomaticComplexMethod:Bounded.kt:Bounded$private fun bounds: Boolean</ID>
@@ -190,6 +191,7 @@
     <ID>LoopWithTooManyJumpStatements:Sed.kt:while</ID>
     <ID>LoopWithTooManyJumpStatements:Skill.kt:for</ID>
     <ID>LoopWithTooManyJumpStatements:ToonTest.kt:while</ID>
+    <ID>LoopWithTooManyJumpStatements:Watch.kt:Watch$for</ID>
     <ID>MagicNumber:Admit.kt:Admit$100</ID>
     <ID>MagicNumber:Admit.kt:Admit$3</ID>
     <ID>MagicNumber:Archive.kt:12</ID>
@@ -806,6 +808,13 @@
     <ID>MagicNumber:ToonTest.kt:ToonTest$64</ID>
     <ID>MagicNumber:TypesTest.kt:TypesTest$9</ID>
     <ID>MagicNumber:Vfs.kt:Vfs$40</ID>
+    <ID>MagicNumber:Watch.kt:Watch$1000</ID>
+    <ID>MagicNumber:WatchTest.kt:WatchTest$1000</ID>
+    <ID>MagicNumber:WatchTest.kt:WatchTest$200</ID>
+    <ID>MagicNumber:WatchTest.kt:WatchTest$3</ID>
+    <ID>MagicNumber:WatchTest.kt:WatchTest$4</ID>
+    <ID>MagicNumber:WatchTest.kt:WatchTest$50</ID>
+    <ID>MagicNumber:WatchTest.kt:WatchTest$80</ID>
     <ID>MatchingDeclarationName:Anthropic.kt:AnthropicWire : ToolResults</ID>
     <ID>MatchingDeclarationName:Cache.kt:ReadCache</ID>
     <ID>MatchingDeclarationName:Compress.kt:CaveIntensity</ID>
@@ -1021,6 +1030,8 @@
     <ID>ReturnCount:Types.kt:HookInput$private fun takeJsonish: JsonElement?</ID>
     <ID>ReturnCount:Walk.kt:Matcher$fun inLinkedWorktree: Boolean</ID>
     <ID>ReturnCount:Walk.kt:Matcher$fun isExcluded: Boolean</ID>
+    <ID>ReturnCount:Watch.kt:Watch$fun absorbEvent: Boolean</ID>
+    <ID>ReturnCount:Watch.kt:Watch$private fun ignored: Boolean</ID>
     <ID>SwallowedException:Dispatch.kt:e: Exception</ID>
     <ID>SwallowedException:Dispatch.kt:e: HookError</ID>
     <ID>SwallowedException:ExpandCmd.kt:e: ExpandException</ID>
@@ -1110,5 +1121,6 @@
     <ID>TooManyFunctions:ToonTest.kt:ToonTest</ID>
     <ID>TooManyFunctions:Types.kt:HookInput</ID>
     <ID>TooManyFunctions:TypesTest.kt:TypesTest</ID>
+    <ID>TooManyFunctions:WatchTest.kt:WatchTest</ID>
   </CurrentIssues>
 </SmellBaseline>

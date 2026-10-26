@@ -9,7 +9,7 @@ import rtok.plugins.read.supportedWith
 import rtok.sys.*
 
 class Matcher(
-    private val root: String,
+    val root: String,
     cfg: Graph,
 ) {
     /** `include` patterns; a trailing `/` names the whole subtree. */
