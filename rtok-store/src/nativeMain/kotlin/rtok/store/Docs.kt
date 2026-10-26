@@ -1,6 +1,8 @@
 // Port of crates/rtok-store/src/docs.rs (T455): cached rustdoc rows for the `docs` plugin.
 package rtok.store
 
+import rtok.db.*
+
 /** One FTS hit: id, path, kind, snippet (the shape `docs_query` prints). */
 data class DocHit(val id: Int, val path: String, val kind: String, val snippet: String)
 
