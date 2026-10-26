@@ -60,6 +60,8 @@ Plan and per-phase checklist: [port-plan.md](port-plan.md).
 | src/plugins/read (mod, roots, search, cache, hook, outline, density) | `rtok/plugins/read/` `Read.kt` (ReadPlugin, readWith, resolve, cap), `Roots.kt`, `Search.kt`, `Cache.kt`, `Hook.kt`, `Outline.kt`, `Languages.kt`, `Density.kt` over `libs/treesitter` + `libs/treesitter-native` (34 grammars); `rtok/HostPaths.kt` (normalize_following, is_secret, same_spelling, is_linked_worktree) | ✅ (MCP dispatch → `rtok mcp`) | 101 → 98 + 5 walk in rtok-sys (+7 adapter) |
 | src/expand.rs, src/cli/expand.rs | `rtok/Expand.kt`, `cli/ExpandCmd.kt` | ✅ | 27 → 27 |
 | src/plugins/graph/walk.rs | `rtok/plugins/graph/Walk.kt` (`Matcher`) | ✅ (rest of graph ⬜) | 5 → 5 |
+| src/plugins/graph/index.rs (+ worker pool) | `rtok/plugins/graph/Index.kt`, rtok-sys `Parallel.kt` | 🟡 rank refresh via `FileRanks` (rank.rs ⬜) | 15 → 14 (+2 pool); rank 3 + crate fixture pending |
+| src/plugins/graph/resolve.rs, tally.rs | `rtok/plugins/graph/Resolve.kt`, `Tally.kt` | ✅ | 1 → 1, 4 → 4 |
 | src/worktree/git.rs `list`, mod.rs `parse_porcelain` | `rtok/worktree/Git.kt` | 🟡 rest of worktree pending | via RootsTest |
 | src/plugins (compress, json_tree, toon, read, cmd, inject, guard, memory, measure, docs, archive, checkpoint, graph, proxy, wasm) | `rtok.plugins` | ⬜ | |
 | src/proxy | `rtok.proxy` (Ktor) | ⬜ | |

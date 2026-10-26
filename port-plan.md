@@ -119,7 +119,7 @@ jiff/humantime→kotlinx-datetime; shlex→own; wasmi→not portable (see risks)
 - [x] cmd (10098) — 207 Kotlin tests: rules 51, formatters 25, run 29, hook 25, compact 18, grep 10, logfmt 8, gh 7, loops 7, python 7, bounded 7, diffs 6, mise 4, filter 3; rtok-sys ProgressRunner +5; catfile (4) + cat re-read delta (1) blocked on tree-sitter / read cache (docs/cmd.md)
 - [x] memory (5419) — 126 of 127 (scrub 2, admit 6, files 8, pack 7, observe 6, handoff 11, sync 15, export 3, import 6, extract 11, mod 51); `rtok memory` CLI (all but `status`); docs/memory.md
   - pending: handoff `pointers_carry_enclosing_symbol_ranges_when_indexed` (needs graph index, Phase 10); `memory status` (model::memory_status); `sync --stat` (change_preview Preview); MCP dispatch (rtok-mcp)
-- [ ] graph (20084) — 275
+- [ ] graph (20084) — 275; walk 5, index 14 (12 Rust + batch + rows; rank-document 2 and the Rust-crate fixture pending rank.rs)
 - [x] wasm host (478) — 3 → 5 (+1 registry, +3 Chasm adapter); Chasm 2.3.0 behind libs/wasm, fuel 100M/call; docs/wasm-plugins.md
 - [ ] Tests: port matching Rust unit + integration tests to kotlin.test; phase done only when they pass on the Mac (`./gradlew macosArm64Test`)
 - [ ] Docs: `docs/<feature>.md` (how it works, enable, disable, test, limitations) + README section
@@ -214,7 +214,7 @@ Release binary: unchanged so far (17.9 MB) — no CLI/MCP path calls the read pl
 strip the grammars; measure again once `read`/`graph` are wired (all grammars = 70 MB of objects).
 Read plugin finished (PR feat/read-rest): `Read.kt`, `Roots.kt`, `Search.kt`, `Cache.kt`, `Hook.kt`,
 `rtok/Expand.kt` + `rtok expand`, `rtok/worktree/Git.kt` (porcelain list), `HostPaths.kt`; 84 read + 27 expand tests.
-Graph started (PR feat/graph-walk-index): `rtok/plugins/graph/Walk.kt` (`Matcher`, walk.rs, 5 tests).
+Graph started (merged with #9): `rtok/plugins/graph/Walk.kt` (`Matcher`, walk.rs, 5 tests).
 Exact stop point: graph `index.rs` (Report, run/run_with/run_changed, extractor fingerprint, SYMBOL_BATCH_FILES
 batching; needs a per-core parse worker pool and `outline` symbol rows with span/sig/doc) is next, then
 text, resolve, tally, mod.rs tools, and the rest in dependency order (events, rank, blast, follow, drill, scope,
@@ -230,3 +230,13 @@ Next, in order:
 
 - Fixed (#9): release-only K/N crash `Unexpected receiver type: kotlin.Char` in `rtok run cat` (boxed `Char?` in `Bounded.lex`). `./gradlew e2eTest -Pe2e.release` runs e2e against the release binary.
 - Stop point: graph `Walk.kt` (Matcher) is merged with #9; next is `index.rs`, then text, resolve, tally, mod.rs.
+
+## Session 2026-10-26 (late) — graph index
+- `rtok/plugins/graph/Index.kt` (index.rs): run/runWith/runChanged/ensure, stat + sha gates, extractor fingerprint,
+  SYMBOL_BATCH_FILES batching, `scoped` rows with span/hash/signature/doc, indexed HEAD. Parsing runs on
+  `rtok.sys.eachOrdered` (one K/N Worker per core, results in walk order, bounded in-flight). Tags queries are
+  compiled on the calling thread before the workers start.
+- Rank refresh goes through `FileRanks` (no-op `FileRanks.None` until rank.rs lands; set `Index.ranks`).
+- `Resolve.kt` (resolve.rs, 1 test), `Tally.kt` (tally.rs, 4 tests; `@ThreadLocal` record).
+- Stop point: next `text.rs`, then `cochange.rs` + `rank.rs` (enables the 2 pending
+  index rank tests), then mod.rs tools.
