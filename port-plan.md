@@ -661,3 +661,12 @@ Next, in order:
 - Stop point: next 3d-2 = claude `plugin_update` (plugin_version receipt/version file, plugin_install `claude_install`),
   then 3d-3 = claude `migrate` (`--replace`); skill sync stays pending for every host. Then grok, cursor, codex; then
   `libs/yaml-aot` (own lossless YAML editor, Ivan: no YAML library) and continue/goose.
+
+## Session: agents chunk 3d-2 — claude plugin update (T279)
+- `PluginVersion.kt` (plugin_version.rs): `Source`, `VersionFile`, `Receipt`/`ReceiptEntry` (sorted keys, receipt under the
+  OS state dir or `pluginReceiptPath`), `installed`, `available` (GitHub/marketplace catalog/local + `git describe`),
+  `localVersion`, `decide` (SemVer precedence via `:semver`, build metadata compared on equal precedence), `nowIso`.
+- `ClaudeUpdate.kt`: `plugin_update` (skip / update in place / reinstall, stale marketplace, new local build, receipt
+  record and delete on `REINSTALL_FAILED`) and plugin_install.rs `claude_install`; `agents update claude` uses it.
+- Tests: ClaudeUpdateTest 6, PluginVersionTest 2. Windows receipt path (LOCALAPPDATA) not ported (no Windows target).
+- Stop point: next 3d-3 = claude `migrate` (`--replace`), then grok, cursor, codex; then `libs/yaml-aot` + continue/goose.
