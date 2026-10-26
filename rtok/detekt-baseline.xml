@@ -37,6 +37,7 @@
     <ID>CyclomaticComplexMethod:Bounded.kt:Bounded$internal fun lex: List&lt;List&lt;List&lt;String>>></ID>
     <ID>CyclomaticComplexMethod:Bounded.kt:Bounded$private fun bounds: Boolean</ID>
     <ID>CyclomaticComplexMethod:Bounded.kt:Bounded$private fun sedRange: Boolean</ID>
+    <ID>CyclomaticComplexMethod:CatFile.kt:CatFile$fun rereadKey: Pair&lt;String, String>?</ID>
     <ID>CyclomaticComplexMethod:Compact.kt:Compact$fun cargoBuild: String?</ID>
     <ID>CyclomaticComplexMethod:Compact.kt:Compact$fun cargoTest: String?</ID>
     <ID>CyclomaticComplexMethod:Compact.kt:Compact$fun gitStatus: String?</ID>
@@ -224,6 +225,14 @@
     <ID>MagicNumber:CapabilityTest.kt:CapabilityTest$3</ID>
     <ID>MagicNumber:CapabilityTest.kt:CapabilityTest$300</ID>
     <ID>MagicNumber:CapabilityTest.kt:CapabilityTest$8</ID>
+    <ID>MagicNumber:CatFile.kt:CatFile$3</ID>
+    <ID>MagicNumber:CatFileTest.kt:CatFileTest$12</ID>
+    <ID>MagicNumber:CatFileTest.kt:CatFileTest$200</ID>
+    <ID>MagicNumber:CatFileTest.kt:CatFileTest$3</ID>
+    <ID>MagicNumber:CatFileTest.kt:CatFileTest$3L</ID>
+    <ID>MagicNumber:CatFileTest.kt:CatFileTest$400</ID>
+    <ID>MagicNumber:CatFileTest.kt:CatFileTest$6</ID>
+    <ID>MagicNumber:CatFileTest.kt:CatFileTest$9999</ID>
     <ID>MagicNumber:Checkpoint.kt:1024uL</ID>
     <ID>MagicNumber:Checkpoint.kt:10uL</ID>
     <ID>MagicNumber:CheckpointTest.kt:CheckpointTest$1024</ID>
@@ -802,6 +811,8 @@
     <ID>ReturnCount:Bounded.kt:Bounded$private fun bounds: Boolean</ID>
     <ID>ReturnCount:Cache.kt:ReadCache$fun hit: String?</ID>
     <ID>ReturnCount:Cache.kt:ReadCache$fun invalidate</ID>
+    <ID>ReturnCount:CatFile.kt:CatFile$fun outlineOf: String?</ID>
+    <ID>ReturnCount:CatFile.kt:CatFile$fun rereadKey: Pair&lt;String, String>?</ID>
     <ID>ReturnCount:Checkpoint.kt:PathEntry.Companion$fun parse: PathEntry</ID>
     <ID>ReturnCount:CliktAdapter.kt:CliktParser$override fun run: Int</ID>
     <ID>ReturnCount:Cochange.kt:Cochange$fun pairs: List&lt;CochangePair></ID>

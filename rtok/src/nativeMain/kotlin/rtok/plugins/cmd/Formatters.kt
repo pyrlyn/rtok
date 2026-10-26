@@ -450,8 +450,7 @@ object Formatters {
 
             b == "ls" && Compact.lsLong(argv) -> Compact.lsL(output)
 
-            // `cat` outlines need the read plugin's tree-sitter tags (catfile.rs); not ported yet.
-            b == "cat" -> null
+            b == "cat" -> CatFile.outlineOf(argv, output)
 
             b == "grep" || b == "rg" || (b == "git" && s == "grep") -> Grep.group(argv, output)
 
