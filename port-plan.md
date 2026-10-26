@@ -119,7 +119,7 @@ jiff/humantime→kotlinx-datetime; shlex→own; wasmi→not portable (see risks)
 - [x] cmd (10098) — 207 Kotlin tests: rules 51, formatters 25, run 29, hook 25, compact 18, grep 10, logfmt 8, gh 7, loops 7, python 7, bounded 7, diffs 6, mise 4, filter 3; rtok-sys ProgressRunner +5; catfile (4) + cat re-read delta (1) blocked on tree-sitter / read cache (docs/cmd.md)
 - [x] memory (5419) — 126 of 127 (scrub 2, admit 6, files 8, pack 7, observe 6, handoff 11, sync 15, export 3, import 6, extract 11, mod 51); `rtok memory` CLI (all but `status`); docs/memory.md
   - pending: handoff `pointers_carry_enclosing_symbol_ranges_when_indexed` (needs graph index, Phase 10); `memory status` (model::memory_status); `sync --stat` (change_preview Preview); MCP dispatch (rtok-mcp)
-- [ ] graph (20084) — 275; walk 5, index 14 (12 Rust + batch + rows; rank-document 2 and the Rust-crate fixture pending rank.rs)
+- [ ] graph (20084) — 275; walk 5, index 16 (12 Rust + batch + rows + rank-document 2; Rust-crate fixture pending), rank 10, cochange 4 (impact partner test pending mod.rs `impact`)
 - [x] wasm host (478) — 3 → 5 (+1 registry, +3 Chasm adapter); Chasm 2.3.0 behind libs/wasm, fuel 100M/call; docs/wasm-plugins.md
 - [ ] Tests: port matching Rust unit + integration tests to kotlin.test; phase done only when they pass on the Mac (`./gradlew macosArm64Test`)
 - [ ] Docs: `docs/<feature>.md` (how it works, enable, disable, test, limitations) + README section
@@ -241,3 +241,11 @@ Next, in order:
 - Stop point (main 683ebd3, 1173 tests green): next `cochange.rs` + `rank.rs` (set `Index.ranks`; enables the 2
   pending index rank tests), then the mod.rs core types (`Filter`, `Mode`, `ExploreParts`, `backend_name`) that
   `text.rs` needs, then `text.rs`, `capability.rs`, the rest of mod.rs and the other submodules.
+
+## Session 2026-10-26 (evening) — graph rank + cochange
+- `Cochange.kt` (cochange.rs, 3 Rust tests + layout test; `impact` partner test waits for mod.rs `impact`),
+  `Rank.kt` (rank.rs, 10 tests; `Index.ranks` defaults to `Rank`, both pending index rank tests enabled),
+  `Git.kt` (mod.rs `git_stdout`/`git_stdout_result`, shared with `Index.rememberIndexedHead`).
+- On-disk compat: `file_rank` JSON keeps the serde field names; the cochange `kv` doc keeps `pairs` as `[a,b,n]`.
+- Stop point: next the mod.rs core types (`Filter`, `Mode`, `ExploreParts`, `backend_name`), then `text.rs`,
+  `capability.rs`, the rest of mod.rs and the other submodules.
