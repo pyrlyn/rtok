@@ -22,6 +22,20 @@ Retention (`Store.housekeeping`, run at session start) purges calls older than
 drops orphan hook-session rows and dead symbol roots, then runs an incremental vacuum; a pre-T352
 file is converted to incremental auto-vacuum once.
 
+## Layout
+One file per Rust module, as extension functions on `Store` (`Agents.kt`, `Messages.kt`,
+`Symbols.kt`, `Embed.kt`, …); `SqlExt.kt` holds the shared SQL helpers (`inList`, `chunkedIn`).
+
+The SQLite binding is an adapter: the store talks to `Db` / `Row` (`Db.kt`), and
+`driver/Sqlite3Db.kt` implements them over the system `libsqlite3`. `Db.driver` picks the
+`DbDriver`, so another driver replaces one file.
+
+Schema compatibility is tested, not assumed: `ArchiveTest` checks the migrated database against
+the Rust crate's `schema.rs` and `schema_snapshot.txt` (copied to `src/nativeTest/fixtures`).
+
+Note embeddings (`[plugins.memory.embed]`) use the same deterministic hash vectors as Rust
+(`hash2` scheme), or a host-supplied `TextEmbedder` for a remote backend.
+
 ## Enable / disable
 Always on. `retain_calls_days = 0` / `retain_hook_bodies_days = 0` keep everything.
 
@@ -30,5 +44,9 @@ Always on. `retain_calls_days = 0` / `retain_hook_bodies_days = 0` keep everythi
 
 ## Limitations
 - Numbers inside re-encoded JSON keep their parsed literal (serde re-prints floats via ryu).
-- Ported so far: handle, migrations, sanitize, hook_fields, retention, cache, kv. The remaining
-  modules are tracked in [port-plan.md](../port-plan.md).
+- Every rtok-store module is ported. `host_usage` reads a host's own database through the same
+  driver.
+- Ordering that Rust does in memory uses Rust string order (`compareUtf8`, code-point order);
+  ordering done in SQL is SQLite's `BINARY` collation in both builds.
+- Hash embeddings split words on `Char.isLetterOrDigit`; a letter outside the Basic Multilingual
+  Plane separates words, where Rust's `char::is_alphanumeric` would keep it.
