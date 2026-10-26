@@ -24,6 +24,7 @@ class ProgressRunner(
     private var stdinPath: String? = null
     private var timeoutMs: Long? = null
     private var quiet = false
+    private val extraEnv = mutableMapOf<String, String>()
 
     /** The child's stdin is this file (Rust `.stdin(Stdio::from(file))`). */
     fun stdinFile(path: String) = apply { stdinPath = path }
@@ -33,6 +34,12 @@ class ProgressRunner(
 
     /** No spinner (Rust `ProgressRunner::quiet`). */
     fun quiet() = apply { quiet = true }
+
+    /** Set [key] to [value] in the child's environment, on top of ours (Rust `.env`). */
+    fun env(
+        key: String,
+        value: String,
+    ) = apply { extraEnv[key] = value }
 
     /** Captures up to [cap] bytes over both streams; the second value counts the bytes dropped past it. */
     fun runCapped(cap: Long): Pair<Captured, Long> =
@@ -48,7 +55,8 @@ class ProgressRunner(
             for (fd in listOf(outPipe[0], outPipe[1], errPipe[0], errPipe[1])) posix_spawn_file_actions_addclose(actions.ptr, fd)
             val argv = allocArrayOf((listOf(program) + args).map { it.cstr.ptr } + listOf(null))
             val pid = alloc<pid_tVar>()
-            val rc = posix_spawnp(pid.ptr, program, actions.ptr, null, argv, environPtr())
+            val envp = if (extraEnv.isEmpty()) environPtr() else allocArrayOf(mergedEnv(extraEnv).map { it.cstr.ptr } + listOf(null))
+            val rc = posix_spawnp(pid.ptr, program, actions.ptr, null, argv, envp)
             posix_spawn_file_actions_destroy(actions.ptr)
             close(outPipe[1])
             close(errPipe[1])
