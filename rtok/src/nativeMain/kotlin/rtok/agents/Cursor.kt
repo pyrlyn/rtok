@@ -16,6 +16,7 @@ import rtok.config.Config
 import rtok.mcp.config.Client
 import rtok.mcp.config.EntryShape
 import rtok.mcp.config.McpSpec
+import rtok.plugin.sdk.Surface
 import rtok.sys.exists
 import rtok.sys.join
 import rtok.sys.readToString
@@ -24,6 +25,7 @@ class Cursor(
     private val plugins: PluginSource = ShippedPlugins,
 ) : Agent {
     override val id = HOST
+    override val pluginSurfaces = listOf(Surface.Hook)
 
     override fun files(
         cfg: Config,

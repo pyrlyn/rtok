@@ -16,6 +16,7 @@ import rtok.config.Toml
 import rtok.mcp.config.Client
 import rtok.mcp.config.EntryShape
 import rtok.mcp.config.Format
+import rtok.plugin.sdk.Surface
 import rtok.sys.exists
 import rtok.sys.isDir
 import rtok.sys.readToString
@@ -24,6 +25,7 @@ class Grok(
     private val plugins: PluginSource = ShippedPlugins,
 ) : Agent {
     override val id = HOST
+    override val pluginSurfaces = listOf(Surface.Hook)
 
     override fun files(
         cfg: Config,

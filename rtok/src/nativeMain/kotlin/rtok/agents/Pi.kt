@@ -3,12 +3,13 @@
 package rtok.agents
 
 import rtok.config.Config
+import rtok.plugin.sdk.Surface
 
 class Pi(
     private val plugins: PluginSource = ShippedPlugins,
 ) : Agent {
     override val id = "pi"
-    override val pluginServesMcp = true
+    override val pluginSurfaces = listOf(Surface.Cli, Surface.Mcp)
 
     override fun files(
         cfg: Config,

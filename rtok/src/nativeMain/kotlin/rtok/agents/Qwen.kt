@@ -4,11 +4,14 @@
 package rtok.agents
 
 import rtok.config.Config
+import rtok.plugin.sdk.Surface
 
 class Qwen(
     plugins: PluginSource = ShippedPlugins,
     cli: ((Config, List<String>) -> String?)? = null,
 ) : ExtensionHost(SPEC, plugins, cli) {
+    override val pluginSurfaces = listOf(Surface.Hook)
+
     companion object {
         const val HOST = "qwen"
 

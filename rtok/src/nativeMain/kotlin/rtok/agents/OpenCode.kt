@@ -8,6 +8,7 @@ import rtok.mcp.config.Client
 import rtok.mcp.config.EntryShape
 import rtok.mcp.config.Format
 import rtok.mcp.config.McpSpec
+import rtok.plugin.sdk.Surface
 
 /** What OpenCode and its forks share: the local MCP entry and the `plugins/rtok.ts` link beside the config. */
 object OpenCodeFamily {
@@ -50,6 +51,7 @@ class OpenCode(
     private val plugins: PluginSource = ShippedPlugins,
 ) : Agent {
     override val id = HOST
+    override val pluginSurfaces = listOf(Surface.Cli)
 
     override fun files(
         cfg: Config,
@@ -107,6 +109,7 @@ class Kilo(
     private val plugins: PluginSource = ShippedPlugins,
 ) : Agent {
     override val id = "kilo"
+    override val pluginSurfaces = listOf(Surface.Cli)
 
     override fun files(
         cfg: Config,
@@ -134,6 +137,7 @@ class Mimo(
     private val plugins: PluginSource = ShippedPlugins,
 ) : Agent {
     override val id = "mimo"
+    override val pluginSurfaces = listOf(Surface.Cli)
 
     override fun files(
         cfg: Config,

@@ -11,6 +11,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import rtok.agent.sdk.HostJson
 import rtok.agent.sdk.NO_CHANGES
 import rtok.config.Config
+import rtok.plugin.sdk.Surface
 import rtok.sys.environ
 import rtok.sys.exists
 import rtok.sys.join
@@ -22,7 +23,7 @@ class Devin(
     private val plugins: PluginSource = ShippedPlugins,
 ) : Agent {
     override val id = HOST
-    override val pluginServesMcp = true
+    override val pluginSurfaces = listOf(Surface.Hook, Surface.Mcp)
 
     override fun files(
         cfg: Config,

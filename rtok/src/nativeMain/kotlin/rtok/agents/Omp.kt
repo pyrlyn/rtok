@@ -3,11 +3,13 @@
 package rtok.agents
 
 import rtok.config.Config
+import rtok.plugin.sdk.Surface
 
 class Omp(
     private val plugins: PluginSource = ShippedPlugins,
 ) : Agent {
     override val id = HOST
+    override val pluginSurfaces = listOf(Surface.Cli)
 
     override fun files(
         cfg: Config,

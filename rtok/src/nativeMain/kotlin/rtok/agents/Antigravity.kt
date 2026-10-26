@@ -4,12 +4,13 @@
 package rtok.agents
 
 import rtok.config.Config
+import rtok.plugin.sdk.Surface
 
 class Antigravity(
     private val plugins: PluginSource = ShippedPlugins,
 ) : Agent {
     override val id = "antigravity"
-    override val pluginServesMcp = true
+    override val pluginSurfaces = listOf(Surface.Mcp)
 
     override fun files(
         cfg: Config,

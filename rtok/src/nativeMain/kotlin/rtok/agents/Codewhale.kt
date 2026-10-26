@@ -8,6 +8,7 @@ import rtok.agent.sdk.Apply
 import rtok.agent.sdk.NO_CHANGES
 import rtok.agent.sdk.write
 import rtok.config.Config
+import rtok.plugin.sdk.Surface
 import rtok.sys.exists
 import rtok.sys.join
 import rtok.sys.readToString
@@ -17,6 +18,7 @@ import tomlaot.TomlValue
 
 class Codewhale : Agent {
     override val id = HOST
+    override val pluginSurfaces = listOf(Surface.Mcp, Surface.Hook)
 
     override fun files(
         cfg: Config,
