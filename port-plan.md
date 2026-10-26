@@ -364,3 +364,12 @@ Next, in order:
 - Tests: ProtocolTest (9), LineReaderTest (2), ServerTest (11). Live: initialize + ping over stdio with an isolated HOME.
 - Deferred to the next MCP chunks: graph plugin registration (graph tools are dispatched but not yet listed — no `GraphPlugin.mcpTools`), whoami/agents/messages tools + agent link, worktree_* and task_* tools (with worktree/task), `--http`, `rtok mcp ping`, the foreign-server wrapper (`rtok mcp -- <cmd>`), retention/otel tickers, health-check loop, follow refresh, rooted-path annotation (mcp/paths.rs), description token cap test.
 - Stop point: next MCP chunk 2 (graph plugin tool defs + paths.rs), then otel.
+
+## Session: MCP chunk 2a — graph tool descriptors + paths.rs
+- `rtok.plugins.graph.GraphPlugin` (mod.rs `GraphPlugin`: manifest, dashboard page, Edit/Write `markSymbolsStale`,
+  the 7 `mcp_tools` descriptors) registered in `plugins.all()` after memory, so `tools/list` now lists the graph tools.
+- `rtok.mcp.Paths` (mcp/paths.rs: `isRooted`, `anchorOutline`, `annotate`); `Server.invokeRooted` enters the caller
+  root through `read.Roots.enterCaller` (caller dir hook is `{ null }` until the agent link lands). PathsTest (6).
+- Full suite: 1460 tests, 0 failures. Deferred: graph session-start repo map (`repo_map`, needs checkpoint `last_paths`).
+- Stop point: next whoami/agents/messages tools + agent link (feeds `callerDir`), then `--http`, `mcp ping`,
+  `mcp -- <cmd>` wrapper, server background jobs; then otel.
