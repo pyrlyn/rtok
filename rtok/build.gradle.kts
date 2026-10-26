@@ -7,12 +7,12 @@ configure<KotlinMultiplatformExtension> {
     sourceSets.commonMain.get().kotlin.srcDir(defaultRules)
     sourceSets.commonMain.dependencies {
         implementation(project(":rtok-plugin-sdk")); implementation(project(":rtok-config"))
-        implementation(project(":rtok-sys")); implementation(project(":rtok-agent-sdk")); implementation(project(":rtok-store")); implementation(project(":db-room")); implementation(project(":rtok-log")); implementation(project(":http")); implementation(project(":http-ktor"))
+        implementation(project(":rtok-sys")); implementation(project(":rtok-agent-sdk")); implementation(project(":rtok-store")); implementation(project(":db-room")); implementation(project(":rtok-log")); implementation(project(":http")); implementation(project(":http-ktor")); implementation(project(":rtok-wasm")); implementation(project(":wasm-chasm"))
         implementation("com.github.ajalt.clikt:clikt:5.1.0")
     }
 }
 val fixtures = layout.projectDirectory.dir("src/commonTest/fixtures").asFile.absolutePath
-tasks.withType<org.jetbrains.kotlin.gradle.targets.native.tasks.KotlinNativeTest>().configureEach { environment("RTOK_FIXTURES", fixtures) }
+tasks.withType<org.jetbrains.kotlin.gradle.targets.native.tasks.KotlinNativeTest>().configureEach { environment("RTOK_FIXTURES", fixtures); environment("RTOK_WASM_FIXTURES", rootDir.resolve("rtok-wasm/src/nativeTest/fixtures").absolutePath) }
 
 // Test groups (docs/testing.md): `macosArm64Test` = unit tests without the CLI specs, `cliTest` = the
 // Kotest CLI specs (package rtok.cli, tagged `Cli`; Kotest ignores Gradle's filter, so KOTEST_TAGS selects them) from the same test binary; e2e lives in :rtok-e2e (`e2eTest`).

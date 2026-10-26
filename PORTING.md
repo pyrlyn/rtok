@@ -50,8 +50,8 @@ Plan and per-phase checklist: [port-plan.md](port-plan.md).
 | crates/rtok-sys | `:rtok-sys` | ⬜ (module currently hosts `rtok.sys.Fs`, the fs-kit replacement) | |
 | fs-kit (external crate) path helpers | `rtok-sys/nativeMain/Fs.kt` | 🟡 normalize/canon/ancestors/starts_with | via root tests |
 | crates/rtok-mcp | `:rtok-mcp` | ⬜ | |
-| (new) WASM host module | `rtok-wasm/` — `WasmRuntime` interface; Chasm adapter next; tests via `./gradlew wasmTest` | 🚧 | |
-| crates/rtok-wasm-demo-guest | – | ❌ wasm guest, not needed | |
+| src/plugins/wasm.rs (WASM plugin host) | `libs/wasm` interface, `libs/wasm-chasm` (Chasm 2.3.0 adapter, fuel), `rtok-wasm` `WasmPlugin.kt`, `rtok/plugins/WasmPlugins.kt` (registry wiring); docs/wasm-plugins.md | ✅ | 3 → 5 + 1 registry + 3 adapter |
+| crates/rtok-wasm-demo-guest | – (built `.wasm` kept as test fixture) | ❌ wasm guest, not ported | |
 | crates/rtok-webui | – | ❌ excluded (web) | |
 | src/tokens.rs | `rtok/…/rtok/Tokens.kt` | ✅ | 4 → 4 |
 | src/modes/ladder.rs | `rtok/…/rtok/modes/Ladder.kt` | ✅ | 3 → 3 |
@@ -67,7 +67,7 @@ Plan and per-phase checklist: [port-plan.md](port-plan.md).
 | src/web, agents/junk_web.rs, `rtok web/tui/dashboard` | – | ❌ excluded (web) | |
 | tests/*.rs (138 integration files) | `:rtok` commonTest | ⬜ | 0 / ~138 files |
 
-Totals: 920 unit (`macosArm64Test`, all modules) + 23 CLI (`cliTest`) + 14 e2e (`e2eTest`) tests passing on macosArm64 (see port-plan.md for the per-phase table).
+Totals: 929 unit (`macosArm64Test`, all modules) + 26 CLI (`cliTest`) + 14 e2e (`e2eTest`) tests passing on macosArm64 (see port-plan.md for the per-phase table).
 
 | Rust | Kotlin | Status | Tests |
 |---|---|---|---|
@@ -81,4 +81,4 @@ Totals: 920 unit (`macosArm64Test`, all modules) + 23 CLI (`cliTest`) + 14 e2e (
 unit `./gradlew macosArm64Test`, CLI `./gradlew cliTest`, e2e `./gradlew e2eTest`, wasm `./gradlew wasmTest` (docs/testing.md).
 
 ## Dependencies added 2026-10-26 (Ivan approved)
-Ktor client 3.3.3 (`ktor-client-core`, `-darwin`, `-curl` on Linux, `-mock` tests only) and kotlinx-coroutines-core 1.10.2 (the version Ktor requires), in `libs/http` / `libs/http-ktor` only.
+Ktor client (now 3.6.0) (`ktor-client-core`, `-darwin`, `-curl` on Linux, `-mock` tests only) and kotlinx-coroutines-core 1.10.2 (the version Ktor requires), in `libs/http` / `libs/http-ktor` only.

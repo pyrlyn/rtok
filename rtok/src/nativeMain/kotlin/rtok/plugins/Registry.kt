@@ -30,6 +30,6 @@ class Registry private constructor(private val plugins: List<Pair<Plugin, Boolea
 
         /** Registry over a caller-supplied plugin list (embedding rtok with external plugins). */
         fun fromPlugins(plugins: List<Plugin>, config: Config) =
-            Registry(plugins.map { p -> val m = p.manifest(); p to config.pluginEnabled(m.id, m.defaultOn) })
+            Registry(wasmPlugins(plugins.map { p -> val m = p.manifest(); p to config.pluginEnabled(m.id, m.defaultOn) }, config))
     }
 }

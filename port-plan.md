@@ -119,7 +119,7 @@ jiff/humantime→kotlinx-datetime; shlex→own; wasmi→not portable (see risks)
 - [x] memory (5419) — 126 of 127 (scrub 2, admit 6, files 8, pack 7, observe 6, handoff 11, sync 15, export 3, import 6, extract 11, mod 51); `rtok memory` CLI (all but `status`); docs/memory.md
   - pending: handoff `pointers_carry_enclosing_symbol_ranges_when_indexed` (needs graph index, Phase 10); `memory status` (model::memory_status); `sync --stat` (change_preview Preview); MCP dispatch (rtok-mcp)
 - [ ] graph (20084) — 275
-- [ ] wasm host (478) — 3; needs a WASM runtime library → ask Ivan before adding one
+- [x] wasm host (478) — 3 → 5 (+1 registry, +3 Chasm adapter); Chasm 2.3.0 behind libs/wasm, fuel 100M/call; docs/wasm-plugins.md
 - [ ] Tests: port matching Rust unit + integration tests to kotlin.test; phase done only when they pass on the Mac (`./gradlew macosArm64Test`)
 - [ ] Docs: `docs/<feature>.md` (how it works, enable, disable, test, limitations) + README section
 ### Phase 6 — CLI surface (src/cli: stats, info, expand, filter, run, config, logs, report, completions, man)
@@ -166,14 +166,15 @@ jiff/humantime→kotlinx-datetime; shlex→own; wasmi→not portable (see risks)
 | tooling | db-room 5 (+3; 2 moved from store) | 3 |
 | tooling | Kotest RenderSpec 1 | 1 |
 | 6 (partial) | Kotest CliSpec 17, toml-ktoml trailing newline 1 (e2e 11 counted separately) | 18 |
-| **total** | | **559** |
+| 5 wasm | wasm host 5, registry 1, Chasm adapter 3 | 9 |
+| **total** | | **559** (table predates later phases; live totals: PORTING.md, 929 unit + 26 CLI + 14 e2e) |
 
 ## Test-porting
 Each Rust `#[cfg(test)]` module → `src/commonTest` in the matching module; `tests/*.rs` (138 files)
 → `:rtok` integration tests driving the built binary. Track count in PORTING.md.
 
 ## Risks / non-portable
-- wasmi plugin host (`plugins/wasm.rs`): no Kotlin/Native wasm runtime; would need wasm3/wamr cinterop.
+- wasm plugin host: Chasm interpreter (pure Kotlin) doubles the release binary; see Chasm status.
 - tree-sitter: 13 grammars need cinterop + vendored C sources per target.
 - rustls/webpki: replaced by platform TLS (Darwin/Curl engines) — behaviour differs.
 - printpdf/resvg (report PDF/SVG): no native equivalent; report limited to text/JSON.
@@ -184,5 +185,7 @@ Each Rust `#[cfg(test)]` module → `src/commonTest` in the matching module; `te
 - Adapter libs/wasm-chasm/ChasmRuntime.kt is written but not built. It is not in settings.gradle.kts.
 - Blocker: every Chasm release needs Kotlin ≥ 2.2.0. Fuel metering, which the Rust test `endless_guest_runs_out_of_fuel` needs, exists only in Chasm ≥ 2.1, and those releases need Kotlin 2.4.10.
   - A trial on Kotlin 2.4.10 with KSP 2.3.12 passed 920/920 tests and was reverted.
-  - Needs Ivan's decision: bump Kotlin, or use Chasm 1.0.0 without fuel.
+  - Decided (Ivan): Kotlin bumped (now 2.4.21, KSP 2.3.12), Chasm 2.3.0 with fuel. Adapter built and tested (3 tests).
+- Measured on M3 Max, release link, Kotlin 2.4.21: without the host 8,958,312 B / 50 s; with Chasm wired in 17,092,616 B / 125 s (+8.1 MB, +75 s).
+  Fuel: 1M units of an endless loop trap after ~60 ms (debug test binary), so the 100M per-call budget is ~6 s debug worst case.
 - Baseline before Chasm: release rtok.kexe is 8,739,016 B; release link takes 58 s.
