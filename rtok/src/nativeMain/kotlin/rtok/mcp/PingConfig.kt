@@ -1,5 +1,5 @@
 // `rtok mcp ping` config side (mcp/ping.rs): where each host writes rtok's MCP server object, the headless
-// command lines, and reading a `Launch` back from a host config. The process probe and CLI are the next chunk.
+// command lines, and reading a `Launch` back from a host config. The process side is [PingRun].
 package rtok.mcp
 
 import kotlinx.serialization.json.JsonArray
