@@ -551,3 +551,12 @@ Next, in order:
   no prune, strip counts only a `hooks`-only entry as unchanged (else `keep_edited`).
 - Tests: 3 own (matcher slot kept, unlisted event untouched, user-edited entries left); stale test uses the real spec.
 - Stop point: next 3b-3e = codewhale, commandcode, copilot, then devin, kimi.
+
+## Session: agents chunk 3b-3e — devin
+- `Devin.kt`: `config.json` Claude-layout hooks via `ClaudeHooks.formFor("devin")` (Devin event rows, `timeout` s),
+  Windows `%APPDATA%` redirect for the XDG default, `mcp_config.json` stdio entry, `--yes` print-only plugin offer,
+  `hooksDoc` for `plugins/devin/hooks.json`; registered in `Agents`.
+- Tests: 5 (3 ported, 2 own); plugin_manifest_matches_the_installer reads the Rust tree's plugins/devin, not ported.
+- Found: codewhale and kimi edit TOML `[[array-of-tables]]` keeping comments (toml_edit); the Kotlin side has only
+  `rtok-mcp` `TomlEdit` (one `[a.b]` table). They need a lossless array-of-tables editor first (own module).
+- Stop point: next = commandcode, copilot (JSON), then the TOML array-of-tables editor, codewhale, kimi.
