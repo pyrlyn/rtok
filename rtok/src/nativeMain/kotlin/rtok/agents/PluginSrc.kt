@@ -80,9 +80,16 @@ object PluginSrc {
         if (exists(versioned)) return versioned
         val dirs = runCatching { listDir(store) }.getOrDefault(emptyList()).map { join(store, it) }.filter(::isDir)
         return dirs
-            .sortedWith(compareBy(nullsFirst(), { d: String -> VersionKey.parse(fileName(d).orEmpty().removePrefix("v")) }).thenBy { fileName(it) })
+            .sortedWith(VERSION_DIR_ORDER)
             .asReversed()
             .map { joinRel(it, rel) }
             .firstOrNull(::exists)
     }
 }
+
+/**
+ * mod.rs `version_dir_key`: a `0.10.0` or `v0.10.0` directory after `0.9.0` (SemVer precedence, not name order); a name
+ * that does not parse sorts before every version, then by name. The newest is last.
+ */
+val VERSION_DIR_ORDER: Comparator<String> =
+    compareBy(nullsFirst(), { d: String -> VersionKey.parse(fileName(d).orEmpty().removePrefix("v")) }).thenBy { fileName(it) }

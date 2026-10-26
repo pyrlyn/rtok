@@ -801,3 +801,14 @@ Next, in order:
 - Tests: AgentsJsonTest 2, AgentsCliSpec (info/list `--json` against Windsurf).
 - Stop point: next `rtok agents outdated` / `update --check` (outdated.rs, with `plugin_version`/`plugin_source` in
   the JSON rows), then sessions, usage, junk, whoami, show, status, send, inbox, `--project`, restart.rs.
+
+## Session: agents — `rtok agents outdated` / `update --check` (outdated.rs, plugin_install.rs)
+- `rtok.agents.PluginInstall` (`install_probe`: the receipt row first, else each host's layout table: Claude's record,
+  the Codex/CodeBuddy cache by SemVer (T628), linked trees, Gemini/Copilot manifest scans, Kimi, VS Code, Antigravity;
+  `manifestVersion`, `cacheProbe`). `VERSION_DIR_ORDER` (mod.rs `version_dir_key`) now shared with `ketchStorePlugin`.
+- `rtok.agents.Outdated`: `report`, `installedPlugin`, `pluginStatus` (T382 note), `human` table, compact `json`,
+  `EXIT_OUTDATED` 10. CLI `rtok agents outdated [host] [--cli|--desktop|--all] [--json] [--exit-code]` and
+  `update --check`. The `plugin` row of list/info carries the note; JSON rows carry `plugin_version`/`plugin_source`.
+- Tests: OutdatedTest 8, AgentsCliSpec +1.
+- Stop point: next sessions, usage, junk, whoami, show, status, send, inbox, `--project`, restart.rs.
+
