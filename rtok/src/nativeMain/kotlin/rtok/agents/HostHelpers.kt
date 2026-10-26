@@ -28,6 +28,9 @@ object HookLine {
     /** The command written into hook lines; on unix always the bare name (hooks resolve it in a shell). */
     fun rtokCommand(): String = RTOK.command
 
+    /** claude/mod.rs `desktop_command`: the running binary's absolute path, for apps started without a shell PATH. */
+    fun desktopCommand(): String = rtok.sys.currentExe() ?: rtokCommand()
+
     /** Binary token for hook command lines (quoted when needed). */
     fun rtokHookBin(): String = shellQuoteBin(rtokCommand())
 
