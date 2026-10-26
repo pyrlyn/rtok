@@ -18,7 +18,7 @@ internal object Migrations {
     fun bridgeLegacy(db: Db) {
         db.exec(CREATE)
         val names = try { db.query("SELECT name FROM schema_migrations ORDER BY name") { it.string(0) } }
-            catch (e: SqliteException) { if ((e.message ?: "").contains("no such table")) return else throw e }
+            catch (e: DbException) { if ((e.message ?: "").contains("no such table")) return else throw e }
         for (name in names) {
             val prefix = name.substringBefore('.')
             val version = EMBEDDED_MIGRATIONS.map { versionOf(it.first) }.firstOrNull { it.substringBefore('_') == prefix }
@@ -39,7 +39,7 @@ internal object Migrations {
     }
 
     private fun runOne(db: Db, version: String, sql: String, dir: String) = db.transaction {
-        try { db.exec(sql) } catch (e: SqliteException) { throw StoreException("Failed to run $dir with: ${e.message}", e) }
+        try { db.exec(sql) } catch (e: DbException) { throw StoreException("Failed to run $dir with: ${e.message}", e) }
         db.execute("INSERT INTO __diesel_schema_migrations (version) VALUES (?)", version)
     }
 

@@ -23,6 +23,7 @@ Plan and per-phase checklist: [port-plan.md](port-plan.md).
 | crates/rtok-store agents, worktree_claims, worktree_pending, note_files, host_usage | `Agents.kt`, `WorktreeClaims.kt`, `WorktreePending.kt`, `NoteFiles.kt`, `HostUsage.kt`, `SqlExt.kt` | ✅ | 14 → 14, 8 → 9, 4 → 4, 0 → 1 |
 | crates/rtok-store projects, symbols (+ symbol-root retention) | `Projects.kt`, `Symbols.kt` | ✅ | 7 → 7, 10 → 10, tests_schema 9 → 7 (+archive purge) |
 | crates/rtok-store project_links | `ProjectLinks.kt` | ✅ | 5 → 5 |
+| (adapters) SQLite driver, Clikt | `Db.kt` + `driver/Sqlite3Db.kt`; `cli/Mod.kt` + `cli/clikt/CliktAdapter.kt` | ✅ | new: 1 + 1 |
 | crates/rtok-store messages | `Messages.kt` | ✅ | 7 → 8 |
 | humantime crate (dependency) | `libs/humantime` (`:humantime`) | ✅ own module | 0 → 3 |
 | crates/rtok-store tests_archive (archive rows, retention, schema drift vs schema_snapshot.txt) | `ArchiveTest.kt` + fixtures | ✅ | 22 → 29 |
@@ -47,7 +48,7 @@ Plan and per-phase checklist: [port-plan.md](port-plan.md).
 | src/web, agents/junk_web.rs, `rtok web/tui/dashboard` | – | ❌ excluded (web) | |
 | tests/*.rs (138 integration files) | `:rtok` commonTest | ⬜ | 0 / ~138 files |
 
-Totals: 347 Kotlin tests passing on macosArm64 (see port-plan.md for the per-phase table).
+Totals: 349 Kotlin tests passing on macosArm64 (see port-plan.md for the per-phase table).
 
 | Rust | Kotlin | Status | Tests |
 |---|---|---|---|
