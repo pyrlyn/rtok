@@ -1,7 +1,7 @@
 // Driver-neutral SQL connection: the Kotlin stand-in for diesel's SqliteConnection. Statements are
-// plain SQL with `?` parameters. The store and its tests see only `Db` / `Row`; the SQLite
-// binding is one adapter (`driver/Sqlite3Db.kt`), chosen through `DbDriver`.
-package rtok.store
+// plain SQL with `?` parameters. Code that stores data sees only `Db` / `Row`; a SQLite binding is
+// an adapter module (`libs/db-room`) that the application installs as `Db.driver`.
+package rtok.db
 
 import kotlin.concurrent.AtomicInt
 
@@ -59,8 +59,13 @@ interface Db : AutoCloseable {
     }
 
     companion object {
-        /** The driver every `Db.open` uses; the system libsqlite3 unless replaced. */
-        var driver: DbDriver = rtok.store.driver.Sqlite3Db.Driver
+        private var installed: DbDriver? = null
+        /** The driver every `Db.open` uses; the application (or a test) installs it once at start. */
+        var driver: DbDriver
+            get() = installed ?: error("no SQLite driver installed: set Db.driver (see libs/db-room)")
+            set(v) { installed = v }
+        /** Install [d] unless a driver is already set. */
+        fun installIfAbsent(d: DbDriver) { if (installed == null) installed = d }
         fun open(path: String): Db = driver.open(path)
         fun version(): String = driver.version()
     }

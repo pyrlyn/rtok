@@ -2,6 +2,8 @@
 // canonical root so the symbol index never mixes repos.
 package rtok.store
 
+import rtok.db.*
+
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import rtok.sys.canonicalize

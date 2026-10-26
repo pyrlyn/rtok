@@ -1,5 +1,7 @@
 package rtok.store
 
+import rtok.db.*
+
 import rtok.sys.*
 import kotlin.test.*
 
@@ -59,7 +61,8 @@ class HandleTest {
         removeDirAll(dir)
     }
 
-    private fun preT352(db: String) { Db.open(db).use { it.exec("CREATE TABLE t (x INTEGER)") } }
+    /** A file without auto-vacuum, as SQLite builds with the stock default (0) created it. The bundled SQLite defaults to 1, so it is spelled out. */
+    private fun preT352(db: String) { Db.open(db).use { it.exec("PRAGMA auto_vacuum = NONE; CREATE TABLE t (x INTEGER)") } }
 
     @Test fun anExistingStoreConvertsOnce() {
         val dir = tmpDir("t352-convert"); val db = "$dir/old.db"; preT352(db)

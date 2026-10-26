@@ -33,6 +33,7 @@ Plan and per-phase checklist: [port-plan.md](port-plan.md).
 | src/plugins/mod.rs registry, measure, proxy, render::plugins_table | `rtok/plugins/Registry.kt`, `Manifests.kt`, `Render.kt`, `ShellWord.kt` | ✅ | 3 → 4 |
 | src/project.rs | `rtok/Project.kt` (+ test `Vfs`) | ✅ | 13 → 13 |
 | toml crate (dependency) | `libs/toml` interface + `libs/toml-ktoml` (ktoml adapter) | ✅ | 0 → 12 |
+| diesel/libsqlite3-sys (dependency) | `libs/db` interface + `libs/db-room` (androidx.sqlite bundled) | ✅ | 0 → 5 |
 | crates/rtok-sys | `:rtok-sys` | ⬜ (module currently hosts `rtok.sys.Fs`, the fs-kit replacement) | |
 | fs-kit (external crate) path helpers | `rtok-sys/nativeMain/Fs.kt` | 🟡 normalize/canon/ancestors/starts_with | via root tests |
 | crates/rtok-mcp | `:rtok-mcp` | ⬜ | |
@@ -53,7 +54,7 @@ Plan and per-phase checklist: [port-plan.md](port-plan.md).
 | src/web, agents/junk_web.rs, `rtok web/tui/dashboard` | – | ❌ excluded (web) | |
 | tests/*.rs (138 integration files) | `:rtok` commonTest | ⬜ | 0 / ~138 files |
 
-Totals: 403 Kotlin tests passing on macosArm64 (see port-plan.md for the per-phase table).
+Totals: 406 Kotlin tests passing on macosArm64 (see port-plan.md for the per-phase table).
 
 | Rust | Kotlin | Status | Tests |
 |---|---|---|---|

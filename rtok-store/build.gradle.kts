@@ -19,15 +19,14 @@ val genMigrations by tasks.registering {
     }
 }
 configure<KotlinMultiplatformExtension> {
-    targets.withType<KotlinNativeTarget>().configureEach {
-        compilations.getByName("main").cinterops.create("sqlite3") { definitionFile.set(project.file("src/nativeInterop/cinterop/sqlite3.def")) }
-    }
     sourceSets.commonMain {
         kotlin.srcDir(genMigrations.map { genDir.get() })
-        dependencies { api(project(":rtok-plugin-sdk")); api(project(":rtok-sys")); implementation(project(":humantime")) }
+        dependencies { api(project(":db")); api(project(":rtok-plugin-sdk")); api(project(":rtok-sys")); implementation(project(":humantime")) }
     }
 }
 // schema.rs + schema_snapshot.txt copied from the Rust crate: the drift test checks the Kotlin-migrated
 // database against the same golden files, so both builds keep one on-disk schema.
+// Tests run on the same adapter the app installs; store code itself sees only rtok.db.
+configure<KotlinMultiplatformExtension> { sourceSets.commonTest.dependencies { implementation(project(":db-room")) } }
 val storeFixtures = layout.projectDirectory.dir("src/nativeTest/fixtures").asFile.absolutePath
 tasks.withType<org.jetbrains.kotlin.gradle.targets.native.tasks.KotlinNativeTest>().configureEach { environment("RTOK_FIXTURES", storeFixtures) }

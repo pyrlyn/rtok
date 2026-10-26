@@ -2,6 +2,8 @@
 // from — one scan of a root (or a batch of names) each, never a query per symbol.
 package rtok.store
 
+import rtok.db.*
+
 import rtok.sys.compareUtf8
 
 private const val DEF_COLUMNS = "path, name, kind, line, end_line, signature, content_hash, start_byte, end_byte"

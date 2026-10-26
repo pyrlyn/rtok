@@ -1,5 +1,7 @@
 package rtok.store
 
+import rtok.db.*
+
 import kotlinx.serialization.json.*
 import rtok.plugin.sdk.NewObservation
 import rtok.sys.*

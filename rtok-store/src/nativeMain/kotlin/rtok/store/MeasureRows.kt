@@ -1,6 +1,8 @@
 // Port of crates/rtok-store/src/measure_rows.rs.
 package rtok.store
 
+import rtok.db.*
+
 import rtok.plugin.sdk.Measurement
 
 fun Store.insertMeasurement(session: String, m: Measurement) = insertMeasurementOnce(session, m, null)

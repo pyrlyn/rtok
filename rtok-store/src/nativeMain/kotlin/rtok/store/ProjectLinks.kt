@@ -2,6 +2,8 @@
 // the graph scope they define (the selected project plus everything reachable).
 package rtok.store
 
+import rtok.db.*
+
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 

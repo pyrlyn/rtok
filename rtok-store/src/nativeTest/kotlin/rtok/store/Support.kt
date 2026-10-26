@@ -1,6 +1,13 @@
 package rtok.store
 
+import rtok.db.*
+
 import rtok.sys.*
+
+/** Every test binary installs the app's SQLite adapter before any test runs. */
+@OptIn(ExperimentalStdlibApi::class)
+@EagerInitialization
+private val installDriver = Db.installIfAbsent(rtok.db.room.RoomDbDriver)
 
 private var nextTmp = 0
 /** Port of support.rs `tmp_dir`: a fresh, empty directory under `$TMPDIR`. */

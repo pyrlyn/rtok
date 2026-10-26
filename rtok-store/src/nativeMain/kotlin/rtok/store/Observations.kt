@@ -1,6 +1,8 @@
 // Port of crates/rtok-store/src/observations.rs and archive_summaries.rs.
 package rtok.store
 
+import rtok.db.*
+
 import rtok.plugin.sdk.NewObservation
 import rtok.plugin.sdk.ObsHit
 

@@ -3,6 +3,8 @@
 @file:OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
 package rtok.store
 
+import rtok.db.*
+
 import kotlinx.cinterop.*
 import platform.posix.*
 import rtok.sys.*

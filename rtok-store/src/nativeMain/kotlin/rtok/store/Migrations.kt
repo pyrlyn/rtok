@@ -3,6 +3,8 @@
 // bridge from the pre-T163.4 `schema_migrations` (`NNNN.sql`).
 package rtok.store
 
+import rtok.db.*
+
 internal object Migrations {
     private const val CREATE = "CREATE TABLE IF NOT EXISTS __diesel_schema_migrations (\n" +
         "       version VARCHAR(50) PRIMARY KEY NOT NULL,\n" +

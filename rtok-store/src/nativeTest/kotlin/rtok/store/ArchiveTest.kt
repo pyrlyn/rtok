@@ -1,5 +1,7 @@
 package rtok.store
 
+import rtok.db.*
+
 import kotlinx.cinterop.toKString
 import platform.posix.getenv
 import platform.posix.link

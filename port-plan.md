@@ -92,6 +92,7 @@ jiff/humantime→kotlinx-datetime; shlex→own; wasmi→not portable (see risks)
 - [x] embed — 16 (+1 slot/sign scheme check)
 - [x] docs/store.md: layout, driver adapter, schema-drift check, limitations
 - [x] config TOML via ktoml (Ivan approved) behind `libs/toml` (`TomlReader`/writer interface) + `libs/toml-ktoml` adapter; own Toml.kt and line editor removed (branch eval/ktoml, rebased + fast-forwarded) — toml-ktoml 12, rtok-config 92 → 91
+- [x] SQLite via androidx.sqlite (Room KMP driver layer, bundled) behind `libs/db` interface + `libs/db-room` adapter; cinterop removed; schema drift tests unchanged and passing — db-room 5 (2 moved from store DbTest)
 - [x] tooling: Dokka 2 API docs, one root convention, `./gradlew dokkaGenerate` → `build/dokka/html` (docs/api-docs.md); not part of build/test
 
 ### Phase 5 — reduction plugins (src/plugins: compress, json_tree, toon, read, cmd, inject, guard, memory, measure, docs, archive, checkpoint)
@@ -151,7 +152,8 @@ jiff/humantime→kotlinx-datetime; shlex→own; wasmi→not portable (see risks)
 | 4 | plugin-sdk 9, sha256 1, db 2, handle 10, sanitize 11, hook_fields 7, store 31, otel 8, tasks 7, retention 5, archive 29, agents 14, worktree 9, note_files+host_usage 5, humantime 3, messages 8, projects 7, symbols 10, retention +2, sys text 2, project_links 5, driver 1, cli adapter 1, graph 7, docs 2, embed 17 | 213 |
 | 5 (partial) | registry 3 (+1 skip_word), project 13 | 17 |
 | tooling | toml-ktoml 12, rtok-config −1 (own TOML parser test removed) | 11 |
-| **total** | | **403** |
+| tooling | db-room 5 (+3; 2 moved from store) | 3 |
+| **total** | | **406** |
 
 ## Test-porting
 Each Rust `#[cfg(test)]` module → `src/commonTest` in the matching module; `tests/*.rs` (138 files)

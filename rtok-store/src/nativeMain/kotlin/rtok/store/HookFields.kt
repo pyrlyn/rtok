@@ -2,6 +2,8 @@
 // `hook_sessions`, the rest of the body in `call_io`; read back whole.
 package rtok.store
 
+import rtok.db.*
+
 import kotlinx.serialization.json.*
 
 internal object HookFields {

@@ -1,6 +1,8 @@
 // Port of crates/rtok-store/src/task_claims.rs and task_counters.rs.
 package rtok.store
 
+import rtok.db.*
+
 data class TaskClaim(val project: String, val taskId: String, val agentId: String, val title: String, val since: Long)
 
 fun Store.upsertTaskClaim(project: String, taskId: String, agent: String, title: String) {

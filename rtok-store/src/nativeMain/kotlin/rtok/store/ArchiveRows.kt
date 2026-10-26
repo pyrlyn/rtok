@@ -1,6 +1,8 @@
 // Port of crates/rtok-store/src/archive_rows.rs (+ the archive helpers in lib.rs).
 package rtok.store
 
+import rtok.db.*
+
 import platform.posix.unlink
 import rtok.plugin.sdk.ArchiveDecision
 import rtok.plugin.sdk.Measurement

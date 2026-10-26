@@ -3,6 +3,8 @@
 @file:OptIn(kotlin.uuid.ExperimentalUuidApi::class)
 package rtok.store
 
+import rtok.db.*
+
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import rtok.plugin.sdk.debugStr

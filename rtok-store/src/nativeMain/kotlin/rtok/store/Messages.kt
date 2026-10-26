@@ -3,6 +3,8 @@
 @file:OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
 package rtok.store
 
+import rtok.db.*
+
 import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
