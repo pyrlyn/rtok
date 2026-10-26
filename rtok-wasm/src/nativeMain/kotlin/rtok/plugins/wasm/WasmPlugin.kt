@@ -30,6 +30,7 @@ import wasm.WasmMemory
 import wasm.WasmRuntime
 import wasm.WasmType.I32
 import wasm.WasmValue
+import wasm.readPacked
 
 /**
  * Fuel per guest call (about one unit per call or loop turn). Without a budget a guest `loop`
@@ -236,14 +237,3 @@ private fun memRead(
     ptr: WasmValue,
     len: WasmValue,
 ): ByteArray = (mem ?: throw WasmException("guest memory export missing")).read(ptr.i32(), len.i32())
-
-/** Reads the guest's packed `(ptr, len)` (low 32 bits pointer, high 32 bits length). */
-internal fun readPacked(
-    mem: WasmMemory?,
-    packed: Long,
-): ByteArray {
-    val (ptr, len) = unpackI64(packed)
-    return (mem ?: throw WasmException("guest memory export missing")).read(ptr, len)
-}
-
-internal fun unpackI64(packed: Long): Pair<Int, Int> = packed.toInt() to (packed ushr 32).toInt()

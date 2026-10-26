@@ -120,9 +120,4 @@ class WasmPluginTest {
         rtok.sys.writeBytes("$tmp/spin.wasm", ByteArray(m.size) { m[it].toByte() })
         assertFailsWith<WasmException> { WasmPlugin.loadWithFuel("$tmp/spin.wasm", ChasmRuntime, env, 10_000) }
     }
-
-    @Test fun unpackSplitsPointerAndLength() {
-        assertEquals(16 to 4, unpackI64((4L shl 32) or 16L))
-        assertEquals(-1 to 0, unpackI64(0xffff_ffffL))
-    }
 }
