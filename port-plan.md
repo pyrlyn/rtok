@@ -268,3 +268,13 @@ Next, in order:
 - Stop point: next the mod.rs tools (`door`, symbol/callers/impact/explore + `assemble_explore`, `record_mode_row`;
   enable the deferred cochange `impact` partner test), then events, blast, follow, drill, scope, diff, export, health,
   lsp, watch, review, draw, projects, jobs, status; then the rest of the list above.
+
+## Session 2026-10-26 (evening) — graph tools door, symbol, callers
+- `Tools.kt` (mod.rs: `text_or`, `lsp_or_tags`, `door`, `record_mode_row`, `tags_kind`/`text_kind`, `cap`/`cap_kind`,
+  `symbol`/`symbol_tags`/`symbol_by_id`, `defs_text`, `body_lines`, `def_id`/`def_head`/`parse_symbol_id`, ambiguity
+  marks, `callers`/`callers_tags`). The server side is an `LspBackend` interface (`LspBackend.None` until lsp.rs).
+  7 tools tests + the concurrent-first-request capability test (test `support.parallel`).
+- Stop point: next `impact` (`impact_filtered`/`impact_tags`, `with_cochange`; enable the deferred cochange impact
+  partner test), then `explore` (`assemble_explore`, tags `ExploreParts`), `outline`, `call` dispatch; then events,
+  blast, follow, drill, scope, diff, export, health, lsp, watch, review, draw, projects, jobs, status; then the rest of
+  the list above.
