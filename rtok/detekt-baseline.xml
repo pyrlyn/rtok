@@ -45,6 +45,7 @@
     <ID>CyclomaticComplexMethod:Compressor.kt:Compressor$private suspend fun tryRun: Outcome</ID>
     <ID>CyclomaticComplexMethod:Dead.kt:Dead$fun candidates: List&lt;DeadRow></ID>
     <ID>CyclomaticComplexMethod:Diffs.kt:Diffs$internal fun parse: Parsed?</ID>
+    <ID>CyclomaticComplexMethod:Dispatch.kt:Dispatch$fun call: String</ID>
     <ID>CyclomaticComplexMethod:Dispatch.kt:fun dispatch: ByteArray</ID>
     <ID>CyclomaticComplexMethod:Dispatch.kt:internal fun capBudget: String</ID>
     <ID>CyclomaticComplexMethod:Dispatch.kt:internal fun dispatchOwnedStrict: ByteArray</ID>
@@ -56,6 +57,7 @@
     <ID>CyclomaticComplexMethod:Extract.kt:internal fun removedPaths: List&lt;String></ID>
     <ID>CyclomaticComplexMethod:Extract.kt:internal fun worthParsing: Boolean</ID>
     <ID>CyclomaticComplexMethod:Filter.kt:Filter$fun runWithStore: String</ID>
+    <ID>CyclomaticComplexMethod:Follow.kt:Follow$fun follow: Followed</ID>
     <ID>CyclomaticComplexMethod:Formatters.kt:Formatters$internal fun format: String?</ID>
     <ID>CyclomaticComplexMethod:Formatters.kt:Formatters$internal fun gitLog: String?</ID>
     <ID>CyclomaticComplexMethod:Formatters.kt:Formatters$private fun peelMiseExec: List&lt;String>?</ID>
@@ -84,6 +86,7 @@
     <ID>CyclomaticComplexMethod:Python.kt:Python$fun pytest: String?</ID>
     <ID>CyclomaticComplexMethod:Rank.kt:Rank$fun build: FileGraph</ID>
     <ID>CyclomaticComplexMethod:Read.kt:fun readWith: String</ID>
+    <ID>CyclomaticComplexMethod:Refs.kt:Refs$private fun npm</ID>
     <ID>CyclomaticComplexMethod:Resolve.kt:Resolve$fun rankName: ResolveHit</ID>
     <ID>CyclomaticComplexMethod:Rules.kt:Rules$internal fun parseDiag: Triple&lt;String, String, String>?</ID>
     <ID>CyclomaticComplexMethod:Rules.kt:Rules$internal fun parseLocated: Triple&lt;String, String, String>?</ID>
@@ -142,6 +145,7 @@
     <ID>LoopWithTooManyJumpStatements:Extract.kt:for</ID>
     <ID>LoopWithTooManyJumpStatements:Extract.kt:while</ID>
     <ID>LoopWithTooManyJumpStatements:Files.kt:for</ID>
+    <ID>LoopWithTooManyJumpStatements:Follow.kt:Follow$for</ID>
     <ID>LoopWithTooManyJumpStatements:Formatters.kt:Formatters$for</ID>
     <ID>LoopWithTooManyJumpStatements:Formatters.kt:Formatters$while</ID>
     <ID>LoopWithTooManyJumpStatements:Git.kt:Git$for</ID>
@@ -159,6 +163,7 @@
     <ID>LoopWithTooManyJumpStatements:Portable.kt:Import$for</ID>
     <ID>LoopWithTooManyJumpStatements:Project.kt:for</ID>
     <ID>LoopWithTooManyJumpStatements:Rank.kt:Rank$for</ID>
+    <ID>LoopWithTooManyJumpStatements:Refs.kt:Refs$for</ID>
     <ID>LoopWithTooManyJumpStatements:Resident.kt:Resident$while</ID>
     <ID>LoopWithTooManyJumpStatements:Rules.kt:Rules$for</ID>
     <ID>LoopWithTooManyJumpStatements:Rules.kt:Rules$while</ID>
@@ -831,6 +836,8 @@
     <ID>ReturnCount:Queue.kt:Queue$internal fun admit: Admit</ID>
     <ID>ReturnCount:Rank.kt:FileGraph$internal fun powerIteration: List&lt;Double></ID>
     <ID>ReturnCount:Read.kt:fun readWith: String</ID>
+    <ID>ReturnCount:Refs.kt:Refs$internal fun expand: List&lt;String></ID>
+    <ID>ReturnCount:Refs.kt:Refs$internal fun pep508File: String?</ID>
     <ID>ReturnCount:Resident.kt:Resident$fun bindPrivate: Int?</ID>
     <ID>ReturnCount:Resident.kt:Resident$fun serve</ID>
     <ID>ReturnCount:Resolve.kt:Resolve$fun rankName: ResolveHit</ID>
@@ -904,6 +911,8 @@
     <ID>TooGenericExceptionCaught:Dispatch.kt:e: Exception</ID>
     <ID>TooGenericExceptionCaught:Dispatch.kt:e: Throwable</ID>
     <ID>TooGenericExceptionCaught:Extract.kt:CommandExtractor$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:Follow.kt:Follow$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:Refs.kt:Refs.Reader$e: Exception</ID>
     <ID>TooGenericExceptionCaught:Rules.kt:Rules$e: Exception</ID>
     <ID>TooGenericExceptionCaught:Spec.kt:e: Exception</ID>
     <ID>TooGenericExceptionCaught:Threads.kt:e: Throwable</ID>
@@ -946,6 +955,7 @@
     <ID>TooManyFunctions:ProjectTest.kt:ProjectTest</ID>
     <ID>TooManyFunctions:RankTest.kt:RankTest</ID>
     <ID>TooManyFunctions:ReadTest.kt:ReadTest</ID>
+    <ID>TooManyFunctions:Refs.kt:Refs</ID>
     <ID>TooManyFunctions:Roots.kt:Roots</ID>
     <ID>TooManyFunctions:Rules.kt:Rules</ID>
     <ID>TooManyFunctions:RulesTest.kt:RulesTest</ID>
