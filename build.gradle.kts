@@ -28,6 +28,18 @@ subprojects {
     extensions.configure<org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension> {
         macosArm64()
         if (providers.gradleProperty("rtok.allTargets").orNull == "true") { linuxX64(); linuxArm64() }
+        // Release-size options (docs/build-speed.md "Release binary size"): RELEASE binaries only;
+        // debug and test binaries are untouched. K/N release already runs LTO (whole-program LLVM opt).
+        // -Prtok.releaseSize=none|all|small,strip,latin1 picks a subset (for measuring); default all.
+        val sizeOpts = (providers.gradleProperty("rtok.releaseSize").orNull ?: "all").split(',').map { it.trim() }.toSet()
+        fun size(o: String) = "all" in sizeOpts || o in sizeOpts
+        targets.withType<org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget>().configureEach {
+            binaries.matching { it.buildType == org.jetbrains.kotlin.gradle.plugin.mpp.NativeBuildType.RELEASE && it !is org.jetbrains.kotlin.gradle.plugin.mpp.TestExecutable }.configureEach {
+                if (size("small")) freeCompilerArgs += "-Xbinary=smallBinary=true"
+                if (size("latin1")) freeCompilerArgs += "-Xbinary=latin1Strings=true"
+                if (size("strip")) linkerOpts(if (konanTarget.family == org.jetbrains.kotlin.konan.target.Family.OSX) listOf("-Wl,-dead_strip", "-Wl,-x", "-Wl,-S") else listOf("-Wl,--gc-sections", "-Wl,-s"))
+            }
+        }
         sourceSets.commonMain.dependencies {
             implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.12.0")
         }
