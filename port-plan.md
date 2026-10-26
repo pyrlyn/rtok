@@ -115,7 +115,7 @@ jiff/humantime→kotlinx-datetime; shlex→own; wasmi→not portable (see risks)
 - [x] inject (523) — 8
 - [x] guard (2844) — 45 of 53 (+1 check, +1 types.rs view key); grep_symbol 8 pending (graph/tree-sitter); docs/guard.md; read::outline markdown digest ported (no tree-sitter needed); cmd `sh_quote`/`wrap_quote` in `plugins/cmd/Run.kt`
 - [ ] read (4334) — 101
-- [ ] cmd (10098) — 207; 🚧 15 so far: logfmt 8, gh 7, sh_quote/wrap_quote (docs/cmd.md)
+- [ ] cmd (10098) — 207; 🚧 149 so far: rules 50, formatters 25 (all cmd_golden), compact 18, grep 10, logfmt 8, gh 7, loops 7, python 7, bounded 7 (rstest cases folded), diffs 6, mise 4; pending filter, run, hook; catfile blocked on tree-sitter outline + read cache
 - [ ] memory (5419) — 127
 - [ ] graph (20084) — 275
 - [ ] wasm host (478) — 3; needs a WASM runtime library → ask Ivan before adding one
