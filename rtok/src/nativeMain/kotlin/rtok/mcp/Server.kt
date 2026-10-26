@@ -1,5 +1,5 @@
 // The `rtok mcp` request handler (mcp.rs `Server`): the listed tools, JSON-RPC dispatch,
-// `tools/call` validation and recording. Agent, worktree, message and task tools land with
+// `tools/call` validation and recording, and the agent tools (AgentSession). Worktree and task tools land with
 // those features.
 package rtok.mcp
 
@@ -26,8 +26,8 @@ class Listed(
 class Server(
     val cx: Runtime,
     val listed: List<Listed>,
-    /** The registered cwd of the agent this process serves (mcp.rs `caller_dir`); none until the agent link lands. */
-    private val callerDir: () -> String? = { null },
+    /** The agent this process serves (T283.1) and its registered cwd (T923). */
+    val agents: AgentSession = AgentSession(cx),
 ) : AutoCloseable {
     /** `initialize` declared `capabilities.roots`. */
     private val rootsCapable = AtomicInt(0)
@@ -71,6 +71,8 @@ class Server(
     private fun initialize(params: JsonObject): JsonObject {
         val roots = (params["capabilities"] as? JsonObject)?.get("roots")
         if (roots != null && roots !is JsonNull) rootsCapable.value = 1
+        // T283.1: a first attempt now; `whoami` retries while hooks have not registered.
+        agents.link()
         return Protocol.serverInfo(Protocol.negotiateProtocolVersion(params["protocolVersion"]), rtok.VERSION)
     }
 
@@ -133,30 +135,10 @@ class Server(
             when {
                 found == null -> Protocol.unknownTool(name).message.orEmpty() to false
                 missing != null -> "invalid params: $missing" to false
-                else -> invokeRooted(name, args)
+                else -> Paths.invoke(cx, agents, name, args)
             }
         runCatching { Record.call(cx, found?.plugin ?: "archive", name, args, answer.first) }
         return answer
-    }
-
-    /** [Tools.invokeText] with `read`/`search`/`tree`/`outline` paths resolved against the caller's root (T923). */
-    private fun invokeRooted(
-        name: String,
-        args: JsonObject,
-    ): Pair<String, Boolean> {
-        if (!Paths.isRooted(name)) return Tools.invokeText(cx, name, args)
-        val guard =
-            callerDir()?.let {
-                rtok.plugins.read.Roots
-                    .enterCaller(rtok.sys.cwd(), it)
-            }
-        try {
-            val anchored = Paths.anchorOutline(name, args)
-            val (text, ok) = Tools.invokeText(cx, name, anchored)
-            return Paths.annotate(name, anchored, text, ok, guard != null) to ok
-        } finally {
-            guard?.close()
-        }
     }
 
     override fun close() = cx.close()
@@ -165,7 +147,9 @@ class Server(
         const val ROOTS_ID = "rtok-roots"
 
         /** The tools every server lists, ahead of the plugins' own. */
-        private val BUILTIN = listOf(Listed("archive", Tools.EXPAND), Listed("mcp", Tools.PING))
+        private val BUILTIN =
+            listOf(Listed("archive", Tools.EXPAND), Listed("mcp", Tools.PING), Listed("mcp", AgentTools.WHOAMI)) +
+                AgentTools.DEFS.map { Listed("mcp", it) }
 
         /** Opens one session per process: `read_cache` rows are keyed by session and never expire. */
         fun open(
