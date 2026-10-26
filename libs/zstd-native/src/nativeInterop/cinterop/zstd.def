@@ -1,0 +1,4 @@
+headers = rtok_zstd.h
+headerFilter = rtok_zstd.h
+package = rtok.zstd.native.c
+staticLibraries = librtok_zstd.a
