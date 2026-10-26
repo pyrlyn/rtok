@@ -8,7 +8,7 @@ import rtok.plugin.sdk.Plugin
 import rtok.pluginsTable
 
 /** Every compiled-in plugin, in dispatch order. Grows as Phase 5 ports each plugin. */
-fun all(): List<Plugin> = listOf(MeasurePlugin, rtok.plugins.jsontree.JsonTreePlugin, rtok.plugins.archive.ArchivePlugin, ProxyPlugin, rtok.plugins.toon.ToonPlugin)
+fun all(): List<Plugin> = listOf(MeasurePlugin, rtok.plugins.jsontree.JsonTreePlugin, rtok.plugins.archive.ArchivePlugin, ProxyPlugin, rtok.plugins.toon.ToonPlugin, rtok.plugins.compress.CompressPlugin)
 
 /** Compiled-in plugins plus their enabled state from config. */
 class Registry private constructor(private val plugins: List<Pair<Plugin, Boolean>>) {
