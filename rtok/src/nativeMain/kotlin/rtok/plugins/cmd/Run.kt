@@ -260,7 +260,20 @@ internal fun emitFilteredTo(
     val cx = runCatching { Runtime.open(cfg, "run") }.getOrElse { return writeRaw() }
     cx.use {
         identicalResult(cx, "cmd", body, agent)?.let { return writeText(it) }
-        // The `cat <file>` re-read delta (Rust `catfile::reread_key` + `read::cache`) joins with the read plugin.
+        // T674: a file or line range printed again: unchanged is a pointer, changed a diff against what this session
+        // saw. Main window only: a sub-agent never saw the parent's copy (T127).
+        if (agent == null && exit == 0) {
+            CatFile.rereadKey(Formatters.familyArgv(argv))?.let { (path, key) ->
+                val host = rtok.plugin.sdk.Ctx(cx)
+                rtok.plugins.read.ReadCache
+                    .hit(host, key, path, body, false)
+                    ?.let { return writeText(it) }
+                runCatching {
+                    rtok.plugins.read.ReadCache
+                        .remember(host, key, body)
+                }
+            }
+        }
         val id = hexSha256(body)
         val lines = if (body.isEmpty()) 0u else before.rustLines().size.toUInt()
         val pointerLine = trailer(id, lines)
