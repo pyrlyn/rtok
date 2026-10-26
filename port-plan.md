@@ -300,3 +300,10 @@ Next, in order:
 - Stop point: next diff, lsp, watch, review (+ Scope.reviewGit), draw; wire `rtok graph` into CLI; then grep_symbol, catfile, cat re-read, docs zstd, memory status, sync --stat, MCP, otel, worktree, task, batch, bench, hook dispatcher tests; release re-measure, completeness pass.
   a project scope), then `call` dispatch (needs scope); then
   follow, drill, scope, diff, export, health, lsp, watch, review, draw, projects, jobs (needs projects); then the rest.
+
+## Session 2026-10-26 (night) — graph diff
+- `Diff.kt` (diff.rs: git-side extraction via one `git cat-file --batch` fed from a temp file, index as the working
+  side, changed/added/removed/moved/renamed, edges with renamed/moved callers followed, not-analysed files, per-project
+  `PROJECT:REF`, saved-export compare + registry links, `DiffReport` JSON/page with `capped`, MCP `call`); 19 tests.
+  `ExportView.parse` now refuses a bare word (kotlinx parses `/a/path` as a primitive; serde does not).
+- Stop point: next lsp, watch, review (+ Scope.reviewGit), draw (SVG); wire `rtok graph` (incl. `diff`) into CLI; then grep_symbol, catfile, cat re-read, docs zstd, memory status, sync --stat, MCP, otel, worktree, task, batch, bench, hook dispatcher tests; release re-measure, completeness pass.

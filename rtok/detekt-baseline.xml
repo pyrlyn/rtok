@@ -46,6 +46,8 @@
     <ID>CyclomaticComplexMethod:Compress.kt:private fun inlineSegments: List&lt;Seg></ID>
     <ID>CyclomaticComplexMethod:Compressor.kt:Compressor$private suspend fun tryRun: Outcome</ID>
     <ID>CyclomaticComplexMethod:Dead.kt:Dead$fun candidates: List&lt;DeadRow></ID>
+    <ID>CyclomaticComplexMethod:Diff.kt:GraphDiffs$internal fun diffSides: GraphDiff</ID>
+    <ID>CyclomaticComplexMethod:Diff.kt:GraphDiffs$private fun gather: Gathered</ID>
     <ID>CyclomaticComplexMethod:Diffs.kt:Diffs$internal fun parse: Parsed?</ID>
     <ID>CyclomaticComplexMethod:Dispatch.kt:Dispatch$fun call: String</ID>
     <ID>CyclomaticComplexMethod:Dispatch.kt:fun dispatch: ByteArray</ID>
@@ -296,6 +298,11 @@
     <ID>MagicNumber:DensityTest.kt:DensityTest$3</ID>
     <ID>MagicNumber:DensityTest.kt:DensityTest$30</ID>
     <ID>MagicNumber:DensityTest.kt:DensityTest$60</ID>
+    <ID>MagicNumber:Diff.kt:GraphDiffs$3</ID>
+    <ID>MagicNumber:DiffTest.kt:DiffTest$1500</ID>
+    <ID>MagicNumber:DiffTest.kt:DiffTest$20</ID>
+    <ID>MagicNumber:DiffTest.kt:DiffTest$300</ID>
+    <ID>MagicNumber:DiffTest.kt:DiffTest$4</ID>
     <ID>MagicNumber:Diffs.kt:Diffs$6</ID>
     <ID>MagicNumber:DiffsTest.kt:8</ID>
     <ID>MagicNumber:DiffsTest.kt:DiffsTest$3</ID>
@@ -749,6 +756,7 @@
     <ID>ReturnCount:Core.kt:GraphCore$internal fun staleBanner: String</ID>
     <ID>ReturnCount:Dead.kt:Affected$fun format: String</ID>
     <ID>ReturnCount:Dead.kt:Dead$fun dead: String</ID>
+    <ID>ReturnCount:Diff.kt:Side$fun body: String?</ID>
     <ID>ReturnCount:Diffs.kt:Diffs$internal fun parse: Parsed?</ID>
     <ID>ReturnCount:Diffs.kt:Diffs$private fun counts: Pair&lt;Int, Int>?</ID>
     <ID>ReturnCount:Dispatch.kt:fun run: ByteArray</ID>
@@ -914,6 +922,7 @@
     <ID>SwallowedException:Extract.kt:e: IoException</ID>
     <ID>SwallowedException:Spec.kt:Invocation$e: rtok.config.ConfigException</ID>
     <ID>SwallowedException:Sync.kt:Sync$e: IoException</ID>
+    <ID>ThrowsCount:Diff.kt:GraphDiffs$private fun eachBlob</ID>
     <ID>ThrowsCount:Expand.kt:Expand$fun parseRange: Pair&lt;Int, Int></ID>
     <ID>ThrowsCount:Expand.kt:Expand$fun resolveId: String</ID>
     <ID>ThrowsCount:Export.kt:ExportView$fun parse: Export</ID>
@@ -938,6 +947,8 @@
     <ID>TooManyFunctions:CompactTest.kt:CompactTest</ID>
     <ID>TooManyFunctions:Compress.kt:rtok.modes.Compress.kt</ID>
     <ID>TooManyFunctions:Dead.kt:Affected</ID>
+    <ID>TooManyFunctions:Diff.kt:GraphDiffs</ID>
+    <ID>TooManyFunctions:DiffTest.kt:DiffTest</ID>
     <ID>TooManyFunctions:Diffs.kt:Diffs</ID>
     <ID>TooManyFunctions:Dispatch.kt:rtok.hooks.Dispatch.kt</ID>
     <ID>TooManyFunctions:DispatchTest.kt:DispatchTest</ID>
