@@ -425,3 +425,10 @@ Next, in order:
 - Deferred (agents chunk 2+): per-host `files`/`markers`/`installed`/`apply`, MCP config paths and writers
   (agents/mcp.rs), `find_bin`/`probe_installed`/`app_version`, plugin surfaces.
 - Stop point: next `rtok mcp ping` (mcp/ping.rs: needs host MCP config paths from agents/mcp.rs), then `rtok agents` CLI.
+
+## Session: mcp ping chunk 1 — host config shapes (mcp/ping.rs, agents/jsonc.rs parse)
+- `rtok.agents.Jsonc` (parse with comments + trailing commas, `stripComments`), `rtok.mcp.Ping` (`SHAPES` for 18 hosts,
+  `HEADLESS` command lines, `pingText`, `promptFor`, `launchFromRead`/`launchFromBody` → `Launch`).
+- Tests: PingConfigTest (3, incl. the Rust per-host fixture case), JsoncTest (2). Full suite 1521, 0 failures.
+- Stop point: next ping process side (`probe` via doctor mcp_roundtrip, headless `capture`, `select`/report/JSON, CLI)
+  which needs per-host `files`/`installed` from agents chunk 2.
