@@ -7,6 +7,7 @@ import rtok.plugin.sdk.Ctx
 import rtok.support.tmpDir
 import rtok.support.withRuntime
 import rtok.sys.*
+import platform.posix.usleep
 
 class CapabilityTest {
     private fun backend(name: String): (Config) -> Config = { c -> c.copy(plugins = c.plugins.copy(graph = c.plugins.graph.copy(backend = name))) }
@@ -97,5 +98,18 @@ class CapabilityTest {
 
     @Test fun clipKeepsTheFirstLineAtMost120Chars() {
         assertEquals("a", Capability.clip("a\nb")); assertEquals(120, Capability.clip("x".repeat(300)).length)
+    }
+
+    /** Eight first requests at once: one check, and a server that cannot start is tried by the first alone. */
+    @Test fun concurrentFirstRequestsShareOneCheckAndOneServerAttempt() {
+        for (working in listOf(true, false)) project("t32911-flight-$working") { cx, root ->
+            val n = Counts()
+            val errs = rtok.support.parallel(8) {
+                request(cx, root, n, { true }) { usleep(30_000u); if (working) "a.rs:1 function" else throw IllegalStateException("lsp: eof") }
+            }
+            assertEquals(emptyList(), errs)
+            assertEquals(1, n.probes.value)
+            assertEquals(if (working) 8 else 1, n.server.value, "working: $working")
+        }
     }
 }
