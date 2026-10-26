@@ -520,3 +520,11 @@ Next, in order:
   on success, else the failure text (`CliCall`). rtok-sys `ProgressRunner.env` (Rust `.env`) for the config-dir override.
 - Tests: 13 (2 ported `shell_quote_bin_*`, 11 own).
 - Stop point: next 3b-3b = gemini + qwen (JSON settings hooks), then codewhale, commandcode, copilot, devin, kimi.
+
+## Session: agents chunk 3b-3b — Claude-layout hook JSON walk (claude/mod.rs)
+- `ClaudeHooks.kt` (`HookForm`, `HookSpec`, `HookEdit`, `command`/`is_ours`, `command_for`/`is_ours_for`, `show`, the
+  `run` body as `edit`), `HookInsert.kt` (`insert_ours_as`, `has_ours`, `prune_ours`), `HookStrip.kt` (`strip_ours_as`).
+  Shared by every host with Claude's `hooks.<event>[]` layout (qwen, devin, codebuddy, codex, claude itself).
+  Immutable kotlinx JSON: keys keep insertion order (Rust serde_json sorts them; same semantics, other byte order).
+- Tests: 7 (5 ported from claude/mod.rs, 2 own).
+- Stop point: next 3b-3c = `d21_plugin_apply` + qwen, then gemini (own BeforeTool/ms form).
