@@ -603,3 +603,11 @@ Next, in order:
 - Tests: 8. Group 3b (JSON/TOML hook hosts) is complete.
 - Stop point: next group 3c (opencode/mimo/kilo/zcode/zed/amp/omp/pi/aider/continue/goose/reasonix/antigravity/vscode/
   codebuddy), then 3d (claude, cursor, codex, grok).
+
+## Session: agents chunk 3c-1 — pi, omp, amp
+- `Pi.kt`: `plugins/pi` linked as `<setup.pi.extensions_path>/rtok`, by default (T164); no MCP, no hooks.
+- `Omp.kt`: the same tree behind `--yes` plus stdio `mcpServers.rtok` (no `type`) in `setup.omp.mcp_path`.
+- `Amp.kt`: `amp.mcpServers.rtok` as one dotted segment via the shared MCP core in JSONC (comments kept), lone
+  `settings.jsonc` edited in place; `McpEntries.hasEntryAt` takes a segment list.
+- Tests: PiTest 5, AmpTest 4.
+- Stop point: next 3c-2 = opencode, mimo, kilo.
