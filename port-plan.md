@@ -670,3 +670,10 @@ Next, in order:
   record and delete on `REINSTALL_FAILED`) and plugin_install.rs `claude_install`; `agents update claude` uses it.
 - Tests: ClaudeUpdateTest 6, PluginVersionTest 2. Windows receipt path (LOCALAPPDATA) not ported (no Windows target).
 - Stop point: next 3d-3 = claude `migrate` (`--replace`), then grok, cursor, codex; then `libs/yaml-aot` + continue/goose.
+
+## Session: agents chunk 3d-3 — claude migrate (`--replace`)
+- `ClaudeMigrate.kt` (claude/migrate.rs): legacy token hooks out (rtk, lean-ctx, caveman, python-launcher), legacy
+  loopback proxy 8788/8787 retargeted with its path/query kept, lean-ctx/code-review-graph MCP dropped in both files,
+  `--yes` or `--dry-run` required; `Claude.apply(Replace)` runs it. Claude host done except skill sync (pending for all).
+- Tests: ClaudeMigrateTest 3.
+- Stop point: next 3d-4 = grok, then cursor, codex; then `libs/yaml-aot` + continue/goose.

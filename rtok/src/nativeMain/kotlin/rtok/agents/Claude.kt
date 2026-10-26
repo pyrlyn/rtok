@@ -2,8 +2,8 @@
 // in `settings.json` and `mcpServers.rtok` in `~/.claude.json`; Claude Desktop has only `mcpServers.rtok` in
 // `claude_desktop_config.json`, with the absolute binary. `plugins/claude` comes from the GitHub marketplace
 // `pyrlyn/rtok` through `claude plugin …`, by default once `claude` is on PATH; while installed it is the only hook
-// path (D21), MCP stays independent (T275); `agents update` takes the version decision ([ClaudeUpdate]). Not yet ported:
-// `migrate` (`--replace` = install for now) and skill sync.
+// path (D21), MCP stays independent (T275); `agents update` takes the version decision ([ClaudeUpdate]). `--replace` runs
+// [ClaudeMigrate]. Not yet ported: skill sync.
 package rtok.agents
 
 import kotlinx.serialization.json.Json
@@ -61,6 +61,10 @@ class Claude(
 
             mode == Mode.Remove -> {
                 listOf(plugin(cfg, true), run(cfg, true), McpRun.remove(cfg, mcpSpec(cfg, kind)), proxy(cfg, true))
+            }
+
+            mode == Mode.Replace -> {
+                listOf(ClaudeMigrate.run(cfg))
             }
 
             else -> {
