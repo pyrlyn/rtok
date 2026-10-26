@@ -3,10 +3,6 @@
 // the config (default install, T164). The forks Kilo Code and MiMo Code reuse [OpenCodeFamily].
 package rtok.agents
 
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import rtok.agent.sdk.HostJson
-import rtok.agent.sdk.NO_CHANGES
 import rtok.config.Config
 import rtok.mcp.config.Client
 import rtok.mcp.config.EntryShape
@@ -81,7 +77,6 @@ class OpenCode(
 
     companion object {
         const val HOST = "opencode"
-        private const val ENV = "env"
         private const val ENV_KEY = "OPENAI_BASE_URL"
 
         val PLUGIN = OpenCodeFamily.plugin("OpenCode") { it.setup.opencode.configPath }
@@ -103,28 +98,7 @@ class OpenCode(
         fun runProxy(
             cfg: Config,
             remove: Boolean,
-        ): String =
-            HostJson.edit(applyOf(cfg), cfg.setup.opencode.configPath) { root ->
-                if (remove) strip(root) else insert(root, ProxyUrl.openai(cfg))
-            }
-
-        private fun insert(
-            root: JsonObject,
-            url: String,
-        ): Pair<JsonObject, String> {
-            val env = root[ENV] as? JsonObject ?: JsonObject(emptyMap())
-            val prev = env[ENV_KEY]
-            if (prev == JsonPrimitive(url)) return root to NO_CHANGES
-            val revert = (prev as? JsonPrimitive)?.takeIf { it.isString }?.let { "revert: set env.$ENV_KEY to ${it.content}" } ?: "revert: remove env.$ENV_KEY"
-            return JsonObject(root + (ENV to JsonObject(env + (ENV_KEY to JsonPrimitive(url))))) to "env.$ENV_KEY: $url\n$revert"
-        }
-
-        private fun strip(root: JsonObject): Pair<JsonObject, String> {
-            val env = root[ENV] as? JsonObject
-            if (env == null || ENV_KEY !in env) return root to NO_CHANGES
-            val left = JsonObject(env - ENV_KEY)
-            return JsonObject(if (left.isEmpty()) root - ENV else root + (ENV to left)) to "- env.$ENV_KEY"
-        }
+        ): String = ProxyEnv.run(cfg, cfg.setup.opencode.configPath, ENV_KEY, ProxyUrl.openai(cfg), remove)
     }
 }
 

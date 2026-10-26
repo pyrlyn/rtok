@@ -650,3 +650,14 @@ Next, in order:
 - Tests: VscodeTest 4.
 - Group 3c done except continue and goose (YAML library decision pending).
 - Stop point: next 3d = claude, cursor, codex, grok.
+
+## Session: agents chunk 3d-1 — claude (install side)
+- `Claude.kt`: Claude-layout hooks in `settings.json` (Claude rows minus the plugin-only Worktree rows), typed
+  `mcpServers.rtok` in `~/.claude.json` and, with the absolute binary, in `claude_desktop_config.json`; `plugins/claude`
+  from the GitHub marketplace `pyrlyn/rtok` by default once `claude` is on PATH (`MarketplaceState` absent/current/stale,
+  repoint, forced reinstall steps, `REINSTALL_FAILED`); installed plugin = only hook path (D21), MCP independent (T275).
+- `ProxyEnv.kt` (proxy_env.rs): `env.<KEY>` set/strip shared by Claude (`ANTHROPIC_BASE_URL`, strip only ours) and OpenCode.
+- Tests: ClaudeTest 8.
+- Stop point: next 3d-2 = claude `plugin_update` (plugin_version receipt/version file, plugin_install `claude_install`),
+  then 3d-3 = claude `migrate` (`--replace`); skill sync stays pending for every host. Then grok, cursor, codex; then
+  `libs/yaml-aot` (own lossless YAML editor, Ivan: no YAML library) and continue/goose.
