@@ -1,0 +1,6 @@
+# posix_spawn and the process environment, which Kotlin/Native's platform.posix does not export.
+headers = spawn.h unistd.h
+package = rtok.sys.spawn
+---
+extern char **environ;
+static inline char **rtok_environ(void) { return environ; }
