@@ -10,15 +10,24 @@ import rtok.store.hexSha256
 import rtok.sys.rustLines
 
 private const val VERSION_HASH_CHARS = 12
+
 /** The wire provider the compressor request is shaped for. */
 private const val PROVIDER = "anthropic"
 
 /** The compressor prompt (data, not code): `system` and `user` from `prompt.toml`. */
-class Prompt(val system: String, val user: String) {
+class Prompt(
+    val system: String,
+    val user: String,
+) {
     companion object {
         val DEFAULT: Prompt by lazy {
             val doc = Toml.parse(PROMPT_FILE)
-            fun field(k: String) = doc.getValue(k).jsonPrimitive.content.trim()
+
+            fun field(k: String) =
+                doc
+                    .getValue(k)
+                    .jsonPrimitive.content
+                    .trim()
             Prompt(field("system"), field("user"))
         }
     }
@@ -28,7 +37,9 @@ class Prompt(val system: String, val user: String) {
 fun version(model: String) = "${hexSha256(PROMPT_FILE.encodeToByteArray()).take(VERSION_HASH_CHARS)}+$model"
 
 /** Credential headers of the agent turn, forwarded to the compressor call; held in memory only. */
-class Auth private constructor(val headers: List<Pair<String, String>>) {
+class Auth private constructor(
+    val headers: List<Pair<String, String>>,
+) {
     companion object {
         private val HEADERS = listOf("x-api-key", "authorization", "anthropic-version", "anthropic-beta")
 
@@ -39,7 +50,10 @@ class Auth private constructor(val headers: List<Pair<String, String>>) {
         }
 
         /** Credential and version headers of an Anthropic-wire request; any other provider's key never crosses. */
-        fun fromHeaders(headers: List<Pair<String, String>>, provider: String?): Auth? {
+        fun fromHeaders(
+            headers: List<Pair<String, String>>,
+            provider: String?,
+        ): Auth? {
             if (provider != PROVIDER) return null
             return of(HEADERS.mapNotNull { n -> headers.firstOrNull { it.first.equals(n, ignoreCase = true) }?.let { n to it.second } })
         }

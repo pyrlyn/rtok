@@ -119,7 +119,7 @@ jiff/humantime→kotlinx-datetime; shlex→own; wasmi→not portable (see risks)
 - [x] cmd (10098) — 207 Kotlin tests: rules 51, formatters 25, run 29, hook 25, compact 18, grep 10, logfmt 8, gh 7, loops 7, python 7, bounded 7, diffs 6, mise 4, filter 3; rtok-sys ProgressRunner +5; catfile (4) + cat re-read delta (1) blocked on tree-sitter / read cache (docs/cmd.md)
 - [x] memory (5419) — 126 of 127 (scrub 2, admit 6, files 8, pack 7, observe 6, handoff 11, sync 15, export 3, import 6, extract 11, mod 51); `rtok memory` CLI (all but `status`); docs/memory.md
   - pending: handoff `pointers_carry_enclosing_symbol_ranges_when_indexed` (needs graph index, Phase 10); `memory status` (model::memory_status); `sync --stat` (change_preview Preview); MCP dispatch (rtok-mcp)
-- [ ] graph (20084) — 275
+- [ ] graph (20084) — 275; walk 5, index 16 (12 Rust + batch + rows + rank-document 2; Rust-crate fixture pending), rank 10, cochange 5
 - [x] wasm host (478) — 3 → 5 (+1 registry, +3 Chasm adapter); Chasm 2.3.0 behind libs/wasm, fuel 100M/call; docs/wasm-plugins.md
 - [ ] Tests: port matching Rust unit + integration tests to kotlin.test; phase done only when they pass on the Mac (`./gradlew macosArm64Test`)
 - [ ] Docs: `docs/<feature>.md` (how it works, enable, disable, test, limitations) + README section
@@ -204,3 +204,231 @@ Next, in order:
 3. docs fetch with zstd behind our own interface; memory status, sync --stat, MCP wiring (Phase 8).
 4. Remaining hooks tests (29) once worktree/otel/MCP land (`HookLinks`).
 5. Final stage: completeness pass against Rust + code review (no separate preview deliverable).
+
+## Session 2026-10-26 (evening) — where the port stopped
+Done: tree-sitter interface + native adapter with 34 grammars (PR #3), `mise run coverage` (PR #4),
+read `outline.rs` (10 tests) and `density.rs` (4), rtok-sys gitignore walk (5), review fixes (this PR).
+Decision: Dropbox affectedmoduledetector rejected (archived, breaks the configuration cache, Android task
+names only); `scripts/smart.py` stays (docs/toolchain.md).
+Release binary: unchanged so far (17.9 MB) — no CLI/MCP path calls the read plugin yet, so K/N and ld
+strip the grammars; measure again once `read`/`graph` are wired (all grammars = 70 MB of objects).
+Read plugin finished (PR feat/read-rest): `Read.kt`, `Roots.kt`, `Search.kt`, `Cache.kt`, `Hook.kt`,
+`rtok/Expand.kt` + `rtok expand`, `rtok/worktree/Git.kt` (porcelain list), `HostPaths.kt`; 84 read + 27 expand tests.
+Graph started (merged with #9): `rtok/plugins/graph/Walk.kt` (`Matcher`, walk.rs, 5 tests).
+Exact stop point: graph `index.rs` (Report, run/run_with/run_changed, extractor fingerprint, SYMBOL_BATCH_FILES
+batching; needs a per-core parse worker pool and `outline` symbol rows with span/sig/doc) is next, then
+text, resolve, tally, mod.rs tools, and the rest in dependency order (events, rank, blast, follow, drill, scope,
+diff, export, health, lsp, watch, review, draw, capability, cochange, projects, jobs, status).
+Release binary after read: 17.97 MB, `linkReleaseExecutableMacosArm64` 125 s wall (incl. compile); the grammars
+are still stripped because no CLI/MCP path calls `read`/`outline` until `rtok mcp` dispatches the read tools.
+Next, in order:
+1. (done) read.
+2. graph (275 tests; 20k Rust lines), grep_symbol (8), catfile (4) + cat re-read delta (1).
+3. docs fetch + zstd behind an interface; memory status, sync --stat, MCP wiring; otel, worktree/task/batch/bench;
+   29 hook dispatch tests; worktree host events via `rtok hook`.
+4. Completeness pass against Rust and final code review.
+
+- Fixed (#9): release-only K/N crash `Unexpected receiver type: kotlin.Char` in `rtok run cat` (boxed `Char?` in `Bounded.lex`). `./gradlew e2eTest -Pe2e.release` runs e2e against the release binary.
+- Stop point: graph `Walk.kt` (Matcher) is merged with #9; next is `index.rs`, then text, resolve, tally, mod.rs.
+
+## Session 2026-10-26 (late) — graph index
+- `rtok/plugins/graph/Index.kt` (index.rs): run/runWith/runChanged/ensure, stat + sha gates, extractor fingerprint,
+  SYMBOL_BATCH_FILES batching, `scoped` rows with span/hash/signature/doc, indexed HEAD. Parsing runs on
+  `rtok.sys.eachOrdered` (one K/N Worker per core, results in walk order, bounded in-flight). Tags queries are
+  compiled on the calling thread before the workers start.
+- Rank refresh goes through `FileRanks` (no-op `FileRanks.None` until rank.rs lands; set `Index.ranks`).
+- `Resolve.kt` (resolve.rs, 1 test), `Tally.kt` (tally.rs, 4 tests; `@ThreadLocal` record).
+- Stop point (main 683ebd3, 1173 tests green): next `cochange.rs` + `rank.rs` (set `Index.ranks`; enables the 2
+  pending index rank tests), then the mod.rs core types (`Filter`, `Mode`, `ExploreParts`, `backend_name`) that
+  `text.rs` needs, then `text.rs`, `capability.rs`, the rest of mod.rs and the other submodules.
+
+## Session 2026-10-26 (evening) — graph rank + cochange
+- `Cochange.kt` (cochange.rs, 3 Rust tests + layout test; `impact` partner test waits for mod.rs `impact`),
+  `Rank.kt` (rank.rs, 10 tests; `Index.ranks` defaults to `Rank`, both pending index rank tests enabled),
+  `Git.kt` (mod.rs `git_stdout`/`git_stdout_result`, shared with `Index.rememberIndexedHead`).
+- On-disk compat: `file_rank` JSON keeps the serde field names; the cochange `kv` doc keeps `pairs` as `[a,b,n]`.
+- `Alerts.kt` (health.rs Kind/Alert/mirrored/all/describe/texts/reach/notice), `Score.kt` (health/score.rs), `Projects.resolve`; 6 tests. The checker loop (`Health` tick/backoff/run) is next.
+- `HealthCheck.kt` (health.rs Health findings/backend backoff/tick/load/recovered/persist, scope_of, run loop); 6 tests. Manifest ref discovery (project::refs) is an injected `refWarnings` until it is ported; backend backoff tests wait for lsp.rs; stat has no 2 s timeout thread.
+- `Projects.kt` (projects.rs rows/render/run/preview, `ProjectAction`), `Jobs.kt` (jobs.rs worker re-index), `rtok.table` (render.rs); 6 tests.
+- `Dead.kt` (mod.rs dead_rows/dead_candidates/has_test_attr/is_test_path/is_support_path/rust_impls; affected/affected_from_paths/changed_starts/name_linked_tests/git_changed_files/format_affected); 4 tests.
+- `graph/Scope.kt` (scope.rs: resolve, fan-out, callers/symbol/impact/explore/outline/dead/affected over linked projects; review_git waits for review.rs; relOf keeps absolute paths) + ScopeTest (12).
+- `graph/Dispatch.kt` (mod.rs `call`: symbol/callers/impact/outline/explore over a scope, stale-HEAD prefix, outline kind filter) + DispatchTest (4).
+- `project/Refs.kt` (project/refs.rs: cargo/npm+pnpm/go/python/submodule references) + RefsTest (9); `graph/Follow.kt` (follow.rs: follow/indexNew/refresh/report) + FollowTest (8); store `dropToollessSessionProjects`; health `refWarnings` now defaults to Refs. Lock-wait follow tests not ported (no hold_write_lock helper).
+- `graph/Drill.kt` (drill.rs: files/defs/external nodes, calls/imports/implements/contains edges, focus neighbourhood, cap, scope search) + DrillTest (6).
+- `graph/Export.kt` (export.rs: collect/graph/near, redact/redactor, read/parse, run/render/write, pageFile/downloadName, MCP call) + ExportTest (9). SVG via `ExportView.draw` hook (draw.rs pending); PNG needs a rasterizer dependency, so it errors; schema generation (schemars) not ported. Detekt findings baselined like #31. Also restores older session stop-point lines that an earlier global sed overwrote.
+- Stop point: next the mod.rs core types (`Filter`, `Mode`, `ExploreParts`, `backend_name`), then `text.rs`,
+  `capability.rs`, the rest of mod.rs and the other submodules.
+
+## Session 2026-10-26 (evening) — graph core types
+- `Core.kt` (mod.rs: `Filter`, `Mode`, `GraphCore.backendName/modeOf/indexFor/pendingPaths/withStale/
+  withoutModeLine/lspNoneAnswer`, shared `graphCfg`), `Langs.kt` (lsp.rs `LANGS`/`EXTENSIONS`/`language_of`/
+  `server_of`/`served_languages`); 5 tests (mode-of, filter, language tables, lsp-none, auto_index=false stale banner).
+- Stop point: next `text.rs` (uses Mode/Filter/backend_name), then `capability.rs`, the mod.rs tools
+  (symbol/callers/impact/explore with `ExploreParts`, `record_mode_row`), and the other submodules
+  (events, blast, follow, drill, scope, diff, export, health, lsp, watch, review, draw, projects, jobs, status);
+  then grep_symbol (8), catfile (4), cat re-read delta (1); docs fetch + zstd, memory status, sync --stat, MCP,
+  otel, worktree/task/batch/bench, 29 hook dispatch tests, worktree events; release size re-measure; completeness pass.
+
+## Session 2026-10-26 (night) — graph text + capability
+- `Capability.kt` (capability.rs: record, mirror in `plugin_state` with serde field names, `ask`/`serverReady`/
+  `held`/`reprobe`, `Refused`/`serverBroke`; probe is a `Probe` lambda until lsp.rs lands), `Text.kt` (text.rs,
+  `Text.Explore`), `ExploreParts` in `Core.kt`, `rtok.sys.Mutex`. 6 capability + 8 text tests (door-level capability
+  tests run through `ask`; the concurrency test waits for mod.rs `door`).
+- Stop point: next the mod.rs tools (`door`, symbol/callers/impact/explore + `assemble_explore`, `record_mode_row`;
+  enable the deferred cochange `impact` partner test), then events, blast, follow, drill, scope, diff, export, health,
+  lsp, watch, review, draw, projects, jobs, status; then the rest of the list above.
+
+## Session 2026-10-26 (evening) — graph tools door, symbol, callers
+- `Tools.kt` (mod.rs: `text_or`, `lsp_or_tags`, `door`, `record_mode_row`, `tags_kind`/`text_kind`, `cap`/`cap_kind`,
+  `symbol`/`symbol_tags`/`symbol_by_id`, `defs_text`, `body_lines`, `def_id`/`def_head`/`parse_symbol_id`, ambiguity
+  marks, `callers`/`callers_tags`). The server side is an `LspBackend` interface (`LspBackend.None` until lsp.rs).
+  7 tools tests + the concurrent-first-request capability test (test `support.parallel`).
+- Stop point: next `impact` (`impact_filtered`/`impact_tags`, `with_cochange`; enable the deferred cochange impact
+  partner test), then `explore` (`assemble_explore`, tags `ExploreParts`), `outline`, `call` dispatch; then events,
+  blast, follow, drill, scope, diff, export, health, lsp, watch, review, draw, projects, jobs, status; then the rest of
+  the list above.
+
+## Session 2026-10-26 (late) — graph impact + blast
+- `Impact.kt` (mod.rs `impact`/`impact_filtered`/`impact_tags`, `with_cochange`, `reverse_call_chain`, `impact_bfs`,
+  `impact_walk_roots`, `WalkMemo`), `Blast.kt` (blast.rs budgeted render; `WalkRow`, `Budget`, `linesText`).
+  `LspBackend.impact`. 4 impact + 5 blast tests; the deferred cochange impact partner test is on.
+- `Explore.kt` (explore_tokens, assemble_explore/assemble_named, explore/explore_tags with FTS fallback, `TagsExplore`); 5 tests.
+- `Status.kt` (status.rs collect/format_table, mod.rs `cli_root`); 2 tests. `rtok graph` CLI wiring still pending.
+- `Events.kt` (events.rs `GraphCall` start/progress/end, target/symbols/backend); 6 tests (the web `coalesce`
+  summary test waits for web live).
+- `Outline.kt` (outline_in, outline_of_kind, symbol_arg_names, head_stale_prefix; `LspBackend.outline`/`outlineWorkspace`); 4 tests.
+- Stop point: next diff, lsp, watch, review (+ Scope.reviewGit), draw; wire `rtok graph` into CLI; then grep_symbol, catfile, cat re-read, docs zstd, memory status, sync --stat, MCP, otel, worktree, task, batch, bench, hook dispatcher tests; release re-measure, completeness pass.
+  a project scope), then `call` dispatch (needs scope); then
+  follow, drill, scope, diff, export, health, lsp, watch, review, draw, projects, jobs (needs projects); then the rest.
+
+## Session 2026-10-26 (night) — graph diff
+- `Diff.kt` (diff.rs: git-side extraction via one `git cat-file --batch` fed from a temp file, index as the working
+  side, changed/added/removed/moved/renamed, edges with renamed/moved callers followed, not-analysed files, per-project
+  `PROJECT:REF`, saved-export compare + registry links, `DiffReport` JSON/page with `capped`, MCP `call`); 19 tests.
+  `ExportView.parse` now refuses a bare word (kotlinx parses `/a/path` as a primitive; serde does not).
+- `Draw.kt` (draw.rs SVG: degree-capped nodes, sunflower layout, legend, footer; `ExportView.draw` defaults to it, so `--format svg` works); 6 tests. PNG stays unported (needs a rasterizer dependency); the Rust PNG tests are deferred.
+- `Review.kt` (review.rs: risk score, security tokens, `-U0` hunk parse, widen/merge, round-robin budget, text/JSON with serde key order) + `Scope.reviewGit`; 9 tests.
+- `cli/GraphCmd.kt` (cli/graph.rs): `rtok graph index|dead|status|impact|projects [add|select|link|unlink|reindex|remove|list]|review|diff|export|affected`; clap conflicts/requires as usage errors (exit 2). CLI model: repeatable options (`OptSpec.Value(repeat)`, `Invocation.values`), `-o` short names, `CommandSpec.runsBare` (bare `graph projects` lists). GraphCliSpec (2). The index line prints bare (no `success_op` icon yet: there is no `ui/style` port); `--format png` fails like before (no rasterizer).
+- `guard/GrepSymbol.kt` (grep_symbol.rs, T369): symbol-shaped Grep answered from the index (classifier, path scope, stale-row check, inject budget fit, checkout-root fallback), wired into `GuardPlugin.preTool`; 9 tests (classifier table + 7 Rust tests; the linked-worktree test waits for the worktree port).
+- `cmd/CatFile.kt` (catfile.rs, T674): long `cat <source>` prints definitions with spans; `cat [-n] f` / `sed -n A,Bp f` re-reads go through the read cache (pointer when unchanged, delta when changed) in `emitFilteredTo`; 5 tests (4 catfile + the run.rs re-read delta).
+- Stop point: next lsp, watch; then docs zstd, memory status, sync --stat, MCP, otel, worktree, task, batch, bench, hook dispatcher tests; release re-measure, completeness pass.
+
+## Session 2026-10-26 (night) — graph lsp
+- `rtok.sys.PipedChild` (piped stdin/stdout child: queued non-blocking stdin, `read(deadline)` over poll, `tryWait`,
+  `kill`; cwd via `posix_spawn_file_actions_addchdir_np` in librtok_spawn; SIGPIPE ignored) + PipedTest (5).
+  `mergedEnv` shared with `spawnDetached`.
+- `LspWire.kt` (framing, file URIs, percent coding, `rel`, `sync_kind`, `kind_name`), `LspSession.kt` (Session:
+  deadline requests without reader/writer threads, server replies, did_open/open/close/refresh_open, cached
+  session `with`/`shutdown`), `Lsp.kt` (on_path with mise-shim/rustup-proxy checks, `rustup which`, probe, pick,
+  state dirs, spawn + initialize, symbol/callers/impact/call paths/explore/outline). `Tools.lsp` now defaults to
+  `Lsp`. LspTest (27: all Rust lsp.rs tests; the Windows drive test is not applicable).
+- Deferred: `LspSession.shutdown()` must run when `rtok mcp` ends (MCP wiring); health-check backend backoff tests.
+- Stop point: next watch; then docs zstd, memory status, sync --stat, MCP, otel, worktree, task, batch, bench, hook
+  dispatcher tests; release re-measure, completeness pass.
+
+## Session 2026-10-26 (night) — graph watch
+- `rtok.sys.FsWatch` (notify's part): `watchRecursive` = FSEvents on macOS (file events on a dispatch queue into
+  `FsEventQueue`, dropped/must-scan flags as rescan), inotify on Linux (watch per directory, new dirs added,
+  overflow as rescan; not compiled locally, linux targets are off by default) + FsWatchTest (3).
+- `graph/Watch.kt` (watch.rs: run, runScope with one worker per scope member and 2 s rescope, pump, settle,
+  root `.gitignore`, absorbEvent, pending sync) + WatchTest (14: all Rust watch.rs tests, FSEvents ones included).
+  `Matcher.root` is public.
+- Deferred: start `Watch.runScope` from `rtok mcp` when `[plugins.graph] watch = "notify"` (MCP wiring).
+- Stop point: next docs zstd; then memory status, sync --stat, MCP, otel, worktree, task, batch, bench, hook
+  dispatcher tests; release re-measure, completeness pass.
+
+## Session 2026-10-26 (night) — docs fetch + zstd
+- `:zstd` (interface `ZstdDecoder`, `ZstdException`) + `:zstd-native` (zstd 1.5.7 pinned in `zstd.json` by
+  tarball sha256, fetched into build/vendor; lib/common + lib/decompress compiled without asm/threads into
+  librtok_zstd.a; streaming `decodeAll` over concatenated frames with a 2 GiB cap) + NativeZstdTest (6).
+- `rtok.http.HttpClient.get` (Ktor `send` shared by post/get) + test; `docs.httpGet` (rtok UA, 30 s),
+  `docs.runFetch`, CLI `rtok docs fetch <name>` (cli/docs.rs). DocsTest +1 (real zstd body).
+  Live check: `rtok docs fetch zstd` in a copy of the Rust Cargo.lock → `cached zstd 0.14.2 (60 items)`.
+- Stop point: next memory status; then sync --stat, MCP, otel, worktree, task, batch, bench, hook dispatcher
+  tests; release re-measure, completeness pass.
+
+## Session: memory status
+- `rtok memory status` (--project, --since, --json): MemoryStatus.kt ports model::memory_status + memory_status.rs; MemoryStatusTest (3).
+- Full suite: 1423 tests, 0 failures.
+- Stop point: next `sync --stat`.
+
+## Session: sync --stat
+- `rtok.sys.Preview`/`PreviewMode` (change-preview `Preview`: edits, removals, `--stat` lines with 40-mark bar cap, totals) + PreviewTest (5); `ChangePreview.counts`.
+- `rtok.StatPreview` (stat_preview.rs: process-wide switch, colour-stripping `sides`, `show`/`showFile`/`shown`) + StatPreviewTest (4); `rtok memory sync --dry-run --stat`, totals line now closes the dry-run diff.
+- Deferred: `--stat` on config/doctor/agents dry runs lands with those commands.
+- Stop point: next MCP (incl. `LspSession.shutdown()` on exit, `Watch.runScope` for watch="notify").
+
+## Session: MCP core (stdio server)
+- `rtok/mcp`: `Protocol` (rpc errors, protocol negotiation, required-field gate with `anyOf`, search/docs_query aliases, read-only annotations, mem hit line), `LineReader` (8 MiB cap, lossy UTF-8), `Server` (initialize/ping/tools/list/tools/call, batches, notifications, roots handshake), `Tools` (expand, ping, mem_*, handoff, docs_*, read/search/tree, graph tools via `GraphTools`), `Record` (mcp_call rows + I/O + 3 token rows), `Roots`, `Mcp.run`/`Mcp.call`; CLI `rtok mcp [--call TOOL --args JSON]`.
+- `LspSession.shutdown()` now runs on every `rtok mcp` exit (served and `--call`); `Watch.runScope` starts on a worker when `[plugins.graph] watch` is not `off`.
+- Tests: ProtocolTest (9), LineReaderTest (2), ServerTest (11). Live: initialize + ping over stdio with an isolated HOME.
+- Deferred to the next MCP chunks: graph plugin registration (graph tools are dispatched but not yet listed — no `GraphPlugin.mcpTools`), whoami/agents/messages tools + agent link, worktree_* and task_* tools (with worktree/task), `--http`, `rtok mcp ping`, the foreign-server wrapper (`rtok mcp -- <cmd>`), retention/otel tickers, health-check loop, follow refresh, rooted-path annotation (mcp/paths.rs), description token cap test.
+- Stop point: next MCP chunk 2 (graph plugin tool defs + paths.rs), then otel.
+
+## Session: MCP chunk 2a — graph tool descriptors + paths.rs
+- `rtok.plugins.graph.GraphPlugin` (mod.rs `GraphPlugin`: manifest, dashboard page, Edit/Write `markSymbolsStale`,
+  the 7 `mcp_tools` descriptors) registered in `plugins.all()` after memory, so `tools/list` now lists the graph tools.
+- `rtok.mcp.Paths` (mcp/paths.rs: `isRooted`, `anchorOutline`, `annotate`); `Server.invokeRooted` enters the caller
+  root through `read.Roots.enterCaller` (caller dir hook is `{ null }` until the agent link lands). PathsTest (6).
+- Full suite: 1460 tests, 0 failures. Deferred: graph session-start repo map (`repo_map`, needs checkpoint `last_paths`).
+- Stop point: next whoami/agents/messages tools + agent link (feeds `callerDir`), then `--http`, `mcp ping`,
+  `mcp -- <cmd>` wrapper, server background jobs; then otel.
+
+## Session: MCP chunk 2b — agent link + whoami/agents/messages tools
+- `rtok.agents.AgentView` (agent_view.rs: `AgentState`, `AgentView`, `SessionView` with serde-flatten JSON),
+  `rtok.model.Agents` (model/agents.rs: worktree label, nest, session views, `agentSessions`/`agentShow` with claims +
+  unread enrich, `cleanStatus`/`setStatus`; takes the open `Store` instead of reopening one),
+  `rtok.agents.AgentLink` (agents/link.rs `resolve` env/ancestor/cwd/own rules, `Link`, `Rule`, `Caller`;
+  shell_agent.rs `shellAgent`). Hookless detection is the `HookSupport` interface (`Unknown` = every host hooked)
+  until the agent host registry is ported.
+- `rtok.mcp.AgentSession` (mcp.rs link cache, `caller_dir` 5 s TTL, `agent`/`agent_for`/`whoami`), `rtok.mcp.AgentTools`
+  (mcp/agents.rs + mcp/messages.rs: agents_list, agent_show, agent_status_set, agent_send, agent_inbox; `withAgent`).
+  `Server` lists whoami + the 5 agent tools after ping (Rust order), links on `initialize`; `Paths.invoke` is
+  mcp.rs `invoke_rooted` and now feeds the caller root from the agent link.
+- Tests: LinkTest (19), AgentsTest (5), AgentToolsTest (6). Full suite: 1491, 0 failures. Detekt: test-only
+  MagicNumber/TooManyFunctions baselined.
+- Deferred: hookless host table (agent registry), `rtok agents` CLI commands on this model.
+- Stop point (superseded below): next `--http`, `rtok mcp ping`, `mcp -- <cmd>` wrapper, server background jobs; then otel.
+
+## Session: MCP chunk 3 — `rtok mcp -- <server>` wrapper (wrap.rs)
+- `rtok.mcp.FrameReader`/`Framing` (wrap.rs `read_frame`/`write_frame`, fed incrementally: line JSON, `Content-Length`,
+  Raw for malformed/oversized/short headers), `rtok.mcp.Wrap` (`run`, `Pending` note/take, `shortenResult` with the
+  `[mcp]` cmd rule, archive + expand trailer, json_tree fold). Single-threaded poll loop over our stdin and the
+  server's stdout: `PipedChild` gains `inheritStderr`, `awaitReadable`, `finishInput`, `waitExit`.
+- CLI: `rtok mcp -- <argv>` (variadic `server`), `--call` with a wrapped server is refused like Rust.
+- Tests: WrapTest (10: the 8 Rust cases + byte-at-a-time feed + isError), e2e wrapper spec (cut + pass-through + exit code).
+  Full suite: 1501 unit/CLI, 0 failures; e2e 16.
+- Ivan approved ktor-server (CIO, pinned) for `--http`, behind our own HTTP server interface in its own module.
+- Stop point: next `rtok mcp --http` (mcp/http.rs), then agent host registry → `rtok mcp ping` → HookSupport → `rtok agents`
+  CLI; server background jobs; otel.
+
+## Session: MCP chunk 4 — `rtok mcp --http` (mcp/http.rs)
+- New modules: `:http-server` (rtok.http.server: `HttpServer`, `RequestHandler`, `ServerRequest/Response`, serialized
+  handler calls, 413 body cap) and `:http-server-ktor` (`KtorHttpServer`, ktor-server-core + CIO 3.6.0 pinned; approved by Ivan).
+- `rtok.mcp.Http` (http.rs): `Addr` (SocketAddr parse, loopback/unspecified), `PublicUrl` (host + origin), `transport`
+  allow-lists, `exposureGuard`, `bearerToken`, constant-time `bearerMatches`, `httpServer` (fresh `mcp-http-<uuid>`
+  session, `restrictArchives`, AGENT_BOUND dropped, `http_tools` as the allow-list), `Endpoint` (rmcp stateless JSON
+  mode: 401 Bearer, 404, 403 Host/Origin, 405 non-POST, 406 Accept, 415 Content-Type, 400 MCP-Protocol-Version,
+  202 for notifications), `serveBlocking` (deny secrets, log the URL, never the token). `Server.handleLine(stateless)`.
+- CLI: `rtok mcp --http [ADDR]` (`OptSpec.Value(optional)` → clikt `optionalValue`); refuses `--` and `--call`.
+- Tests: HttpTest (9: the 6 Rust cases + Addr parse + endpoint gates + live socket initialize/401),
+  KtorHttpServerTest (1). Full suite 1511, 0 failures. Deferred: retention + otel tickers on `--http` (with otel).
+- Stop point: next agent host registry → `rtok mcp ping` → HookSupport → `rtok agents` CLI; server background jobs; otel.
+
+## Session: agents chunk 1 — host registry descriptors (agents/mod.rs + 36 host folders)
+- `rtok.agents.Hosts` (`host`, `ALL` in rtok-config `HOSTS` order, `MODULES`, `wants`), `Kind`, `Variant`, `Support`
+  (Yes/Flag/Offer/No), `SupportRule` (first-match arms of each host's `support`), `Host` (`support`, `hookless`,
+  `shared`). The 36 rows (variants + support arms, incl. `support_mcp_only` hosts) were generated from the Rust
+  sources and checked by HostsTest (5).
+- `HostHookSupport` (link.rs `hookless`) is now the default for `AgentLink.resolve` and `AgentSession`: zed/warp and
+  other hookless hosts register their agent from the MCP process. Full suite 1516, 0 failures.
+- Deferred (agents chunk 2+): per-host `files`/`markers`/`installed`/`apply`, MCP config paths and writers
+  (agents/mcp.rs), `find_bin`/`probe_installed`/`app_version`, plugin surfaces.
+- Stop point: next `rtok mcp ping` (mcp/ping.rs: needs host MCP config paths from agents/mcp.rs), then `rtok agents` CLI.
+
+## Session: mcp ping chunk 1 — host config shapes (mcp/ping.rs, agents/jsonc.rs parse)
+- `rtok.agents.Jsonc` (parse with comments + trailing commas, `stripComments`), `rtok.mcp.Ping` (`SHAPES` for 18 hosts,
+  `HEADLESS` command lines, `pingText`, `promptFor`, `launchFromRead`/`launchFromBody` → `Launch`).
+- Tests: PingConfigTest (3, incl. the Rust per-host fixture case), JsoncTest (2). Full suite 1521, 0 failures.
+- Stop point: next ping process side (`probe` via doctor mcp_roundtrip, headless `capture`, `select`/report/JSON, CLI)
+  which needs per-host `files`/`installed` from agents chunk 2.

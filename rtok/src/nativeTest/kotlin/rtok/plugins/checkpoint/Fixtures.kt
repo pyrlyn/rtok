@@ -34,16 +34,30 @@ internal const val ACTIONS = """{"type":"user","message":{"role":"user","content
 
 internal fun skillFixture(): Pair<String, String> {
     val body = "Base directory for this skill: /home/u/.claude/skills/pixel\n\n# Pixel\n" + "x".repeat(5000)
-    fun meta(id: String, text: String) = buildJsonObject {
-        put("type", "user"); put("isMeta", true); put("sourceToolUseID", id)
-        putJsonObject("message") { putJsonArray("content") { addJsonObject { put("type", "text"); put("text", text) } } }
+
+    fun meta(
+        id: String,
+        text: String,
+    ) = buildJsonObject {
+        put("type", "user")
+        put("isMeta", true)
+        put("sourceToolUseID", id)
+        putJsonObject("message") {
+            putJsonArray("content") {
+                addJsonObject {
+                    put("type", "text")
+                    put("text", text)
+                }
+            }
+        }
     }.toString()
-    return body to listOf(
-        """{"type":"user","message":{"content":"make it blue"}}""",
-        meta("toolu_1", body),
-        meta("toolu_2", "Base directory for this skill: C:\\u\\.claude\\plugins\\cache\\p\\1.0\\skills\\ponytail\n\n# P"),
-        """{"type":"user","isMeta":true,"message":{"content":"Base directory for this skill: /x/y"}}""",
-    ).joinToString("\n")
+    return body to
+        listOf(
+            """{"type":"user","message":{"content":"make it blue"}}""",
+            meta("toolu_1", body),
+            meta("toolu_2", "Base directory for this skill: C:\\u\\.claude\\plugins\\cache\\p\\1.0\\skills\\ponytail\n\n# P"),
+            """{"type":"user","isMeta":true,"message":{"content":"Base directory for this skill: /x/y"}}""",
+        ).joinToString("\n")
 }
 
 private fun obj(s: String) = Json.parseToJsonElement(s)
@@ -52,17 +66,55 @@ private fun obj(s: String) = Json.parseToJsonElement(s)
 internal fun bigTranscript(targetBytes: Int): String {
     val toolOutput = "line of bash output ".repeat(6)
     val prose = "lorem ipsum dolor sit amet consectetur adipiscing elit ".repeat(3)
-    val s = StringBuilder(); var i = 0
+    val s = StringBuilder()
+    var i = 0
     while (s.length < targetBytes) {
-        val lines = when {
-            i % 500 == 0 -> listOf(
-                buildJsonObject { put("type", "user"); putJsonObject("message") { put("content", "prompt $i") } },
-                obj("""{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Read","input":{"file_path":"src/file$i.rs"}}]}}"""),
-                obj("""{"type":"user","message":{"content":[{"type":"text","text":"still failing with error: boom $i"}]}}"""),
-            )
-            i % 2 == 0 -> listOf(buildJsonObject { put("type", "user"); putJsonObject("message") { putJsonArray("content") { addJsonObject { put("type", "tool_result"); put("tool_use_id", "toolu_$i"); put("content", toolOutput) } } } })
-            else -> listOf(buildJsonObject { put("type", "assistant"); putJsonObject("message") { putJsonArray("content") { addJsonObject { put("type", "text"); put("text", prose) } } } })
-        }
+        val lines =
+            when {
+                i % 500 == 0 -> {
+                    listOf(
+                        buildJsonObject {
+                            put("type", "user")
+                            putJsonObject("message") { put("content", "prompt $i") }
+                        },
+                        obj("""{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Read","input":{"file_path":"src/file$i.rs"}}]}}"""),
+                        obj("""{"type":"user","message":{"content":[{"type":"text","text":"still failing with error: boom $i"}]}}"""),
+                    )
+                }
+
+                i % 2 == 0 -> {
+                    listOf(
+                        buildJsonObject {
+                            put("type", "user")
+                            putJsonObject("message") {
+                                putJsonArray("content") {
+                                    addJsonObject {
+                                        put("type", "tool_result")
+                                        put("tool_use_id", "toolu_$i")
+                                        put("content", toolOutput)
+                                    }
+                                }
+                            }
+                        },
+                    )
+                }
+
+                else -> {
+                    listOf(
+                        buildJsonObject {
+                            put("type", "assistant")
+                            putJsonObject("message") {
+                                putJsonArray("content") {
+                                    addJsonObject {
+                                        put("type", "text")
+                                        put("text", prose)
+                                    }
+                                }
+                            }
+                        },
+                    )
+                }
+            }
         lines.forEach { s.append(it.toString()).append('\n') }
         i++
     }

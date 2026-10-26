@@ -1,5 +1,6 @@
 // Path and file helpers replacing the Rust `fs-kit` crate (pyrlyn/crates) used across rtok.
 @file:OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
+
 package rtok.sys
 
 import kotlinx.cinterop.*
@@ -13,62 +14,97 @@ fun components(path: String): List<String> {
     return out
 }
 
-fun joinComponents(c: List<String>): String = when {
-    c.isEmpty() -> ""
-    c[0] == "/" -> "/" + c.drop(1).joinToString("/")
-    else -> c.joinToString("/")
-}
+fun joinComponents(c: List<String>): String =
+    when {
+        c.isEmpty() -> ""
+        c[0] == "/" -> "/" + c.drop(1).joinToString("/")
+        else -> c.joinToString("/")
+    }
 
 /** Rust `Path::join`: an absolute [rel] replaces [base]. */
-fun join(base: String, rel: String): String = when {
-    rel.startsWith("/") -> rel
-    base.isEmpty() -> rel
-    base.endsWith("/") -> base + rel
-    else -> "$base/$rel"
-}
+fun join(
+    base: String,
+    rel: String,
+): String =
+    when {
+        rel.startsWith("/") -> rel
+        base.isEmpty() -> rel
+        base.endsWith("/") -> base + rel
+        else -> "$base/$rel"
+    }
 
 /** Lexical `base.join(rel)` with `.` and `..` folded (fs-kit `normalize`). */
-fun normalize(base: String, rel: String): String {
+fun normalize(
+    base: String,
+    rel: String,
+): String {
     val out = ArrayList<String>()
     for (c in components(join(base, rel))) {
-        if (c == "..") { if (out.isNotEmpty() && out.last() != "/" && out.last() != "..") out.removeAt(out.size - 1) else if (out.isEmpty()) out += c }
-        else out += c
+        if (c == "..") {
+            if (out.isNotEmpty() && out.last() != "/" && out.last() != "..") {
+                out.removeAt(out.size - 1)
+            } else if (out.isEmpty()) {
+                out += c
+            }
+        } else {
+            out += c
+        }
     }
     return joinComponents(out).ifEmpty { "." }
 }
 
 /** realpath(3); null when the path does not exist. */
-fun canonicalize(path: String): String? = memScoped {
-    val buf = allocArray<ByteVar>(PATH_MAX + 1)
-    realpath(path, buf)?.toKString()
-}
+fun canonicalize(path: String): String? =
+    memScoped {
+        val buf = allocArray<ByteVar>(PATH_MAX + 1)
+        realpath(path, buf)?.toKString()
+    }
 
-fun cwd(): String = memScoped { val b = allocArray<ByteVar>(PATH_MAX + 1); getcwd(b, (PATH_MAX + 1).convert())!!.toKString() }
+fun cwd(): String =
+    memScoped {
+        val b = allocArray<ByteVar>(PATH_MAX + 1)
+        getcwd(b, (PATH_MAX + 1).convert())!!.toKString()
+    }
 
 /** Canonical when it exists, otherwise lexically normalized against the cwd (fs-kit `canon`). */
 fun canon(path: String): String = canonicalize(path) ?: normalize(cwd(), path)
 
 /** Component-wise prefix test (fs-kit `path_starts_with`, Rust `Path::starts_with`). */
-fun pathStartsWith(path: String, prefix: String): Boolean {
-    val a = components(path); val b = components(prefix)
+fun pathStartsWith(
+    path: String,
+    prefix: String,
+): Boolean {
+    val a = components(path)
+    val b = components(prefix)
     return a.size >= b.size && a.subList(0, b.size) == b
 }
 
 /** Rust `Path::ancestors`: the path itself, then each parent. */
 fun ancestors(path: String): List<String> {
-    val c = components(path); return (c.size downTo 1).map { joinComponents(c.subList(0, it)) }
+    val c = components(path)
+    return (c.size downTo 1).map { joinComponents(c.subList(0, it)) }
 }
 
 /** Rust `Path::strip_prefix`, component-wise; null when not a prefix. */
-fun stripPrefix(path: String, prefix: String): String? {
-    val a = components(path); val b = components(prefix)
+fun stripPrefix(
+    path: String,
+    prefix: String,
+): String? {
+    val a = components(path)
+    val b = components(prefix)
     if (a.size < b.size || a.subList(0, b.size) != b) return null
     return a.drop(b.size).joinToString("/")
 }
 
-fun parent(path: String): String? { val c = components(path); return if (c.size <= 1) null else joinComponents(c.dropLast(1)) }
+fun parent(path: String): String? {
+    val c = components(path)
+    return if (c.size <= 1) null else joinComponents(c.dropLast(1))
+}
 
-class IoException(val kind: Kind, message: String) : Exception(message) {
+class IoException(
+    val kind: Kind,
+    message: String,
+) : Exception(message) {
     enum class Kind { NotFound, PermissionDenied, InvalidInput, Other }
 }
 
@@ -79,44 +115,89 @@ fun readToString(path: String): String = readBytes(path).decodeToString()
 fun readBytes(path: String): ByteArray {
     val f = fopen(path, "rb") ?: throw IoException(if (errno == ENOENT) IoException.Kind.NotFound else IoException.Kind.Other, "$path: errno $errno")
     try {
-        val st = memScoped { val s = alloc<stat>(); fstat(fileno(f), s.ptr); s.st_mode.toInt() and S_IFMT }
+        val st =
+            memScoped {
+                val s = alloc<stat>()
+                fstat(fileno(f), s.ptr)
+                s.st_mode.toInt() and S_IFMT
+            }
         if (st == S_IFDIR) throw IoException(IoException.Kind.Other, "$path is a directory")
         return okioLikeRead(f)
-    } finally { fclose(f) }
+    } finally {
+        fclose(f)
+    }
 }
 
 private fun okioLikeRead(f: CPointer<FILE>): ByteArray {
     val chunks = ArrayList<ByteArray>()
-    memScoped { val buf = allocArray<ByteVar>(65536); while (true) { val n = fread(buf, 1u, 65536u, f).toInt(); if (n <= 0) break; chunks += buf.readBytes(n) } }
-    val total = chunks.sumOf { it.size }; val out = ByteArray(total); var p = 0
-    for (c in chunks) { c.copyInto(out, p); p += c.size }
+    memScoped {
+        val buf = allocArray<ByteVar>(65536)
+        while (true) {
+            val n = fread(buf, 1u, 65536u, f).toInt()
+            if (n <= 0) break
+            chunks += buf.readBytes(n)
+        }
+    }
+    val total = chunks.sumOf { it.size }
+    val out = ByteArray(total)
+    var p = 0
+    for (c in chunks) {
+        c.copyInto(out, p)
+        p += c.size
+    }
     return out
 }
 
-fun writeString(path: String, text: String) = writeBytes(path, text.encodeToByteArray())
+fun writeString(
+    path: String,
+    text: String,
+) = writeBytes(path, text.encodeToByteArray())
 
 /** Create or truncate [path] with [b]. */
-fun writeBytes(path: String, b: ByteArray) {
+fun writeBytes(
+    path: String,
+    b: ByteArray,
+) {
     val f = fopen(path, "wb") ?: throw IoException(IoException.Kind.Other, "$path: errno $errno")
-    try { if (b.isNotEmpty()) b.usePinned { fwrite(it.addressOf(0), 1u, b.size.convert(), f) } } finally { fclose(f) }
+    try {
+        if (b.isNotEmpty()) b.usePinned { fwrite(it.addressOf(0), 1u, b.size.convert(), f) }
+    } finally {
+        fclose(f)
+    }
 }
 
 /** Rust `Path::is_file`: exists (following links) and is a regular file. */
-fun isFile(p: String): Boolean = memScoped { val st = alloc<stat>(); stat(p, st.ptr) == 0 && (st.st_mode.toInt() and S_IFMT) == S_IFREG }
+fun isFile(p: String): Boolean =
+    memScoped {
+        val st = alloc<stat>()
+        stat(p, st.ptr) == 0 && (st.st_mode.toInt() and S_IFMT) == S_IFREG
+    }
 
-fun removeFile(p: String) { if (unlink(p) != 0) throw IoException(if (errno == ENOENT) IoException.Kind.NotFound else IoException.Kind.Other, "$p: errno $errno") }
+fun removeFile(p: String) {
+    if (unlink(p) != 0) throw IoException(if (errno == ENOENT) IoException.Kind.NotFound else IoException.Kind.Other, "$p: errno $errno")
+}
 
 /** `std::env::set_current_dir`. */
-fun setCwd(p: String) { if (chdir(p) != 0) throw IoException(IoException.Kind.Other, "$p: errno $errno") }
+fun setCwd(p: String) {
+    if (chdir(p) != 0) throw IoException(IoException.Kind.Other, "$p: errno $errno")
+}
 
 fun createDirAll(dir: String) {
     var cur = ""
-    for (c in components(dir)) { cur = if (c == "/") "/" else join(cur, c); mkdir(cur, 0x1ed.convert()) }
+    for (c in components(dir)) {
+        cur = if (c == "/") "/" else join(cur, c)
+        mkdir(cur, 0x1ed.convert())
+    }
 }
 
 fun exists(path: String) = access(path, F_OK) == 0
-fun removeDirAll(path: String) { if (exists(path)) system("rm -rf '" + path.replace("'", "'\\''") + "'") }
+
+fun removeDirAll(path: String) {
+    if (exists(path)) system("rm -rf '" + path.replace("'", "'\\''") + "'")
+}
+
 fun tempDir(): String = (getenv("TMPDIR")?.toKString() ?: "/tmp").trimEnd('/')
+
 fun pid(): Int = getpid()
 
 /** Entry names of a directory (no `.`/`..`), unsorted like `std::fs::read_dir`. */
@@ -129,89 +210,172 @@ fun listDir(path: String): List<String> {
             val n = e.pointed.d_name.toKString()
             if (n != "." && n != "..") out += n
         }
-    } finally { closedir(d) }
+    } finally {
+        closedir(d)
+    }
     return out
 }
 
 /** `$HOME`, as `std::env::home_dir` reads it first. */
-fun homeDir(): String? = platform.posix.getenv("HOME")?.toKString()?.takeIf { it.isNotEmpty() }
+fun homeDir(): String? =
+    platform.posix
+        .getenv("HOME")
+        ?.toKString()
+        ?.takeIf { it.isNotEmpty() }
 
 /** A root no walk may cover: the filesystem root or the home directory (fs-kit `is_unwalkable_root`). */
-fun isUnwalkableRoot(root: String, home: String?): Boolean {
+fun isUnwalkableRoot(
+    root: String,
+    home: String?,
+): Boolean {
     val r = canon(root)
     return parent(r) == null || (home != null && canon(home) == r)
 }
 
 /** fs-kit `same_path` on Unix: component-wise equality (`/a//b/` = `/a/b`), no disk access. */
-fun samePath(a: String, b: String): Boolean = a == b || components(a) == components(b)
+fun samePath(
+    a: String,
+    b: String,
+): Boolean = a == b || components(a) == components(b)
 
 /** stat(2)-backed queries; null / false when the path does not exist. */
-fun isDir(p: String): Boolean = memScoped { val st = alloc<stat>(); stat(p, st.ptr) == 0 && (st.st_mode.toInt() and S_IFMT) == S_IFDIR }
-fun fileLen(p: String): Long? = memScoped { val st = alloc<stat>(); if (stat(p, st.ptr) == 0) st.st_size else null }
-fun fileMode(p: String): Int? = memScoped { val st = alloc<stat>(); if (stat(p, st.ptr) == 0) st.st_mode.toInt() and 0x1ff else null }
+fun isDir(p: String): Boolean =
+    memScoped {
+        val st = alloc<stat>()
+        stat(p, st.ptr) == 0 && (st.st_mode.toInt() and S_IFMT) == S_IFDIR
+    }
+
+fun fileLen(p: String): Long? =
+    memScoped {
+        val st = alloc<stat>()
+        if (stat(p, st.ptr) == 0) st.st_size else null
+    }
+
+fun fileMode(p: String): Int? =
+    memScoped {
+        val st = alloc<stat>()
+        if (stat(p, st.ptr) == 0) st.st_mode.toInt() and 0x1ff else null
+    }
 
 /** The stat field holding mtime differs per libc (`st_mtimespec` on Darwin, `st_mtim` on glibc). */
 internal expect fun mtimeNanos(st: stat): Long
 
 /** `(mtime in nanoseconds since the epoch, size)`, as Rust `metadata().modified()` / `len()` give them; null when missing. */
-fun fileStat(p: String): Pair<Long, Long>? = memScoped {
-    val st = alloc<stat>(); if (stat(p, st.ptr) != 0) null else mtimeNanos(st) to st.st_size
-}
+fun fileStat(p: String): Pair<Long, Long>? =
+    memScoped {
+        val st = alloc<stat>()
+        if (stat(p, st.ptr) != 0) null else mtimeNanos(st) to st.st_size
+    }
 
 /** Write [text] to stderr unbuffered (stdout stays Kotlin's `print`). */
 @OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
-fun eprint(text: String) { platform.posix.fputs(text, platform.posix.stderr); platform.posix.fflush(platform.posix.stderr) }
-
-/** Everything readable from [fd] until EOF (stdin = 0). */
-fun readFd(fd: Int): ByteArray = memScoped {
-    val out = ArrayList<Byte>(); val buf = allocArray<ByteVar>(65536)
-    while (true) { val n = read(fd, buf, 65536.convert()).toInt(); if (n <= 0) break; for (i in 0 until n) out += buf[i] }
-    out.toByteArray()
+fun eprint(text: String) {
+    platform.posix.fputs(text, platform.posix.stderr)
+    platform.posix.fflush(platform.posix.stderr)
 }
 
+/** Everything readable from [fd] until EOF (stdin = 0). */
+fun readFd(fd: Int): ByteArray =
+    memScoped {
+        val out = ArrayList<Byte>()
+        val buf = allocArray<ByteVar>(65536)
+        while (true) {
+            val n = read(fd, buf, 65536.convert()).toInt()
+            if (n <= 0) break
+            for (i in 0 until n) out += buf[i]
+        }
+        out.toByteArray()
+    }
+
 /** Writes all of [bytes] to [fd] (stdout = 1), flushing stdio first so ordering holds. */
-fun writeFd(fd: Int, bytes: ByteArray) {
+fun writeFd(
+    fd: Int,
+    bytes: ByteArray,
+) {
     fflush(null)
     var off = 0
-    bytes.usePinned { p -> while (off < bytes.size) { val n = write(fd, p.addressOf(off), (bytes.size - off).convert()).toInt(); if (n <= 0) break; off += n } }
+    bytes.usePinned { p ->
+        while (off < bytes.size) {
+            val n = write(fd, p.addressOf(off), (bytes.size - off).convert()).toInt()
+            if (n <= 0) break
+            off += n
+        }
+    }
 }
 
 /** At most [limit] bytes from the start of [path]; null when it cannot be opened or read (a directory, say). */
-fun readPrefix(path: String, limit: Long): ByteArray? {
+fun readPrefix(
+    path: String,
+    limit: Long,
+): ByteArray? {
     val f = fopen(path, "rb") ?: return null
     try {
-        val out = ArrayList<ByteArray>(); var left = limit
+        val out = ArrayList<ByteArray>()
+        var left = limit
         memScoped {
             val buf = allocArray<ByteVar>(65536)
             while (left > 0) {
                 val n = fread(buf, 1u, minOf(left, 65536L).toULong(), f).toInt()
                 if (n <= 0) break
-                out += buf.readBytes(n); left -= n
+                out += buf.readBytes(n)
+                left -= n
             }
         }
         if (ferror(f) != 0) return null
-        val all = ByteArray(out.sumOf { it.size }); var p = 0
-        for (c in out) { c.copyInto(all, p); p += c.size }
+        val all = ByteArray(out.sumOf { it.size })
+        var p = 0
+        for (c in out) {
+            c.copyInto(all, p)
+            p += c.size
+        }
         return all
-    } finally { fclose(f) }
+    } finally {
+        fclose(f)
+    }
 }
 
 /** Appends [text] to [path], creating it (Rust `OpenOptions::new().create(true).append(true)`). */
-fun appendString(path: String, text: String) {
+fun appendString(
+    path: String,
+    text: String,
+) {
     val f = platform.posix.fopen(path, "a") ?: throw IoException(IoException.Kind.Other, "cannot open $path")
-    try { platform.posix.fputs(text, f) } finally { platform.posix.fclose(f) }
+    try {
+        platform.posix.fputs(text, f)
+    } finally {
+        platform.posix.fclose(f)
+    }
 }
 
 /** Reads at most [limit] bytes from file descriptor [fd] (Rust `Read::take(limit).read_to_end`). */
 @OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
-fun readFdBounded(fd: Int, limit: Long): ByteArray {
-    val out = Bytes(); val buf = ByteArray(64 * 1024); var left = limit
+fun readFdBounded(
+    fd: Int,
+    limit: Long,
+): ByteArray {
+    val out = Bytes()
+    val buf = ByteArray(64 * 1024)
+    var left = limit
     while (left > 0) {
         val want = minOf(buf.size.toLong(), left).toInt()
         val n = buf.usePinned { platform.posix.read(fd, it.addressOf(0), want.convert()) }.toInt()
-        if (n < 0) { if (platform.posix.errno == platform.posix.EINTR) continue; throw IoException(IoException.Kind.Other, "read errno ${platform.posix.errno}") }
+        if (n < 0) {
+            if (platform.posix.errno == platform.posix.EINTR) continue
+            throw IoException(IoException.Kind.Other, "read errno ${platform.posix.errno}")
+        }
         if (n == 0) break
-        out.write(buf, n); left -= n
+        out.write(buf, n)
+        left -= n
     }
     return out.toByteArray()
+}
+
+/** Last component, like Rust's `Path::file_name` (`None` for `..` and the root). */
+fun fileName(path: String): String? = components(path).lastOrNull()?.takeIf { it != ".." && it != "/" && it != "." }
+
+/** Rust's `Path::extension`: text after the last `.` of the file name, none for `.hidden` or `name.`-less names. */
+fun extension(path: String): String? {
+    val name = fileName(path) ?: return null
+    val dot = name.lastIndexOf('.')
+    return if (dot <= 0) null else name.substring(dot + 1)
 }

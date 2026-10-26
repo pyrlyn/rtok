@@ -1,0 +1,14 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>ComplexCondition:Lib.kt:prefix.isEmpty() || prefix.length > TASK_PREFIX_MAX || !prefix.all { it in 'a'..'z' || it in 'A'..'Z' }</ID>
+    <ID>EmptyFunctionBlock:Testing.kt:MemoryHost${}</ID>
+    <ID>MatchingDeclarationName:Testing.kt:MemoryHost : Capabilities</ID>
+    <ID>ReturnCount:SdkTest.kt:SdkTest.&lt;no name provided>$override fun preTool: PreToolDecision?</ID>
+    <ID>TooManyFunctions:Host.kt:Host</ID>
+    <ID>TooManyFunctions:Host.kt:Notes</ID>
+    <ID>TooManyFunctions:Host.kt:Symbols</ID>
+    <ID>TooManyFunctions:Testing.kt:MemoryHost : Capabilities</ID>
+  </CurrentIssues>
+</SmellBaseline>

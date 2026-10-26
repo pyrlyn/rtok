@@ -1,35 +1,48 @@
 package rtok.store
 
 import rtok.db.*
-
 import rtok.sys.*
 import kotlin.test.*
 
 class HandleTest {
     @Test fun freshStoreIsOwnerOnly() {
-        val base = tmpDir("private-store"); val db = "$base/home/rtok.db"
+        val base = tmpDir("private-store")
+        val db = "$base/home/rtok.db"
         Store.open(db).close()
-        val modes = fileMode("$base/home") to fileMode(db); removeDirAll(base)
+        val modes = fileMode("$base/home") to fileMode(db)
+        removeDirAll(base)
         assertEquals(0x1c0 to 0x180, modes)
     }
 
     @Test fun existingReadableDbIsTightened() {
-        val base = tmpDir("private-existing"); val db = "$base/rtok.db"
-        Store.open(db).close(); platform.posix.chmod(db, 0x1a4u); Store.open(db).close()
-        val m = fileMode(db); removeDirAll(base); assertEquals(0x180, m)
+        val base = tmpDir("private-existing")
+        val db = "$base/rtok.db"
+        Store.open(db).close()
+        platform.posix.chmod(db, 0x1a4u)
+        Store.open(db).close()
+        val m = fileMode(db)
+        removeDirAll(base)
+        assertEquals(0x180, m)
     }
 
     @Test fun archiveFilesAreOwnerOnly() {
-        val base = tmpDir("private-archive"); val (p, created) = writeArchiveFile("$base/archive", "abc", "x".encodeToByteArray())
-        assertTrue(created); assertEquals(0x180, fileMode(p)); assertEquals(0x1c0, fileMode("$base/archive"))
-        assertFalse(writeArchiveFile("$base/archive", "abc", "x".encodeToByteArray()).second); removeDirAll(base)
+        val base = tmpDir("private-archive")
+        val (p, created) = writeArchiveFile("$base/archive", "abc", "x".encodeToByteArray())
+        assertTrue(created)
+        assertEquals(0x180, fileMode(p))
+        assertEquals(0x1c0, fileMode("$base/archive"))
+        assertFalse(writeArchiveFile("$base/archive", "abc", "x".encodeToByteArray()).second)
+        removeDirAll(base)
     }
 
     @Test fun migrationsUseDieselVersionsAndAreIdempotent() {
-        val base = tmpDir("migrate"); val db = "$base/rtok.db"
+        val base = tmpDir("migrate")
+        val db = "$base/rtok.db"
         Store.open(db).use { s ->
             val versions = s.conn { it.query("SELECT version FROM __diesel_schema_migrations ORDER BY version") { r -> r.string(0) } }
-            assertEquals(EMBEDDED_MIGRATIONS.size, versions.size); assertEquals("0001", versions.first()); assertTrue(versions.all { Regex("\\d{4}").matches(it) })
+            assertEquals(EMBEDDED_MIGRATIONS.size, versions.size)
+            assertEquals("0001", versions.first())
+            assertTrue(versions.all { Regex("\\d{4}").matches(it) })
             assertEquals(0, s.migrate())
         }
         removeDirAll(base)
@@ -43,10 +56,13 @@ class HandleTest {
     }
 
     @Test fun anOldStoreMigratesForward() {
-        val db = Db.open(":memory:"); db.exec("PRAGMA foreign_keys = ON")
+        val db = Db.open(":memory:")
+        db.exec("PRAGMA foreign_keys = ON")
         Migrations.runBefore(db, "0015")
         assertEquals(14L, db.longOf("SELECT count(*) FROM __diesel_schema_migrations"))
-        assertTrue(Migrations.hasPending(db)); assertEquals(EMBEDDED_MIGRATIONS.size - 14, Migrations.runPending(db)); assertFalse(Migrations.hasPending(db))
+        assertTrue(Migrations.hasPending(db))
+        assertEquals(EMBEDDED_MIGRATIONS.size - 14, Migrations.runPending(db))
+        assertFalse(Migrations.hasPending(db))
         db.close()
     }
 
@@ -55,23 +71,38 @@ class HandleTest {
         Store.open("$dir/rtok.db").use { s ->
             listOf("plugin:a_b:2" to "two", "plugin:a_b:1" to "one", "plugin:axb:1" to "other", "plugin:a%b:1" to "pct", "plugin:A_B:1" to "upper", "other" to "x").forEach { (k, v) -> s.kvSet(k, v) }
             assertEquals(listOf("plugin:a_b:1" to "one", "plugin:a_b:2" to "two"), s.kvPrefix("plugin:a_b:"))
-            assertEquals(1, s.kvPrefix("plugin:a%b:").size); assertTrue(s.kvPrefix("nothing:").isEmpty())
-            s.kvSet("other", "y"); assertEquals("y", s.kvGet("other")); s.kvDelete("other"); assertNull(s.kvGet("other"))
+            assertEquals(1, s.kvPrefix("plugin:a%b:").size)
+            assertTrue(s.kvPrefix("nothing:").isEmpty())
+            s.kvSet("other", "y")
+            assertEquals("y", s.kvGet("other"))
+            s.kvDelete("other")
+            assertNull(s.kvGet("other"))
         }
         removeDirAll(dir)
     }
 
     /** A file without auto-vacuum, as SQLite builds with the stock default (0) created it. The bundled SQLite defaults to 1, so it is spelled out. */
-    private fun preT352(db: String) { Db.open(db).use { it.exec("PRAGMA auto_vacuum = NONE; CREATE TABLE t (x INTEGER)") } }
+    private fun preT352(db: String) {
+        Db.open(db).use { it.exec("PRAGMA auto_vacuum = NONE; CREATE TABLE t (x INTEGER)") }
+    }
 
     @Test fun anExistingStoreConvertsOnce() {
-        val dir = tmpDir("t352-convert"); val db = "$dir/old.db"; preT352(db)
-        Store.open(db).use { s -> assertEquals(0, s.autoVacuumMode()); assertTrue(s.convertToIncrementalVacuum()); assertEquals(2, s.autoVacuumMode()); assertFalse(s.convertToIncrementalVacuum()) }
+        val dir = tmpDir("t352-convert")
+        val db = "$dir/old.db"
+        preT352(db)
+        Store.open(db).use { s ->
+            assertEquals(0, s.autoVacuumMode())
+            assertTrue(s.convertToIncrementalVacuum())
+            assertEquals(2, s.autoVacuumMode())
+            assertFalse(s.convertToIncrementalVacuum())
+        }
         removeDirAll(dir)
     }
 
     @Test fun housekeepingConvertsAPreT352Store() {
-        val dir = tmpDir("t352-housekeeping"); val db = "$dir/rtok.db"; preT352(db)
+        val dir = tmpDir("t352-housekeeping")
+        val db = "$dir/rtok.db"
+        preT352(db)
         assertEquals(0, Store.open(db).use { it.autoVacuumMode() })
         assertEquals(emptyList(), Store.housekeeping(RetentionJob(db, 30u, 3u)))
         assertEquals(2, Store.open(db).use { it.autoVacuumMode() })
@@ -81,6 +112,8 @@ class HandleTest {
     @Test fun retentionScoreAndRankBlend() {
         assertEquals(1.0, retentionScore(true, 0, 1000.0, null))
         assertTrue(retentionScore(false, 0, 0.0, null) - 0.5 < 1e-9)
-        assertTrue(rankBlend(0, 1.0) > rankBlend(1, 1.0)); assertEquals("\"a\" \"b\"\"c\"", ftsPhraseQuery(" a  b\"c ")); assertNull(ftsPhraseQuery("  "))
+        assertTrue(rankBlend(0, 1.0) > rankBlend(1, 1.0))
+        assertEquals("\"a\" \"b\"\"c\"", ftsPhraseQuery(" a  b\"c "))
+        assertNull(ftsPhraseQuery("  "))
     }
 }

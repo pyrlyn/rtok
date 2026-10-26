@@ -59,7 +59,7 @@ size quota, so a pruning job also deletes the oldest entries first until the buc
 
 ## Release binary size
 
-Configured once in the root `build.gradle.kts`, release executables only (debug/test binaries untouched).
+Configured via `diffuser.releaseSize=all` in `gradle.properties` (logic in ci-diffuser `NativeConventionPlugin`), release executables only (debug/test binaries untouched).
 K/N release already links in LTO mode (all modules optimized together), so no extra LTO flag.
 
 | option | flag | rtok size | link (median of 3) |
@@ -71,4 +71,4 @@ K/N release already links in LTO mode (all modules optimized together), so no ex
 | all (default) | all of the above | 9.95 MB | 86 s |
 
 `rtok --version` startup (hyperfine, 50 runs): 7.0 ms baseline vs 7.1 ms all, within noise.
-Pick a subset with `-Prtok.releaseSize=none|all|small,strip,latin1`.
+Pick a subset with `-Pdiffuser.releaseSize=none|all|small,strip,latin1`.

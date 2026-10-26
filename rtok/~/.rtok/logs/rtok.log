@@ -1,4 +1,0 @@
-2026-10-26 13:54:40 error hook/PreToolUse: stdin over core.hook_max_input_bytes (4 bytes, got 7); failing open
-2026-10-26 13:55:35 error hook/PreToolUse: stdin over core.hook_max_input_bytes (4 bytes, got 7); failing open
-2026-10-26 13:55:44 error hook/PreToolUse: stdin over core.hook_max_input_bytes (4 bytes, got 7); failing open
-2026-10-26 14:54:53 error hook/PreToolUse: stdin over core.hook_max_input_bytes (4 bytes, got 7); failing open

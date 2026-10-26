@@ -7,28 +7,60 @@ configure<KotlinMultiplatformExtension> {
     sourceSets.commonTest.dependencies { implementation(project(":rtok-sys")) }
 }
 
-val rtokBin = project(":rtok").layout.buildDirectory.file("bin/macosArm64/debugExecutable/rtok.kexe")
+// `-Pe2e.release` runs the suite against the release binary: some K/N bugs only show with release optimizations.
+// `-Prtok.e2e.bin=<path>` runs it against any other binary (e.g. a fast-release build); it wins over `-Pe2e.release`.
+val e2eRelease = providers.gradleProperty("e2e.release").isPresent
+val rtokKind = if (e2eRelease) "release" else "debug"
+val customBin = providers.gradleProperty("rtok.e2e.bin")
+val rtokBin =
+    customBin
+        .map { layout.projectDirectory.file(it) }
+        .orElse(project(":rtok").layout.buildDirectory.file("bin/macosArm64/${rtokKind}Executable/rtok.kexe"))
 val testBin = layout.buildDirectory.file("bin/macosArm64/debugTest/test.kexe")
 
 // The fast default suite skips this module.
 tasks.named("macosArm64Test") { enabled = false }
 
 tasks.register<Exec>("e2eTest") {
-    group = "verification"; description = "Runs the end-to-end CLI suite against the debug rtok binary."
-    dependsOn(":rtok:linkDebugExecutableMacosArm64", "linkDebugTestMacosArm64")
-    inputs.file(rtokBin); inputs.file(testBin)
+    group = "verification"
+    description = "Runs the end-to-end CLI suite against the debug rtok binary."
+    dependsOn("linkDebugTestMacosArm64")
+    if (!customBin.isPresent) dependsOn(if (e2eRelease) ":rtok:linkReleaseExecutableMacosArm64" else ":rtok:linkDebugExecutableMacosArm64")
+    inputs.file(rtokBin)
+    inputs.file(testBin)
     executable(testBin.get().asFile)
     environment("RTOK_BIN", rtokBin.get().asFile.absolutePath)
+    // Isolated home for the binary under test; the suite never touches the real ~/.rtok.
+    val e2eHome =
+        layout.buildDirectory
+            .dir("e2e/home")
+            .get()
+            .asFile
+    environment("HOME", e2eHome.absolutePath)
+    environment("RTOK_HOME", e2eHome.resolve(".rtok").absolutePath)
+    val strayTilde =
+        rootProject.layout.projectDirectory.asFile
+            .walkTopDown()
+            .maxDepth(2)
+            .filter { it.name == "~" }
+    doFirst { e2eHome.resolve(".rtok").mkdirs() }
     outputs.upToDateWhen { false }
     // The Kotest native launcher exits 0 even when a spec fails, so the verdict is read from its report.
     val log = layout.buildDirectory.file("e2e/output.txt")
     val logFile = log.get().asFile
-    doFirst { logFile.parentFile.mkdirs(); standardOutput = org.apache.tools.ant.util.TeeOutputStream(logFile.outputStream(), System.out) }
+    doFirst {
+        logFile.parentFile.mkdirs()
+        standardOutput =
+            org.apache.tools.ant.util
+                .TeeOutputStream(logFile.outputStream(), System.out)
+    }
     doLast {
         val text = logFile.readText()
-        val tests = Regex("""Tests:\s+\S*?(\d+) passed\S*, \S*?(\d+) failed""").find(text.replace(Regex("\u001B\\[[0-9;]*m"), ""))
-            ?: throw GradleException("e2e: no Kotest summary in ${logFile}")
+        val tests =
+            Regex("""Tests:\s+\S*?(\d+) passed\S*, \S*?(\d+) failed""").find(text.replace(Regex("\u001B\\[[0-9;]*m"), ""))
+                ?: throw GradleException("e2e: no Kotest summary in $logFile")
         if (tests.groupValues[2] != "0" || tests.groupValues[1] == "0") throw GradleException("e2e: ${tests.value} (see $logFile)")
         logger.lifecycle("e2e: ${tests.value}")
+        strayTilde.firstOrNull()?.let { throw GradleException("e2e created a literal '~' directory: $it") }
     }
 }

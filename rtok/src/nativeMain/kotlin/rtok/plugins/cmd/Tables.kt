@@ -6,44 +6,71 @@ import rtok.sys.rustLines
 
 object Tables {
     private fun words(s: String) = s.split(' ', '\t', '\n', '\r', '\u000C').filter { it.isNotEmpty() }
+
     private fun String.upper() = buildString { for (c in this@upper) append(if (c in 'a'..'z') c - 32 else c) }
 
     fun dockerPs(output: String): String? {
         val lines = output.rustLines().filter { it.isNotEmpty() }
         val u = (lines.firstOrNull() ?: return null).upper()
         if (!u.contains("CONTAINER ID") && !(u.contains("IMAGE") && u.contains("NAMES"))) return null
-        return lines.drop(1).map(::compactDockerRow).filter { it.isNotEmpty() }.takeIf { it.isNotEmpty() }?.joinToString("\n")
+        return lines
+            .drop(1)
+            .map(::compactDockerRow)
+            .filter { it.isNotEmpty() }
+            .takeIf { it.isNotEmpty() }
+            ?.joinToString("\n")
     }
 
     private fun compactDockerRow(line: String) = shortenAgo(dropRegistryHost(dropArrowPort(words(line).joinToString(" ").replace("0.0.0.0:", ""))))
 
     /** `8080->80/tcp` → `8080`. */
-    private fun dropArrowPort(s: String) = buildString {
-        var i = 0
-        while (i < s.length) {
-            if (s[i] == '-' && s.getOrNull(i + 1) == '>') {
-                i += 2
-                while (i < s.length && s[i] in '0'..'9') i++
-                if (s.getOrNull(i) == '/') { i++; while (i < s.length && (s[i] in 'a'..'z' || s[i] in 'A'..'Z')) i++ }
-                continue
+    private fun dropArrowPort(s: String) =
+        buildString {
+            var i = 0
+            while (i < s.length) {
+                if (s[i] == '-' && s.getOrNull(i + 1) == '>') {
+                    i += 2
+                    while (i < s.length && s[i] in '0'..'9') i++
+                    if (s.getOrNull(i) == '/') {
+                        i++
+                        while (i < s.length && (s[i] in 'a'..'z' || s[i] in 'A'..'Z')) i++
+                    }
+                    continue
+                }
+                append(s[i++])
             }
-            append(s[i++])
         }
-    }
 
-    private fun dropRegistryHost(s: String) = words(s).joinToString(" ") { tok ->
-        val slash = tok.indexOf('/')
-        if (slash >= 0 && tok.substring(0, slash).let { it.contains('.') && !it.contains(':') }) tok.substring(slash + 1) else tok
-    }
+    private fun dropRegistryHost(s: String) =
+        words(s).joinToString(" ") { tok ->
+            val slash = tok.indexOf('/')
+            if (slash >= 0 && tok.substring(0, slash).let { it.contains('.') && !it.contains(':') }) tok.substring(slash + 1) else tok
+        }
 
     /** Only `<number> <unit>` shortens; docker's prose forms stay readable words. */
     internal fun shortenAgo(s: String): String {
-        fun unit(w: String) = when (w) { "day", "days" -> 'd'; "hour", "hours" -> 'h'; "minute", "minutes" -> 'm'; "second", "seconds" -> 's'; "week", "weeks" -> 'w'; else -> null }
-        val words = s.split(' '); val out = ArrayList<String>(words.size); var i = 0
+        fun unit(w: String) =
+            when (w) {
+                "day", "days" -> 'd'
+                "hour", "hours" -> 'h'
+                "minute", "minutes" -> 'm'
+                "second", "seconds" -> 's'
+                "week", "weeks" -> 'w'
+                else -> null
+            }
+        val words = s.split(' ')
+        val out = ArrayList<String>(words.size)
+        var i = 0
         while (i < words.size) {
             val w = words[i]
             val u = words.getOrNull(i + 1)?.let(::unit)
-            if (u != null && w.isNotEmpty() && w.all { it in '0'..'9' }) { out += "$w$u"; i += 2 } else { out += w; i++ }
+            if (u != null && w.isNotEmpty() && w.all { it in '0'..'9' }) {
+                out += "$w$u"
+                i += 2
+            } else {
+                out += w
+                i++
+            }
         }
         return out.joinToString(" ")
     }
@@ -59,7 +86,11 @@ object Tables {
         if (idx.isEmpty()) return null
         // A cell can hold spaces (RESTARTS `1 (3m ago)` since 1.22): a cell is the text under its header.
         val starts = header.indices.filter { i -> header[i] != ' ' && (i == 0 || header[i - 1] == ' ') }
-        fun cell(line: String, col: Int): String? {
+
+        fun cell(
+            line: String,
+            col: Int,
+        ): String? {
             val from = starts.getOrNull(col) ?: return null
             if (from > line.length) return null
             val to = starts.getOrNull(col + 1) ?: Int.MAX_VALUE

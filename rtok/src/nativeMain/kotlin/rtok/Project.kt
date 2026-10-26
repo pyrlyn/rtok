@@ -14,7 +14,10 @@ import rtok.sys.normalize
 /** Name of the project `cwd` lies in: the `origin` repo name, else the main checkout's basename. */
 fun projectName(cwd: String): String? = projectNameWith(HostFs, cwd)
 
-fun projectNameWith(fs: ReadFs, cwd: String): String? {
+fun projectNameWith(
+    fs: ReadFs,
+    cwd: String,
+): String? {
     val root = ProjectRoot.findWith(fs, cwd) ?: return null
     return originUrl(fs, root.gitDir)?.let(::urlName) ?: components(root.main).lastOrNull()?.takeIf { it != "/" }
 }
@@ -22,7 +25,10 @@ fun projectNameWith(fs: ReadFs, cwd: String): String? {
 /** The key per-project state is filed under: `host/owner/repo` (lower case), a local remote's path, or the main checkout's path. */
 fun projectKey(cwd: String): String? = projectKeyWith(HostFs, cwd)
 
-fun projectKeyWith(fs: ReadFs, cwd: String): String? {
+fun projectKeyWith(
+    fs: ReadFs,
+    cwd: String,
+): String? {
     val root = ProjectRoot.findWith(fs, cwd) ?: return null
     val origin = originUrl(fs, root.gitDir)
     origin?.let(::localRemote)?.let { return localKey(fs, root.main, it) }
@@ -31,13 +37,15 @@ fun projectKeyWith(fs: ReadFs, cwd: String): String? {
 }
 
 /** `cwd` when it lies in a checkout; else the first of [extra] that does; else [noProjectRoot]. */
-fun projectDir(cwd: String, extra: List<String>): String {
+fun projectDir(
+    cwd: String,
+    extra: List<String>,
+): String {
     if (ProjectRoot.find(cwd) != null) return cwd
     return extra.firstOrNull { ProjectRoot.find(it) != null } ?: throw noProjectRoot(cwd)
 }
 
-fun noProjectRoot(cwd: String) =
-    IllegalStateException("no project root: rtok mcp runs in ${canon(cwd)}; pass a path or open a project")
+fun noProjectRoot(cwd: String) = IllegalStateException("no project root: rtok mcp runs in ${canon(cwd)}; pass a path or open a project")
 
 private fun isScpHost(host: String) = !host.contains('/') && !host.contains('\\') && host.length > 1
 
@@ -56,19 +64,29 @@ internal fun localRemote(raw: String): String? {
 
 private fun Char.isAsciiLetter() = this in 'a'..'z' || this in 'A'..'Z'
 
-private fun localKey(fs: ReadFs, main: String, path: String): String {
+private fun localKey(
+    fs: ReadFs,
+    main: String,
+    path: String,
+): String {
     val abs = normalize("", join(main, path))
     val resolved = (fs.canonicalize(abs) ?: abs).trimEnd('/', '\\')
     return resolved.removeSuffix(".git")
 }
 
 /** `[remote "origin"] url` in `<common>/config`. */
-private fun originUrl(fs: ReadFs, common: String): String? {
+private fun originUrl(
+    fs: ReadFs,
+    common: String,
+): String? {
     val config = runCatching { fs.readToString(join(common, "config")) }.getOrNull() ?: return null
     var inOrigin = false
     for (raw in config.lines()) {
         val line = raw.trim()
-        if (line.startsWith("[")) { inOrigin = line == "[remote \"origin\"]"; continue }
+        if (line.startsWith("[")) {
+            inOrigin = line == "[remote \"origin\"]"
+            continue
+        }
         val eq = line.indexOf('=').takeIf { it >= 0 } ?: continue
         if (inOrigin && line.substring(0, eq).trim() == "url") return line.substring(eq + 1).trim()
     }
@@ -83,7 +101,11 @@ internal fun urlName(url: String): String? {
 }
 
 /** Rust `trim_end_matches(".git")` removes every trailing repeat. */
-private fun String.removeSuffixRepeated(s: String): String { var r = this; while (r.endsWith(s)) r = r.dropLast(s.length); return r }
+private fun String.removeSuffixRepeated(s: String): String {
+    var r = this
+    while (r.endsWith(s)) r = r.dropLast(s.length)
+    return r
+}
 
 /** `git@github.com:Owner/Repo.git` and friends → `github.com/owner/repo`; a path keeps its path. */
 internal fun canonicalUrl(raw: String): String? {

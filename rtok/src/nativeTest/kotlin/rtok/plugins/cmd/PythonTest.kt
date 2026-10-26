@@ -1,8 +1,8 @@
 // Port of the src/plugins/cmd/python.rs tests (7).
 package rtok.plugins.cmd
 
-import kotlin.test.*
 import rtok.sys.rustLines
+import kotlin.test.*
 
 private const val FAILING = """============================= test session starts ==============================
 platform linux -- Python 3.12.1, pytest-8.1.1
@@ -41,10 +41,14 @@ class PythonTest {
 
     @Test fun quietModeWithoutBannersStillParses() {
         val got = Python.pytest("..F.. [100%]\n=================================== FAILURES ===================================\nboom\n1 failed, 4 passed in 0.10s")!!
-        assertTrue(got.contains("..F.."), got); assertTrue(got.endsWith("1 failed, 4 passed in 0.10s"))
+        assertTrue(got.contains("..F.."), got)
+        assertTrue(got.endsWith("1 failed, 4 passed in 0.10s"))
     }
 
-    @Test fun nonPytestTextIsLeftAlone() { assertNull(Python.pytest("hello\nworld\n")); assertNull(Python.unittest("hello\n")) }
+    @Test fun nonPytestTextIsLeftAlone() {
+        assertNull(Python.pytest("hello\nworld\n"))
+        assertNull(Python.unittest("hello\n"))
+    }
 
     @Test fun unittestDropsACleanDotsLineOnly() {
         assertFalse(Python.unittest("....\n----------------------------------------------------------------------\nRan 4 tests in 0.001s\n\nOK")!!.startsWith("...."))
@@ -52,11 +56,12 @@ class PythonTest {
     }
 
     @Test fun recursionFramesFoldAndEveryOtherFrameStays() {
-        val raw = buildString {
-            append("start\nTraceback (most recent call last):\n  File \"m.py\", line 9, in <module>\n    f(3)\n")
-            repeat(40) { append("  File \"m.py\", line 5, in f\n    return f(n - 1)\n") }
-            append("RecursionError: maximum recursion depth exceeded\nend\n")
-        }
+        val raw =
+            buildString {
+                append("start\nTraceback (most recent call last):\n  File \"m.py\", line 9, in <module>\n    f(3)\n")
+                repeat(40) { append("  File \"m.py\", line 5, in f\n    return f(n - 1)\n") }
+                append("RecursionError: maximum recursion depth exceeded\nend\n")
+            }
         val got = Python.collapseFrames(raw)
         assertTrue(got.contains("[previous frame repeated 39 more times]"), got)
         assertTrue(got.contains("File \"m.py\", line 9, in <module>") && got.contains("f(3)"))

@@ -3,6 +3,7 @@
 package rtok.plugins
 
 const val TOON_PREFIX = "[toon "
+
 /** Rust `expand::JSON_TREE_PREFIX`. */
 const val JSON_TREE_PREFIX = "[json-tree "
 

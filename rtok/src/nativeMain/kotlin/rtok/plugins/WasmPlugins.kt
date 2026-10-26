@@ -13,7 +13,10 @@ import rtok.sys.eprint
 import rtok.wasm.chasm.ChasmRuntime
 
 /** Appends `[plugins.wasm] dir`'s `.wasm` plugins when `[plugins.wasm] enabled`; load errors go to stderr and the log. */
-internal fun wasmPlugins(plugins: List<Pair<Plugin, Boolean>>, config: Config): List<Pair<Plugin, Boolean>> {
+internal fun wasmPlugins(
+    plugins: List<Pair<Plugin, Boolean>>,
+    config: Config,
+): List<Pair<Plugin, Boolean>> {
     if (!config.plugins.wasm.enabled) return plugins
     val env = WasmHostEnv({ text, cls -> estimate(text, cls, config.estimator) }, config.fileLog(), ::eprint)
     return appendWasm(plugins, config.plugins.wasm.dir, ChasmRuntime, env, config::pluginEnabled) { msg ->

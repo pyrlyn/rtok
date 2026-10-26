@@ -1,0 +1,16 @@
+# ktlint (ci.diffuser.ktlint from ../ci-diffuser): `./gradlew ktlintCheck` / `./gradlew ktlintFormat`.
+root = true
+
+[*.{kt,kts}]
+# Rules ktlintFormat cannot fix; disabled until the code is cleaned up by hand (follow-up).
+ktlint_standard_no-wildcard-imports = disabled
+ktlint_standard_max-line-length = disabled
+ktlint_standard_filename = disabled
+ktlint_standard_property-naming = disabled
+ktlint_standard_kdoc = disabled
+ktlint_standard_no-consecutive-comments = disabled
+ktlint_standard_mixed-condition-operators = disabled
+
+[**/build.gradle.kts]
+# Modules configured only from the root script keep an empty build file.
+ktlint_standard_no-empty-file = disabled

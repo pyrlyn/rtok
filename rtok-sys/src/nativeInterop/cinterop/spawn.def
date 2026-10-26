@@ -1,26 +1,5 @@
 # posix_spawn, the process environment and a process parent lookup, which Kotlin/Native's platform.posix does not export.
-headers = spawn.h unistd.h
+# The rtok_* helpers live in src/nativeInterop/c and are linked from librtok_spawn.a (docs/experiments/binary-split.md).
+headers = spawn.h unistd.h rtok_spawn.h
 package = rtok.sys.spawn
----
-extern char **environ;
-static inline char **rtok_environ(void) { return environ; }
-#ifdef __APPLE__
-#include <libproc.h>
-#include <sys/proc_info.h>
-/* Parent pid of `pid` via proc_pidinfo(PROC_PIDTBSDINFO), or -1 (Rust rtok_sys::parent_of, macOS arm). */
-static inline int rtok_parent_of(int pid) {
-    struct proc_bsdinfo info;
-    int size = (int)sizeof(info);
-    if (pid <= 0 || proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, size) != size) return -1;
-    return (int)info.pbi_ppid;
-}
-#else
-static inline int rtok_parent_of(int pid) { (void)pid; return -1; }
-#endif
-#ifdef __APPLE__
-#include <mach-o/dyld.h>
-/* Path of the running executable into buf; 0 on success (Rust std::env::current_exe). */
-static inline int rtok_current_exe(char *buf, unsigned int size) { uint32_t s = size; return _NSGetExecutablePath(buf, &s); }
-#else
-static inline int rtok_current_exe(char *buf, unsigned int size) { (void)buf; (void)size; return -1; }
-#endif
+staticLibraries = librtok_spawn.a

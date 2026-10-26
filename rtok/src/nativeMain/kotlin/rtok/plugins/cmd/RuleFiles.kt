@@ -11,6 +11,7 @@ import rtok.sys.listDir
 interface RuleFiles {
     /** UTF-8 body, null when [path] is missing; throws for any other read error. */
     fun read(path: String): String?
+
     /** The `*.toml` drop-ins under [dir], sorted by name; empty when [dir] is missing. */
     fun dropIns(dir: String): List<String>
 }
@@ -19,14 +20,25 @@ interface RuleFiles {
 object DiskRuleFiles : RuleFiles {
     override fun read(path: String): String? {
         if (!isFile(path)) return null
-        return try { rtok.sys.readToString(path) } catch (e: IoException) { if (e.kind == IoException.Kind.NotFound) null else throw e }
+        return try {
+            rtok.sys.readToString(path)
+        } catch (e: IoException) {
+            if (e.kind == IoException.Kind.NotFound) null else throw e
+        }
     }
 
     override fun dropIns(dir: String): List<String> {
         if (!isDir(dir)) return emptyList()
         // `Path::extension() == "toml"`: a dot after the first character, `toml` after the last one.
-        val names = try { listDir(dir) } catch (_: IoException) { return emptyList() }
-        return names.filter { n -> n.lastIndexOf('.').let { it > 0 && n.substring(it + 1) == "toml" } }
-            .map { "${dir.trimEnd('/')}/$it" }.sortedWith(Utf8Order)
+        val names =
+            try {
+                listDir(dir)
+            } catch (_: IoException) {
+                return emptyList()
+            }
+        return names
+            .filter { n -> n.lastIndexOf('.').let { it > 0 && n.substring(it + 1) == "toml" } }
+            .map { "${dir.trimEnd('/')}/$it" }
+            .sortedWith(Utf8Order)
     }
 }

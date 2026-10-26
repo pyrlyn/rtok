@@ -1,0 +1,18 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>ComplexCondition:Humantime.kt:i &lt; s.length &amp;&amp; !s[i].isWhitespace() &amp;&amp; s[i] !in '0'..'9' &amp;&amp; s[i] != '+'</ID>
+    <ID>CyclomaticComplexMethod:Humantime.kt:fun parseHumanDuration: Duration</ID>
+    <ID>MagicNumber:Humantime.kt:1_000L</ID>
+    <ID>MagicNumber:Humantime.kt:1_000_000L</ID>
+    <ID>MagicNumber:Humantime.kt:2_630_016L</ID>
+    <ID>MagicNumber:Humantime.kt:31_557_600L</ID>
+    <ID>MagicNumber:Humantime.kt:3_600L</ID>
+    <ID>MagicNumber:Humantime.kt:604_800L</ID>
+    <ID>MagicNumber:Humantime.kt:60L</ID>
+    <ID>MagicNumber:Humantime.kt:86_400L</ID>
+    <ID>MatchingDeclarationName:Humantime.kt:DurationParseException : IllegalArgumentException</ID>
+    <ID>ThrowsCount:Humantime.kt:fun parseHumanDuration: Duration</ID>
+  </CurrentIssues>
+</SmellBaseline>

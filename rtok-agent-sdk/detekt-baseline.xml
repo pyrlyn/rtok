@@ -1,0 +1,10 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>MatchingDeclarationName:Backup.kt:Apply</ID>
+    <ID>ReturnCount:Backup.kt:fun pruneBackups</ID>
+    <ID>ReturnCount:Backup.kt:internal fun backupAt: String?</ID>
+    <ID>TooManyFunctions:Backup.kt:rtok.agent.sdk.Backup.kt</ID>
+  </CurrentIssues>
+</SmellBaseline>

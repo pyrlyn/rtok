@@ -1,0 +1,162 @@
+{
+  "comment": "Pinned by scripts/grammars.py lock; fetched by scripts/grammars.py fetch.",
+  "repos": [
+    {
+      "repo": "tree-sitter/tree-sitter",
+      "role": "runtime",
+      "ref": "v0.27.1",
+      "commit": "10eb5ac119eec9cb4267a8e035066473983f5f3a"
+    },
+    {
+      "repo": "tree-sitter/tree-sitter-agda",
+      "ref": "v1.3.3",
+      "commit": "47802091de0cb8ac2533d67ac37e65692c5902c4"
+    },
+    {
+      "repo": "tree-sitter/tree-sitter-bash",
+      "ref": "v0.25.1",
+      "commit": "a06c2e4415e9bc0346c6b86d401879ffb44058f7"
+    },
+    {
+      "repo": "tree-sitter/tree-sitter-c",
+      "ref": "v0.24.2",
+      "commit": "b780e47fc780ddc8da13afa35a3f4ed5c157823d"
+    },
+    {
+      "repo": "tree-sitter/tree-sitter-c-sharp",
+      "ref": "v0.23.5",
+      "commit": "cac6d5fb595f5811a076336682d5d595ac1c9e85"
+    },
+    {
+      "repo": "tree-sitter/tree-sitter-cpp",
+      "ref": "v0.23.4",
+      "commit": "f41e1a044c8a84ea9fa8577fdd2eab92ec96de02"
+    },
+    {
+      "repo": "tree-sitter/tree-sitter-css",
+      "ref": "v0.25.0",
+      "commit": "dda5cfc5722c429eaba1c910ca32c2c0c5bb1a3f"
+    },
+    {
+      "repo": "tree-sitter/tree-sitter-embedded-template",
+      "ref": "v0.25.0",
+      "commit": "c70c1de07dedd532089c0c90835c8ed9fa694f5c"
+    },
+    {
+      "repo": "tree-sitter/tree-sitter-fluent",
+      "ref": "master",
+      "commit": "858fdd6f1e81992e00d3541bfb31bac9365d7a47"
+    },
+    {
+      "repo": "tree-sitter/tree-sitter-go",
+      "ref": "v0.25.0",
+      "commit": "1547678a9da59885853f5f5cc8a99cc203fa2e2c"
+    },
+    {
+      "repo": "tree-sitter/tree-sitter-haskell",
+      "ref": "v0.24.1",
+      "commit": "97288e585b0bd44199720280d067fa35bacd81ff"
+    },
+    {
+      "repo": "tree-sitter/tree-sitter-html",
+      "ref": "v0.23.2",
+      "commit": "5a5ca8551a179998360b4a4ca2c0f366a35acc03"
+    },
+    {
+      "repo": "tree-sitter/tree-sitter-java",
+      "ref": "v0.23.5",
+      "commit": "94703d5a6bed02b98e438d7cad1136c01a60ba2c"
+    },
+    {
+      "repo": "tree-sitter/tree-sitter-javascript",
+      "ref": "v0.25.0",
+      "commit": "44c892e0be055ac465d5eeddae6d3e194424e7de"
+    },
+    {
+      "repo": "tree-sitter/tree-sitter-jsdoc",
+      "ref": "v0.25.0",
+      "commit": "658d18dcdddb75c760363faa4963427a7c6b52db"
+    },
+    {
+      "repo": "tree-sitter/tree-sitter-json",
+      "ref": "v0.24.8",
+      "commit": "ee35a6ebefcef0c5c416c0d1ccec7370cfca5a24"
+    },
+    {
+      "repo": "tree-sitter/tree-sitter-julia",
+      "ref": "v0.25.0",
+      "commit": "e0f9dcd180fdcfcfa8d79a3531e11d99e79321d3"
+    },
+    {
+      "repo": "tree-sitter/tree-sitter-ocaml",
+      "ref": "v0.26.0",
+      "commit": "e3c9cf368f68bffd2f81188229aefa7b434eda65"
+    },
+    {
+      "repo": "tree-sitter/tree-sitter-php",
+      "ref": "v0.25.1",
+      "commit": "58d5643086ae60e93a3746cca648363ee97c8761"
+    },
+    {
+      "repo": "tree-sitter/tree-sitter-python",
+      "ref": "v0.25.0",
+      "commit": "293fdc02038ee2bf0e2e206711b69c90ac0d413f"
+    },
+    {
+      "repo": "tree-sitter/tree-sitter-ql",
+      "ref": "v0.23.1",
+      "commit": "1fd627a4e8bff8c24c11987474bd33112bead857"
+    },
+    {
+      "repo": "tree-sitter/tree-sitter-ql-dbscheme",
+      "ref": "v0.23.1",
+      "commit": "15baf01feb5f20bb3d668d27abc0a36e944b183f"
+    },
+    {
+      "repo": "tree-sitter/tree-sitter-regex",
+      "ref": "v0.25.0",
+      "commit": "b2ac15e27fce703d2f37a79ccd94a5c0cbe9720b"
+    },
+    {
+      "repo": "tree-sitter/tree-sitter-ruby",
+      "ref": "v0.23.1",
+      "commit": "71bd32fb7607035768799732addba884a37a6210"
+    },
+    {
+      "repo": "tree-sitter/tree-sitter-rust",
+      "ref": "v0.24.2",
+      "commit": "77a3747266f4d621d0757825e6b11edcbf991ca5"
+    },
+    {
+      "repo": "tree-sitter/tree-sitter-scala",
+      "ref": "v0.26.3",
+      "commit": "851032fc97297bbe299dabe5bd826f778794d03c"
+    },
+    {
+      "repo": "tree-sitter/tree-sitter-typescript",
+      "ref": "v0.23.2",
+      "commit": "f975a621f4e7f532fe322e13c4f79495e0a7b2e7"
+    },
+    {
+      "repo": "tree-sitter/tree-sitter-verilog",
+      "ref": "v1.0.3",
+      "commit": "521b535e41a5acd2c6539a922d4649bbe8275110"
+    },
+    {
+      "repo": "tree-sitter-grammars/tree-sitter-kotlin",
+      "ref": "v1.1.0",
+      "commit": "77dd60ea0a9003ce062c9728a513ffe1aaff8c82"
+    },
+    {
+      "repo": "UserNobody14/tree-sitter-dart",
+      "ref": "master",
+      "commit": "0038280b774b65c1b89ba7fec50624d8baed9fe1"
+    },
+    {
+      "repo": "alex-pinkus/tree-sitter-swift",
+      "branch": "with-generated-files",
+      "ref": "with-generated-files",
+      "commit": "82bb3a533e0801fd2bbaa11dc49676e10bf41948"
+    }
+  ]
+}

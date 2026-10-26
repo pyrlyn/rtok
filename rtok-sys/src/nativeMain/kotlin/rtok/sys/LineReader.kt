@@ -7,11 +7,15 @@ import platform.posix.*
 
 /** Calls [each] per line of [path]; false when the file cannot be opened. */
 @OptIn(ExperimentalForeignApi::class)
-fun forEachFileLine(path: String, each: (String?) -> Unit): Boolean {
+fun forEachFileLine(
+    path: String,
+    each: (String?) -> Unit,
+): Boolean {
     val f = fopen(path, "rb") ?: return false
     try {
         memScoped {
-            val buf = alloc<CPointerVar<ByteVar>>(); val cap = alloc<ULongVar>()
+            val buf = alloc<CPointerVar<ByteVar>>()
+            val cap = alloc<ULongVar>()
             try {
                 while (true) {
                     val len = getline(buf.ptr, cap.ptr, f)
@@ -23,8 +27,12 @@ fun forEachFileLine(path: String, each: (String?) -> Unit): Boolean {
                     }
                     each(runCatching { bytes.decodeToString(throwOnInvalidSequence = true) }.getOrNull())
                 }
-            } finally { free(buf.value) }
+            } finally {
+                free(buf.value)
+            }
         }
-    } finally { fclose(f) }
+    } finally {
+        fclose(f)
+    }
     return true
 }

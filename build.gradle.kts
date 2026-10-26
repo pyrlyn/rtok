@@ -4,48 +4,30 @@ buildscript { configurations.classpath { resolutionStrategy.force("org.jetbrains
 plugins {
     kotlin("multiplatform") version "2.4.21" apply false; kotlin("plugin.serialization") version "2.4.21" apply false
     // API docs: `./gradlew dokkaGenerate` only; never wired into build/test (docs/api-docs.md).
-    id("org.jetbrains.dokka") version "2.2.0"
+    id("org.jetbrains.dokka") version "2.2.0" apply false
     // Tests: Kotest specs next to kotlin.test (docs/testing.md); KSP must come before Kotest.
     id("com.google.devtools.ksp") version "2.3.12" apply false
     id("io.kotest") version "6.2.6" apply false
+    // Dev-only coverage (`mise run coverage`, docs/toolchain.md): active only with -Prtok.coverage=true.
+    id("org.jetbrains.kotlinx.kover") version "0.9.11" apply false
+    // Shared Kotlin/Native dev/release settings: targets, release cache rules, -Prtok.releaseSize, -Prtok.release.fast.
+    id("ci.diffuser.native")
+    // Shared project config: KMP/serialization/Dokka/Kotest per subproject, Dokka aggregation, opt-in Kover (-Prtok.coverage=true).
+    id("ci.diffuser.kmp")
 }
 
-// One aggregated HTML site over every module, declared once here.
-dependencies { subprojects.forEach { add("dokka", it) } }
-dokka { moduleName.set("rtok-kotlin") }
+extensions.configure<org.jetbrains.dokka.gradle.DokkaExtension> { moduleName.set("rtok-kotlin") }
 
+// Tests never see the real home: every native test run and the e2e suite get a per-module temp HOME and
+// RTOK_HOME under build/, and fail if anything created a literal `~` directory in the module (unexpanded path).
 subprojects {
-    apply(plugin = "org.jetbrains.kotlin.multiplatform")
-    apply(plugin = "org.jetbrains.kotlin.plugin.serialization")
-    apply(plugin = "org.jetbrains.dokka")
-    apply(plugin = "com.google.devtools.ksp")
-    apply(plugin = "io.kotest")
-    // Release binaries are rebuilt only for shipping and are large, so they never enter the
-    // build cache (local or remote); debug test binaries stay cacheable (docs/build-speed.md).
-    tasks.matching { it.name.startsWith("linkRelease") }.configureEach {
-        outputs.cacheIf("release binaries are not cached") { false }
-    }
-    extensions.configure<org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension> {
-        macosArm64()
-        if (providers.gradleProperty("rtok.allTargets").orNull == "true") { linuxX64(); linuxArm64() }
-        // Release-size options (docs/build-speed.md "Release binary size"): RELEASE binaries only;
-        // debug and test binaries are untouched. K/N release already runs LTO (whole-program LLVM opt).
-        // -Prtok.releaseSize=none|all|small,strip,latin1 picks a subset (for measuring); default all.
-        val sizeOpts = (providers.gradleProperty("rtok.releaseSize").orNull ?: "all").split(',').map { it.trim() }.toSet()
-        fun size(o: String) = "all" in sizeOpts || o in sizeOpts
-        targets.withType<org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget>().configureEach {
-            binaries.matching { it.buildType == org.jetbrains.kotlin.gradle.plugin.mpp.NativeBuildType.RELEASE && it !is org.jetbrains.kotlin.gradle.plugin.mpp.TestExecutable }.configureEach {
-                if (size("small")) freeCompilerArgs += "-Xbinary=smallBinary=true"
-                if (size("latin1")) freeCompilerArgs += "-Xbinary=latin1Strings=true"
-                if (size("strip")) linkerOpts(if (konanTarget.family == org.jetbrains.kotlin.konan.target.Family.OSX) listOf("-Wl,-dead_strip", "-Wl,-x", "-Wl,-S") else listOf("-Wl,--gc-sections", "-Wl,-s"))
-            }
-        }
-        sourceSets.commonMain.dependencies {
-            implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.12.0")
-        }
-        sourceSets.commonTest.dependencies {
-            implementation(kotlin("test"))
-            implementation("io.kotest:kotest-framework-engine:6.2.6"); implementation("io.kotest:kotest-assertions-core:6.2.6")
-        }
+    val testHome = layout.buildDirectory.dir("test-home")
+    val strayTilde = layout.projectDirectory.dir("~").asFile
+    tasks.withType<org.jetbrains.kotlin.gradle.targets.native.tasks.KotlinNativeTest>().configureEach {
+        val h = testHome.get().asFile
+        doFirst { h.resolve(".rtok").mkdirs() }
+        environment("HOME", h.absolutePath)
+        environment("RTOK_HOME", h.resolve(".rtok").absolutePath)
+        doLast { if (strayTilde.exists()) throw GradleException("test created a literal '~' directory: $strayTilde") }
     }
 }

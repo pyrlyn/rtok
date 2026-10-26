@@ -3,6 +3,7 @@
 // client's cwd. It refuses a client whose environment fingerprint differs, and exits when its home
 // goes or a client of another version calls. Nothing depends on it (fail open).
 @file:OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
+
 package rtok.hooks
 
 import kotlinx.cinterop.*
@@ -27,29 +28,53 @@ object Resident {
         createDirAll(home)
         val lockPath = "$home/hook.lock"
         val lockFd = tryLockExclusive(lockPath) ?: return
-        try { listen(ep, lockPath, fingerprint(environ())) } finally { close(lockFd) }
+        try {
+            listen(ep, lockPath, fingerprint(environ()))
+        } finally {
+            close(lockFd)
+        }
     }
 
-    private fun listen(ep: String, lock: String, fp: ULong) {
+    private fun listen(
+        ep: String,
+        lock: String,
+        fp: ULong,
+    ) {
         unlink(ep)
         val fd = bindPrivate(ep) ?: return
         try {
             memScoped {
-                val pfd = alloc<pollfd>(); pfd.fd = fd; pfd.events = POLLIN.toShort()
+                val pfd = alloc<pollfd>()
+                pfd.fd = fd
+                pfd.events = POLLIN.toShort()
                 while (true) {
                     val r = poll(pfd.ptr, 1u, 1000)
                     if (r > 0) {
                         val c = accept(fd, null, null)
-                        if (c >= 0) { val stale = try { answer(c, fp) } finally { close(c) }; if (stale) break }
+                        if (c >= 0) {
+                            val stale =
+                                try {
+                                    answer(c, fp)
+                                } finally {
+                                    close(c)
+                                }
+                            if (stale) break
+                        }
                     }
                     if (!exists(lock) || !exists(ep)) break
                 }
             }
-        } finally { close(fd); unlink(ep) }
+        } finally {
+            close(fd)
+            unlink(ep)
+        }
     }
 
     /** Read one request, answer it. Returns true when the caller is another version (this binary is stale). */
-    internal fun answer(c: Int, fp: ULong): Boolean {
+    internal fun answer(
+        c: Int,
+        fp: ULong,
+    ): Boolean {
         val req = runCatching { Request.decode(readFrame { readExact(c, it) }) }.getOrNull()
         val stale = req != null && req.version != VERSION
         val out = if (req != null && !stale && req.fingerprint == fp) run(req) else null
@@ -66,13 +91,21 @@ object Resident {
      *  falls back to bind-then-chmod when the detour path is too long. */
     fun bindPrivate(ep: String): Int? {
         val parent = rtok.sys.parent(ep) ?: "."
-        val dir = "$parent/.hs${pid()}"; removeDirAll(dir)
+        val dir = "$parent/.hs${pid()}"
+        removeDirAll(dir)
         if (mkdir(dir, 0x1c0u) != 0) return null // 0o700
         val tmp = "$dir/s"
         var fd = bindUnix(tmp)
-        if (fd != null && (chmod(tmp, SOCKET_MODE.convert()) != 0 || rename(tmp, ep) != 0)) { close(fd); fd = null }
-        unlink(tmp); rmdir(dir)
-        if (fd == null) { fd = bindUnix(ep) ?: return null; chmod(ep, SOCKET_MODE.convert()) }
+        if (fd != null && (chmod(tmp, SOCKET_MODE.convert()) != 0 || rename(tmp, ep) != 0)) {
+            close(fd)
+            fd = null
+        }
+        unlink(tmp)
+        rmdir(dir)
+        if (fd == null) {
+            fd = bindUnix(ep) ?: return null
+            chmod(ep, SOCKET_MODE.convert())
+        }
         return fd
     }
 }

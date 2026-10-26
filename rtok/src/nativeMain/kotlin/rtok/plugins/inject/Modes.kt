@@ -27,4 +27,3 @@ Prefer `outline` or `read mode=map` before `read mode=full`, `search` before nat
 Long command output carries `expand <id>`; expand a slice, never re-run the command for the same bytes.
 A guard deny names the prior result — `expand` it instead of retrying the call.
 """
-

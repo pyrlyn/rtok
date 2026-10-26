@@ -1,0 +1,1206 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>ComplexCondition:Compress.kt:d == null || d.expanded || !d.pointer.startsWith("[archived ") || pointer != d.pointer</ID>
+    <ID>ComplexCondition:Drill.kt:Drill$d.focusOnly &amp;&amp; !(sym(l.from) &amp;&amp; (sym(l.to) || l.to is End.Ext))</ID>
+    <ID>ComplexCondition:Expand.kt:Expand$(c == '"' || c == '\'') &amp;&amp; idx > 0 &amp;&amp; hasNext</ID>
+    <ID>ComplexCondition:Expand.kt:Expand$s.isNotEmpty() &amp;&amp; s.all { it in '0'..'9' } || (s.startsWith('+') &amp;&amp; s.length > 1 &amp;&amp; s.drop(1).all { it in '0'..'9' })</ID>
+    <ID>ComplexCondition:Expand.kt:Expand$spec.length >= 2 &amp;&amp; ((spec.first() == '"' &amp;&amp; spec.last() == '"') || (spec.first() == '\'' &amp;&amp; spec.last() == '\''))</ID>
+    <ID>ComplexCondition:Export.kt:ExportView$(root.startsWith('/') || root.startsWith('\\')) &amp;&amp; name.isNotEmpty() &amp;&amp; name != ".."</ID>
+    <ID>ComplexCondition:Extract.kt:"file_path" in line || "error" in line || "Error" in line || "ERROR" in line || escapesALetter(line)</ID>
+    <ID>ComplexCondition:Extract.kt:hasPair(line, "\"type\"", "\"create\"") || CREATED in line || (hasPair(line, "\"name\"", "\"Bash\"") &amp;&amp; "rm" in line)</ID>
+    <ID>ComplexCondition:Extract.kt:start &amp;&amp; (w == "rm" || gitRm) &amp;&amp; !ends</ID>
+    <ID>ComplexCondition:Formatters.kt:Formatters$sha.length &lt; 7 || !sha.all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }</ID>
+    <ID>ComplexCondition:HealthCheck.kt:Health$held != null &amp;&amp; rec.backend == Chosen.Tags &amp;&amp; rec.server &amp;&amp; !rec.down</ID>
+    <ID>ComplexCondition:Index.kt:Index$replaced || fpStale || removed > 0 || ranks.missing(cx, rk)</ID>
+    <ID>ComplexCondition:JsonTree.kt:t.isEmpty() || t.any { it == ']' || it == ' ' || it == '\n' }</ID>
+    <ID>ComplexCondition:Read.kt:mode == "map" || mode == "signatures" || density != null || strippedSrc != null || range != null</ID>
+    <ID>ComplexCondition:Review.kt:Review$start == null || len == null || start == 0 || len == 0</ID>
+    <ID>ComplexCondition:Rules.kt:Rules$!l.startsWith("stack backtrace:") &amp;&amp; !l.startsWith("note:") &amp;&amp; !l.startsWith("error") &amp;&amp; !l.startsWith("warning")</ID>
+    <ID>ComplexCondition:Rules.kt:Rules$code.length in 2..7 &amp;&amp; code[0] in 'A'..'Z' &amp;&amp; code.all { it in 'A'..'Z' || it.digit() } &amp;&amp; code.any { it.digit() }</ID>
+    <ID>ComplexCondition:Rules.kt:Rules$key.isNotEmpty() &amp;&amp; key.all { it in 'a'..'z' || it == '-' || it.digit() }</ID>
+    <ID>ComplexCondition:Rules.kt:Rules$n >= 19 &amp;&amp; c(4) == '-' &amp;&amp; c(7) == '-' &amp;&amp; (c(10) == 'T' || c(10) == ' ') &amp;&amp; c(13) == ':' &amp;&amp; c(16) == ':' &amp;&amp; all(0..3) { it.digit() } &amp;&amp; all(5..6) { it.digit() } &amp;&amp; all(8..9) { it.digit() } &amp;&amp; all(11..12) { it.digit() } &amp;&amp; all(14..15) { it.digit() } &amp;&amp; all(17..18) { it.digit() }</ID>
+    <ID>ComplexCondition:Rules.kt:Rules$n >= 20 &amp;&amp; c(2) == '/' &amp;&amp; c(6) == '/' &amp;&amp; c(11) == ':' &amp;&amp; c(14) == ':' &amp;&amp; c(17) == ':' &amp;&amp; all(0..1) { it.digit() } &amp;&amp; all(7..10) { it.digit() } &amp;&amp; all(12..13) { it.digit() } &amp;&amp; all(15..16) { it.digit() } &amp;&amp; all(18..19) { it.digit() } &amp;&amp; all(3..5) { it.alpha() }</ID>
+    <ID>ComplexCondition:Rules.kt:Rules$n >= CLOCK_LEN &amp;&amp; s[at].digit() &amp;&amp; s[at + 1] == ':' &amp;&amp; s[at + 2].digit() &amp;&amp; s[at + 3] == ':' &amp;&amp; s[at + 4].digit() &amp;&amp; durationBoundary(s, at + CLOCK_LEN)</ID>
+    <ID>ComplexCondition:Rules.kt:Rules$path.isEmpty() || loc.any { it.isWhitespace() } || last.isEmpty() || !last.all { it.digit() }</ID>
+    <ID>ComplexCondition:Run.kt:i &lt; body.size &amp;&amp; (body[i].toInt() and 0xff).let { it == 0x20 || it == 9 || it == 13 }</ID>
+    <ID>ComplexCondition:Run.kt:validUtf8 &amp;&amp; ((lines &lt;= c.trailerMinLines &amp;&amp; noShorter) || shown.byteLen >= body.size)</ID>
+    <ID>ComplexCondition:Sed.kt:at(i)?.let { it != ';'.code &amp;&amp; it != '\n'.code &amp;&amp; it != '}'.code &amp;&amp; it != ' '.code &amp;&amp; it != '\t'.code } == true</ID>
+    <ID>ComplexCondition:Sed.kt:i &lt; b.size &amp;&amp; at(i)!!.let { ws(it) || it == ';'.code || it == '{'.code || it == '}'.code }</ID>
+    <ID>ComplexCondition:Skill.kt:line[i] == ':' &amp;&amp; (i + 1 == line.length || line[i + 1] == ' ' || line[i + 1] == '\t')</ID>
+    <ID>ComplexCondition:Skill.kt:name.isEmpty() || name.contains('/') || name.contains('\\') || name.contains("..")</ID>
+    <ID>ComplexCondition:Tables.kt:Tables$!u.contains("FILESYSTEM") || !(u.contains("MOUNTED") || u.contains("CAPACITY") || u.contains("USE%"))</ID>
+    <ID>ComplexCondition:Tables.kt:Tables$cols.firstOrNull() != "NAME" || cols.none { it == "STATUS" || it == "READY" || it == "AGE" }</ID>
+    <ID>ComplexCondition:ToonTest.kt:brace &lt; 0 || !s.startsWith('[') || !s.substring(0, brace).endsWith(']') || !s.endsWith('}')</ID>
+    <ID>ComplexCondition:Watch.kt:Watch$gitPath(p) || matcher.inLinkedWorktree(p) || (ignored(ig, root, p) &amp;&amp; !matcher.isIncluded(p))</ID>
+    <ID>CyclomaticComplexMethod:Blast.kt:Blast$fun render: String</ID>
+    <ID>CyclomaticComplexMethod:Bounded.kt:Bounded$internal fun lex: List&lt;List&lt;List&lt;String>>></ID>
+    <ID>CyclomaticComplexMethod:Bounded.kt:Bounded$private fun bounds: Boolean</ID>
+    <ID>CyclomaticComplexMethod:Bounded.kt:Bounded$private fun sedRange: Boolean</ID>
+    <ID>CyclomaticComplexMethod:CatFile.kt:CatFile$fun rereadKey: Pair&lt;String, String>?</ID>
+    <ID>CyclomaticComplexMethod:Compact.kt:Compact$fun cargoBuild: String?</ID>
+    <ID>CyclomaticComplexMethod:Compact.kt:Compact$fun cargoTest: String?</ID>
+    <ID>CyclomaticComplexMethod:Compact.kt:Compact$fun gitStatus: String?</ID>
+    <ID>CyclomaticComplexMethod:Compact.kt:Compact$fun lsL: String?</ID>
+    <ID>CyclomaticComplexMethod:Compact.kt:Compact$private fun renderFiles: List&lt;String></ID>
+    <ID>CyclomaticComplexMethod:Compact.kt:Compact$private fun upstreamNote: String?</ID>
+    <ID>CyclomaticComplexMethod:Compact.kt:Compact.Totals$fun add: Boolean</ID>
+    <ID>CyclomaticComplexMethod:Compress.kt:private fun inlineSegments: List&lt;Seg></ID>
+    <ID>CyclomaticComplexMethod:Compressor.kt:Compressor$private suspend fun tryRun: Outcome</ID>
+    <ID>CyclomaticComplexMethod:Dead.kt:Dead$fun candidates: List&lt;DeadRow></ID>
+    <ID>CyclomaticComplexMethod:Diff.kt:GraphDiffs$internal fun diffSides: GraphDiff</ID>
+    <ID>CyclomaticComplexMethod:Diff.kt:GraphDiffs$private fun gather: Gathered</ID>
+    <ID>CyclomaticComplexMethod:Diffs.kt:Diffs$internal fun parse: Parsed?</ID>
+    <ID>CyclomaticComplexMethod:Dispatch.kt:Dispatch$fun call: String</ID>
+    <ID>CyclomaticComplexMethod:Dispatch.kt:fun dispatch: ByteArray</ID>
+    <ID>CyclomaticComplexMethod:Dispatch.kt:internal fun capBudget: String</ID>
+    <ID>CyclomaticComplexMethod:Dispatch.kt:internal fun dispatchOwnedStrict: ByteArray</ID>
+    <ID>CyclomaticComplexMethod:Dispatch.kt:private fun injectEvent: HookOutput</ID>
+    <ID>CyclomaticComplexMethod:Draw.kt:Draw$fun svg: String</ID>
+    <ID>CyclomaticComplexMethod:Drill.kt:Drill$private fun draw</ID>
+    <ID>CyclomaticComplexMethod:Expand.kt:Expand$fun parseRange: Pair&lt;Int, Int></ID>
+    <ID>CyclomaticComplexMethod:Expand.kt:Expand$private fun normalizeRange: Pair&lt;String, Boolean></ID>
+    <ID>CyclomaticComplexMethod:Export.kt:ExportView$fun collect: Export</ID>
+    <ID>CyclomaticComplexMethod:Export.kt:ExportView$private fun graph: Graph</ID>
+    <ID>CyclomaticComplexMethod:Extract.kt:Files$private fun toolUse</ID>
+    <ID>CyclomaticComplexMethod:Extract.kt:fun transcriptText: String</ID>
+    <ID>CyclomaticComplexMethod:Extract.kt:internal fun removedPaths: List&lt;String></ID>
+    <ID>CyclomaticComplexMethod:Extract.kt:internal fun worthParsing: Boolean</ID>
+    <ID>CyclomaticComplexMethod:Filter.kt:Filter$fun runWithStore: String</ID>
+    <ID>CyclomaticComplexMethod:Follow.kt:Follow$fun follow: Followed</ID>
+    <ID>CyclomaticComplexMethod:Formatters.kt:Formatters$internal fun format: String?</ID>
+    <ID>CyclomaticComplexMethod:Formatters.kt:Formatters$internal fun gitLog: String?</ID>
+    <ID>CyclomaticComplexMethod:Formatters.kt:Formatters$private fun peelMiseExec: List&lt;String>?</ID>
+    <ID>CyclomaticComplexMethod:Formatters.kt:Formatters$private fun peelToolWrapper: List&lt;String>?</ID>
+    <ID>CyclomaticComplexMethod:Framing.kt:FrameReader$private fun header: Frame?</ID>
+    <ID>CyclomaticComplexMethod:Gh.kt:Gh$internal fun runLog: String?</ID>
+    <ID>CyclomaticComplexMethod:Gh.kt:Gh$internal fun view: String?</ID>
+    <ID>CyclomaticComplexMethod:Git.kt:Git$fun parsePorcelain: List&lt;WorktreeRecord></ID>
+    <ID>CyclomaticComplexMethod:Grep.kt:Grep$fun group: String?</ID>
+    <ID>CyclomaticComplexMethod:Grep.kt:Grep$private fun parseArgv: Pair&lt;String, String?>?</ID>
+    <ID>CyclomaticComplexMethod:Guard.kt:internal fun cacheKey: String?</ID>
+    <ID>CyclomaticComplexMethod:Guard.kt:private fun flatten: String?</ID>
+    <ID>CyclomaticComplexMethod:Guard.kt:private fun relativeHop: Boolean</ID>
+    <ID>CyclomaticComplexMethod:Guard.kt:private fun stemReadOnly: Boolean</ID>
+    <ID>CyclomaticComplexMethod:Handoff.kt:private fun ledger: List&lt;Pointer></ID>
+    <ID>CyclomaticComplexMethod:Handoff.kt:private fun symbolRanges: List&lt;Range></ID>
+    <ID>CyclomaticComplexMethod:HealthCheck.kt:Health$fun tick</ID>
+    <ID>CyclomaticComplexMethod:Index.kt:Index$fun runChanged: IndexReport</ID>
+    <ID>CyclomaticComplexMethod:Index.kt:Index$fun runWith: IndexReport</ID>
+    <ID>CyclomaticComplexMethod:Index.kt:Index$internal fun docAbove: String</ID>
+    <ID>CyclomaticComplexMethod:Logfmt.kt:private fun pairs: List&lt;Pair></ID>
+    <ID>CyclomaticComplexMethod:LspSession.kt:LspSession$fun requestWithin: JsonElement</ID>
+    <ID>CyclomaticComplexMethod:Outline.kt:fun render: String</ID>
+    <ID>CyclomaticComplexMethod:Pack.kt:fun packNotes: Pack</ID>
+    <ID>CyclomaticComplexMethod:Portable.kt:Import$fun run: Report</ID>
+    <ID>CyclomaticComplexMethod:Projects.kt:Projects$fun row: ProjectRow</ID>
+    <ID>CyclomaticComplexMethod:Projects.kt:Projects$fun run: String</ID>
+    <ID>CyclomaticComplexMethod:Python.kt:Python$fun pytest: String?</ID>
+    <ID>CyclomaticComplexMethod:Rank.kt:Rank$fun build: FileGraph</ID>
+    <ID>CyclomaticComplexMethod:Read.kt:fun readWith: String</ID>
+    <ID>CyclomaticComplexMethod:Refs.kt:Refs$private fun npm</ID>
+    <ID>CyclomaticComplexMethod:Resolve.kt:Resolve$fun rankName: ResolveHit</ID>
+    <ID>CyclomaticComplexMethod:Review.kt:Review$fun allocateBudget</ID>
+    <ID>CyclomaticComplexMethod:Rules.kt:Rules$internal fun parseDiag: Triple&lt;String, String, String>?</ID>
+    <ID>CyclomaticComplexMethod:Rules.kt:Rules$internal fun parseLocated: Triple&lt;String, String, String>?</ID>
+    <ID>CyclomaticComplexMethod:Rules.kt:Rules$internal fun placeholderToken: Pair&lt;Int, String>?</ID>
+    <ID>CyclomaticComplexMethod:Rules.kt:Rules$internal fun traceBlocks: BooleanArray</ID>
+    <ID>CyclomaticComplexMethod:Rules.kt:Rules$private fun cut: String</ID>
+    <ID>CyclomaticComplexMethod:Rules.kt:Rules$private fun durationAt: Int?</ID>
+    <ID>CyclomaticComplexMethod:Run.kt:internal fun emitFilteredTo</ID>
+    <ID>CyclomaticComplexMethod:Run.kt:private fun canonical: ByteArray</ID>
+    <ID>CyclomaticComplexMethod:Sed.kt:internal fun sedReadOnly: Boolean</ID>
+    <ID>CyclomaticComplexMethod:Sed.kt:private fun address: Int?</ID>
+    <ID>CyclomaticComplexMethod:Sed.kt:private fun scriptReadOnly: Boolean</ID>
+    <ID>CyclomaticComplexMethod:Skill.kt:internal fun frontmatterKeys: Set&lt;String>?</ID>
+    <ID>CyclomaticComplexMethod:Sync.kt:Sync$fun run</ID>
+    <ID>CyclomaticComplexMethod:Tables.kt:Tables$fun kubectlGet: String?</ID>
+    <ID>CyclomaticComplexMethod:Tools.kt:Tools$fun door: String</ID>
+    <ID>CyclomaticComplexMethod:Tools.kt:Tools$fun invoke: String</ID>
+    <ID>CyclomaticComplexMethod:ToonTest.kt:private fun decodeCell: JsonElement</ID>
+    <ID>CyclomaticComplexMethod:Types.kt:HookInput$fun adaptCline</ID>
+    <ID>CyclomaticComplexMethod:Types.kt:HookInput$fun adaptCursor</ID>
+    <ID>CyclomaticComplexMethod:Types.kt:HookInput$fun adaptGrok</ID>
+    <ID>CyclomaticComplexMethod:Types.kt:HookInput$fun toJson: JsonObject</ID>
+    <ID>CyclomaticComplexMethod:Types.kt:HookInput.Companion$fun fromJson: HookInput</ID>
+    <ID>DestructuringDeclarationWithTooManyEntries:FormattersTest.kt:FormattersTest$(argv, out, exit, needle)</ID>
+    <ID>DestructuringDeclarationWithTooManyEntries:OutlineTest.kt:OutlineTest$(path, src, gone, keep)</ID>
+    <ID>DestructuringDeclarationWithTooManyEntries:RootsTest.kt:RootsTest$val (base, main, _, other) = repo("callerbad")</ID>
+    <ID>DestructuringDeclarationWithTooManyEntries:RootsTest.kt:RootsTest$val (base, main, wt, _) = repo("caller")</ID>
+    <ID>DestructuringDeclarationWithTooManyEntries:RootsTest.kt:RootsTest$val (base, main, wt, _) = repo("moved")</ID>
+    <ID>DestructuringDeclarationWithTooManyEntries:RootsTest.kt:RootsTest$val (base, main, wt, other) = repo("guard")</ID>
+    <ID>DestructuringDeclarationWithTooManyEntries:RootsTest.kt:RootsTest$val (base, main, wt, other) = repo("list")</ID>
+    <ID>DestructuringDeclarationWithTooManyEntries:RulesTest.kt:RulesTest$(fail, count, start, end)</ID>
+    <ID>DestructuringDeclarationWithTooManyEntries:Tools.kt:Tools$val (path, name, kind, line) = parseSymbolId(id) ?: return "no definition of $id"</ID>
+    <ID>EmptyFunctionBlock:QueueTest.kt:Scripted${}</ID>
+    <ID>EmptyWhileBlock:QueueTest.kt:QueueTest${}</ID>
+    <ID>ExplicitItLambdaParameter:Lsp.kt:Lsp${ it -> if (it["name"].str != name) return@firstNotNullOfOrNull null val loc = it["location"] val uri = loc["uri"].str ?: return@firstNotNullOfOrNull null val start = loc["range"]["start"] Def( uri = uri, pos = start, kind = it["kind"].long ?: 0, path = LspWire.rel(root, uri), line = (start["line"].long ?: 0).toInt() + 1, endLine = (loc["range"]["end"]["line"].long ?: 0).toInt() + 1, ) }</ID>
+    <ID>ForEachOnRange:CompressTest.kt:CompressTest$1..6</ID>
+    <ID>FunctionOnlyReturningConstant:Tokens.kt:fun calibrateOrSkip: String</ID>
+    <ID>LargeClass:Rules.kt:Rules</ID>
+    <ID>LongMethod:Bounded.kt:Bounded$internal fun lex: List&lt;List&lt;List&lt;String>>></ID>
+    <ID>LongMethod:Compact.kt:Compact$fun cargoBuild: String?</ID>
+    <ID>LongMethod:Dispatch.kt:fun dispatch: ByteArray</ID>
+    <ID>LongMethod:Draw.kt:Draw$fun svg: String</ID>
+    <ID>LongMethod:Formatters.kt:Formatters$internal fun gitLog: String?</ID>
+    <ID>LongMethod:Index.kt:Index$fun runWith: IndexReport</ID>
+    <ID>LongMethod:Projects.kt:Projects$fun run: String</ID>
+    <ID>LongMethod:Read.kt:fun readWith: String</ID>
+    <ID>LongMethod:Types.kt:HookInput$fun adaptCline</ID>
+    <ID>LoopWithTooManyJumpStatements:Anthropic.kt:AnthropicWire$for</ID>
+    <ID>LoopWithTooManyJumpStatements:Bounded.kt:Bounded$for</ID>
+    <ID>LoopWithTooManyJumpStatements:Bounded.kt:Bounded$while</ID>
+    <ID>LoopWithTooManyJumpStatements:Compact.kt:Compact$for</ID>
+    <ID>LoopWithTooManyJumpStatements:Compact.kt:Compact$while</ID>
+    <ID>LoopWithTooManyJumpStatements:Compact.kt:Compact.Totals$for</ID>
+    <ID>LoopWithTooManyJumpStatements:Compress.kt:while</ID>
+    <ID>LoopWithTooManyJumpStatements:Dead.kt:Dead$for</ID>
+    <ID>LoopWithTooManyJumpStatements:Density.kt:for</ID>
+    <ID>LoopWithTooManyJumpStatements:Diffs.kt:Diffs$for</ID>
+    <ID>LoopWithTooManyJumpStatements:Draw.kt:Draw$for</ID>
+    <ID>LoopWithTooManyJumpStatements:Expand.kt:Expand$while</ID>
+    <ID>LoopWithTooManyJumpStatements:Export.kt:ExportView$for</ID>
+    <ID>LoopWithTooManyJumpStatements:Extract.kt:for</ID>
+    <ID>LoopWithTooManyJumpStatements:Extract.kt:while</ID>
+    <ID>LoopWithTooManyJumpStatements:Files.kt:for</ID>
+    <ID>LoopWithTooManyJumpStatements:Follow.kt:Follow$for</ID>
+    <ID>LoopWithTooManyJumpStatements:Formatters.kt:Formatters$for</ID>
+    <ID>LoopWithTooManyJumpStatements:Formatters.kt:Formatters$while</ID>
+    <ID>LoopWithTooManyJumpStatements:Framing.kt:FrameReader$while</ID>
+    <ID>LoopWithTooManyJumpStatements:Git.kt:Git$for</ID>
+    <ID>LoopWithTooManyJumpStatements:Grep.kt:Grep$for</ID>
+    <ID>LoopWithTooManyJumpStatements:Grep.kt:Grep$while</ID>
+    <ID>LoopWithTooManyJumpStatements:Handoff.kt:for</ID>
+    <ID>LoopWithTooManyJumpStatements:HealthCheck.kt:Health$for</ID>
+    <ID>LoopWithTooManyJumpStatements:Index.kt:Index$for</ID>
+    <ID>LoopWithTooManyJumpStatements:Inject.kt:for</ID>
+    <ID>LoopWithTooManyJumpStatements:Loops.kt:Loops$while</ID>
+    <ID>LoopWithTooManyJumpStatements:Lsp.kt:Lsp$for</ID>
+    <ID>LoopWithTooManyJumpStatements:LspSession.kt:LspSession$while</ID>
+    <ID>LoopWithTooManyJumpStatements:Notes.kt:for</ID>
+    <ID>LoopWithTooManyJumpStatements:Observe.kt:for</ID>
+    <ID>LoopWithTooManyJumpStatements:Outline.kt:Outline$for</ID>
+    <ID>LoopWithTooManyJumpStatements:Pack.kt:for</ID>
+    <ID>LoopWithTooManyJumpStatements:Portable.kt:Import$for</ID>
+    <ID>LoopWithTooManyJumpStatements:Project.kt:for</ID>
+    <ID>LoopWithTooManyJumpStatements:Rank.kt:Rank$for</ID>
+    <ID>LoopWithTooManyJumpStatements:Refs.kt:Refs$for</ID>
+    <ID>LoopWithTooManyJumpStatements:Resident.kt:Resident$while</ID>
+    <ID>LoopWithTooManyJumpStatements:Review.kt:Review$for</ID>
+    <ID>LoopWithTooManyJumpStatements:Rules.kt:Rules$for</ID>
+    <ID>LoopWithTooManyJumpStatements:Rules.kt:Rules$while</ID>
+    <ID>LoopWithTooManyJumpStatements:Search.kt:Search$for</ID>
+    <ID>LoopWithTooManyJumpStatements:Sed.kt:while</ID>
+    <ID>LoopWithTooManyJumpStatements:Skill.kt:for</ID>
+    <ID>LoopWithTooManyJumpStatements:ToonTest.kt:while</ID>
+    <ID>LoopWithTooManyJumpStatements:Watch.kt:Watch$for</ID>
+    <ID>MagicNumber:Admit.kt:Admit$100</ID>
+    <ID>MagicNumber:Admit.kt:Admit$3</ID>
+    <ID>MagicNumber:AgentToolsTest.kt:AgentToolsTest$8</ID>
+    <ID>MagicNumber:AgentsTest.kt:AgentsTest$1000</ID>
+    <ID>MagicNumber:AgentsTest.kt:AgentsTest$120</ID>
+    <ID>MagicNumber:AgentsTest.kt:AgentsTest$121</ID>
+    <ID>MagicNumber:AgentsTest.kt:AgentsTest$3</ID>
+    <ID>MagicNumber:AgentsTest.kt:AgentsTest$5</ID>
+    <ID>MagicNumber:AgentsTest.kt:AgentsTest$6</ID>
+    <ID>MagicNumber:AgentsTest.kt:AgentsTest$60</ID>
+    <ID>MagicNumber:AgentsTest.kt:AgentsTest$8</ID>
+    <ID>MagicNumber:AgentsTest.kt:AgentsTest$900</ID>
+    <ID>MagicNumber:AgentsTest.kt:AgentsTest$990</ID>
+    <ID>MagicNumber:Archive.kt:12</ID>
+    <ID>MagicNumber:Archive.kt:3</ID>
+    <ID>MagicNumber:Archive.kt:4096</ID>
+    <ID>MagicNumber:ArchiveCliSpec.kt:400</ID>
+    <ID>MagicNumber:ArchiveTest.kt:200</ID>
+    <ID>MagicNumber:ArchiveTest.kt:400</ID>
+    <ID>MagicNumber:ArchiveTest.kt:6</ID>
+    <ID>MagicNumber:ArchiveTest.kt:ArchiveTest$10</ID>
+    <ID>MagicNumber:ArchiveTest.kt:ArchiveTest$3u</ID>
+    <ID>MagicNumber:ArchiveTest.kt:ArchiveTest$4</ID>
+    <ID>MagicNumber:ArchiveTest.kt:ArchiveTest$4000</ID>
+    <ID>MagicNumber:ArchiveTest.kt:ArchiveTest$5</ID>
+    <ID>MagicNumber:ArchiveTest.kt:ArchiveTest$6</ID>
+    <ID>MagicNumber:ArchiveTest.kt:ArchiveTest$64</ID>
+    <ID>MagicNumber:ArchiveTest.kt:ArchiveTest$8</ID>
+    <ID>MagicNumber:ArchiveTest.kt:ArchiveTest$80</ID>
+    <ID>MagicNumber:BlastTest.kt:BlastTest$0.1f</ID>
+    <ID>MagicNumber:BlastTest.kt:BlastTest$0.5f</ID>
+    <ID>MagicNumber:BlastTest.kt:BlastTest$120</ID>
+    <ID>MagicNumber:BlastTest.kt:BlastTest$120u</ID>
+    <ID>MagicNumber:BlastTest.kt:BlastTest$1500u</ID>
+    <ID>MagicNumber:BlastTest.kt:BlastTest$200</ID>
+    <ID>MagicNumber:BlastTest.kt:BlastTest$3</ID>
+    <ID>MagicNumber:BlastTest.kt:BlastTest$300u</ID>
+    <ID>MagicNumber:BlastTest.kt:BlastTest$4</ID>
+    <ID>MagicNumber:BlastTest.kt:BlastTest$5</ID>
+    <ID>MagicNumber:CacheTest.kt:CacheTest$23u</ID>
+    <ID>MagicNumber:CacheTest.kt:CacheTest$3</ID>
+    <ID>MagicNumber:CacheTest.kt:CacheTest$40</ID>
+    <ID>MagicNumber:CacheTest.kt:CacheTest$64</ID>
+    <ID>MagicNumber:CacheTest.kt:CacheTest$80</ID>
+    <ID>MagicNumber:Capability.kt:Capability$120</ID>
+    <ID>MagicNumber:CapabilityTest.kt:CapabilityTest$100</ID>
+    <ID>MagicNumber:CapabilityTest.kt:CapabilityTest$120</ID>
+    <ID>MagicNumber:CapabilityTest.kt:CapabilityTest$3</ID>
+    <ID>MagicNumber:CapabilityTest.kt:CapabilityTest$300</ID>
+    <ID>MagicNumber:CapabilityTest.kt:CapabilityTest$8</ID>
+    <ID>MagicNumber:CatFile.kt:CatFile$3</ID>
+    <ID>MagicNumber:CatFileTest.kt:CatFileTest$12</ID>
+    <ID>MagicNumber:CatFileTest.kt:CatFileTest$200</ID>
+    <ID>MagicNumber:CatFileTest.kt:CatFileTest$3</ID>
+    <ID>MagicNumber:CatFileTest.kt:CatFileTest$3L</ID>
+    <ID>MagicNumber:CatFileTest.kt:CatFileTest$400</ID>
+    <ID>MagicNumber:CatFileTest.kt:CatFileTest$6</ID>
+    <ID>MagicNumber:CatFileTest.kt:CatFileTest$9999</ID>
+    <ID>MagicNumber:Checkpoint.kt:1024uL</ID>
+    <ID>MagicNumber:Checkpoint.kt:10uL</ID>
+    <ID>MagicNumber:CheckpointTest.kt:CheckpointTest$1024</ID>
+    <ID>MagicNumber:CheckpointTest.kt:CheckpointTest$10u</ID>
+    <ID>MagicNumber:CheckpointTest.kt:CheckpointTest$10uL</ID>
+    <ID>MagicNumber:CheckpointTest.kt:CheckpointTest$1280uL</ID>
+    <ID>MagicNumber:CheckpointTest.kt:CheckpointTest$1792uL</ID>
+    <ID>MagicNumber:CheckpointTest.kt:CheckpointTest$200</ID>
+    <ID>MagicNumber:CheckpointTest.kt:CheckpointTest$25</ID>
+    <ID>MagicNumber:CheckpointTest.kt:CheckpointTest$256uL</ID>
+    <ID>MagicNumber:CheckpointTest.kt:CheckpointTest$25uL</ID>
+    <ID>MagicNumber:CheckpointTest.kt:CheckpointTest$3</ID>
+    <ID>MagicNumber:CheckpointTest.kt:CheckpointTest$3uL</ID>
+    <ID>MagicNumber:CheckpointTest.kt:CheckpointTest$4000</ID>
+    <ID>MagicNumber:CheckpointTest.kt:CheckpointTest$4u</ID>
+    <ID>MagicNumber:CheckpointTest.kt:CheckpointTest$4uL</ID>
+    <ID>MagicNumber:CheckpointTest.kt:CheckpointTest$5</ID>
+    <ID>MagicNumber:CheckpointTest.kt:CheckpointTest$5120uL</ID>
+    <ID>MagicNumber:CheckpointTest.kt:CheckpointTest$51uL</ID>
+    <ID>MagicNumber:CheckpointTest.kt:CheckpointTest$59u</ID>
+    <ID>MagicNumber:CheckpointTest.kt:CheckpointTest$5u</ID>
+    <ID>MagicNumber:CheckpointTest.kt:CheckpointTest$6uL</ID>
+    <ID>MagicNumber:CheckpointTest.kt:CheckpointTest$7</ID>
+    <ID>MagicNumber:CheckpointTest.kt:CheckpointTest$768uL</ID>
+    <ID>MagicNumber:CheckpointTest.kt:CheckpointTest$7u</ID>
+    <ID>MagicNumber:CheckpointTest.kt:CheckpointTest$8</ID>
+    <ID>MagicNumber:CheckpointTest.kt:CheckpointTest$9u</ID>
+    <ID>MagicNumber:CliSpec.kt:CliSpec$10800L</ID>
+    <ID>MagicNumber:CliSpec.kt:CliSpec$172800L</ID>
+    <ID>MagicNumber:CliSpec.kt:CliSpec$3</ID>
+    <ID>MagicNumber:CmdCliSpec.kt:CmdCliSpec$4</ID>
+    <ID>MagicNumber:CochangeTest.kt:CochangeTest$20</ID>
+    <ID>MagicNumber:CochangeTest.kt:CochangeTest$21</ID>
+    <ID>MagicNumber:CochangeTest.kt:CochangeTest$3</ID>
+    <ID>MagicNumber:Compact.kt:Compact$10</ID>
+    <ID>MagicNumber:Compact.kt:Compact$1024u</ID>
+    <ID>MagicNumber:Compact.kt:Compact$10u</ID>
+    <ID>MagicNumber:Compact.kt:Compact$11</ID>
+    <ID>MagicNumber:Compact.kt:Compact$16</ID>
+    <ID>MagicNumber:Compact.kt:Compact$3</ID>
+    <ID>MagicNumber:Compact.kt:Compact$4</ID>
+    <ID>MagicNumber:Compact.kt:Compact$5</ID>
+    <ID>MagicNumber:Compact.kt:Compact$6</ID>
+    <ID>MagicNumber:Compact.kt:Compact$8</ID>
+    <ID>MagicNumber:Compact.kt:Compact.Totals$13</ID>
+    <ID>MagicNumber:Compact.kt:Compact.Totals$3</ID>
+    <ID>MagicNumber:CompactTest.kt:CompactTest$12</ID>
+    <ID>MagicNumber:CompactTest.kt:CompactTest$3</ID>
+    <ID>MagicNumber:CompactTest.kt:CompactTest$30</ID>
+    <ID>MagicNumber:CompactTest.kt:CompactTest$4</ID>
+    <ID>MagicNumber:CompactTest.kt:CompactTest$5</ID>
+    <ID>MagicNumber:CompactTest.kt:CompactTest$7</ID>
+    <ID>MagicNumber:Compress.kt:0x80</ID>
+    <ID>MagicNumber:Compress.kt:3</ID>
+    <ID>MagicNumber:Compress.kt:32</ID>
+    <ID>MagicNumber:CompressTest.kt:400</ID>
+    <ID>MagicNumber:CompressTest.kt:6</ID>
+    <ID>MagicNumber:CompressTest.kt:CompressTest$1000</ID>
+    <ID>MagicNumber:Compressor.kt:12</ID>
+    <ID>MagicNumber:Core.kt:GraphCore$5</ID>
+    <ID>MagicNumber:CoreTest.kt:CoreTest$5_000u</ID>
+    <ID>MagicNumber:Dead.kt:Affected$3</ID>
+    <ID>MagicNumber:DeadTest.kt:DeadTest$20</ID>
+    <ID>MagicNumber:DeadTest.kt:DeadTest$3</ID>
+    <ID>MagicNumber:Deadline.kt:1000</ID>
+    <ID>MagicNumber:Deadline.kt:10L</ID>
+    <ID>MagicNumber:DeadlineResidentTest.kt:5</ID>
+    <ID>MagicNumber:DeadlineResidentTest.kt:5000u</ID>
+    <ID>MagicNumber:DeadlineResidentTest.kt:DeadlineTest$20</ID>
+    <ID>MagicNumber:DeadlineResidentTest.kt:DeadlineTest$300_000u</ID>
+    <ID>MagicNumber:DeadlineResidentTest.kt:DeadlineTest$50</ID>
+    <ID>MagicNumber:DeadlineResidentTest.kt:DeadlineTest$5000</ID>
+    <ID>MagicNumber:DeadlineResidentTest.kt:ResidentTest$42uL</ID>
+    <ID>MagicNumber:DeadlineResidentTest.kt:ResidentTest$7uL</ID>
+    <ID>MagicNumber:DensityTest.kt:DensityTest$0.2</ID>
+    <ID>MagicNumber:DensityTest.kt:DensityTest$0.3</ID>
+    <ID>MagicNumber:DensityTest.kt:DensityTest$0.4</ID>
+    <ID>MagicNumber:DensityTest.kt:DensityTest$3</ID>
+    <ID>MagicNumber:DensityTest.kt:DensityTest$30</ID>
+    <ID>MagicNumber:DensityTest.kt:DensityTest$60</ID>
+    <ID>MagicNumber:Diff.kt:GraphDiffs$3</ID>
+    <ID>MagicNumber:DiffTest.kt:DiffTest$1500</ID>
+    <ID>MagicNumber:DiffTest.kt:DiffTest$20</ID>
+    <ID>MagicNumber:DiffTest.kt:DiffTest$300</ID>
+    <ID>MagicNumber:DiffTest.kt:DiffTest$4</ID>
+    <ID>MagicNumber:Diffs.kt:Diffs$6</ID>
+    <ID>MagicNumber:DiffsTest.kt:8</ID>
+    <ID>MagicNumber:DiffsTest.kt:DiffsTest$3</ID>
+    <ID>MagicNumber:DiffsTest.kt:DiffsTest$8</ID>
+    <ID>MagicNumber:Dispatch.kt:10u</ID>
+    <ID>MagicNumber:Dispatch.kt:120</ID>
+    <ID>MagicNumber:Dispatch.kt:60</ID>
+    <ID>MagicNumber:Dispatch.kt:8</ID>
+    <ID>MagicNumber:Dispatch.kt:8u</ID>
+    <ID>MagicNumber:DispatchTest.kt:DispatchTest$10</ID>
+    <ID>MagicNumber:DispatchTest.kt:DispatchTest$1000</ID>
+    <ID>MagicNumber:DispatchTest.kt:DispatchTest$10u</ID>
+    <ID>MagicNumber:DispatchTest.kt:DispatchTest$11.0</ID>
+    <ID>MagicNumber:DispatchTest.kt:DispatchTest$1100</ID>
+    <ID>MagicNumber:DispatchTest.kt:DispatchTest$12.0</ID>
+    <ID>MagicNumber:DispatchTest.kt:DispatchTest$1200</ID>
+    <ID>MagicNumber:DispatchTest.kt:DispatchTest$13.0</ID>
+    <ID>MagicNumber:DispatchTest.kt:DispatchTest$1300</ID>
+    <ID>MagicNumber:DispatchTest.kt:DispatchTest$25.0</ID>
+    <ID>MagicNumber:DispatchTest.kt:DispatchTest$3</ID>
+    <ID>MagicNumber:DispatchTest.kt:DispatchTest$300u</ID>
+    <ID>MagicNumber:DispatchTest.kt:DispatchTest$30u</ID>
+    <ID>MagicNumber:DispatchTest.kt:DispatchTest$3L</ID>
+    <ID>MagicNumber:DispatchTest.kt:DispatchTest$40.0</ID>
+    <ID>MagicNumber:DispatchTest.kt:DispatchTest$40u</ID>
+    <ID>MagicNumber:DispatchTest.kt:DispatchTest$5</ID>
+    <ID>MagicNumber:DispatchTest.kt:DispatchTest$5.0</ID>
+    <ID>MagicNumber:DispatchTest.kt:DispatchTest$50</ID>
+    <ID>MagicNumber:DispatchTest.kt:DispatchTest$50.0</ID>
+    <ID>MagicNumber:DispatchTest.kt:DispatchTest$500.0</ID>
+    <ID>MagicNumber:DispatchTest.kt:DispatchTest$60</ID>
+    <ID>MagicNumber:DispatchTest.kt:DispatchTest$70.0</ID>
+    <ID>MagicNumber:DispatchTest.kt:DispatchTest$9.9</ID>
+    <ID>MagicNumber:Docs.kt:200</ID>
+    <ID>MagicNumber:DocsTest.kt:DocsTest$39</ID>
+    <ID>MagicNumber:DocsTest.kt:DocsTest$40u</ID>
+    <ID>MagicNumber:DocsTest.kt:DocsTest$5u</ID>
+    <ID>MagicNumber:DocsTest.kt:DocsTest$60</ID>
+    <ID>MagicNumber:DocsTest.kt:DocsTest$60u</ID>
+    <ID>MagicNumber:DocsTest.kt:DocsTest$800u</ID>
+    <ID>MagicNumber:Draw.kt:Draw$0.6</ID>
+    <ID>MagicNumber:Draw.kt:Draw$1.5</ID>
+    <ID>MagicNumber:Draw.kt:Draw$10</ID>
+    <ID>MagicNumber:Draw.kt:Draw$11</ID>
+    <ID>MagicNumber:Draw.kt:Draw$12</ID>
+    <ID>MagicNumber:Draw.kt:Draw$14</ID>
+    <ID>MagicNumber:Draw.kt:Draw$150</ID>
+    <ID>MagicNumber:Draw.kt:Draw$18</ID>
+    <ID>MagicNumber:Draw.kt:Draw$20</ID>
+    <ID>MagicNumber:Draw.kt:Draw$22</ID>
+    <ID>MagicNumber:Draw.kt:Draw$24</ID>
+    <ID>MagicNumber:Draw.kt:Draw$28</ID>
+    <ID>MagicNumber:Draw.kt:Draw$3</ID>
+    <ID>MagicNumber:Draw.kt:Draw$3.0</ID>
+    <ID>MagicNumber:Draw.kt:Draw$30</ID>
+    <ID>MagicNumber:Draw.kt:Draw$35</ID>
+    <ID>MagicNumber:Draw.kt:Draw$4</ID>
+    <ID>MagicNumber:Draw.kt:Draw$4.0</ID>
+    <ID>MagicNumber:Draw.kt:Draw$40</ID>
+    <ID>MagicNumber:Draw.kt:Draw$6</ID>
+    <ID>MagicNumber:Draw.kt:Draw$6.2</ID>
+    <ID>MagicNumber:Draw.kt:Draw$80.0</ID>
+    <ID>MagicNumber:Draw.kt:Draw$9</ID>
+    <ID>MagicNumber:DrawTest.kt:DrawTest$0.3</ID>
+    <ID>MagicNumber:DrawTest.kt:DrawTest$1.2e7</ID>
+    <ID>MagicNumber:DrawTest.kt:DrawTest$1.46</ID>
+    <ID>MagicNumber:DrawTest.kt:DrawTest$1_700_000_000</ID>
+    <ID>MagicNumber:DrawTest.kt:DrawTest$1_700_000_100</ID>
+    <ID>MagicNumber:DrawTest.kt:DrawTest$3</ID>
+    <ID>MagicNumber:DrawTest.kt:DrawTest$900.6</ID>
+    <ID>MagicNumber:DrillTest.kt:DrillTest$100</ID>
+    <ID>MagicNumber:DrillTest.kt:DrillTest$120</ID>
+    <ID>MagicNumber:DrillTest.kt:DrillTest$20</ID>
+    <ID>MagicNumber:EventsTest.kt:EventsTest$10u</ID>
+    <ID>MagicNumber:EventsTest.kt:EventsTest$12</ID>
+    <ID>MagicNumber:EventsTest.kt:EventsTest$12u</ID>
+    <ID>MagicNumber:EventsTest.kt:EventsTest$3u</ID>
+    <ID>MagicNumber:EventsTest.kt:EventsTest$40u</ID>
+    <ID>MagicNumber:EventsTest.kt:EventsTest$5u</ID>
+    <ID>MagicNumber:Expand.kt:Expand$4</ID>
+    <ID>MagicNumber:Expand.kt:Expand$64</ID>
+    <ID>MagicNumber:Expand.kt:Expand$8</ID>
+    <ID>MagicNumber:ExpandTest.kt:ExpandTest$10</ID>
+    <ID>MagicNumber:ExpandTest.kt:ExpandTest$100</ID>
+    <ID>MagicNumber:ExpandTest.kt:ExpandTest$1000</ID>
+    <ID>MagicNumber:ExpandTest.kt:ExpandTest$13</ID>
+    <ID>MagicNumber:ExpandTest.kt:ExpandTest$20</ID>
+    <ID>MagicNumber:ExpandTest.kt:ExpandTest$25</ID>
+    <ID>MagicNumber:ExpandTest.kt:ExpandTest$3</ID>
+    <ID>MagicNumber:ExpandTest.kt:ExpandTest$490</ID>
+    <ID>MagicNumber:ExpandTest.kt:ExpandTest$5</ID>
+    <ID>MagicNumber:ExpandTest.kt:ExpandTest$5000</ID>
+    <ID>MagicNumber:ExpandTest.kt:ExpandTest$52</ID>
+    <ID>MagicNumber:ExpandTest.kt:ExpandTest$7</ID>
+    <ID>MagicNumber:ExpandTest.kt:ExpandTest$70</ID>
+    <ID>MagicNumber:ExpandTest.kt:ExpandTest$8</ID>
+    <ID>MagicNumber:ExpandTest.kt:ExpandTest$800</ID>
+    <ID>MagicNumber:Explore.kt:Explore$8</ID>
+    <ID>MagicNumber:Explore.kt:TagsExplore$3u</ID>
+    <ID>MagicNumber:Explore.kt:TagsExplore$5</ID>
+    <ID>MagicNumber:Extract.kt:0x80</ID>
+    <ID>MagicNumber:Extract.kt:0xC0</ID>
+    <ID>MagicNumber:Extract.kt:4</ID>
+    <ID>MagicNumber:ExtractTest.kt:ExtractTest$10</ID>
+    <ID>MagicNumber:ExtractTest.kt:ExtractTest$120</ID>
+    <ID>MagicNumber:ExtractTest.kt:ExtractTest$3</ID>
+    <ID>MagicNumber:ExtractTest.kt:ExtractTest$40</ID>
+    <ID>MagicNumber:ExtractTest.kt:ExtractTest$5u</ID>
+    <ID>MagicNumber:FilesTest.kt:FilesTest$3</ID>
+    <ID>MagicNumber:FilterTest.kt:FilterTest$3</ID>
+    <ID>MagicNumber:Fixtures.kt:65536</ID>
+    <ID>MagicNumber:Formatters.kt:Formatters$15</ID>
+    <ID>MagicNumber:Formatters.kt:Formatters$20</ID>
+    <ID>MagicNumber:Formatters.kt:Formatters$3</ID>
+    <ID>MagicNumber:Formatters.kt:Formatters$4</ID>
+    <ID>MagicNumber:Formatters.kt:Formatters$40</ID>
+    <ID>MagicNumber:Formatters.kt:Formatters$400</ID>
+    <ID>MagicNumber:Formatters.kt:Formatters$5</ID>
+    <ID>MagicNumber:Formatters.kt:Formatters$7</ID>
+    <ID>MagicNumber:Formatters.kt:Formatters$8</ID>
+    <ID>MagicNumber:FormattersTest.kt:FormattersTest$10</ID>
+    <ID>MagicNumber:FormattersTest.kt:FormattersTest$102</ID>
+    <ID>MagicNumber:FormattersTest.kt:FormattersTest$200</ID>
+    <ID>MagicNumber:FormattersTest.kt:FormattersTest$40</ID>
+    <ID>MagicNumber:Gh.kt:Gh$3</ID>
+    <ID>MagicNumber:GhTest.kt:12</ID>
+    <ID>MagicNumber:GhTest.kt:30</ID>
+    <ID>MagicNumber:Git.kt:Git$16L</ID>
+    <ID>MagicNumber:Git.kt:Git$20</ID>
+    <ID>MagicNumber:GraphCliSpec.kt:GraphCliSpec$20</ID>
+    <ID>MagicNumber:GrepSymbolTest.kt:GrepSymbolTest$3</ID>
+    <ID>MagicNumber:GrepSymbolTest.kt:GrepSymbolTest$30</ID>
+    <ID>MagicNumber:GrepSymbolTest.kt:GrepSymbolTest$4</ID>
+    <ID>MagicNumber:GrepSymbolTest.kt:GrepSymbolTest$6</ID>
+    <ID>MagicNumber:GrepSymbolTest.kt:GrepSymbolTest$60u</ID>
+    <ID>MagicNumber:GrepTest.kt:GrepTest$160</ID>
+    <ID>MagicNumber:GrepTest.kt:GrepTest$40</ID>
+    <ID>MagicNumber:GrepTest.kt:GrepTest$80</ID>
+    <ID>MagicNumber:Guard.kt:3</ID>
+    <ID>MagicNumber:GuardTest.kt:GuardTest$4</ID>
+    <ID>MagicNumber:GuardTest.kt:GuardTest$50</ID>
+    <ID>MagicNumber:GuardTest.kt:GuardTest$8</ID>
+    <ID>MagicNumber:HandoffTest.kt:HandoffTest$20</ID>
+    <ID>MagicNumber:HandoffTest.kt:HandoffTest$300u</ID>
+    <ID>MagicNumber:HandoffTest.kt:HandoffTest$40u</ID>
+    <ID>MagicNumber:HandoffTest.kt:HandoffTest$800u</ID>
+    <ID>MagicNumber:HealthCheck.kt:Health.Companion$1000</ID>
+    <ID>MagicNumber:HealthCheck.kt:Health.Companion$10_000L</ID>
+    <ID>MagicNumber:HealthCheckTest.kt:HealthCheckTest$10</ID>
+    <ID>MagicNumber:HealthCheckTest.kt:HealthCheckTest$120</ID>
+    <ID>MagicNumber:HealthCheckTest.kt:HealthCheckTest$120L</ID>
+    <ID>MagicNumber:HealthCheckTest.kt:HealthCheckTest$180</ID>
+    <ID>MagicNumber:HealthCheckTest.kt:HealthCheckTest$240</ID>
+    <ID>MagicNumber:HealthCheckTest.kt:HealthCheckTest$3</ID>
+    <ID>MagicNumber:HealthCheckTest.kt:HealthCheckTest$60</ID>
+    <ID>MagicNumber:HealthCheckTest.kt:HealthCheckTest$60L</ID>
+    <ID>MagicNumber:HealthScoreTest.kt:HealthScoreTest$0.5</ID>
+    <ID>MagicNumber:HealthScoreTest.kt:HealthScoreTest$100</ID>
+    <ID>MagicNumber:HealthScoreTest.kt:HealthScoreTest$3</ID>
+    <ID>MagicNumber:HealthScoreTest.kt:HealthScoreTest$60</ID>
+    <ID>MagicNumber:HealthScoreTest.kt:HealthScoreTest$85</ID>
+    <ID>MagicNumber:Hook.kt:CmdHook$64</ID>
+    <ID>MagicNumber:Hook.kt:ReadHook$8</ID>
+    <ID>MagicNumber:HookTest.kt:HookTest$10</ID>
+    <ID>MagicNumber:HookTest.kt:HookTest$100</ID>
+    <ID>MagicNumber:HookTest.kt:HookTest$1024</ID>
+    <ID>MagicNumber:HookTest.kt:HookTest$12</ID>
+    <ID>MagicNumber:HookTest.kt:HookTest$2000</ID>
+    <ID>MagicNumber:HookTest.kt:HookTest$200_000</ID>
+    <ID>MagicNumber:HookTest.kt:HookTest$2048</ID>
+    <ID>MagicNumber:HookTest.kt:HookTest$3</ID>
+    <ID>MagicNumber:HookTest.kt:HookTest$300</ID>
+    <ID>MagicNumber:HookTest.kt:HookTest$300u</ID>
+    <ID>MagicNumber:HookTest.kt:HookTest$301</ID>
+    <ID>MagicNumber:HookTest.kt:HookTest$5</ID>
+    <ID>MagicNumber:HookTest.kt:HookTest$50</ID>
+    <ID>MagicNumber:HookTest.kt:HookTest$500</ID>
+    <ID>MagicNumber:HookTest.kt:HookTest$65</ID>
+    <ID>MagicNumber:HookTest.kt:HookTest$65536</ID>
+    <ID>MagicNumber:HookTest.kt:HookTest$8</ID>
+    <ID>MagicNumber:HttpTest.kt:HttpTest$10_000u</ID>
+    <ID>MagicNumber:HttpTest.kt:HttpTest$12</ID>
+    <ID>MagicNumber:HttpTest.kt:HttpTest$200</ID>
+    <ID>MagicNumber:HttpTest.kt:HttpTest$202</ID>
+    <ID>MagicNumber:HttpTest.kt:HttpTest$400</ID>
+    <ID>MagicNumber:HttpTest.kt:HttpTest$401</ID>
+    <ID>MagicNumber:HttpTest.kt:HttpTest$403</ID>
+    <ID>MagicNumber:HttpTest.kt:HttpTest$404</ID>
+    <ID>MagicNumber:HttpTest.kt:HttpTest$405</ID>
+    <ID>MagicNumber:HttpTest.kt:HttpTest$406</ID>
+    <ID>MagicNumber:HttpTest.kt:HttpTest$415</ID>
+    <ID>MagicNumber:HttpTest.kt:HttpTest$7</ID>
+    <ID>MagicNumber:HttpTest.kt:HttpTest$8</ID>
+    <ID>MagicNumber:HttpTest.kt:HttpTest$9</ID>
+    <ID>MagicNumber:Impact.kt:Impact$4</ID>
+    <ID>MagicNumber:ImpactTest.kt:ImpactTest$200u</ID>
+    <ID>MagicNumber:ImpactTest.kt:ImpactTest$240</ID>
+    <ID>MagicNumber:ImpactTest.kt:ImpactTest$3</ID>
+    <ID>MagicNumber:ImpactTest.kt:ImpactTest$4</ID>
+    <ID>MagicNumber:ImpactTest.kt:ImpactTest$60</ID>
+    <ID>MagicNumber:Index.kt:Index$0x80</ID>
+    <ID>MagicNumber:Index.kt:Index$0xC0</ID>
+    <ID>MagicNumber:Index.kt:Index$16</ID>
+    <ID>MagicNumber:Index.kt:Index$24</ID>
+    <ID>MagicNumber:Index.kt:Index$8</ID>
+    <ID>MagicNumber:IndexTest.kt:IndexTest$10_000u</ID>
+    <ID>MagicNumber:IndexTest.kt:IndexTest$20</ID>
+    <ID>MagicNumber:IndexTest.kt:IndexTest$3</ID>
+    <ID>MagicNumber:IndexTest.kt:IndexTest$400</ID>
+    <ID>MagicNumber:IndexTest.kt:IndexTest$5</ID>
+    <ID>MagicNumber:IndexTest.kt:IndexTest$500u</ID>
+    <ID>MagicNumber:IndexTest.kt:IndexTest$64</ID>
+    <ID>MagicNumber:IndexTest.kt:IndexTest$7</ID>
+    <ID>MagicNumber:Inject.kt:0x80</ID>
+    <ID>MagicNumber:Inject.kt:0xC0</ID>
+    <ID>MagicNumber:Inject.kt:3</ID>
+    <ID>MagicNumber:Inject.kt:InjectPlugin$9u</ID>
+    <ID>MagicNumber:InjectTest.kt:InjectTest$1000</ID>
+    <ID>MagicNumber:InjectTest.kt:InjectTest$10u</ID>
+    <ID>MagicNumber:InjectTest.kt:InjectTest$18</ID>
+    <ID>MagicNumber:InjectTest.kt:InjectTest$20</ID>
+    <ID>MagicNumber:InjectTest.kt:InjectTest$250u</ID>
+    <ID>MagicNumber:InjectTest.kt:InjectTest$3361</ID>
+    <ID>MagicNumber:InjectTest.kt:InjectTest$4.2f</ID>
+    <ID>MagicNumber:InjectTest.kt:InjectTest$500u</ID>
+    <ID>MagicNumber:InjectTest.kt:InjectTest$800u</ID>
+    <ID>MagicNumber:JsonTree.kt:4</ID>
+    <ID>MagicNumber:JsonTree.kt:8</ID>
+    <ID>MagicNumber:JsonTreeTest.kt:20</ID>
+    <ID>MagicNumber:JsonTreeTest.kt:26</ID>
+    <ID>MagicNumber:JsonTreeTest.kt:3</ID>
+    <ID>MagicNumber:JsonTreeTest.kt:4</ID>
+    <ID>MagicNumber:JsonTreeTest.kt:6</ID>
+    <ID>MagicNumber:JsonTreeTest.kt:8</ID>
+    <ID>MagicNumber:JsonTreeTest.kt:JsonTreeTest$12</ID>
+    <ID>MagicNumber:JsonTreeTest.kt:JsonTreeTest$32</ID>
+    <ID>MagicNumber:JsonTreeTest.kt:JsonTreeTest$4</ID>
+    <ID>MagicNumber:JsonTreeTest.kt:JsonTreeTest$6</ID>
+    <ID>MagicNumber:JsonTreeTest.kt:JsonTreeTest$64</ID>
+    <ID>MagicNumber:LinkTest.kt:LinkTest$11149</ID>
+    <ID>MagicNumber:LinkTest.kt:LinkTest$11381</ID>
+    <ID>MagicNumber:LinkTest.kt:LinkTest$13792</ID>
+    <ID>MagicNumber:LinkTest.kt:LinkTest$13793</ID>
+    <ID>MagicNumber:LinkTest.kt:LinkTest$200</ID>
+    <ID>MagicNumber:LinkTest.kt:LinkTest$25434</ID>
+    <ID>MagicNumber:LinkTest.kt:LinkTest$25435</ID>
+    <ID>MagicNumber:LinkTest.kt:LinkTest$26000</ID>
+    <ID>MagicNumber:LinkTest.kt:LinkTest$300</ID>
+    <ID>MagicNumber:LinkTest.kt:LinkTest$30709</ID>
+    <ID>MagicNumber:LinkTest.kt:LinkTest$500</ID>
+    <ID>MagicNumber:LinkTest.kt:LinkTest$6</ID>
+    <ID>MagicNumber:LinkTest.kt:LinkTest$700</ID>
+    <ID>MagicNumber:LinkTest.kt:LinkTest$701</ID>
+    <ID>MagicNumber:LinkTest.kt:LinkTest$999</ID>
+    <ID>MagicNumber:Llm.kt:100</ID>
+    <ID>MagicNumber:Llm.kt:35</ID>
+    <ID>MagicNumber:Logfmt.kt:3</ID>
+    <ID>MagicNumber:Logfmt.kt:4</ID>
+    <ID>MagicNumber:LogfmtTest.kt:LogfmtTest$10</ID>
+    <ID>MagicNumber:LogfmtTest.kt:LogfmtTest$20</ID>
+    <ID>MagicNumber:LogfmtTest.kt:LogfmtTest$30</ID>
+    <ID>MagicNumber:LogfmtTest.kt:LogfmtTest$4</ID>
+    <ID>MagicNumber:LogfmtTest.kt:LogfmtTest$5</ID>
+    <ID>MagicNumber:LogfmtTest.kt:LogfmtTest$7</ID>
+    <ID>MagicNumber:LogfmtTest.kt:LogfmtTest$8</ID>
+    <ID>MagicNumber:Lsp.kt:Lsp$1000</ID>
+    <ID>MagicNumber:LspTest.kt:LspTest$1000</ID>
+    <ID>MagicNumber:LspTest.kt:LspTest$10L</ID>
+    <ID>MagicNumber:LspTest.kt:LspTest$11L</ID>
+    <ID>MagicNumber:LspTest.kt:LspTest$12L</ID>
+    <ID>MagicNumber:LspTest.kt:LspTest$13L</ID>
+    <ID>MagicNumber:LspTest.kt:LspTest$20</ID>
+    <ID>MagicNumber:LspTest.kt:LspTest$2000</ID>
+    <ID>MagicNumber:LspTest.kt:LspTest$20_000u</ID>
+    <ID>MagicNumber:LspTest.kt:LspTest$23L</ID>
+    <ID>MagicNumber:LspTest.kt:LspTest$3</ID>
+    <ID>MagicNumber:LspTest.kt:LspTest$5L</ID>
+    <ID>MagicNumber:LspTest.kt:LspTest$6</ID>
+    <ID>MagicNumber:LspTest.kt:LspTest$6L</ID>
+    <ID>MagicNumber:LspTest.kt:LspTest$700_000u</ID>
+    <ID>MagicNumber:LspTest.kt:LspTest$99L</ID>
+    <ID>MagicNumber:LspWire.kt:LspWire$0xff</ID>
+    <ID>MagicNumber:LspWire.kt:LspWire$3</ID>
+    <ID>MagicNumber:Memory.kt:10</ID>
+    <ID>MagicNumber:Memory.kt:10u</ID>
+    <ID>MagicNumber:Memory.kt:11u</ID>
+    <ID>MagicNumber:Memory.kt:12u</ID>
+    <ID>MagicNumber:Memory.kt:20</ID>
+    <ID>MagicNumber:Memory.kt:MemoryPlugin$9u</ID>
+    <ID>MagicNumber:MemoryStatusTest.kt:MemoryStatusTest$12u</ID>
+    <ID>MagicNumber:MemoryStatusTest.kt:MemoryStatusTest$3</ID>
+    <ID>MagicNumber:MemoryStatusTest.kt:MemoryStatusTest$3u</ID>
+    <ID>MagicNumber:MemoryStatusTest.kt:MemoryStatusTest$4</ID>
+    <ID>MagicNumber:MemoryStatusTest.kt:MemoryStatusTest$4u</ID>
+    <ID>MagicNumber:MemoryStatusTest.kt:MemoryStatusTest$5</ID>
+    <ID>MagicNumber:MemoryStatusTest.kt:MemoryStatusTest$6</ID>
+    <ID>MagicNumber:MemoryTest.kt:MemoryTest$10</ID>
+    <ID>MagicNumber:MemoryTest.kt:MemoryTest$10u</ID>
+    <ID>MagicNumber:MemoryTest.kt:MemoryTest$120</ID>
+    <ID>MagicNumber:MemoryTest.kt:MemoryTest$20</ID>
+    <ID>MagicNumber:MemoryTest.kt:MemoryTest$200u</ID>
+    <ID>MagicNumber:MemoryTest.kt:MemoryTest$3</ID>
+    <ID>MagicNumber:MemoryTest.kt:MemoryTest$30u</ID>
+    <ID>MagicNumber:MemoryTest.kt:MemoryTest$4</ID>
+    <ID>MagicNumber:MemoryTest.kt:MemoryTest$400</ID>
+    <ID>MagicNumber:MemoryTest.kt:MemoryTest$5</ID>
+    <ID>MagicNumber:MemoryTest.kt:MemoryTest$5u</ID>
+    <ID>MagicNumber:MemoryTest.kt:MemoryTest$6</ID>
+    <ID>MagicNumber:MemoryTest.kt:MemoryTest$60</ID>
+    <ID>MagicNumber:MemoryTest.kt:MemoryTest$7</ID>
+    <ID>MagicNumber:MemoryTest.kt:MemoryTest$8</ID>
+    <ID>MagicNumber:MemoryTest.kt:MemoryTest$90u</ID>
+    <ID>MagicNumber:MemoryTest.kt:MemoryTest$999</ID>
+    <ID>MagicNumber:MustKeepTest.kt:LlmTest$14</ID>
+    <ID>MagicNumber:MustKeepTest.kt:MustKeepTest$400</ID>
+    <ID>MagicNumber:Names.kt:128</ID>
+    <ID>MagicNumber:Names.kt:4</ID>
+    <ID>MagicNumber:Names.kt:64</ID>
+    <ID>MagicNumber:Notes.kt:9u</ID>
+    <ID>MagicNumber:Observe.kt:512</ID>
+    <ID>MagicNumber:Observe.kt:8</ID>
+    <ID>MagicNumber:ObserveTest.kt:ObserveTest$10</ID>
+    <ID>MagicNumber:ObserveTest.kt:ObserveTest$3</ID>
+    <ID>MagicNumber:ObserveTest.kt:ObserveTest$300</ID>
+    <ID>MagicNumber:ObserveTest.kt:ObserveTest$4</ID>
+    <ID>MagicNumber:ObserveTest.kt:ObserveTest$5</ID>
+    <ID>MagicNumber:Outline.kt:60</ID>
+    <ID>MagicNumber:OutlineTest.kt:OutlineTest$20</ID>
+    <ID>MagicNumber:OutlineTest.kt:OutlineTest$3</ID>
+    <ID>MagicNumber:PackTest.kt:3</ID>
+    <ID>MagicNumber:PackTest.kt:4</ID>
+    <ID>MagicNumber:PackTest.kt:PackTest$3</ID>
+    <ID>MagicNumber:PackTest.kt:PackTest$60u</ID>
+    <ID>MagicNumber:PiTest.kt:PiTest$3</ID>
+    <ID>MagicNumber:PiTest.kt:PiTest$3L</ID>
+    <ID>MagicNumber:PiTest.kt:PiTest$5L</ID>
+    <ID>MagicNumber:PortableTest.kt:50</ID>
+    <ID>MagicNumber:PortableTest.kt:ExportTest$3</ID>
+    <ID>MagicNumber:PortableTest.kt:ExportTest$3u</ID>
+    <ID>MagicNumber:PortableTest.kt:ImportTest$50u</ID>
+    <ID>MagicNumber:ProjectsTest.kt:ProjectsTest$20_000u</ID>
+    <ID>MagicNumber:ProjectsTest.kt:ProjectsTest$3000</ID>
+    <ID>MagicNumber:ProtocolTest.kt:ProtocolTest$10</ID>
+    <ID>MagicNumber:ProtocolTest.kt:ProtocolTest$3</ID>
+    <ID>MagicNumber:ProtocolTest.kt:ProtocolTest$4</ID>
+    <ID>MagicNumber:ProtocolTest.kt:ProtocolTest$5</ID>
+    <ID>MagicNumber:ProtocolTest.kt:ProtocolTest$6</ID>
+    <ID>MagicNumber:ProtocolTest.kt:ProtocolTest$7</ID>
+    <ID>MagicNumber:Push.kt:Push$10u</ID>
+    <ID>MagicNumber:Python.kt:Python$4</ID>
+    <ID>MagicNumber:PythonTest.kt:PythonTest$12</ID>
+    <ID>MagicNumber:QueueTest.kt:200</ID>
+    <ID>MagicNumber:QueueTest.kt:CompressorTest$10_000</ID>
+    <ID>MagicNumber:QueueTest.kt:CompressorTest$60_000</ID>
+    <ID>MagicNumber:QueueTest.kt:CompressorTest$70_000</ID>
+    <ID>MagicNumber:QueueTest.kt:QueueTest$20</ID>
+    <ID>MagicNumber:RankTest.kt:RankTest$0.02</ID>
+    <ID>MagicNumber:RankTest.kt:RankTest$1.5</ID>
+    <ID>MagicNumber:RankTest.kt:RankTest$1e-12</ID>
+    <ID>MagicNumber:RankTest.kt:RankTest$1e-6</ID>
+    <ID>MagicNumber:RankTest.kt:RankTest$1e-9</ID>
+    <ID>MagicNumber:RankTest.kt:RankTest$3</ID>
+    <ID>MagicNumber:RankTest.kt:RankTest$4</ID>
+    <ID>MagicNumber:RankTest.kt:RankTest$40</ID>
+    <ID>MagicNumber:RankTest.kt:RankTest$5</ID>
+    <ID>MagicNumber:RankTest.kt:RankTest$500u</ID>
+    <ID>MagicNumber:ReadTest.kt:ReadTest$20</ID>
+    <ID>MagicNumber:ReadTest.kt:ReadTest$200u</ID>
+    <ID>MagicNumber:ReadTest.kt:ReadTest$3000</ID>
+    <ID>MagicNumber:ReadTest.kt:ReadTest$32</ID>
+    <ID>MagicNumber:ReadTest.kt:ReadTest$4</ID>
+    <ID>MagicNumber:ReadTest.kt:ReadTest$500u</ID>
+    <ID>MagicNumber:Render.kt:10</ID>
+    <ID>MagicNumber:Resident.kt:Resident$0x1c0u</ID>
+    <ID>MagicNumber:Resolve.kt:Resolve$20</ID>
+    <ID>MagicNumber:ResolveTest.kt:ResolveTest$10</ID>
+    <ID>MagicNumber:ResolveTest.kt:ResolveTest$100</ID>
+    <ID>MagicNumber:ResolveTest.kt:ResolveTest$5</ID>
+    <ID>MagicNumber:ResolveTest.kt:ResolveTest$50</ID>
+    <ID>MagicNumber:ResolveTest.kt:ResolveTest$6</ID>
+    <ID>MagicNumber:Review.kt:Review$0.10</ID>
+    <ID>MagicNumber:Review.kt:Review$0.20</ID>
+    <ID>MagicNumber:Review.kt:Review$0.4</ID>
+    <ID>MagicNumber:Review.kt:Review$0.7</ID>
+    <ID>MagicNumber:Review.kt:Review$10_000.0</ID>
+    <ID>MagicNumber:Review.kt:Review$20.0</ID>
+    <ID>MagicNumber:Review.kt:Review$4</ID>
+    <ID>MagicNumber:ReviewTest.kt:ReviewTest$0.05</ID>
+    <ID>MagicNumber:ReviewTest.kt:ReviewTest$0.3</ID>
+    <ID>MagicNumber:ReviewTest.kt:ReviewTest$0.6</ID>
+    <ID>MagicNumber:ReviewTest.kt:ReviewTest$0.71</ID>
+    <ID>MagicNumber:ReviewTest.kt:ReviewTest$10</ID>
+    <ID>MagicNumber:ReviewTest.kt:ReviewTest$100</ID>
+    <ID>MagicNumber:ReviewTest.kt:ReviewTest$11</ID>
+    <ID>MagicNumber:ReviewTest.kt:ReviewTest$20</ID>
+    <ID>MagicNumber:ReviewTest.kt:ReviewTest$200</ID>
+    <ID>MagicNumber:ReviewTest.kt:ReviewTest$4</ID>
+    <ID>MagicNumber:ReviewTest.kt:ReviewTest$40</ID>
+    <ID>MagicNumber:ReviewTest.kt:ReviewTest$5</ID>
+    <ID>MagicNumber:Roots.kt:Roots$3</ID>
+    <ID>MagicNumber:RootsTest.kt:RootsTest$20</ID>
+    <ID>MagicNumber:Rules.kt:Rules$10</ID>
+    <ID>MagicNumber:Rules.kt:Rules$10u</ID>
+    <ID>MagicNumber:Rules.kt:Rules$11</ID>
+    <ID>MagicNumber:Rules.kt:Rules$12</ID>
+    <ID>MagicNumber:Rules.kt:Rules$13</ID>
+    <ID>MagicNumber:Rules.kt:Rules$14</ID>
+    <ID>MagicNumber:Rules.kt:Rules$15</ID>
+    <ID>MagicNumber:Rules.kt:Rules$16</ID>
+    <ID>MagicNumber:Rules.kt:Rules$17</ID>
+    <ID>MagicNumber:Rules.kt:Rules$18</ID>
+    <ID>MagicNumber:Rules.kt:Rules$19</ID>
+    <ID>MagicNumber:Rules.kt:Rules$20</ID>
+    <ID>MagicNumber:Rules.kt:Rules$200u</ID>
+    <ID>MagicNumber:Rules.kt:Rules$20u</ID>
+    <ID>MagicNumber:Rules.kt:Rules$3</ID>
+    <ID>MagicNumber:Rules.kt:Rules$4</ID>
+    <ID>MagicNumber:Rules.kt:Rules$40u</ID>
+    <ID>MagicNumber:Rules.kt:Rules$5</ID>
+    <ID>MagicNumber:Rules.kt:Rules$6</ID>
+    <ID>MagicNumber:Rules.kt:Rules$7</ID>
+    <ID>MagicNumber:Rules.kt:Rules$8</ID>
+    <ID>MagicNumber:Rules.kt:Rules$9</ID>
+    <ID>MagicNumber:Rules.kt:Settings.Companion$80</ID>
+    <ID>MagicNumber:RulesTest.kt:80u</ID>
+    <ID>MagicNumber:RulesTest.kt:RulesTest$10</ID>
+    <ID>MagicNumber:RulesTest.kt:RulesTest$1000</ID>
+    <ID>MagicNumber:RulesTest.kt:RulesTest$11u</ID>
+    <ID>MagicNumber:RulesTest.kt:RulesTest$150</ID>
+    <ID>MagicNumber:RulesTest.kt:RulesTest$20</ID>
+    <ID>MagicNumber:RulesTest.kt:RulesTest$200</ID>
+    <ID>MagicNumber:RulesTest.kt:RulesTest$20u</ID>
+    <ID>MagicNumber:RulesTest.kt:RulesTest$299</ID>
+    <ID>MagicNumber:RulesTest.kt:RulesTest$3</ID>
+    <ID>MagicNumber:RulesTest.kt:RulesTest$30</ID>
+    <ID>MagicNumber:RulesTest.kt:RulesTest$300</ID>
+    <ID>MagicNumber:RulesTest.kt:RulesTest$3u</ID>
+    <ID>MagicNumber:RulesTest.kt:RulesTest$40u</ID>
+    <ID>MagicNumber:RulesTest.kt:RulesTest$4u</ID>
+    <ID>MagicNumber:RulesTest.kt:RulesTest$50</ID>
+    <ID>MagicNumber:RulesTest.kt:RulesTest$5000</ID>
+    <ID>MagicNumber:RulesTest.kt:RulesTest$5u</ID>
+    <ID>MagicNumber:RulesTest.kt:RulesTest$60</ID>
+    <ID>MagicNumber:RulesTest.kt:RulesTest$6u</ID>
+    <ID>MagicNumber:RulesTest.kt:RulesTest$7</ID>
+    <ID>MagicNumber:RulesTest.kt:RulesTest$7u</ID>
+    <ID>MagicNumber:RulesTest.kt:RulesTest$80</ID>
+    <ID>MagicNumber:RulesTest.kt:RulesTest$80u</ID>
+    <ID>MagicNumber:RulesTest.kt:RulesTest$8u</ID>
+    <ID>MagicNumber:RulesTest.kt:RulesTest$9u</ID>
+    <ID>MagicNumber:Run.kt:0x1b</ID>
+    <ID>MagicNumber:Run.kt:0x20</ID>
+    <ID>MagicNumber:Run.kt:0xff</ID>
+    <ID>MagicNumber:Run.kt:10</ID>
+    <ID>MagicNumber:Run.kt:12</ID>
+    <ID>MagicNumber:Run.kt:13</ID>
+    <ID>MagicNumber:Run.kt:60</ID>
+    <ID>MagicNumber:Run.kt:9</ID>
+    <ID>MagicNumber:RunTest.kt:RunTest$10</ID>
+    <ID>MagicNumber:RunTest.kt:RunTest$100</ID>
+    <ID>MagicNumber:RunTest.kt:RunTest$1024</ID>
+    <ID>MagicNumber:RunTest.kt:RunTest$10u</ID>
+    <ID>MagicNumber:RunTest.kt:RunTest$150</ID>
+    <ID>MagicNumber:RunTest.kt:RunTest$29u</ID>
+    <ID>MagicNumber:RunTest.kt:RunTest$3</ID>
+    <ID>MagicNumber:RunTest.kt:RunTest$3u</ID>
+    <ID>MagicNumber:RunTest.kt:RunTest$400</ID>
+    <ID>MagicNumber:RunTest.kt:RunTest$400u</ID>
+    <ID>MagicNumber:RunTest.kt:RunTest$40u</ID>
+    <ID>MagicNumber:RunTest.kt:RunTest$5u</ID>
+    <ID>MagicNumber:RunTest.kt:RunTest$60</ID>
+    <ID>MagicNumber:RunTest.kt:RunTest$80</ID>
+    <ID>MagicNumber:RuntimeTest.kt:RuntimeTest$10_000u</ID>
+    <ID>MagicNumber:RuntimeTest.kt:RuntimeTest$10u</ID>
+    <ID>MagicNumber:RuntimeTest.kt:RuntimeTest$3</ID>
+    <ID>MagicNumber:RuntimeTest.kt:RuntimeTest$3L</ID>
+    <ID>MagicNumber:RuntimeTest.kt:RuntimeTest$3u</ID>
+    <ID>MagicNumber:RuntimeTest.kt:RuntimeTest$5u</ID>
+    <ID>MagicNumber:Scope.kt:Scope$3</ID>
+    <ID>MagicNumber:Scope.kt:Scope.Scoped$5</ID>
+    <ID>MagicNumber:ScopeTest.kt:ScopeTest$3</ID>
+    <ID>MagicNumber:Score.kt:Score$0.5</ID>
+    <ID>MagicNumber:Score.kt:Score$100.0</ID>
+    <ID>MagicNumber:Score.kt:Score$1000</ID>
+    <ID>MagicNumber:ScrubAdmitTest.kt:AdmitTest$10u</ID>
+    <ID>MagicNumber:ScrubAdmitTest.kt:AdmitTest$12u</ID>
+    <ID>MagicNumber:ScrubAdmitTest.kt:AdmitTest$3</ID>
+    <ID>MagicNumber:ScrubAdmitTest.kt:AdmitTest$4</ID>
+    <ID>MagicNumber:ScrubAdmitTest.kt:AdmitTest$7</ID>
+    <ID>MagicNumber:ScrubAdmitTest.kt:AdmitTest$85u</ID>
+    <ID>MagicNumber:ScrubAdmitTest.kt:AdmitTest$9</ID>
+    <ID>MagicNumber:Search.kt:Search$120</ID>
+    <ID>MagicNumber:SearchTest.kt:SearchTest$10</ID>
+    <ID>MagicNumber:SearchTest.kt:SearchTest$100</ID>
+    <ID>MagicNumber:SearchTest.kt:SearchTest$1024</ID>
+    <ID>MagicNumber:SearchTest.kt:SearchTest$115</ID>
+    <ID>MagicNumber:SearchTest.kt:SearchTest$187</ID>
+    <ID>MagicNumber:SearchTest.kt:SearchTest$2</ID>
+    <ID>MagicNumber:SearchTest.kt:SearchTest$20</ID>
+    <ID>MagicNumber:SearchTest.kt:SearchTest$200</ID>
+    <ID>MagicNumber:SearchTest.kt:SearchTest$3</ID>
+    <ID>MagicNumber:SearchTest.kt:SearchTest$3u</ID>
+    <ID>MagicNumber:SearchTest.kt:SearchTest$64</ID>
+    <ID>MagicNumber:Sed.kt:0x0c</ID>
+    <ID>MagicNumber:Sed.kt:0xff</ID>
+    <ID>MagicNumber:ServerTest.kt:ServerTest$32600</ID>
+    <ID>MagicNumber:ServerTest.kt:ServerTest$32601</ID>
+    <ID>MagicNumber:ServerTest.kt:ServerTest$32700</ID>
+    <ID>MagicNumber:Skill.kt:0x80</ID>
+    <ID>MagicNumber:Skill.kt:0xC0</ID>
+    <ID>MagicNumber:SkillTest.kt:SkillTest$100</ID>
+    <ID>MagicNumber:SkillTest.kt:SkillTest$200_000</ID>
+    <ID>MagicNumber:SkillTest.kt:SkillTest$8192</ID>
+    <ID>MagicNumber:SyncTest.kt:SyncTest$300u</ID>
+    <ID>MagicNumber:SyncTest.kt:SyncTest$420u</ID>
+    <ID>MagicNumber:SyncTest.kt:SyncTest$65u</ID>
+    <ID>MagicNumber:Tables.kt:Tables$3</ID>
+    <ID>MagicNumber:Tables.kt:Tables$32</ID>
+    <ID>MagicNumber:Tables.kt:Tables$40</ID>
+    <ID>MagicNumber:TallyTest.kt:TallyTest$3</ID>
+    <ID>MagicNumber:ToolsTest.kt:ToolsTest$200</ID>
+    <ID>MagicNumber:ToolsTest.kt:ToolsTest$500</ID>
+    <ID>MagicNumber:ToolsTest.kt:ToolsTest$7</ID>
+    <ID>MagicNumber:ToolsTest.kt:ToolsTest$9</ID>
+    <ID>MagicNumber:Toon.kt:3</ID>
+    <ID>MagicNumber:ToonTest.kt:6</ID>
+    <ID>MagicNumber:ToonTest.kt:ToonTest$3</ID>
+    <ID>MagicNumber:ToonTest.kt:ToonTest$64</ID>
+    <ID>MagicNumber:TypesTest.kt:TypesTest$9</ID>
+    <ID>MagicNumber:Vfs.kt:Vfs$40</ID>
+    <ID>MagicNumber:Watch.kt:Watch$1000</ID>
+    <ID>MagicNumber:WatchTest.kt:WatchTest$1000</ID>
+    <ID>MagicNumber:WatchTest.kt:WatchTest$200</ID>
+    <ID>MagicNumber:WatchTest.kt:WatchTest$3</ID>
+    <ID>MagicNumber:WatchTest.kt:WatchTest$4</ID>
+    <ID>MagicNumber:WatchTest.kt:WatchTest$50</ID>
+    <ID>MagicNumber:WatchTest.kt:WatchTest$80</ID>
+    <ID>MagicNumber:WrapTest.kt:WrapTest$64</ID>
+    <ID>MatchingDeclarationName:Anthropic.kt:AnthropicWire : ToolResults</ID>
+    <ID>MatchingDeclarationName:Cache.kt:ReadCache</ID>
+    <ID>MatchingDeclarationName:Compress.kt:CaveIntensity</ID>
+    <ID>MatchingDeclarationName:Docs.kt:DocsPlugin : Plugin</ID>
+    <ID>MatchingDeclarationName:Events.kt:GraphCall</ID>
+    <ID>MatchingDeclarationName:HealthCheck.kt:Health</ID>
+    <ID>MatchingDeclarationName:Hook.kt:ReadHook</ID>
+    <ID>MatchingDeclarationName:Pi.kt:PiWire : ToolResults</ID>
+    <ID>MatchingDeclarationName:Render.kt:Col</ID>
+    <ID>MatchingDeclarationName:Walk.kt:Matcher</ID>
+    <ID>MayBeConstant:ExtractTest.kt:private val SESSION = """{"type":"user","message":{"content":"we picked sqlite for the cache"}}""" + "\n" + """{"type":"assistant","message":{"content":[{"type":"text","text":"noted &lt;private>hunter2&lt;/private> done"},{"type":"tool_use","name":"Bash"}]}}""" + "\n" + """{"type":"summary"}""" + "\nnot json\n"</ID>
+    <ID>NestedBlockDepth:Compact.kt:Compact$fun gitStatus: String?</ID>
+    <ID>NestedBlockDepth:Grep.kt:Grep$private fun parseArgv: Pair&lt;String, String?>?</ID>
+    <ID>NestedBlockDepth:Impact.kt:Impact$fun walkRoots: List&lt;RootRow></ID>
+    <ID>NestedBlockDepth:Logfmt.kt:private fun pairs: List&lt;Pair></ID>
+    <ID>NestedBlockDepth:Tools.kt:Tools$fun defsText: String</ID>
+    <ID>NestedBlockDepth:ToonTest.kt:private fun splitCells: List&lt;String>?</ID>
+    <ID>ReturnCount:Admit.kt:Admit$internal fun similarityPct: UInt</ID>
+    <ID>ReturnCount:Alerts.kt:Alerts$fun notice: String?</ID>
+    <ID>ReturnCount:Archive.kt:private fun archiveNew: Pair&lt;String, String>?</ID>
+    <ID>ReturnCount:Archive.kt:private fun recordRun: List&lt;Measurement></ID>
+    <ID>ReturnCount:Archive.kt:private fun rewriteBlob: Measurement?</ID>
+    <ID>ReturnCount:Archive.kt:private fun rewriteBlock: Measurement?</ID>
+    <ID>ReturnCount:Archive.kt:private fun rewriteSkill: Measurement?</ID>
+    <ID>ReturnCount:Bounded.kt:Bounded$private fun bounds: Boolean</ID>
+    <ID>ReturnCount:Cache.kt:ReadCache$fun hit: String?</ID>
+    <ID>ReturnCount:Cache.kt:ReadCache$fun invalidate</ID>
+    <ID>ReturnCount:CatFile.kt:CatFile$fun outlineOf: String?</ID>
+    <ID>ReturnCount:CatFile.kt:CatFile$fun rereadKey: Pair&lt;String, String>?</ID>
+    <ID>ReturnCount:Checkpoint.kt:PathEntry.Companion$fun parse: PathEntry</ID>
+    <ID>ReturnCount:CliktAdapter.kt:CliktParser$override fun run: Int</ID>
+    <ID>ReturnCount:Cochange.kt:Cochange$fun pairs: List&lt;CochangePair></ID>
+    <ID>ReturnCount:Compact.kt:Compact$fun gitStatus: String?</ID>
+    <ID>ReturnCount:Compact.kt:Compact$fun lsL: String?</ID>
+    <ID>ReturnCount:Compact.kt:Compact$private fun lintCode: String?</ID>
+    <ID>ReturnCount:Compact.kt:Compact$private fun upstreamNote: String?</ID>
+    <ID>ReturnCount:Compress.kt:internal fun findFence: Pair&lt;Int, Int>?</ID>
+    <ID>ReturnCount:Compress.kt:private fun fenceRun: Triple&lt;Char, Int, String>?</ID>
+    <ID>ReturnCount:Compress.kt:private fun storedView: String?</ID>
+    <ID>ReturnCount:Compress.kt:private fun summarizeBlock: Measurement?</ID>
+    <ID>ReturnCount:Compressor.kt:Compressor$private suspend fun tryRun: Outcome</ID>
+    <ID>ReturnCount:Core.kt:GraphCore$internal fun staleBanner: String</ID>
+    <ID>ReturnCount:Dead.kt:Affected$fun format: String</ID>
+    <ID>ReturnCount:Dead.kt:Dead$fun dead: String</ID>
+    <ID>ReturnCount:Diff.kt:Side$fun body: String?</ID>
+    <ID>ReturnCount:Diffs.kt:Diffs$internal fun parse: Parsed?</ID>
+    <ID>ReturnCount:Diffs.kt:Diffs$private fun counts: Pair&lt;Int, Int>?</ID>
+    <ID>ReturnCount:Dispatch.kt:fun run: ByteArray</ID>
+    <ID>ReturnCount:Dispatch.kt:internal fun capBudget: String</ID>
+    <ID>ReturnCount:Dispatch.kt:internal fun claimInjection: Injection?</ID>
+    <ID>ReturnCount:Dispatch.kt:internal fun mcpResult: JsonElement?</ID>
+    <ID>ReturnCount:Dispatch.kt:internal fun noteSlow</ID>
+    <ID>ReturnCount:Dispatch.kt:internal fun resolveSession: String</ID>
+    <ID>ReturnCount:Dispatch.kt:internal fun writeAgentEnvFile</ID>
+    <ID>ReturnCount:Dispatch.kt:private fun cursorMcpOutput: JsonElement?</ID>
+    <ID>ReturnCount:Dispatch.kt:private fun injectEvent: HookOutput</ID>
+    <ID>ReturnCount:Dispatch.kt:private fun postTool: HookOutput</ID>
+    <ID>ReturnCount:Dispatch.kt:private fun preTool: HookOutput</ID>
+    <ID>ReturnCount:Docs.kt:fun docsQuery: String</ID>
+    <ID>ReturnCount:Docs.kt:fun docsResolve: String</ID>
+    <ID>ReturnCount:Docs.kt:fun fetchCrate: String</ID>
+    <ID>ReturnCount:Docs.kt:fun resolveLock: Pair&lt;String, String>?</ID>
+    <ID>ReturnCount:Drill.kt:Drill$fun run: DrillGraph</ID>
+    <ID>ReturnCount:Expand.kt:Expand$fun filterLines: List&lt;String></ID>
+    <ID>ReturnCount:Expand.kt:Expand$fun resolveId: String</ID>
+    <ID>ReturnCount:Expand.kt:Expand$private fun stripTrailingBr: String?</ID>
+    <ID>ReturnCount:Extract.kt:Extraction$fun line</ID>
+    <ID>ReturnCount:Extract.kt:internal fun worthParsing: Boolean</ID>
+    <ID>ReturnCount:Extract.kt:private fun parseStrict: JsonElement?</ID>
+    <ID>ReturnCount:Extract.kt:private fun skillBody: Pair&lt;String, ULong>?</ID>
+    <ID>ReturnCount:Extract.kt:private fun userPrompt: UserText?</ID>
+    <ID>ReturnCount:Files.kt:internal fun relative: String?</ID>
+    <ID>ReturnCount:Filter.kt:Filter$fun runWithStore: String</ID>
+    <ID>ReturnCount:Formatters.kt:Formatters$fun family: String</ID>
+    <ID>ReturnCount:Formatters.kt:Formatters$fun familyOf: String</ID>
+    <ID>ReturnCount:Formatters.kt:Formatters$internal fun gitLog: String?</ID>
+    <ID>ReturnCount:Formatters.kt:Formatters$internal fun visibleArgv: List&lt;String></ID>
+    <ID>ReturnCount:Formatters.kt:Formatters$private fun commandAfter: List&lt;String>?</ID>
+    <ID>ReturnCount:Formatters.kt:Formatters$private fun compressText: Compressed</ID>
+    <ID>ReturnCount:Formatters.kt:Formatters$private fun echoCommand: String?</ID>
+    <ID>ReturnCount:Formatters.kt:Formatters$private fun echoed: Resolved?</ID>
+    <ID>ReturnCount:Formatters.kt:Formatters$private fun looksLikeInvocation: Boolean</ID>
+    <ID>ReturnCount:Formatters.kt:Formatters$private fun peelJustCommand: List&lt;String>?</ID>
+    <ID>ReturnCount:Formatters.kt:Formatters$private fun peelMiseExec: List&lt;String>?</ID>
+    <ID>ReturnCount:Formatters.kt:Formatters$private fun peelToolWrapper: List&lt;String>?</ID>
+    <ID>ReturnCount:Formatters.kt:Formatters$private fun resolve: Resolved</ID>
+    <ID>ReturnCount:Formatters.kt:Formatters$private fun skipMiseFlags: Int?</ID>
+    <ID>ReturnCount:Formatters.kt:Formatters$private fun taskDollar: String?</ID>
+    <ID>ReturnCount:Framing.kt:FrameReader$private fun header: Frame?</ID>
+    <ID>ReturnCount:Gh.kt:Gh$fun format: String?</ID>
+    <ID>ReturnCount:Gh.kt:Gh$internal fun runLog: String?</ID>
+    <ID>ReturnCount:Grep.kt:Grep$fun group: String?</ID>
+    <ID>ReturnCount:Grep.kt:Grep$private fun parseArgv: Pair&lt;String, String?>?</ID>
+    <ID>ReturnCount:Grep.kt:Grep$private fun window: String</ID>
+    <ID>ReturnCount:GrepSymbol.kt:GrepSymbol$fun answer: PreToolDecision?</ID>
+    <ID>ReturnCount:GrepSymbol.kt:GrepSymbol$fun symbolName: String?</ID>
+    <ID>ReturnCount:GrepSymbol.kt:GrepSymbol$private fun definitions: Pair&lt;String, List&lt;SymDef>>?</ID>
+    <ID>ReturnCount:GrepSymbol.kt:GrepSymbol$private fun reason: String?</ID>
+    <ID>ReturnCount:GrepSymbol.kt:GrepSymbol$private fun under: String?</ID>
+    <ID>ReturnCount:Guard.kt:GuardPlugin$override fun postTool: String?</ID>
+    <ID>ReturnCount:Guard.kt:GuardPlugin$override fun preTool: PreToolDecision?</ID>
+    <ID>ReturnCount:Guard.kt:internal fun cacheKey: String?</ID>
+    <ID>ReturnCount:Guard.kt:internal fun pathIdentity: String?</ID>
+    <ID>ReturnCount:Guard.kt:internal fun stripCdHop: Pair&lt;String, String>?</ID>
+    <ID>ReturnCount:Guard.kt:private fun afterCdPrefix: String</ID>
+    <ID>ReturnCount:Guard.kt:private fun fileArg: String?</ID>
+    <ID>ReturnCount:Guard.kt:private fun nativeRedirect: PreToolDecision?</ID>
+    <ID>ReturnCount:Guard.kt:private fun normCmd: String?</ID>
+    <ID>ReturnCount:Guard.kt:private fun payload: ByteArray</ID>
+    <ID>ReturnCount:Handoff.kt:private fun symbolRanges: List&lt;Range></ID>
+    <ID>ReturnCount:HealthCheck.kt:Health$private fun backend: String?</ID>
+    <ID>ReturnCount:HealthCheck.kt:Health.Companion$fun rootState: Pair&lt;AlertKind, String>?</ID>
+    <ID>ReturnCount:HealthCheck.kt:Health.Companion$fun scopeOf: List&lt;Project></ID>
+    <ID>ReturnCount:Hook.kt:CmdHook$fun preTool: PreToolDecision?</ID>
+    <ID>ReturnCount:Hook.kt:ReadHook$fun preTool: PreToolDecision?</ID>
+    <ID>ReturnCount:Hook.kt:ReadHook$private fun recentlyEdited: Boolean</ID>
+    <ID>ReturnCount:Hook.kt:ReadHook$private fun rtokCannotServe: Boolean</ID>
+    <ID>ReturnCount:HostOutputs.kt:fun codebuddyOutput: ByteArray</ID>
+    <ID>ReturnCount:HostOutputs.kt:fun cursorOutput: ByteArray</ID>
+    <ID>ReturnCount:HostOutputs.kt:fun geminiOutput: ByteArray</ID>
+    <ID>ReturnCount:HostPaths.kt:HostPaths$fun isSecret: Boolean</ID>
+    <ID>ReturnCount:Http.kt:Http$fun bearerMatches: Boolean</ID>
+    <ID>ReturnCount:Impact.kt:Impact$fun impactTags: String</ID>
+    <ID>ReturnCount:Index.kt:Index$internal fun parse: Parsed</ID>
+    <ID>ReturnCount:JsonTree.kt:fun foldJsonWith: Folded?</ID>
+    <ID>ReturnCount:JsonTree.kt:private fun rewriteBlock: Measurement?</ID>
+    <ID>ReturnCount:Logfmt.kt:fun logfmtFactor: String?</ID>
+    <ID>ReturnCount:Logfmt.kt:fun logfmtSummary: String?</ID>
+    <ID>ReturnCount:Lsp.kt:Lsp$internal fun isRustupProxy: Boolean</ID>
+    <ID>ReturnCount:Lsp.kt:Lsp$private fun callPaths: List&lt;String></ID>
+    <ID>ReturnCount:Lsp.kt:Lsp$private fun rustupComponentPath: String?</ID>
+    <ID>ReturnCount:LspSession.kt:LspSession$fun didOpen</ID>
+    <ID>ReturnCount:LspWire.kt:LspWire.Parser$fun next: JsonElement?</ID>
+    <ID>ReturnCount:Memory.kt:fun memSaveGated: Saved</ID>
+    <ID>ReturnCount:Memory.kt:internal fun recall: Injection?</ID>
+    <ID>ReturnCount:Memory.kt:private fun promptRecall: Injection?</ID>
+    <ID>ReturnCount:Memory.kt:private fun rememberSave: Injection?</ID>
+    <ID>ReturnCount:Names.kt:private fun stripRunWrap: String</ID>
+    <ID>ReturnCount:Notes.kt:fun offerSession: Injection?</ID>
+    <ID>ReturnCount:Observe.kt:fun capture: Int?</ID>
+    <ID>ReturnCount:Observe.kt:fun inferType: String</ID>
+    <ID>ReturnCount:Outline.kt:fun render: String</ID>
+    <ID>ReturnCount:Outline.kt:private fun expandClause: List&lt;Pair&lt;String, String>></ID>
+    <ID>ReturnCount:Outline.kt:private fun parseLlmsLink: LlmsLink?</ID>
+    <ID>ReturnCount:Pi.kt:fun rewriteStdin: ByteArray</ID>
+    <ID>ReturnCount:Portable.kt:Import$fun &lt;T> opt: T?</ID>
+    <ID>ReturnCount:Portable.kt:Import$private fun parse: Line?</ID>
+    <ID>ReturnCount:Project.kt:fun projectKeyWith: String?</ID>
+    <ID>ReturnCount:Project.kt:private fun originUrl: String?</ID>
+    <ID>ReturnCount:Projects.kt:Projects$fun render: String</ID>
+    <ID>ReturnCount:Protocol.kt:Protocol$fun missingRequired: String?</ID>
+    <ID>ReturnCount:Protocol.kt:Protocol$private fun missingFields: String?</ID>
+    <ID>ReturnCount:Push.kt:Push.Companion$fun pending: Push?</ID>
+    <ID>ReturnCount:Queue.kt:Queue$internal fun admit: Admit</ID>
+    <ID>ReturnCount:Rank.kt:FileGraph$internal fun powerIteration: List&lt;Double></ID>
+    <ID>ReturnCount:Read.kt:fun readWith: String</ID>
+    <ID>ReturnCount:Refs.kt:Refs$internal fun expand: List&lt;String></ID>
+    <ID>ReturnCount:Refs.kt:Refs$internal fun pep508File: String?</ID>
+    <ID>ReturnCount:Resident.kt:Resident$fun bindPrivate: Int?</ID>
+    <ID>ReturnCount:Resident.kt:Resident$fun serve</ID>
+    <ID>ReturnCount:Resolve.kt:Resolve$fun rankName: ResolveHit</ID>
+    <ID>ReturnCount:Review.kt:Review$private fun hunkHeader: Pair&lt;Int, Int>?</ID>
+    <ID>ReturnCount:Roots.kt:Roots$fun enterCaller: CallerGuard?</ID>
+    <ID>ReturnCount:Roots.kt:Roots$fun movedHint: String</ID>
+    <ID>ReturnCount:Roots.kt:Roots$internal fun filePath: String?</ID>
+    <ID>ReturnCount:RuleFiles.kt:DiskRuleFiles$override fun dropIns: List&lt;String></ID>
+    <ID>ReturnCount:Rules.kt:Rules$internal fun applyParsed: String</ID>
+    <ID>ReturnCount:Rules.kt:Rules$internal fun parseDiag: Triple&lt;String, String, String>?</ID>
+    <ID>ReturnCount:Rules.kt:Rules$internal fun parseLocated: Triple&lt;String, String, String>?</ID>
+    <ID>ReturnCount:Rules.kt:Rules$internal fun placeholderToken: Pair&lt;Int, String>?</ID>
+    <ID>ReturnCount:Rules.kt:Rules$private fun coded: Triple&lt;String, String, String>?</ID>
+    <ID>ReturnCount:Rules.kt:Rules$private fun dedupeOf: Result&lt;Dedupe></ID>
+    <ID>ReturnCount:Rules.kt:Rules$private fun durationAt: Int?</ID>
+    <ID>ReturnCount:Rules.kt:Rules$private fun pathLine: Pair&lt;String, String>?</ID>
+    <ID>ReturnCount:Rules.kt:Rules$private fun uuidAt: Int?</ID>
+    <ID>ReturnCount:Run.kt:internal fun emitFilteredTo</ID>
+    <ID>ReturnCount:Runtime.kt:fun identicalResult: String?</ID>
+    <ID>ReturnCount:Scope.kt:Scope$fun affected: String</ID>
+    <ID>ReturnCount:Scope.kt:Scope$fun callers: String</ID>
+    <ID>ReturnCount:Scope.kt:Scope$fun dead: String</ID>
+    <ID>ReturnCount:Scope.kt:Scope$fun deadFiltered: String</ID>
+    <ID>ReturnCount:Scope.kt:Scope$fun explore: String</ID>
+    <ID>ReturnCount:Scope.kt:Scope$fun impact: String</ID>
+    <ID>ReturnCount:Scope.kt:Scope$fun symbol: String</ID>
+    <ID>ReturnCount:Score.kt:Score$fun cached: HealthScore?</ID>
+    <ID>ReturnCount:Score.kt:Score$fun of: HealthScore</ID>
+    <ID>ReturnCount:Score.kt:Score$private fun backend: Pair&lt;Double, Reason?></ID>
+    <ID>ReturnCount:Sed.kt:internal fun sedReadOnly: Boolean</ID>
+    <ID>ReturnCount:Sed.kt:private fun address: Int?</ID>
+    <ID>ReturnCount:Sed.kt:private fun partEnd: Int?</ID>
+    <ID>ReturnCount:Sed.kt:private fun scriptReadOnly: Boolean</ID>
+    <ID>ReturnCount:Server.kt:Server$fun handleLine: String?</ID>
+    <ID>ReturnCount:Server.kt:Server$private fun handleValue: JsonObject?</ID>
+    <ID>ReturnCount:Skill.kt:internal fun decide: PreToolDecision?</ID>
+    <ID>ReturnCount:Skill.kt:internal fun digest: PreToolDecision?</ID>
+    <ID>ReturnCount:Skill.kt:internal fun frontmatterKeys: Set&lt;String>?</ID>
+    <ID>ReturnCount:Skill.kt:internal fun hostKeys: Boolean</ID>
+    <ID>ReturnCount:Skill.kt:internal fun noteLoad: String?</ID>
+    <ID>ReturnCount:Skill.kt:internal fun pluginRoot: String?</ID>
+    <ID>ReturnCount:Skill.kt:internal fun resolve: String?</ID>
+    <ID>ReturnCount:Skill.kt:private fun keyOf: Pair&lt;String, String>?</ID>
+    <ID>ReturnCount:Tables.kt:Tables$fun cell: String?</ID>
+    <ID>ReturnCount:Tables.kt:Tables$fun df: String?</ID>
+    <ID>ReturnCount:Tables.kt:Tables$fun dockerPs: String?</ID>
+    <ID>ReturnCount:Tables.kt:Tables$fun kubectlGet: String?</ID>
+    <ID>ReturnCount:Tables.kt:Tables$fun psAux: String?</ID>
+    <ID>ReturnCount:Tables.kt:Tables$private fun compactDfRow: String?</ID>
+    <ID>ReturnCount:Text.kt:Text$fun impact: String</ID>
+    <ID>ReturnCount:Tools.kt:Tools$fun door: String</ID>
+    <ID>ReturnCount:Tools.kt:Tools$fun parseSymbolId: SymbolId?</ID>
+    <ID>ReturnCount:Tools.kt:Tools$fun symbolById: String</ID>
+    <ID>ReturnCount:Toon.kt:fun tabularKeys: List&lt;String>?</ID>
+    <ID>ReturnCount:Toon.kt:private fun rewriteBlock: Measurement?</ID>
+    <ID>ReturnCount:ToonTest.kt:private fun decode: JsonElement?</ID>
+    <ID>ReturnCount:ToonTest.kt:private fun decodeCell: JsonElement</ID>
+    <ID>ReturnCount:ToonTest.kt:private fun splitCells: List&lt;String>?</ID>
+    <ID>ReturnCount:Types.kt:HookInput$fun postTool: PostToolUse?</ID>
+    <ID>ReturnCount:Types.kt:HookInput$fun preTool: PreToolUse?</ID>
+    <ID>ReturnCount:Types.kt:HookInput$fun promptSubmit: PromptSubmit?</ID>
+    <ID>ReturnCount:Types.kt:HookInput$private fun takeJsonish: JsonElement?</ID>
+    <ID>ReturnCount:Walk.kt:Matcher$fun inLinkedWorktree: Boolean</ID>
+    <ID>ReturnCount:Walk.kt:Matcher$fun isExcluded: Boolean</ID>
+    <ID>ReturnCount:Watch.kt:Watch$fun absorbEvent: Boolean</ID>
+    <ID>ReturnCount:Watch.kt:Watch$private fun ignored: Boolean</ID>
+    <ID>ReturnCount:Wrap.kt:Wrap$fun shortenResult: JsonObject?</ID>
+    <ID>ReturnCount:Wrap.kt:Wrap$private fun cutBlock: String?</ID>
+    <ID>ReturnCount:Wrap.kt:Wrap$private fun jsonTreeFold: String?</ID>
+    <ID>ReturnCount:Wrap.kt:Wrap$private fun shorten: ByteArray?</ID>
+    <ID>ReturnCount:Wrap.kt:Wrap.Pending$fun note</ID>
+    <ID>ReturnCount:Wrap.kt:Wrap.Pending$fun take: String?</ID>
+    <ID>SwallowedException:Dispatch.kt:e: Exception</ID>
+    <ID>SwallowedException:Dispatch.kt:e: HookError</ID>
+    <ID>SwallowedException:ExpandCmd.kt:e: ExpandException</ID>
+    <ID>SwallowedException:Extract.kt:e: IoException</ID>
+    <ID>SwallowedException:Spec.kt:Invocation$e: rtok.config.ConfigException</ID>
+    <ID>SwallowedException:Sync.kt:Sync$e: IoException</ID>
+    <ID>ThrowsCount:Diff.kt:GraphDiffs$private fun eachBlob</ID>
+    <ID>ThrowsCount:Expand.kt:Expand$fun parseRange: Pair&lt;Int, Int></ID>
+    <ID>ThrowsCount:Expand.kt:Expand$fun resolveId: String</ID>
+    <ID>ThrowsCount:Export.kt:ExportView$fun parse: Export</ID>
+    <ID>ThrowsCount:Http.kt:Http.Addr.Companion$fun parse: Addr</ID>
+    <ID>ThrowsCount:Jobs.kt:Jobs$fun start: String</ID>
+    <ID>ThrowsCount:LspSession.kt:LspSession$fun requestWithin: JsonElement</ID>
+    <ID>TooGenericExceptionCaught:Compressor.kt:Compressor$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:Dispatch.kt:e: Exception</ID>
+    <ID>TooGenericExceptionCaught:Dispatch.kt:e: Throwable</ID>
+    <ID>TooGenericExceptionCaught:Extract.kt:CommandExtractor$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:Follow.kt:Follow$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:Refs.kt:Refs.Reader$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:Rules.kt:Rules$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:Spec.kt:e: Exception</ID>
+    <ID>TooGenericExceptionCaught:Threads.kt:e: Throwable</ID>
+    <ID>TooGenericExceptionCaught:Tools.kt:Tools$e: Throwable</ID>
+    <ID>TooManyFunctions:Archive.kt:rtok.plugins.archive.Archive.kt</ID>
+    <ID>TooManyFunctions:ArchiveTest.kt:ArchiveTest</ID>
+    <ID>TooManyFunctions:Bounded.kt:Bounded</ID>
+    <ID>TooManyFunctions:CacheTest.kt:CacheTest</ID>
+    <ID>TooManyFunctions:Capability.kt:Capability</ID>
+    <ID>TooManyFunctions:CheckpointTest.kt:CheckpointTest</ID>
+    <ID>TooManyFunctions:Compact.kt:Compact</ID>
+    <ID>TooManyFunctions:CompactTest.kt:CompactTest</ID>
+    <ID>TooManyFunctions:Compress.kt:rtok.modes.Compress.kt</ID>
+    <ID>TooManyFunctions:Dead.kt:Affected</ID>
+    <ID>TooManyFunctions:Diff.kt:GraphDiffs</ID>
+    <ID>TooManyFunctions:DiffTest.kt:DiffTest</ID>
+    <ID>TooManyFunctions:Diffs.kt:Diffs</ID>
+    <ID>TooManyFunctions:Dispatch.kt:rtok.hooks.Dispatch.kt</ID>
+    <ID>TooManyFunctions:DispatchTest.kt:DispatchTest</ID>
+    <ID>TooManyFunctions:Docs.kt:rtok.plugins.docs.Docs.kt</ID>
+    <ID>TooManyFunctions:DocsTest.kt:DocsTest</ID>
+    <ID>TooManyFunctions:Draw.kt:Draw</ID>
+    <ID>TooManyFunctions:Expand.kt:Expand</ID>
+    <ID>TooManyFunctions:ExpandTest.kt:ExpandTest</ID>
+    <ID>TooManyFunctions:Export.kt:ExportView</ID>
+    <ID>TooManyFunctions:ExportTest.kt:ExportTest</ID>
+    <ID>TooManyFunctions:Extract.kt:rtok.plugins.checkpoint.Extract.kt</ID>
+    <ID>TooManyFunctions:Files.kt:rtok.plugins.memory.Files.kt</ID>
+    <ID>TooManyFunctions:Formatters.kt:Formatters</ID>
+    <ID>TooManyFunctions:FormattersTest.kt:FormattersTest</ID>
+    <ID>TooManyFunctions:GrepSymbolTest.kt:GrepSymbolTest</ID>
+    <ID>TooManyFunctions:Guard.kt:rtok.plugins.guard.Guard.kt</ID>
+    <ID>TooManyFunctions:GuardTest.kt:GuardTest</ID>
+    <ID>TooManyFunctions:Handoff.kt:rtok.plugins.memory.Handoff.kt</ID>
+    <ID>TooManyFunctions:HookTest.kt:HookTest</ID>
+    <ID>TooManyFunctions:HttpTest.kt:HttpTest</ID>
+    <ID>TooManyFunctions:Index.kt:Index</ID>
+    <ID>TooManyFunctions:IndexTest.kt:IndexTest</ID>
+    <ID>TooManyFunctions:JsonTree.kt:rtok.plugins.jsontree.JsonTree.kt</ID>
+    <ID>TooManyFunctions:JsonTreeTest.kt:JsonTreeTest</ID>
+    <ID>TooManyFunctions:JsonTreeTest.kt:rtok.plugins.jsontree.JsonTreeTest.kt</ID>
+    <ID>TooManyFunctions:LinkTest.kt:LinkTest</ID>
+    <ID>TooManyFunctions:Lsp.kt:Lsp : LspBackend</ID>
+    <ID>TooManyFunctions:LspSession.kt:LspSession : AutoCloseable</ID>
+    <ID>TooManyFunctions:LspTest.kt:LspTest</ID>
+    <ID>TooManyFunctions:Memory.kt:rtok.plugins.memory.Memory.kt</ID>
+    <ID>TooManyFunctions:MemoryTest.kt:MemoryTest</ID>
+    <ID>TooManyFunctions:Notes.kt:rtok.plugins.checkpoint.Notes.kt</ID>
+    <ID>TooManyFunctions:Outline.kt:rtok.plugins.read.Outline.kt</ID>
+    <ID>TooManyFunctions:Project.kt:rtok.Project.kt</ID>
+    <ID>TooManyFunctions:ProjectTest.kt:ProjectTest</ID>
+    <ID>TooManyFunctions:Protocol.kt:Protocol</ID>
+    <ID>TooManyFunctions:RankTest.kt:RankTest</ID>
+    <ID>TooManyFunctions:ReadTest.kt:ReadTest</ID>
+    <ID>TooManyFunctions:Refs.kt:Refs</ID>
+    <ID>TooManyFunctions:Review.kt:Review</ID>
+    <ID>TooManyFunctions:Roots.kt:Roots</ID>
+    <ID>TooManyFunctions:Rules.kt:Rules</ID>
+    <ID>TooManyFunctions:RulesTest.kt:RulesTest</ID>
+    <ID>TooManyFunctions:Run.kt:rtok.plugins.cmd.Run.kt</ID>
+    <ID>TooManyFunctions:RunTest.kt:RunTest</ID>
+    <ID>TooManyFunctions:Runtime.kt:Runtime : CapabilitiesAutoCloseable</ID>
+    <ID>TooManyFunctions:Scope.kt:Scope</ID>
+    <ID>TooManyFunctions:ScopeTest.kt:ScopeTest</ID>
+    <ID>TooManyFunctions:Score.kt:Score</ID>
+    <ID>TooManyFunctions:SearchTest.kt:SearchTest</ID>
+    <ID>TooManyFunctions:ServerTest.kt:ServerTest</ID>
+    <ID>TooManyFunctions:Skill.kt:rtok.plugins.guard.Skill.kt</ID>
+    <ID>TooManyFunctions:SyncTest.kt:SyncTest</ID>
+    <ID>TooManyFunctions:Tables.kt:Tables</ID>
+    <ID>TooManyFunctions:Text.kt:Text</ID>
+    <ID>TooManyFunctions:Tools.kt:Tools</ID>
+    <ID>TooManyFunctions:ToonTest.kt:ToonTest</ID>
+    <ID>TooManyFunctions:Types.kt:HookInput</ID>
+    <ID>TooManyFunctions:TypesTest.kt:TypesTest</ID>
+    <ID>TooManyFunctions:WatchTest.kt:WatchTest</ID>
+    <ID>TooManyFunctions:WrapTest.kt:WrapTest</ID>
+  </CurrentIssues>
+</SmellBaseline>

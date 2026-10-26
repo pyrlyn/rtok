@@ -1,0 +1,20 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>MagicNumber:Connect.kt:104</ID>
+    <ID>MagicNumber:Connect.kt:64</ID>
+    <ID>MagicNumber:Hook.kt:0x100000001b3uL</ID>
+    <ID>MagicNumber:Hook.kt:0xffu</ID>
+    <ID>MagicNumber:Hook.kt:100</ID>
+    <ID>MagicNumber:Hook.kt:4</ID>
+    <ID>MagicNumber:Hook.kt:8</ID>
+    <ID>MagicNumber:Hook.kt:Reader$4</ID>
+    <ID>MagicNumber:Hook.kt:Request.Companion$0xffu</ID>
+    <ID>MagicNumber:Hook.kt:Request.Companion$8</ID>
+    <ID>ReturnCount:Hook.kt:Reader$fun take: ByteArray?</ID>
+    <ID>ReturnCount:Hook.kt:Request.Companion$fun decode: Request?</ID>
+    <ID>ReturnCount:Hook.kt:fun expandWith: String</ID>
+    <ID>TooManyFunctions:Hook.kt:rtok.hook.Hook.kt</ID>
+  </CurrentIssues>
+</SmellBaseline>

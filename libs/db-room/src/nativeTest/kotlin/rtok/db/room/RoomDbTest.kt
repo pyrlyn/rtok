@@ -1,8 +1,8 @@
 package rtok.db.room
 
-import kotlin.test.*
 import rtok.db.Db
 import rtok.db.DbException
+import kotlin.test.*
 
 class RoomDbTest {
     private fun open() = RoomDbDriver.open(":memory:")
@@ -23,8 +23,21 @@ class RoomDbTest {
     @Test fun transactionRollsBackAndNests() {
         open().use { db ->
             db.exec("CREATE TABLE t (a INTEGER)")
-            assertFails { db.transaction { db.execute("INSERT INTO t VALUES (1)"); error("boom") } }
-            db.transaction { db.execute("INSERT INTO t VALUES (2)"); runCatching { db.transaction { db.execute("INSERT INTO t VALUES (3)"); error("inner") } } }
+            assertFails {
+                db.transaction {
+                    db.execute("INSERT INTO t VALUES (1)")
+                    error("boom")
+                }
+            }
+            db.transaction {
+                db.execute("INSERT INTO t VALUES (2)")
+                runCatching {
+                    db.transaction {
+                        db.execute("INSERT INTO t VALUES (3)")
+                        error("inner")
+                    }
+                }
+            }
             assertEquals(listOf(2L), db.query("SELECT a FROM t") { it.long(0) })
             assertFalse(db.inTransaction)
         }
@@ -33,27 +46,40 @@ class RoomDbTest {
     @Test fun errorsCarryTheSqliteCode() {
         open().use { db ->
             val e = assertFailsWith<DbException> { db.exec("SELECT * FROM missing") }
-            assertEquals(1, e.code); assertTrue("no such table" in e.message!!, e.message)
+            assertEquals(1, e.code)
+            assertTrue("no such table" in e.message!!, e.message)
         }
     }
 
     @Test fun scriptsSplitOnStatementsButNotInsideTriggersQuotesOrComments() {
-        val sql = """
+        val sql =
+            """
             -- a; comment
             CREATE TABLE a (x TEXT DEFAULT 'semi;colon'); /* block; */
             CREATE TRIGGER tr AFTER INSERT ON a BEGIN
               INSERT INTO b(x) VALUES (new.x); UPDATE b SET y = 1;
             END;
             CREATE TABLE "b;c" (y INTEGER)
-        """.trimIndent()
+            """.trimIndent()
         val parts = splitSql(sql)
         assertEquals(3, parts.size, parts.joinToString("\n---\n"))
         assertTrue("CREATE TRIGGER" in parts[1] && parts[1].endsWith("END;"), parts[1])
-        open().use { db -> db.exec("CREATE TABLE b (x TEXT, y INTEGER); " + sql); db.execute("INSERT INTO a VALUES ('v')"); assertEquals(1L, db.longOf("SELECT y FROM b")) }
+        open().use { db ->
+            db.exec("CREATE TABLE b (x TEXT, y INTEGER); " + sql)
+            db.execute("INSERT INTO a VALUES ('v')")
+            assertEquals(1L, db.longOf("SELECT y FROM b"))
+        }
     }
 
     @Test fun driverInstallsOnce() {
-        Db.installIfAbsent(RoomDbDriver); Db.installIfAbsent(object : rtok.db.DbDriver { override fun open(path: String) = error("x"); override fun version() = "x" })
+        Db.installIfAbsent(RoomDbDriver)
+        Db.installIfAbsent(
+            object : rtok.db.DbDriver {
+                override fun open(path: String) = error("x")
+
+                override fun version() = "x"
+            },
+        )
         assertSame(RoomDbDriver, Db.driver)
         assertTrue(RoomDbDriver.version().startsWith("3."))
     }
