@@ -178,3 +178,11 @@ Each Rust `#[cfg(test)]` module → `src/commonTest` in the matching module; `te
 - rustls/webpki: replaced by platform TLS (Darwin/Curl engines) — behaviour differs.
 - printpdf/resvg (report PDF/SVG): no native equivalent; report limited to text/JSON.
 - Scope: ~200k lines; full parity is a multi-month effort (see PORTING.md for live status).
+
+### Chasm status (2026-10-26)
+- Interface in libs/wasm (`rtok.wasm`: WasmRuntime with fuel, WasmMemory, HostFunction, guestSlice).
+- Adapter libs/wasm-chasm/ChasmRuntime.kt is written but not built. It is not in settings.gradle.kts.
+- Blocker: every Chasm release needs Kotlin ≥ 2.2.0. Fuel metering, which the Rust test `endless_guest_runs_out_of_fuel` needs, exists only in Chasm ≥ 2.1, and those releases need Kotlin 2.4.10.
+  - A trial on Kotlin 2.4.10 with KSP 2.3.12 passed 920/920 tests and was reverted.
+  - Needs Ivan's decision: bump Kotlin, or use Chasm 1.0.0 without fuel.
+- Baseline before Chasm: release rtok.kexe is 8,739,016 B; release link takes 58 s.
