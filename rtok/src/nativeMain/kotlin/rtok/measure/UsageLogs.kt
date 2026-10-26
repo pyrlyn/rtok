@@ -6,6 +6,11 @@ package rtok.measure
 
 import kotlinx.serialization.Serializable
 import rtok.config.Config
+import rtok.measure.usage.Copilot
+import rtok.measure.usage.Gemini
+import rtok.measure.usage.Kimi
+import rtok.measure.usage.Pi
+import rtok.measure.usage.Sqlite
 import rtok.store.UsageSlice
 import rtok.sys.fileName
 import rtok.sys.listDir
@@ -64,6 +69,12 @@ object UsageLogs {
         }
         add("claude", UNKNOWN, claudeSlices(cfg.stats.transcriptsDir, since))
         add("codex", UNKNOWN, codexSlices(cfg.stats.codexDir, since))
+        add("opencode", UNKNOWN, Sqlite.slices("opencode", dirs.opencode, since))
+        add("kilo", UNKNOWN, Sqlite.slices("kilo", dirs.kilo, since))
+        add("copilot", UNKNOWN, Copilot.slices(dirs.copilot, since, since))
+        add("gemini", UNKNOWN, Gemini.slices(dirs.gemini, since, since))
+        add("pi", UNKNOWN, Pi.slices(dirs.pi, since, since))
+        add("kimi", UNKNOWN, Kimi.slices(dirs.kimi, since, since))
         // Hosts whose format is not documented are named when they left files, never guessed at.
         for ((host, reason, list) in listOf(
             Triple("droid", DROID_UNSUPPORTED, dirs.droid),
