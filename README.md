@@ -14,6 +14,7 @@ Docs: [build speed](docs/build-speed.md) · [token estimator](docs/tokens.md) ·
 
 - [Configuration](docs/config.md)
 - [Hooks](docs/hooks.md)
+- [Host install (`rtok agents`)](docs/agents.md)
 - [Store](docs/store.md)
 - [Plugin runtime](docs/plugin-runtime.md)
 - [archive plugin](docs/archive.md)
