@@ -27,6 +27,9 @@ enum class Mode(
 interface Agent {
     val id: String
 
+    /** The linked `plugin` module serves MCP on this host (Rust `plugin_surfaces` holding `Surface::Mcp`). */
+    val pluginServesMcp: Boolean get() = false
+
     /** Every file the host's installer may write for [kind]. */
     fun files(
         cfg: Config,

@@ -752,3 +752,11 @@ Next, in order:
   copilot (D21 `extra`), opencode, pi, antigravity (desktop and CLI roots). Cursor has a root but no caller, as in Rust.
 - Tests: SkillCopyTest 9, SkillsTest 6; Pi/Antigravity tests take the extra skill line.
 - Stop point: next agents leftovers (doctor MCP lines, `rtok mcp ping` server side, `rtok agents` CLI), then phase 10.
+
+## Session: agents — doctor MCP lines (agents/mcp.rs rows/own_row/doctor_lines)
+- `rtok.agents.McpDoctor`: `rows` (surfaces with the MCP-serving plugin and Grok's `[compat.claude]` import, `status` +
+  `spawnable` on the real disk), `ownRow` (continue/goose/reasonix through their `installed`; none without MCP),
+  `doctorLines` (off under `[setup] mcp = false`), `hostDoctorLines` (installed variants or present apps, `--cli/--desktop`
+  flag unless shared). `Agent.pluginServesMcp` = Rust `plugin_surfaces` ∋ Mcp (codebuddy, gemini, antigravity, pi, devin).
+- Tests: McpDoctorTest 2. `rtok doctor` itself is not ported yet; it calls `McpDoctor.doctorLines` when it lands.
+- Stop point: next `rtok mcp ping` process side, then `rtok agents` CLI.

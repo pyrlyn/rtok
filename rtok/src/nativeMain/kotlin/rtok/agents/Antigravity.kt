@@ -9,6 +9,7 @@ class Antigravity(
     private val plugins: PluginSource = ShippedPlugins,
 ) : Agent {
     override val id = "antigravity"
+    override val pluginServesMcp = true
 
     override fun files(
         cfg: Config,
