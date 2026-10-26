@@ -66,7 +66,7 @@ Plan and per-phase checklist: [port-plan.md](port-plan.md).
 | src/web, agents/junk_web.rs, `rtok web/tui/dashboard` | – | ❌ excluded (web) | |
 | tests/*.rs (138 integration files) | `:rtok` commonTest | ⬜ | 0 / ~138 files |
 
-Totals: 597 unit (`macosArm64Test`) + 22 CLI (`cliTest`) + 14 e2e (`e2eTest`) tests passing on macosArm64 (see port-plan.md for the per-phase table).
+Totals: 597 unit (`macosArm64Test`) + 23 CLI (`cliTest`) + 14 e2e (`e2eTest`) tests passing on macosArm64 (see port-plan.md for the per-phase table).
 
 | Rust | Kotlin | Status | Tests |
 |---|---|---|---|
