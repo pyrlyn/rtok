@@ -212,10 +212,10 @@ Decision: Dropbox affectedmoduledetector rejected (archived, breaks the configur
 names only); `scripts/smart.py` stays (docs/toolchain.md).
 Release binary: unchanged so far (17.9 MB) — no CLI/MCP path calls the read plugin yet, so K/N and ld
 strip the grammars; measure again once `read`/`graph` are wired (all grammars = 70 MB of objects).
-Next, in order (exact stop point: read plugin, after density + walk):
-1. read: `roots.rs` (client roots, secrets, moved hint), `search.rs` (search/tree over `rtok.sys.walk`),
-   `cache.rs` (re-read delta), `mod.rs` (read_with, cap_recording, resolve), `hook.rs`; needs `expand`
-   (`parse_range`, `slice_lines`). Remaining read tests: 101 − 14.
+Read plugin finished (PR feat/read-rest): `Read.kt`, `Roots.kt`, `Search.kt`, `Cache.kt`, `Hook.kt`,
+`rtok/Expand.kt` + `rtok expand`, `rtok/worktree/Git.kt` (porcelain list), `HostPaths.kt`; 84 read + 27 expand tests.
+Next, in order:
+1. (done) read.
 2. graph (275 tests; 20k Rust lines), grep_symbol (8), catfile (4) + cat re-read delta (1).
 3. docs fetch + zstd behind an interface; memory status, sync --stat, MCP wiring; otel, worktree/task/batch/bench;
    29 hook dispatch tests; worktree host events via `rtok hook`.
