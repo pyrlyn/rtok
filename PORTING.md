@@ -34,6 +34,7 @@ Plan and per-phase checklist: [port-plan.md](port-plan.md).
 | src/project.rs | `rtok/Project.kt` (+ test `Vfs`) | ✅ | 13 → 13 |
 | src/plugins/docs | `rtok/plugins/docs/Docs.kt` | ✅ (fetch CLI pending zstd approval) | 12 → 13 |
 | (new) libs/http, libs/http-ktor | `rtok.http` interface, Ktor adapter | ✅ | – → 4 |
+| src/plugins/guard (mod, sed, skill), read/outline.rs markdown half, cmd/run.rs quoting | `rtok/plugins/guard/` (Guard, Sed, Skill), `plugins/read/Outline.kt`, `plugins/cmd/Run.kt` | ✅ (grep_symbol → graph) | 53 → 46 (+1 TypesTest) |
 | src/plugins/inject | `rtok/plugins/inject/` (Inject, Modes) | ✅ (hook-path halves → Phase 6) | 8 → 9 |
 | src/plugins/checkpoint.rs | `rtok/plugins/checkpoint/`, `rtok/plugins/memory/Private.kt`, `rtok-sys` Shlex/LineReader | ✅ (3 hook-dispatcher tests → Phase 6) | 27 → 27 |
 | src/plugins/compress | `rtok/plugins/compress/` (Compress, MustKeep, Llm, PromptToml) + Compressor, Queue; HTTP via `libs/http` + `libs/http-ktor` | ✅ (proxy-side `submit` call → Phase 7) | 19 → 22 (+4 KtorHttpTest) |
@@ -64,7 +65,7 @@ Plan and per-phase checklist: [port-plan.md](port-plan.md).
 | src/web, agents/junk_web.rs, `rtok web/tui/dashboard` | – | ❌ excluded (web) | |
 | tests/*.rs (138 integration files) | `:rtok` commonTest | ⬜ | 0 / ~138 files |
 
-Totals: 559 Kotlin (+11 e2e via `./gradlew e2eTest`) tests passing on macosArm64 (see port-plan.md for the per-phase table).
+Totals: 582 unit (`macosArm64Test`) + 22 CLI (`cliTest`) + 14 e2e (`e2eTest`) tests passing on macosArm64 (see port-plan.md for the per-phase table).
 
 | Rust | Kotlin | Status | Tests |
 |---|---|---|---|

@@ -66,7 +66,9 @@ class TypesTest {
             val want = o("command" to "git status"); val fs = adapted(e, "bash", JsonPrimitive(want.toString())); val fo = adapted(e, "bash", want)
             assertEquals(want, fs.toolInput, e); assertEquals(fs.toolInput, fo.toolInput, e)
         }
-        // guard::cache_key assertion arrives with the guard plugin port (Phase 5).
+        val view = adapted("preToolUse", "view", JsonPrimitive(o("path" to "/repo/a.rs").toString()))
+        // Absolute: since T556 a relative path without a cwd has no guard identity.
+        assertEquals("read\t/repo/a.rs", rtok.plugins.guard.cacheKey("Read", view.toolInput!!, null, null))
         for (raw in listOf("{\"command\":", "42", "\"x\"", "")) assertEquals(JsonPrimitive(raw), adapted("preToolUse", "bash", JsonPrimitive(raw)).toolInput, raw)
         assertNotNull(adapted("preToolUse", "bash", JsonNull).toolInput)
         val both = HookInput.fromJson(o("tool_input" to o("command" to "ls"), "toolArgs" to "{\"command\":\"pwd\"}")); both.adaptCopilot("preToolUse"); assertEquals("ls", both.toolInput["command"].s)

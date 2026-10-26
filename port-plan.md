@@ -113,7 +113,7 @@ jiff/humantime→kotlinx-datetime; shlex→own; wasmi→not portable (see risks)
 - [x] docs (707) — 12
 - [x] checkpoint (1932) — 27
 - [x] inject (523) — 8
-- [ ] guard (2844) — 53
+- [x] guard (2844) — 45 of 53 (+1 check, +1 types.rs view key); grep_symbol 8 pending (graph/tree-sitter); docs/guard.md; read::outline markdown digest ported (no tree-sitter needed); cmd `sh_quote`/`wrap_quote` in `plugins/cmd/Run.kt`
 - [ ] read (4334) — 101
 - [ ] cmd (10098) — 207
 - [ ] memory (5419) — 127
