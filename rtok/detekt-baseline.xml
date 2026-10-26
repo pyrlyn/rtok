@@ -7,6 +7,7 @@
     <ID>ComplexCondition:Expand.kt:Expand$(c == '"' || c == '\'') &amp;&amp; idx > 0 &amp;&amp; hasNext</ID>
     <ID>ComplexCondition:Expand.kt:Expand$s.isNotEmpty() &amp;&amp; s.all { it in '0'..'9' } || (s.startsWith('+') &amp;&amp; s.length > 1 &amp;&amp; s.drop(1).all { it in '0'..'9' })</ID>
     <ID>ComplexCondition:Expand.kt:Expand$spec.length >= 2 &amp;&amp; ((spec.first() == '"' &amp;&amp; spec.last() == '"') || (spec.first() == '\'' &amp;&amp; spec.last() == '\''))</ID>
+    <ID>ComplexCondition:Export.kt:ExportView$(root.startsWith('/') || root.startsWith('\\')) &amp;&amp; name.isNotEmpty() &amp;&amp; name != ".."</ID>
     <ID>ComplexCondition:Extract.kt:"file_path" in line || "error" in line || "Error" in line || "ERROR" in line || escapesALetter(line)</ID>
     <ID>ComplexCondition:Extract.kt:hasPair(line, "\"type\"", "\"create\"") || CREATED in line || (hasPair(line, "\"name\"", "\"Bash\"") &amp;&amp; "rm" in line)</ID>
     <ID>ComplexCondition:Extract.kt:start &amp;&amp; (w == "rm" || gitRm) &amp;&amp; !ends</ID>
@@ -54,6 +55,8 @@
     <ID>CyclomaticComplexMethod:Drill.kt:Drill$private fun draw</ID>
     <ID>CyclomaticComplexMethod:Expand.kt:Expand$fun parseRange: Pair&lt;Int, Int></ID>
     <ID>CyclomaticComplexMethod:Expand.kt:Expand$private fun normalizeRange: Pair&lt;String, Boolean></ID>
+    <ID>CyclomaticComplexMethod:Export.kt:ExportView$fun collect: Export</ID>
+    <ID>CyclomaticComplexMethod:Export.kt:ExportView$private fun graph: Graph</ID>
     <ID>CyclomaticComplexMethod:Extract.kt:Files$private fun toolUse</ID>
     <ID>CyclomaticComplexMethod:Extract.kt:fun transcriptText: String</ID>
     <ID>CyclomaticComplexMethod:Extract.kt:internal fun removedPaths: List&lt;String></ID>
@@ -144,6 +147,7 @@
     <ID>LoopWithTooManyJumpStatements:Density.kt:for</ID>
     <ID>LoopWithTooManyJumpStatements:Diffs.kt:Diffs$for</ID>
     <ID>LoopWithTooManyJumpStatements:Expand.kt:Expand$while</ID>
+    <ID>LoopWithTooManyJumpStatements:Export.kt:ExportView$for</ID>
     <ID>LoopWithTooManyJumpStatements:Extract.kt:for</ID>
     <ID>LoopWithTooManyJumpStatements:Extract.kt:while</ID>
     <ID>LoopWithTooManyJumpStatements:Files.kt:for</ID>
@@ -912,6 +916,7 @@
     <ID>SwallowedException:Sync.kt:Sync$e: IoException</ID>
     <ID>ThrowsCount:Expand.kt:Expand$fun parseRange: Pair&lt;Int, Int></ID>
     <ID>ThrowsCount:Expand.kt:Expand$fun resolveId: String</ID>
+    <ID>ThrowsCount:Export.kt:ExportView$fun parse: Export</ID>
     <ID>ThrowsCount:Jobs.kt:Jobs$fun start: String</ID>
     <ID>TooGenericExceptionCaught:Compressor.kt:Compressor$e: Exception</ID>
     <ID>TooGenericExceptionCaught:Dispatch.kt:e: Exception</ID>
@@ -940,6 +945,8 @@
     <ID>TooManyFunctions:DocsTest.kt:DocsTest</ID>
     <ID>TooManyFunctions:Expand.kt:Expand</ID>
     <ID>TooManyFunctions:ExpandTest.kt:ExpandTest</ID>
+    <ID>TooManyFunctions:Export.kt:ExportView</ID>
+    <ID>TooManyFunctions:ExportTest.kt:ExportTest</ID>
     <ID>TooManyFunctions:Extract.kt:rtok.plugins.checkpoint.Extract.kt</ID>
     <ID>TooManyFunctions:Files.kt:rtok.plugins.memory.Files.kt</ID>
     <ID>TooManyFunctions:Formatters.kt:Formatters</ID>

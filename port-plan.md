@@ -255,14 +255,15 @@ Next, in order:
 - `graph/Dispatch.kt` (mod.rs `call`: symbol/callers/impact/outline/explore over a scope, stale-HEAD prefix, outline kind filter) + DispatchTest (4).
 - `project/Refs.kt` (project/refs.rs: cargo/npm+pnpm/go/python/submodule references) + RefsTest (9); `graph/Follow.kt` (follow.rs: follow/indexNew/refresh/report) + FollowTest (8); store `dropToollessSessionProjects`; health `refWarnings` now defaults to Refs. Lock-wait follow tests not ported (no hold_write_lock helper).
 - `graph/Drill.kt` (drill.rs: files/defs/external nodes, calls/imports/implements/contains edges, focus neighbourhood, cap, scope search) + DrillTest (6).
-- Stop point: next diff, export, lsp, watch, review (+ Scope.reviewGit), draw; wire `rtok graph` into CLI; then grep_symbol, catfile, cat re-read, docs zstd, memory status, sync --stat, MCP, otel, worktree, task, batch, bench, hook dispatcher tests; release re-measure, completeness pass.
+- `graph/Export.kt` (export.rs: collect/graph/near, redact/redactor, read/parse, run/render/write, pageFile/downloadName, MCP call) + ExportTest (9). SVG via `ExportView.draw` hook (draw.rs pending); PNG needs a rasterizer dependency, so it errors; schema generation (schemars) not ported. Detekt findings baselined like #31. Also restores older session stop-point lines that an earlier global sed overwrote.
+- Stop point: next the mod.rs core types (`Filter`, `Mode`, `ExploreParts`, `backend_name`), then `text.rs`,
   `capability.rs`, the rest of mod.rs and the other submodules.
 
 ## Session 2026-10-26 (evening) — graph core types
 - `Core.kt` (mod.rs: `Filter`, `Mode`, `GraphCore.backendName/modeOf/indexFor/pendingPaths/withStale/
   withoutModeLine/lspNoneAnswer`, shared `graphCfg`), `Langs.kt` (lsp.rs `LANGS`/`EXTENSIONS`/`language_of`/
   `server_of`/`served_languages`); 5 tests (mode-of, filter, language tables, lsp-none, auto_index=false stale banner).
-- Stop point: next diff, export, lsp, watch, review (+ Scope.reviewGit), draw; wire `rtok graph` into CLI; then grep_symbol, catfile, cat re-read, docs zstd, memory status, sync --stat, MCP, otel, worktree, task, batch, bench, hook dispatcher tests; release re-measure, completeness pass.
+- Stop point: next `text.rs` (uses Mode/Filter/backend_name), then `capability.rs`, the mod.rs tools
   (symbol/callers/impact/explore with `ExploreParts`, `record_mode_row`), and the other submodules
   (events, blast, follow, drill, scope, diff, export, health, lsp, watch, review, draw, projects, jobs, status);
   then grep_symbol (8), catfile (4), cat re-read delta (1); docs fetch + zstd, memory status, sync --stat, MCP,
@@ -273,7 +274,7 @@ Next, in order:
   `held`/`reprobe`, `Refused`/`serverBroke`; probe is a `Probe` lambda until lsp.rs lands), `Text.kt` (text.rs,
   `Text.Explore`), `ExploreParts` in `Core.kt`, `rtok.sys.Mutex`. 6 capability + 8 text tests (door-level capability
   tests run through `ask`; the concurrency test waits for mod.rs `door`).
-- Stop point: next diff, export, lsp, watch, review (+ Scope.reviewGit), draw; wire `rtok graph` into CLI; then grep_symbol, catfile, cat re-read, docs zstd, memory status, sync --stat, MCP, otel, worktree, task, batch, bench, hook dispatcher tests; release re-measure, completeness pass.
+- Stop point: next the mod.rs tools (`door`, symbol/callers/impact/explore + `assemble_explore`, `record_mode_row`;
   enable the deferred cochange `impact` partner test), then events, blast, follow, drill, scope, diff, export, health,
   lsp, watch, review, draw, projects, jobs, status; then the rest of the list above.
 
@@ -282,7 +283,7 @@ Next, in order:
   `symbol`/`symbol_tags`/`symbol_by_id`, `defs_text`, `body_lines`, `def_id`/`def_head`/`parse_symbol_id`, ambiguity
   marks, `callers`/`callers_tags`). The server side is an `LspBackend` interface (`LspBackend.None` until lsp.rs).
   7 tools tests + the concurrent-first-request capability test (test `support.parallel`).
-- Stop point: next diff, export, lsp, watch, review (+ Scope.reviewGit), draw; wire `rtok graph` into CLI; then grep_symbol, catfile, cat re-read, docs zstd, memory status, sync --stat, MCP, otel, worktree, task, batch, bench, hook dispatcher tests; release re-measure, completeness pass.
+- Stop point: next `impact` (`impact_filtered`/`impact_tags`, `with_cochange`; enable the deferred cochange impact
   partner test), then `explore` (`assemble_explore`, tags `ExploreParts`), `outline`, `call` dispatch; then events,
   blast, follow, drill, scope, diff, export, health, lsp, watch, review, draw, projects, jobs, status; then the rest of
   the list above.
@@ -296,6 +297,6 @@ Next, in order:
 - `Events.kt` (events.rs `GraphCall` start/progress/end, target/symbols/backend); 6 tests (the web `coalesce`
   summary test waits for web live).
 - `Outline.kt` (outline_in, outline_of_kind, symbol_arg_names, head_stale_prefix; `LspBackend.outline`/`outlineWorkspace`); 4 tests.
-- Stop point: next diff, export, lsp, watch, review (+ Scope.reviewGit), draw; wire `rtok graph` into CLI; then grep_symbol, catfile, cat re-read, docs zstd, memory status, sync --stat, MCP, otel, worktree, task, batch, bench, hook dispatcher tests; release re-measure, completeness pass.
+- Stop point: next diff, lsp, watch, review (+ Scope.reviewGit), draw; wire `rtok graph` into CLI; then grep_symbol, catfile, cat re-read, docs zstd, memory status, sync --stat, MCP, otel, worktree, task, batch, bench, hook dispatcher tests; release re-measure, completeness pass.
   a project scope), then `call` dispatch (needs scope); then
   follow, drill, scope, diff, export, health, lsp, watch, review, draw, projects, jobs (needs projects); then the rest.
