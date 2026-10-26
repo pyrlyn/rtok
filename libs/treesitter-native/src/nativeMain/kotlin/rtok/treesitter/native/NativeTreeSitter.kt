@@ -42,9 +42,14 @@ private class NativeGrammar(
         val bytes = source.encodeToByteArray()
         val buf = if (bytes.isEmpty()) ByteArray(1) else bytes
         val q = buf.usePinned { ts_query_new(language, it.addressOf(0), bytes.size.toUInt(), offset.ptr, error.ptr) }
-            ?: throw QueryException("query error ${error.value} at byte ${offset.value}")
+            ?: throw QueryException(queryError(name, error.value, offset.value.toInt(), bytes))
         NativeQuery(q)
     }
+}
+
+private fun queryError(grammar: String, kind: Any, offset: Int, src: ByteArray): String {
+    val near = src.decodeToString(offset.coerceIn(0, src.size), (offset + 40).coerceIn(0, src.size)).substringBefore('\n')
+    return "$grammar query: ${kind.toString().removePrefix("TSQueryError")} error at byte $offset near `$near`"
 }
 
 internal class NativeTree(val ptr: CPointer<TSTree>) : Tree {
