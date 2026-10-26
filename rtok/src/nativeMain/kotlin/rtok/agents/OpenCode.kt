@@ -99,15 +99,13 @@ class OpenCode(
 
         fun mcpSpec(cfg: Config) = OpenCodeFamily.mcpSpec(HOST, cfg.setup.opencode.configPath)
 
-        fun proxyUrl(cfg: Config) = "http://${cfg.proxy.bind}:${cfg.proxy.port}/v1"
-
         /** Set or drop `env.OPENAI_BASE_URL`; the report names how to revert. */
         fun runProxy(
             cfg: Config,
             remove: Boolean,
         ): String =
             HostJson.edit(applyOf(cfg), cfg.setup.opencode.configPath) { root ->
-                if (remove) strip(root) else insert(root, proxyUrl(cfg))
+                if (remove) strip(root) else insert(root, ProxyUrl.openai(cfg))
             }
 
         private fun insert(

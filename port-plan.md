@@ -626,3 +626,13 @@ Next, in order:
 - `Zed.kt`: `context_servers.rtok` in JSONC through `McpSurfaces.jsoncSpec` (Amp moved onto it too).
 - Tests: ZcodeTest 5, ZedTest 4.
 - Stop point: next 3c-4 = aider, continue, goose.
+
+## Session: agents chunk 3c-4 — aider, reasonix, antigravity
+- `Aider.kt`: `openai-api-base` line edit (`YamlKeyLine`), ownership by loopback authority (`ProxyUrl.loopbackPort`,
+  own code, no URL library); `ProxyUrl.openai` now shared with OpenCode.
+- `Reasonix.kt`: `[[plugins]]` table named rtok via `:toml-aot`, `judgeOwned` on remove, other `plugins` shapes refused.
+- `Antigravity.kt`: CLI printed `agy plugin install` offer (staged copy kept), Desktop link behind `--yes`.
+- continue and goose are held: both parse YAML (`serde_saphyr` in Rust); no YAML library is in the build yet, so a
+  dependency needs Ivan's approval first.
+- Tests: AiderTest 4, ReasonixTest 5, AntigravityTest 4.
+- Stop point: next 3c-5 = vscode, codebuddy; then continue/goose once YAML is decided.

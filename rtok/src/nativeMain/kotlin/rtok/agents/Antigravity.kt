@@ -1,0 +1,57 @@
+// Port of src/agents/antigravity/mod.rs: the plugin is the only unit (T90): `plugins/antigravity` carries the MCP config
+// and no hooks. Desktop links it into `<[setup.antigravity] plugins_path>/rtok` behind `--yes`; the CLI's store is
+// `agy`'s own, so rtok prints the `agy plugin install` line instead (the Kimi rule, T86).
+package rtok.agents
+
+import rtok.config.Config
+
+class Antigravity(
+    private val plugins: PluginSource = ShippedPlugins,
+) : Agent {
+    override val id = "antigravity"
+
+    override fun files(
+        cfg: Config,
+        kind: Kind,
+    ) = emptyList<String>()
+
+    override fun installed(
+        cfg: Config,
+        kind: Kind,
+    ): List<String> {
+        val found = if (kind == Kind.Cli) cliPluginDetected(cfg) else PLUGIN.ours(cfg, plugins)
+        return if (found) listOf("plugin") else emptyList()
+    }
+
+    override fun apply(
+        cfg: Config,
+        kind: Kind,
+        mode: Mode,
+    ): List<String> {
+        val remove = mode == Mode.Remove
+        return listOf(if (kind == Kind.Cli) offerCli(cfg, remove) else PLUGIN.offer(cfg, remove, plugins))
+    }
+
+    private fun offerCli(
+        cfg: Config,
+        remove: Boolean,
+    ) = PluginOffers.printOffer(
+        cfg,
+        remove,
+        cliPluginDetected(cfg),
+        PLUGIN_REL,
+        "agy plugin install ${plugins.of(PLUGIN_REL)}",
+        "keep antigravity-cli/plugins/rtok (owned by agy; remove with `agy plugin uninstall rtok`)",
+    )
+
+    companion object {
+        private const val PLUGIN_REL = "plugins/antigravity"
+        private const val DIR_NAME = "rtok"
+
+        val PLUGIN = HostPlugin(PLUGIN_REL, "Antigravity", null, { join(it.setup.antigravity.pluginsPath, DIR_NAME) }, defaultInstall = false)
+
+        fun cliPluginDest(cfg: Config) = join(cfg.setup.antigravity.cliPluginsPath, DIR_NAME)
+
+        fun cliPluginDetected(cfg: Config) = PluginOffers.manifestNames(cliPluginDest(cfg), "plugin.json", DIR_NAME)
+    }
+}
