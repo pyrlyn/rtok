@@ -1,0 +1,90 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>ComplexCondition:Config.kt:x is JsonPrimitive &amp;&amp; !x.isString &amp;&amp; d is JsonPrimitive &amp;&amp; !d.isString &amp;&amp; d.longOrNull != null &amp;&amp; (d.longOrNull ?: 0) >= 0 &amp;&amp; (x.longOrNull ?: 0) &lt; 0</ID>
+    <ID>ComplexCondition:Validate.kt:Validate$p.isEmpty() || p.length > TASK_PREFIX_MAX || !p.all { it in 'a'..'z' || it in 'A'..'Z' }</ID>
+    <ID>CyclomaticComplexMethod:Config.kt:Config$fun pluginEnabled: Boolean</ID>
+    <ID>CyclomaticComplexMethod:Config.kt:Config$fun withPluginEnabled: Config</ID>
+    <ID>CyclomaticComplexMethod:Config.kt:internal fun applyLegacyFold: Config</ID>
+    <ID>CyclomaticComplexMethod:Layers.kt:Layers$fun readDotenv: DotenvFile</ID>
+    <ID>CyclomaticComplexMethod:Validate.kt:Validate$private fun checkLeaf</ID>
+    <ID>DestructuringDeclarationWithTooManyEntries:LayersTest.kt:LayersTest$(e, flagPort, want, src)</ID>
+    <ID>LongMethod:LayersTest.kt:LayersTest$@Test fun projectTomlCannotOverrideSensitiveSettings</ID>
+    <ID>LongMethod:Validate.kt:Validate$private fun checkLeaf</ID>
+    <ID>LoopWithTooManyJumpStatements:Layers.kt:Layers$for</ID>
+    <ID>LoopWithTooManyJumpStatements:Root.kt:for</ID>
+    <ID>LoopWithTooManyJumpStatements:Validate.kt:Validate$for</ID>
+    <ID>MagicNumber:ConfigTest.kt:ConfigTest$0.95f</ID>
+    <ID>MagicNumber:ConfigTest.kt:ConfigTest$0.99f</ID>
+    <ID>MagicNumber:ConfigTest.kt:ConfigTest$250u</ID>
+    <ID>MagicNumber:ConfigTest.kt:ConfigTest$300uL</ID>
+    <ID>MagicNumber:ConfigTest.kt:ConfigTest$384u</ID>
+    <ID>MagicNumber:ConfigTest.kt:ConfigTest$4.0f</ID>
+    <ID>MagicNumber:ConfigTest.kt:ConfigTest$4.2f</ID>
+    <ID>MagicNumber:ConfigTest.kt:ConfigTest$40_000u</ID>
+    <ID>MagicNumber:ConfigTest.kt:ConfigTest$40u</ID>
+    <ID>MagicNumber:ConfigTest.kt:ConfigTest$500u</ID>
+    <ID>MagicNumber:ConfigTest.kt:ConfigTest$60u</ID>
+    <ID>MagicNumber:ConfigTest.kt:ConfigTest$800u</ID>
+    <ID>MagicNumber:LayersTest.kt:LayersTest$4321u</ID>
+    <ID>MagicNumber:LayersTest.kt:LayersTest$5555</ID>
+    <ID>MagicNumber:LayersTest.kt:LayersTest$5uL</ID>
+    <ID>MagicNumber:LayersTest.kt:LayersTest$8812u</ID>
+    <ID>MagicNumber:LayersTest.kt:LayersTest$99u</ID>
+    <ID>MagicNumber:Sections.kt:0.0125</ID>
+    <ID>MagicNumber:Sections.kt:0.025</ID>
+    <ID>MagicNumber:Sections.kt:0.05</ID>
+    <ID>MagicNumber:Sections.kt:0.0625</ID>
+    <ID>MagicNumber:Sections.kt:0.1</ID>
+    <ID>MagicNumber:Sections.kt:0.125</ID>
+    <ID>MagicNumber:Sections.kt:0.2</ID>
+    <ID>MagicNumber:Sections.kt:0.25</ID>
+    <ID>MagicNumber:Sections.kt:0.5</ID>
+    <ID>MagicNumber:Sections.kt:0.625</ID>
+    <ID>MagicNumber:Sections.kt:1.25</ID>
+    <ID>MagicNumber:Sections.kt:10.0</ID>
+    <ID>MagicNumber:Sections.kt:12.5</ID>
+    <ID>MagicNumber:Sections.kt:2.5</ID>
+    <ID>MagicNumber:Sections.kt:20.0</ID>
+    <ID>MagicNumber:Sections.kt:25.0</ID>
+    <ID>MagicNumber:Sections.kt:4.0</ID>
+    <ID>MagicNumber:Sections.kt:5.0</ID>
+    <ID>MagicNumber:Sections.kt:50.0</ID>
+    <ID>MagicNumber:Sections.kt:6.25</ID>
+    <ID>MagicNumber:Validate.kt:Validate$100</ID>
+    <ID>MagicNumber:Validate.kt:Validate$1000</ID>
+    <ID>MagicNumber:Validate.kt:Validate$1024</ID>
+    <ID>MagicNumber:Validate.kt:Validate$20</ID>
+    <ID>MagicNumber:Validate.kt:Validate$3650</ID>
+    <ID>MagicNumber:Validate.kt:Validate$5</ID>
+    <ID>MagicNumber:Validate.kt:Validate$65535</ID>
+    <ID>MagicNumber:Validate.kt:Validate$87_600</ID>
+    <ID>MagicNumber:ValidateTest.kt:ValidateTest$8790L</ID>
+    <ID>MagicNumber:ValidateTest.kt:ValidateTest$8791L</ID>
+    <ID>MagicNumber:ValidateTest.kt:ValidateTest$9000L</ID>
+    <ID>MatchingDeclarationName:Since.kt:ConfigException : Exception</ID>
+    <ID>ReturnCount:Config.kt:fun homeDirAbsolute: String</ID>
+    <ID>ReturnCount:Layers.kt:Layers$fun parseEnvValue: JsonElement</ID>
+    <ID>ReturnCount:Layers.kt:Layers$private fun legacySourceFor: String?</ID>
+    <ID>ReturnCount:Root.kt:ProjectRoot.Companion$fun findWith: ProjectRoot?</ID>
+    <ID>ReturnCount:Root.kt:ProjectRoot.Companion$private fun commonDir: String?</ID>
+    <ID>ReturnCount:Validate.kt:Glob$fun error: String?</ID>
+    <ID>ReturnCount:Validate.kt:Validate$private fun checkLeaf</ID>
+    <ID>SwallowedException:Config.kt:e: ConfigException</ID>
+    <ID>SwallowedException:Config.kt:e: IllegalArgumentException</ID>
+    <ID>SwallowedException:Config.kt:e: kotlinx.serialization.SerializationException</ID>
+    <ID>SwallowedException:Layers.kt:Layers$e: IoException</ID>
+    <ID>SwallowedException:Validate.kt:Validate$e: TomlException</ID>
+    <ID>ThrowsCount:Layers.kt:Dotenv$private fun parseInto</ID>
+    <ID>ThrowsCount:Since.kt:fun parseSinceFrom: Long</ID>
+    <ID>ThrowsCount:Validate.kt:Validate$fun setAllWith: Pair&lt;String, String></ID>
+    <ID>TooGenericExceptionCaught:Config.kt:Config.Companion$e: Exception</ID>
+    <ID>TooManyFunctions:Config.kt:rtok.config.Config.kt</ID>
+    <ID>TooManyFunctions:ConfigTest.kt:ConfigTest</ID>
+    <ID>TooManyFunctions:Layers.kt:Layers</ID>
+    <ID>TooManyFunctions:LayersTest.kt:LayersTest</ID>
+    <ID>TooManyFunctions:Validate.kt:Validate</ID>
+    <ID>TooManyFunctions:ValidateTest.kt:ValidateTest</ID>
+  </CurrentIssues>
+</SmellBaseline>

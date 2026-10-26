@@ -1,0 +1,8 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>MagicNumber:NativeTreeSitterTest.kt:NativeTreeSitterTest$34</ID>
+    <ID>ReturnCount:NativeTreeSitter.kt:NativeGrammar$override fun parse: Tree?</ID>
+  </CurrentIssues>
+</SmellBaseline>

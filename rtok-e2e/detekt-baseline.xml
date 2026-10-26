@@ -1,0 +1,8 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>MagicNumber:ArchiveE2eSpec.kt:400</ID>
+    <ID>MagicNumber:ArchiveE2eSpec.kt:ArchiveE2eSpec$6</ID>
+  </CurrentIssues>
+</SmellBaseline>

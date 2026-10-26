@@ -1,0 +1,78 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>CyclomaticComplexMethod:Gitignore.kt:fun globToRegex: String</ID>
+    <ID>CyclomaticComplexMethod:Proc.kt:ProgressRunner$fun runCapped: Pair&lt;Captured, Long></ID>
+    <ID>CyclomaticComplexMethod:Shlex.kt:Shlex$fun split: List&lt;String>?</ID>
+    <ID>CyclomaticComplexMethod:Walk.kt:fun walk: Sequence&lt;WalkEntry></ID>
+    <ID>LongMethod:Proc.kt:ProgressRunner$fun runCapped: Pair&lt;Captured, Long></ID>
+    <ID>LongMethod:Shlex.kt:Shlex$fun split: List&lt;String>?</ID>
+    <ID>LoopWithTooManyJumpStatements:Ancestors.kt:while</ID>
+    <ID>LoopWithTooManyJumpStatements:Fs.kt:while</ID>
+    <ID>LoopWithTooManyJumpStatements:Gitignore.kt:while</ID>
+    <ID>LoopWithTooManyJumpStatements:Shlex.kt:Shlex$while</ID>
+    <ID>LoopWithTooManyJumpStatements:Walk.kt:for</ID>
+    <ID>MagicNumber:ChangePreview.kt:ChangePreview$3</ID>
+    <ID>MagicNumber:ChangePreview.kt:ChangePreview$4</ID>
+    <ID>MagicNumber:Fs.kt:0x1ff</ID>
+    <ID>MagicNumber:Gitignore.kt:3</ID>
+    <ID>MagicNumber:Lock.kt:Mutex$50u</ID>
+    <ID>MagicNumber:ParallelTest.kt:ParallelTest$100</ID>
+    <ID>MagicNumber:ParallelTest.kt:ParallelTest$200u</ID>
+    <ID>MagicNumber:ParallelTest.kt:ParallelTest$3</ID>
+    <ID>MagicNumber:ParallelTest.kt:ParallelTest$4</ID>
+    <ID>MagicNumber:ParallelTest.kt:ParallelTest$7</ID>
+    <ID>MagicNumber:Proc.kt:4096u</ID>
+    <ID>MagicNumber:Proc.kt:ProgressRunner$0x7f</ID>
+    <ID>MagicNumber:Proc.kt:ProgressRunner$0xff</ID>
+    <ID>MagicNumber:Proc.kt:ProgressRunner$8</ID>
+    <ID>MagicNumber:ProcTest.kt:ProcTest$3</ID>
+    <ID>MagicNumber:ProcTest.kt:ProcTest$6</ID>
+    <ID>MagicNumber:Sha1.kt:Sha1$0x5A827999</ID>
+    <ID>MagicNumber:Sha1.kt:Sha1$0x6ED9EBA1</ID>
+    <ID>MagicNumber:Sha1.kt:Sha1$0xff</ID>
+    <ID>MagicNumber:Sha1.kt:Sha1$14</ID>
+    <ID>MagicNumber:Sha1.kt:Sha1$16</ID>
+    <ID>MagicNumber:Sha1.kt:Sha1$19</ID>
+    <ID>MagicNumber:Sha1.kt:Sha1$20</ID>
+    <ID>MagicNumber:Sha1.kt:Sha1$3</ID>
+    <ID>MagicNumber:Sha1.kt:Sha1$30</ID>
+    <ID>MagicNumber:Sha1.kt:Sha1$39</ID>
+    <ID>MagicNumber:Sha1.kt:Sha1$4</ID>
+    <ID>MagicNumber:Sha1.kt:Sha1$40</ID>
+    <ID>MagicNumber:Sha1.kt:Sha1$59</ID>
+    <ID>MagicNumber:Sha1.kt:Sha1$64</ID>
+    <ID>MagicNumber:Sha1.kt:Sha1$8</ID>
+    <ID>MagicNumber:Sha1.kt:Sha1$80</ID>
+    <ID>MagicNumber:Sha256.kt:Sha256$0xff</ID>
+    <ID>MagicNumber:Sha256.kt:Sha256$16</ID>
+    <ID>MagicNumber:Sha256.kt:Sha256$24</ID>
+    <ID>MagicNumber:Sha256.kt:Sha256$3</ID>
+    <ID>MagicNumber:Sha256.kt:Sha256$32</ID>
+    <ID>MagicNumber:Sha256.kt:Sha256$4</ID>
+    <ID>MagicNumber:Sha256.kt:Sha256$5</ID>
+    <ID>MagicNumber:Sha256.kt:Sha256$6</ID>
+    <ID>MagicNumber:Sha256.kt:Sha256$64</ID>
+    <ID>MagicNumber:Sha256.kt:Sha256$7</ID>
+    <ID>MagicNumber:Sha256.kt:Sha256$8</ID>
+    <ID>MagicNumber:Stat.linux.kt:1_000_000_000L</ID>
+    <ID>MagicNumber:Stat.macos.kt:1_000_000_000L</ID>
+    <ID>MagicNumber:Text.kt:0x10000</ID>
+    <ID>MagicNumber:Text.kt:0xD800</ID>
+    <ID>MagicNumber:Text.kt:0xDC00</ID>
+    <ID>MagicNumber:Text.kt:0xFFFF</ID>
+    <ID>MagicNumber:Text.kt:10</ID>
+    <ID>MagicNumber:Text.kt:16</ID>
+    <ID>MagicNumber:Text.kt:32</ID>
+    <ID>MatchingDeclarationName:Walk.kt:WalkEntry</ID>
+    <ID>NestedBlockDepth:Shlex.kt:Shlex$fun split: List&lt;String>?</ID>
+    <ID>ReturnCount:Ancestors.kt:@OptIn(ExperimentalForeignApi::class) fun parentOf: Int?</ID>
+    <ID>ReturnCount:ChangePreview.kt:ChangePreview$fun humanBytes: String</ID>
+    <ID>ReturnCount:Fs.kt:fun readPrefix: ByteArray?</ID>
+    <ID>ReturnCount:Gitignore.kt:Gitignore$fun matched: Boolean?</ID>
+    <ID>ReturnCount:Gitignore.kt:Gitignore$private fun parse: Rule?</ID>
+    <ID>ReturnCount:Shlex.kt:Shlex$fun split: List&lt;String>?</ID>
+    <ID>TooManyFunctions:Fs.kt:rtok.sys.Fs.kt</ID>
+  </CurrentIssues>
+</SmellBaseline>

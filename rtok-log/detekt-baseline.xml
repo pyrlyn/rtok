@@ -1,0 +1,22 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>MagicNumber:Log.kt:3600</ID>
+    <ID>MagicNumber:Log.kt:4</ID>
+    <ID>MagicNumber:Log.kt:60</ID>
+    <ID>MagicNumber:LogTest.kt:0x1ff</ID>
+    <ID>MagicNumber:LogTest.kt:LogTest$0x180</ID>
+    <ID>MagicNumber:LogTest.kt:LogTest$10</ID>
+    <ID>MagicNumber:LogTest.kt:LogTest$1_709_209_845</ID>
+    <ID>MagicNumber:LogTest.kt:LogTest$1_788_966_245</ID>
+    <ID>MagicNumber:LogTest.kt:LogTest$20</ID>
+    <ID>MagicNumber:LogTest.kt:LogTest$200</ID>
+    <ID>MagicNumber:LogTest.kt:LogTest$4</ID>
+    <ID>MagicNumber:LogTest.kt:LogTest$4_107_542_400</ID>
+    <ID>MagicNumber:LogTest.kt:LogTest$50</ID>
+    <ID>MagicNumber:LogTest.kt:LogTest$99</ID>
+    <ID>TooManyFunctions:Log.kt:rtok.log.Log.kt</ID>
+    <ID>TooManyFunctions:LogTest.kt:LogTest</ID>
+  </CurrentIssues>
+</SmellBaseline>

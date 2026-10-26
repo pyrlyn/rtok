@@ -1,0 +1,20 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>MagicNumber:WasmPlugin.kt:32</ID>
+    <ID>MagicNumber:WasmPluginTest.kt:WasmPluginTest$0x1c0u</ID>
+    <ID>MagicNumber:WasmPluginTest.kt:WasmPluginTest$0xffff_ffffL</ID>
+    <ID>MagicNumber:WasmPluginTest.kt:WasmPluginTest$10_000</ID>
+    <ID>MagicNumber:WasmPluginTest.kt:WasmPluginTest$16</ID>
+    <ID>MagicNumber:WasmPluginTest.kt:WasmPluginTest$16L</ID>
+    <ID>MagicNumber:WasmPluginTest.kt:WasmPluginTest$3</ID>
+    <ID>MagicNumber:WasmPluginTest.kt:WasmPluginTest$32</ID>
+    <ID>MagicNumber:WasmPluginTest.kt:WasmPluginTest$4</ID>
+    <ID>MagicNumber:WasmPluginTest.kt:WasmPluginTest$4L</ID>
+    <ID>MagicNumber:WasmPluginTest.kt:WasmPluginTest$7</ID>
+    <ID>MagicNumber:WasmPluginTest.kt:WasmPluginTest$8</ID>
+    <ID>MagicNumber:WasmPluginTest.kt:WasmPluginTest$9</ID>
+    <ID>ThrowsCount:WasmPlugin.kt:WasmPlugin.Companion$fun loadWithFuel: WasmPlugin</ID>
+  </CurrentIssues>
+</SmellBaseline>

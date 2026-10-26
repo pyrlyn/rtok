@@ -1,0 +1,13 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>CyclomaticComplexMethod:Tags.kt:TagsConfiguration$fun generate: List&lt;Tag></ID>
+    <ID>LoopWithTooManyJumpStatements:Tags.kt:TagsConfiguration$for</ID>
+    <ID>MagicNumber:Tags.kt:0x80</ID>
+    <ID>MagicNumber:Tags.kt:0xC0</ID>
+    <ID>ReturnCount:Predicates.kt:private fun holds: Boolean</ID>
+    <ID>ReturnCount:Tags.kt:TagsConfiguration$private fun docs: String?</ID>
+    <ID>ReturnCount:Tags.kt:TagsConfiguration$private fun isLocal: Boolean</ID>
+  </CurrentIssues>
+</SmellBaseline>
