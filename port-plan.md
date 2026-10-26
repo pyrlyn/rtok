@@ -483,3 +483,12 @@ Next, in order:
   `hook_events.rs` (host event table) and `HostPlugin` (plugin-file copy + `ours`/`offer`) first.
 - Stop point: next 3b-2 = `hook_events.rs` + `HostPlugin`, then cline; 3b-3 = JSON settings hooks (gemini, qwen,
   codewhale, commandcode, copilot, devin, kimi).
+
+## Session: agents chunk 3b-2a — PluginLink (agent SDK link/copy cycle)
+- `:rtok-agent-sdk` `PluginLink` (`linked`/`ours`/`run` with `CopyFix`/`upToDate`/`health`), `LinkHealth`, `KETCH_INSTALL`,
+  `OWNED_MARKER`, `inVersionedStore`, `treeCopies`, `copyOwned`, `unlinkAt`; rtok-sys `EntryKind.kt` (lstat kind,
+  `readLink`, `symlink`, mode-keeping `copyFile`).
+- Tests: PluginLinkTest 7 + PluginCopyTest 7 (every Rust `plugin_link_*`/owned-copy/health case; the two foreign-remove
+  cases merged into one).
+- Deferred: `SkillCopy`/`skill_plan` (with skills), Windows owned-copy-by-default branch (no Windows target).
+- Stop point: next 3b-2b = `hook_events.rs`, `plugin_src` resolution, `HostPlugin`, then cline.
