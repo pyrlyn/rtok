@@ -190,3 +190,17 @@ Each Rust `#[cfg(test)]` module → `src/commonTest` in the matching module; `te
 - Measured on M3 Max, release link, Kotlin 2.4.21: without the host 8,958,312 B / 50 s; with Chasm wired in 17,092,616 B / 125 s (+8.1 MB, +75 s).
   Fuel: 1M units of an endless loop trap after ~60 ms (debug test binary), so the 100M per-call budget is ~6 s debug worst case.
 - Baseline before Chasm: release rtok.kexe is 8,739,016 B; release link takes 58 s.
+
+## Session 2026-10-26 (afternoon) — where the port stands
+Done today: Kotlin 2.4.21 / latest libs (e8c5c7a), mise toolchain (e0ad1be), Chasm adapter (7b4e2d5),
+WASM plugin host (0c55807), hooks dispatcher + push + `rtok hook` (119c63c), smart test/build tasks (dfdb3cb).
+Next, in order:
+1. Phase 10 tree-sitter: `libs/treesitter` interface + `libs/treesitter-native` (cinterop over the vendored
+   tree-sitter runtime + grammars; one registry with extension mappings and queries). Grammars: every
+   grammar repo in github.com/tree-sitter, plus tree-sitter-grammars/tree-sitter-kotlin and the maintained
+   Dart and Swift grammars. Measure size/build-time impact per grammar.
+2. read plugin (101 tests), graph (275 tests incl. the memory handoff test), guard grep_symbol (8),
+   cmd catfile (4) + cat re-read delta (1).
+3. docs fetch with zstd behind our own interface; memory status, sync --stat, MCP wiring (Phase 8).
+4. Remaining hooks tests (29) once worktree/otel/MCP land (`HookLinks`).
+5. Final stage: completeness pass against Rust + code review (no separate preview deliverable).
