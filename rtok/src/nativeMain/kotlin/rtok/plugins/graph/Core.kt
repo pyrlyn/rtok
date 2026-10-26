@@ -66,7 +66,7 @@ object GraphCore {
         return (cx.symbolPending(key, root) + cx.graphWatchPending(key)).toSet().sorted()
     }
 
-    private fun staleBanner(cx: Ctx, root: String): String {
+    internal fun staleBanner(cx: Ctx, root: String): String {
         val cfg = graphCfg(cx)
         val pending = pendingPaths(cx, root)
         if (pending.isEmpty()) return ""
