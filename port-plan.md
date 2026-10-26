@@ -119,7 +119,7 @@ jiff/humantime→kotlinx-datetime; shlex→own; wasmi→not portable (see risks)
 - [x] cmd (10098) — 207 Kotlin tests: rules 51, formatters 25, run 29, hook 25, compact 18, grep 10, logfmt 8, gh 7, loops 7, python 7, bounded 7, diffs 6, mise 4, filter 3; rtok-sys ProgressRunner +5; catfile (4) + cat re-read delta (1) blocked on tree-sitter / read cache (docs/cmd.md)
 - [x] memory (5419) — 126 of 127 (scrub 2, admit 6, files 8, pack 7, observe 6, handoff 11, sync 15, export 3, import 6, extract 11, mod 51); `rtok memory` CLI (all but `status`); docs/memory.md
   - pending: handoff `pointers_carry_enclosing_symbol_ranges_when_indexed` (needs graph index, Phase 10); `memory status` (model::memory_status); `sync --stat` (change_preview Preview); MCP dispatch (rtok-mcp)
-- [ ] graph (20084) — 275
+- [ ] graph (20084) — 275; walk 5, index 16 (12 Rust + batch + rows + rank-document 2; Rust-crate fixture pending), rank 10, cochange 5
 - [x] wasm host (478) — 3 → 5 (+1 registry, +3 Chasm adapter); Chasm 2.3.0 behind libs/wasm, fuel 100M/call; docs/wasm-plugins.md
 - [ ] Tests: port matching Rust unit + integration tests to kotlin.test; phase done only when they pass on the Mac (`./gradlew macosArm64Test`)
 - [ ] Docs: `docs/<feature>.md` (how it works, enable, disable, test, limitations) + README section
@@ -214,9 +214,82 @@ Release binary: unchanged so far (17.9 MB) — no CLI/MCP path calls the read pl
 strip the grammars; measure again once `read`/`graph` are wired (all grammars = 70 MB of objects).
 Read plugin finished (PR feat/read-rest): `Read.kt`, `Roots.kt`, `Search.kt`, `Cache.kt`, `Hook.kt`,
 `rtok/Expand.kt` + `rtok expand`, `rtok/worktree/Git.kt` (porcelain list), `HostPaths.kt`; 84 read + 27 expand tests.
+Graph started (merged with #9): `rtok/plugins/graph/Walk.kt` (`Matcher`, walk.rs, 5 tests).
+Exact stop point: graph `index.rs` (Report, run/run_with/run_changed, extractor fingerprint, SYMBOL_BATCH_FILES
+batching; needs a per-core parse worker pool and `outline` symbol rows with span/sig/doc) is next, then
+text, resolve, tally, mod.rs tools, and the rest in dependency order (events, rank, blast, follow, drill, scope,
+diff, export, health, lsp, watch, review, draw, capability, cochange, projects, jobs, status).
+Release binary after read: 17.97 MB, `linkReleaseExecutableMacosArm64` 125 s wall (incl. compile); the grammars
+are still stripped because no CLI/MCP path calls `read`/`outline` until `rtok mcp` dispatches the read tools.
 Next, in order:
 1. (done) read.
 2. graph (275 tests; 20k Rust lines), grep_symbol (8), catfile (4) + cat re-read delta (1).
 3. docs fetch + zstd behind an interface; memory status, sync --stat, MCP wiring; otel, worktree/task/batch/bench;
    29 hook dispatch tests; worktree host events via `rtok hook`.
 4. Completeness pass against Rust and final code review.
+
+- Fixed (#9): release-only K/N crash `Unexpected receiver type: kotlin.Char` in `rtok run cat` (boxed `Char?` in `Bounded.lex`). `./gradlew e2eTest -Pe2e.release` runs e2e against the release binary.
+- Stop point: graph `Walk.kt` (Matcher) is merged with #9; next is `index.rs`, then text, resolve, tally, mod.rs.
+
+## Session 2026-10-26 (late) — graph index
+- `rtok/plugins/graph/Index.kt` (index.rs): run/runWith/runChanged/ensure, stat + sha gates, extractor fingerprint,
+  SYMBOL_BATCH_FILES batching, `scoped` rows with span/hash/signature/doc, indexed HEAD. Parsing runs on
+  `rtok.sys.eachOrdered` (one K/N Worker per core, results in walk order, bounded in-flight). Tags queries are
+  compiled on the calling thread before the workers start.
+- Rank refresh goes through `FileRanks` (no-op `FileRanks.None` until rank.rs lands; set `Index.ranks`).
+- `Resolve.kt` (resolve.rs, 1 test), `Tally.kt` (tally.rs, 4 tests; `@ThreadLocal` record).
+- Stop point (main 683ebd3, 1173 tests green): next `cochange.rs` + `rank.rs` (set `Index.ranks`; enables the 2
+  pending index rank tests), then the mod.rs core types (`Filter`, `Mode`, `ExploreParts`, `backend_name`) that
+  `text.rs` needs, then `text.rs`, `capability.rs`, the rest of mod.rs and the other submodules.
+
+## Session 2026-10-26 (evening) — graph rank + cochange
+- `Cochange.kt` (cochange.rs, 3 Rust tests + layout test; `impact` partner test waits for mod.rs `impact`),
+  `Rank.kt` (rank.rs, 10 tests; `Index.ranks` defaults to `Rank`, both pending index rank tests enabled),
+  `Git.kt` (mod.rs `git_stdout`/`git_stdout_result`, shared with `Index.rememberIndexedHead`).
+- On-disk compat: `file_rank` JSON keeps the serde field names; the cochange `kv` doc keeps `pairs` as `[a,b,n]`.
+- `Alerts.kt` (health.rs Kind/Alert/mirrored/all/describe/texts/reach/notice), `Score.kt` (health/score.rs), `Projects.resolve`; 6 tests. The checker loop (`Health` tick/backoff/run) is next.
+- `HealthCheck.kt` (health.rs Health findings/backend backoff/tick/load/recovered/persist, scope_of, run loop); 6 tests. Manifest ref discovery (project::refs) is an injected `refWarnings` until it is ported; backend backoff tests wait for lsp.rs; stat has no 2 s timeout thread.
+- Stop point: next the mod.rs core types (`Filter`, `Mode`, `ExploreParts`, `backend_name`), then `text.rs`,
+  `capability.rs`, the rest of mod.rs and the other submodules.
+
+## Session 2026-10-26 (evening) — graph core types
+- `Core.kt` (mod.rs: `Filter`, `Mode`, `GraphCore.backendName/modeOf/indexFor/pendingPaths/withStale/
+  withoutModeLine/lspNoneAnswer`, shared `graphCfg`), `Langs.kt` (lsp.rs `LANGS`/`EXTENSIONS`/`language_of`/
+  `server_of`/`served_languages`); 5 tests (mode-of, filter, language tables, lsp-none, auto_index=false stale banner).
+- Stop point: next `text.rs` (uses Mode/Filter/backend_name), then `capability.rs`, the mod.rs tools
+  (symbol/callers/impact/explore with `ExploreParts`, `record_mode_row`), and the other submodules
+  (events, blast, follow, drill, scope, diff, export, health, lsp, watch, review, draw, projects, jobs, status);
+  then grep_symbol (8), catfile (4), cat re-read delta (1); docs fetch + zstd, memory status, sync --stat, MCP,
+  otel, worktree/task/batch/bench, 29 hook dispatch tests, worktree events; release size re-measure; completeness pass.
+
+## Session 2026-10-26 (night) — graph text + capability
+- `Capability.kt` (capability.rs: record, mirror in `plugin_state` with serde field names, `ask`/`serverReady`/
+  `held`/`reprobe`, `Refused`/`serverBroke`; probe is a `Probe` lambda until lsp.rs lands), `Text.kt` (text.rs,
+  `Text.Explore`), `ExploreParts` in `Core.kt`, `rtok.sys.Mutex`. 6 capability + 8 text tests (door-level capability
+  tests run through `ask`; the concurrency test waits for mod.rs `door`).
+- Stop point: next the mod.rs tools (`door`, symbol/callers/impact/explore + `assemble_explore`, `record_mode_row`;
+  enable the deferred cochange `impact` partner test), then events, blast, follow, drill, scope, diff, export, health,
+  lsp, watch, review, draw, projects, jobs, status; then the rest of the list above.
+
+## Session 2026-10-26 (evening) — graph tools door, symbol, callers
+- `Tools.kt` (mod.rs: `text_or`, `lsp_or_tags`, `door`, `record_mode_row`, `tags_kind`/`text_kind`, `cap`/`cap_kind`,
+  `symbol`/`symbol_tags`/`symbol_by_id`, `defs_text`, `body_lines`, `def_id`/`def_head`/`parse_symbol_id`, ambiguity
+  marks, `callers`/`callers_tags`). The server side is an `LspBackend` interface (`LspBackend.None` until lsp.rs).
+  7 tools tests + the concurrent-first-request capability test (test `support.parallel`).
+- Stop point: next `impact` (`impact_filtered`/`impact_tags`, `with_cochange`; enable the deferred cochange impact
+  partner test), then `explore` (`assemble_explore`, tags `ExploreParts`), `outline`, `call` dispatch; then events,
+  blast, follow, drill, scope, diff, export, health, lsp, watch, review, draw, projects, jobs, status; then the rest of
+  the list above.
+
+## Session 2026-10-26 (late) — graph impact + blast
+- `Impact.kt` (mod.rs `impact`/`impact_filtered`/`impact_tags`, `with_cochange`, `reverse_call_chain`, `impact_bfs`,
+  `impact_walk_roots`, `WalkMemo`), `Blast.kt` (blast.rs budgeted render; `WalkRow`, `Budget`, `linesText`).
+  `LspBackend.impact`. 4 impact + 5 blast tests; the deferred cochange impact partner test is on.
+- `Explore.kt` (explore_tokens, assemble_explore/assemble_named, explore/explore_tags with FTS fallback, `TagsExplore`); 5 tests.
+- `Status.kt` (status.rs collect/format_table, mod.rs `cli_root`); 2 tests. `rtok graph` CLI wiring still pending.
+- `Events.kt` (events.rs `GraphCall` start/progress/end, target/symbols/backend); 6 tests (the web `coalesce`
+  summary test waits for web live).
+- `Outline.kt` (outline_in, outline_of_kind, symbol_arg_names, head_stale_prefix; `LspBackend.outline`/`outlineWorkspace`); 4 tests.
+- Stop point: next `scope.rs` (Member, symbols/symbol_id/callers/dead_filtered/impact/affected_path/outline/explore over
+  a project scope), then `call` dispatch (needs scope); then
+  follow, drill, scope, diff, export, health, lsp, watch, review, draw, projects, jobs (needs projects); then the rest.

@@ -7,9 +7,13 @@ configure<KotlinMultiplatformExtension> {
     sourceSets.commonTest.dependencies { implementation(project(":rtok-sys")) }
 }
 
-// `-Prtok.e2e.bin=<path>` runs the suite against another binary (e.g. a release or fast-release build).
-val rtokBin = providers.gradleProperty("rtok.e2e.bin").map { layout.projectDirectory.file(it) }
-    .orElse(project(":rtok").layout.buildDirectory.file("bin/macosArm64/debugExecutable/rtok.kexe"))
+// `-Pe2e.release` runs the suite against the release binary: some K/N bugs only show with release optimizations.
+// `-Prtok.e2e.bin=<path>` runs it against any other binary (e.g. a fast-release build); it wins over `-Pe2e.release`.
+val e2eRelease = providers.gradleProperty("e2e.release").isPresent
+val rtokKind = if (e2eRelease) "release" else "debug"
+val customBin = providers.gradleProperty("rtok.e2e.bin")
+val rtokBin = customBin.map { layout.projectDirectory.file(it) }
+    .orElse(project(":rtok").layout.buildDirectory.file("bin/macosArm64/${rtokKind}Executable/rtok.kexe"))
 val testBin = layout.buildDirectory.file("bin/macosArm64/debugTest/test.kexe")
 
 // The fast default suite skips this module.
@@ -17,7 +21,8 @@ tasks.named("macosArm64Test") { enabled = false }
 
 tasks.register<Exec>("e2eTest") {
     group = "verification"; description = "Runs the end-to-end CLI suite against the debug rtok binary."
-    dependsOn(":rtok:linkDebugExecutableMacosArm64", "linkDebugTestMacosArm64")
+    dependsOn("linkDebugTestMacosArm64")
+    if (!customBin.isPresent) dependsOn(if (e2eRelease) ":rtok:linkReleaseExecutableMacosArm64" else ":rtok:linkDebugExecutableMacosArm64")
     inputs.file(rtokBin); inputs.file(testBin)
     executable(testBin.get().asFile)
     environment("RTOK_BIN", rtokBin.get().asFile.absolutePath)
