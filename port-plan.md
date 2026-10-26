@@ -247,6 +247,7 @@ Next, in order:
   `Rank.kt` (rank.rs, 10 tests; `Index.ranks` defaults to `Rank`, both pending index rank tests enabled),
   `Git.kt` (mod.rs `git_stdout`/`git_stdout_result`, shared with `Index.rememberIndexedHead`).
 - On-disk compat: `file_rank` JSON keeps the serde field names; the cochange `kv` doc keeps `pairs` as `[a,b,n]`.
+- `Alerts.kt` (health.rs Kind/Alert/mirrored/all/describe/texts/reach/notice), `Score.kt` (health/score.rs), `Projects.resolve`; 6 tests. The checker loop (`Health` tick/backoff/run) is next.
 - Stop point: next the mod.rs core types (`Filter`, `Mode`, `ExploreParts`, `backend_name`), then `text.rs`,
   `capability.rs`, the rest of mod.rs and the other submodules.
 
