@@ -7,9 +7,9 @@ import rtok.log.FileLog
 import rtok.plugin.sdk.Ctx
 import rtok.plugin.sdk.MemoryHost
 import rtok.plugin.sdk.Plugin
-import rtok.wasm.WasmException
-import rtok.wasm.chasm.ChasmRuntime
-import rtok.wasm.guestSlice
+import wasm.WasmException
+import wasm.chasm.ChasmRuntime
+import wasm.guestSlice
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
