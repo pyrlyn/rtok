@@ -12,7 +12,7 @@ private fun cfg(): Config = Config().finish("${tempDir()}/rtok-registry-test")
 class RegistryTest {
     /** Rust checks equality with the catalogue; until Phase 5 ends the registry is an ordered subset. */
     @Test fun registryMatchesCatalogue() {
-        val got = Registry.new(Config()).manifests().map { (m, _) -> m.id to m.defaultOn }
+        val got = Registry.new(cfg()).manifests().map { (m, _) -> m.id to m.defaultOn }
         val order = CATALOGUE.filter { it in got }
         assertEquals(order, got, "plugins/Registry.kt and config CATALOGUE drifted")
     }

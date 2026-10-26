@@ -30,6 +30,20 @@ tasks.register<Exec>("e2eTest") {
     inputs.file(testBin)
     executable(testBin.get().asFile)
     environment("RTOK_BIN", rtokBin.get().asFile.absolutePath)
+    // Isolated home for the binary under test; the suite never touches the real ~/.rtok.
+    val e2eHome =
+        layout.buildDirectory
+            .dir("e2e/home")
+            .get()
+            .asFile
+    environment("HOME", e2eHome.absolutePath)
+    environment("RTOK_HOME", e2eHome.resolve(".rtok").absolutePath)
+    val strayTilde =
+        rootProject.layout.projectDirectory.asFile
+            .walkTopDown()
+            .maxDepth(2)
+            .filter { it.name == "~" }
+    doFirst { e2eHome.resolve(".rtok").mkdirs() }
     outputs.upToDateWhen { false }
     // The Kotest native launcher exits 0 even when a spec fails, so the verdict is read from its report.
     val log = layout.buildDirectory.file("e2e/output.txt")
@@ -47,5 +61,6 @@ tasks.register<Exec>("e2eTest") {
                 ?: throw GradleException("e2e: no Kotest summary in $logFile")
         if (tests.groupValues[2] != "0" || tests.groupValues[1] == "0") throw GradleException("e2e: ${tests.value} (see $logFile)")
         logger.lifecycle("e2e: ${tests.value}")
+        strayTilde.firstOrNull()?.let { throw GradleException("e2e created a literal '~' directory: $it") }
     }
 }
