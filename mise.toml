@@ -1,0 +1,11 @@
+# Toolchain for rtok-kotlin, installed with `mise install` (see docs/toolchain.md).
+# Kotlin libraries and klibs stay in Gradle (Maven Central); the build system is Gradle.
+# Keep `gradle` in step with gradle/wrapper/gradle-wrapper.properties.
+[tools]
+java = "temurin-25.0.5+8.0.LTS"   # JDK for Gradle and the Kotlin daemon
+kotlin = "2.4.21"                 # CLI compiler for .main.kts CI scripts; matches the Gradle plugin
+gradle = "9.8.2"                  # same as the wrapper
+rust = "1.99.1"                   # builds the Rust wasm demo guest (wasm32-unknown-unknown) used by WASM plugin tests
+cmake = "4.4.4"                   # native C builds (tree-sitter grammars, zstd)
+ninja = "1.13.2"
+tree-sitter = "0.27.1"            # tree-sitter CLI: regenerates grammar parser.c where needed
