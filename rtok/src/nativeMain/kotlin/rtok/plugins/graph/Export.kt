@@ -392,7 +392,10 @@ object ExportView {
         label: String,
     ): Export {
         if (text.length.toLong() > MAX_IMPORT) throw IllegalArgumentException("$label: ${text.length} bytes is more than a graph export can be")
-        val value = runCatching { Json.parseToJsonElement(text) }.getOrElse { throw IllegalArgumentException("$label is not a graph export") }
+        // kotlinx reads a bare word such as a path as a primitive where serde fails, so only an object or array is JSON here.
+        val value =
+            runCatching { Json.parseToJsonElement(text) }.getOrNull()?.takeIf { it !is JsonPrimitive || it.isString || text.trim() in setOf("null", "true", "false") || text.trim().toDoubleOrNull() != null }
+                ?: throw IllegalArgumentException("$label is not a graph export")
         val schema = ((value as? JsonObject)?.get("schema") as? JsonPrimitive)?.takeIf { it.isString }?.content
         if (schema != SCHEMA) throw IllegalArgumentException("$label: schema ${schema?.let { "Some(\"$it\")" } ?: "None"}, this rtok reads $SCHEMA")
         return runCatching { strict.decodeFromJsonElement(Export.serializer(), value) }.getOrElse { throw IllegalArgumentException("$label does not match $SCHEMA") }
