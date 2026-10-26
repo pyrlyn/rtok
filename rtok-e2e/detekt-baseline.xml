@@ -4,5 +4,6 @@
   <CurrentIssues>
     <ID>MagicNumber:ArchiveE2eSpec.kt:400</ID>
     <ID>MagicNumber:ArchiveE2eSpec.kt:ArchiveE2eSpec$6</ID>
+    <ID>MagicNumber:CliE2eSpec.kt:CliE2eSpec$3</ID>
   </CurrentIssues>
 </SmellBaseline>

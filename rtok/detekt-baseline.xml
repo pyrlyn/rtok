@@ -73,6 +73,7 @@
     <ID>CyclomaticComplexMethod:Formatters.kt:Formatters$internal fun gitLog: String?</ID>
     <ID>CyclomaticComplexMethod:Formatters.kt:Formatters$private fun peelMiseExec: List&lt;String>?</ID>
     <ID>CyclomaticComplexMethod:Formatters.kt:Formatters$private fun peelToolWrapper: List&lt;String>?</ID>
+    <ID>CyclomaticComplexMethod:Framing.kt:FrameReader$private fun header: Frame?</ID>
     <ID>CyclomaticComplexMethod:Gh.kt:Gh$internal fun runLog: String?</ID>
     <ID>CyclomaticComplexMethod:Gh.kt:Gh$internal fun view: String?</ID>
     <ID>CyclomaticComplexMethod:Git.kt:Git$fun parsePorcelain: List&lt;WorktreeRecord></ID>
@@ -166,6 +167,7 @@
     <ID>LoopWithTooManyJumpStatements:Follow.kt:Follow$for</ID>
     <ID>LoopWithTooManyJumpStatements:Formatters.kt:Formatters$for</ID>
     <ID>LoopWithTooManyJumpStatements:Formatters.kt:Formatters$while</ID>
+    <ID>LoopWithTooManyJumpStatements:Framing.kt:FrameReader$while</ID>
     <ID>LoopWithTooManyJumpStatements:Git.kt:Git$for</ID>
     <ID>LoopWithTooManyJumpStatements:Grep.kt:Grep$for</ID>
     <ID>LoopWithTooManyJumpStatements:Grep.kt:Grep$while</ID>
@@ -859,6 +861,7 @@
     <ID>MagicNumber:WatchTest.kt:WatchTest$4</ID>
     <ID>MagicNumber:WatchTest.kt:WatchTest$50</ID>
     <ID>MagicNumber:WatchTest.kt:WatchTest$80</ID>
+    <ID>MagicNumber:WrapTest.kt:WrapTest$64</ID>
     <ID>MatchingDeclarationName:Anthropic.kt:AnthropicWire : ToolResults</ID>
     <ID>MatchingDeclarationName:Cache.kt:ReadCache</ID>
     <ID>MatchingDeclarationName:Compress.kt:CaveIntensity</ID>
@@ -947,6 +950,7 @@
     <ID>ReturnCount:Formatters.kt:Formatters$private fun resolve: Resolved</ID>
     <ID>ReturnCount:Formatters.kt:Formatters$private fun skipMiseFlags: Int?</ID>
     <ID>ReturnCount:Formatters.kt:Formatters$private fun taskDollar: String?</ID>
+    <ID>ReturnCount:Framing.kt:FrameReader$private fun header: Frame?</ID>
     <ID>ReturnCount:Gh.kt:Gh$fun format: String?</ID>
     <ID>ReturnCount:Gh.kt:Gh$internal fun runLog: String?</ID>
     <ID>ReturnCount:Grep.kt:Grep$fun group: String?</ID>
@@ -1081,6 +1085,12 @@
     <ID>ReturnCount:Walk.kt:Matcher$fun isExcluded: Boolean</ID>
     <ID>ReturnCount:Watch.kt:Watch$fun absorbEvent: Boolean</ID>
     <ID>ReturnCount:Watch.kt:Watch$private fun ignored: Boolean</ID>
+    <ID>ReturnCount:Wrap.kt:Wrap$fun shortenResult: JsonObject?</ID>
+    <ID>ReturnCount:Wrap.kt:Wrap$private fun cutBlock: String?</ID>
+    <ID>ReturnCount:Wrap.kt:Wrap$private fun jsonTreeFold: String?</ID>
+    <ID>ReturnCount:Wrap.kt:Wrap$private fun shorten: ByteArray?</ID>
+    <ID>ReturnCount:Wrap.kt:Wrap.Pending$fun note</ID>
+    <ID>ReturnCount:Wrap.kt:Wrap.Pending$fun take: String?</ID>
     <ID>SwallowedException:Dispatch.kt:e: Exception</ID>
     <ID>SwallowedException:Dispatch.kt:e: HookError</ID>
     <ID>SwallowedException:ExpandCmd.kt:e: ExpandException</ID>
@@ -1174,5 +1184,6 @@
     <ID>TooManyFunctions:Types.kt:HookInput</ID>
     <ID>TooManyFunctions:TypesTest.kt:TypesTest</ID>
     <ID>TooManyFunctions:WatchTest.kt:WatchTest</ID>
+    <ID>TooManyFunctions:WrapTest.kt:WrapTest</ID>
   </CurrentIssues>
 </SmellBaseline>
