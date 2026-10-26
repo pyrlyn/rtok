@@ -7,7 +7,7 @@ configure<KotlinMultiplatformExtension> {
     sourceSets.commonMain.get().kotlin.srcDir(defaultRules)
     sourceSets.commonMain.dependencies {
         implementation(project(":rtok-plugin-sdk")); implementation(project(":rtok-config"))
-        implementation(project(":rtok-sys")); implementation(project(":rtok-store")); implementation(project(":db-room")); implementation(project(":rtok-log")); implementation(project(":http")); implementation(project(":http-ktor"))
+        implementation(project(":rtok-sys")); implementation(project(":rtok-agent-sdk")); implementation(project(":rtok-store")); implementation(project(":db-room")); implementation(project(":rtok-log")); implementation(project(":http")); implementation(project(":http-ktor"))
         implementation("com.github.ajalt.clikt:clikt:5.0.3")
     }
 }

@@ -99,7 +99,7 @@ fun Store.listNoteTitles(project: String?, limit: UInt): List<Pair<Int, String>>
     }
     val now = unixNow()
     fun score(r: R) = retentionScore(r.pinned != 0, r.uses, ageDays(now, r.ts), daysSince(now, r.lastUsed))
-    return rows.sortedWith(compareByDescending<R> { it.pinned }.thenByDescending { score(it) }.thenByDescending { it.id }).take(lim.toInt()).map { it.id to it.title }
+    return rows.sortedWith(compareByDescending<R> { it.pinned }.thenByDescending { score(it) }.thenByDescending { it.id }).take(lim.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()).map { it.id to it.title }
 }
 
 fun Store.touchNote(id: Int) = conn { it.execute("UPDATE notes SET uses = uses + 1, last_used = unixepoch() WHERE id = ?", id); Unit }

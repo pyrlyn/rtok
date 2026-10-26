@@ -19,3 +19,6 @@ fun worktreeLayout(dir: String): Pair<String, String> {
     writeString("$wt/.git", "gitdir: $admin\n")
     return main to wt
 }
+
+/** Port of testutil.rs `config`: default config with every path under a fresh dir, and that dir. */
+fun diskConfig(tag: String): Pair<rtok.config.Config, String> = tmpDir(tag).let { rtok.config.Config().rebasePaths(it) to it }
