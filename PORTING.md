@@ -43,6 +43,7 @@ Plan and per-phase checklist: [port-plan.md](port-plan.md).
 | crates/rtok-agent-sdk `PluginLink`, `LinkHealth`, `CopyFix`, `in_versioned_store`, owned copy | `rtok-agent-sdk/…/PluginLink.kt`; rtok-sys `EntryKind.kt` (`entryKind`, `readLink`, `symlink`, `copyFile`) | ✅ (unix; skill copy pending) | 14 → 14 |
 | src/agents hook_events.rs, plugin.rs `HostPlugin`, mod.rs `plugin_src`, cline | `rtok/agents/` `HookEvents.kt`, `PluginSrc.kt`, `HostPlugin.kt`, `Cline.kt` | ✅ | 4+7 → 17 |
 | src/agents/mod.rs shared host helpers (`shell_quote_bin`, `rtok_hook_bin`, `hook_resolver`, `unquote_bin`, `takes_hook`, `removed_report`, `with_kept`, `run_cli`, `manifest_names`, `offer_plugin`, `print_offer`) | `rtok/agents/HostHelpers.kt` | ✅ | 2 → 13 |
+| src/agents/claude/mod.rs hook JSON walk (`HookForm`, `insert_ours[_as]`, `prune_ours`, `strip_ours[_as]`, `command[_for]`, `is_ours[_for]`) | `rtok/agents/` `ClaudeHooks.kt`, `HookInsert.kt`, `HookStrip.kt` | ✅ (claude host itself pending) | 5 → 7 |
 | src/plugins/checkpoint.rs | `rtok/plugins/checkpoint/`, `rtok/plugins/memory/Private.kt`, `rtok-sys` Shlex/LineReader | ✅ (3 hook-dispatcher tests → Phase 6) | 27 → 27 |
 | src/plugins/compress | `rtok/plugins/compress/` (Compress, MustKeep, Llm, PromptToml) + Compressor, Queue; HTTP via `libs/http` + `libs/http-ktor` | ✅ (proxy-side `submit` call → Phase 7) | 19 → 22 (+4 KtorHttpTest) |
 | src/plugins/json_tree | `rtok/plugins/jsontree/JsonTree.kt`, `rtok-sys/Sha1.kt`, `Text.kt` jsonQuote | ✅ (3 MCP tests pending) | 15 → 12 |
