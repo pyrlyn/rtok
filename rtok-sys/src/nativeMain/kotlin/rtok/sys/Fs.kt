@@ -164,3 +164,23 @@ fun writeFd(fd: Int, bytes: ByteArray) {
     var off = 0
     bytes.usePinned { p -> while (off < bytes.size) { val n = write(fd, p.addressOf(off), (bytes.size - off).convert()).toInt(); if (n <= 0) break; off += n } }
 }
+
+/** At most [limit] bytes from the start of [path]; null when it cannot be opened or read (a directory, say). */
+fun readPrefix(path: String, limit: Long): ByteArray? {
+    val f = fopen(path, "rb") ?: return null
+    try {
+        val out = ArrayList<ByteArray>(); var left = limit
+        memScoped {
+            val buf = allocArray<ByteVar>(65536)
+            while (left > 0) {
+                val n = fread(buf, 1u, minOf(left, 65536L).toULong(), f).toInt()
+                if (n <= 0) break
+                out += buf.readBytes(n); left -= n
+            }
+        }
+        if (ferror(f) != 0) return null
+        val all = ByteArray(out.sumOf { it.size }); var p = 0
+        for (c in out) { c.copyInto(all, p); p += c.size }
+        return all
+    } finally { fclose(f) }
+}

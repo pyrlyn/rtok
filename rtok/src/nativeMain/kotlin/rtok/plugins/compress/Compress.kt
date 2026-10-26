@@ -12,6 +12,7 @@ import rtok.plugins.archive.clip
 import rtok.plugins.archive.outsideLiveZone
 import rtok.plugins.archive.utf8Len
 import rtok.shortId
+import rtok.sys.asciiLowercase
 import rtok.sys.rustLines
 import rtok.sys.takeScalars
 
@@ -66,7 +67,7 @@ fun extractiveSummary(id: String, text: String): String {
     val title = lines.firstOrNull()?.takeScalars(80)
     val narrative = lines.drop(1).take(3).joinToString("; ") { it.takeScalars(60) }
     val rest = lines.drop(4)
-    fun isError(l: String) = "error" in l.map { if (it in 'A'..'Z') it + 32 else it }.joinToString("")
+    fun isError(l: String) = "error" in l.asciiLowercase()
     val facts = (rest.filter(::isError) + rest.filter { !isError(it) && ':' in it }).take(3)
     val files = rest.filter { it !in facts && ('/' in it || '\\' in it) }.take(3)
     val short = shortId(id)
