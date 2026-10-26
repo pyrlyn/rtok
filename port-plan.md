@@ -455,3 +455,13 @@ Next, in order:
 - Deferred: `rows`/`own_row` (per-host `installed`), `doctor_lines`, `run`/`sync`/`install`/`remove` (apply ctx),
   plugin detection (`plugin_surfaces` + installed), Windows path branches (no Windows target).
 - Stop point: next per-host files/installed/apply, `find_bin`, `app_version`; then doctor_lines + run/sync; ping process side.
+
+## Session: agents chunk 2c — host binary lookup (agents/mod.rs find_bin/app_version, locate.rs lookup)
+- `rtok.agents.HostBins` (`RTOK_HOST_SANDBOX`, `expandSpec`/`expandApp`, `under`, `findBin`, `findOnPath`,
+  `probeInstalled`, `hostProgram`), `Locate` (`key`, `variantFor`, `locate`, `present`, `appPaths`, `programs`, `cli`,
+  `cliProgram`), `AppVersion` (`of` with a 3 s `--version` probe limit, `looksLikeAVersion`).
+- Tests: HostBinsTest 4, LocateTest 3, AppVersionTest 3 (incl. wrapper noise and a CLI that never answers).
+- Deferred: `PATHEXT` / `.exe` probing (no Windows target); locate.rs `resolve_input`/`ask_*`/`absent`/`not_found`
+  (with `rtok agents` CLI); `run_cli` (with plugin offers).
+- Stop point: next per-host `files`/`installed`/`apply` (Agent interface over the 36 hosts), then `doctor_lines` +
+  MCP `run`/`sync`, ping process side, `rtok agents` CLI.
