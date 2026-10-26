@@ -54,6 +54,7 @@
     <ID>CyclomaticComplexMethod:Dispatch.kt:internal fun capBudget: String</ID>
     <ID>CyclomaticComplexMethod:Dispatch.kt:internal fun dispatchOwnedStrict: ByteArray</ID>
     <ID>CyclomaticComplexMethod:Dispatch.kt:private fun injectEvent: HookOutput</ID>
+    <ID>CyclomaticComplexMethod:Draw.kt:Draw$fun svg: String</ID>
     <ID>CyclomaticComplexMethod:Drill.kt:Drill$private fun draw</ID>
     <ID>CyclomaticComplexMethod:Expand.kt:Expand$fun parseRange: Pair&lt;Int, Int></ID>
     <ID>CyclomaticComplexMethod:Expand.kt:Expand$private fun normalizeRange: Pair&lt;String, Boolean></ID>
@@ -133,6 +134,7 @@
     <ID>LongMethod:Bounded.kt:Bounded$internal fun lex: List&lt;List&lt;List&lt;String>>></ID>
     <ID>LongMethod:Compact.kt:Compact$fun cargoBuild: String?</ID>
     <ID>LongMethod:Dispatch.kt:fun dispatch: ByteArray</ID>
+    <ID>LongMethod:Draw.kt:Draw$fun svg: String</ID>
     <ID>LongMethod:Formatters.kt:Formatters$internal fun gitLog: String?</ID>
     <ID>LongMethod:Index.kt:Index$fun runWith: IndexReport</ID>
     <ID>LongMethod:Projects.kt:Projects$fun run: String</ID>
@@ -148,6 +150,7 @@
     <ID>LoopWithTooManyJumpStatements:Dead.kt:Dead$for</ID>
     <ID>LoopWithTooManyJumpStatements:Density.kt:for</ID>
     <ID>LoopWithTooManyJumpStatements:Diffs.kt:Diffs$for</ID>
+    <ID>LoopWithTooManyJumpStatements:Draw.kt:Draw$for</ID>
     <ID>LoopWithTooManyJumpStatements:Expand.kt:Expand$while</ID>
     <ID>LoopWithTooManyJumpStatements:Export.kt:ExportView$for</ID>
     <ID>LoopWithTooManyJumpStatements:Extract.kt:for</ID>
@@ -343,6 +346,36 @@
     <ID>MagicNumber:DocsTest.kt:DocsTest$60</ID>
     <ID>MagicNumber:DocsTest.kt:DocsTest$60u</ID>
     <ID>MagicNumber:DocsTest.kt:DocsTest$800u</ID>
+    <ID>MagicNumber:Draw.kt:Draw$0.6</ID>
+    <ID>MagicNumber:Draw.kt:Draw$1.5</ID>
+    <ID>MagicNumber:Draw.kt:Draw$10</ID>
+    <ID>MagicNumber:Draw.kt:Draw$11</ID>
+    <ID>MagicNumber:Draw.kt:Draw$12</ID>
+    <ID>MagicNumber:Draw.kt:Draw$14</ID>
+    <ID>MagicNumber:Draw.kt:Draw$150</ID>
+    <ID>MagicNumber:Draw.kt:Draw$18</ID>
+    <ID>MagicNumber:Draw.kt:Draw$20</ID>
+    <ID>MagicNumber:Draw.kt:Draw$22</ID>
+    <ID>MagicNumber:Draw.kt:Draw$24</ID>
+    <ID>MagicNumber:Draw.kt:Draw$28</ID>
+    <ID>MagicNumber:Draw.kt:Draw$3</ID>
+    <ID>MagicNumber:Draw.kt:Draw$3.0</ID>
+    <ID>MagicNumber:Draw.kt:Draw$30</ID>
+    <ID>MagicNumber:Draw.kt:Draw$35</ID>
+    <ID>MagicNumber:Draw.kt:Draw$4</ID>
+    <ID>MagicNumber:Draw.kt:Draw$4.0</ID>
+    <ID>MagicNumber:Draw.kt:Draw$40</ID>
+    <ID>MagicNumber:Draw.kt:Draw$6</ID>
+    <ID>MagicNumber:Draw.kt:Draw$6.2</ID>
+    <ID>MagicNumber:Draw.kt:Draw$80.0</ID>
+    <ID>MagicNumber:Draw.kt:Draw$9</ID>
+    <ID>MagicNumber:DrawTest.kt:DrawTest$0.3</ID>
+    <ID>MagicNumber:DrawTest.kt:DrawTest$1.2e7</ID>
+    <ID>MagicNumber:DrawTest.kt:DrawTest$1.46</ID>
+    <ID>MagicNumber:DrawTest.kt:DrawTest$1_700_000_000</ID>
+    <ID>MagicNumber:DrawTest.kt:DrawTest$1_700_000_100</ID>
+    <ID>MagicNumber:DrawTest.kt:DrawTest$3</ID>
+    <ID>MagicNumber:DrawTest.kt:DrawTest$900.6</ID>
     <ID>MagicNumber:DrillTest.kt:DrillTest$100</ID>
     <ID>MagicNumber:DrillTest.kt:DrillTest$120</ID>
     <ID>MagicNumber:DrillTest.kt:DrillTest$20</ID>
@@ -954,6 +987,7 @@
     <ID>TooManyFunctions:DispatchTest.kt:DispatchTest</ID>
     <ID>TooManyFunctions:Docs.kt:rtok.plugins.docs.Docs.kt</ID>
     <ID>TooManyFunctions:DocsTest.kt:DocsTest</ID>
+    <ID>TooManyFunctions:Draw.kt:Draw</ID>
     <ID>TooManyFunctions:Expand.kt:Expand</ID>
     <ID>TooManyFunctions:ExpandTest.kt:ExpandTest</ID>
     <ID>TooManyFunctions:Export.kt:ExportView</ID>
