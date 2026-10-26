@@ -1,5 +1,5 @@
-// Port of src/cli/memory.rs: `rtok memory …`. `status` (needs model::memory_status) and TTY styling
-// (ui::style) are not ported yet; lines print plain, as Rust does off a terminal.
+// Port of src/cli/memory.rs: `rtok memory …`. TTY styling (ui::style) is not ported yet; lines print plain, as
+// Rust does off a terminal.
 package rtok.cli
 
 import rtok.plugin.Runtime
@@ -87,6 +87,19 @@ val MEMORY =
                         ),
                 ) { inv ->
                     Sync.run(inv.loadConfig(), inv.value("file") ?: "CLAUDE.md", inv.intOpt("budget")?.toUInt(), inv.flag("dry-run"), inv.flag("remove"), inv.flag("force")) { inv.io.out(it) }
+                },
+                CommandSpec(
+                    "status",
+                    "Notes live/pinned/retired, recall and MCP call counts",
+                    options =
+                        listOf(
+                            PROJECT,
+                            OptSpec.Value("since", "Window for recalls and MCP calls (`30d`, `24h`)", "SINCE"),
+                            OptSpec.Flag("json", "JSON instead of the table"),
+                        ),
+                ) { inv ->
+                    val s = rtok.MemoryStatusView.collect(inv.loadConfig(), inv.value("project"), inv.value("since"))
+                    if (inv.flag("json")) inv.io.println(rtok.MemoryStatusView.json(s)) else inv.io.out(rtok.MemoryStatusView.table(s))
                 },
             ),
     )
