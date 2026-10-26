@@ -13,3 +13,4 @@ Docs: [build speed](docs/build-speed.md) · [token estimator](docs/tokens.md) ·
 - [Configuration](docs/config.md)
 - [Hooks](docs/hooks.md)
 - [Store](docs/store.md)
+- [API docs (Dokka)](docs/api-docs.md)

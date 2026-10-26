@@ -91,6 +91,8 @@ jiff/humantime→kotlinx-datetime; shlex→own; wasmi→not portable (see risks)
 - [x] docs — 0 in Rust (plugin-driven); 2 new store-contract tests
 - [x] embed — 16 (+1 slot/sign scheme check)
 - [x] docs/store.md: layout, driver adapter, schema-drift check, limitations
+- [x] tooling: Dokka 2 API docs, one root convention, `./gradlew dokkaGenerate` → `build/dokka/html` (docs/api-docs.md); not part of build/test
+
 ### Phase 5 — reduction plugins (src/plugins: compress, json_tree, toon, read, cmd, inject, guard, memory, measure, docs, archive, checkpoint)
 - [x] registry (`plugins/Registry.kt`, dispatch order) + measure + proxy manifests + `render.plugins_table` + `skip_word` — 3 (+1); catalogue test is an ordered-subset check until every plugin is in
 - [x] prerequisite: src/project.rs (project name/key/dir) — 13
