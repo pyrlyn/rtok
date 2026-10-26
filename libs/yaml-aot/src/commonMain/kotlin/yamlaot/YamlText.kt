@@ -93,7 +93,7 @@ object YamlText {
         val header = lines.indexOfFirst { text(it).startsWith("$key:") }
         if (header < 0) return null
         val stop = (header + 1 until lines.size).firstOrNull { !skippable(lines[it]) && indentOf(lines[it]) == 0 && !text(lines[it]).startsWith("-") } ?: lines.size
-        val end = lastContent(lines, header + 1, stop).let { if (skippable(lines.getOrElse(it) { "#" })) header + 1 else it + 1 }
+        val end = (header + 1 until stop).lastOrNull { !skippable(lines[it]) }?.plus(1) ?: (header + 1)
         val child = lines.subList(header + 1, end).firstOrNull { !skippable(it) }?.let(::indentOf) ?: 2
         return Block(header, text(lines[header]).substring(key.length + 1).trim(), end, child)
     }

@@ -122,5 +122,7 @@ class YamlTest {
         assertEquals("# head\r\nmcpServers:\r\n- name: a\r\n- name: b\r\n\r\n# tail note\r\nmodels: []\r\n", out)
         assertEquals("a: 1\nb: 2\n", YamlText.splice(YamlText.lines("a: 1"), 1, 1, "b: 2\n", "\n"))
         assertEquals(null, YamlText.block(lines, "extensions"))
+        assertEquals(YamlText.Block(0, "", 1, 2), YamlText.block(YamlText.lines("mcpServers:\nname: n\n"), "mcpServers"))
+        assertEquals(YamlText.Block(0, "[] # none", 1, 2), YamlText.block(YamlText.lines("mcpServers: [] # none\n\n# c\nname: n\n"), "mcpServers"))
     }
 }
