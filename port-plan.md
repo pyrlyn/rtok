@@ -722,3 +722,12 @@ Next, in order:
 - Codex host done except skill sync (pending for every host).
 - Tests: CodexPluginTest 5.
 - Stop point: next `libs/yaml-aot` (own lossless YAML editor), then continue and goose.
+
+## Session: libs/yaml-aot — own lossless YAML module (Ivan: no YAML library)
+- `:yaml-aot` (no dependencies), replaces `serde_saphyr` + agents/yaml_text.rs: `Yaml.parse` reads block maps and
+  sequences (compact `- key: v`), flow collections, plain/quoted scalars with the core schema, folded plain lines,
+  `|`/`>` block scalars, comments, `---`; anchors, aliases, tags, directives and complex keys are refused, never
+  guessed. `YamlText` is the line editor: `lines` (endings kept), `scalar`, `indentOf`, `skippable`, `eolOf`, `splice`,
+  `block` (a top-level key and its lines), `lastContent`. Writing never re-serialises: callers swap only their lines.
+- Tests: YamlTest 6.
+- Stop point: next continue and goose (MCP only) on `:yaml-aot`.
