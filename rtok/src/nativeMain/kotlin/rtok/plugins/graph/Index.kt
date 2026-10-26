@@ -62,8 +62,6 @@ object Index {
 
     var ranks: FileRanks = Rank
 
-    private fun graphCfg(cx: Ctx): Graph = (cx.host as? rtok.plugin.Runtime)?.config?.plugins?.graph ?: Graph()
-
     /** Incremental index of [root]. [dryRun] walks and parses as a real run does but writes nothing. */
     fun run(cx: Ctx, root: String, dryRun: Boolean, cfg: Graph = graphCfg(cx)): IndexReport = runWith(cx, root, dryRun, cfg) { IndexProgress.Hidden }
 
