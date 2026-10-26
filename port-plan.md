@@ -30,17 +30,17 @@ jiff/humantime→kotlinx-datetime; shlex→own; wasmi→not portable (see risks)
 
 ## Phases (commit per phase; `./gradlew macosArm64Test` green each phase)
 ### Phase 0 — scaffolding
-- [ ] Tests: port matching Rust unit + integration tests to kotlin.test; phase done only when they pass on the Mac (`./gradlew macosArm64Test`)
-- [ ] Docs: `docs/<feature>.md` (how it works, enable, disable, test, limitations) + README section
-- [ ] Gradle KMP build, modules above, targets macosArm64/linuxX64/linuxArm64 (+mingwX64 if deps allow)
-- [ ] PORTING.md inventory, README stub
-- [ ] Build speed: configuration cache, build cache, parallel, daemon jvmargs, Kotlin daemon, host-only target by default (`-Prtok.allTargets=true` for others), debug-only test links, `kotlin.native.cacheKind`, `kotlin.incremental.native`, fine-grained modules, one test binary per module; measure clean + incremental debug build/test times and record below + docs/build-speed.md
+- [x] Tests: port matching Rust unit + integration tests to kotlin.test; phase done only when they pass on the Mac (`./gradlew macosArm64Test`)
+- [x] Docs: `docs/<feature>.md` (how it works, enable, disable, test, limitations) + README section
+- [x] Gradle KMP build, modules above, targets macosArm64/linuxX64/linuxArm64 (mingwX64 not yet added)
+- [x] PORTING.md inventory, README stub
+- [x] Build speed: configuration cache, build cache, parallel, daemon jvmargs, Kotlin daemon, host-only target by default (`-Prtok.allTargets=true` for others), debug-only test links, `kotlin.native.cacheKind`, `kotlin.incremental.native`, fine-grained modules, one test binary per module; measure clean + incremental debug build/test times and record below + docs/build-speed.md
 - Acceptance: `./gradlew build` produces `rtok.kexe`; empty test suite green.
 ### Phase 1 — pure core (no IO)
-- [ ] Tests: port matching Rust unit + integration tests to kotlin.test; phase done only when they pass on the Mac (`./gradlew macosArm64Test`)
-- [ ] Docs: `docs/<feature>.md` (how it works, enable, disable, test, limitations) + README section
-- [ ] plugin-sdk `Class`; config `Estimator`; `tokens.rs` (estimate, tokens_saved) + tests
-- [ ] `modes/` compress_prose (Lite/Full/Ultra), YAGNI ladder + all unit tests
+- [x] Tests: port matching Rust unit + integration tests to kotlin.test; phase done only when they pass on the Mac (`./gradlew macosArm64Test`)
+- [x] Docs: `docs/<feature>.md` (how it works, enable, disable, test, limitations) + README section
+- [x] plugin-sdk `Class`; config `Estimator`; `tokens.rs` (estimate, tokens_saved) + tests
+- [x] `modes/` compress_prose (Lite/Full/Ultra), YAGNI ladder + all unit tests
 - Acceptance: every Rust unit test of these files translated and passing.
 ### Phase 2 — rtok-config + rtok-log
 - [ ] Tests: port matching Rust unit + integration tests to kotlin.test; phase done only when they pass on the Mac (`./gradlew macosArm64Test`)
@@ -80,14 +80,15 @@ jiff/humantime→kotlinx-datetime; shlex→own; wasmi→not portable (see risks)
 ## Build timings (Mac, macosArm64 debug)
 | Scenario | Time |
 |---|---|
-| clean `macosArm64Test` | tbd |
-| incremental (1 file) `macosArm64Test` | tbd |
+| clean `macosArm64Test` (first run, incl. Kotlin/Native toolchain + deps download) | 3 m 23 s |
+| incremental (1 file touched) `macosArm64Test` | 5.5 s |
+| `linkDebugExecutable` + `linkReleaseExecutable` | 23 s |
 
 ## Test counts per phase
 | Phase | Rust tests in scope | Kotlin tests passing |
 |---|---|---|
 | 0 | 0 | 0 |
-| 1 | – | – |
+| 1 | 23 (tokens 4, ladder 3, compress 16) | 23 |
 
 ## Test-porting
 Each Rust `#[cfg(test)]` module → `src/commonTest` in the matching module; `tests/*.rs` (138 files)
