@@ -636,3 +636,10 @@ Next, in order:
   dependency needs Ivan's approval first.
 - Tests: AiderTest 4, ReasonixTest 5, AntigravityTest 4.
 - Stop point: next 3c-5 = vscode, codebuddy; then continue/goose once YAML is decided.
+
+## Session: agents chunk 3c-5 — codebuddy
+- `Codebuddy.kt`: CLI + WorkBuddy dirs, `hook <event> --host codebuddy` hooks in `settings.json`, typed
+  `mcpServers.rtok` (JSONC) in the first existing MCP file, `plugins/codebuddy` via `codebuddy plugin marketplace add`
+  + `plugin install` behind `--yes` (`CODEBUDDY_CONFIG_DIR` for a non-default dir), D21 singleton over hooks.
+- Tests: CodebuddyTest 5.
+- Stop point: next 3c-6 = vscode; then continue/goose (YAML decision), then 3d.
