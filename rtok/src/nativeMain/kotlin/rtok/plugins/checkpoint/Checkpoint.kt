@@ -2,18 +2,41 @@
 package rtok.plugins.checkpoint
 
 /** What the session did to a file. Declaration order is the render order (T375). */
-enum class Action(val word: String) {
-    Edited("edited"), Created("created"), Deleted("deleted"), Read("read");
-    companion object { fun fromWord(w: String) = entries.firstOrNull { it.word == w } }
+enum class Action(
+    val word: String,
+) {
+    Edited("edited"),
+    Created("created"),
+    Deleted("deleted"),
+    Read("read"),
+    ;
+
+    companion object {
+        fun fromWord(w: String) = entries.firstOrNull { it.word == w }
+    }
 }
 
 /** `offset`, and `offset + limit - 1` when a limit was given, of the last ranged `Read`. */
-data class Lines(val from: ULong, val to: ULong?)
+data class Lines(
+    val from: ULong,
+    val to: ULong?,
+)
 
-data class PathEntry(val path: String, val action: Action, val lines: Lines? = null) {
+data class PathEntry(
+    val path: String,
+    val action: Action,
+    val lines: Lines? = null,
+) {
     fun render(out: StringBuilder) {
-        out.append("path ").append(path).append(" (").append(action.word)
-        lines?.let { out.append(" ${it.from}-"); it.to?.let(out::append) }
+        out
+            .append("path ")
+            .append(path)
+            .append(" (")
+            .append(action.word)
+        lines?.let {
+            out.append(" ${it.from}-")
+            it.to?.let(out::append)
+        }
         out.append(")\n")
     }
 
@@ -22,12 +45,19 @@ data class PathEntry(val path: String, val action: Action, val lines: Lines? = n
         fun parse(rest: String): PathEntry {
             val plain = PathEntry(rest, Action.Read)
             if (!rest.endsWith(')')) return plain
-            val body = rest.dropLast(1); val at = body.lastIndexOf(" (")
+            val body = rest.dropLast(1)
+            val at = body.lastIndexOf(" (")
             if (at < 0) return plain
-            val tail = body.substring(at + 2); val sp = tail.indexOf(' ')
-            val word = if (sp < 0) tail else tail.substring(0, sp); val range = if (sp < 0) null else tail.substring(sp + 1)
+            val tail = body.substring(at + 2)
+            val sp = tail.indexOf(' ')
+            val word = if (sp < 0) tail else tail.substring(0, sp)
+            val range = if (sp < 0) null else tail.substring(sp + 1)
             val action = Action.fromWord(word) ?: return plain
-            val lines = range?.let { r -> val dash = r.indexOf('-'); if (dash < 0) null else r.substring(0, dash).toRustU64()?.let { Lines(it, r.substring(dash + 1).toRustU64()) } }
+            val lines =
+                range?.let { r ->
+                    val dash = r.indexOf('-')
+                    if (dash < 0) null else r.substring(0, dash).toRustU64()?.let { Lines(it, r.substring(dash + 1).toRustU64()) }
+                }
             return PathEntry(body.substring(0, at), action, lines)
         }
     }
@@ -51,26 +81,40 @@ data class Checkpoint(
     val typed: ULong = 0u,
     val skipped: ULong = 0u,
 ) {
-    fun render(): String = buildString {
-        append("checkpoint\n")
-        prompts.forEach { append("- ").append(it).append('\n') }
-        if (skills.isNotEmpty()) {
-            append("skills loaded before compaction: ")
-            append(skills.joinToString(", ") { (n, b) -> "$n (${kib1(b)} KB)" })
-            append(" — re-invoke only what the next step needs\n")
+    fun render(): String =
+        buildString {
+            append("checkpoint\n")
+            prompts.forEach { append("- ").append(it).append('\n') }
+            if (skills.isNotEmpty()) {
+                append("skills loaded before compaction: ")
+                append(skills.joinToString(", ") { (n, b) -> "$n (${kib1(b)} KB)" })
+                append(" — re-invoke only what the next step needs\n")
+            }
+            paths.forEach { it.render(this) }
+            errors.forEach { append("err ").append(it).append('\n') }
+            ids.zip(idMeta).forEach { (id, m) ->
+                append("id ")
+                    .append(id)
+                    .append(' ')
+                    .append(m.first)
+                    .append(' ')
+                    .append(m.second)
+                    .append('\n')
+            }
         }
-        paths.forEach { it.render(this) }
-        errors.forEach { append("err ").append(it).append('\n') }
-        ids.zip(idMeta).forEach { (id, m) -> append("id ").append(id).append(' ').append(m.first).append(' ').append(m.second).append('\n') }
-    }
 }
 
 /** Rust `{:.1}` of `bytes as f64 / 1024.0`: exact, ties to even. */
 internal fun kib1(bytes: ULong): String {
-    val n = bytes * 10uL; var q = n / 1024uL; val r = n % 1024uL
+    val n = bytes * 10uL
+    var q = n / 1024uL
+    val r = n % 1024uL
     if (r * 2uL > 1024uL || (r * 2uL == 1024uL && q % 2uL == 1uL)) q++
     return "${q / 10uL}.${q % 10uL}"
 }
 
 /** Rust `u64::saturating_add`. */
-internal fun sat(a: ULong, b: ULong) = if (ULong.MAX_VALUE - a < b) ULong.MAX_VALUE else a + b
+internal fun sat(
+    a: ULong,
+    b: ULong,
+) = if (ULong.MAX_VALUE - a < b) ULong.MAX_VALUE else a + b

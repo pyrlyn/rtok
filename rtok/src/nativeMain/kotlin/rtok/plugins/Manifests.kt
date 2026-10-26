@@ -9,11 +9,12 @@ import rtok.plugin.sdk.Surface
 
 object MeasurePlugin : Plugin {
     override fun manifest() = Manifest("measure", listOf(Surface.Cli, Surface.Proxy), true)
-    override fun dashboardPage() =
-        DashboardPage("Measure", "Only Measurement rows count as savings. Stats from transcripts and proxy usage.", false)
+
+    override fun dashboardPage() = DashboardPage("Measure", "Only Measurement rows count as savings. Stats from transcripts and proxy usage.", false)
 }
 
 object ProxyPlugin : Plugin {
     override fun manifest() = Manifest("proxy", listOf(Surface.Proxy), true)
+
     override fun dashboardPage() = DashboardPage("Proxy usage", "Record provider usage; compress mode runs plugin proxy_filter.", true)
 }

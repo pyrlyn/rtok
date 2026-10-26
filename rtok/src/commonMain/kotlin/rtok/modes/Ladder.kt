@@ -13,15 +13,18 @@ data class LadderContext(
 
 enum class LadderDecision { YagniSkip, Reuse, Stdlib, NativePlatform, InstalledDep, OneLiner, Minimum }
 
-fun evaluateLadder(ctx: LadderContext): LadderDecision = when {
-    ctx.mustNotSimplify -> LadderDecision.Minimum
-    ctx.speculative -> LadderDecision.YagniSkip
-    ctx.existingHelper -> LadderDecision.Reuse
-    ctx.stdlib -> LadderDecision.Stdlib
-    ctx.native -> LadderDecision.NativePlatform
-    ctx.installedDep -> LadderDecision.InstalledDep
-    ctx.oneLiner -> LadderDecision.OneLiner
-    else -> LadderDecision.Minimum
-}
+fun evaluateLadder(ctx: LadderContext): LadderDecision =
+    when {
+        ctx.mustNotSimplify -> LadderDecision.Minimum
+        ctx.speculative -> LadderDecision.YagniSkip
+        ctx.existingHelper -> LadderDecision.Reuse
+        ctx.stdlib -> LadderDecision.Stdlib
+        ctx.native -> LadderDecision.NativePlatform
+        ctx.installedDep -> LadderDecision.InstalledDep
+        ctx.oneLiner -> LadderDecision.OneLiner
+        else -> LadderDecision.Minimum
+    }
 
-fun naiveAlwaysMinimum(@Suppress("UNUSED_PARAMETER") ctx: LadderContext) = LadderDecision.Minimum
+fun naiveAlwaysMinimum(
+    @Suppress("UNUSED_PARAMETER") ctx: LadderContext,
+) = LadderDecision.Minimum

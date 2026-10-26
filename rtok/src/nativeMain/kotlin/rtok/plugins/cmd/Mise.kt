@@ -18,12 +18,17 @@ object Mise {
 
     /** [output] without install/progress lines and one marker line counting them, or null when none went. */
     fun tidy(output: String): String? {
-        val out = ArrayList<String>(); var dropped = 0; var markerAt = -1
+        val out = ArrayList<String>()
+        var dropped = 0
+        var markerAt = -1
         for (raw in output.rustLines()) {
             val line = visible(raw)
             if (!problem(line) && (STEP.containsMatchIn(line) || PROGRESS.containsMatchIn(line))) {
-                dropped++; if (markerAt < 0) markerAt = out.size
-            } else out += raw
+                dropped++
+                if (markerAt < 0) markerAt = out.size
+            } else {
+                out += raw
+            }
         }
         if (dropped == 0) return null
         out.add(maxOf(markerAt, 0), "mise: $dropped install/progress lines dropped")

@@ -2,9 +2,8 @@
 // `hook_sessions`, the rest of the body in `call_io`; read back whole.
 package rtok.store
 
-import rtok.db.*
-
 import kotlinx.serialization.json.*
+import rtok.db.*
 
 internal object HookFields {
     private val SESSION_KEYS = listOf("session_id", "transcript_path", "cwd", "scratchpad_dir", "permission_mode", "effort", "agent_id", "agent_type")
@@ -20,14 +19,21 @@ internal object HookFields {
     }
 
     /** Splice `fields` back into `body` (both JSON objects); `body` unchanged otherwise. */
-    fun rebuild(body: String, fields: String?): String {
+    fun rebuild(
+        body: String,
+        fields: String?,
+    ): String {
         fun inner(s: String) = if (s.startsWith("{") && s.endsWith("}") && s.length >= 2) s.substring(1, s.length - 1) else null
-        val f = fields?.let(::inner) ?: return body; val b = inner(body) ?: return body
+        val f = fields?.let(::inner) ?: return body
+        val b = inner(body) ?: return body
         val sep = if (f.isEmpty() || b.isEmpty()) "" else ","
         return "{$f$sep$b}"
     }
 
-    fun upsert(db: Db, fields: String): Long {
+    fun upsert(
+        db: Db,
+        fields: String,
+    ): Long {
         db.execute("INSERT INTO hook_sessions (fields) VALUES (?) ON CONFLICT (fields) DO NOTHING", fields)
         return db.longOf("SELECT id FROM hook_sessions WHERE fields = ?", fields)!!
     }

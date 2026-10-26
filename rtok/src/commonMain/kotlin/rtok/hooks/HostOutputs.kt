@@ -14,22 +14,23 @@ import kotlinx.serialization.json.jsonObject
 private val EMPTY = "{}".encodeToByteArray()
 
 /** [v] with every object's keys in byte order, recursively (serde_json `Value` ordering). */
-fun sortedJson(v: JsonElement): JsonElement = when (v) {
-    is JsonObject -> JsonObject(v.entries.sortedBy { it.key }.associateTo(LinkedHashMap()) { it.key to sortedJson(it.value) })
-    is JsonArray -> JsonArray(v.map(::sortedJson))
-    else -> v
-}
+fun sortedJson(v: JsonElement): JsonElement =
+    when (v) {
+        is JsonObject -> JsonObject(v.entries.sortedBy { it.key }.associateTo(LinkedHashMap()) { it.key to sortedJson(it.value) })
+        is JsonArray -> JsonArray(v.map(::sortedJson))
+        else -> v
+    }
 
-private fun obj(vararg kv: Pair<String, JsonElement?>): ByteArray =
-    sortedJson(JsonObject(kv.filter { it.second != null }.associate { it.first to it.second!! })).toString().encodeToByteArray()
+private fun obj(vararg kv: Pair<String, JsonElement?>): ByteArray = sortedJson(JsonObject(kv.filter { it.second != null }.associate { it.first to it.second!! })).toString().encodeToByteArray()
 
 private fun str(s: String?) = s?.let(::JsonPrimitive)
 
 /** Codex: a rewrite needs `permissionDecision: allow` beside it; MCP replacements are Cursor-only. */
 fun codexOutput(out: HookOutput): ByteArray {
-    val h = out.hookSpecificOutput?.let { h ->
-        h.copy(updatedMcpToolOutput = null, permissionDecision = h.permissionDecision ?: if (h.updatedInput != null) "allow" else null)
-    }
+    val h =
+        out.hookSpecificOutput?.let { h ->
+            h.copy(updatedMcpToolOutput = null, permissionDecision = h.permissionDecision ?: if (h.updatedInput != null) "allow" else null)
+        }
     return out.copy(updatedMcpToolOutput = null, hookSpecificOutput = h).encode().encodeToByteArray()
 }
 
@@ -43,7 +44,10 @@ fun codebuddyOutput(out: HookOutput): ByteArray {
 }
 
 /** Gemini: `decision: deny` / `hookSpecificOutput.tool_input` before a tool, `additionalContext` otherwise. */
-fun geminiOutput(out: HookOutput, event: String): ByteArray {
+fun geminiOutput(
+    out: HookOutput,
+    event: String,
+): ByteArray {
     val h = out.hookSpecificOutput ?: return EMPTY
     if (event == "PreToolUse") {
         if (h.permissionDecision == "deny") return obj("decision" to JsonPrimitive("deny"), "reason" to str(h.permissionDecisionReason))
@@ -55,7 +59,10 @@ fun geminiOutput(out: HookOutput, event: String): ByteArray {
 }
 
 /** CodeWhale replaces the prompt text, so context is folded into a full replacement. */
-fun codewhaleOutput(out: HookOutput, prompt: String?): ByteArray {
+fun codewhaleOutput(
+    out: HookOutput,
+    prompt: String?,
+): ByteArray {
     val ctx = out.hookSpecificOutput?.additionalContext ?: return EMPTY
     val text = if (!prompt.isNullOrEmpty()) "$prompt\n\n[hook context] $ctx" else ctx
     return obj("text" to JsonPrimitive(text))

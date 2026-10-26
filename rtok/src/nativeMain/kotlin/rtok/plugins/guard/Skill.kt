@@ -17,7 +17,10 @@ private val HOST_KEYS = listOf("allowed-tools", "model", "context", "agent")
 /** Read-cache namespace of the skill loads (T392); compaction clears it by prefix. */
 private const val LOADS = "skill"
 
-internal fun digest(ev: PreToolUse, cx: Ctx): PreToolDecision? {
+internal fun digest(
+    ev: PreToolUse,
+    cx: Ctx,
+): PreToolDecision? {
     val g = guardCfg(cx)
     if (!g.skills) return null
     val name = skillName(ev.toolInput) ?: return null
@@ -27,13 +30,18 @@ internal fun digest(ev: PreToolUse, cx: Ctx): PreToolDecision? {
     return decide(cx, name, body, g.skillMaxBytes.toLong())
 }
 
-private fun skillName(input: JsonElement) =
-    ((input as? JsonObject)?.get("skill") as? JsonPrimitive)?.takeIf { it.isString }?.content?.trim()
+private fun skillName(input: JsonElement) = ((input as? JsonObject)?.get("skill") as? JsonPrimitive)?.takeIf { it.isString }?.content?.trim()
 
-private fun loadKey(name: String, agent: String?) = if (!agent.isNullOrEmpty()) "$LOADS\t$name\t$agent" else "$LOADS\t$name"
+private fun loadKey(
+    name: String,
+    agent: String?,
+) = if (!agent.isNullOrEmpty()) "$LOADS\t$name\t$agent" else "$LOADS\t$name"
 
 /** `PostToolUse(Skill)`: remember the load; when the skill is already in this window, say so (context, not a deny). */
-internal fun noteLoad(ev: PostToolUse, cx: Ctx): String? {
+internal fun noteLoad(
+    ev: PostToolUse,
+    cx: Ctx,
+): String? {
     val name = skillName(ev.toolInput)?.takeIf { it.isNotEmpty() } ?: return null
     val key = loadKey(name, cx.agentId())
     val earlier = runCatching { cx.getReadCache(key) }.getOrNull()
@@ -44,13 +52,22 @@ internal fun noteLoad(ev: PostToolUse, cx: Ctx): String? {
 }
 
 /** A compaction drops the loaded bodies, so the next load is a first one again. */
-internal fun forgetLoads(cx: Ctx) { runCatching { cx.clearReadCache(LOADS) } }
+internal fun forgetLoads(cx: Ctx) {
+    runCatching { cx.clearReadCache(LOADS) }
+}
 
 /** Port of src/skill_path.rs. */
-internal fun skillMdPath(home: String, name: String) = "$home/.claude/skills/$name/SKILL.md"
+internal fun skillMdPath(
+    home: String,
+    name: String,
+) = "$home/.claude/skills/$name/SKILL.md"
 
 /** `SKILL.md` for a skill name: `plugin:skill` → that plugin's installPath; a bare name → project, then user. */
-internal fun resolve(name: String, cwd: String?, home: String): String? {
+internal fun resolve(
+    name: String,
+    cwd: String?,
+    home: String,
+): String? {
     if (name.isEmpty() || name.contains('/') || name.contains('\\') || name.contains("..")) return null
     val colon = name.indexOf(':')
     if (colon >= 0) {
@@ -62,36 +79,61 @@ internal fun resolve(name: String, cwd: String?, home: String): String? {
 }
 
 /** `plugins."<plugin>@<marketplace>"[i].installPath`; anything not provably the right install falls open. */
-internal fun pluginRoot(manifest: String, plugin: String, cwd: String?): String? {
+internal fun pluginRoot(
+    manifest: String,
+    plugin: String,
+    cwd: String?,
+): String? {
     val v = runCatching { Json.parseToJsonElement(readToString(manifest)) }.getOrNull() ?: return null
     val plugins = (v as? JsonObject)?.get("plugins") as? JsonObject ?: return null
     val keys = plugins.entries.filter { it.key.split('@').first() == plugin }
     if (keys.size != 1) return null
     val installs = keys[0].value as? JsonArray ?: return null
-    fun s(i: JsonElement, k: String) = ((i as? JsonObject)?.get(k) as? JsonPrimitive)?.takeIf { it.isString }?.content
+
+    fun s(
+        i: JsonElement,
+        k: String,
+    ) = ((i as? JsonObject)?.get(k) as? JsonPrimitive)?.takeIf { it.isString }?.content
+
     fun only(pick: (JsonElement) -> Boolean) = installs.filter(pick).singleOrNull()
-    val chosen = cwd?.let { c -> only { s(it, "projectPath") == c } }
-        ?: only { s(it, "scope") == "user" }
-        ?: installs.firstOrNull()?.takeIf { i ->
-            installs.size == 1 && (i as? JsonObject)?.containsKey("scope") != true && (i as? JsonObject)?.containsKey("projectPath") != true
-        }
-        ?: return null
+    val chosen =
+        cwd?.let { c -> only { s(it, "projectPath") == c } }
+            ?: only { s(it, "scope") == "user" }
+            ?: installs.firstOrNull()?.takeIf { i ->
+                installs.size == 1 && (i as? JsonObject)?.containsKey("scope") != true && (i as? JsonObject)?.containsKey("projectPath") != true
+            }
+            ?: return null
     return s(chosen, "installPath")
 }
 
-internal fun decide(cx: Ctx, name: String, body: String, cap: Long): PreToolDecision? {
+internal fun decide(
+    cx: Ctx,
+    name: String,
+    body: String,
+    cap: Long,
+): PreToolDecision? {
     val bytes = body.encodeToByteArray().size.toLong()
     if (bytes <= cap || hostKeys(body)) return null
     val id = runCatching { cx.putArchive(body.encodeToByteArray()) }.getOrNull() ?: return null
     val lines = body.rustLines().size
     val map = truncateBytes(markdownDigest(body), (cap - 512).coerceAtLeast(0).toInt())
     val shown = shortId(id)
-    val reason = "rtok kept the map of skill $name (${bytes / 1024} KB); the full body is archived, not loaded:\n$map" +
-        "[rtok $shown · $lines lines · expand: rtok expand $shown]\n" +
-        "Pull one section with `rtok expand $shown --grep <heading>`; set [plugins.guard] skills = false to load skills whole."
+    val reason =
+        "rtok kept the map of skill $name (${bytes / 1024} KB); the full body is archived, not loaded:\n$map" +
+            "[rtok $shown · $lines lines · expand: rtok expand $shown]\n" +
+            "Pull one section with `rtok expand $shown --grep <heading>`; set [plugins.guard] skills = false to load skills whole."
     runCatching {
-        cx.record(Measurement("guard", "skill", bytes.toULong(), reason.encodeToByteArray().size.toULong(),
-            cx.estimate(body, Class.Prose), cx.estimate(reason, Class.Prose), id))
+        cx.record(
+            Measurement(
+                "guard",
+                "skill",
+                bytes.toULong(),
+                reason.encodeToByteArray().size.toULong(),
+                cx.estimate(body, Class.Prose),
+                cx.estimate(reason, Class.Prose),
+                id,
+            ),
+        )
     }
     return PreToolDecision.Deny(reason)
 }
@@ -143,7 +185,8 @@ internal fun frontmatterKeys(yaml: String): Set<String>? {
 /** `key: value` with a plain, `"…"` or `'…'` key; null when there is no mapping colon. */
 private fun keyOf(line: String): Pair<String, String>? {
     if (line.startsWith('"') || line.startsWith('\'')) {
-        val q = line[0]; val close = line.indexOf(q, 1)
+        val q = line[0]
+        val close = line.indexOf(q, 1)
         if (close < 0) return null
         val after = line.substring(close + 1).trimStart()
         if (!after.startsWith(':')) return null
@@ -159,30 +202,61 @@ private fun keyOf(line: String): Pair<String, String>? {
 
 /** Flow brackets and quotes close on the same value. */
 private fun balanced(v: String): Boolean {
-    var depth = 0; var quote: Char? = null
+    var depth = 0
+    var quote: Char? = null
     val t = v.trim()
     for (c in t) {
         val q = quote
         when {
-            q != null -> if (c == q) quote = null
-            (c == '"' || c == '\'') && (t.startsWith(c) || depth > 0) -> quote = c
-            c == '[' || c == '{' -> depth++
-            c == ']' || c == '}' -> { depth--; if (depth < 0) return false }
+            q != null -> {
+                if (c == q) quote = null
+            }
+
+            (c == '"' || c == '\'') && (t.startsWith(c) || depth > 0) -> {
+                quote = c
+            }
+
+            c == '[' || c == '{' -> {
+                depth++
+            }
+
+            c == ']' || c == '}' -> {
+                depth--
+                if (depth < 0) return false
+            }
         }
     }
     return depth == 0 && quote == null
 }
 
 private fun splitTop(s: String): List<String> {
-    val out = ArrayList<String>(); var depth = 0; var start = 0; var quote: Char? = null
+    val out = ArrayList<String>()
+    var depth = 0
+    var start = 0
+    var quote: Char? = null
     for ((i, c) in s.withIndex()) {
         val q = quote
         when {
-            q != null -> if (c == q) quote = null
-            c == '"' || c == '\'' -> quote = c
-            c == '[' || c == '{' -> depth++
-            c == ']' || c == '}' -> depth--
-            c == ',' && depth == 0 -> { out += s.substring(start, i); start = i + 1 }
+            q != null -> {
+                if (c == q) quote = null
+            }
+
+            c == '"' || c == '\'' -> {
+                quote = c
+            }
+
+            c == '[' || c == '{' -> {
+                depth++
+            }
+
+            c == ']' || c == '}' -> {
+                depth--
+            }
+
+            c == ',' && depth == 0 -> {
+                out += s.substring(start, i)
+                start = i + 1
+            }
         }
     }
     out += s.substring(start)
@@ -190,7 +264,10 @@ private fun splitTop(s: String): List<String> {
 }
 
 /** Cut at a UTF-8 char boundary within [cap] bytes, with an ellipsis. */
-internal fun truncateBytes(s: String, cap: Int): String {
+internal fun truncateBytes(
+    s: String,
+    cap: Int,
+): String {
     val b = s.encodeToByteArray()
     if (b.size <= cap) return s
     var end = cap

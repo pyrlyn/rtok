@@ -11,7 +11,9 @@ import rtok.pluginsTable
 fun all(): List<Plugin> = listOf(MeasurePlugin, rtok.plugins.cmd.CmdPlugin, rtok.plugins.read.ReadPlugin, rtok.plugins.jsontree.JsonTreePlugin, rtok.plugins.archive.ArchivePlugin, ProxyPlugin, rtok.plugins.inject.InjectPlugin, rtok.plugins.guard.GuardPlugin, rtok.plugins.memory.MemoryPlugin, rtok.plugins.toon.ToonPlugin, rtok.plugins.compress.CompressPlugin, rtok.plugins.docs.DocsPlugin)
 
 /** Compiled-in plugins plus their enabled state from config. */
-class Registry private constructor(private val plugins: List<Pair<Plugin, Boolean>>) {
+class Registry private constructor(
+    private val plugins: List<Pair<Plugin, Boolean>>,
+) {
     /** Enabled plugins in dispatch order. */
     fun enabled(): List<Plugin> = plugins.filter { it.second }.map { it.first }
 
@@ -29,7 +31,17 @@ class Registry private constructor(private val plugins: List<Pair<Plugin, Boolea
         fun new(config: Config) = fromPlugins(all(), config)
 
         /** Registry over a caller-supplied plugin list (embedding rtok with external plugins). */
-        fun fromPlugins(plugins: List<Plugin>, config: Config) =
-            Registry(wasmPlugins(plugins.map { p -> val m = p.manifest(); p to config.pluginEnabled(m.id, m.defaultOn) }, config))
+        fun fromPlugins(
+            plugins: List<Plugin>,
+            config: Config,
+        ) = Registry(
+            wasmPlugins(
+                plugins.map { p ->
+                    val m = p.manifest()
+                    p to config.pluginEnabled(m.id, m.defaultOn)
+                },
+                config,
+            ),
+        )
     }
 }

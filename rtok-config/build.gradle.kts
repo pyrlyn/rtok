@@ -5,6 +5,11 @@ val defaultToml = embedText("genDefaultToml", "default.toml", "rtok.config", "DE
 configure<KotlinMultiplatformExtension> {
     sourceSets.commonMain {
         kotlin.srcDir(defaultToml)
-        dependencies { api(project(":rtok-sys")); api(project(":rtok-hook")); api(project(":toml")); implementation(project(":toml-ktoml")) }
+        dependencies {
+            api(project(":rtok-sys"))
+            api(project(":rtok-hook"))
+            api(project(":toml"))
+            implementation(project(":toml-ktoml"))
+        }
     }
 }

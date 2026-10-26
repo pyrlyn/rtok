@@ -25,10 +25,17 @@ import rtok.store.retryLocked
 
 /** Why a branch of references was not followed. */
 sealed class Stop {
-    data class Depth(val project: String, val limit: UInt) : Stop() {
+    data class Depth(
+        val project: String,
+        val limit: UInt,
+    ) : Stop() {
         override fun toString() = "reference_depth $limit reached at $project: its references are not followed"
     }
-    data class Cap(val dir: String, val limit: UInt) : Stop() {
+
+    data class Cap(
+        val dir: String,
+        val limit: UInt,
+    ) : Stop() {
         override fun toString() = "max_auto_projects $limit reached: $dir was not added"
     }
 }
@@ -48,7 +55,11 @@ object Follow {
     private const val LOCK_PAUSE_MS = 250L
 
     /** Walk the references of the project registered for [root]; nothing when off or unregistered. */
-    fun follow(store: Store, cfg: Graph, root: String): Followed {
+    fun follow(
+        store: Store,
+        cfg: Graph,
+        root: String,
+    ): Followed {
         val out = Followed()
         val start = store.projectByRoot(root)?.takeIf { cfg.autoLinkReferences } ?: return out
         var auto = store.projects().count { it.origin == Origin.Reference }
@@ -68,12 +79,14 @@ object Follow {
                 found.warnings.mapTo(out.warnings) { "${p.displayName()}: $it" }
                 val keep = ArrayList<Int>()
                 for (r in found.refs) {
-                    val target = store.projectByRoot(r.dir) ?: if (auto >= cfg.maxAutoProjects.toInt()) {
-                        out.stops += Stop.Cap(r.dir, cfg.maxAutoProjects); continue
-                    } else {
-                        auto++
-                        store.registerProject(r.dir, Origin.Reference).also { out.registered += it }
-                    }
+                    val target =
+                        store.projectByRoot(r.dir) ?: if (auto >= cfg.maxAutoProjects.toInt()) {
+                            out.stops += Stop.Cap(r.dir, cfg.maxAutoProjects)
+                            continue
+                        } else {
+                            auto++
+                            store.registerProject(r.dir, Origin.Reference).also { out.registered += it }
+                        }
                     if (target.id == p.id) continue
                     val made = store.linkProjects(p.id, target.id, LinkKind.Auto, r.reason)
                     if (made) out.linked++
@@ -92,20 +105,38 @@ object Follow {
     }
 
     /** Index the projects a [follow] added. One failing project is logged and skipped. */
-    fun indexNew(rt: Runtime, followed: Followed) {
+    fun indexNew(
+        rt: Runtime,
+        followed: Followed,
+    ) {
         for (p in followed.registered) {
-            try { Index.run(Ctx(rt), p.root, false) }
-            catch (e: Exception) { appendLog(rt.config, "warn", "graph", "references", "indexing reference ${p.root} failed: ${e.message}") }
+            try {
+                Index.run(Ctx(rt), p.root, false)
+            } catch (e: Exception) {
+                appendLog(rt.config, "warn", "graph", "references", "indexing reference ${p.root} failed: ${e.message}")
+            }
         }
     }
 
     /** [follow] with limits and failures logged; fails open, and a lock that stays is skipped silently. */
-    fun refresh(rt: Runtime, root: String): Followed = refreshWith(rt, root, LOCK_ATTEMPTS, LOCK_PAUSE_MS)
+    fun refresh(
+        rt: Runtime,
+        root: String,
+    ): Followed = refreshWith(rt, root, LOCK_ATTEMPTS, LOCK_PAUSE_MS)
 
-    internal fun refreshWith(rt: Runtime, root: String, attempts: Int, pauseMs: Long): Followed {
+    internal fun refreshWith(
+        rt: Runtime,
+        root: String,
+        attempts: Int,
+        pauseMs: Long,
+    ): Followed {
         val cfg = rt.config.plugins.graph
         return try {
-            val f = retryLocked(attempts, pauseMs) { rt.store.dropToollessSessionProjects(); follow(rt.store, cfg, root) }
+            val f =
+                retryLocked(attempts, pauseMs) {
+                    rt.store.dropToollessSessionProjects()
+                    follow(rt.store, cfg, root)
+                }
             for (line in f.stops.map { it.toString() } + f.warnings) appendLog(rt.config, "warn", "graph", "references", line)
             f
         } catch (e: Exception) {
@@ -115,7 +146,10 @@ object Follow {
     }
 
     /** What `rtok graph index` prints after its own index: follow, index what was added, say what changed. */
-    fun report(rt: Runtime, root: String): List<String> {
+    fun report(
+        rt: Runtime,
+        root: String,
+    ): List<String> {
         val f = refresh(rt, root)
         indexNew(rt, f)
         if (f.registered.isEmpty() && f.linked == 0 && f.dropped == 0) return emptyList()

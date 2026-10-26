@@ -15,7 +15,8 @@ class FilterTest {
         val out = Filter.runWithStore(c, "read src/lib.rs", raw)
         assertTrue(out.contains("[rtok ") && out.contains(" lines]") && out.length < raw.length, out)
         val rows = cmdRows(c)
-        assertEquals(1, rows.size); assertEquals("rule", rows[0].kind)
+        assertEquals(1, rows.size)
+        assertEquals("rule", rows[0].kind)
         assertTrue(rows[0].refId.orEmpty().startsWith("read:"), rows[0].refId)
         removeDirAll(dir)
     }

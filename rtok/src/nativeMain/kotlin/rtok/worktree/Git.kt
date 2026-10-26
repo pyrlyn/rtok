@@ -5,8 +5,13 @@ import rtok.sys.ProgressRunner
 
 /** One `git worktree list --porcelain` record. */
 data class WorktreeRecord(
-    val path: String, val head: String? = null, val branch: String? = null, val bare: Boolean = false,
-    val detached: Boolean = false, val locked: String? = null, val prunable: String? = null,
+    val path: String,
+    val head: String? = null,
+    val branch: String? = null,
+    val bare: Boolean = false,
+    val detached: Boolean = false,
+    val locked: String? = null,
+    val prunable: String? = null,
 )
 
 object Git {
@@ -17,17 +22,21 @@ object Git {
             val sp = attr.indexOf(' ')
             val key = if (sp < 0) attr else attr.substring(0, sp)
             val value = if (sp < 0) "" else attr.substring(sp + 1)
-            if (key == "worktree") { records += WorktreeRecord(value); continue }
-            val r = records.lastOrNull() ?: continue
-            records[records.size - 1] = when (key) {
-                "HEAD" -> r.copy(head = value)
-                "branch" -> r.copy(branch = value.removePrefix("refs/heads/"))
-                "bare" -> r.copy(bare = true)
-                "detached" -> r.copy(detached = true)
-                "locked" -> r.copy(locked = value)
-                "prunable" -> r.copy(prunable = value)
-                else -> r
+            if (key == "worktree") {
+                records += WorktreeRecord(value)
+                continue
             }
+            val r = records.lastOrNull() ?: continue
+            records[records.size - 1] =
+                when (key) {
+                    "HEAD" -> r.copy(head = value)
+                    "branch" -> r.copy(branch = value.removePrefix("refs/heads/"))
+                    "bare" -> r.copy(bare = true)
+                    "detached" -> r.copy(detached = true)
+                    "locked" -> r.copy(locked = value)
+                    "prunable" -> r.copy(prunable = value)
+                    else -> r
+                }
         }
         return records
     }

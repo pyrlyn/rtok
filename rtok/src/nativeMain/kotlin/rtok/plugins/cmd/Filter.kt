@@ -11,13 +11,20 @@ import rtok.sys.rustLines
 
 object Filter {
     /** Filter without a store: the user config's rules when it loads, the builtins otherwise. */
-    fun run(cmd: String, input: String): String {
+    fun run(
+        cmd: String,
+        input: String,
+    ): String {
         val settings = runCatching { Settings.fromConfig(Config.loadWith(null, null)) }.getOrElse { Settings.builtin() }
         return compressOnly(settings, cmd, input)
     }
 
     /** Filter, archive the input when the output points at it, and record one `cmd` row. */
-    fun runWithStore(cfg: Config, cmd: String, input: String): String {
+    fun runWithStore(
+        cfg: Config,
+        cmd: String,
+        input: String,
+    ): String {
         val settings = Settings.fromConfig(cfg)
         val argv = words(cmd)
         val cx = runCatching { Runtime.open(cfg, "filter") }.getOrElse { return compressOnly(settings, cmd, input) }
@@ -30,21 +37,39 @@ object Filter {
             val c = cfg.plugins.cmd
             val pointer = c.trailer && needsPointer(lines, c.trailerMinLines, bytes, filtered, named)
             if (lines <= c.trailerMinLines && filtered.trimEnd().byteLen >= input.trimEnd().byteLen) return input
-            val out = buildString {
-                append(filtered)
-                if (pointer) { if (isNotEmpty() && !endsWith('\n')) append('\n'); append(trailer(id, lines)).append('\n') }
-            }
+            val out =
+                buildString {
+                    append(filtered)
+                    if (pointer) {
+                        if (isNotEmpty() && !endsWith('\n')) append('\n')
+                        append(trailer(id, lines)).append('\n')
+                    }
+                }
             if (out.byteLen >= bytes.size) return input
             if ((pointer || named) && runCatching { cx.putArchive(bytes) }.isFailure) return compressOnly(settings, cmd, input)
             val family = Formatters.familyOf(settings, argv, input)
             runCatching {
-                cx.record(Measurement("cmd", kind, bytes.size.toULong(), out.byteLen.toULong(),
-                    cx.estimate(input, Class.Code), cx.estimate(out, Class.Code), if (pointer || named) "$family:$id" else null))
+                cx.record(
+                    Measurement(
+                        "cmd",
+                        kind,
+                        bytes.size.toULong(),
+                        out.byteLen.toULong(),
+                        cx.estimate(input, Class.Code),
+                        cx.estimate(out, Class.Code),
+                        if (pointer || named) "$family:$id" else null,
+                    ),
+                )
             }
             return out
         }
     }
 
     private fun words(cmd: String) = cmd.split(' ', '\t', '\n', '\r').filter { it.isNotEmpty() }
-    private fun compressOnly(settings: Settings, cmd: String, input: String) = Formatters.compress(settings, words(cmd), input, 0, "").text
+
+    private fun compressOnly(
+        settings: Settings,
+        cmd: String,
+        input: String,
+    ) = Formatters.compress(settings, words(cmd), input, 0, "").text
 }

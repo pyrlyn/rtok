@@ -27,11 +27,15 @@ class WasmPluginTest {
         val p = WasmPlugin.load("$fixtures/wasm-demo.wasm", ChasmRuntime, env)
         assertEquals("wasm-demo", p.manifest().id)
         assertEquals(listOf("demo"), p.mcpTools().map { it.name })
-        val host = MemoryHost(); val text = p.invokeMcp("demo", JsonObject(emptyMap()), Ctx(host))
+        val host = MemoryHost()
+        val text = p.invokeMcp("demo", JsonObject(emptyMap()), Ctx(host))
         assertTrue("ok" in text)
         val rows = host.recorded()
-        assertEquals(1, rows.size); assertEquals("wasm-demo", rows[0].plugin); assertEquals("demo", rows[0].kind)
-        assertTrue(rows[0].beforeBytes >= rows[0].afterBytes); assertTrue(rows[0].estBefore >= rows[0].estAfter)
+        assertEquals(1, rows.size)
+        assertEquals("wasm-demo", rows[0].plugin)
+        assertEquals("demo", rows[0].kind)
+        assertTrue(rows[0].beforeBytes >= rows[0].afterBytes)
+        assertTrue(rows[0].estBefore >= rows[0].estAfter)
     }
 
     @Test fun appendSkipsBadFilesAndHonoursConfig() {
@@ -42,7 +46,8 @@ class WasmPluginTest {
         val errors = mutableListOf<String>()
         val out = appendWasm(emptyList<Pair<Plugin, Boolean>>(), tmp, ChasmRuntime, env, { _, d -> d }, { errors += it })
         assertEquals(listOf("wasm-demo" to true), out.map { it.first.manifest().id to it.second })
-        assertEquals(1, errors.size); assertTrue("broken.wasm" in errors[0])
+        assertEquals(1, errors.size)
+        assertTrue("broken.wasm" in errors[0])
         assertTrue(appendWasm(emptyList(), "$tmp/missing", ChasmRuntime, env, { _, d -> d }, {}).isEmpty())
     }
 
@@ -60,10 +65,57 @@ class WasmPluginTest {
     // Port of `endless_guest_runs_out_of_fuel`: (memory (export "memory") 1)
     // (func (export "rtok_manifest") (result i64) (loop $l (br $l)) (i64.const 0)).
     @Test fun endlessGuestRunsOutOfFuel() {
-        val m = intArrayOf(0, 0x61, 0x73, 0x6d, 1, 0, 0, 0,
-            1, 5, 1, 0x60, 0, 1, 0x7e, 3, 2, 1, 0, 5, 3, 1, 0, 1,
-            7, 0x1a, 2, 6, *"memory".map { it.code }.toIntArray(), 2, 0, 13, *"rtok_manifest".map { it.code }.toIntArray(), 0, 0,
-            0x0a, 0x0b, 1, 9, 0, 3, 0x40, 0x0c, 0, 0x0b, 0x42, 0, 0x0b)
+        val m =
+            intArrayOf(
+                0,
+                0x61,
+                0x73,
+                0x6d,
+                1,
+                0,
+                0,
+                0,
+                1,
+                5,
+                1,
+                0x60,
+                0,
+                1,
+                0x7e,
+                3,
+                2,
+                1,
+                0,
+                5,
+                3,
+                1,
+                0,
+                1,
+                7,
+                0x1a,
+                2,
+                6,
+                *"memory".map { it.code }.toIntArray(),
+                2,
+                0,
+                13,
+                *"rtok_manifest".map { it.code }.toIntArray(),
+                0,
+                0,
+                0x0a,
+                0x0b,
+                1,
+                9,
+                0,
+                3,
+                0x40,
+                0x0c,
+                0,
+                0x0b,
+                0x42,
+                0,
+                0x0b,
+            )
         platform.posix.mkdir(tmp, 0x1c0u)
         rtok.sys.writeBytes("$tmp/spin.wasm", ByteArray(m.size) { m[it].toByte() })
         assertFailsWith<WasmException> { WasmPlugin.loadWithFuel("$tmp/spin.wasm", ChasmRuntime, env, 10_000) }

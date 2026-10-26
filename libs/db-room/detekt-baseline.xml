@@ -1,0 +1,15 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>CyclomaticComplexMethod:SqlScript.kt:internal fun splitSql: List&lt;String></ID>
+    <ID>LongMethod:SqlScript.kt:internal fun splitSql: List&lt;String></ID>
+    <ID>MagicNumber:RoomDbTest.kt:RoomDbTest$1.5</ID>
+    <ID>MagicNumber:RoomDbTest.kt:RoomDbTest$3</ID>
+    <ID>MagicNumber:RoomDbTest.kt:RoomDbTest$5L</ID>
+    <ID>MagicNumber:SqlScript.kt:3</ID>
+    <ID>MatchingDeclarationName:RoomDb.kt:RoomDbDriver : DbDriver</ID>
+    <ID>NestedBlockDepth:SqlScript.kt:internal fun splitSql: List&lt;String></ID>
+    <ID>SwallowedException:RoomDb.kt:e: SQLiteException</ID>
+  </CurrentIssues>
+</SmellBaseline>

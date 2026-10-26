@@ -7,23 +7,31 @@ import rtok.plugin.sdk.Ctx
 
 @Serializable
 data class GraphStatus(
-    val root: String, val rows: Long, val files: Long, val pending: List<String>, val watch: String,
+    val root: String,
+    val rows: Long,
+    val files: Long,
+    val pending: List<String>,
+    val watch: String,
     @SerialName("indexed_at") val indexedAt: Long?,
 )
 
 object Status {
-    fun collect(cx: Ctx, root: String): GraphStatus {
+    fun collect(
+        cx: Ctx,
+        root: String,
+    ): GraphStatus {
         val key = Index.canon(root)
         return GraphStatus(key, cx.symbolCount(key), cx.symbolFileCount(key), GraphCore.pendingPaths(cx, root), graphCfg(cx).watch, cx.symbolIndexedAt(key))
     }
 
     /** Rendered for `rtok graph status` and the Graph page (T230). */
-    fun formatTable(s: GraphStatus): String = buildString {
-        append("root ${s.root}\nrows ${s.rows}\nfiles ${s.files}\npending ${s.pending.size}\n")
-        for (p in s.pending) append("  $p\n")
-        append("watch ${s.watch}\n")
-        append("indexed_at ${s.indexedAt ?: "-"}\n")
-    }
+    fun formatTable(s: GraphStatus): String =
+        buildString {
+            append("root ${s.root}\nrows ${s.rows}\nfiles ${s.files}\npending ${s.pending.size}\n")
+            for (p in s.pending) append("  $p\n")
+            append("watch ${s.watch}\n")
+            append("indexed_at ${s.indexedAt ?: "-"}\n")
+        }
 
     /** The root of a one-project subcommand: [path] or the cwd, which must be a directory. */
     fun cliRoot(path: String?): String {

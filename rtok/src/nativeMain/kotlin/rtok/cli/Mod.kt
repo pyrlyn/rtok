@@ -9,18 +9,28 @@ var cliParser: CliParser = rtok.cli.clikt.CliktParser
 /** `--config PATH`, global like clap's `#[arg(long, global = true)]`. */
 val CONFIG_OPT = OptSpec.Value("config", "Config file (else `<home>/config.toml`)", "PATH", global = true)
 
-val RTOK = CommandSpec(
-    name = "rtok", help = "Token reduction for coding agents (rtok $VERSION)",
-    options = listOf(CONFIG_OPT),
-    subcommands = listOf(PLUGINS, CONFIG, EXPAND, ARCHIVE, MEMORY, RUN, FILTER, HOOK),
-)
+val RTOK =
+    CommandSpec(
+        name = "rtok",
+        help = "Token reduction for coding agents (rtok $VERSION)",
+        options = listOf(CONFIG_OPT),
+        subcommands = listOf(PLUGINS, CONFIG, EXPAND, ARCHIVE, MEMORY, RUN, FILTER, HOOK),
+    )
 
 object StdIo : CliIo {
-    override fun out(text: String) { print(text) }
+    override fun out(text: String) {
+        print(text)
+    }
+
     override fun err(text: String) = rtok.sys.eprint(text)
+
     override fun readStdin() = rtok.sys.readFd(0)
+
     override fun writeBytes(bytes: ByteArray) = rtok.sys.writeFd(1, bytes)
 }
 
 /** Runs the CLI; the process exit code. */
-fun run(args: Array<String>, io: CliIo = StdIo): Int = cliParser.run(RTOK, args, io)
+fun run(
+    args: Array<String>,
+    io: CliIo = StdIo,
+): Int = cliParser.run(RTOK, args, io)

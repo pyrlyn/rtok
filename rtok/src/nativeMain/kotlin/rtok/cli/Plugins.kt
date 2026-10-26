@@ -3,6 +3,7 @@ package rtok.cli
 
 import rtok.plugins.Registry
 
-val PLUGINS = CommandSpec("plugins", "List plugins, whether each is on, and where it runs") { inv ->
-    inv.io.out(Registry.new(inv.loadConfig()).table())
-}
+val PLUGINS =
+    CommandSpec("plugins", "List plugins, whether each is on, and where it runs") { inv ->
+        inv.io.out(Registry.new(inv.loadConfig()).table())
+    }

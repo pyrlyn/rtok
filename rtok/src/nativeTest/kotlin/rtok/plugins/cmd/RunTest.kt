@@ -1,28 +1,40 @@
 package rtok.plugins.cmd
 
+import rtok.shortId
 import rtok.store.Store
 import rtok.store.listMeasurements
-import rtok.shortId
 import rtok.sys.*
 import kotlin.test.*
 
 class RunTest {
     private fun sh(script: String) = ProgressRunner("t…", "sh", listOf("-c", script))
-    private fun emit(c: rtok.config.Config, argv: List<String>, body: ByteArray, agent: String? = null): ByteArray {
-        val out = ArrayList<Byte>(); emitFilteredTo(c, argv, body, 0, agent) { out.addAll(it.toList()) }; return out.toByteArray()
+
+    private fun emit(
+        c: rtok.config.Config,
+        argv: List<String>,
+        body: ByteArray,
+        agent: String? = null,
+    ): ByteArray {
+        val out = ArrayList<Byte>()
+        emitFilteredTo(c, argv, body, 0, agent) { out.addAll(it.toList()) }
+        return out.toByteArray()
     }
+
     private fun dedups(c: rtok.config.Config) = cmdRows(c).count { it.kind == "dedup" }
 
     @Test fun captureBodyCapsAndAppendsTheNotice() {
         val (body, code) = captureBody(sh("head -c 5000 /dev/zero | tr '\\0' x; exit 2"), 1024)
         val notice = "[rtok: output capped at 1024 bytes; 3976 bytes not captured]\n"
-        assertEquals(2, code); assertEquals(1024 + 1 + notice.length, body.size)
-        assertTrue(body.decodeToString().endsWith(notice)); assertTrue(body.take(1024).all { it == 'x'.code.toByte() })
+        assertEquals(2, code)
+        assertEquals(1024 + 1 + notice.length, body.size)
+        assertTrue(body.decodeToString().endsWith(notice))
+        assertTrue(body.take(1024).all { it == 'x'.code.toByte() })
     }
 
     @Test fun captureBodyWithoutOverflowHasNoNotice() {
         val (body, code) = captureBody(sh("printf hi"), 1024)
-        assertEquals("hi", body.decodeToString()); assertEquals(0, code)
+        assertEquals("hi", body.decodeToString())
+        assertEquals(0, code)
     }
 
     @Test fun theSpinnerNamesTheCommandOnOneShortLine() {
@@ -45,7 +57,8 @@ class RunTest {
         val body = numbered(400)
         emit(c, listOf("cat"), body.encodeToByteArray())
         val files = archived(c)
-        assertEquals(1, files.size); assertEquals(body, readToString(files[0]))
+        assertEquals(1, files.size)
+        assertEquals(body, readToString(files[0]))
         assertEquals(1, cmdRows(c).size)
         removeDirAll(dir)
     }
@@ -68,7 +81,8 @@ class RunTest {
         assertEquals(0, run(c, listOf("printf", "a\nb\n"), null))
         assertTrue(archived(c).isEmpty())
         val rows = cmdRows(c)
-        assertEquals(1, rows.size); assertTrue(rows[0].afterBytes <= rows[0].beforeBytes)
+        assertEquals(1, rows.size)
+        assertTrue(rows[0].afterBytes <= rows[0].beforeBytes)
         removeDirAll(dir)
     }
 
@@ -88,9 +102,12 @@ class RunTest {
     @Test fun dedupIsScopedToTheDispatchingAgent() {
         val (c, dir) = cmdConfig("dedup-agent-scope")
         val payload = (numbered(80) + "\n").encodeToByteArray()
-        emit(c, listOf("printf"), payload, "agent-a"); assertEquals(0, dedups(c), "nothing to dedup against yet")
-        emit(c, listOf("printf"), payload, "agent-b"); assertEquals(0, dedups(c), "agent-b never saw agent-a's body")
-        emit(c, listOf("printf"), payload, "agent-a"); assertEquals(1, dedups(c), "agent-a's own repeat still dedups")
+        emit(c, listOf("printf"), payload, "agent-a")
+        assertEquals(0, dedups(c), "nothing to dedup against yet")
+        emit(c, listOf("printf"), payload, "agent-b")
+        assertEquals(0, dedups(c), "agent-b never saw agent-a's body")
+        emit(c, listOf("printf"), payload, "agent-a")
+        assertEquals(1, dedups(c), "agent-a's own repeat still dedups")
         removeDirAll(dir)
     }
 
@@ -104,7 +121,8 @@ class RunTest {
         val (c, dir) = cmdConfig("stats3")
         repeat(3) { assertEquals(0, run(c, listOf("printf", "a\nb\n"), null)) }
         val rows = cmdRows(c)
-        assertEquals(3, rows.size); assertTrue(rows.all { it.beforeBytes >= it.afterBytes })
+        assertEquals(3, rows.size)
+        assertTrue(rows.all { it.beforeBytes >= it.afterBytes })
         removeDirAll(dir)
     }
 
@@ -157,7 +175,9 @@ class RunTest {
         assertTrue(needsPointer(body.rustLines().size.toUInt(), 40u, body.encodeToByteArray(), filtered, false))
         val printed = emit(c, listOf("ps", "aux"), body.encodeToByteArray())
         assertTrue(printed.size <= body.length + 1, printed.decodeToString())
-        val m = cmdRows(c); assertEquals(1, m.size); assertTrue(m[0].afterBytes <= m[0].beforeBytes)
+        val m = cmdRows(c)
+        assertEquals(1, m.size)
+        assertTrue(m[0].afterBytes <= m[0].beforeBytes)
         removeDirAll(dir)
     }
 
@@ -174,24 +194,31 @@ class RunTest {
         val body = (listOf("x".repeat(Bounded.HOST_VISIBLE_CHARS)) + (0 until 50).map { "tail line $it that the host already dropped" }).joinToString("\n")
         emit(c, listOf("echo"), body.encodeToByteArray())
         val m = cmdRows(c)
-        assertEquals(1, m.size); assertTrue(m[0].beforeBytes > m[0].afterBytes, m.toString())
+        assertEquals(1, m.size)
+        assertTrue(m[0].beforeBytes > m[0].afterBytes, m.toString())
         assertEquals(m[0].estBefore, m[0].estAfter, "both estimates stop at the host prefix")
         removeDirAll(dir)
     }
 
     @Test fun emitFilteredUnderTheCapStillCountsAShrink() {
         val (c, dir) = cmdConfig("host-under")
-        val body = (listOf("running 50 tests") + (0 until 50).map { "test a::ok$it ... ok" } +
-            listOf("test a::bad ... FAILED", "test result: FAILED. 1 failed; 50 passed")).joinToString("\n")
+        val body =
+            (
+                listOf("running 50 tests") + (0 until 50).map { "test a::ok$it ... ok" } +
+                    listOf("test a::bad ... FAILED", "test result: FAILED. 1 failed; 50 passed")
+            ).joinToString("\n")
         val shown = emit(c, listOf("cargo", "test"), body.encodeToByteArray()).decodeToString()
         assertTrue(shown.contains("[rtok "), shown)
-        val m = cmdRows(c); assertEquals(1, m.size); assertTrue(m[0].estBefore > m[0].estAfter)
+        val m = cmdRows(c)
+        assertEquals(1, m.size)
+        assertTrue(m[0].estBefore > m[0].estAfter)
         removeDirAll(dir)
     }
 
     private fun rawBytesSurviveAFailingStore(storeOpens: Boolean) {
         val (c0, dir) = cmdConfig("raw-fallback")
-        val blocker = "$dir/blocker"; writeString(blocker, "a file, not a directory")
+        val blocker = "$dir/blocker"
+        writeString(blocker, "a file, not a directory")
         val c = if (storeOpens) c0.copy(core = c0.core.copy(archiveDir = blocker)) else c0.copy(core = c0.core.copy(dbPath = "$blocker/rtok.db"))
         var body = ByteArray(0)
         for (i in 0 until 400) body += "line $i \u00e9".encodeToByteArray() + byteArrayOf(0xff.toByte(), 10)
@@ -199,7 +226,9 @@ class RunTest {
         assertContentEquals(body + byteArrayOf(10), emit(c, listOf("echo"), body))
         removeDirAll(dir)
     }
+
     @Test fun rawBytesSurviveAStoreThatWillNotOpen() = rawBytesSurviveAFailingStore(false)
+
     @Test fun rawBytesSurviveAFailingArchiveWrite() = rawBytesSurviveAFailingStore(true)
 
     @Test fun resolveShellPrefersConfigThenEnvThenHostDefault() {
@@ -213,15 +242,18 @@ class RunTest {
 
     @Test fun resolveShellIgnoresNonPosixEnvShell() {
         for (s in listOf("/opt/homebrew/bin/fish", "nu", "/usr/bin/xonsh", "fish")) {
-            assertEquals("/bin/sh", resolveShell("", s, false, null), s); assertEquals("cmd.exe", resolveShell("", s, true, null), s)
+            assertEquals("/bin/sh", resolveShell("", s, false, null), s)
+            assertEquals("cmd.exe", resolveShell("", s, true, null), s)
         }
         for (s in listOf("/bin/bash", "/usr/local/bin/zsh", "dash", "ksh", "C:\\msys64\\usr\\bin\\BASH.EXE")) assertEquals(s, resolveShell("", s, false, null), s)
         assertEquals("/usr/bin/fish", resolveShell("/usr/bin/fish", "/bin/zsh", false, null))
     }
 
     @Test fun shellKindAndArgsMatchWindowsHosts() {
-        assertEquals(ShellKind.Posix, shellKind("/bin/sh")); assertEquals(ShellKind.Cmd, shellKind("C:\\Windows\\System32\\cmd.exe"))
-        assertEquals(ShellKind.PowerShell, shellKind("powershell.exe")); assertEquals(ShellKind.PowerShell, shellKind("pwsh"))
+        assertEquals(ShellKind.Posix, shellKind("/bin/sh"))
+        assertEquals(ShellKind.Cmd, shellKind("C:\\Windows\\System32\\cmd.exe"))
+        assertEquals(ShellKind.PowerShell, shellKind("powershell.exe"))
+        assertEquals(ShellKind.PowerShell, shellKind("pwsh"))
         assertEquals(listOf("-c", "true"), shellArgs("/bin/sh", "true"))
         assertEquals(listOf("/D", "/C", "echo hi"), shellArgs("C:\\Windows\\System32\\cmd.exe", "echo hi"))
         assertEquals(listOf("-NoProfile", "-NonInteractive", "-Command", "Get-Date"), shellArgs("pwsh.exe", "Get-Date"))
@@ -237,9 +269,11 @@ class RunTest {
         val (c0, dir) = cmdConfig("ps-shell")
         val c = c0.copy(plugins = c0.plugins.copy(cmd = c0.plugins.cmd.copy(shell = "powershell.exe")))
         val sh = shell(c)
-        assertEquals("powershell.exe", sh); assertEquals(ShellKind.PowerShell, shellKind(sh))
+        assertEquals("powershell.exe", sh)
+        assertEquals(ShellKind.PowerShell, shellKind(sh))
         val args = shellArgs(sh, scriptFor(ShellKind.PowerShell, listOf("echo", "x")))
-        assertEquals("-NoProfile", args[0]); assertEquals("-Command", args[2])
+        assertEquals("-NoProfile", args[0])
+        assertEquals("-Command", args[2])
         removeDirAll(dir)
     }
 

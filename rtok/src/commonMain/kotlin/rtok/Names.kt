@@ -27,8 +27,10 @@ private fun stripRunWrap(s0: String): String {
     if (s.startsWith("rtok run -- ")) return s.removePrefix("rtok run -- ")
     if (!s.startsWith("rtok run --agent ")) return s
     val after = s.removePrefix("rtok run --agent ")
-    val sp = after.indexOf(' '); if (sp < 0) return s
-    val id = after.substring(0, sp); val rest = after.substring(sp + 1)
+    val sp = after.indexOf(' ')
+    if (sp < 0) return s
+    val id = after.substring(0, sp)
+    val rest = after.substring(sp + 1)
     return if (wrapAgentId(id) && rest.startsWith("-- ")) rest.removePrefix("-- ") else s
 }
 
@@ -36,6 +38,7 @@ private fun wrapAgentId(id: String) = id.length in 1..64 && id.all { it.code < 1
 
 /** Shortest archive-id prefix `rtok expand` resolves. */
 const val MIN_PREFIX = 8
+
 fun shortId(id: String) = id.take(MIN_PREFIX)
 
 /** Host tool names (`bash`, `read_file`, `edit`, …) to the Claude names `plugins::guard` matches. */

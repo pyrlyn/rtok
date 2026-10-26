@@ -7,7 +7,8 @@ class WalkTest {
         val root = "${tempDir()}/rtok-walk-${pid()}"
         removeDirAll(root)
         for (f in listOf(".git/HEAD", ".gitignore", "a.txt", "out.log", "keep.log", "sub/b.txt", "sub/.gitignore", "sub/gen/c.txt", "target/d.txt")) {
-            createDirAll(parent(join(root, f))!!); writeString(join(root, f), "x\n")
+            createDirAll(parent(join(root, f))!!)
+            writeString(join(root, f), "x\n")
         }
         writeString(join(root, ".gitignore"), "*.log\n!keep.log\ntarget/\n")
         writeString(join(root, "sub/.gitignore"), "gen/\n")

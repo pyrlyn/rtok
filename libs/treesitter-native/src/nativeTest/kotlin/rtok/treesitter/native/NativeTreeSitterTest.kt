@@ -57,7 +57,8 @@ class NativeTreeSitterTest {
         assertTrue("helper" to "call" in named, "$named")
         assertTrue("S" to "class" in named, "$named")
         val add = tags.first { src.decodeToString(it.nameRange.first, it.nameRange.last + 1) == "add" }
-        assertTrue(add.isDefinition); assertEquals(1, add.start.row)
+        assertTrue(add.isDefinition)
+        assertEquals(1, add.start.row)
         assertEquals("fn add(a: i32) -> i32 { helper(a) }", src.decodeToString(add.lineRange.first, add.lineRange.last + 1))
     }
 }

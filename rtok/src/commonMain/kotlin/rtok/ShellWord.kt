@@ -19,4 +19,5 @@ fun skipWord(s: String): String? {
 }
 
 private fun isAsciiWs(c: Char) = c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\u000C'
+
 private fun Char.isAsciiWhitespace() = isAsciiWs(this)

@@ -50,6 +50,7 @@ object HookLinks {
     var completePendingWorktree: (rt: Runtime, cwd: String, agent: String) -> Unit = { _, _, _ -> }
     var unlockEndedWorktree: (cwd: String, agent: String) -> Unit = { _, _ -> }
     var spawnOtelExport: (rt: Runtime) -> Unit = {}
+
     /** MCP `shorten_result` for a foreign tool's result under Cursor; true when it shortened [result] in place. */
     var shortenMcpResult: (rt: Runtime, server: String, tool: String, result: Array<JsonElement>) -> Boolean = { _, _, _, _ -> false }
 }
@@ -58,19 +59,35 @@ object HookLinks {
  * Fail-open entry. [readStdin] reads at most `limit` bytes. With `[hook] fail_open = false`
  * (debugging only) errors are thrown instead of answering `{}`.
  */
-fun run(event: String, readStdin: (limit: Long) -> ByteArray, cfg: Config): ByteArray {
+fun run(
+    event: String,
+    readStdin: (limit: Long) -> ByteArray,
+    cfg: Config,
+): ByteArray {
     val max = cfg.core.hookMaxInputBytes.toLong()
     if (!cfg.hook.failOpen) {
         val buf = readStdin(max + 1)
         check(buf.size <= max) { "rtok hook: stdin over core.hook_max_input_bytes ($max bytes, debugging only)" }
         return dispatchOwnedStrict(buf, event, cfg)
     }
+
     fun failOpen(msg: String): ByteArray {
-        eprint("rtok: hook $event $msg\n"); rtok.appendLog(cfg, "error", "hook", event, msg); return EMPTY_OUT
+        eprint("rtok: hook $event $msg\n")
+        rtok.appendLog(cfg, "error", "hook", event, msg)
+        return EMPTY_OUT
     }
-    val buf = try { readStdin(max + 1) } catch (e: Exception) { return failOpen("stdin read failed: ${e.message}; failing open") }
+    val buf =
+        try {
+            readStdin(max + 1)
+        } catch (e: Exception) {
+            return failOpen("stdin read failed: ${e.message}; failing open")
+        }
     if (buf.size > max) return failOpen("stdin over core.hook_max_input_bytes ($max bytes, got ${buf.size}); failing open")
-    return try { dispatchOwnedStrict(buf, event, cfg) } catch (e: HookError) { EMPTY_OUT } catch (e: Throwable) {
+    return try {
+        dispatchOwnedStrict(buf, event, cfg)
+    } catch (e: HookError) {
+        EMPTY_OUT
+    } catch (e: Throwable) {
         failOpen("panicked: ${e.message ?: e::class.simpleName}; failing open")
     }
 }
@@ -78,17 +95,33 @@ fun run(event: String, readStdin: (limit: Long) -> ByteArray, cfg: Config): Byte
 private val EMPTY_OUT get() = "{}".encodeToByteArray()
 
 /** A dispatch error that is answered with `{}` silently (Rust `dispatch_owned` maps `Err` to `{}`). */
-class HookError(message: String) : Exception(message)
+class HookError(
+    message: String,
+) : Exception(message)
 
 /** Session id: stdin first, then `$<core.session_env>`, else `unknown`. An empty key disables the env fallback. */
-internal fun resolveSession(stdinSession: String, sessionEnvKey: String, env: (String) -> String?): String {
+internal fun resolveSession(
+    stdinSession: String,
+    sessionEnvKey: String,
+    env: (String) -> String?,
+): String {
     if (stdinSession.isNotEmpty()) return stdinSession
     if (sessionEnvKey.isNotEmpty()) env(sessionEnvKey)?.trim()?.takeIf { it.isNotEmpty() }?.let { return it }
     return "unknown"
 }
 
-internal fun dispatchOwnedStrict(stdin: ByteArray, event: String, cfg: Config, env: (String) -> String? = ::envVar): ByteArray {
-    val input = try { HookInput.parse(stdin.decodeToString()) } catch (e: Exception) { throw HookError("hook $event: bad stdin: ${e.message}") }
+internal fun dispatchOwnedStrict(
+    stdin: ByteArray,
+    event: String,
+    cfg: Config,
+    env: (String) -> String? = ::envVar,
+): ByteArray {
+    val input =
+        try {
+            HookInput.parse(stdin.decodeToString())
+        } catch (e: Exception) {
+            throw HookError("hook $event: bad stdin: ${e.message}")
+        }
     val host = cfg.hook.host
     // Grok Build sends its own envelope to every hook it runs, so GROK_HOOK_EVENT wins over --host (T98).
     val grok = host == "grok" || env("GROK_HOOK_EVENT") != null
@@ -109,15 +142,19 @@ internal fun dispatchOwnedStrict(stdin: ByteArray, event: String, cfg: Config, e
     val stored = if (adapted) input.encode().encodeToByteArray() else stdin
     val session = resolveSession(input.sessionId, cfg.core.sessionEnv, env)
     val wait = if (env(DEFERRED_ENV) != null) LockWait.STEADY else HOOK_LOCK_WAIT
-    val cx = try { Runtime.open(cfg, session, wait) } catch (e: Exception) {
-        if (isLocked(e)) deferSessionEnd(cfg, input.hookEventName, stored, env)
-        throw HookError("hook $event: store open: ${e.message}")
-    }
+    val cx =
+        try {
+            Runtime.open(cfg, session, wait)
+        } catch (e: Exception) {
+            if (isLocked(e)) deferSessionEnd(cfg, input.hookEventName, stored, env)
+            throw HookError("hook $event: store open: ${e.message}")
+        }
     return cx.use {
         cx.cwd = input.cwd
         // Plugin hooks plus leftover settings-file hooks deliver one call twice (T245).
         cx.once = input.toolUseId?.takeIf { it.isNotEmpty() }?.let { "${input.hookEventName}:$it" }
         val out = dispatch(stored, input, cx)
+
         fun parsed() = runCatching { HookOutput.parse(out.decodeToString()) }.getOrDefault(HookOutput())
         when (h) {
             "copilot" -> copilotOutput(parsed())
@@ -148,27 +185,45 @@ private fun toolMainArgument(input: JsonObject): String? =
     }
 
 /** First [n] Unicode scalar values of [s] (Rust `chars().take(n)`). */
-internal fun firstChars(s: String, n: Int): String {
-    var count = 0; var i = 0
-    while (i < s.length && count < n) { i += if (s[i].isHighSurrogate() && i + 1 < s.length) 2 else 1; count++ }
+internal fun firstChars(
+    s: String,
+    n: Int,
+): String {
+    var count = 0
+    var i = 0
+    while (i < s.length && count < n) {
+        i += if (s[i].isHighSurrogate() && i + 1 < s.length) 2 else 1
+        count++
+    }
     return s.substring(0, i)
 }
 
-internal fun agentIdInjection(agent: String?): Injection? = agent?.let { id ->
-    Injection("agent_id", "rtok agent id: ${firstChars(id, 8)} (full: $id). Use it with rtok's agent_* and worktree_* MCP tools; agent_inbox reads messages sent to you.", 10u)
-}
+internal fun agentIdInjection(agent: String?): Injection? =
+    agent?.let { id ->
+        Injection("agent_id", "rtok agent id: ${firstChars(id, 8)} (full: $id). Use it with rtok's agent_* and worktree_* MCP tools; agent_inbox reads messages sent to you.", 10u)
+    }
 
 /** T442: `task <id> <title>` for the newest claim this agent holds in the checkout `cx.cwd` names. */
-internal fun claimInjection(cx: Runtime, agent: String?): Injection? {
+internal fun claimInjection(
+    cx: Runtime,
+    agent: String?,
+): Injection? {
     agent ?: return null
     val project = rtok.projectKey(cx.cwd ?: return null) ?: return null
     val row = runCatching { cx.store.latestTaskClaim(project, agent) }.getOrNull() ?: return null
-    val title = row.title.split('\n', '\r').first().trim()
+    val title =
+        row.title
+            .split('\n', '\r')
+            .first()
+            .trim()
     return Injection("task_claim", "task ${row.taskId} $title".trimEnd(), 8u)
 }
 
 /** T283: append `export RTOK_AGENT_ID=<id>` to `$CLAUDE_ENV_FILE` once; every failure is silent. */
-internal fun writeAgentEnvFile(agent: String?, env: (String) -> String? = ::envVar) {
+internal fun writeAgentEnvFile(
+    agent: String?,
+    env: (String) -> String? = ::envVar,
+) {
     val id = agent ?: return
     val path = env("CLAUDE_ENV_FILE")?.takeIf { it.isNotEmpty() } ?: return
     val line = "export RTOK_AGENT_ID=$id"
@@ -178,8 +233,11 @@ internal fun writeAgentEnvFile(agent: String?, env: (String) -> String? = ::envV
 }
 
 /** A note when `[hook] max_ms` is non-zero and the event ran over it. */
-internal fun slowNote(ms: Double, maxMs: ULong, event: String): String? =
-    if (maxMs > 0u && ms > maxMs.toDouble()) "hook $event slow: ${fmt1(ms)} ms over max_ms $maxMs ms" else null
+internal fun slowNote(
+    ms: Double,
+    maxMs: ULong,
+    event: String,
+): String? = if (maxMs > 0u && ms > maxMs.toDouble()) "hook $event slow: ${fmt1(ms)} ms over max_ms $maxMs ms" else null
 
 internal fun slowKey(event: String) = "hook:slow:$event"
 
@@ -187,20 +245,36 @@ internal fun slowKey(event: String) = "hook:slow:$event"
  * T969: folds one slow call into the tally `"<last warning secs> <calls> <worst ms>"`; returns the
  * next tally and, when a warning is due, its `(calls, worst ms)`. Garbage counts as never warned.
  */
-internal fun slowTally(prev: String?, now: Long, ms: Double, every: ULong): Pair<String, Pair<Long, Double>?> {
+internal fun slowTally(
+    prev: String?,
+    now: Long,
+    ms: Double,
+    every: ULong,
+): Pair<String, Pair<Long, Double>?> {
     val it = (prev ?: "").split(' ')
     val since = it.getOrNull(0)?.toULongOrNull()?.toLong()
     val calls = (it.getOrNull(1)?.toULongOrNull()?.toLong() ?: 0) + 1
     val worst = maxOf(it.getOrNull(2)?.toDoubleOrNull() ?: 0.0, ms)
-    return if (since == null || every == 0uL || maxOf(0, now - since) >= every.toLong()) "$now 0 0" to (calls to worst)
-    else "$since $calls ${fmt1(worst)}" to null
+    return if (since == null || every == 0uL || maxOf(0, now - since) >= every.toLong()) {
+        "$now 0 0" to (calls to worst)
+    } else {
+        "$since $calls ${fmt1(worst)}" to null
+    }
 }
 
 /** `{:.1}` formatting. */
-internal fun fmt1(v: Double): String { val r = kotlin.math.round(v * 10) / 10; val s = r.toString(); return if ('.' in s) s else "$s.0" }
+internal fun fmt1(v: Double): String {
+    val r = kotlin.math.round(v * 10) / 10
+    val s = r.toString()
+    return if ('.' in s) s else "$s.0"
+}
 
 /** T170 / T969: at most one `warn` row per event per `[hook] slow_warn_s`. */
-internal fun noteSlow(cx: Runtime, event: String, ms: Double) {
+internal fun noteSlow(
+    cx: Runtime,
+    event: String,
+    ms: Double,
+) {
     val maxMs = cx.config.hook.maxMs
     val note = slowNote(ms, maxMs, event) ?: return
     val key = slowKey(event)
@@ -214,71 +288,128 @@ internal fun noteSlow(cx: Runtime, event: String, ms: Double) {
 }
 
 /** T204: a throwing plugin is logged at `error` under its id and dropped; the rest run (D1). */
-private inline fun <T> guarded(cx: Runtime, plugin: String, event: String, block: () -> T): T? = try { block() } catch (e: Exception) {
-    cx.log("error", "plugin", plugin, "$event panicked: ${e.message ?: e::class.simpleName}"); null
-}
+private inline fun <T> guarded(
+    cx: Runtime,
+    plugin: String,
+    event: String,
+    block: () -> T,
+): T? =
+    try {
+        block()
+    } catch (e: Exception) {
+        cx.log("error", "plugin", plugin, "$event panicked: ${e.message ?: e::class.simpleName}")
+        null
+    }
 
 /** Runs the event's plugins against an open runtime and returns Claude-shaped stdout bytes. */
-fun dispatch(stdin: ByteArray, input: HookInput, cx: Runtime): ByteArray {
+fun dispatch(
+    stdin: ByteArray,
+    input: HookInput,
+    cx: Runtime,
+): ByteArray {
     val start = TimeSource.Monotonic.markNow()
     val registry = Registry.new(cx.config)
     val event = input.hookEventName
-    val agent = if (!cx.config.agents.enabled) null else cx.hostId?.let { hostId ->
-        runCatching { cx.store.registerAgent(hostId, cx.session, agentParentKey(input), cx.cwd, agentActivity(input)) }.getOrNull()?.also { id ->
-            cx.config.hookClientPid?.toInt()?.let { pid -> runCatching { cx.store.setAgentAncestors(id, rtok.sys.processAncestors(pid, AGENT_ANCESTORS)) } }
+    val agent =
+        if (!cx.config.agents.enabled) {
+            null
+        } else {
+            cx.hostId?.let { hostId ->
+                runCatching { cx.store.registerAgent(hostId, cx.session, agentParentKey(input), cx.cwd, agentActivity(input)) }.getOrNull()?.also { id ->
+                    cx.config.hookClientPid
+                        ?.toInt()
+                        ?.let { pid -> runCatching { cx.store.setAgentAncestors(id, rtok.sys.processAncestors(pid, AGENT_ANCESTORS)) } }
+                }
+            }
         }
-    }
-    val parent = try { cx.recordCall("hook", "hook", event) } catch (e: Exception) {
-        if (isLocked(e)) {
-            val msg = "skipped: store locked: ${e.message}"
-            eprint("rtok: hook $event $msg\n"); rtok.appendLog(cx.config, "error", "hook", event, msg)
-            deferSessionEnd(cx.config, event, stdin)
-            return EMPTY_OUT
+    val parent =
+        try {
+            cx.recordCall("hook", "hook", event)
+        } catch (e: Exception) {
+            if (isLocked(e)) {
+                val msg = "skipped: store locked: ${e.message}"
+                eprint("rtok: hook $event $msg\n")
+                rtok.appendLog(cx.config, "error", "hook", event, msg)
+                deferSessionEnd(cx.config, event, stdin)
+                return EMPTY_OUT
+            }
+            rtok.appendLog(cx.config, "error", "hook", event, "record_call failed: ${e.message}")
+            null
         }
-        rtok.appendLog(cx.config, "error", "hook", event, "record_call failed: ${e.message}"); null
-    }
     forgetAfterCompaction(input, cx)
-    val out = when (event) {
-        "PreToolUse" -> preTool(input, cx, registry)
-        "PostToolUse" -> postTool(input, cx, registry, agent)
-        "AfterMCPExecution" -> HookOutput()
-        "SessionStart" -> {
-            writeAgentEnvFile(agent)
-            val cwd = cx.cwd
-            if (cx.config.plugins.graph.autoAddProjects && cwd != null) runCatching { cx.store.autoAddProject(cwd, Origin.Session, null) }
-            if (agent != null && cwd != null) runCatching { HookLinks.completePendingWorktree(cx, cwd, agent) }
-            cx.deferMeasurements()
-            injectEvent(input, cx, registry, agent).also { cx.flushMeasurements() }
+    val out =
+        when (event) {
+            "PreToolUse" -> {
+                preTool(input, cx, registry)
+            }
+
+            "PostToolUse" -> {
+                postTool(input, cx, registry, agent)
+            }
+
+            "AfterMCPExecution" -> {
+                HookOutput()
+            }
+
+            "SessionStart" -> {
+                writeAgentEnvFile(agent)
+                val cwd = cx.cwd
+                if (cx.config.plugins.graph.autoAddProjects && cwd != null) runCatching { cx.store.autoAddProject(cwd, Origin.Session, null) }
+                if (agent != null && cwd != null) runCatching { HookLinks.completePendingWorktree(cx, cwd, agent) }
+                cx.deferMeasurements()
+                injectEvent(input, cx, registry, agent).also { cx.flushMeasurements() }
+            }
+
+            "PostCompact" -> {
+                if (cx.config.hook.host == "claude" && "compact_summary" in input.extra) HookOutput() else injectEvent(input, cx, registry, agent)
+            }
+
+            "UserPromptSubmit", "SubagentStart" -> {
+                injectEvent(input, cx, registry, agent)
+            }
+
+            "PreCompact" -> {
+                input.preCompact()?.let { ev -> for (p in registry.enabled()) guarded(cx, p.manifest().id, "PreCompact") { p.preCompact(ev, Ctx(cx)) } }
+                val extra = rtok.plugins.memory.compactContext(Ctx(cx))
+                if (extra != null) HookOutput(hookSpecificOutput = HookSpecificOutput("PreCompact", additionalContext = extra.text)) else HookOutput()
+            }
+
+            "SessionEnd" -> {
+                runCatching { rtok.plugins.checkpoint.saveSession(input.transcriptPath ?: "", Ctx(cx)) }
+                val now = rtok.log.now()
+                if (agent != null && runCatching { cx.store.endAgent(agent, now) }.isSuccess) cx.cwd?.let { cwd -> runCatching { HookLinks.unlockEndedWorktree(cwd, agent) } }
+                runCatching { cx.store.endSession(cx.session, now) }.exceptionOrNull()?.let { if (isLocked(it)) deferSessionEnd(cx.config, "SessionEnd", stdin) }
+                HookOutput()
+            }
+
+            else -> {
+                HookOutput()
+            }
         }
-        "PostCompact" -> if (cx.config.hook.host == "claude" && "compact_summary" in input.extra) HookOutput() else injectEvent(input, cx, registry, agent)
-        "UserPromptSubmit", "SubagentStart" -> injectEvent(input, cx, registry, agent)
-        "PreCompact" -> {
-            input.preCompact()?.let { ev -> for (p in registry.enabled()) guarded(cx, p.manifest().id, "PreCompact") { p.preCompact(ev, Ctx(cx)) } }
-            val extra = rtok.plugins.memory.compactContext(Ctx(cx))
-            if (extra != null) HookOutput(hookSpecificOutput = HookSpecificOutput("PreCompact", additionalContext = extra.text)) else HookOutput()
-        }
-        "SessionEnd" -> {
-            runCatching { rtok.plugins.checkpoint.saveSession(input.transcriptPath ?: "", Ctx(cx)) }
-            val now = rtok.log.now()
-            if (agent != null && runCatching { cx.store.endAgent(agent, now) }.isSuccess) cx.cwd?.let { cwd -> runCatching { HookLinks.unlockEndedWorktree(cwd, agent) } }
-            runCatching { cx.store.endSession(cx.session, now) }.exceptionOrNull()?.let { if (isLocked(it)) deferSessionEnd(cx.config, "SessionEnd", stdin) }
-            HookOutput()
-        }
-        else -> HookOutput()
-    }
     val bytes = out.encode().encodeToByteArray()
     val ms = start.elapsedNow().inWholeNanoseconds / 1e6
     noteSlow(cx, event, ms)
     if (parent != null) {
         runCatching { cx.store.setCallMs(parent, ms) }
-        runCatching { cx.store.insertHookCallIo(parent, stdin, bytes, cx.config.core.callIoInlineBytes.toInt()) }
+        runCatching {
+            cx.store.insertHookCallIo(
+                parent,
+                stdin,
+                bytes,
+                cx.config.core.callIoInlineBytes
+                    .toInt(),
+            )
+        }
     }
     if (event == "Stop" || event == "SessionEnd") runCatching { HookLinks.spawnOtelExport(cx) }
     return bytes
 }
 
 /** T929: a compaction drops what the window saw, so the re-read cache and archive pointers go too. */
-private fun forgetAfterCompaction(input: HookInput, cx: Runtime) {
+private fun forgetAfterCompaction(
+    input: HookInput,
+    cx: Runtime,
+) {
     val compacting = input.hookEventName == "PreCompact" || input.hookEventName == "PostCompact" || input.sessionStart()?.source == "compact"
     if (compacting) runCatching { cx.forgetSeen(agentParentKey(input)) }
 }
@@ -287,27 +418,51 @@ private fun forgetAfterCompaction(input: HookInput, cx: Runtime) {
  * T(D1): a SessionEnd that met a locked store is re-run detached with a steady lock wait, so the
  * session still ends. Runs at most once (`RTOK_HOOK_DEFERRED` marks the re-run).
  */
-internal fun deferSessionEnd(cfg: Config, event: String, stdin: ByteArray, env: (String) -> String? = ::envVar) {
+internal fun deferSessionEnd(
+    cfg: Config,
+    event: String,
+    stdin: ByteArray,
+    env: (String) -> String? = ::envVar,
+) {
     if (event != "SessionEnd" || env(DEFERRED_ENV) != null) return
     val exe = rtok.sys.currentExe() ?: return
-    val extra = buildMap { put(DEFERRED_ENV, "1"); if (cfg.home.isNotEmpty()) put("RTOK_HOME", cfg.home) }
+    val extra =
+        buildMap {
+            put(DEFERRED_ENV, "1")
+            if (cfg.home.isNotEmpty()) put("RTOK_HOME", cfg.home)
+        }
     rtok.sys.spawnDetached(exe, listOf("hook", "SessionEnd"), extra, stdin)
 }
 
-private fun preTool(input: HookInput, cx: Runtime, registry: Registry): HookOutput {
+private fun preTool(
+    input: HookInput,
+    cx: Runtime,
+    registry: Registry,
+): HookOutput {
     val ev = input.preTool() ?: return HookOutput()
     var rewrite: PreToolDecision.Rewrite? = null
     for (p in registry.enabled()) {
         when (val got = guarded(cx, p.manifest().id, "PreToolUse") { p.preTool(ev, Ctx(cx, input.agentId)) }) {
-            is PreToolDecision.Deny -> return HookOutput(hookSpecificOutput = HookSpecificOutput("PreToolUse", permissionDecision = "deny", permissionDecisionReason = got.reason))
-            is PreToolDecision.Rewrite -> rewrite = got
+            is PreToolDecision.Deny -> {
+                return HookOutput(hookSpecificOutput = HookSpecificOutput("PreToolUse", permissionDecision = "deny", permissionDecisionReason = got.reason))
+            }
+
+            is PreToolDecision.Rewrite -> {
+                rewrite = got
+            }
+
             null -> {}
         }
     }
     return rewrite?.let { HookOutput(hookSpecificOutput = HookSpecificOutput("PreToolUse", updatedInput = it.input, permissionDecisionReason = it.reason)) } ?: HookOutput()
 }
 
-private fun postTool(input: HookInput, cx: Runtime, registry: Registry, agent: String?): HookOutput {
+private fun postTool(
+    input: HookInput,
+    cx: Runtime,
+    registry: Registry,
+    agent: String?,
+): HookOutput {
     val ev = input.postTool() ?: return HookOutput()
     val parts = mutableListOf<String>()
     for (p in registry.enabled()) guarded(cx, p.manifest().id, "PostToolUse") { p.postTool(ev, Ctx(cx, input.agentId)) }?.let { parts += it }
@@ -335,7 +490,10 @@ internal fun mcpResult(response: JsonElement): JsonElement? {
     return if (r?.get("content") is kotlinx.serialization.json.JsonArray) r else null
 }
 
-private fun cursorMcpOutput(input: HookInput, cx: Runtime): JsonElement? {
+private fun cursorMcpOutput(
+    input: HookInput,
+    cx: Runtime,
+): JsonElement? {
     if (cx.config.hook.host != "cursor" || isRtokMcp(input)) return null
     val result = arrayOf(mcpResult(input.toolResponse ?: return null) ?: return null)
     val server = input.mcpServerName() ?: "mcp"
@@ -343,19 +501,28 @@ private fun cursorMcpOutput(input: HookInput, cx: Runtime): JsonElement? {
     return if (HookLinks.shortenMcpResult(cx, server, tool, result)) result[0] else null
 }
 
-private fun injectEvent(input: HookInput, cx: Runtime, registry: Registry, agent: String?): HookOutput {
+private fun injectEvent(
+    input: HookInput,
+    cx: Runtime,
+    registry: Registry,
+    agent: String?,
+): HookOutput {
     val event = input.hookEventName
     val inj = mutableListOf<Injection>()
-    for (p in registry.enabled()) guarded(cx, p.manifest().id, event) {
-        val ss = input.sessionStart(); val ps = input.promptSubmit(); val sa = input.subagentStart()
-        when {
-            ss != null -> p.sessionStart(ss, Ctx(cx))
-            ps != null -> p.promptSubmit(ps, Ctx(cx))
-            event == "PostCompact" -> p.sessionStart(SessionStart("compact"), Ctx(cx))
-            sa != null -> p.subagentStart(sa, Ctx(cx))
-            else -> null
-        }
-    }?.let { inj += it }
+    for (p in registry.enabled()) {
+        guarded(cx, p.manifest().id, event) {
+            val ss = input.sessionStart()
+            val ps = input.promptSubmit()
+            val sa = input.subagentStart()
+            when {
+                ss != null -> p.sessionStart(ss, Ctx(cx))
+                ps != null -> p.promptSubmit(ps, Ctx(cx))
+                event == "PostCompact" -> p.sessionStart(SessionStart("compact"), Ctx(cx))
+                sa != null -> p.subagentStart(sa, Ctx(cx))
+                else -> null
+            }
+        }?.let { inj += it }
+    }
     if (event == "SessionStart" || event == "SubagentStart") agentIdInjection(agent)?.let { inj += it }
     if (event == "SessionStart" || event == "PostCompact") claimInjection(cx, agent)?.let { inj += it }
     val push = if (event == "UserPromptSubmit") Push.pending(cx, agent) else null
@@ -368,15 +535,23 @@ private fun injectEvent(input: HookInput, cx: Runtime, registry: Registry, agent
 }
 
 /** Caps PostToolUse context at `[plugins.inject] budget_tokens`; the rest goes to the archive behind a marker. */
-internal fun capBudget(cx: Runtime, text: String): String {
+internal fun capBudget(
+    cx: Runtime,
+    text: String,
+): String {
     val budget = cx.config.plugins.inject.budgetTokens
+
     fun est(s: String) = cx.estimate(s, Class.Prose)
     if (est(text) <= budget) return text
     val lines = text.rustLines()
     var keep = 0
     while (keep < lines.size && est(lines.subList(0, keep + 1).joinToString("\n")) <= budget) keep++
     if (keep == lines.size) return lines.joinToString("\n")
-    fun markerFor(dropped: String, id: String): String {
+
+    fun markerFor(
+        dropped: String,
+        id: String,
+    ): String {
         val e = est(dropped)
         return if (id.isEmpty()) "dropped:post_tool:$e" else "dropped:post_tool:$e · expand: rtok expand ${rtok.shortId(id)}"
     }

@@ -15,7 +15,8 @@ class MiseTest {
     @Test fun progressFramesCollapseAndCarriageReturnsShowTheLastFrame() {
         val raw = "mise node@20 download x.tar.gz [=>        ] 1.0MiB/45MiB\rmise node@20 download x.tar.gz [=====>    ] 20MiB/45MiB\n\u001b[32m  [#########>] 45MiB/45MiB\u001b[0m\ndone\n"
         val got = Mise.tidy(raw)!!
-        assertTrue(got.endsWith("\ndone"), got); assertTrue(got.startsWith("mise: 2 install/progress lines dropped"), got)
+        assertTrue(got.endsWith("\ndone"), got)
+        assertTrue(got.startsWith("mise: 2 install/progress lines dropped"), got)
     }
 
     @Test fun warningsAndErrorsAreNeverDroppedEvenOnAStepLine() {
@@ -24,5 +25,8 @@ class MiseTest {
         for (k in listOf("download failed: connection reset", "mise WARN  deprecated setting", "mise ERROR task failed")) assertTrue(got.contains(k), got)
     }
 
-    @Test fun outputWithoutNoiseIsLeftAlone() { assertNull(Mise.tidy("[test] $ cargo test\ntest result: ok\n")); assertNull(Mise.tidy("")) }
+    @Test fun outputWithoutNoiseIsLeftAlone() {
+        assertNull(Mise.tidy("[test] $ cargo test\ntest result: ok\n"))
+        assertNull(Mise.tidy(""))
+    }
 }

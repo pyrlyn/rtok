@@ -1,6 +1,5 @@
 package rtok.expand
 
-import kotlin.test.*
 import rtok.Expand
 import rtok.Expand.filterLines
 import rtok.Expand.parseRange
@@ -12,14 +11,18 @@ import rtok.plugin.Runtime
 import rtok.shortId
 import rtok.store.*
 import rtok.support.diskConfig
+import kotlin.test.*
 
 class ExpandTest {
     private fun cfg(name: String): Config = diskConfig("expand-$name").first
+
     private fun err(block: () -> Unit): String = assertFailsWith<ExpandException> { block() }.message!!
 
     @Test fun shortIdIsTheResolvableMinimum() {
         val id = "ab".repeat(32)
-        assertEquals("abababab", shortId(id)); assertEquals("abc", shortId("abc")); assertTrue(shortId(id).length >= MIN_PREFIX)
+        assertEquals("abababab", shortId(id))
+        assertEquals("abc", shortId("abc"))
+        assertTrue(shortId(id).length >= MIN_PREFIX)
     }
 
     @Test fun ambiguousPrefixListsTheLongerCandidates() {
@@ -28,11 +31,9 @@ class ExpandTest {
         assertTrue("abababab1111" in msg && "abababab2222" in msg, msg)
     }
 
-    @Test fun hugeGrepContextClampsToTheWholePayload(): Unit =
-        assertEquals(listOf("1:a", "2:b", "3:HIT", "4:c"), filterLines("a\nb\nHIT\nc", null, "HIT", Int.MAX_VALUE))
+    @Test fun hugeGrepContextClampsToTheWholePayload(): Unit = assertEquals(listOf("1:a", "2:b", "3:HIT", "4:c"), filterLines("a\nb\nHIT\nc", null, "HIT", Int.MAX_VALUE))
 
-    @Test fun malformedRangeIsRejectedBeforeArchiveLookup(): Unit =
-        assertTrue("invalid line range" in err { Expand.run(cfg("bad-range"), "no-such", "3-2", null, 0) })
+    @Test fun malformedRangeIsRejectedBeforeArchiveLookup(): Unit = assertTrue("invalid line range" in err { Expand.run(cfg("bad-range"), "no-such", "3-2", null, 0) })
 
     @Test fun unknownIdIsErr(): Unit = assertTrue("unknown archive id" in err { Expand.run(cfg("unknown"), "no-such", null, null, 0) })
 
@@ -49,11 +50,12 @@ class ExpandTest {
 
     @Test fun roundTripFromPutArchive() {
         val c = cfg("round")
-        val id = Runtime.open(c, "expand").use { rt ->
-            rt.store.putArchive("expand", "hello\nworld\n".encodeToByteArray(), c.core.archiveDir).also {
-                assertEquals("hello\nworld\n", rt.store.getArchive(it, c.core.archiveDir)!!.decodeToString())
+        val id =
+            Runtime.open(c, "expand").use { rt ->
+                rt.store.putArchive("expand", "hello\nworld\n".encodeToByteArray(), c.core.archiveDir).also {
+                    assertEquals("hello\nworld\n", rt.store.getArchive(it, c.core.archiveDir)!!.decodeToString())
+                }
             }
-        }
         assertEquals("hello\nworld\n", Expand.run(c, id, null, null, 0).decodeToString())
     }
 
@@ -82,15 +84,23 @@ class ExpandTest {
         }
     }
 
-    private fun seeded(name: String, body: String, pointer: (String) -> String = { "[archived $it]" }): Pair<Config, String> {
+    private fun seeded(
+        name: String,
+        body: String,
+        pointer: (String) -> String = { "[archived $it]" },
+    ): Pair<Config, String> {
         val c = cfg(name)
-        val id = Runtime.open(c, "proxy-sess").use { rt ->
-            rt.store.putArchive("proxy-sess", body.encodeToByteArray(), c.core.archiveDir).also { rt.store.putArchiveDecision("tu-1", it, "proxy-sess", pointer(it)) }
-        }
+        val id =
+            Runtime.open(c, "proxy-sess").use { rt ->
+                rt.store.putArchive("proxy-sess", body.encodeToByteArray(), c.core.archiveDir).also { rt.store.putArchiveDecision("tu-1", it, "proxy-sess", pointer(it)) }
+            }
         return c to id
     }
 
-    private fun frozenAndCharged(c: Config, id: String) = Runtime.open(c, "probe").use { rt ->
+    private fun frozenAndCharged(
+        c: Config,
+        id: String,
+    ) = Runtime.open(c, "probe").use { rt ->
         rt.store.archiveDecision("proxy-sess", "tu-1")!!.expanded to rt.store.listMeasurements("archive").count { it.refId == id }
     }
 
@@ -125,8 +135,10 @@ class ExpandTest {
     }
 
     @Test fun contextWindowsMergeAndSeparateOnDashDash() {
-        assertEquals(listOf("1:a1", "2:a2", "3:HIT", "4:a4", "5:a5", "6:b1", "7:HIT", "8:b3", "9:b4"),
-            filterLines("a1\na2\nHIT\na4\na5\nb1\nHIT\nb3\nb4\nb5\n", null, "HIT", 2))
+        assertEquals(
+            listOf("1:a1", "2:a2", "3:HIT", "4:a4", "5:a5", "6:b1", "7:HIT", "8:b3", "9:b4"),
+            filterLines("a1\na2\nHIT\na4\na5\nb1\nHIT\nb3\nb4\nb5\n", null, "HIT", 2),
+        )
         assertEquals(listOf("1:h1", "2:HIT", "3:x3", "--", "8:x8", "9:HIT"), filterLines("h1\nHIT\nx3\nx4\nx5\nx6\nx7\nx8\nHIT\n", null, "HIT", 1))
     }
 
@@ -135,16 +147,17 @@ class ExpandTest {
         assertEquals(listOf("1:a", "2:HIT"), filterLines("a\nHIT", null, "HIT", 3))
     }
 
-    @Test fun contextInsideALinesRangeKeepsAbsoluteNumbers(): Unit =
-        assertEquals(listOf("2:l2", "3:hit", "4:l4", "--", "6:l6", "7:hit", "8:l8"), filterLines("l1\nl2\nhit\nl4\nl5\nl6\nhit\nl8\n", "2-8", "hit", 1))
+    @Test fun contextInsideALinesRangeKeepsAbsoluteNumbers(): Unit = assertEquals(listOf("2:l2", "3:hit", "4:l4", "--", "6:l6", "7:hit", "8:l8"), filterLines("l1\nl2\nhit\nl4\nl5\nl6\nhit\nl8\n", "2-8", "hit", 1))
 
     @Test fun contextZeroIsTheOldOutputAndMaxLinesStillCaps() {
         val text = (1..20).joinToString("\n") { if (it == 10 || it == 16) "hit" else "l$it" }
         assertEquals(listOf("10:hit", "16:hit"), filterLines(text, null, "hit", 0))
         val wide = filterLines(text, null, "hit", 3)
-        assertEquals(13, wide.size); assertTrue(wide.none { it == "--" })
+        assertEquals(13, wide.size)
+        assertTrue(wide.none { it == "--" })
         val out = renderLines(text, "arc123", null, "hit", 3, 5u)
-        assertEquals(5, out.lines().count { "lines omitted" !in it }); assertTrue("8 lines omitted (expand arc123)" in out, out)
+        assertEquals(5, out.lines().count { "lines omitted" !in it })
+        assertTrue("8 lines omitted (expand arc123)" in out, out)
     }
 
     @Test fun aFullArchiveIdInTheOmittedMarkerPrintsEightHexChars() {
@@ -154,8 +167,10 @@ class ExpandTest {
     }
 
     @Test fun parseRangeBareStartRunsToEnd() {
-        assertEquals(10 to 20, parseRange("10", 20)); assertEquals(5 to 5, parseRange("5-5", 20))
-        assertEquals(1 to 5, parseRange("-5", 20)); assertEquals(5 to 20, parseRange("5-", 20))
+        assertEquals(10 to 20, parseRange("10", 20))
+        assertEquals(5 to 5, parseRange("5-5", 20))
+        assertEquals(1 to 5, parseRange("-5", 20))
+        assertEquals(5 to 20, parseRange("5-", 20))
     }
 
     @Test fun parseRangeStripsSurroundingQuotes() {
@@ -165,7 +180,8 @@ class ExpandTest {
 
     @Test fun parseRangeAcceptsCommaPairs() {
         for (s in listOf("5,10", "5, 10", "\"5, 10\"")) assertEquals(5 to 10, parseRange(s, 20))
-        assertEquals(5 to 20, parseRange("5,", 20)); assertEquals(7 to 10, parseRange("7,100", 10))
+        assertEquals(5 to 20, parseRange("5,", 20))
+        assertEquals(7 to 10, parseRange("7,100", 10))
         for (s in listOf("1,2,3", "3,2", "0,2", "a,b")) assertTrue("`$s`" in err { parseRange(s, 20) }, s)
     }
 
@@ -179,12 +195,34 @@ class ExpandTest {
     }
 
     @Test fun parseRangeAcceptsTheLoggedSpellings() {
-        val cases = listOf("36<br/>-60" to (36 to 60), "320 - 360" to (320 to 360), "10:45" to (10 to 45), "[1, 50]" to (1 to 50),
-            "[200, 260]" to (200 to 260), "[242, 300]" to (242 to 300), "[317, 390]" to (317 to 390), "560 650" to (560 to 650),
-            "12 - 100" to (12 to 100), "580:650" to (580 to 650), "200 - 380" to (200 to 380), "1860_1960" to (1860 to 1960),
-            "283 350" to (283 to 350), "1 40" to (1 to 40), "136\"-\"215" to (136 to 215), "610 614" to (610 to 614),
-            "490<br>-800" to (490 to 800), "12 - 70" to (12 to 70), "215\"-\"460" to (215 to 460), "235\"-\"270" to (235 to 270),
-            "52<br>" to (52 to 52), "60<br>" to (60 to 60), "410<br>" to (410 to 410), "95<br>" to (95 to 95), "420 - 640" to (420 to 640))
+        val cases =
+            listOf(
+                "36<br/>-60" to (36 to 60),
+                "320 - 360" to (320 to 360),
+                "10:45" to (10 to 45),
+                "[1, 50]" to (1 to 50),
+                "[200, 260]" to (200 to 260),
+                "[242, 300]" to (242 to 300),
+                "[317, 390]" to (317 to 390),
+                "560 650" to (560 to 650),
+                "12 - 100" to (12 to 100),
+                "580:650" to (580 to 650),
+                "200 - 380" to (200 to 380),
+                "1860_1960" to (1860 to 1960),
+                "283 350" to (283 to 350),
+                "1 40" to (1 to 40),
+                "136\"-\"215" to (136 to 215),
+                "610 614" to (610 to 614),
+                "490<br>-800" to (490 to 800),
+                "12 - 70" to (12 to 70),
+                "215\"-\"460" to (215 to 460),
+                "235\"-\"270" to (235 to 270),
+                "52<br>" to (52 to 52),
+                "60<br>" to (60 to 60),
+                "410<br>" to (410 to 410),
+                "95<br>" to (95 to 95),
+                "420 - 640" to (420 to 640),
+            )
         assertEquals(25, cases.size)
         for ((s, want) in cases) assertEquals(want, parseRange(s, 5000), s)
     }
@@ -192,7 +230,8 @@ class ExpandTest {
     @Test fun parseRangeTrailingBrIsOneLineNotToEnd() {
         assertEquals(52 to 100, parseRange("52", 100))
         for (s in listOf("52<br>", "52<br/>", "52<br><br>")) assertEquals(52 to 52, parseRange(s, 100), s)
-        assertEquals(52 to 70, parseRange("52-70<br>", 100)); assertEquals(490 to 800, parseRange("490<br>-800", 1000))
+        assertEquals(52 to 70, parseRange("52-70<br>", 100))
+        assertEquals(490 to 800, parseRange("490<br>-800", 1000))
     }
 
     @Test fun parseRangeStillRejectsNonLines() {
@@ -201,6 +240,7 @@ class ExpandTest {
 
     @Test fun maxLinesTruncatesAndReports() {
         val out = renderLines((1..150).joinToString("\n") { "line$it" }, "arc123", null, null, 0, 100u)
-        assertEquals(100, out.lines().count { "lines omitted" !in it }); assertTrue("50 lines omitted (expand arc123)" in out, out)
+        assertEquals(100, out.lines().count { "lines omitted" !in it })
+        assertTrue("50 lines omitted (expand arc123)" in out, out)
     }
 }
