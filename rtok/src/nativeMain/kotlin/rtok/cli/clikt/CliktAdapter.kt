@@ -6,6 +6,7 @@ import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.arguments.multiple
 import com.github.ajalt.clikt.parameters.arguments.optional
 import com.github.ajalt.clikt.parameters.options.flag
+import com.github.ajalt.clikt.parameters.options.multiple
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.options.versionOption
 import rtok.VERSION
@@ -27,13 +28,20 @@ private class SpecCommand(
 ) : CliktCommand(name = spec.name) {
     override fun help(context: Context) = spec.help
 
-    override val invokeWithoutSubcommand = spec.subcommands.isEmpty()
+    override val invokeWithoutSubcommand = spec.subcommands.isEmpty() || spec.runsBare
     private val opts =
         (inherited + spec.options).map { o ->
             o to
                 when (o) {
-                    is OptSpec.Flag -> option("--${o.name}", help = o.help).flag().also { registerOption(it) }
-                    is OptSpec.Value -> option("--${o.name}", help = o.help, metavar = o.metavar).also { registerOption(it) }
+                    is OptSpec.Flag -> {
+                        option("--${o.name}", help = o.help).flag().also { registerOption(it) }
+                    }
+
+                    is OptSpec.Value -> {
+                        val names = listOfNotNull("--${o.name}", o.short?.let { "-$it" }).toTypedArray()
+                        val base = option(*names, help = o.help, metavar = o.metavar)
+                        (if (o.repeat) base.multiple() else base).also { registerOption(it) }
+                    }
                 }
         }
     private val positionals =
@@ -53,12 +61,17 @@ private class SpecCommand(
                     parsed.values[o.name] = v
                 }
 
+                is List<*> -> {
+                    parsed.lists["--${o.name}"] = v.map { it as String }
+                }
+
                 else -> {}
             }
         }
         for ((a, arg) in positionals) (arg.value as String?)?.let { parsed.args[a.name] = it }
         for ((a, arg) in rest) parsed.lists[a.name] = arg.value
-        if (spec.subcommands.isEmpty()) parsed.action = spec.action
+        // A subcommand runs after its parent and replaces a bare action.
+        if (spec.subcommands.isEmpty() || spec.runsBare) parsed.action = spec.action
     }
 }
 
