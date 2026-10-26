@@ -812,3 +812,10 @@ Next, in order:
 - Tests: OutdatedTest 8, AgentsCliSpec +1.
 - Stop point: next sessions, usage, junk, whoami, show, status, send, inbox, `--project`, restart.rs.
 
+## Session: agents — `rtok agents sessions [watch]` (render.rs sessions_table/tick, log.rs watch_loop)
+- `rtok.agents.SessionsTable` (`duration`, `ago`, agent cells, `render`, `Ticker` with `keep` for a missed poll),
+  `rtok.log` `WatchTick`/`watchLoop`/`repaint` (TTY repaint, pipe appends fresh rows, ends when reparented).
+  `CliIo.tty`/`flush`. CLI `rtok agents sessions [--all] [--json]` and `sessions watch` over `model.Agents.agentSessions`.
+- Tests: SessionsTableTest 6, AgentsCliSpec +1.
+- Stop point: next whoami, show, status, send, inbox, then usage, junk, `--project`, restart.rs.
+

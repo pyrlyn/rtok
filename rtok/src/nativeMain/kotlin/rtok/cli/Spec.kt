@@ -105,6 +105,12 @@ interface CliIo {
 
     /** Raw bytes to stdout, unchanged (an echoed input must stay byte-identical). */
     fun writeBytes(bytes: ByteArray) = out(bytes.decodeToString())
+
+    /** stdout is a terminal: a `watch` repaints in place instead of appending. */
+    val tty: Boolean get() = false
+
+    /** Push what [out] buffered to the reader (a `watch` step). */
+    fun flush() {}
 }
 
 /** A command failed: printed as `Error: <message>` with exit [code] (Rust: anyhow from main → 1). */
