@@ -32,9 +32,10 @@ Plan and per-phase checklist: [port-plan.md](port-plan.md).
 | crates/rtok-store embed | `Embed.kt` | ✅ | 16 → 17 |
 | src/plugins/mod.rs registry, measure, proxy, render::plugins_table | `rtok/plugins/Registry.kt`, `Manifests.kt`, `Render.kt`, `ShellWord.kt` | ✅ | 3 → 4 |
 | src/project.rs | `rtok/Project.kt` (+ test `Vfs`) | ✅ | 13 → 13 |
+| (new) libs/http, libs/http-ktor | `rtok.http` interface, Ktor adapter | ✅ | – → 4 |
 | src/plugins/inject | `rtok/plugins/inject/` (Inject, Modes) | ✅ (hook-path halves → Phase 6) | 8 → 9 |
 | src/plugins/checkpoint.rs | `rtok/plugins/checkpoint/`, `rtok/plugins/memory/Private.kt`, `rtok-sys` Shlex/LineReader | ✅ (3 hook-dispatcher tests → Phase 6) | 27 → 27 |
-| src/plugins/compress | `rtok/plugins/compress/` (Compress, MustKeep, Llm, PromptToml) | ✅ (llm HTTP + queue.rs 3 tests pending: no approved HTTP client) | 16 → 14 |
+| src/plugins/compress | `rtok/plugins/compress/` (Compress, MustKeep, Llm, PromptToml) + Compressor, Queue; HTTP via `libs/http` + `libs/http-ktor` | ✅ (proxy-side `submit` call → Phase 7) | 19 → 22 (+4 KtorHttpTest) |
 | src/plugins/json_tree | `rtok/plugins/jsontree/JsonTree.kt`, `rtok-sys/Sha1.kt`, `Text.kt` jsonQuote | ✅ (3 MCP tests pending) | 15 → 12 |
 | src/plugins/toon, src/proxy/anthropic.rs (ToolResults only) | `rtok/plugins/toon/Toon.kt`, `rtok/proxy/Anthropic.kt`, `Wire.kt` | ✅ (expand row pending) | 10 (+rstest folded) → 12 + 2 |
 | src/plugins/archive (mod, pi), src/cli/archive.rs | `rtok/plugins/archive/Archive.kt`, `Pi.kt`, `cli/ArchiveCmd.kt` | ✅ (4 wire/gate tests pending) | 24 → 20 + 5 CLI + 3 e2e |
@@ -62,7 +63,7 @@ Plan and per-phase checklist: [port-plan.md](port-plan.md).
 | src/web, agents/junk_web.rs, `rtok web/tui/dashboard` | – | ❌ excluded (web) | |
 | tests/*.rs (138 integration files) | `:rtok` commonTest | ⬜ | 0 / ~138 files |
 
-Totals: 534 Kotlin (+11 e2e via `./gradlew e2eTest`) tests passing on macosArm64 (see port-plan.md for the per-phase table).
+Totals: 546 Kotlin (+11 e2e via `./gradlew e2eTest`) tests passing on macosArm64 (see port-plan.md for the per-phase table).
 
 | Rust | Kotlin | Status | Tests |
 |---|---|---|---|
@@ -74,3 +75,6 @@ Totals: 534 Kotlin (+11 e2e via `./gradlew e2eTest`) tests passing on macosArm64
 
 ## Test groups
 unit `./gradlew macosArm64Test`, CLI `./gradlew cliTest`, e2e `./gradlew e2eTest`, wasm `./gradlew wasmTest` (docs/testing.md).
+
+## Dependencies added 2026-10-26 (Ivan approved)
+Ktor client 3.3.3 (`ktor-client-core`, `-darwin`, `-curl` on Linux, `-mock` tests only) and kotlinx-coroutines-core 1.10.2 (the version Ktor requires), in `libs/http` / `libs/http-ktor` only.
