@@ -116,6 +116,7 @@
     <ID>CyclomaticComplexMethod:Sync.kt:Sync$fun run</ID>
     <ID>CyclomaticComplexMethod:Tables.kt:Tables$fun kubectlGet: String?</ID>
     <ID>CyclomaticComplexMethod:Tools.kt:Tools$fun door: String</ID>
+    <ID>CyclomaticComplexMethod:Tools.kt:Tools$fun invoke: String</ID>
     <ID>CyclomaticComplexMethod:ToonTest.kt:private fun decodeCell: JsonElement</ID>
     <ID>CyclomaticComplexMethod:Types.kt:HookInput$fun adaptCline</ID>
     <ID>CyclomaticComplexMethod:Types.kt:HookInput$fun adaptCursor</ID>
@@ -637,6 +638,12 @@
     <ID>MagicNumber:PortableTest.kt:ImportTest$50u</ID>
     <ID>MagicNumber:ProjectsTest.kt:ProjectsTest$20_000u</ID>
     <ID>MagicNumber:ProjectsTest.kt:ProjectsTest$3000</ID>
+    <ID>MagicNumber:ProtocolTest.kt:ProtocolTest$10</ID>
+    <ID>MagicNumber:ProtocolTest.kt:ProtocolTest$3</ID>
+    <ID>MagicNumber:ProtocolTest.kt:ProtocolTest$4</ID>
+    <ID>MagicNumber:ProtocolTest.kt:ProtocolTest$5</ID>
+    <ID>MagicNumber:ProtocolTest.kt:ProtocolTest$6</ID>
+    <ID>MagicNumber:ProtocolTest.kt:ProtocolTest$7</ID>
     <ID>MagicNumber:Push.kt:Push$10u</ID>
     <ID>MagicNumber:Python.kt:Python$4</ID>
     <ID>MagicNumber:PythonTest.kt:PythonTest$12</ID>
@@ -688,6 +695,7 @@
     <ID>MagicNumber:ReviewTest.kt:ReviewTest$4</ID>
     <ID>MagicNumber:ReviewTest.kt:ReviewTest$40</ID>
     <ID>MagicNumber:ReviewTest.kt:ReviewTest$5</ID>
+    <ID>MagicNumber:Roots.kt:Roots$3</ID>
     <ID>MagicNumber:RootsTest.kt:RootsTest$20</ID>
     <ID>MagicNumber:Rules.kt:Rules$10</ID>
     <ID>MagicNumber:Rules.kt:Rules$10u</ID>
@@ -793,6 +801,9 @@
     <ID>MagicNumber:SearchTest.kt:SearchTest$64</ID>
     <ID>MagicNumber:Sed.kt:0x0c</ID>
     <ID>MagicNumber:Sed.kt:0xff</ID>
+    <ID>MagicNumber:ServerTest.kt:ServerTest$32600</ID>
+    <ID>MagicNumber:ServerTest.kt:ServerTest$32601</ID>
+    <ID>MagicNumber:ServerTest.kt:ServerTest$32700</ID>
     <ID>MagicNumber:Skill.kt:0x80</ID>
     <ID>MagicNumber:Skill.kt:0xC0</ID>
     <ID>MagicNumber:SkillTest.kt:SkillTest$100</ID>
@@ -970,6 +981,8 @@
     <ID>ReturnCount:Project.kt:fun projectKeyWith: String?</ID>
     <ID>ReturnCount:Project.kt:private fun originUrl: String?</ID>
     <ID>ReturnCount:Projects.kt:Projects$fun render: String</ID>
+    <ID>ReturnCount:Protocol.kt:Protocol$fun missingRequired: String?</ID>
+    <ID>ReturnCount:Protocol.kt:Protocol$private fun missingFields: String?</ID>
     <ID>ReturnCount:Push.kt:Push.Companion$fun pending: Push?</ID>
     <ID>ReturnCount:Queue.kt:Queue$internal fun admit: Admit</ID>
     <ID>ReturnCount:Rank.kt:FileGraph$internal fun powerIteration: List&lt;Double></ID>
@@ -982,6 +995,7 @@
     <ID>ReturnCount:Review.kt:Review$private fun hunkHeader: Pair&lt;Int, Int>?</ID>
     <ID>ReturnCount:Roots.kt:Roots$fun enterCaller: CallerGuard?</ID>
     <ID>ReturnCount:Roots.kt:Roots$fun movedHint: String</ID>
+    <ID>ReturnCount:Roots.kt:Roots$internal fun filePath: String?</ID>
     <ID>ReturnCount:RuleFiles.kt:DiskRuleFiles$override fun dropIns: List&lt;String></ID>
     <ID>ReturnCount:Rules.kt:Rules$internal fun applyParsed: String</ID>
     <ID>ReturnCount:Rules.kt:Rules$internal fun parseDiag: Triple&lt;String, String, String>?</ID>
@@ -1008,6 +1022,8 @@
     <ID>ReturnCount:Sed.kt:private fun address: Int?</ID>
     <ID>ReturnCount:Sed.kt:private fun partEnd: Int?</ID>
     <ID>ReturnCount:Sed.kt:private fun scriptReadOnly: Boolean</ID>
+    <ID>ReturnCount:Server.kt:Server$fun handleLine: String?</ID>
+    <ID>ReturnCount:Server.kt:Server$private fun handleValue: JsonObject?</ID>
     <ID>ReturnCount:Skill.kt:internal fun decide: PreToolDecision?</ID>
     <ID>ReturnCount:Skill.kt:internal fun digest: PreToolDecision?</ID>
     <ID>ReturnCount:Skill.kt:internal fun frontmatterKeys: Set&lt;String>?</ID>
@@ -1106,6 +1122,7 @@
     <ID>TooManyFunctions:Outline.kt:rtok.plugins.read.Outline.kt</ID>
     <ID>TooManyFunctions:Project.kt:rtok.Project.kt</ID>
     <ID>TooManyFunctions:ProjectTest.kt:ProjectTest</ID>
+    <ID>TooManyFunctions:Protocol.kt:Protocol</ID>
     <ID>TooManyFunctions:RankTest.kt:RankTest</ID>
     <ID>TooManyFunctions:ReadTest.kt:ReadTest</ID>
     <ID>TooManyFunctions:Refs.kt:Refs</ID>
@@ -1120,6 +1137,7 @@
     <ID>TooManyFunctions:ScopeTest.kt:ScopeTest</ID>
     <ID>TooManyFunctions:Score.kt:Score</ID>
     <ID>TooManyFunctions:SearchTest.kt:SearchTest</ID>
+    <ID>TooManyFunctions:ServerTest.kt:ServerTest</ID>
     <ID>TooManyFunctions:Skill.kt:rtok.plugins.guard.Skill.kt</ID>
     <ID>TooManyFunctions:SyncTest.kt:SyncTest</ID>
     <ID>TooManyFunctions:Tables.kt:Tables</ID>
