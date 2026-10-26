@@ -75,6 +75,24 @@ class TomlTable internal constructor(
         lines.add(after + 1, "${bareOrQuoted(key)} = ${value.render()}")
     }
 
+    /** Set [key] like [set], its trailing comment replaced by [comment] (none when null). */
+    fun set(
+        key: String,
+        value: TomlValue,
+        comment: String?,
+    ) {
+        set(key, value)
+        val e = entries().first { it.key == key }
+        lines[e.last] = lines[e.last].substring(0, e.end) + comment?.let { " $it" }.orEmpty()
+    }
+
+    /** Drop [key] and its lines; false when absent. */
+    fun remove(key: String): Boolean {
+        val e = entries().firstOrNull { it.key == key } ?: return false
+        repeat(e.last - e.first + 1) { lines.removeAt(e.first) }
+        return true
+    }
+
     internal fun text(): List<String> = lines
 
     companion object {
@@ -82,4 +100,10 @@ class TomlTable internal constructor(
 
         fun bareOrQuoted(key: String) = if (BARE.matches(key)) key else TomlValue.quote(key)
     }
+}
+
+/** The `# …` comment after [key]'s value on its last line, or null. */
+fun TomlTable.comment(key: String): String? {
+    val e = entries().firstOrNull { it.key == key } ?: return null
+    return lines[e.last].substring(e.end).trim().takeIf { it.startsWith("#") }
 }

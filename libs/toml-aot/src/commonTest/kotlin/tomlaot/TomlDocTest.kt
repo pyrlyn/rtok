@@ -125,4 +125,20 @@ class TomlDocTest {
         assertEquals(false, doc.removeTable("x.rtok"))
         assertEquals(false, doc.removeTable("x"))
     }
+
+    @Test fun rootKeysCarryAReplaceableCommentAndCanBeRemoved() {
+        val doc = TomlDoc.parse("# head\nprovider = \"openai\" # old\nmodel = \"o3\"\n\n[x]\na = 1\n")
+        val root = doc.root
+        assertEquals("# old", root.comment("provider"))
+        root.set("provider", TomlValue.Str("rtok"), "# was \"openai\"")
+        assertEquals("# was \"openai\"", root.comment("provider"))
+        root.set("provider", TomlValue.Str("openai"), null)
+        assertNull(root.comment("provider"))
+        assertTrue(root.remove("model"))
+        assertEquals(false, root.remove("model"))
+        assertEquals("# head\nprovider = \"openai\"\n\n[x]\na = 1\n", doc.toString())
+        val empty = TomlDoc.parse("")
+        empty.root.set("k", TomlValue.Str("v"), "# c")
+        assertEquals("k = \"v\" # c", empty.toString())
+    }
 }

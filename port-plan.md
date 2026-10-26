@@ -704,3 +704,11 @@ Next, in order:
 - Tests: CodexTest 7, TomlDocTest +1.
 - Stop point: next 3d-6b = codex proxy (`[model_providers.rtok]`, `# rtok: was` restore), then 3d-6c = codex plugin
   (marketplace add/repoint, `plugin_update`); then `libs/yaml-aot` + continue/goose.
+
+## Session: agents chunk 3d-6b — codex proxy
+- `CodexProxy.kt`: `model_provider = "rtok"` + `[model_providers.rtok] {name, base_url}` behind `--proxy` (removed on any
+  remove); the replaced value kept as `# rtok: was "<v>"` on that line and restored byte for byte, a re-install keeps the
+  original; a hand-edited provider table left unless `keepEdited` says remove (T307).
+- `:toml-aot`: `TomlDoc.root`, `TomlTable.set(key, value, comment)`, `remove`, `comment`.
+- Tests: CodexProxyTest 4, TomlDocTest +1.
+- Stop point: next 3d-6c = codex plugin (marketplace add/repoint, `plugin_update`); then `libs/yaml-aot` + continue/goose.
