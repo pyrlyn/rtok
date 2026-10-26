@@ -284,9 +284,10 @@ Next, in order:
   `impact_walk_roots`, `WalkMemo`), `Blast.kt` (blast.rs budgeted render; `WalkRow`, `Budget`, `linesText`).
   `LspBackend.impact`. 4 impact + 5 blast tests; the deferred cochange impact partner test is on.
 - `Explore.kt` (explore_tokens, assemble_explore/assemble_named, explore/explore_tags with FTS fallback, `TagsExplore`); 5 tests.
+- `Status.kt` (status.rs collect/format_table, mod.rs `cli_root`); 2 tests. `rtok graph` CLI wiring still pending.
 - `Events.kt` (events.rs `GraphCall` start/progress/end, target/symbols/backend); 6 tests (the web `coalesce`
   summary test waits for web live).
 - `Outline.kt` (outline_in, outline_of_kind, symbol_arg_names, head_stale_prefix; `LspBackend.outline`/`outlineWorkspace`); 4 tests.
 - Stop point: next `scope.rs` (Member, symbols/symbol_id/callers/dead_filtered/impact/affected_path/outline/explore over
   a project scope), then `call` dispatch (needs scope); then
-  follow, drill, scope, diff, export, health, lsp, watch, review, draw, projects, jobs, status; then the rest.
+  follow, drill, scope, diff, export, health, lsp, watch, review, draw, projects, jobs (needs projects); then the rest.
