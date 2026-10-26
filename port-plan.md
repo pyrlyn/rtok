@@ -685,3 +685,12 @@ Next, in order:
   `--yes`, remove keeps Grok's copy. Windows skip note not ported (no Windows target).
 - Tests: GrokTest 5.
 - Stop point: next 3d-5 = cursor, then codex; then `libs/yaml-aot` + continue/goose.
+
+## Session: agents chunk 3d-5 — cursor
+- `Cursor.kt`: flat `{version, hooks.<event>[].command}` in `hooks.json` from `HookEvents` (installer rows only, retired
+  `beforeSubmitPrompt` taken back), a bare `rtok` wrapped as `{ <resolver>; }` for Cursor's heredoc, stale lines
+  rewritten in their slot (T242.5), edited ones asked about on remove (T246.6); typed `mcpServers.rtok` in the sibling
+  `mcp.json` (D33); `plugins/cursor` linked into `plugins/local/rtok` by default (T164), then the only hook path (D21).
+  Windows copy fix not ported (no Windows target).
+- Tests: CursorTest 6.
+- Stop point: next 3d-6 = codex (several PRs); then `libs/yaml-aot` + continue/goose.
