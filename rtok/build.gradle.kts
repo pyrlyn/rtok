@@ -1,7 +1,10 @@
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
 import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
+// rules/default.toml is copied verbatim from the Rust repo's rules/default.toml (the built-in cmd rules).
+val defaultRules = embedText("genDefaultRules", "rules/default.toml", "rtok.plugins.cmd", "DEFAULT_RULES", "DefaultRules")
 configure<KotlinMultiplatformExtension> {
     targets.withType<KotlinNativeTarget>().configureEach { binaries.executable { entryPoint = "rtok.main"; baseName = "rtok" } }
+    sourceSets.commonMain.get().kotlin.srcDir(defaultRules)
     sourceSets.commonMain.dependencies {
         implementation(project(":rtok-plugin-sdk")); implementation(project(":rtok-config"))
         implementation(project(":rtok-sys")); implementation(project(":rtok-store")); implementation(project(":db-room")); implementation(project(":rtok-log")); implementation(project(":http")); implementation(project(":http-ktor"))
