@@ -10,7 +10,6 @@ import rtok.sys.rustLines
 import rtok.sys.writeString
 
 private fun settings(failTailLines: UInt) = Settings(maxOf(failTailLines, 1u).toInt(), Rules.defaults())
-private fun numbered(n: Int, tag: String = "line ") = (0 until n).joinToString("\n") { "$tag$it" }
 private fun apply(s: Settings, body: String, exit: Int, rule: Rule, id: String) = Rules.apply(s, body, exit, rule, id)
 private fun loadVfs(v: VfsRuleFiles, file: String, dir: String?) = Settings.load(v, file, dir, 80u)
 private fun uncut(group: Group) = Rule(maxLines = 40u, head = 10u, tail = 10u, dedupe = Dedupe.Off, collapseColumns = false, group = group)
