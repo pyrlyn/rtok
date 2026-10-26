@@ -31,7 +31,7 @@ fun Store.insertPortableNoteIfAbsent(n: PortableNote): Int? {
     n.id?.let { cols += "id"; vals += it }; n.ts?.let { cols += "ts"; vals += it }
     cols += listOf("project", "kind", "title", "body", "retired", "superseded_by", "pinned")
     vals.addAll(listOf(n.project, n.kind, n.title, n.body, n.retired, n.supersededBy, n.pinned ?: 0))
-    return conn { it.queryOne("INSERT OR IGNORE INTO notes (${cols.joinToString(", ")}) VALUES (${cols.joinToString(", ") { "?" }}) RETURNING id", *vals.toTypedArray()) { r -> r.int(0) } }
+    return conn { it.queryOne("INSERT OR IGNORE INTO notes (${cols.joinToString(", ")}) VALUES (${inList(cols.size)}) RETURNING id", *vals.toTypedArray()) { r -> r.int(0) } }
 }
 
 /** Insert or replace the body of `(project, kind, title)`; `(id, existed)`. A changed body keeps its old version. */

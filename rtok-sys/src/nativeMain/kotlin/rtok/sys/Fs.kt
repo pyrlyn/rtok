@@ -130,3 +130,6 @@ fun isUnwalkableRoot(root: String, home: String?): Boolean {
     val r = canon(root)
     return parent(r) == null || (home != null && canon(home) == r)
 }
+
+/** fs-kit `same_path` on Unix: component-wise equality (`/a//b/` = `/a/b`), no disk access. */
+fun samePath(a: String, b: String): Boolean = a == b || components(a) == components(b)

@@ -37,7 +37,7 @@ fun Store.searchObservations(project: String?, query: String, limit: UInt): List
 fun Store.observationsForFiles(project: String?, paths: List<String>, limit: UInt): List<ObsHit> {
     if (paths.isEmpty()) return emptyList()
     return conn { db ->
-        val marks = paths.joinToString(",") { "?" }
+        val marks = inList(paths.size)
         db.query("SELECT $OBS_COLS FROM observations WHERE observations.id IN (SELECT observation_id FROM observation_files WHERE path IN ($marks))" +
             (if (project != null) " AND (observations.project IS NULL OR observations.project = ?)" else "") + " ORDER BY observations.id DESC LIMIT ?",
             *(paths + listOfNotNull(project) + maxOf(limit, 1u).toLong()).toTypedArray()) { hit(it) }

@@ -34,7 +34,7 @@ class Db private constructor(private val db: CPointer<sqlite3>) : AutoCloseable 
     companion object {
         fun open(path: String): Db = memScoped {
             val pp = alloc<CPointerVar<sqlite3>>()
-            val rc = sqlite3_open_v2(path, pp.ptr, SQLITE_OPEN_READWRITE or SQLITE_OPEN_CREATE or SQLITE_OPEN_FULLMUTEX, null)
+            val rc = sqlite3_open_v2(path, pp.ptr, SQLITE_OPEN_READWRITE or SQLITE_OPEN_CREATE or SQLITE_OPEN_FULLMUTEX or SQLITE_OPEN_URI, null)
             val h = pp.value
             if (rc != SQLITE_OK || h == null) {
                 val msg = h?.let { sqlite3_errmsg(it)?.toKString() } ?: "unable to open database file"

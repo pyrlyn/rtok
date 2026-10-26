@@ -6,6 +6,12 @@ on-disk formats (SQLite ledger `rtok.db`, payload files) stay interchangeable wi
 **Excluded:** TUI (`src/tui`, ratatui/crossterm UI, `rtok tui`) and web UI (`src/web`,
 `crates/rtok-webui`, `rtok web`, `rtok dashboard`, `agents/junk_web.rs`).
 
+## Standing rules (Ivan)
+- Prefer popular, actively maintained libraries; own code only when none fits, and then as a separate module under `libs/`, not inside port code.
+- No new dependency without Ivan's approval (pending: ktoml for TOML).
+- Decompose: no copy-paste; shared helpers are extracted (e.g. `SqlExt.kt`).
+- After every finished item: tick port-plan.md + PORTING.md, update test counts, commit with the code. Local commits only.
+
 ## Structure mirror
 | Rust crate / dir | Gradle module | Kotlin package |
 |---|---|---|
@@ -14,6 +20,7 @@ on-disk formats (SQLite ledger `rtok.db`, payload files) stay interchangeable wi
 | crates/rtok-log | `:rtok-log` | `rtok.log` |
 | crates/rtok-hook | `:rtok-hook` | `rtok.hook` |
 | crates/rtok-store | `:rtok-store` | `rtok.store` |
+| (Rust dep `humantime`) | `:humantime` (`libs/humantime`) | `humantime` — own code, no maintained K/N library fits |
 | crates/rtok-sys | `:rtok-sys` | `rtok.sys` (cinterop/posix) |
 | crates/rtok-mcp | `:rtok-mcp` | `rtok.mcp` |
 | crates/rtok-agent-sdk | `:rtok-agent-sdk` | `rtok.agent.sdk` |
@@ -71,8 +78,10 @@ jiff/humantime→kotlinx-datetime; shlex→own; wasmi→not portable (see risks)
 - [x] call_log, measure_rows, session_rows, archive_rows, note_store, observations, archive_summaries, models — tests_store 31
 - [x] otel.rs — 8; task_id, task_claims, task_counters — 7
 - [x] tests_archive (22 → 29: drift checks run against the Rust crate's schema.rs + schema_snapshot.txt copied as fixtures)
-- [ ] note_files, messages, agents, worktree claims/pending, projects/links
-- [ ] symbols, symbol_graph, docs, embed, graph_events, host_usage
+- [x] agents — 14 (humantime grammar in the standalone `:humantime` module, 3 own tests); worktree_claims + worktree_pending — 8 (+1 same_path); note_files — 4; host_usage — 1 (new: read-only URI round trip)
+- [x] shared SQL helpers in `SqlExt.kt` (`inList`), replacing three hand-rolled placeholder lists
+- [ ] messages, projects, project_links
+- [ ] symbols, symbol_graph, docs, embed, graph_events
 ### Phase 5 — reduction plugins (src/plugins: compress, json_tree, toon, read, cmd, inject, guard, memory, measure, docs, archive, checkpoint)
 - [ ] Tests: port matching Rust unit + integration tests to kotlin.test; phase done only when they pass on the Mac (`./gradlew macosArm64Test`)
 - [ ] Docs: `docs/<feature>.md` (how it works, enable, disable, test, limitations) + README section
@@ -111,8 +120,8 @@ jiff/humantime→kotlinx-datetime; shlex→own; wasmi→not portable (see risks)
 | 1 | 23 (tokens 4, ladder 3, compress 16) | 23 |
 | 2 | log 12, root 7, lib 33, layers 20 (rstest cases folded), validate 27, change-preview 4, since 5 (new) | 108 |
 | 3 (partial) | types 18, deadline 3, resident 1 (+1 new), sys environ/lock 2 new — dispatch 55 waits for Phase 5 | 25 |
-| 4 (partial) | plugin-sdk 9, sha256 1, db 2, handle 10, sanitize 11, hook_fields 7, store 31, otel 8, tasks 7, retention 5, archive 29 | 120 |
-| **total** | | **282** |
+| 4 (partial) | plugin-sdk 9, sha256 1, db 2, handle 10, sanitize 11, hook_fields 7, store 31, otel 8, tasks 7, retention 5, archive 29, agents 14, worktree 9, note_files+host_usage 5, humantime 3 | 151 |
+| **total** | | **313** |
 
 ## Test-porting
 Each Rust `#[cfg(test)]` module → `src/commonTest` in the matching module; `tests/*.rs` (138 files)

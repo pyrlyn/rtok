@@ -24,7 +24,7 @@ configure<KotlinMultiplatformExtension> {
     }
     sourceSets.commonMain {
         kotlin.srcDir(genMigrations.map { genDir.get() })
-        dependencies { api(project(":rtok-plugin-sdk")); api(project(":rtok-sys")) }
+        dependencies { api(project(":rtok-plugin-sdk")); api(project(":rtok-sys")); implementation(project(":humantime")) }
     }
 }
 // schema.rs + schema_snapshot.txt copied from the Rust crate: the drift test checks the Kotlin-migrated
