@@ -134,7 +134,7 @@ object Agents {
             McpOnlyAgent("windsurf", { it.setup.windsurf.configPath }),
         )
 
-    private val BY_ID: Map<String, Agent> = (MCP_ONLY + Cline() + Qwen() + Gemini() + Devin()).associateBy { it.id }
+    private val BY_ID: Map<String, Agent> = (MCP_ONLY + Cline() + Qwen() + Gemini() + Devin() + CommandCode()).associateBy { it.id }
 
     /** The ported install side of [id], or null while that host is not ported yet. */
     fun agent(id: String): Agent? = BY_ID[id]
