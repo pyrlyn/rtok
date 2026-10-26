@@ -116,7 +116,8 @@ jiff/humantime→kotlinx-datetime; shlex→own; wasmi→not portable (see risks)
 - [x] guard (2844) — 45 of 53 (+1 check, +1 types.rs view key); grep_symbol 8 pending (graph/tree-sitter); docs/guard.md; read::outline markdown digest ported (no tree-sitter needed); cmd `sh_quote`/`wrap_quote` in `plugins/cmd/Run.kt`
 - [ ] read (4334) — 101
 - [x] cmd (10098) — 207 Kotlin tests: rules 51, formatters 25, run 29, hook 25, compact 18, grep 10, logfmt 8, gh 7, loops 7, python 7, bounded 7, diffs 6, mise 4, filter 3; rtok-sys ProgressRunner +5; catfile (4) + cat re-read delta (1) blocked on tree-sitter / read cache (docs/cmd.md)
-- [ ] memory (5419) — 127
+- [x] memory (5419) — 126 of 127 (scrub 2, admit 6, files 8, pack 7, observe 6, handoff 11, sync 15, export 3, import 6, extract 11, mod 51); `rtok memory` CLI (all but `status`); docs/memory.md
+  - pending: handoff `pointers_carry_enclosing_symbol_ranges_when_indexed` (needs graph index, Phase 10); `memory status` (model::memory_status); `sync --stat` (change_preview Preview); MCP dispatch (rtok-mcp)
 - [ ] graph (20084) — 275
 - [ ] wasm host (478) — 3; needs a WASM runtime library → ask Ivan before adding one
 - [ ] Tests: port matching Rust unit + integration tests to kotlin.test; phase done only when they pass on the Mac (`./gradlew macosArm64Test`)

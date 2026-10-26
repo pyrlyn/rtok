@@ -21,3 +21,6 @@ fun touchAt(rt: Runtime, cwd: String, tool: String, input: JsonElement) {
 }
 
 fun touch(rt: Runtime, tool: String, path: String) = touchAt(rt, ".", tool, buildJsonObject { put("file_path", path) })
+
+/** Rust tests flip `cx.config.plugins.memory.*` in place; the Kotlin config is immutable data. */
+fun Runtime.mem(tune: (Memory) -> Memory) { config = config.copy(plugins = config.plugins.copy(memory = tune(config.plugins.memory))) }

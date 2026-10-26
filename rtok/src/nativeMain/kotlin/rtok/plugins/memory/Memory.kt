@@ -11,7 +11,7 @@ import rtok.store.*
 import rtok.sys.cwd
 
 /** One line in the hook index: titles only; names the MCP tools that fetch bodies (T293). */
-private const val INDEX_GUIDE = "titles only; mem_search this turn; mem_get matching id for body"
+internal const val INDEX_GUIDE = "titles only; mem_search this turn; mem_get matching id for body"
 
 private fun schema(required: List<String>, vararg props: Pair<String, String>) = buildJsonObject {
     put("type", "object")
@@ -48,10 +48,10 @@ internal fun resolvedProject(cx: Ctx): String? = cx.cwd()?.let(::projectName) ?:
 private fun emptyProjectLine(project: String?) = "memory project ${project ?: "none"}: no notes"
 
 /** `(id, title, body token estimate)` of one index line. */
-private class Entry(val id: Int, var title: String, val tokens: UInt)
+internal class Entry(val id: Int, var title: String, val tokens: UInt)
 
 /** Capped index text, dropping the newest-last entry; a lone overflowing entry has its title halved, then is dropped. */
-private fun renderTitleIndex(cx: Ctx, entries: MutableList<Entry>, cap: UInt): String {
+internal fun renderTitleIndex(cx: Ctx, entries: MutableList<Entry>, cap: UInt): String {
     while (true) {
         val text = (listOf(INDEX_GUIDE) + entries.map { "${it.id} ${it.title} (${it.tokens}t body)" }).joinToString("\n")
         if (cx.estimate(text, Class.Prose) <= cap) return text
@@ -156,7 +156,7 @@ fun compactContext(cx: Ctx): Injection? {
     return Injection("memory", text, 10u)
 }
 
-private fun recall(cx: Ctx): Injection? {
+internal fun recall(cx: Ctx): Injection? {
     val cfg = memoryConfig(cx); val cap = maxOf(cfg.recallTokens, 1u)
     val project = resolvedProject(cx)
     val rows = runCatching { cx.listNoteTitles(project, maxOf(cfg.recallTitles, 1u)) }.getOrNull() ?: return null

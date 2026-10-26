@@ -37,6 +37,8 @@ Plan and per-phase checklist: [port-plan.md](port-plan.md).
 | src/plugins/guard (mod, sed, skill), read/outline.rs markdown half, cmd/run.rs quoting | `rtok/plugins/guard/` (Guard, Sed, Skill), `plugins/read/Outline.kt`, `plugins/cmd/Run.kt` | ✅ (grep_symbol → graph) | 53 → 46 (+1 TypesTest) |
 | src/plugins/cmd (all files but catfile.rs) | `rtok/plugins/cmd/` + rtok-sys `Proc.kt` | ✅ except catfile (tree-sitter + read cache) | 207 Kotlin tests (Rust 207; catfile 4, cat re-read delta 1, Windows-only cmd.exe run 1 not ported) |
 | src/plugins/inject | `rtok/plugins/inject/` (Inject, Modes) | ✅ (hook-path halves → Phase 6) | 8 → 9 |
+| src/plugins/memory (mod, scrub, admit, files, pack, observe, handoff, sync, export, import, extract), src/cli/memory.rs | `rtok/plugins/memory/` (Memory, Scrub, Admit, Files, Pack, Observe, Handoff, Sync, Portable, Extract), `cli/MemoryCmd.kt`; rtok-sys `ProgressRunner` stdin/timeout/quiet | ✅ (graph-range handoff test → Phase 10; `memory status`, `sync --stat`, MCP dispatch pending) | 127 → 126 |
+| crates/rtok-agent-sdk backup/write subset | `rtok-agent-sdk/…/Backup.kt` (`Apply`, `backup`, `pruneBackups`, `staleBackups`, `write`, `writeAtomic`) | 🟡 rest is Phase 9 | via sync tests |
 | src/plugins/checkpoint.rs | `rtok/plugins/checkpoint/`, `rtok/plugins/memory/Private.kt`, `rtok-sys` Shlex/LineReader | ✅ (3 hook-dispatcher tests → Phase 6) | 27 → 27 |
 | src/plugins/compress | `rtok/plugins/compress/` (Compress, MustKeep, Llm, PromptToml) + Compressor, Queue; HTTP via `libs/http` + `libs/http-ktor` | ✅ (proxy-side `submit` call → Phase 7) | 19 → 22 (+4 KtorHttpTest) |
 | src/plugins/json_tree | `rtok/plugins/jsontree/JsonTree.kt`, `rtok-sys/Sha1.kt`, `Text.kt` jsonQuote | ✅ (3 MCP tests pending) | 15 → 12 |
@@ -48,7 +50,6 @@ Plan and per-phase checklist: [port-plan.md](port-plan.md).
 | crates/rtok-sys | `:rtok-sys` | ⬜ (module currently hosts `rtok.sys.Fs`, the fs-kit replacement) | |
 | fs-kit (external crate) path helpers | `rtok-sys/nativeMain/Fs.kt` | 🟡 normalize/canon/ancestors/starts_with | via root tests |
 | crates/rtok-mcp | `:rtok-mcp` | ⬜ | |
-| crates/rtok-agent-sdk | `:rtok-agent-sdk` | ⬜ | |
 | (new) WASM host module | `rtok-wasm/` — `WasmRuntime` interface; Chasm adapter next; tests via `./gradlew wasmTest` | 🚧 | |
 | crates/rtok-wasm-demo-guest | – | ❌ wasm guest, not needed | |
 | crates/rtok-webui | – | ❌ excluded (web) | |
@@ -66,7 +67,7 @@ Plan and per-phase checklist: [port-plan.md](port-plan.md).
 | src/web, agents/junk_web.rs, `rtok web/tui/dashboard` | – | ❌ excluded (web) | |
 | tests/*.rs (138 integration files) | `:rtok` commonTest | ⬜ | 0 / ~138 files |
 
-Totals: 597 unit (`macosArm64Test`) + 23 CLI (`cliTest`) + 14 e2e (`e2eTest`) tests passing on macosArm64 (see port-plan.md for the per-phase table).
+Totals: 920 unit (`macosArm64Test`, all modules) + 23 CLI (`cliTest`) + 14 e2e (`e2eTest`) tests passing on macosArm64 (see port-plan.md for the per-phase table).
 
 | Rust | Kotlin | Status | Tests |
 |---|---|---|---|

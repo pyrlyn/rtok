@@ -13,6 +13,17 @@ class Captured(val stdout: ByteArray, val stderr: ByteArray, val exitCode: Int?)
 
 /** Runs [program] with [args] (no shell) and captures its output; [label] is the spinner text. */
 class ProgressRunner(private val label: String, private val program: String, private val args: List<String>) {
+    private var stdinPath: String? = null
+    private var timeoutMs: Long? = null
+    private var quiet = false
+
+    /** The child's stdin is this file (Rust `.stdin(Stdio::from(file))`). */
+    fun stdinFile(path: String) = apply { stdinPath = path }
+    /** Kill the child and fail once it runs longer than [ms] (Rust `.timeout`). */
+    fun timeout(ms: Long) = apply { timeoutMs = ms }
+    /** No spinner (Rust `ProgressRunner::quiet`). */
+    fun quiet() = apply { quiet = true }
+
     /** Captures up to [cap] bytes over both streams; the second value counts the bytes dropped past it. */
     fun runCapped(cap: Long): Pair<Captured, Long> = memScoped {
         val outPipe = allocArray<IntVar>(2); val errPipe = allocArray<IntVar>(2)
@@ -21,6 +32,7 @@ class ProgressRunner(private val label: String, private val program: String, pri
         posix_spawn_file_actions_init(actions.ptr)
         posix_spawn_file_actions_adddup2(actions.ptr, outPipe[1], 1)
         posix_spawn_file_actions_adddup2(actions.ptr, errPipe[1], 2)
+        stdinPath?.let { posix_spawn_file_actions_addopen(actions.ptr, 0, it, O_RDONLY, 0u) }
         for (fd in listOf(outPipe[0], outPipe[1], errPipe[0], errPipe[1])) posix_spawn_file_actions_addclose(actions.ptr, fd)
         val argv = allocArrayOf((listOf(program) + args).map { it.cstr.ptr } + listOf(null))
         val pid = alloc<pid_tVar>()
@@ -29,11 +41,16 @@ class ProgressRunner(private val label: String, private val program: String, pri
         close(outPipe[1]); close(errPipe[1])
         if (rc != 0) { close(outPipe[0]); close(errPipe[0]); throw IoException(if (rc == ENOENT) IoException.Kind.NotFound else IoException.Kind.Other, "$program: spawn errno $rc") }
         val sinks = listOf(Sink(outPipe[0]), Sink(errPipe[0]))
-        val spinner = Spinner.pick(label)
+        val spinner = if (quiet) Spinner.NONE else Spinner.pick(label)
+        val deadline = timeoutMs?.let { kotlin.time.TimeSource.Monotonic.markNow() + with(kotlin.time.Duration) { it.milliseconds } }
         var budget = cap; var dropped = 0L
         val fds = allocArray<pollfd>(2); val buf = ByteArray(64 * 1024)
         while (sinks.any { it.open }) {
             sinks.forEachIndexed { i, s -> fds[i].fd = if (s.open) s.fd else -1; fds[i].events = POLLIN.toShort(); fds[i].revents = 0 }
+            if (deadline != null && deadline.hasPassedNow()) {
+                kill(pid.value, SIGKILL); sinks.filter { it.open }.forEach { close(it.fd) }; waitExit(pid.value); spinner.finish()
+                throw IoException(IoException.Kind.Other, "$program: timed out after ${timeoutMs}ms")
+            }
             if (poll(fds, 2u, Spinner.TICK_MS) == 0) { spinner.tick(); continue }
             sinks.forEachIndexed { i, s ->
                 if (!s.open || fds[i].revents.toInt() == 0) return@forEachIndexed
@@ -87,6 +104,7 @@ internal class Spinner private constructor(private val label: String?) {
         const val TICK_MS = 120
         private val FRAMES = listOf("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏")
         internal fun shown(stderrIsTty: Boolean, env: String?) = stderrIsTty && env != "1"
+        val NONE = Spinner(null)
         fun pick(label: String) = Spinner(label.takeIf { shown(isatty(2) == 1, getenv("RTOK_NO_PROGRESS")?.toKString()) })
         private fun eprint(s: String) { val b = s.encodeToByteArray(); b.usePinned { write(2, it.addressOf(0), b.size.convert()) } }
     }
