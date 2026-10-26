@@ -20,6 +20,9 @@ interface LspBackend {
     fun callers(cx: Ctx, root: String, name: String, filter: Filter): String
     fun impact(cx: Ctx, root: String, name: String, depth: Int, filter: Filter, to: String?): String = throw Refused("lsp: unavailable")
     fun explore(cx: Ctx, root: String, query: String, filter: Filter): String = throw Refused("lsp: unavailable")
+    fun outline(cx: Ctx, root: String, path: String): String = throw Refused("lsp: unavailable")
+    /** The session key for one file's outline (lsp.rs `outline_workspace`). */
+    fun outlineWorkspace(root: String, abs: String): String = root
     fun setTimeoutMs(ms: ULong) {}
 
     object None : LspBackend {
