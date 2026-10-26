@@ -82,6 +82,9 @@ object StdioMcp {
     ): String = HostJson.unregisterOwned(applyOf(cfg), path, key, "rtok", entry("rtok", host), ::isRtokBin)
 }
 
+/** The host file mentions `"rtok"` (T186); a missing or unreadable file does not. */
+fun mentionsRtok(path: String): Boolean = exists(path) && "\"rtok\"" in runCatching { readToString(path) }.getOrDefault("")
+
 /** A host whose only module is `mcp` (any variant: Windsurf is desktop-only): one JSON file, rtok's stdio entry under [key]. */
 class McpOnlyAgent(
     override val id: String,
@@ -100,11 +103,7 @@ class McpOnlyAgent(
     override fun installed(
         cfg: Config,
         kind: Kind,
-    ): List<String> {
-        val p = path(cfg)
-        val text = if (exists(p)) runCatching { readToString(p) }.getOrDefault("") else ""
-        return if ("\"rtok\"" in text) listOf("mcp") else emptyList()
-    }
+    ): List<String> = if (mentionsRtok(path(cfg))) listOf("mcp") else emptyList()
 
     override fun apply(
         cfg: Config,
@@ -135,7 +134,7 @@ object Agents {
             McpOnlyAgent("windsurf", { it.setup.windsurf.configPath }),
         )
 
-    private val BY_ID: Map<String, Agent> = MCP_ONLY.associateBy { it.id }
+    private val BY_ID: Map<String, Agent> = (MCP_ONLY + Cline()).associateBy { it.id }
 
     /** The ported install side of [id], or null while that host is not ported yet. */
     fun agent(id: String): Agent? = BY_ID[id]
