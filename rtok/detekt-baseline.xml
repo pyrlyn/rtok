@@ -16,6 +16,7 @@
     <ID>ComplexCondition:Index.kt:Index$replaced || fpStale || removed > 0 || ranks.missing(cx, rk)</ID>
     <ID>ComplexCondition:JsonTree.kt:t.isEmpty() || t.any { it == ']' || it == ' ' || it == '\n' }</ID>
     <ID>ComplexCondition:Read.kt:mode == "map" || mode == "signatures" || density != null || strippedSrc != null || range != null</ID>
+    <ID>ComplexCondition:Review.kt:Review$start == null || len == null || start == 0 || len == 0</ID>
     <ID>ComplexCondition:Rules.kt:Rules$!l.startsWith("stack backtrace:") &amp;&amp; !l.startsWith("note:") &amp;&amp; !l.startsWith("error") &amp;&amp; !l.startsWith("warning")</ID>
     <ID>ComplexCondition:Rules.kt:Rules$code.length in 2..7 &amp;&amp; code[0] in 'A'..'Z' &amp;&amp; code.all { it in 'A'..'Z' || it.digit() } &amp;&amp; code.any { it.digit() }</ID>
     <ID>ComplexCondition:Rules.kt:Rules$key.isNotEmpty() &amp;&amp; key.all { it in 'a'..'z' || it == '-' || it.digit() }</ID>
@@ -96,6 +97,7 @@
     <ID>CyclomaticComplexMethod:Read.kt:fun readWith: String</ID>
     <ID>CyclomaticComplexMethod:Refs.kt:Refs$private fun npm</ID>
     <ID>CyclomaticComplexMethod:Resolve.kt:Resolve$fun rankName: ResolveHit</ID>
+    <ID>CyclomaticComplexMethod:Review.kt:Review$fun allocateBudget</ID>
     <ID>CyclomaticComplexMethod:Rules.kt:Rules$internal fun parseDiag: Triple&lt;String, String, String>?</ID>
     <ID>CyclomaticComplexMethod:Rules.kt:Rules$internal fun parseLocated: Triple&lt;String, String, String>?</ID>
     <ID>CyclomaticComplexMethod:Rules.kt:Rules$internal fun placeholderToken: Pair&lt;Int, String>?</ID>
@@ -176,6 +178,7 @@
     <ID>LoopWithTooManyJumpStatements:Rank.kt:Rank$for</ID>
     <ID>LoopWithTooManyJumpStatements:Refs.kt:Refs$for</ID>
     <ID>LoopWithTooManyJumpStatements:Resident.kt:Resident$while</ID>
+    <ID>LoopWithTooManyJumpStatements:Review.kt:Review$for</ID>
     <ID>LoopWithTooManyJumpStatements:Rules.kt:Rules$for</ID>
     <ID>LoopWithTooManyJumpStatements:Rules.kt:Rules$while</ID>
     <ID>LoopWithTooManyJumpStatements:Search.kt:Search$for</ID>
@@ -620,6 +623,25 @@
     <ID>MagicNumber:ResolveTest.kt:ResolveTest$5</ID>
     <ID>MagicNumber:ResolveTest.kt:ResolveTest$50</ID>
     <ID>MagicNumber:ResolveTest.kt:ResolveTest$6</ID>
+    <ID>MagicNumber:Review.kt:Review$0.10</ID>
+    <ID>MagicNumber:Review.kt:Review$0.20</ID>
+    <ID>MagicNumber:Review.kt:Review$0.4</ID>
+    <ID>MagicNumber:Review.kt:Review$0.7</ID>
+    <ID>MagicNumber:Review.kt:Review$10_000.0</ID>
+    <ID>MagicNumber:Review.kt:Review$20.0</ID>
+    <ID>MagicNumber:Review.kt:Review$4</ID>
+    <ID>MagicNumber:ReviewTest.kt:ReviewTest$0.05</ID>
+    <ID>MagicNumber:ReviewTest.kt:ReviewTest$0.3</ID>
+    <ID>MagicNumber:ReviewTest.kt:ReviewTest$0.6</ID>
+    <ID>MagicNumber:ReviewTest.kt:ReviewTest$0.71</ID>
+    <ID>MagicNumber:ReviewTest.kt:ReviewTest$10</ID>
+    <ID>MagicNumber:ReviewTest.kt:ReviewTest$100</ID>
+    <ID>MagicNumber:ReviewTest.kt:ReviewTest$11</ID>
+    <ID>MagicNumber:ReviewTest.kt:ReviewTest$20</ID>
+    <ID>MagicNumber:ReviewTest.kt:ReviewTest$200</ID>
+    <ID>MagicNumber:ReviewTest.kt:ReviewTest$4</ID>
+    <ID>MagicNumber:ReviewTest.kt:ReviewTest$40</ID>
+    <ID>MagicNumber:ReviewTest.kt:ReviewTest$5</ID>
     <ID>MagicNumber:RootsTest.kt:RootsTest$20</ID>
     <ID>MagicNumber:Rules.kt:Rules$10</ID>
     <ID>MagicNumber:Rules.kt:Rules$10u</ID>
@@ -892,6 +914,7 @@
     <ID>ReturnCount:Resident.kt:Resident$fun bindPrivate: Int?</ID>
     <ID>ReturnCount:Resident.kt:Resident$fun serve</ID>
     <ID>ReturnCount:Resolve.kt:Resolve$fun rankName: ResolveHit</ID>
+    <ID>ReturnCount:Review.kt:Review$private fun hunkHeader: Pair&lt;Int, Int>?</ID>
     <ID>ReturnCount:Roots.kt:Roots$fun enterCaller: CallerGuard?</ID>
     <ID>ReturnCount:Roots.kt:Roots$fun movedHint: String</ID>
     <ID>ReturnCount:RuleFiles.kt:DiskRuleFiles$override fun dropIns: List&lt;String></ID>
@@ -1014,6 +1037,7 @@
     <ID>TooManyFunctions:RankTest.kt:RankTest</ID>
     <ID>TooManyFunctions:ReadTest.kt:ReadTest</ID>
     <ID>TooManyFunctions:Refs.kt:Refs</ID>
+    <ID>TooManyFunctions:Review.kt:Review</ID>
     <ID>TooManyFunctions:Roots.kt:Roots</ID>
     <ID>TooManyFunctions:Rules.kt:Rules</ID>
     <ID>TooManyFunctions:RulesTest.kt:RulesTest</ID>

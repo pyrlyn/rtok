@@ -307,4 +307,5 @@ Next, in order:
   `PROJECT:REF`, saved-export compare + registry links, `DiffReport` JSON/page with `capped`, MCP `call`); 19 tests.
   `ExportView.parse` now refuses a bare word (kotlinx parses `/a/path` as a primitive; serde does not).
 - `Draw.kt` (draw.rs SVG: degree-capped nodes, sunflower layout, legend, footer; `ExportView.draw` defaults to it, so `--format svg` works); 6 tests. PNG stays unported (needs a rasterizer dependency); the Rust PNG tests are deferred.
-- Stop point: next lsp, watch, review (+ Scope.reviewGit); wire `rtok graph` (incl. `diff`) into CLI; then grep_symbol, catfile, cat re-read, docs zstd, memory status, sync --stat, MCP, otel, worktree, task, batch, bench, hook dispatcher tests; release re-measure, completeness pass.
+- `Review.kt` (review.rs: risk score, security tokens, `-U0` hunk parse, widen/merge, round-robin budget, text/JSON with serde key order) + `Scope.reviewGit`; 9 tests.
+- Stop point: next lsp, watch; wire `rtok graph` (incl. `diff`, `review`) into CLI; then grep_symbol, catfile, cat re-read, docs zstd, memory status, sync --stat, MCP, otel, worktree, task, batch, bench, hook dispatcher tests; release re-measure, completeness pass.
