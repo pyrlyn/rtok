@@ -34,6 +34,7 @@ jiff/humantime→kotlinx-datetime; shlex→own; wasmi→not portable (see risks)
 - [ ] Docs: `docs/<feature>.md` (how it works, enable, disable, test, limitations) + README section
 - [ ] Gradle KMP build, modules above, targets macosArm64/linuxX64/linuxArm64 (+mingwX64 if deps allow)
 - [ ] PORTING.md inventory, README stub
+- [ ] Build speed: configuration cache, build cache, parallel, daemon jvmargs, Kotlin daemon, host-only target by default (`-Prtok.allTargets=true` for others), debug-only test links, `kotlin.native.cacheKind`, `kotlin.incremental.native`, fine-grained modules, one test binary per module; measure clean + incremental debug build/test times and record below + docs/build-speed.md
 - Acceptance: `./gradlew build` produces `rtok.kexe`; empty test suite green.
 ### Phase 1 — pure core (no IO)
 - [ ] Tests: port matching Rust unit + integration tests to kotlin.test; phase done only when they pass on the Mac (`./gradlew macosArm64Test`)
@@ -75,6 +76,12 @@ jiff/humantime→kotlinx-datetime; shlex→own; wasmi→not portable (see risks)
 ### Phase 11 — docs (how it works, enable/disable, test, limitations) and size/test report
 - [ ] Tests: port matching Rust unit + integration tests to kotlin.test; phase done only when they pass on the Mac (`./gradlew macosArm64Test`)
 - [ ] Docs: `docs/<feature>.md` (how it works, enable, disable, test, limitations) + README section
+
+## Build timings (Mac, macosArm64 debug)
+| Scenario | Time |
+|---|---|
+| clean `macosArm64Test` | tbd |
+| incremental (1 file) `macosArm64Test` | tbd |
 
 ## Test counts per phase
 | Phase | Rust tests in scope | Kotlin tests passing |
