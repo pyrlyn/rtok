@@ -19,6 +19,7 @@ Docs: [build speed](docs/build-speed.md) · [token estimator](docs/tokens.md) ·
 - [compress plugin](docs/compress.md)
 - [checkpoint and inject plugins](docs/checkpoint-inject.md)
 - [guard plugin](docs/guard.md)
+- [cmd plugin (in progress)](docs/cmd.md)
 - [docs plugin](docs/docs-plugin.md)
 - [json_tree plugin](docs/json-tree.md)
 - [API docs (Dokka)](docs/api-docs.md)
