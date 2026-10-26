@@ -315,7 +315,14 @@ object McpEntries {
         path: String,
         key: String,
         name: String,
-    ) = entryIn(path, Format.Jsonc, McpSpec.keyPath(key), name)
+    ) = hasEntryAt(path, McpSpec.keyPath(key), name)
+
+    /** [hasEntry] for a key path given segment by segment (Amp's `amp.mcpServers` is one segment). */
+    fun hasEntryAt(
+        path: String,
+        keyPath: List<String>,
+        name: String,
+    ) = entryIn(path, Format.Jsonc, keyPath, name)
 
     /** True when [path]'s TOML holds a `[<table>.<name>]` table. */
     fun hasTomlEntry(
