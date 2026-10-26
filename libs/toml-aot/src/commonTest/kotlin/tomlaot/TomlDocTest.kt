@@ -117,4 +117,12 @@ class TomlDocTest {
         doc.arrayOfTables("hooks").single()["new key"] = TomlValue.Bool(false)
         assertTrue("\"new key\" = false" in doc.toString())
     }
+
+    @Test fun removeTableTakesItsSubtreeAndDecorAndLeavesTheRest() {
+        val doc = TomlDoc.parse("a = 1\n\n# ours\n[x.rtok]\ncommand = \"rtok\"\n\n[x.rtok.tools.read]\nmode = 1\n\n[x.other]\ncommand = \"o\"\n")
+        assertTrue(doc.removeTable("x.rtok"))
+        assertEquals("a = 1\n\n[x.other]\ncommand = \"o\"\n", doc.toString())
+        assertEquals(false, doc.removeTable("x.rtok"))
+        assertEquals(false, doc.removeTable("x"))
+    }
 }

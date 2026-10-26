@@ -3,8 +3,6 @@
 // providers and foreign plugins survive; remove takes rtok's table only as far as rtok wrote it (T246).
 package rtok.agents
 
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import rtok.agent.sdk.NO_CHANGES
@@ -65,8 +63,7 @@ object Reasonix : Agent {
         val doc = HostToml.load(path)
         if (tables(doc).any(::isRtok)) return NO_CHANGES
         val cmd = rtokMcpCommand()
-        val args = StdioMcp.args(HOST).joinToString(", ", "[", "]") { TomlValue.quote(it) }
-        doc.push(AOT, listOf("name" to TomlValue.Str(NAME), "command" to TomlValue.Str(cmd), "args" to TomlValue.Raw(args)))
+        doc.push(AOT, listOf("name" to TomlValue.Str(NAME), "command" to TomlValue.Str(cmd), "args" to HostToml.strings(StdioMcp.args(HOST))))
         val report = "plugins.rtok: ${StdioMcp.summary(cmd, HOST)}"
         write(applyOf(cfg), path, doc.toString(), report)
         return report
@@ -76,25 +73,11 @@ object Reasonix : Agent {
         val path = configPath(cfg)
         val doc = HostToml.load(path)
         val have = tables(doc).firstOrNull(::isRtok) ?: return NO_CHANGES
-        val leave = judgeOwned(applyOf(cfg), "plugins.rtok in $path", toJson(have), entry("rtok"), ::isRtokBin)
+        val leave = judgeOwned(applyOf(cfg), "plugins.rtok in $path", HostToml.toJson(have), entry("rtok"), ::isRtokBin)
         if (leave == null) {
             doc.retain(AOT) { !isRtok(it) }
             write(applyOf(cfg), path, doc.toString(), "- plugins.rtok")
         }
         return leave ?: "- plugins.rtok"
     }
-
-    /** The table as JSON for the ownership check: scalars as they are, raw values (arrays) parsed when they are JSON. */
-    private fun toJson(t: TomlTable): JsonObject =
-        JsonObject(
-            t.keys().associateWith { k ->
-                when (val v = t[k]) {
-                    is TomlValue.Str -> JsonPrimitive(v.value)
-                    is TomlValue.Int -> JsonPrimitive(v.value)
-                    is TomlValue.Bool -> JsonPrimitive(v.value)
-                    is TomlValue.Raw -> runCatching { Json.parseToJsonElement(v.text) }.getOrDefault(JsonPrimitive(v.text)) as JsonElement
-                    null -> JsonPrimitive(null as String?)
-                }
-            },
-        )
 }

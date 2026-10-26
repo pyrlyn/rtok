@@ -694,3 +694,13 @@ Next, in order:
   Windows copy fix not ported (no Windows target).
 - Tests: CursorTest 6.
 - Stop point: next 3d-6 = codex (several PRs); then `libs/yaml-aot` + continue/goose.
+
+## Session: agents chunk 3d-6a — codex (MCP + hooks)
+- `Codex.kt`: `[mcp_servers.rtok]` through `TomlDoc` (comments, other servers kept, no bare `[mcp_servers]`) with
+  `default_tools_approval_mode = "writes"` (T528, added to older entries, a user's value kept), bare `rtok` repointed
+  (T932), a pre-`--host` entry replaced, remove judged by `judgeOwned` ignoring our approval value; `hooks.json` with the
+  `codex` rows in Claude's layout, `--host codex` spelling, pre-T645 compaction lines rewritten in place.
+- `:toml-aot` `TomlDoc.removeTable` (table and its subtree); `HostToml.toJson`/`strings` shared with Reasonix.
+- Tests: CodexTest 7, TomlDocTest +1.
+- Stop point: next 3d-6b = codex proxy (`[model_providers.rtok]`, `# rtok: was` restore), then 3d-6c = codex plugin
+  (marketplace add/repoint, `plugin_update`); then `libs/yaml-aot` + continue/goose.
