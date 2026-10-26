@@ -28,4 +28,10 @@ class KtomlWriterTest {
         assertEquals(tree, KtomlReader.parse(out))
         assertFalse(out.contains("# c"))
     }
+    /** A file `config set` wrote and a user then appended to must still parse (no glued last line). */
+    @Test fun writtenDocumentEndsWithANewline() {
+        val out = KtomlReader.write(buildJsonObject { putJsonObject("a") { put("x", 1) }; putJsonObject("b") {} })
+        assertTrue(out.endsWith("\n"), out)
+        assertEquals("1", KtomlReader.parse(out + "c = 1\n")["b"]!!.jsonObject["c"]!!.jsonPrimitive.content)
+    }
 }

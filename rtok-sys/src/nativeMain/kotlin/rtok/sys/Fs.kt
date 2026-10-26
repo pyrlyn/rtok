@@ -146,3 +146,7 @@ internal expect fun mtimeNanos(st: stat): Long
 fun fileStat(p: String): Pair<Long, Long>? = memScoped {
     val st = alloc<stat>(); if (stat(p, st.ptr) != 0) null else mtimeNanos(st) to st.st_size
 }
+
+/** Write [text] to stderr unbuffered (stdout stays Kotlin's `print`). */
+@OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
+fun eprint(text: String) { platform.posix.fputs(text, platform.posix.stderr); platform.posix.fflush(platform.posix.stderr) }

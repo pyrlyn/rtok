@@ -116,6 +116,9 @@ jiff/humantime→kotlinx-datetime; shlex→own; wasmi→not portable (see risks)
 - [ ] Tests: port matching Rust unit + integration tests to kotlin.test; phase done only when they pass on the Mac (`./gradlew macosArm64Test`)
 - [ ] Docs: `docs/<feature>.md` (how it works, enable, disable, test, limitations) + README section
 ### Phase 6 — CLI surface (src/cli: stats, info, expand, filter, run, config, logs, report, completions, man)
+- [x] CLI layer: own `CommandSpec`/`Invocation`/`CliIo`, exit codes 0/1/2, Clikt behind `CliktAdapter`; `plugins` (table), `config init/path/validate/set`
+- [x] CLI testing: Kotest `CliSpec` (17, our layer: parsing incl. `--since`, errors/exit codes/messages, log/root/config) + `./gradlew e2eTest` (11, built rtok.kexe, real git main/worktree/submodule)
+- [ ] CLI testing per subcommand (Kotest spec + e2e case each): stats (`--since` vs real repo), info, expand, filter, run, config show/get, plugins --json, logs, report, completions, man
 - [ ] Tests: port matching Rust unit + integration tests to kotlin.test; phase done only when they pass on the Mac (`./gradlew macosArm64Test`)
 - [ ] Docs: `docs/<feature>.md` (how it works, enable, disable, test, limitations) + README section
 ### Phase 7 — proxy (Anthropic/OpenAI chat+responses/Gemini wire, route, gate, semantic cache) via Ktor
@@ -155,7 +158,8 @@ jiff/humantime→kotlinx-datetime; shlex→own; wasmi→not portable (see risks)
 | tooling | toml-ktoml 12, rtok-config −1 (own TOML parser test removed) | 11 |
 | tooling | db-room 5 (+3; 2 moved from store) | 3 |
 | tooling | Kotest RenderSpec 1 | 1 |
-| **total** | | **407** |
+| 6 (partial) | Kotest CliSpec 17, toml-ktoml trailing newline 1 (e2e 11 counted separately) | 18 |
+| **total** | | **425** |
 
 ## Test-porting
 Each Rust `#[cfg(test)]` module → `src/commonTest` in the matching module; `tests/*.rs` (138 files)

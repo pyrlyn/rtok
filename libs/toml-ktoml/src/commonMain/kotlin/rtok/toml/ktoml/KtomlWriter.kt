@@ -10,7 +10,8 @@ import kotlinx.serialization.json.*
 
 internal object KtomlWriter {
     private val toml = Toml()
-    fun write(root: JsonObject): String = toml.encodeToString(TableSerializer, root)
+    /** A TOML document; always newline-terminated, so a line appended later starts on its own line. */
+    fun write(root: JsonObject): String = toml.encodeToString(TableSerializer, root).let { if (it.isEmpty() || it.endsWith("\n")) it else it + "\n" }
 
     /** Encodes a table; ktoml picks table/array/primitive layout from each value's descriptor. */
     private object TableSerializer : SerializationStrategy<JsonObject> {

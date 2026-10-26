@@ -36,6 +36,13 @@ Measured on the Mac (one edit, warm daemon, seconds):
 KSP adds roughly 1.5–3 s per changed test compilation; a full clean `macosArm64Test` took 65 s
 (with the build cache).
 
-## Limitations
+## CLI tests
+- In-process: `rtok/src/nativeTest/kotlin/rtok/cli/CliSpec.kt` (Kotest, 17) drives `run(args, io)` with a captured `CliIo`; covers parsing (incl. `--since` through a toy spec), usage errors (exit 2), `Error: …` (exit 1), log/project root/config integration. Tests target our `CommandSpec` layer, not Clikt.
+- End-to-end: module `rtok-e2e` (Kotest, 11, no mocks). `./gradlew e2eTest` links `:rtok:linkDebugExecutableMacosArm64`, runs the real `rtok.kexe` in temp dirs (own `RTOK_HOME`/`HOME`/git env) against real git repos (main checkout, worktree, submodule), asserting stdout, stderr, exit code and files written (log, config). Not part of `macosArm64Test` (skipped there). Output: `rtok-e2e/build/e2e/output.txt`.
+- Timing (Mac, one edit in `rtok/cli`): `:rtok:macosArm64Test` 7.7–8.8 s, `e2eTest` 7.7 s.
+
 - Native Kotest has no annotation-based config (Kotlin/Native has no runtime annotations).
+- The Kotest native launcher exits 0 on failures; `e2eTest` parses the `Tests: N passed, M failed` line and fails the build.
+- Usage-error texts come from Clikt and differ from clap's wording (exit codes match).
+- `--since` against a real repo in e2e waits for Phase 6 `stats`/`discover`; `plugins --json`, `config show/get` wait for the model.
 - Native incremental caches must be cleaned once after a Kotlin version change.
