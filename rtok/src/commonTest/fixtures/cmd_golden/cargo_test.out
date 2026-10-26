@@ -1,0 +1,2 @@
+FAILED: a::bad
+cargo test: 2 passed, 1 failed (1 suite)

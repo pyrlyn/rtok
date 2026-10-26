@@ -1,0 +1,141 @@
+argv: golangci-lint run
+exit: 0
+min_saving: 85
+---
+internal/svc/h0.go:12:2: Error return value of `w.Write` is not checked (errcheck)
+	w.Write(buf0)
+	^
+internal/svc/h1.go:13:3: Error return value of `w.Write` is not checked (errcheck)
+	w.Write(buf1)
+	^
+internal/svc/h2.go:14:4: Error return value of `w.Write` is not checked (errcheck)
+	w.Write(buf2)
+	^
+internal/svc/h3.go:15:5: Error return value of `w.Write` is not checked (errcheck)
+	w.Write(buf3)
+	^
+internal/svc/h4.go:16:6: Error return value of `w.Write` is not checked (errcheck)
+	w.Write(buf4)
+	^
+internal/svc/h5.go:17:7: Error return value of `w.Write` is not checked (errcheck)
+	w.Write(buf5)
+	^
+internal/svc/h6.go:18:2: Error return value of `w.Write` is not checked (errcheck)
+	w.Write(buf6)
+	^
+internal/svc/h7.go:19:3: Error return value of `w.Write` is not checked (errcheck)
+	w.Write(buf7)
+	^
+internal/svc/h0.go:20:4: Error return value of `w.Write` is not checked (errcheck)
+	w.Write(buf8)
+	^
+internal/svc/h1.go:21:5: Error return value of `w.Write` is not checked (errcheck)
+	w.Write(buf9)
+	^
+internal/svc/h2.go:22:6: Error return value of `w.Write` is not checked (errcheck)
+	w.Write(buf10)
+	^
+internal/svc/h3.go:23:7: Error return value of `w.Write` is not checked (errcheck)
+	w.Write(buf11)
+	^
+internal/svc/h4.go:24:2: Error return value of `w.Write` is not checked (errcheck)
+	w.Write(buf12)
+	^
+internal/svc/h5.go:25:3: Error return value of `w.Write` is not checked (errcheck)
+	w.Write(buf13)
+	^
+internal/svc/h6.go:26:4: Error return value of `w.Write` is not checked (errcheck)
+	w.Write(buf14)
+	^
+internal/svc/h7.go:27:5: Error return value of `w.Write` is not checked (errcheck)
+	w.Write(buf15)
+	^
+internal/svc/h0.go:28:6: Error return value of `w.Write` is not checked (errcheck)
+	w.Write(buf16)
+	^
+internal/svc/h1.go:29:7: Error return value of `w.Write` is not checked (errcheck)
+	w.Write(buf17)
+	^
+internal/svc/h2.go:30:2: Error return value of `w.Write` is not checked (errcheck)
+	w.Write(buf18)
+	^
+internal/svc/h3.go:31:3: Error return value of `w.Write` is not checked (errcheck)
+	w.Write(buf19)
+	^
+internal/svc/h4.go:32:4: Error return value of `w.Write` is not checked (errcheck)
+	w.Write(buf20)
+	^
+internal/svc/h5.go:33:5: Error return value of `w.Write` is not checked (errcheck)
+	w.Write(buf21)
+	^
+internal/svc/h6.go:34:6: Error return value of `w.Write` is not checked (errcheck)
+	w.Write(buf22)
+	^
+internal/svc/h7.go:35:7: Error return value of `w.Write` is not checked (errcheck)
+	w.Write(buf23)
+	^
+internal/svc/h0.go:36:2: Error return value of `w.Write` is not checked (errcheck)
+	w.Write(buf24)
+	^
+internal/svc/h1.go:37:3: Error return value of `w.Write` is not checked (errcheck)
+	w.Write(buf25)
+	^
+internal/svc/h2.go:38:4: Error return value of `w.Write` is not checked (errcheck)
+	w.Write(buf26)
+	^
+internal/svc/h3.go:39:5: Error return value of `w.Write` is not checked (errcheck)
+	w.Write(buf27)
+	^
+internal/svc/h4.go:40:6: Error return value of `w.Write` is not checked (errcheck)
+	w.Write(buf28)
+	^
+internal/svc/h5.go:41:7: Error return value of `w.Write` is not checked (errcheck)
+	w.Write(buf29)
+	^
+internal/svc/h6.go:42:2: Error return value of `w.Write` is not checked (errcheck)
+	w.Write(buf30)
+	^
+internal/svc/h7.go:43:3: Error return value of `w.Write` is not checked (errcheck)
+	w.Write(buf31)
+	^
+internal/svc/h0.go:44:4: Error return value of `w.Write` is not checked (errcheck)
+	w.Write(buf32)
+	^
+internal/svc/h1.go:45:5: Error return value of `w.Write` is not checked (errcheck)
+	w.Write(buf33)
+	^
+internal/svc/h2.go:46:6: Error return value of `w.Write` is not checked (errcheck)
+	w.Write(buf34)
+	^
+internal/svc/h3.go:47:7: Error return value of `w.Write` is not checked (errcheck)
+	w.Write(buf35)
+	^
+internal/svc/h4.go:48:2: Error return value of `w.Write` is not checked (errcheck)
+	w.Write(buf36)
+	^
+internal/svc/h5.go:49:3: Error return value of `w.Write` is not checked (errcheck)
+	w.Write(buf37)
+	^
+internal/svc/h6.go:50:4: Error return value of `w.Write` is not checked (errcheck)
+	w.Write(buf38)
+	^
+internal/svc/h7.go:51:5: Error return value of `w.Write` is not checked (errcheck)
+	w.Write(buf39)
+	^
+internal/svc/h0.go:52:6: Error return value of `w.Write` is not checked (errcheck)
+	w.Write(buf40)
+	^
+internal/svc/h1.go:53:7: Error return value of `w.Write` is not checked (errcheck)
+	w.Write(buf41)
+	^
+internal/svc/h2.go:54:2: Error return value of `w.Write` is not checked (errcheck)
+	w.Write(buf42)
+	^
+internal/svc/h3.go:55:3: Error return value of `w.Write` is not checked (errcheck)
+	w.Write(buf43)
+	^
+internal/svc/h4.go:56:4: Error return value of `w.Write` is not checked (errcheck)
+	w.Write(buf44)
+	^
+45 issues:
+* errcheck: 45

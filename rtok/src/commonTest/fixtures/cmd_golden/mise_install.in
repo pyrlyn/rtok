@@ -1,0 +1,29 @@
+argv: mise install
+exit: 0
+min_saving: 70
+---
+mise node@20.11.0 download node-20.11.0-darwin-arm64.tar.gz
+mise node@20.11.0 download node-20.11.0-darwin-arm64.tar.gz [=>         ] 2.1MiB/48.0MiB
+mise node@20.11.0 download node-20.11.0-darwin-arm64.tar.gz [=====>     ] 24.0MiB/48.0MiB
+mise node@20.11.0 download node-20.11.0-darwin-arm64.tar.gz [==========>] 48.0MiB/48.0MiB
+mise node@20.11.0 checksum node-20.11.0-darwin-arm64.tar.gz
+mise node@20.11.0 extract node-20.11.0-darwin-arm64.tar.gz
+mise node@20.11.0 node-20.11.0-darwin-arm64/bin/node -v
+mise node@20.11.0 ✓ installed
+mise python@3.12.2 download python-3.12.2-darwin-arm64.tar.gz
+mise python@3.12.2 download python-3.12.2-darwin-arm64.tar.gz [=>         ] 2.1MiB/48.0MiB
+mise python@3.12.2 download python-3.12.2-darwin-arm64.tar.gz [=====>     ] 24.0MiB/48.0MiB
+mise python@3.12.2 download python-3.12.2-darwin-arm64.tar.gz [==========>] 48.0MiB/48.0MiB
+mise python@3.12.2 checksum python-3.12.2-darwin-arm64.tar.gz
+mise python@3.12.2 extract python-3.12.2-darwin-arm64.tar.gz
+mise python@3.12.2 python-3.12.2-darwin-arm64/bin/python -v
+mise python@3.12.2 ✓ installed
+mise rust@1.80.0 download rust-1.80.0-darwin-arm64.tar.gz
+mise rust@1.80.0 download rust-1.80.0-darwin-arm64.tar.gz [=>         ] 2.1MiB/48.0MiB
+mise rust@1.80.0 download rust-1.80.0-darwin-arm64.tar.gz [=====>     ] 24.0MiB/48.0MiB
+mise rust@1.80.0 download rust-1.80.0-darwin-arm64.tar.gz [==========>] 48.0MiB/48.0MiB
+mise rust@1.80.0 checksum rust-1.80.0-darwin-arm64.tar.gz
+mise rust@1.80.0 extract rust-1.80.0-darwin-arm64.tar.gz
+mise rust@1.80.0 rust-1.80.0-darwin-arm64/bin/rust -v
+mise rust@1.80.0 ✓ installed
+mise ~/proj/mise.toml tools: node@20.11.0, python@3.12.2, rust@1.80.0

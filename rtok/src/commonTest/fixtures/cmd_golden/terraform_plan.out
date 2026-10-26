@@ -1,0 +1,21 @@
+Acquiring state lock. This may take a few moments...
+random_id.suffix: Refreshing state... [id=abc]
+aws_instance.web[0]: Refreshing state... [id=i-0abc0000]
+aws_instance.web[1]: Refreshing state... [id=i-0abc0001]
+aws_instance.web[2]: Refreshing state... [id=i-0abc0002]
+aws_instance.web[3]: Refreshing state... [id=i-0abc0003]
+aws_instance.web[4]: Refreshing state... [id=i-0abc0004]
+aws_instance.web[5]: Refreshing state... [id=i-0abc0005]
+aws_instance.web[6]: Refreshing state... [id=i-0abc0006]
+aws_instance.web[7]: Refreshing state... [id=i-0abc0007]
+… 62 lines omitted (expand deadbeef)
+    }
+
+  # aws_instance.web[5] will be updated in-place
+  ~ resource "aws_instance" "web" {
+        id = "i-0abc0005"
+      ~ instance_type = "t3.micro" -> "t3.small"
+        tags = {}
+    }
+
+Plan: 0 to add, 6 to change, 0 to destroy.

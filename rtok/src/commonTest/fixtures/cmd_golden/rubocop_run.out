@@ -1,0 +1,25 @@
+Inspecting 41 files
+..........C.....W....E............C......
+
+Offenses:
+
+Style/StringLiterals ×30: Prefer single-quoted strings when you don't need string interpolation. (app/models/m0.rb:10:3, app/models/m1.rb:11:4, app/models/m2.rb:12:5, …)
+x = "a0"
+    ^^^^^^
+… 44 lines omitted (expand deadbeef)
+x = "a23"
+    ^^^^^^
+x = "a24"
+    ^^^^^^
+x = "a25"
+    ^^^^^^
+x = "a26"
+    ^^^^^^
+x = "a27"
+    ^^^^^^
+x = "a28"
+    ^^^^^^
+x = "a29"
+    ^^^^^^
+
+41 files inspected, 30 offenses detected, 30 offenses autocorrectable

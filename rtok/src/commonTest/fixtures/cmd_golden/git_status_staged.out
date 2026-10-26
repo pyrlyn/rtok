@@ -1,0 +1,6 @@
+On branch feat/x
+A  src/new.rs
+R  src/old.rs -> src/moved.rs
+ M README.md
+ D docs/gone.md
+?? bench-dir/ notes.txt

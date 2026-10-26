@@ -1,0 +1,7 @@
+Traceback (most recent call last):
+  File "deep.py", line 12, in <module>
+    print(depth(5000))
+  File "deep.py", line 5, in depth
+    return 1 + depth(n - 1)
+  [previous frame repeated 44 more times]
+RecursionError: maximum recursion depth exceeded

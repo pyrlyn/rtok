@@ -1,0 +1,28 @@
+argv: gh pr checks 12
+exit: 1
+min_saving: 70
+---
+job-1 (ubuntu-latest)	pass	1m3s	https://github.com/o/r/actions/runs/1001/job/201
+job-2 (ubuntu-latest)	pass	2m3s	https://github.com/o/r/actions/runs/1002/job/202
+job-3 (ubuntu-latest)	pass	3m3s	https://github.com/o/r/actions/runs/1003/job/203
+job-4 (ubuntu-latest)	pass	4m3s	https://github.com/o/r/actions/runs/1004/job/204
+job-5 (ubuntu-latest)	pass	5m3s	https://github.com/o/r/actions/runs/1005/job/205
+job-6 (ubuntu-latest)	pass	6m3s	https://github.com/o/r/actions/runs/1006/job/206
+job-7 (ubuntu-latest)	fail	7m3s	https://github.com/o/r/actions/runs/1007/job/207
+job-8 (ubuntu-latest)	pass	8m3s	https://github.com/o/r/actions/runs/1008/job/208
+job-9 (ubuntu-latest)	skipping	9m3s	https://github.com/o/r/actions/runs/1009/job/209
+job-10 (ubuntu-latest)	pass	10m3s	https://github.com/o/r/actions/runs/10010/job/2010
+job-11 (ubuntu-latest)	pass	11m3s	https://github.com/o/r/actions/runs/10011/job/2011
+job-12 (ubuntu-latest)	pass	12m3s	https://github.com/o/r/actions/runs/10012/job/2012
+job-13 (ubuntu-latest)	pass	13m3s	https://github.com/o/r/actions/runs/10013/job/2013
+job-14 (ubuntu-latest)	pass	14m3s	https://github.com/o/r/actions/runs/10014/job/2014
+job-15 (ubuntu-latest)	pending	15m3s	https://github.com/o/r/actions/runs/10015/job/2015
+job-16 (ubuntu-latest)	pass	16m3s	https://github.com/o/r/actions/runs/10016/job/2016
+job-17 (ubuntu-latest)	pass	17m3s	https://github.com/o/r/actions/runs/10017/job/2017
+job-18 (ubuntu-latest)	skipping	18m3s	https://github.com/o/r/actions/runs/10018/job/2018
+job-19 (ubuntu-latest)	pass	19m3s	https://github.com/o/r/actions/runs/10019/job/2019
+job-20 (ubuntu-latest)	pass	20m3s	https://github.com/o/r/actions/runs/10020/job/2020
+job-21 (ubuntu-latest)	pass	21m3s	https://github.com/o/r/actions/runs/10021/job/2021
+job-22 (ubuntu-latest)	pass	22m3s	https://github.com/o/r/actions/runs/10022/job/2022
+job-23 (ubuntu-latest)	pass	23m3s	https://github.com/o/r/actions/runs/10023/job/2023
+job-24 (ubuntu-latest)	pass	24m3s	https://github.com/o/r/actions/runs/10024/job/2024

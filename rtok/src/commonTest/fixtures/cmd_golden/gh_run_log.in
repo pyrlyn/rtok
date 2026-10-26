@@ -1,0 +1,78 @@
+argv: gh run view 7 --log
+exit: 0
+min_saving: 60
+---
+build	Set up job	2026-10-15T10:00:00.1234567Z Download action repository step-0
+build	Set up job	2026-10-15T10:00:01.1234567Z Download action repository step-1
+build	Set up job	2026-10-15T10:00:02.1234567Z Download action repository step-2
+build	Set up job	2026-10-15T10:00:03.1234567Z Download action repository step-3
+build	Set up job	2026-10-15T10:00:04.1234567Z Download action repository step-4
+build	Set up job	2026-10-15T10:00:05.1234567Z Download action repository step-5
+build	Set up job	2026-10-15T10:00:06.1234567Z Download action repository step-6
+build	Set up job	2026-10-15T10:00:07.1234567Z Download action repository step-7
+build	Set up job	2026-10-15T10:00:08.1234567Z Download action repository step-8
+build	Set up job	2026-10-15T10:00:09.1234567Z Download action repository step-9
+build	Set up job	2026-10-15T10:00:10.1234567Z Download action repository step-10
+build	Set up job	2026-10-15T10:00:11.1234567Z Download action repository step-11
+build	Set up job	2026-10-15T10:00:12.1234567Z Download action repository step-12
+build	Set up job	2026-10-15T10:00:13.1234567Z Download action repository step-13
+build	Set up job	2026-10-15T10:00:14.1234567Z Download action repository step-14
+build	Set up job	2026-10-15T10:00:15.1234567Z Download action repository step-15
+build	Set up job	2026-10-15T10:00:16.1234567Z Download action repository step-16
+build	Set up job	2026-10-15T10:00:17.1234567Z Download action repository step-17
+build	Set up job	2026-10-15T10:00:18.1234567Z Download action repository step-18
+build	Set up job	2026-10-15T10:00:19.1234567Z Download action repository step-19
+build	Set up job	2026-10-15T10:00:20.1234567Z Download action repository step-20
+build	Set up job	2026-10-15T10:00:21.1234567Z Download action repository step-21
+build	Set up job	2026-10-15T10:00:22.1234567Z Download action repository step-22
+build	Set up job	2026-10-15T10:00:23.1234567Z Download action repository step-23
+build	Set up job	2026-10-15T10:00:24.1234567Z Download action repository step-24
+build	Set up job	2026-10-15T10:00:25.1234567Z Download action repository step-25
+build	Set up job	2026-10-15T10:00:26.1234567Z Download action repository step-26
+build	Set up job	2026-10-15T10:00:27.1234567Z Download action repository step-27
+build	Set up job	2026-10-15T10:00:28.1234567Z Download action repository step-28
+build	Set up job	2026-10-15T10:00:29.1234567Z Download action repository step-29
+build	Set up job	2026-10-15T10:00:30.1234567Z Download action repository step-30
+build	Set up job	2026-10-15T10:00:31.1234567Z Download action repository step-31
+build	Set up job	2026-10-15T10:00:32.1234567Z Download action repository step-32
+build	Set up job	2026-10-15T10:00:33.1234567Z Download action repository step-33
+build	Set up job	2026-10-15T10:00:34.1234567Z Download action repository step-34
+build	Set up job	2026-10-15T10:00:35.1234567Z Download action repository step-35
+build	Set up job	2026-10-15T10:00:36.1234567Z Download action repository step-36
+build	Set up job	2026-10-15T10:00:37.1234567Z Download action repository step-37
+build	Set up job	2026-10-15T10:00:38.1234567Z Download action repository step-38
+build	Set up job	2026-10-15T10:00:39.1234567Z Download action repository step-39
+build	Run tests	2026-10-15T10:01:00.1234567Z Compiling crate-0 v0.1.0
+build	Run tests	2026-10-15T10:01:01.1234567Z Compiling crate-1 v0.1.0
+build	Run tests	2026-10-15T10:01:02.1234567Z Compiling crate-2 v0.1.0
+build	Run tests	2026-10-15T10:01:03.1234567Z Compiling crate-3 v0.1.0
+build	Run tests	2026-10-15T10:01:04.1234567Z Compiling crate-4 v0.1.0
+build	Run tests	2026-10-15T10:01:05.1234567Z Compiling crate-5 v0.1.0
+build	Run tests	2026-10-15T10:01:06.1234567Z Compiling crate-6 v0.1.0
+build	Run tests	2026-10-15T10:01:07.1234567Z Compiling crate-7 v0.1.0
+build	Run tests	2026-10-15T10:01:08.1234567Z Compiling crate-8 v0.1.0
+build	Run tests	2026-10-15T10:01:09.1234567Z Compiling crate-9 v0.1.0
+build	Run tests	2026-10-15T10:01:10.1234567Z Compiling crate-10 v0.1.0
+build	Run tests	2026-10-15T10:01:11.1234567Z Compiling crate-11 v0.1.0
+build	Run tests	2026-10-15T10:01:12.1234567Z Compiling crate-12 v0.1.0
+build	Run tests	2026-10-15T10:01:13.1234567Z Compiling crate-13 v0.1.0
+build	Run tests	2026-10-15T10:01:14.1234567Z Compiling crate-14 v0.1.0
+build	Run tests	2026-10-15T10:01:15.1234567Z Compiling crate-15 v0.1.0
+build	Run tests	2026-10-15T10:01:16.1234567Z Compiling crate-16 v0.1.0
+build	Run tests	2026-10-15T10:01:17.1234567Z Compiling crate-17 v0.1.0
+build	Run tests	2026-10-15T10:01:18.1234567Z Compiling crate-18 v0.1.0
+build	Run tests	2026-10-15T10:01:19.1234567Z Compiling crate-19 v0.1.0
+build	Run tests	2026-10-15T10:01:20.1234567Z Compiling crate-20 v0.1.0
+build	Run tests	2026-10-15T10:01:21.1234567Z Compiling crate-21 v0.1.0
+build	Run tests	2026-10-15T10:01:22.1234567Z Compiling crate-22 v0.1.0
+build	Run tests	2026-10-15T10:01:23.1234567Z Compiling crate-23 v0.1.0
+build	Run tests	2026-10-15T10:01:24.1234567Z Compiling crate-24 v0.1.0
+build	Run tests	2026-10-15T10:01:25.1234567Z Compiling crate-25 v0.1.0
+build	Run tests	2026-10-15T10:01:26.1234567Z Compiling crate-26 v0.1.0
+build	Run tests	2026-10-15T10:01:27.1234567Z Compiling crate-27 v0.1.0
+build	Run tests	2026-10-15T10:01:28.1234567Z Compiling crate-28 v0.1.0
+build	Run tests	2026-10-15T10:01:29.1234567Z Compiling crate-29 v0.1.0
+build	Run tests	2026-10-15T10:02:00.0000000Z test cache::hits ... ok
+build	Run tests	2026-10-15T10:02:01.0000000Z test cache::misses ... FAILED
+build	Run tests	2026-10-15T10:02:02.0000000Z ##[error]Process completed with exit code 101.
+build	Post job cleanup	2026-10-15T10:02:03.0000000Z Cleaning up orphan processes

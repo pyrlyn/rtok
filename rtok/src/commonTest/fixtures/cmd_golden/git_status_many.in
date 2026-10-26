@@ -1,0 +1,35 @@
+argv: git status
+exit: 0
+min_saving: 60
+---
+On branch feat/cmd-formatters
+Your branch is ahead of 'origin/feat/cmd-formatters' by 3 commits.
+  (use "git push" to publish your local commits)
+
+Changes to be committed:
+  (use "git restore --staged <file>..." to unstage)
+	modified:   src/plugins/cmd/compact.rs
+	modified:   src/plugins/cmd/formatters.rs
+	new file:   src/plugins/cmd/loops.rs
+	new file:   tests/cmd_golden/for_poll.in
+	new file:   tests/cmd_golden/for_poll.out
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   src/plugins/cmd/mod.rs
+	modified:   plan.md
+	modified:   todo.md
+	modified:   done.md
+	deleted:    src/plugins/cmd/old.rs
+	modified:   tests/cmd_golden/git_status.out
+	modified:   tests/cmd_golden/git_status.in
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	bench/c14/
+	notes.txt
+	scratch/a.log
+	scratch/b.log
+	scratch/c.log
+

@@ -1,0 +1,18 @@
+title:	Add retry to the uploader
+state:	OPEN
+author:	ada
+reviewers:	bob (Approved)
+number:	42
+url:	https://github.com/o/r/pull/42
+additions:	120
+deletions:	14
+auto-merge:	disabled
+--
+## Summary
+
+The uploader now retries three times with backoff.
+
+## Test plan
+
+- unit tests for the backoff
+- manual upload of a 2 GB file

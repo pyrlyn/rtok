@@ -1,0 +1,31 @@
+argv: gh pr view 42
+exit: 0
+min_saving: 12
+---
+title:	Add retry to the uploader
+state:	OPEN
+author:	ada
+labels:	
+assignees:	
+reviewers:	bob (Approved)
+projects:	
+milestone:	
+number:	42
+url:	https://github.com/o/r/pull/42
+additions:	120
+deletions:	14
+auto-merge:	disabled
+--
+## Summary
+
+
+The uploader now retries three times with backoff.   
+
+
+
+## Test plan
+
+- unit tests for the backoff
+- manual upload of a 2 GB file
+
+

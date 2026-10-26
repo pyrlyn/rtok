@@ -1,0 +1,35 @@
+argv: pytest tests
+exit: 1
+min_saving: 35
+---
+============================= test session starts ==============================
+platform linux -- Python 3.12.1, pytest-8.1.1, pluggy-1.5.0
+rootdir: /work/shop
+configfile: pyproject.toml
+plugins: cov-5.0.0, xdist-3.5.0
+collected 48 items
+
+tests/test_cart.py ............ [ 25%]
+tests/test_order.py ...........F [ 50%]
+tests/test_user.py ............ [ 75%]
+tests/test_pay.py ............ [100%]
+
+=================================== FAILURES ===================================
+______________________________ test_order_total ________________________________
+
+    def test_order_total():
+        order = Order([Item("a", 3), Item("b", 4)])
+>       assert order.total() == 8
+E       assert 7 == 8
+E        +  where 7 = <bound method Order.total of <Order>>()
+
+tests/test_order.py:21: AssertionError
+=============================== warnings summary ===============================
+tests/test_user.py::test_login
+  /work/shop/user.py:9: DeprecationWarning: utcnow() is deprecated
+    return datetime.utcnow()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_order.py::test_order_total - assert 7 == 8
+==================== 1 failed, 47 passed, 1 warning in 0.31s ====================

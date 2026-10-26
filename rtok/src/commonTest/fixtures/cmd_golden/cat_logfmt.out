@@ -1,0 +1,46 @@
+[every record: level=info svc=api host=web-1 msg="request done" method=GET path=/v1/items status=200]
+ts=2026-10-16T10:00:00Z dur_ms=44 req=r1000
+ts=2026-10-16T10:00:01Z dur_ms=22 req=r1001
+ts=2026-10-16T10:00:02Z dur_ms=53 req=r1002
+ts=2026-10-16T10:00:03Z dur_ms=86 req=r1003
+ts=2026-10-16T10:00:04Z dur_ms=9 req=r1004
+ts=2026-10-16T10:00:05Z dur_ms=12 req=r1005
+ts=2026-10-16T10:00:06Z dur_ms=71 req=r1006
+ts=2026-10-16T10:00:07Z dur_ms=15 req=r1007
+ts=2026-10-16T10:00:08Z dur_ms=49 req=r1008
+ts=2026-10-16T10:00:09Z dur_ms=77 req=r1009
+ts=2026-10-16T10:00:10Z dur_ms=10 req=r1010
+ts=2026-10-16T10:00:11Z dur_ms=67 req=r1011
+ts=2026-10-16T10:00:12Z dur_ms=30 req=r1012
+ts=2026-10-16T10:00:13Z dur_ms=7 req=r1013
+ts=2026-10-16T10:00:14Z dur_ms=14 req=r1014
+ts=2026-10-16T10:00:15Z dur_ms=58 req=r1015
+ts=2026-10-16T10:00:16Z dur_ms=56 req=r1016
+ts=2026-10-16T10:00:17Z dur_ms=11 req=r1017
+ts=2026-10-16T10:00:18Z dur_ms=33 req=r1018
+ts=2026-10-16T10:00:19Z dur_ms=14 req=r1019
+… 77 lines omitted (expand deadbeef) [varying: ts=2026-10-16T10:00:20Z..2026-10-16T10:01:36Z dur_ms=73..76 req=r1020..r1096]
+ts=2026-10-16T10:01:37Z level=warn svc=api host=web-1 msg="slow upstream" method=GET path=/v1/items status=500 dur_ms=43 req=r1097
+… 83 lines omitted (expand deadbeef) [varying: ts=2026-10-16T10:01:38Z..2026-10-16T10:03:00Z dur_ms=46..53 req=r1098..r1180]
+ts=2026-10-16T10:03:01Z level=error svc=api host=web-1 msg="db timeout" method=GET path=/v1/items status=500 dur_ms=53 req=r1181
+… 38 lines omitted (expand deadbeef) [varying: ts=2026-10-16T10:03:02Z..2026-10-16T10:03:39Z dur_ms=54..17 req=r1182..r1219]
+ts=2026-10-16T10:03:40Z dur_ms=65 req=r1220
+ts=2026-10-16T10:03:41Z dur_ms=62 req=r1221
+ts=2026-10-16T10:03:42Z dur_ms=64 req=r1222
+ts=2026-10-16T10:03:43Z dur_ms=64 req=r1223
+ts=2026-10-16T10:03:44Z dur_ms=42 req=r1224
+ts=2026-10-16T10:03:45Z dur_ms=13 req=r1225
+ts=2026-10-16T10:03:46Z dur_ms=21 req=r1226
+ts=2026-10-16T10:03:47Z dur_ms=16 req=r1227
+ts=2026-10-16T10:03:48Z dur_ms=46 req=r1228
+ts=2026-10-16T10:03:49Z dur_ms=36 req=r1229
+ts=2026-10-16T10:03:50Z dur_ms=64 req=r1230
+ts=2026-10-16T10:03:51Z dur_ms=23 req=r1231
+ts=2026-10-16T10:03:52Z dur_ms=69 req=r1232
+ts=2026-10-16T10:03:53Z dur_ms=5 req=r1233
+ts=2026-10-16T10:03:54Z dur_ms=29 req=r1234
+ts=2026-10-16T10:03:55Z dur_ms=70 req=r1235
+ts=2026-10-16T10:03:56Z dur_ms=49 req=r1236
+ts=2026-10-16T10:03:57Z dur_ms=21 req=r1237
+ts=2026-10-16T10:03:58Z dur_ms=72 req=r1238
+ts=2026-10-16T10:03:59Z dur_ms=6 req=r1239

@@ -1,0 +1,22 @@
+argv: ls -la
+exit: 0
+min_saving: 75
+---
+total 2104
+drwxr-xr-x  52 dev  staff    1664 Oct 14 23:12 .
+drwxr-xr-x  18 dev  staff     576 Oct 13 10:02 ..
+drwxr-xr-x  16 dev  staff     512 Oct 14 23:40 .git
+drwxr-xr-x   6 dev  staff     192 Oct 10 09:15 .github
+-rw-r--r--   1 dev  staff     412 Oct 10 09:15 .gitignore
+-rw-r--r--   1 dev  staff   82502 Oct 14 20:41 CHANGELOG.md
+-rw-r--r--   1 dev  staff  131119 Oct 14 20:41 Cargo.lock
+-rw-r--r--   1 dev  staff    3364 Oct 14 20:41 Cargo.toml
+-rw-r--r--   1 dev  staff   35149 Oct 10 09:15 LICENSE
+-rw-r--r--   1 dev  staff   21003 Oct 14 20:41 README.md
+-rwxr-xr-x   1 dev  staff    1785 Oct 10 09:15 build.rs
+drwxr-xr-x  11 dev  staff     352 Oct 14 20:41 crates
+drwxr-xr-x  40 dev  staff    1280 Oct 14 20:41 docs
+lrwxr-xr-x   1 dev  staff       9 Oct 10 09:15 latest -> docs/v0.1
+drwxr-xr-x  33 dev  staff    1056 Oct 14 20:41 src
+drwxr-xr-x   7 dev  staff     224 Oct 14 22:00 target
+drwxr-xr-x  60 dev  staff    1920 Oct 14 20:41 tests

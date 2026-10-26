@@ -1,0 +1,66 @@
+argv: while read -r f; do ./check.sh "$f"; done < files.txt
+exit: 0
+min_saving: 90
+---
+checked src/gen/file_100.rs in 5 ms: ok
+checked src/gen/file_101.rs in 6 ms: ok
+checked src/gen/file_102.rs in 7 ms: ok
+checked src/gen/file_103.rs in 8 ms: ok
+checked src/gen/file_104.rs in 9 ms: ok
+checked src/gen/file_105.rs in 3 ms: ok
+checked src/gen/file_106.rs in 4 ms: ok
+checked src/gen/file_107.rs in 5 ms: ok
+checked src/gen/file_108.rs in 6 ms: ok
+checked src/gen/file_109.rs in 7 ms: ok
+checked src/gen/file_110.rs in 8 ms: ok
+checked src/gen/file_111.rs in 9 ms: ok
+checked src/gen/file_112.rs in 3 ms: ok
+checked src/gen/file_113.rs in 4 ms: ok
+checked src/gen/file_114.rs in 5 ms: ok
+checked src/gen/file_115.rs in 6 ms: ok
+checked src/gen/file_116.rs in 7 ms: ok
+checked src/gen/file_117.rs in 8 ms: ok
+checked src/gen/file_118.rs in 9 ms: ok
+checked src/gen/file_119.rs in 3 ms: ok
+checked src/gen/file_120.rs in 4 ms: ok
+checked src/gen/file_121.rs in 5 ms: ok
+checked src/gen/file_122.rs in 6 ms: ok
+checked src/gen/file_123.rs in 7 ms: ok
+checked src/gen/file_124.rs in 8 ms: ok
+checked src/gen/file_125.rs in 9 ms: ok
+checked src/gen/file_126.rs in 3 ms: ok
+checked src/gen/file_127.rs in 4 ms: ok
+checked src/gen/file_128.rs in 5 ms: ok
+checked src/gen/file_129.rs in 6 ms: ok
+checked src/gen/file_130.rs in 7 ms: ok
+checked src/gen/file_131.rs in 8 ms: ok
+checked src/gen/file_132.rs in 9 ms: ok
+checked src/gen/file_133.rs in 3 ms: ok
+checked src/gen/file_134.rs in 4 ms: ok
+checked src/gen/file_135.rs in 5 ms: ok
+checked src/gen/file_136.rs in 6 ms: ok
+checked src/gen/file_137.rs in 7 ms: ok
+checked src/gen/file_138.rs in 8 ms: ok
+checked src/gen/file_139.rs in 9 ms: ok
+checked src/gen/file_140.rs in 3 ms: ok
+checked src/gen/file_141.rs in 4 ms: ok
+checked src/gen/file_142.rs in 5 ms: ok
+checked src/gen/file_143.rs in 6 ms: ok
+checked src/gen/file_144.rs in 7 ms: ok
+checked src/gen/file_145.rs in 8 ms: ok
+checked src/gen/file_146.rs in 9 ms: ok
+checked src/gen/file_147.rs in 3 ms: ok
+checked src/gen/file_148.rs in 4 ms: ok
+checked src/gen/file_149.rs in 5 ms: ok
+checked src/gen/file_150.rs in 6 ms: ok
+checked src/gen/file_151.rs in 7 ms: ok
+checked src/gen/file_152.rs in 8 ms: ok
+checked src/gen/file_153.rs in 9 ms: ok
+checked src/gen/file_154.rs in 3 ms: ok
+checked src/gen/file_155.rs in 4 ms: ok
+checked src/gen/file_156.rs in 5 ms: ok
+checked src/gen/file_157.rs in 6 ms: ok
+checked src/gen/file_158.rs in 7 ms: ok
+checked src/gen/file_159.rs in 8 ms: ok
+checked src/gen/file_160.rs in 9 ms: ok
+checked src/gen/file_161.rs: FAILED (exit 2)
