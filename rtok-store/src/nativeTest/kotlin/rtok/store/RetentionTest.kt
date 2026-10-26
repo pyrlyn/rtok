@@ -48,4 +48,20 @@ class RetentionTest {
         assertEquals(1, s.purgeCallsOlderThan(30)); assertFalse(exists(pending[0])); assertEquals(0L, s.conn { it.longOf("SELECT count(*) FROM archive") })
         removeDirAll(dir)
     }
+
+    @Test fun retentionDropsSymbolRootsThatAreNoLongerDirectories() {
+        val s = Store.openInMemory(); val live = tmpDir("t352-live"); val gone = "/rtok-t352-no-such-root"
+        for (root in listOf(live, gone, "")) { s.index(root, "a.rs", symRow("f", 1, true)); s.setExtractorFingerprint(root, "fp") }
+        s.markSymbolsStaleIn(gone, "z.rs"); s.runRetention(30u, 3u)
+        assertEquals(0L, s.symbolCount(gone)); assertTrue(s.symbolStalePaths(gone).isEmpty()); assertNull(s.extractorFingerprint(gone))
+        assertEquals(1L, s.symbolCount(live)); assertEquals(1L, s.symbolCount(""), "the empty root stays"); removeDirAll(live)
+    }
+
+    @Test fun retentionDropsHomeAndFilesystemRoots() {
+        val s = Store.openInMemory(); val home = tmpDir("t356-home"); val project = tmpDir("t356-project")
+        for (root in listOf(home, project, "/")) { s.index(root, "a.rs", symRow("f", 1, true)); s.setExtractorFingerprint(root, "fp") }
+        assertEquals(2, s.dropDeadSymbolRoots(home))
+        for (gone in listOf(home, "/")) { assertEquals(0L, s.symbolCount(gone), gone); assertNull(s.extractorFingerprint(gone), gone) }
+        assertEquals(1L, s.symbolCount(project)); removeDirAll(home); removeDirAll(project)
+    }
 }

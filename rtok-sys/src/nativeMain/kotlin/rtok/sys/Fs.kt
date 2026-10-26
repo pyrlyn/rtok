@@ -138,3 +138,11 @@ fun samePath(a: String, b: String): Boolean = a == b || components(a) == compone
 fun isDir(p: String): Boolean = memScoped { val st = alloc<stat>(); stat(p, st.ptr) == 0 && (st.st_mode.toInt() and S_IFMT) == S_IFDIR }
 fun fileLen(p: String): Long? = memScoped { val st = alloc<stat>(); if (stat(p, st.ptr) == 0) st.st_size else null }
 fun fileMode(p: String): Int? = memScoped { val st = alloc<stat>(); if (stat(p, st.ptr) == 0) st.st_mode.toInt() and 0x1ff else null }
+
+/** The stat field holding mtime differs per libc (`st_mtimespec` on Darwin, `st_mtim` on glibc). */
+internal expect fun mtimeNanos(st: stat): Long
+
+/** `(mtime in nanoseconds since the epoch, size)`, as Rust `metadata().modified()` / `len()` give them; null when missing. */
+fun fileStat(p: String): Pair<Long, Long>? = memScoped {
+    val st = alloc<stat>(); if (stat(p, st.ptr) != 0) null else mtimeNanos(st) to st.st_size
+}

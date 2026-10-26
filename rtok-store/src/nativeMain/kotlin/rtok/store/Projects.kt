@@ -91,7 +91,7 @@ fun Store.resolveProject(cwd: String): Resolved {
 fun Store.removeProject(id: Int): Boolean = conn { db ->
     db.transaction("IMMEDIATE") {
         val root = db.stringOf("SELECT root FROM projects WHERE id = ?", id) ?: return@transaction false
-        for (t in listOf("symbols", "extractor", "file_rank", "symbol_stale")) db.execute("DELETE FROM $t WHERE root = ?", root)
+        deleteSymbolRoot(db, root); db.execute("DELETE FROM file_rank WHERE root = ?", root)
         db.execute("DELETE FROM projects WHERE id = ?", id)
         true
     }

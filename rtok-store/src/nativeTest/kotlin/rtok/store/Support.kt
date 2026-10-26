@@ -40,3 +40,9 @@ fun hookCallWithBody(store: Store, kind: String, body: ByteArray, ageDays: Long)
     store.insertCallIo(id, body, body, body.size + 1, null)
     store.setCallTs(id, unixNow() - ageDays * 86_400); return id
 }
+
+// ---- symbol fixtures (symbols_tests.rs helpers), shared by the symbol, project and retention tests ----
+fun symRow(name: String, line: Int, isDef: Boolean) = rtok.plugin.sdk.SymbolRow(name, "function", line, isDef, line, "")
+fun symImport(name: String, line: Int, spec: String = "") = rtok.plugin.sdk.SymbolRow(name, "import", line, false, line, spec)
+fun symRef(name: String, line: Int, scope: String) = rtok.plugin.sdk.SymbolRow(name, "function", line, false, line, scope)
+fun Store.index(root: String, path: String, vararg rows: rtok.plugin.sdk.SymbolRow) = replaceSymbols(root, path, "s", 0L to 0L, rows.toList())
