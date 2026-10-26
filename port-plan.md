@@ -30,27 +30,57 @@ jiff/humantime→kotlinx-datetime; shlex→own; wasmi→not portable (see risks)
 
 ## Phases (commit per phase; `./gradlew macosArm64Test` green each phase)
 ### Phase 0 — scaffolding
+- [ ] Tests: port matching Rust unit + integration tests to kotlin.test; phase done only when they pass on the Mac (`./gradlew macosArm64Test`)
+- [ ] Docs: `docs/<feature>.md` (how it works, enable, disable, test, limitations) + README section
 - [ ] Gradle KMP build, modules above, targets macosArm64/linuxX64/linuxArm64 (+mingwX64 if deps allow)
 - [ ] PORTING.md inventory, README stub
 - Acceptance: `./gradlew build` produces `rtok.kexe`; empty test suite green.
 ### Phase 1 — pure core (no IO)
+- [ ] Tests: port matching Rust unit + integration tests to kotlin.test; phase done only when they pass on the Mac (`./gradlew macosArm64Test`)
+- [ ] Docs: `docs/<feature>.md` (how it works, enable, disable, test, limitations) + README section
 - [ ] plugin-sdk `Class`; config `Estimator`; `tokens.rs` (estimate, tokens_saved) + tests
 - [ ] `modes/` compress_prose (Lite/Full/Ultra), YAGNI ladder + all unit tests
 - Acceptance: every Rust unit test of these files translated and passing.
 ### Phase 2 — rtok-config + rtok-log
+- [ ] Tests: port matching Rust unit + integration tests to kotlin.test; phase done only when they pass on the Mac (`./gradlew macosArm64Test`)
+- [ ] Docs: `docs/<feature>.md` (how it works, enable, disable, test, limitations) + README section
 - [ ] TOML layers (defaults → user → project → env → flags), root discovery, since, validate + tests
 - [ ] rtok-log append/format (same log line format & file path) + tests
 ### Phase 3 — rtok-hook protocol + `rtok hook`
+- [ ] Tests: port matching Rust unit + integration tests to kotlin.test; phase done only when they pass on the Mac (`./gradlew macosArm64Test`)
+- [ ] Docs: `docs/<feature>.md` (how it works, enable, disable, test, limitations) + README section
 - [ ] host hook JSON in/out types (Claude Code etc.), deadline, push/resident + tests
 ### Phase 4 — rtok-store (SQLite ledger)
+- [ ] Tests: port matching Rust unit + integration tests to kotlin.test; phase done only when they pass on the Mac (`./gradlew macosArm64Test`)
+- [ ] Docs: `docs/<feature>.md` (how it works, enable, disable, test, limitations) + README section
 - [ ] migrations identical to Rust; ledger/call_log/archive/payload-by-id; retention + tests
 ### Phase 5 — reduction plugins (src/plugins: compress, json_tree, toon, read, cmd, inject, guard, memory, measure, docs, archive, checkpoint)
+- [ ] Tests: port matching Rust unit + integration tests to kotlin.test; phase done only when they pass on the Mac (`./gradlew macosArm64Test`)
+- [ ] Docs: `docs/<feature>.md` (how it works, enable, disable, test, limitations) + README section
 ### Phase 6 — CLI surface (src/cli: stats, info, expand, filter, run, config, logs, report, completions, man)
+- [ ] Tests: port matching Rust unit + integration tests to kotlin.test; phase done only when they pass on the Mac (`./gradlew macosArm64Test`)
+- [ ] Docs: `docs/<feature>.md` (how it works, enable, disable, test, limitations) + README section
 ### Phase 7 — proxy (Anthropic/OpenAI chat+responses/Gemini wire, route, gate, semantic cache) via Ktor
+- [ ] Tests: port matching Rust unit + integration tests to kotlin.test; phase done only when they pass on the Mac (`./gradlew macosArm64Test`)
+- [ ] Docs: `docs/<feature>.md` (how it works, enable, disable, test, limitations) + README section
 ### Phase 8 — MCP server (rtok-mcp, src/mcp) stdio + HTTP
+- [ ] Tests: port matching Rust unit + integration tests to kotlin.test; phase done only when they pass on the Mac (`./gradlew macosArm64Test`)
+- [ ] Docs: `docs/<feature>.md` (how it works, enable, disable, test, limitations) + README section
 ### Phase 9 — agents install/uninstall/doctor for all hosts (src/agents, src/doctor)
+- [ ] Tests: port matching Rust unit + integration tests to kotlin.test; phase done only when they pass on the Mac (`./gradlew macosArm64Test`)
+- [ ] Docs: `docs/<feature>.md` (how it works, enable, disable, test, limitations) + README section
 ### Phase 10 — graph (tree-sitter cinterop), otel export, worktree/task/batch/demon/bench
+- [ ] Tests: port matching Rust unit + integration tests to kotlin.test; phase done only when they pass on the Mac (`./gradlew macosArm64Test`)
+- [ ] Docs: `docs/<feature>.md` (how it works, enable, disable, test, limitations) + README section
 ### Phase 11 — docs (how it works, enable/disable, test, limitations) and size/test report
+- [ ] Tests: port matching Rust unit + integration tests to kotlin.test; phase done only when they pass on the Mac (`./gradlew macosArm64Test`)
+- [ ] Docs: `docs/<feature>.md` (how it works, enable, disable, test, limitations) + README section
+
+## Test counts per phase
+| Phase | Rust tests in scope | Kotlin tests passing |
+|---|---|---|
+| 0 | 0 | 0 |
+| 1 | – | – |
 
 ## Test-porting
 Each Rust `#[cfg(test)]` module → `src/commonTest` in the matching module; `tests/*.rs` (138 files)
