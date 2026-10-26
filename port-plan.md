@@ -92,6 +92,20 @@ jiff/humantime→kotlinx-datetime; shlex→own; wasmi→not portable (see risks)
 - [x] embed — 16 (+1 slot/sign scheme check)
 - [x] docs/store.md: layout, driver adapter, schema-drift check, limitations
 ### Phase 5 — reduction plugins (src/plugins: compress, json_tree, toon, read, cmd, inject, guard, memory, measure, docs, archive, checkpoint)
+- [ ] registry (`plugins/mod.rs` → `Plugins.kt`, dispatch order) + measure + proxy manifests — 0
+- [ ] archive (1450 lines) — 24
+- [ ] toon (674) — 10
+- [ ] json_tree (1237) — 15
+- [ ] compress (1075) — 16
+- [ ] docs (707) — 12
+- [ ] checkpoint (1932) — 27
+- [ ] inject (523) — 8
+- [ ] guard (2844) — 53
+- [ ] read (4334) — 101
+- [ ] cmd (10098) — 207
+- [ ] memory (5419) — 127
+- [ ] graph (20084) — 275
+- [ ] wasm host (478) — 3; needs a WASM runtime library → ask Ivan before adding one
 - [ ] Tests: port matching Rust unit + integration tests to kotlin.test; phase done only when they pass on the Mac (`./gradlew macosArm64Test`)
 - [ ] Docs: `docs/<feature>.md` (how it works, enable, disable, test, limitations) + README section
 ### Phase 6 — CLI surface (src/cli: stats, info, expand, filter, run, config, logs, report, completions, man)
