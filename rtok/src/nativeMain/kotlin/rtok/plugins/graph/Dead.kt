@@ -96,7 +96,8 @@ object Affected {
 
     fun relOf(root: String, path: String): String {
         val p = path.replace('\\', '/').removePrefix("./")
-        val abs = rtok.sys.canonicalize("$root/$p"); val r = rtok.sys.canonicalize(root)
+        // `Path::join` keeps an absolute path as it is.
+        val abs = rtok.sys.canonicalize(if (p.startsWith("/")) p else "$root/$p"); val r = rtok.sys.canonicalize(root)
         if (abs == null || r == null) return p
         return if (abs.startsWith("$r/")) abs.substring(r.length + 1) else p
     }
