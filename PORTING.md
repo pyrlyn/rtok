@@ -48,6 +48,7 @@ Plan and per-phase checklist: [port-plan.md](port-plan.md).
 | src/agents/commandcode | `rtok/agents/CommandCode.kt` | ✅ (`skill::sync` with skills) | 10 → 9 (payload test belongs to the hook dispatcher) |
 | src/agents/copilot; src/agents/mcp.rs `Writer`/`run`/`sync`/`install`/`remove` | `rtok/agents/` `Copilot.kt`, `McpRun.kt` | ✅ (`skill::sync` with skills) | 7 → 6 (PreCompact note belongs to the hook dispatcher) |
 | src/agents/codewhale; src/agents/mod.rs `load_toml` | `rtok/agents/` `Codewhale.kt`, `HostToml.kt` (on `:toml-aot`) | ✅ | 4 → 5 (support row lives with Hosts; +comment kept, broken config, edited table) |
+| src/agents/kimi | `rtok/agents/Kimi.kt` (on `:toml-aot`) | ✅ | 13 → 8 (3 Vfs twins folded into disk tests, manifest test reads the Rust plugin tree; T275 + legacy upgrade in one) |
 | src/plugins/checkpoint.rs | `rtok/plugins/checkpoint/`, `rtok/plugins/memory/Private.kt`, `rtok-sys` Shlex/LineReader | ✅ (3 hook-dispatcher tests → Phase 6) | 27 → 27 |
 | src/plugins/compress | `rtok/plugins/compress/` (Compress, MustKeep, Llm, PromptToml) + Compressor, Queue; HTTP via `libs/http` + `libs/http-ktor` | ✅ (proxy-side `submit` call → Phase 7) | 19 → 22 (+4 KtorHttpTest) |
 | src/plugins/json_tree | `rtok/plugins/jsontree/JsonTree.kt`, `rtok-sys/Sha1.kt`, `Text.kt` jsonQuote | ✅ (3 MCP tests pending) | 15 → 12 |
