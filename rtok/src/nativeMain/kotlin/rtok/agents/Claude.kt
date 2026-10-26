@@ -2,7 +2,7 @@
 // in `settings.json` and `mcpServers.rtok` in `~/.claude.json`; Claude Desktop has only `mcpServers.rtok` in
 // `claude_desktop_config.json`, with the absolute binary. `plugins/claude` comes from the GitHub marketplace
 // `pyrlyn/rtok` through `claude plugin …`, by default once `claude` is on PATH; while installed it is the only hook
-// path (D21), MCP stays independent (T275). Not yet ported: version-driven `plugin_update` (update = install for now),
+// path (D21), MCP stays independent (T275); `agents update` takes the version decision ([ClaudeUpdate]). Not yet ported:
 // `migrate` (`--replace` = install for now) and skill sync.
 package rtok.agents
 
@@ -22,7 +22,8 @@ enum class MarketplaceState { Absent, Current, Stale }
 
 class Claude(
     private val call: (Config, List<String>, Pair<String, String>?) -> String? = { c, a, e -> HostCli.runCli(c, HOST, a, e) },
-    private val onPath: (Config) -> Boolean = { Locate.cli(it, HOST) != null },
+    val onPath: (Config) -> Boolean = { Locate.cli(it, HOST) != null },
+    val plugins: PluginSource = ShippedPlugins,
 ) : Agent {
     override val id = HOST
 
@@ -63,7 +64,7 @@ class Claude(
             }
 
             else -> {
-                val head = plugin(cfg, false)
+                val head = if (mode == Mode.Update) ClaudeUpdate(this).run(cfg) else plugin(cfg, false)
                 listOfNotNull(
                     head,
                     run(cfg, pluginInstalled(cfg)),
@@ -96,17 +97,22 @@ class Claude(
         }
     }
 
+    /** One `claude …` call; `CLAUDE_CONFIG_DIR` only when `settings_path` is not the default. Null on success. */
+    fun cli(
+        cfg: Config,
+        args: List<String>,
+    ): String? = call(cfg, args, configDir(cfg).takeIf { it != "${McpPaths.home()}/.claude" }?.let { "CLAUDE_CONFIG_DIR" to it })
+
     private fun runSteps(
         cfg: Config,
         remove: Boolean,
         steps: List<List<String>>,
         shown: String,
     ): String {
-        val env = configDir(cfg).takeIf { it != "${McpPaths.home()}/.claude" }?.let { "CLAUDE_CONFIG_DIR" to it }
         var removed = false
         var failure: String? = null
         for (step in steps) {
-            val err = call(cfg, step, env)
+            val err = cli(cfg, step)
             if (err != null) {
                 failure = if (!remove && removed) "plugin $PLUGIN_ID $REINSTALL_FAILED $err" else "offer $PLUGIN_SRC → $shown (claude failed: $err)"
                 break
@@ -203,7 +209,7 @@ class Claude(
 
         fun shownSteps(steps: List<List<String>>) = steps.joinToString(" && ") { "claude ${it.joinToString(" ")}" }
 
-        private fun claudeMissing(shown: String) = "offer $PLUGIN_SRC → $shown (claude failed: claude not found on PATH) $KETCH_INSTALL"
+        fun claudeMissing(shown: String) = "offer $PLUGIN_SRC → $shown (claude failed: claude not found on PATH) $KETCH_INSTALL"
 
         /** Apply or strip rtok's hooks in `settings.json` (Claude's rows, Worktree rows are plugin-only). */
         fun run(

@@ -13,7 +13,7 @@ object McpPaths {
     fun home(): String = envUserHome().orEmpty()
 
     @OptIn(ExperimentalNativeApi::class)
-    private val macos = Platform.osFamily == OsFamily.MACOSX
+    val macos = Platform.osFamily == OsFamily.MACOSX
 
     /** OS-default VS Code user profile dir (vscode `default_user_dir`). */
     fun vscodeDefaultUserDir(insiders: Boolean): String {
