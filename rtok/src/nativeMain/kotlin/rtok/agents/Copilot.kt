@@ -16,6 +16,7 @@ import rtok.config.Config
 import rtok.mcp.config.Client
 import rtok.mcp.config.EntryShape
 import rtok.mcp.config.McpSpec
+import rtok.plugin.sdk.Surface
 import rtok.sys.exists
 import rtok.sys.isDir
 import rtok.sys.join
@@ -28,6 +29,7 @@ class Copilot(
     private val cli: ((Config, List<String>) -> String?)? = null,
 ) : Agent {
     override val id = HOST
+    override val pluginSurfaces = listOf(Surface.Hook)
 
     private val offer = PluginOffer(HOST, NAME, PLUGIN_SRC, listOf("plugin", "install"), listOf("plugin", "uninstall"))
 

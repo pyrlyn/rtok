@@ -10,6 +10,7 @@ import rtok.agent.sdk.Apply
 import rtok.agent.sdk.HostJson
 import rtok.agent.sdk.NO_CHANGES
 import rtok.config.Config
+import rtok.plugin.sdk.Surface
 import rtok.sys.exists
 import rtok.sys.readToString
 
@@ -27,8 +28,11 @@ enum class Mode(
 interface Agent {
     val id: String
 
-    /** The linked `plugin` module serves MCP on this host (Rust `plugin_surfaces` holding `Surface::Mcp`). */
-    val pluginServesMcp: Boolean get() = false
+    /** The plugin surfaces the linked `plugin` module serves on this host (Rust `plugin_surfaces`); empty without one. */
+    val pluginSurfaces: List<Surface> get() = emptyList()
+
+    /** The linked `plugin` module serves MCP on this host. */
+    val pluginServesMcp: Boolean get() = Surface.Mcp in pluginSurfaces
 
     /** Every file the host's installer may write for [kind]. */
     fun files(

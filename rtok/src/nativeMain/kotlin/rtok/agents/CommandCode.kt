@@ -12,6 +12,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import rtok.agent.sdk.HostJson
 import rtok.agent.sdk.NO_CHANGES
 import rtok.config.Config
+import rtok.plugin.sdk.Surface
 import rtok.sys.exists
 import rtok.sys.join
 import rtok.sys.readToString
@@ -20,6 +21,7 @@ class CommandCode(
     private val plugins: PluginSource = ShippedPlugins,
 ) : Agent {
     override val id = HOST
+    override val pluginSurfaces = listOf(Surface.Hook)
 
     override fun files(
         cfg: Config,

@@ -11,6 +11,7 @@ import rtok.config.Config
 import rtok.mcp.config.Client
 import rtok.mcp.config.EntryShape
 import rtok.mcp.config.Format
+import rtok.plugin.sdk.Surface
 import rtok.sys.exists
 import rtok.sys.readToString
 
@@ -20,7 +21,7 @@ class Codebuddy(
     private val onPath: (Config) -> Boolean = { Locate.cli(it, HOST) != null },
 ) : Agent {
     override val id = HOST
-    override val pluginServesMcp = true
+    override val pluginSurfaces = listOf(Surface.Hook, Surface.Mcp)
 
     override fun files(
         cfg: Config,

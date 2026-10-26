@@ -770,3 +770,17 @@ Next, in order:
   to start; `--host` now overlays `[hook] host` like `rtok hook --host`.
 - Tests: PingRunTest 6, McpPingE2eSpec 2 (live spawn of the built binary through a Windsurf config).
 - Stop point: next `rtok agents` CLI (list/install/update/remove/doctor over `Agents`), then phase 10 leftovers.
+
+## Session: agents — install engine (agents/mod.rs rows, block, run/apply_all, list/info)
+- `Agent.pluginSurfaces` (Rust `plugin_surfaces`) replaces the MCP-only flag; every host now names its plugin surfaces
+  as in Rust. Parity fix: codewhale's plugin serves MCP too, so its MCP rows now credit an installed plugin.
+- `Modules` (module rows, lines, summary, expected, missing, mcp.rs `lines`), `PluginRows` (`reaches`, rows, lines),
+  `Blocks.block` with `Outcome`, `AgentsRun` (`resolve`, `absent`/`notFound`, `run`: refuse unknown/absent hosts,
+  back up every file up front, apply, read back, keep copies only on change; `wouldChange`, `applyAll`, `carryFlags`),
+  `AgentsList` (`installedHosts`, `list`, `listIds`, `info`). `AgentsRun.Env` stubs the machine in tests.
+- Output is Rust's pipe form (marks, no ANSI colour or operation icons). Not ported yet: `ensure_hook_client_link`
+  (T357), the host progress bar, outdated.rs `plugin_status` note on the plugin row.
+- Tests: ModulesTest 5, InstallTest 6, InstallListTest 2.
+- Test count check: 1734 → 1730 between reports was a counting difference, not lost tests: `@Test` in sources went
+  1731 (75100fb) → 1754 (2c536ea) with no `@Test` removed.
+- Stop point: next `rtok agents list|info|install|update|remove` CLI over `AgentsRun`/`AgentsList`.
