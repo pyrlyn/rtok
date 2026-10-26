@@ -16,6 +16,7 @@ Docs: [build speed](docs/build-speed.md) · [token estimator](docs/tokens.md) ·
 - [Plugin runtime](docs/plugin-runtime.md)
 - [archive plugin](docs/archive.md)
 - [toon plugin](docs/toon.md)
+- [compress plugin](docs/compress.md)
 - [json_tree plugin](docs/json-tree.md)
 - [API docs (Dokka)](docs/api-docs.md)
 - [Testing (kotlin.test, Kotest, e2e)](docs/testing.md)
