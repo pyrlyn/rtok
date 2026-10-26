@@ -6,19 +6,28 @@ import kotlinx.cinterop.*
 import platform.posix.*
 
 /** Connected socket fd, or null when the resident is not listening. */
+fun connect(endpoint: String): Int? = withSockaddr(endpoint) { addr, len ->
+    val fd = socket(AF_UNIX, SOCK_STREAM, 0); if (fd < 0) return@withSockaddr null
+    if (connect(fd, addr, len) != 0) { close(fd); null } else fd
+}
+
+/** A listening Unix socket bound at `path` (backlog 64), or null. */
+fun bindUnix(path: String): Int? = withSockaddr(path) { addr, len ->
+    val fd = socket(AF_UNIX, SOCK_STREAM, 0); if (fd < 0) return@withSockaddr null
+    if (bind(fd, addr, len) != 0 || listen(fd, 64) != 0) { close(fd); null } else fd
+}
+
+/** struct sockaddr_un laid out by hand (not exposed by the posix klib):
+ *  Darwin: u8 sun_len, u8 sun_family, char[104]; Linux: u16 sun_family, char[108]. */
 @OptIn(kotlin.experimental.ExperimentalNativeApi::class)
-fun connect(endpoint: String): Int? = memScoped {
-    val bytes = endpoint.encodeToByteArray(); if (bytes.size >= 104) return null
-    val fd = socket(AF_UNIX, SOCK_STREAM, 0); if (fd < 0) return null
-    // struct sockaddr_un laid out by hand (not exposed by the posix klib):
-    // Darwin: u8 sun_len, u8 sun_family, char[104]; Linux: u16 sun_family, char[108].
+private fun <T> withSockaddr(path: String, use: (CPointer<sockaddr>, socklen_t) -> T?): T? = memScoped {
+    val bytes = path.encodeToByteArray(); if (bytes.size >= 104) return null
     val size = 110
     val addr = allocArray<ByteVar>(size); for (i in 0 until size) addr[i] = 0
     if (Platform.osFamily == OsFamily.MACOSX) { addr[0] = size.toByte(); addr[1] = AF_UNIX.toByte() }
     else { addr[0] = AF_UNIX.toByte(); addr[1] = 0 }
     bytes.forEachIndexed { i, b -> addr[2 + i] = b }
-    if (connect(fd, addr.reinterpret(), (2 + bytes.size + 1).convert()) != 0) { close(fd); return null }
-    fd
+    use(addr.reinterpret(), (2 + bytes.size + 1).convert())
 }
 
 fun writeAll(fd: Int, data: ByteArray): Boolean {

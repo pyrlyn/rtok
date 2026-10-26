@@ -11,3 +11,4 @@ Build & test (macOS arm64): `./gradlew macosArm64Test` · binary: `./gradlew :rt
 Docs: [build speed](docs/build-speed.md) · [token estimator](docs/tokens.md) · [modes](docs/modes.md) · [log](docs/log.md) · [project root](docs/config-root.md) · [hook protocol](docs/hook-protocol.md) · [build speed](docs/build-speed.md).
 
 - [Configuration](docs/config.md)
+- [Hooks](docs/hooks.md)

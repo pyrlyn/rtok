@@ -43,4 +43,6 @@ Totals: 53 Kotlin tests passing on macosArm64.
 |---|---|---|---|
 | src/names.rs | `rtok/commonMain/Names.kt` | ✅ | (covered by types tests) |
 | src/hooks/types.rs | `rtok/commonMain/hooks/Types.kt` | ✅ | 18 → 18 (guard cache_key assertion deferred to Phase 5) |
-| src/hooks/deadline.rs, push.rs, resident.rs, mod.rs | — | ⬜ | 0 / 59 |
+| src/hooks/deadline.rs | `rtok/nativeMain/hooks/Deadline.kt` (Worker watchdog) | ✅ | 3 → 3 |
+| src/hooks/resident.rs | `rtok/nativeMain/hooks/Resident.kt` (poll loop, no tokio) | ✅ | 1 → 2 |
+| src/hooks/push.rs, mod.rs | — | ⬜ | 0 / 55 |
