@@ -1,10 +1,14 @@
 // Port of src/cli/agents.rs and cli/agents_host.rs (host side): `rtok agents install|uninstall|remove|update|list|info`.
 // Not ported yet: `--project`, the
-// desktop restart behind `--no-restart` (accepted, nothing to skip yet), and the session/usage/junk/message commands.
+// desktop restart behind `--no-restart` (accepted, nothing to skip yet), and the usage/junk commands.
 package rtok.cli
 
+import kotlinx.cinterop.toKString
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
 import rtok.StatPreview
+import rtok.agents.AgentMessages
+import rtok.agents.AgentText
 import rtok.agents.AgentsCommand
 import rtok.agents.AgentsFailure
 import rtok.agents.AgentsJson
@@ -17,7 +21,9 @@ import rtok.agents.SessionsTable
 import rtok.config.Config
 import rtok.log.watchLoop
 import rtok.model.Agents
+import rtok.store.AgentDetail
 import rtok.store.Store
+import rtok.store.StoreException
 
 private val HOST_ARG = ArgSpec("host", "Host id, or several comma-separated (`opencode,cursor`)")
 private val DRY_RUN = OptSpec.Flag("dry-run", "Show what would change; write nothing")
@@ -193,6 +199,83 @@ private val SESSIONS =
         inv.io.out(if (inv.flag("json")) AgentsJson.PRETTY.encodeToString(JsonArray.serializer(), JsonArray(rows.map { it.toJson() })) + "\n" else SessionsTable.render(rows, all, now))
     }
 
+/** A store-backed agent command: refusals, bad input and store errors print as `Error: …`. */
+private fun <T> agentCall(body: () -> T): T =
+    runCatching(body).getOrElse {
+        throw if (it is AgentsFailure || it is IllegalArgumentException || it is StoreException) CliFailure(it.message.orEmpty()) else it
+    }
+
+private fun <T> withMessages(
+    cfg: Config,
+    body: (Store, AgentMessages) -> T,
+): T = Store.open(cfg.core.dbPath).use { s -> agentCall { body(s, AgentMessages(s, ::envVar, ::currentDir)) } }
+
+@OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
+private fun envVar(k: String) = platform.posix.getenv(k)?.toKString()
+
+private fun currentDir() = runCatching { rtok.sys.cwd() }.getOrNull()
+
+private val TEXT_JSON = OptSpec.Flag("json", "JSON instead of the text lines")
+
+private val WHOAMI =
+    CommandSpec("whoami", "This shell's agent: id, host, cwd, start, last seen, activity", options = listOf(TEXT_JSON)) { inv ->
+        val d = withMessages(inv.loadConfig()) { _, m -> m.whoami() }
+        inv.io.out(if (inv.flag("json")) AgentsJson.PRETTY.encodeToString(AgentDetail.serializer(), d) + "\n" else AgentText.whoami(d))
+    }
+
+private val SHOW =
+    CommandSpec(
+        "show",
+        "One agent by id prefix: host, model, ids, parent and sub-agents, cwd, activity, status",
+        options = listOf(TEXT_JSON),
+        args = listOf(ArgSpec("id", "Agent id or any unique prefix of it")),
+    ) { inv ->
+        val cfg = inv.loadConfig()
+        val now = rtok.log.now()
+        val a = Store.open(cfg.core.dbPath).use { agentCall { Agents.agentShow(it, cfg.agents.idle, inv.requireArg("id"), now) } }
+        inv.io.out(if (inv.flag("json")) AgentsJson.PRETTY.encodeToString(JsonObject.serializer(), a.toJson()) + "\n" else AgentText.show(a, now))
+    }
+
+private val STATUS =
+    CommandSpec(
+        "status",
+        "Say what this agent (`RTOK_AGENT_ID`) is busy with: plain text, at most 120 chars",
+        args = listOf(ArgSpec("text", "The status text; empty clears it")),
+    ) { inv ->
+        val set = withMessages(inv.loadConfig()) { s, m -> Agents.setStatus(s, m.statusCaller(), inv.requireArg("text")) }
+        inv.io.println(set?.let { "status: $it" } ?: "status cleared")
+    }
+
+private val TASK = OptSpec.Value("task", "The task this message is about (e.g. `A12`)", "ID")
+
+private val SEND =
+    CommandSpec(
+        "send",
+        "Send a message to an agent: `send <id-prefix> <text|->` or `send --all-live <text|->`",
+        options = listOf(OptSpec.Flag("all-live", "Every live agent of this project (same repository or cwd), except the sender"), TASK),
+        args =
+            listOf(
+                ArgSpec("to", "Recipient's rtok agent id (any unique prefix); with `--all-live`, the text instead", required = false),
+                ArgSpec("text", "The message; `-` reads it from stdin (≤ 4 KiB, control characters stripped)", required = false),
+            ),
+    ) { inv ->
+        val allLive = inv.flag("all-live")
+        val (to, given) = agentCall { AgentMessages.sendArgs(allLive, inv.arg("to"), inv.arg("text")) }
+        val text = if (given == "-") inv.io.readStdin().decodeToString() else given
+        val cfg = inv.loadConfig()
+        inv.io.out(withMessages(cfg) { _, m -> m.send(to, text, allLive, inv.value("task"), cfg.agents.idle) })
+    }
+
+private val INBOX =
+    CommandSpec(
+        "inbox",
+        "Read messages: your own inbox from `RTOK_AGENT_ID` (marks them read), or with an id that agent's queue (marks nothing)",
+        options = listOf(OptSpec.Flag("unread", "Only messages not read yet"), TASK, OptSpec.Flag("json", "JSON instead of the framed text")),
+        args = listOf(ArgSpec("id", "An agent's rtok id (any unique prefix); omitted: `RTOK_AGENT_ID`", required = false)),
+    ) { inv ->
+        inv.io.out(withMessages(inv.loadConfig()) { _, m -> m.inbox(inv.arg("id"), inv.flag("unread"), inv.value("task"), inv.flag("json")) })
+    }
+
 val AGENTS =
     CommandSpec(
         "agents",
@@ -208,5 +291,10 @@ val AGENTS =
                 LIST,
                 INFO,
                 SESSIONS,
+                WHOAMI,
+                SHOW,
+                STATUS,
+                SEND,
+                INBOX,
             ),
     )

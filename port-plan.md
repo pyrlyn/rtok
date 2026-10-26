@@ -819,3 +819,10 @@ Next, in order:
 - Tests: SessionsTableTest 6, AgentsCliSpec +1.
 - Stop point: next whoami, show, status, send, inbox, then usage, junk, `--project`, restart.rs.
 
+## Session: agents — whoami, show, status, send, inbox (command.rs, render.rs whoami/show text)
+- `rtok.agents.AgentMessages` (`caller`, `whoami`, `statusCaller`, `send` with `--all-live` by project, `inbox` framed
+  or JSON with `framed`, `sendArgs`), `rtok.agents.AgentText` (`whoami`, `show`). CLI `whoami`, `show`, `status`,
+  `send`, `inbox` over the existing store and `model.Agents` (`agentShow`, `setStatus`).
+- Tests: AgentMessagesTest 5, AgentsCliSpec +1.
+- Stop point: next usage (usage.rs), junk (junk*.rs), `--project`, restart.rs, then the rest of phase 10.
+

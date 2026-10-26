@@ -93,4 +93,13 @@ class AgentsCliSpec :
                 cli("agents", "sessions", "--json").out shouldBe "[]\n"
             }
         }
+        test("whoami, inbox and status outside an agent session; send without a recipient") {
+            withHome("agents-messages") { home ->
+                writeString("$home/config.toml", "[core]\ndb_path = \"$home/rtok.db\"\n")
+                cli("agents", "whoami").err shouldContain "not inside an agent session"
+                cli("agents", "inbox").err shouldContain "not inside an agent session; pass an agent id"
+                cli("agents", "send", "abcd").err shouldContain "usage: rtok agents send"
+                cli("agents", "show", "abcd").err shouldContain "no agent id starts with \"abcd\""
+            }
+        }
     })
