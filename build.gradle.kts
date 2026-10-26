@@ -10,6 +10,8 @@ plugins {
     id("io.kotest") version "6.2.6" apply false
     // Dev-only coverage (`mise run coverage`, docs/toolchain.md): active only with -Prtok.coverage=true.
     id("org.jetbrains.kotlinx.kover") version "0.9.11" apply false
+    // Shared Kotlin/Native dev/release settings: targets, release cache rules, -Prtok.releaseSize, -Prtok.release.fast.
+    id("ci.diffuser.native")
 }
 
 // Coverage builds add a JVM target to the modules whose sources are all common (Kover measures JVM
@@ -26,36 +28,19 @@ if (coverage) {
     }
 }
 
-// Fast release (opt-in, docs/toolchain.md): `-Prtok.release.fast=true` links release binaries from cached
-// per-library .a (K/N release binary cache, experimental since 2.4.20) instead of one whole-program LTO compile.
-// Unset (the default, and every shipped release) = full optimization, no release cache. Read only here.
-val releaseFast = providers.gradleProperty("rtok.release.fast").orNull == "true"
-
 // One aggregated HTML site over every module, declared once here.
 dependencies { subprojects.forEach { add("dokka", it) } }
 dokka { moduleName.set("rtok-kotlin") }
 
 subprojects {
-    // KGP reads this before configuring native link tasks, so it must be set before the plugin is applied.
-    if (releaseFast) extra["kotlin.internal.native.enableReleaseBinaryCache"] = "true"
     apply(plugin = "org.jetbrains.kotlin.multiplatform")
     apply(plugin = "org.jetbrains.kotlin.plugin.serialization")
     apply(plugin = "org.jetbrains.dokka")
     apply(plugin = "com.google.devtools.ksp")
     apply(plugin = "io.kotest")
-    // Release binaries are rebuilt only for shipping and are large, so they never enter the
-    // build cache (local or remote); debug test binaries stay cacheable (docs/build-speed.md).
     if (coverage && name in jvmCoverable) apply(plugin = "org.jetbrains.kotlinx.kover")
-    tasks.matching { it.name.startsWith("linkRelease") }.configureEach {
-        outputs.cacheIf("release binaries are not cached") { false }
-    }
     extensions.configure<org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension> {
-        macosArm64()
-        if (releaseFast) targets.withType<org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget>().configureEach {
-            binaries.configureEach { if (buildType == org.jetbrains.kotlin.gradle.plugin.mpp.NativeBuildType.RELEASE) binaryOption("enableReleaseBinaryCache", "true") }
-        }
         if (coverage && project.name in jvmCoverable) jvm()
-        if (providers.gradleProperty("rtok.allTargets").orNull == "true") { linuxX64(); linuxArm64() }
         sourceSets.commonMain.dependencies {
             implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.12.0")
         }

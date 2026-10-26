@@ -1,5 +1,10 @@
 rootProject.name = "rtok-kotlin"
-pluginManagement { repositories { gradlePluginPortal(); mavenCentral(); google() } }
+pluginManagement {
+    repositories { gradlePluginPortal(); mavenCentral(); google() }
+    // Shared build settings (docs/build-speed.md "Shared settings: ci-diffuser"): a sibling checkout of
+    // the ci-diffuser repo. CI_DIFFUSER_DIR overrides the path (e.g. for worktrees outside apps/).
+    includeBuild(System.getenv("CI_DIFFUSER_DIR") ?: "../ci-diffuser")
+}
 // Remote build cache on Cloudflare R2 (docs/build-speed.md). Approved by Ivan 2026-10-26.
 plugins { id("com.github.burrunan.s3-build-cache") version "1.9.10" }
 dependencyResolutionManagement { repositories { mavenCentral(); google() } }
