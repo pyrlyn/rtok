@@ -346,3 +346,8 @@ Next, in order:
   Live check: `rtok docs fetch zstd` in a copy of the Rust Cargo.lock → `cached zstd 0.14.2 (60 items)`.
 - Stop point: next memory status; then sync --stat, MCP, otel, worktree, task, batch, bench, hook dispatcher
   tests; release re-measure, completeness pass.
+
+## Session: memory status
+- `rtok memory status` (--project, --since, --json): MemoryStatus.kt ports model::memory_status + memory_status.rs; MemoryStatusTest (3).
+- Full suite: 1423 tests, 0 failures.
+- Stop point: next `sync --stat`.
