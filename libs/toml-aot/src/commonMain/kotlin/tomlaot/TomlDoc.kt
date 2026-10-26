@@ -44,6 +44,13 @@ class TomlDoc private constructor(
         return gone.size
     }
 
+    /** Drop the `[path]` table and every table under it (`[path.x]`, `[[path.y]]`), each with its decor; false when there is none. */
+    fun removeTable(path: String): Boolean {
+        if (table(path) == null) return false
+        blocks.removeAll { it.headerAt >= 0 && (it.path == path || it.path.startsWith("$path.")) }
+        return true
+    }
+
     /** Append a `[[path]]` table after the last one (or at the end), with [entries] in order. */
     fun push(
         path: String,
