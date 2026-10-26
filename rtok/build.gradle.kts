@@ -4,6 +4,7 @@ configure<KotlinMultiplatformExtension> {
     targets.withType<KotlinNativeTarget>().configureEach { binaries.executable { entryPoint = "rtok.main"; baseName = "rtok" } }
     sourceSets.commonMain.dependencies {
         implementation(project(":rtok-plugin-sdk")); implementation(project(":rtok-config"))
+        implementation(project(":rtok-sys")); implementation(project(":rtok-store")); implementation(project(":rtok-log"))
         implementation("com.github.ajalt.clikt:clikt:5.0.3")
     }
 }
