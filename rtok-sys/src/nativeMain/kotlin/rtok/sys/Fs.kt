@@ -104,3 +104,17 @@ fun exists(path: String) = access(path, F_OK) == 0
 fun removeDirAll(path: String) { if (exists(path)) system("rm -rf '" + path.replace("'", "'\\''") + "'") }
 fun tempDir(): String = (getenv("TMPDIR")?.toKString() ?: "/tmp").trimEnd('/')
 fun pid(): Int = getpid()
+
+/** Entry names of a directory (no `.`/`..`), unsorted like `std::fs::read_dir`. */
+fun listDir(path: String): List<String> {
+    val d = opendir(path) ?: throw IoException(IoException.Kind.NotFound, "cannot read dir $path")
+    val out = ArrayList<String>()
+    try {
+        while (true) {
+            val e = readdir(d) ?: break
+            val n = e.pointed.d_name.toKString()
+            if (n != "." && n != "..") out += n
+        }
+    } finally { closedir(d) }
+    return out
+}

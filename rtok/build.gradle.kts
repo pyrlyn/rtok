@@ -7,3 +7,5 @@ configure<KotlinMultiplatformExtension> {
         implementation("com.github.ajalt.clikt:clikt:5.0.3")
     }
 }
+val fixtures = layout.projectDirectory.dir("src/commonTest/fixtures").asFile.absolutePath
+tasks.withType<org.jetbrains.kotlin.gradle.targets.native.tasks.KotlinNativeTest>().configureEach { environment("RTOK_FIXTURES", fixtures) }

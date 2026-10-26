@@ -38,3 +38,9 @@ Plan and per-phase checklist: [port-plan.md](port-plan.md).
 | tests/*.rs (138 integration files) | `:rtok` commonTest | ⬜ | 0 / ~138 files |
 
 Totals: 53 Kotlin tests passing on macosArm64.
+
+| Rust | Kotlin | Status | Tests |
+|---|---|---|---|
+| src/names.rs | `rtok/commonMain/Names.kt` | ✅ | (covered by types tests) |
+| src/hooks/types.rs | `rtok/commonMain/hooks/Types.kt` | ✅ | 18 → 18 (guard cache_key assertion deferred to Phase 5) |
+| src/hooks/deadline.rs, push.rs, resident.rs, mod.rs | — | ⬜ | 0 / 59 |
