@@ -2,7 +2,7 @@
 package rtok.cli
 
 import rtok.config.*
-import rtok.log.FileLog
+import rtok.fileLog
 
 private val DRY_RUN = OptSpec.Flag("dry-run", "Print the diff it would write and exit")
 
@@ -36,7 +36,7 @@ private val VALIDATE = CommandSpec("validate", "Reject unknown keys, wrong types
     errs += Validate.layeredIssues(Layers.sourced(Layers.figment(home, layer, null)))
     errs += Validate.rulesIssues(cfg.plugins.cmd.rules, cfg.plugins.cmd.rulesDir)
     if (errs.isEmpty()) { notes.forEach(inv.io::println); inv.io.println("ok $path"); return@CommandSpec }
-    val log = FileLog(cfg.log.path, cfg.log.maxBytes.toLong(), cfg.log.files.toInt(), cfg.log.level)
+    val log = cfg.fileLog()
     for (e in errs) { inv.io.eprintln(e); rtok.log.append(log, "error", "config", "validate", e) }
     throw CliExit(ExitCode.FAILURE)
 }
