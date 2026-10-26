@@ -35,6 +35,12 @@ class AgentsCliSpec :
                 val info = cli("agents", "info", "windsurf")
                 info.out shouldContain "  app     $home/Windsurf.app"
                 info.out shouldContain "✓ mcp"
+                val json = cli("agents", "info", "windsurf", "--json")
+                json.code shouldBe 0
+                json.out shouldContain "\"host\": \"windsurf\""
+                json.out shouldContain "\"present\": true"
+                json.out shouldContain "\"entry\": \"present\""
+                cli("agents", "list", "--json").out shouldContain "\"kind\": \"desktop\""
                 cli("agents", "update").out shouldContain "Desktop: Windsurf — already current"
                 cli("agents", "remove", "windsurf").code shouldBe 0
                 readToString(file) shouldNotContain "\"rtok\""
