@@ -588,3 +588,10 @@ Next, in order:
   blank lines before a header go with that table (toml_edit decor); multi-line strings and arrays never read as headers.
 - Tests: 10.
 - Stop point: next = codewhale (`[hooks] enabled` + `[[hooks.hooks]]`), then kimi (`[[hooks]]`).
+
+## Session: agents chunk 3b-3h — codewhale
+- `HostToml.kt` (`load_toml`: absent = empty, invalid = error, via `rtok.config.Toml` check then `:toml-aot` `TomlDoc`),
+  `Codewhale.kt` (`[hooks] enabled` only when absent + one `[[hooks.hooks]]` `message_submit` table, strip by
+  `takes_hook`, `mcp.json` `{type: "stdio", ...}` through `StdioMcp.register(typed = true)`); registered in `Agents`.
+- Tests: 5 (2 ported + enabled=false kept with its comment, broken config untouched, edited table left).
+- Stop point: next = kimi (`[[hooks]]` with refresh/prune, MCP spec, plugin marker offer), then group 3c.

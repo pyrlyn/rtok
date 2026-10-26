@@ -59,11 +59,15 @@ object StdioMcp {
         host: String,
     ) = "$cmd ${args(host).joinToString(" ")}"
 
-    /** `{command, args}` with no `type`: the stdio shape Cline, Roo Code, Windsurf, Droid and others read. */
+    /** `{command, args}`: the stdio shape Cline, Roo Code, Windsurf, Droid and others read; [typed] adds `type: "stdio"` (the SDK `mcp_entry`, CodeWhale). */
     fun entry(
         cmd: String,
         host: String,
-    ) = JsonObject(mapOf("command" to JsonPrimitive(cmd), "args" to JsonArray(args(host).map(::JsonPrimitive))))
+        typed: Boolean = false,
+    ) = JsonObject(
+        (if (typed) mapOf("type" to JsonPrimitive("stdio")) else emptyMap()) +
+            mapOf("command" to JsonPrimitive(cmd), "args" to JsonArray(args(host).map(::JsonPrimitive))),
+    )
 
     fun register(
         cfg: Config,
@@ -71,7 +75,8 @@ object StdioMcp {
         host: String,
         key: String = "mcpServers",
         cmd: String = rtokMcpCommand(),
-    ): String = HostJson.registerServer(applyOf(cfg), path, key, "rtok", entry(cmd, host), summary(cmd, host))
+        typed: Boolean = false,
+    ): String = HostJson.registerServer(applyOf(cfg), path, key, "rtok", entry(cmd, host, typed), summary(cmd, host))
 
     /** Only the entry as rtok wrote it (T246.2). */
     fun unregister(
@@ -134,7 +139,7 @@ object Agents {
             McpOnlyAgent("windsurf", { it.setup.windsurf.configPath }),
         )
 
-    private val BY_ID: Map<String, Agent> = (MCP_ONLY + Cline() + Qwen() + Gemini() + Devin() + CommandCode() + Copilot()).associateBy { it.id }
+    private val BY_ID: Map<String, Agent> = (MCP_ONLY + Cline() + Qwen() + Gemini() + Devin() + CommandCode() + Copilot() + Codewhale()).associateBy { it.id }
 
     /** The ported install side of [id], or null while that host is not ported yet. */
     fun agent(id: String): Agent? = BY_ID[id]
