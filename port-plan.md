@@ -836,3 +836,13 @@ Next, in order:
 - Tests: UsageLogsTest 3.
 - Stop point: next the readers of measure/usage/ (sqlite opencode/kilo, copilot, gemini, pi, kimi), then the
   `rtok agents usage` report and CLI (agents/usage.rs, cli/agents.rs), junk, `--project`, restart.rs.
+
+## Session: measure — per-host usage readers (measure/usage/: sqlite, copilot, gemini, pi, kimi)
+- `rtok.measure.usage`: `Sqlite` (OpenCode/Kilo `<host>[-channel].db`, read-only percent-escaped `file:` URI over
+  `readHostMessages`), `Copilot` (last `session.shutdown` per session, `tokenDetails` over `usage`), `Gemini` (jsonl and
+  legacy json chats, one request per message id), `Pi` (fork dedupe by id + timestamp), `Kimi` (`usage.record`). Shared
+  `sessionFiles`/`readEach`/`stem`; `UsageLogs.read` now calls them in the Rust order.
+- `parseJson` rejects a bare word: kotlinx reads `garbage` as an unquoted literal where serde fails.
+- Tests: SqliteUsageTest 4, CopilotUsageTest 3, GeminiUsageTest 2, PiUsageTest 4, KimiUsageTest 2.
+- Stop point: next the `rtok agents usage` report and CLI (agents/usage.rs, `[agents.usage]` flags, zone handling),
+  then junk, `--project`, restart.rs.

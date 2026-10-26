@@ -10,8 +10,18 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.longOrNull
 
-/** `serde_json::from_str::<Value>`: null when [line] is not JSON. */
-internal fun parseJson(line: String): JsonElement? = runCatching { Json.parseToJsonElement(line) }.getOrNull()
+/**
+ * `serde_json::from_str::<Value>`: null when [line] is not JSON. kotlinx reads a bare word (`garbage`) as an unquoted
+ * literal, which serde rejects, so every non-string literal must be `true`, `false`, `null` or a number.
+ */
+internal fun parseJson(line: String): JsonElement? = runCatching { Json.parseToJsonElement(line) }.getOrNull()?.takeIf(::strict)
+
+private fun strict(e: JsonElement): Boolean =
+    when (e) {
+        is JsonObject -> e.values.all(::strict)
+        is JsonArray -> e.all(::strict)
+        is JsonPrimitive -> e.isString || e is kotlinx.serialization.json.JsonNull || e.booleanOrNull != null || e.content.toDoubleOrNull() != null
+    }
 
 /** `v.get(key)`. */
 internal fun JsonElement?.field(key: String): JsonElement? = (this as? JsonObject)?.get(key)
@@ -45,3 +55,6 @@ internal fun rfc3339Seconds(s: String?): Long =
                 .epochSeconds
         }.getOrNull()
     } ?: 0
+
+/** A token counter: `as_i64`, missing is 0, a negative count is 0. */
+internal fun JsonElement?.count(key: String): Long = field(key).int()?.coerceAtLeast(0) ?: 0
