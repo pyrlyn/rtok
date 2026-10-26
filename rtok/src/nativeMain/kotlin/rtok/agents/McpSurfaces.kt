@@ -10,7 +10,6 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import rtok.cmdStem
 import rtok.config.Config
-import rtok.config.envVar
 import rtok.mcp.config.Client
 import rtok.mcp.config.DuplicateName
 import rtok.mcp.config.Entry
@@ -349,15 +348,7 @@ fun resolveMcpCommand(
 }
 
 /** The command a host's MCP entry should run on this machine. */
-fun rtokMcpCommand(): String = resolveMcpCommand(findOnPath(RTOK.command), McpPaths.home())
-
-/** The first regular file named [name] in a `PATH` directory. */
-fun findOnPath(name: String): String? =
-    envVar("PATH")
-        ?.split(':')
-        ?.filter { it.isNotEmpty() }
-        ?.map { "${it.trimEnd('/')}/$name" }
-        ?.firstOrNull(::isFile)
+fun rtokMcpCommand(): String = resolveMcpCommand(HostBins.findOnPath(RTOK.command), McpPaths.home())
 
 /** The read-only disk status goes through. */
 object DiskFs : McpFs {
