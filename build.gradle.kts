@@ -26,11 +26,18 @@ if (coverage) {
     }
 }
 
+// Fast release (opt-in, docs/toolchain.md): `-Prtok.release.fast=true` links release binaries from cached
+// per-library .a (K/N release binary cache, experimental since 2.4.20) instead of one whole-program LTO compile.
+// Unset (the default, and every shipped release) = full optimization, no release cache. Read only here.
+val releaseFast = providers.gradleProperty("rtok.release.fast").orNull == "true"
+
 // One aggregated HTML site over every module, declared once here.
 dependencies { subprojects.forEach { add("dokka", it) } }
 dokka { moduleName.set("rtok-kotlin") }
 
 subprojects {
+    // KGP reads this before configuring native link tasks, so it must be set before the plugin is applied.
+    if (releaseFast) extra["kotlin.internal.native.enableReleaseBinaryCache"] = "true"
     apply(plugin = "org.jetbrains.kotlin.multiplatform")
     apply(plugin = "org.jetbrains.kotlin.plugin.serialization")
     apply(plugin = "org.jetbrains.dokka")
@@ -44,6 +51,9 @@ subprojects {
     }
     extensions.configure<org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension> {
         macosArm64()
+        if (releaseFast) targets.withType<org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget>().configureEach {
+            binaries.configureEach { if (buildType == org.jetbrains.kotlin.gradle.plugin.mpp.NativeBuildType.RELEASE) binaryOption("enableReleaseBinaryCache", "true") }
+        }
         if (coverage && project.name in jvmCoverable) jvm()
         if (providers.gradleProperty("rtok.allTargets").orNull == "true") { linuxX64(); linuxArm64() }
         sourceSets.commonMain.dependencies {

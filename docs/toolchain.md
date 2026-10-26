@@ -57,3 +57,14 @@ Checked 2026-10-26 with 0.6.2 (latest): the repository was archived on 2026-06-1
 include Gradle 9.2 and KMP support; with our Gradle 9.8.2 build the `runAffectedUnitTests` task discards
 the configuration cache ("incompatible task") and wires only Android test task names
 (`testDebugUnitTest`), so it ran nothing for `macosArm64Test`. `scripts/smart.py` stays.
+
+## Release builds: full vs fast
+
+| Command | Gradle | What it builds |
+|---|---|---|
+| `mise run release` | `./gradlew :rtok:linkReleaseExecutableMacosArm64` | Default, for shipping: whole-program optimization (LTO), no release cache. ~105 s link, 18.0 MB. |
+| `mise run release-fast` | same + `-Prtok.release.fast=true` | Dev/CI only, never ship: links cached per-library `.a` (K/N `enableReleaseBinaryCache`, experimental). ~15 s warm link, 21.8 MB, CPU-heavy commands 8–14% slower. |
+
+The flag is read in one place, the root `build.gradle.kts` (`releaseFast`); `gradle.properties` pins `rtok.release.fast=false`,
+so the release cache is never on by default. Check either binary end to end with
+`./gradlew :rtok-e2e:e2eTest -Prtok.e2e.bin=<path-to-rtok.kexe>`. Details: docs/experiments/binary-split.md.
