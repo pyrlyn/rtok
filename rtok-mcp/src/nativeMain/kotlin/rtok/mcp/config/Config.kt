@@ -3,8 +3,6 @@
 // `keyPath.<server.name>` is read or written; every other key stays as it was.
 package rtok.mcp.config
 
-import kotlinx.serialization.ExperimentalSerializationApi
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import rtok.agent.sdk.parseStrictJson
@@ -138,12 +136,7 @@ object McpConfig {
         fs.write(spec.configPath, body)
     }
 
-    @OptIn(ExperimentalSerializationApi::class)
-    internal val pretty =
-        Json {
-            prettyPrint = true
-            prettyPrintIndent = "  "
-        }
+    internal val pretty = rtok.agent.sdk.HostJson.pretty
 
     private fun writeJson(
         spec: McpSpec,
