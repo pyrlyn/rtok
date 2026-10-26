@@ -85,7 +85,7 @@ class OutlineTest {
         }
     }
 
-    @Test fun strippedUnknownLanguageIsNull() = assertNull(stripped("a.txt", "// gone\nkeep\n"))
+    @Test fun strippedUnknownLanguageIsNull(): Unit = assertNull(stripped("a.txt", "// gone\nkeep\n"))
 
     @Test fun importQueriesCaptureLastSegment() {
         val cases = listOf(
