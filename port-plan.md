@@ -826,3 +826,13 @@ Next, in order:
 - Tests: AgentMessagesTest 5, AgentsCliSpec +1.
 - Stop point: next usage (usage.rs), junk (junk*.rs), `--project`, restart.rs, then the rest of phase 10.
 
+
+## Session: measure — session logs for `rtok agents usage --source logs` (measure/usage.rs, jsonl.rs, codex.rs)
+- New package `rtok.measure`: `Jsonl` (the usage side of jsonl.rs: one `Usage` per turn, a repeated `message.id` is a
+  duplicate, a non-UTF-8 line is malformed; the tool/image/injection fields wait for `rtok stats`), `Codex`
+  (`jsonlPaths`/`pathsWithExt` canonical walk with links last, `requests` from `token_count` lines), `isSubagent`,
+  `UsageLogs.read` (Claude Code, Codex, and droid/grok/zcode/antigravity named as unsupported), `JsonFields` helpers.
+  Timestamps via stdlib `kotlin.time.Instant` (no new dependency).
+- Tests: UsageLogsTest 3.
+- Stop point: next the readers of measure/usage/ (sqlite opencode/kilo, copilot, gemini, pi, kimi), then the
+  `rtok agents usage` report and CLI (agents/usage.rs, cli/agents.rs), junk, `--project`, restart.rs.
