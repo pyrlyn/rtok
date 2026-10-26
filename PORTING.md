@@ -54,6 +54,7 @@ Plan and per-phase checklist: [port-plan.md](port-plan.md).
 | src/agents/zcode, src/agents/zed; claude/mod.rs `desktop_command` | `rtok/agents/` `Zcode.kt`, `Zed.kt` (on `McpSurfaces.jsoncSpec`), `HookLine.desktopCommand` | ✅ | 17 → 9 (Zed reports `context_servers.rtok: …` like every MCP-core host, not Rust's `+`/`~` prefix) |
 | src/agents/aider, src/agents/reasonix, src/agents/antigravity; mod.rs `loopback_port` | `rtok/agents/` `Aider.kt`, `YamlKeyLine.kt`, `ProxyUrl.kt`, `Reasonix.kt` (on `:toml-aot`), `Antigravity.kt` | ✅ (antigravity `skill::sync` with skills) | 19 → 13 |
 | src/agents/codebuddy | `rtok/agents/Codebuddy.kt` (on `D21Plugin`, the MCP core in JSONC) | ✅ | 7 → 5 (variants row lives with Hosts; legacy upgrade folded into the MCP lifecycle) |
+| src/agents/vscode | `rtok/agents/Vscode.kt`; `:rtok-mcp` `JsoncEdit` public, any JSON value | ✅ | 5 → 4 |
 | src/plugins/checkpoint.rs | `rtok/plugins/checkpoint/`, `rtok/plugins/memory/Private.kt`, `rtok-sys` Shlex/LineReader | ✅ (3 hook-dispatcher tests → Phase 6) | 27 → 27 |
 | src/plugins/compress | `rtok/plugins/compress/` (Compress, MustKeep, Llm, PromptToml) + Compressor, Queue; HTTP via `libs/http` + `libs/http-ktor` | ✅ (proxy-side `submit` call → Phase 7) | 19 → 22 (+4 KtorHttpTest) |
 | src/plugins/json_tree | `rtok/plugins/jsontree/JsonTree.kt`, `rtok-sys/Sha1.kt`, `Text.kt` jsonQuote | ✅ (3 MCP tests pending) | 15 → 12 |
