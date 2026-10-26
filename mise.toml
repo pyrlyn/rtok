@@ -9,3 +9,17 @@ rust = "1.99.1"                   # builds the Rust wasm demo guest (wasm32-unkn
 cmake = "4.4.4"                   # native C builds (tree-sitter grammars, zstd)
 ninja = "1.13.2"
 tree-sitter = "0.27.1"            # tree-sitter CLI: regenerates grammar parser.c where needed
+
+# Smart runs (scripts/smart.py): FULL or AFFECTED, decided from the git diff; see AGENTS.md.
+[tasks.test-smart]
+description = "Tests: full run when shared build config or many modules changed, else affected modules only"
+run = "python3 scripts/smart.py test"
+[tasks.build-smart]
+description = "Build: full or affected, same rule as test-smart"
+run = "python3 scripts/smart.py build"
+[tasks.test-affected]
+description = "Tests of changed modules and their dependents only"
+run = "python3 scripts/smart.py test --affected"
+[tasks.build-affected]
+description = "Assemble changed modules and their dependents only"
+run = "python3 scripts/smart.py build --affected"
