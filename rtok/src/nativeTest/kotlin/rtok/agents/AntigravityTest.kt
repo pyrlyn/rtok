@@ -43,9 +43,9 @@ class AntigravityTest {
     }
 
     @Test fun cliOfferNamesAgyAndKetchBehindYesAndWritesNothing() {
-        assertEquals(listOf(NO_CHANGES), scratch("no").let { it.agy.apply(it.cfg, Kind.Cli, Mode.Install) })
+        assertEquals(listOf(NO_CHANGES, NO_CHANGES), scratch("no").let { it.agy.apply(it.cfg, Kind.Cli, Mode.Install) })
         val s = scratch("cli", yes = true)
-        val out = s.agy.apply(s.cfg, Kind.Cli, Mode.Install).single()
+        val out = s.agy.apply(s.cfg, Kind.Cli, Mode.Install).first()
         assertTrue("agy plugin install" in out && "plugins/antigravity" in out && "ketch install pyrlyn/rtok" in out, out)
         assertFalse(exists(Antigravity.cliPluginDest(s.cfg)))
         assertTrue(Agents.agent("antigravity") is Antigravity)
@@ -60,7 +60,7 @@ class AntigravityTest {
         assertTrue(
             s.agy
                 .apply(s.cfg, Kind.Cli, Mode.Remove)
-                .single()
+                .first()
                 .startsWith("keep antigravity-cli/plugins/rtok"),
         )
         assertTrue(exists(Antigravity.cliPluginDest(s.cfg)))
@@ -72,15 +72,15 @@ class AntigravityTest {
         assertTrue(
             s.agy
                 .apply(s.cfg, Kind.Desktop, Mode.Install)
-                .single()
+                .first()
                 .startsWith("+ plugin"),
         )
         assertEquals(listOf("plugin"), s.agy.installed(s.cfg, Kind.Desktop))
-        assertEquals(listOf(NO_CHANGES), s.agy.apply(s.cfg, Kind.Desktop, Mode.Install))
+        assertEquals(listOf(NO_CHANGES, NO_CHANGES), s.agy.apply(s.cfg, Kind.Desktop, Mode.Install))
         assertTrue(
             s.agy
                 .apply(s.cfg, Kind.Desktop, Mode.Remove)
-                .single()
+                .first()
                 .startsWith("- plugin"),
         )
         assertEquals(emptyList(), s.agy.installed(s.cfg, Kind.Desktop))

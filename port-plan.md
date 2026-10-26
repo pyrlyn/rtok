@@ -742,3 +742,13 @@ Next, in order:
 - `:yaml-aot` `YamlText.block` end fixed for an empty block.
 - Tests: ContinueTest 8, GooseTest 8, YamlTest +2 asserts. Every host in the registry now has its install side.
 - Stop point: agents phase left: skill sync for every host (pending), then the rest of phase 10/11 per this plan.
+
+## Session: agents — skill sync for every host (agents/skill.rs, SDK SkillCopy)
+- `:rtok-agent-sdk` `SkillCopy.kt`: `SkillPlan`, `SkillView` (`ours`), `skillPlan`, `SkillCopy` (`view` never follows a
+  link, `run` with dry-run label, edited-copy question), `editedSinceMarked`; reuses `treeCopies`/`copyOwned`/`unlinkAt`.
+- `rtok.agents.Skills`: `SKILLS`, `SKILL_DESC_MAX`, `root`/`dest`/`label` for the 8 documented hosts (+ `antigravity-cli`),
+  `src` (hub, then the pi-bundled copy), `sync`, pre-T380 `worktrees` retirement. A missing hub tree (a dev build with
+  no shipped `skills/`) installs nothing. Wired as in Rust: claude (every mode, desktop too), codex, commandcode,
+  copilot (D21 `extra`), opencode, pi, antigravity (desktop and CLI roots). Cursor has a root but no caller, as in Rust.
+- Tests: SkillCopyTest 9, SkillsTest 6; Pi/Antigravity tests take the extra skill line.
+- Stop point: next agents leftovers (doctor MCP lines, `rtok mcp ping` server side, `rtok agents` CLI), then phase 10.

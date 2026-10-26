@@ -50,7 +50,7 @@ class PiTest {
 
     @Test fun piDryRunOfferNamesThePluginAndKetch() {
         val s = scratch("dry", dry = true)
-        val out = Pi(s.plugins).apply(s.cfg, Kind.Cli, Mode.Install).single()
+        val out = Pi(s.plugins).apply(s.cfg, Kind.Cli, Mode.Install).first()
         assertTrue("plugins/pi" in out && "ketch install pyrlyn/rtok" in out, out)
         assertFalse(exists(Pi.PLUGIN.path(s.cfg)))
         removeDirAll(s.dir)
@@ -59,10 +59,10 @@ class PiTest {
     @Test fun piLinksByDefaultSecondApplyIsNoChangesRemoveUnlinks() {
         val s = scratch("link")
         val pi = Pi(s.plugins)
-        assertTrue(pi.apply(s.cfg, Kind.Cli, Mode.Install).single().startsWith("+ plugin"))
+        assertTrue(pi.apply(s.cfg, Kind.Cli, Mode.Install).first().startsWith("+ plugin"))
         assertEquals(listOf("plugin"), pi.installed(s.cfg, Kind.Cli))
-        assertEquals(listOf(NO_CHANGES), pi.apply(s.cfg, Kind.Cli, Mode.Install))
-        assertEquals(listOf("- plugin ${Pi.PLUGIN.path(s.cfg)}"), pi.apply(s.cfg, Kind.Cli, Mode.Remove))
+        assertEquals(listOf(NO_CHANGES, NO_CHANGES), pi.apply(s.cfg, Kind.Cli, Mode.Install))
+        assertEquals(listOf("- plugin ${Pi.PLUGIN.path(s.cfg)}", NO_CHANGES), pi.apply(s.cfg, Kind.Cli, Mode.Remove))
         assertFalse(Pi.PLUGIN.linked(s.cfg, s.plugins))
         assertTrue(Agents.agent("pi") is Pi)
         removeDirAll(s.dir)

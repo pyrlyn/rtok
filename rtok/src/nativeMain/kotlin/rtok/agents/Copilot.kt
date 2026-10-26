@@ -59,6 +59,8 @@ class Copilot(
             run = ::run,
             registerMcp = { McpRun.install(it, mcpSpec(it)) },
             unregisterMcp = { McpRun.remove(it, mcpSpec(it)) },
+            // T234: skill sync runs on every apply, install or remove alike.
+            extra = { c, remove -> Skills.sync(HOST, c, remove, plugins) },
         ).apply(cfg, mode)
 
     /** Offer, install, or uninstall `plugins/copilot` through `copilot plugin` behind `--yes`; a failing CLI keeps the offer. */
