@@ -9,6 +9,38 @@ import rtok.plugins.read.Roots as ReadRoots
 object Paths {
     private val ROOTED = setOf("read", "search", "tree", "outline")
 
+    /**
+     * mcp.rs `invoke_rooted`: `whoami` and the agent tools answer against the linked agent; `read`/`search`/
+     * `tree`/`outline` resolve relative paths against the caller's root (T923); the rest go to [Tools].
+     */
+    fun invoke(
+        cx: rtok.plugin.Runtime,
+        agents: AgentSession,
+        name: String,
+        args: JsonObject,
+    ): Pair<String, Boolean> =
+        when {
+            AgentTools.handles(name) -> runCatching { AgentTools.call(cx, agents, name, args) }.fold({ it to true }) { (it.message ?: it.toString()) to false }
+            !isRooted(name) -> Tools.invokeText(cx, name, args)
+            else -> rooted(cx, agents, name, args)
+        }
+
+    private fun rooted(
+        cx: rtok.plugin.Runtime,
+        agents: AgentSession,
+        name: String,
+        args: JsonObject,
+    ): Pair<String, Boolean> {
+        val guard = agents.callerDir()?.let { ReadRoots.enterCaller(rtok.sys.cwd(), it) }
+        try {
+            val anchored = anchorOutline(name, args)
+            val (text, ok) = Tools.invokeText(cx, name, anchored)
+            return annotate(name, anchored, text, ok, guard != null) to ok
+        } finally {
+            guard?.close()
+        }
+    }
+
     /** Whether [name] takes a path relative to the caller's root. */
     fun isRooted(name: String) = name in ROOTED
 

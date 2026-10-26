@@ -373,3 +373,19 @@ Next, in order:
 - Full suite: 1460 tests, 0 failures. Deferred: graph session-start repo map (`repo_map`, needs checkpoint `last_paths`).
 - Stop point: next whoami/agents/messages tools + agent link (feeds `callerDir`), then `--http`, `mcp ping`,
   `mcp -- <cmd>` wrapper, server background jobs; then otel.
+
+## Session: MCP chunk 2b — agent link + whoami/agents/messages tools
+- `rtok.agents.AgentView` (agent_view.rs: `AgentState`, `AgentView`, `SessionView` with serde-flatten JSON),
+  `rtok.model.Agents` (model/agents.rs: worktree label, nest, session views, `agentSessions`/`agentShow` with claims +
+  unread enrich, `cleanStatus`/`setStatus`; takes the open `Store` instead of reopening one),
+  `rtok.agents.AgentLink` (agents/link.rs `resolve` env/ancestor/cwd/own rules, `Link`, `Rule`, `Caller`;
+  shell_agent.rs `shellAgent`). Hookless detection is the `HookSupport` interface (`Unknown` = every host hooked)
+  until the agent host registry is ported.
+- `rtok.mcp.AgentSession` (mcp.rs link cache, `caller_dir` 5 s TTL, `agent`/`agent_for`/`whoami`), `rtok.mcp.AgentTools`
+  (mcp/agents.rs + mcp/messages.rs: agents_list, agent_show, agent_status_set, agent_send, agent_inbox; `withAgent`).
+  `Server` lists whoami + the 5 agent tools after ping (Rust order), links on `initialize`; `Paths.invoke` is
+  mcp.rs `invoke_rooted` and now feeds the caller root from the agent link.
+- Tests: LinkTest (19), AgentsTest (5), AgentToolsTest (6). Full suite: 1491, 0 failures. Detekt: test-only
+  MagicNumber/TooManyFunctions baselined.
+- Deferred: hookless host table (agent registry), `rtok agents` CLI commands on this model.
+- Stop point: next `--http`, `rtok mcp ping`, `mcp -- <cmd>` wrapper, server background jobs; then otel.

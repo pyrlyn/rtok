@@ -195,6 +195,17 @@
     <ID>LoopWithTooManyJumpStatements:Watch.kt:Watch$for</ID>
     <ID>MagicNumber:Admit.kt:Admit$100</ID>
     <ID>MagicNumber:Admit.kt:Admit$3</ID>
+    <ID>MagicNumber:AgentToolsTest.kt:AgentToolsTest$8</ID>
+    <ID>MagicNumber:AgentsTest.kt:AgentsTest$1000</ID>
+    <ID>MagicNumber:AgentsTest.kt:AgentsTest$120</ID>
+    <ID>MagicNumber:AgentsTest.kt:AgentsTest$121</ID>
+    <ID>MagicNumber:AgentsTest.kt:AgentsTest$3</ID>
+    <ID>MagicNumber:AgentsTest.kt:AgentsTest$5</ID>
+    <ID>MagicNumber:AgentsTest.kt:AgentsTest$6</ID>
+    <ID>MagicNumber:AgentsTest.kt:AgentsTest$60</ID>
+    <ID>MagicNumber:AgentsTest.kt:AgentsTest$8</ID>
+    <ID>MagicNumber:AgentsTest.kt:AgentsTest$900</ID>
+    <ID>MagicNumber:AgentsTest.kt:AgentsTest$990</ID>
     <ID>MagicNumber:Archive.kt:12</ID>
     <ID>MagicNumber:Archive.kt:3</ID>
     <ID>MagicNumber:Archive.kt:4096</ID>
@@ -550,6 +561,21 @@
     <ID>MagicNumber:JsonTreeTest.kt:JsonTreeTest$4</ID>
     <ID>MagicNumber:JsonTreeTest.kt:JsonTreeTest$6</ID>
     <ID>MagicNumber:JsonTreeTest.kt:JsonTreeTest$64</ID>
+    <ID>MagicNumber:LinkTest.kt:LinkTest$11149</ID>
+    <ID>MagicNumber:LinkTest.kt:LinkTest$11381</ID>
+    <ID>MagicNumber:LinkTest.kt:LinkTest$13792</ID>
+    <ID>MagicNumber:LinkTest.kt:LinkTest$13793</ID>
+    <ID>MagicNumber:LinkTest.kt:LinkTest$200</ID>
+    <ID>MagicNumber:LinkTest.kt:LinkTest$25434</ID>
+    <ID>MagicNumber:LinkTest.kt:LinkTest$25435</ID>
+    <ID>MagicNumber:LinkTest.kt:LinkTest$26000</ID>
+    <ID>MagicNumber:LinkTest.kt:LinkTest$300</ID>
+    <ID>MagicNumber:LinkTest.kt:LinkTest$30709</ID>
+    <ID>MagicNumber:LinkTest.kt:LinkTest$500</ID>
+    <ID>MagicNumber:LinkTest.kt:LinkTest$6</ID>
+    <ID>MagicNumber:LinkTest.kt:LinkTest$700</ID>
+    <ID>MagicNumber:LinkTest.kt:LinkTest$701</ID>
+    <ID>MagicNumber:LinkTest.kt:LinkTest$999</ID>
     <ID>MagicNumber:Llm.kt:100</ID>
     <ID>MagicNumber:Llm.kt:35</ID>
     <ID>MagicNumber:Logfmt.kt:3</ID>
@@ -1113,6 +1139,7 @@
     <ID>TooManyFunctions:JsonTree.kt:rtok.plugins.jsontree.JsonTree.kt</ID>
     <ID>TooManyFunctions:JsonTreeTest.kt:JsonTreeTest</ID>
     <ID>TooManyFunctions:JsonTreeTest.kt:rtok.plugins.jsontree.JsonTreeTest.kt</ID>
+    <ID>TooManyFunctions:LinkTest.kt:LinkTest</ID>
     <ID>TooManyFunctions:Lsp.kt:Lsp : LspBackend</ID>
     <ID>TooManyFunctions:LspSession.kt:LspSession : AutoCloseable</ID>
     <ID>TooManyFunctions:LspTest.kt:LspTest</ID>
