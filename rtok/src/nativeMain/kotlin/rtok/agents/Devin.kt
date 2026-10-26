@@ -22,6 +22,7 @@ class Devin(
     private val plugins: PluginSource = ShippedPlugins,
 ) : Agent {
     override val id = HOST
+    override val pluginServesMcp = true
 
     override fun files(
         cfg: Config,

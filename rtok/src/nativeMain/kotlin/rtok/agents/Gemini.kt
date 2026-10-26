@@ -10,6 +10,8 @@ class Gemini(
     plugins: PluginSource = ShippedPlugins,
     cli: ((Config, List<String>) -> String?)? = null,
 ) : ExtensionHost(SPEC, plugins, cli) {
+    override val pluginServesMcp = true
+
     companion object {
         const val HOST = "gemini"
 

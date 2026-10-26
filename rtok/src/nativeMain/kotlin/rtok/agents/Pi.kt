@@ -8,6 +8,7 @@ class Pi(
     private val plugins: PluginSource = ShippedPlugins,
 ) : Agent {
     override val id = "pi"
+    override val pluginServesMcp = true
 
     override fun files(
         cfg: Config,

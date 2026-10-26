@@ -20,6 +20,7 @@ class Codebuddy(
     private val onPath: (Config) -> Boolean = { Locate.cli(it, HOST) != null },
 ) : Agent {
     override val id = HOST
+    override val pluginServesMcp = true
 
     override fun files(
         cfg: Config,
