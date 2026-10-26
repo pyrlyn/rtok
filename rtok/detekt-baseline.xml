@@ -3,6 +3,7 @@
   <ManuallySuppressedIssues/>
   <CurrentIssues>
     <ID>ComplexCondition:Compress.kt:d == null || d.expanded || !d.pointer.startsWith("[archived ") || pointer != d.pointer</ID>
+    <ID>ComplexCondition:Drill.kt:Drill$d.focusOnly &amp;&amp; !(sym(l.from) &amp;&amp; (sym(l.to) || l.to is End.Ext))</ID>
     <ID>ComplexCondition:Expand.kt:Expand$(c == '"' || c == '\'') &amp;&amp; idx > 0 &amp;&amp; hasNext</ID>
     <ID>ComplexCondition:Expand.kt:Expand$s.isNotEmpty() &amp;&amp; s.all { it in '0'..'9' } || (s.startsWith('+') &amp;&amp; s.length > 1 &amp;&amp; s.drop(1).all { it in '0'..'9' })</ID>
     <ID>ComplexCondition:Expand.kt:Expand$spec.length >= 2 &amp;&amp; ((spec.first() == '"' &amp;&amp; spec.last() == '"') || (spec.first() == '\'' &amp;&amp; spec.last() == '\''))</ID>
@@ -50,6 +51,7 @@
     <ID>CyclomaticComplexMethod:Dispatch.kt:internal fun capBudget: String</ID>
     <ID>CyclomaticComplexMethod:Dispatch.kt:internal fun dispatchOwnedStrict: ByteArray</ID>
     <ID>CyclomaticComplexMethod:Dispatch.kt:private fun injectEvent: HookOutput</ID>
+    <ID>CyclomaticComplexMethod:Drill.kt:Drill$private fun draw</ID>
     <ID>CyclomaticComplexMethod:Expand.kt:Expand$fun parseRange: Pair&lt;Int, Int></ID>
     <ID>CyclomaticComplexMethod:Expand.kt:Expand$private fun normalizeRange: Pair&lt;String, Boolean></ID>
     <ID>CyclomaticComplexMethod:Extract.kt:Files$private fun toolUse</ID>
@@ -330,6 +332,9 @@
     <ID>MagicNumber:DocsTest.kt:DocsTest$60</ID>
     <ID>MagicNumber:DocsTest.kt:DocsTest$60u</ID>
     <ID>MagicNumber:DocsTest.kt:DocsTest$800u</ID>
+    <ID>MagicNumber:DrillTest.kt:DrillTest$100</ID>
+    <ID>MagicNumber:DrillTest.kt:DrillTest$120</ID>
+    <ID>MagicNumber:DrillTest.kt:DrillTest$20</ID>
     <ID>MagicNumber:EventsTest.kt:EventsTest$10u</ID>
     <ID>MagicNumber:EventsTest.kt:EventsTest$12</ID>
     <ID>MagicNumber:EventsTest.kt:EventsTest$12u</ID>
@@ -757,6 +762,7 @@
     <ID>ReturnCount:Docs.kt:fun docsResolve: String</ID>
     <ID>ReturnCount:Docs.kt:fun fetchCrate: String</ID>
     <ID>ReturnCount:Docs.kt:fun resolveLock: Pair&lt;String, String>?</ID>
+    <ID>ReturnCount:Drill.kt:Drill$fun run: DrillGraph</ID>
     <ID>ReturnCount:Expand.kt:Expand$fun filterLines: List&lt;String></ID>
     <ID>ReturnCount:Expand.kt:Expand$fun resolveId: String</ID>
     <ID>ReturnCount:Expand.kt:Expand$private fun stripTrailingBr: String?</ID>
