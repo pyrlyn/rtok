@@ -677,3 +677,11 @@ Next, in order:
   `--yes` or `--dry-run` required; `Claude.apply(Replace)` runs it. Claude host done except skill sync (pending for all).
 - Tests: ClaudeMigrateTest 3.
 - Stop point: next 3d-4 = grok, then cursor, codex; then `libs/yaml-aot` + continue/goose.
+
+## Session: agents chunk 3d-4 — grok
+- `Grok.kt`: `[mcp_servers.rtok]` in `config.toml` through `McpRun` (TOML), kept when present except the pre-`--host`
+  legacy entry (T283.2), skipped while `[compat.claude] mcps` + rtok's Claude MCP cover it; hooks never written (one
+  set: plugin or the Claude import, said in a note); `grok plugin install <plugins/grok> --trust` offered behind
+  `--yes`, remove keeps Grok's copy. Windows skip note not ported (no Windows target).
+- Tests: GrokTest 5.
+- Stop point: next 3d-5 = cursor, then codex; then `libs/yaml-aot` + continue/goose.
