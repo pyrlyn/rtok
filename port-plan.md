@@ -643,3 +643,10 @@ Next, in order:
   + `plugin install` behind `--yes` (`CODEBUDDY_CONFIG_DIR` for a non-default dir), D21 singleton over hooks.
 - Tests: CodebuddyTest 5.
 - Stop point: next 3c-6 = vscode; then continue/goose (YAML decision), then 3d.
+
+## Session: agents chunk 3c-6 — vscode
+- `Vscode.kt`: `servers.rtok` (typed stdio) in each profile's `mcp.json` (D33); behind `--yes` `plugins/claude` linked at
+  `<user dir>/plugins/rtok` and registered in `chat.pluginLocations` through `JsoncEdit` (now public, takes any value).
+- Tests: VscodeTest 4.
+- Group 3c done except continue and goose (YAML library decision pending).
+- Stop point: next 3d = claude, cursor, codex, grok.

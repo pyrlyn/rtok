@@ -7,7 +7,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
-internal object JsoncEdit {
+object JsoncEdit {
     private class Member(
         val key: String,
         val keyStart: Int,
@@ -32,7 +32,7 @@ internal object JsoncEdit {
         text: String,
         keyPath: List<String>,
         name: String,
-        entry: JsonObject?,
+        entry: JsonElement?,
     ): String =
         when {
             !text.isBlank() -> edit(path, text, keyPath, name, entry)
@@ -45,7 +45,7 @@ internal object JsoncEdit {
         text: String,
         keyPath: List<String>,
         name: String,
-        entry: JsonObject?,
+        entry: JsonElement?,
     ): String {
         val root = Parser(path, text).root() as? Obj ?: throw McpConfigException("$path: root is not an object")
         val (obj, missing) = walk(path, root, keyPath)
