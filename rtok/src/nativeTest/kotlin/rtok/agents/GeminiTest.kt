@@ -108,10 +108,10 @@ class GeminiTest {
                 """{"$gevent":[{"matcher":"run_shell_command","hooks":[{"type":"command","command":"audit.sh"},""" +
                     """{"type":"command","command":"$stale","timeout":1000}]}]}""",
             )
-        val spec = HookSpec(listOf(gevent to "run_shell_command"), "timeout", 5000)
+        val spec = Gemini.hookSpec(TIMEOUT_S)
         val (out, report) = HookInsert.insert(Gemini.FORM, doc, spec, "rtok")
         val want = "rtok hook $cevent --host gemini"
-        assertTrue("~ $gevent run_shell_command $want" in report && report.endsWith(" updates"), report)
+        assertTrue(report.startsWith("~ $gevent $want\n") && "1 updates" in report, report)
         val entries = out[gevent]!!.jsonArray
         assertEquals(1, entries.size, "$out")
         val inner = entries[0].jsonObject["hooks"]!!.jsonArray
@@ -138,5 +138,49 @@ class GeminiTest {
         assertEquals("+ plugin plugins/gemini → rtok", lines.first())
         assertEquals(listOf(listOf("extensions", "link", "/src/plugins/gemini")), calls)
         removeDirAll(c.setup.gemini.dir)
+    }
+
+    /** Rust `insert_ours` scans every entry of a listed event, so a user's `matcher` keeps ours in place (no prune). */
+    @Test fun oursUnderAnyMatcherIsKeptInItsSlot() {
+        val doc = Json.parseToJsonElement("""{"BeforeTool":[{"matcher":"x","hooks":[{"type":"command","command":"rtok hook PreToolUse --host gemini","timeout":5000}]}]}""")
+        val (out, report) = HookInsert.insert(Gemini.FORM, doc, Gemini.hookSpec(TIMEOUT_S), "rtok")
+        assertEquals(1, out["BeforeTool"]!!.jsonArray.size, "$out")
+        assertEquals(
+            "x",
+            out["BeforeTool"]!!
+                .jsonArray[0]
+                .jsonObject["matcher"]!!
+                .jsonPrimitive.content,
+        )
+        assertFalse(report.lines().any { it.startsWith("- ") || it.startsWith("+ BeforeTool") }, report)
+        assertTrue(report.endsWith("5 additions"), report)
+    }
+
+    /** Rust never prunes: a hook on an event the table no longer lists is not ours for Gemini and survives install. */
+    @Test fun installLeavesHooksOnUnlistedEvents() {
+        val doc = Json.parseToJsonElement("""{"OldEvent":[{"hooks":[{"type":"command","command":"rtok hook PreToolUse --host gemini","timeout":5000}]}]}""")
+        val (out, report) = HookInsert.insert(Gemini.FORM, doc, Gemini.hookSpec(TIMEOUT_S), "rtok")
+        assertEquals(doc.jsonObject["OldEvent"], out["OldEvent"])
+        assertFalse(report.lines().any { it.startsWith("- ") }, report)
+    }
+
+    /** Rust `strip_ours`: only an entry of just `hooks` with the exact hook is unchanged; extra keys mean user-edited. */
+    @Test fun removeLeavesEntriesTheUserChanged() {
+        val c = cfg("edited")
+        val ours = """{"type":"command","command":"rtok hook PreToolUse --host gemini","timeout":5000}"""
+        val other = """{"type":"command","command":"rtok hook SessionStart --host gemini","timeout":5000}"""
+        writeString(
+            Gemini.settingsPath(c),
+            """{"hooks":{"BeforeTool":[{"matcher":"","hooks":[$ours]}],"SessionStart":[{"hooks":[$other]}]}}""",
+        )
+        val out = gemini.run(c, true)
+        assertTrue("leave hooks.BeforeTool in " in out && "1 removed" in out, out)
+        assertEquals(1, hooks(c)["BeforeTool"]!!.jsonArray.size)
+        assertNull(hooks(c)["SessionStart"])
+        removeDirAll(c.setup.gemini.dir)
+    }
+
+    private companion object {
+        const val TIMEOUT_S = 5L
     }
 }

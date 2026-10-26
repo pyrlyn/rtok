@@ -44,7 +44,7 @@ object HookStrip {
             entry: JsonElement,
         ): JsonElement {
             val matcher = matcherOf(entry)
-            val listed = (event to matcher) in spec.entries
+            val listed = if (spec.matcherless) (entry as? JsonObject)?.size == 1 else (event to matcher) in spec.entries
             val inner = innerHooks(entry) ?: return entry
             return withInner(entry, inner.filterNot { h -> takes(event, matcher, listed, h) })
         }

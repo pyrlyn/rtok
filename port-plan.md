@@ -544,3 +544,10 @@ Next, in order:
   `GEMINI_CLI_HOME`); registered in `Agents`.
 - Tests: 5 (3 ported, 2 own); support/t275/hooks_doc stay in the Rust tree (Hosts/plugins).
 - Stop point: next 3b-3e = codewhale, commandcode, copilot, then devin, kimi.
+
+## Session: agents chunk 3b-3d fix — gemini hook walk parity with Rust
+- #63 ran Gemini through the Claude walk, which pruned by `(event, matcher)` and treated any `matcher: ""` entry as
+  unchanged on strip. `HookSpec.matcherless` now gives Gemini's walk (gemini/mod.rs): ours found under any matcher,
+  no prune, strip counts only a `hooks`-only entry as unchanged (else `keep_edited`).
+- Tests: 3 own (matcher slot kept, unlisted event untouched, user-edited entries left); stale test uses the real spec.
+- Stop point: next 3b-3e = codewhale, commandcode, copilot, then devin, kimi.

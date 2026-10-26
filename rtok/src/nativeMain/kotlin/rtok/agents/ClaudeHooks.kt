@@ -17,11 +17,16 @@ class HookForm(
     val isOurs: (cmd: String, event: String) -> Boolean,
 )
 
-/** What one host installs: its `(event, matcher)` rows and how it spells the timeout (`timeout` s, `timeoutMs`). */
+/**
+ * What one host installs: its `(event, matcher)` rows and how it spells the timeout (`timeout` s, `timeoutMs`).
+ * [matcherless] is Gemini's walk (gemini/mod.rs `insert_ours`/`strip_ours`): ours is found in any entry of a listed
+ * event whatever its `matcher`, nothing is pruned, and on strip only an entry holding just `hooks` counts as unchanged.
+ */
 data class HookSpec(
     val entries: List<Pair<String, String>>,
     val timeoutKey: String,
     val timeout: Long,
+    val matcherless: Boolean = false,
 )
 
 object ClaudeHooks {
