@@ -10,10 +10,14 @@ sealed class OptSpec(val name: String, val help: String, val global: Boolean) {
 }
 
 /** A positional argument. */
-class ArgSpec(val name: String, val help: String = "", val required: Boolean = true)
+/** A positional; [variadic] takes every remaining word (after `--` too), read with [Invocation.args]. */
+class ArgSpec(val name: String, val help: String = "", val required: Boolean = true, val variadic: Boolean = false)
 
 /** What the parser hands an action: options by name (without `--`), positionals by name. */
-class Invocation(private val flags: Set<String>, private val values: Map<String, String>, private val args: Map<String, String>, val io: CliIo) {
+class Invocation(private val flags: Set<String>, private val values: Map<String, String>, private val args: Map<String, String>, val io: CliIo,
+                 private val lists: Map<String, List<String>> = emptyMap()) {
+    /** Every word bound to the variadic positional [name]. */
+    fun args(name: String): List<String> = lists[name].orEmpty()
     fun flag(name: String) = name in flags
     fun value(name: String): String? = values[name]
     fun arg(name: String): String? = args[name]

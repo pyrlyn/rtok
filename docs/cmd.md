@@ -24,6 +24,10 @@ Every file is ported except `catfile.rs` (see Limitations).
    Each run records one `cmd` measurement row, estimated on the host-visible prefix (30 000 chars).
 5. **`rtok filter <cmd>`** (`Filter.kt`) does the same for text on stdin.
 
+## CLI
+- `rtok run [--agent ID] [--no-ref] -- <cmd…>`: runs the command and exits with its code.
+- `rtok filter [--cmd CMD] [--archive [--exit N]] [--no-ref] < text`: filters stdin. `--cmd` defaults to `[filter] cmd`; `--archive` archives and records like `run`.
+
 ## Enable / disable
 - `[plugins.cmd] enabled = false` turns the plugin off; `rewrite = false` keeps `rtok run` but stops the
   PreToolUse rewrite.

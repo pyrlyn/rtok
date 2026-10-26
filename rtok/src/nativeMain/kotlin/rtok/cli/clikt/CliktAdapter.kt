@@ -3,6 +3,7 @@ package rtok.cli.clikt
 
 import com.github.ajalt.clikt.core.*
 import com.github.ajalt.clikt.parameters.arguments.argument
+import com.github.ajalt.clikt.parameters.arguments.multiple
 import com.github.ajalt.clikt.parameters.arguments.optional
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
@@ -11,7 +12,7 @@ import rtok.VERSION
 import rtok.cli.*
 
 /** Collected while Clikt walks the command chain; the last command run is the one chosen. */
-private class Parsed { val flags = HashSet<String>(); val values = HashMap<String, String>(); val args = HashMap<String, String>(); var action: ((Invocation) -> Unit)? = null }
+private class Parsed { val flags = HashSet<String>(); val values = HashMap<String, String>(); val args = HashMap<String, String>(); val lists = HashMap<String, List<String>>(); var action: ((Invocation) -> Unit)? = null }
 
 private class SpecCommand(private val spec: CommandSpec, private val parsed: Parsed, inherited: List<OptSpec>) : CliktCommand(name = spec.name) {
     override fun help(context: Context) = spec.help
@@ -22,9 +23,10 @@ private class SpecCommand(private val spec: CommandSpec, private val parsed: Par
             is OptSpec.Value -> option("--${o.name}", help = o.help, metavar = o.metavar).also { registerOption(it) }
         }
     }
-    private val positionals = spec.args.map { a ->
+    private val positionals = spec.args.filter { !it.variadic }.map { a ->
         a to (if (a.required) argument(a.name, help = a.help) else argument(a.name, help = a.help).optional()).also { registerArgument(it) }
     }
+    private val rest = spec.args.filter { it.variadic }.map { a -> a to argument(a.name, help = a.help).multiple(required = a.required).also { registerArgument(it) } }
 
     override fun run() {
         for ((o, opt) in opts) when (val v = opt.value) {
@@ -33,6 +35,7 @@ private class SpecCommand(private val spec: CommandSpec, private val parsed: Par
             else -> {}
         }
         for ((a, arg) in positionals) (arg.value as String?)?.let { parsed.args[a.name] = it }
+        for ((a, arg) in rest) parsed.lists[a.name] = arg.value
         if (spec.subcommands.isEmpty()) parsed.action = spec.action
     }
 }
@@ -55,6 +58,6 @@ object CliktParser : CliParser {
             }
         }
         val action = parsed.action ?: return ExitCode.OK
-        return runAction(io) { action(Invocation(parsed.flags, parsed.values, parsed.args, io)) }
+        return runAction(io) { action(Invocation(parsed.flags, parsed.values, parsed.args, io, parsed.lists)) }
     }
 }

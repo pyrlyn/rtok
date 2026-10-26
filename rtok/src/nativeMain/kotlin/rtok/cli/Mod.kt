@@ -12,7 +12,7 @@ val CONFIG_OPT = OptSpec.Value("config", "Config file (else `<home>/config.toml`
 val RTOK = CommandSpec(
     name = "rtok", help = "Token reduction for coding agents (rtok $VERSION)",
     options = listOf(CONFIG_OPT),
-    subcommands = listOf(PLUGINS, CONFIG, ARCHIVE),
+    subcommands = listOf(PLUGINS, CONFIG, ARCHIVE, RUN, FILTER),
 )
 
 object StdIo : CliIo {
