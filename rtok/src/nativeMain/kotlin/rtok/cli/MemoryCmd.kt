@@ -82,10 +82,12 @@ val MEMORY =
                             OptSpec.Value("file", "CLAUDE.md or AGENTS.md", "FILE"),
                             OptSpec.Value("budget", "Token budget; default `[plugins.memory] sync_tokens`", "BUDGET"),
                             OptSpec.Flag("dry-run", "Print the unified diff and write nothing"),
+                            OptSpec.Flag("stat", "With --dry-run: stat lines and totals instead of the diff"),
                             OptSpec.Flag("remove", "Delete the managed block and nothing else"),
                             OptSpec.Flag("force", "Overwrite a hand-edited block"),
                         ),
                 ) { inv ->
+                    rtok.StatPreview.set(inv.flag("stat"))
                     Sync.run(inv.loadConfig(), inv.value("file") ?: "CLAUDE.md", inv.intOpt("budget")?.toUInt(), inv.flag("dry-run"), inv.flag("remove"), inv.flag("force")) { inv.io.out(it) }
                 },
                 CommandSpec(

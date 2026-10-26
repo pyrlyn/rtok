@@ -145,7 +145,7 @@ object Sync {
                 }
             val after = guardedSplice(before, newBlock, stored, force)
             if (dryRun) {
-                out(ChangePreview.unifiedDiff(path, before, after))
+                out(rtok.StatPreview.showFile(path, ChangePreview.unifiedDiff(path, before, after)))
             } else {
                 if (after != before) {
                     backup(path, cfg.setup.backupFiles.toInt())
