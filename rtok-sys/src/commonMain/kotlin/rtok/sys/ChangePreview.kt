@@ -44,6 +44,15 @@ object ChangePreview {
         return sb.toString()
     }
 
+    /** Inserted and deleted line counts between [before] and [after]. */
+    fun counts(
+        before: String,
+        after: String,
+    ): Pair<Int, Int> {
+        val ops = diff(splitLines(before), splitLines(after))
+        return ops.count { it.kind == '+' } to ops.count { it.kind == '-' }
+    }
+
     private fun range(
         start: Int,
         len: Int,

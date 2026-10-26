@@ -351,3 +351,9 @@ Next, in order:
 - `rtok memory status` (--project, --since, --json): MemoryStatus.kt ports model::memory_status + memory_status.rs; MemoryStatusTest (3).
 - Full suite: 1423 tests, 0 failures.
 - Stop point: next `sync --stat`.
+
+## Session: sync --stat
+- `rtok.sys.Preview`/`PreviewMode` (change-preview `Preview`: edits, removals, `--stat` lines with 40-mark bar cap, totals) + PreviewTest (5); `ChangePreview.counts`.
+- `rtok.StatPreview` (stat_preview.rs: process-wide switch, colour-stripping `sides`, `show`/`showFile`/`shown`) + StatPreviewTest (4); `rtok memory sync --dry-run --stat`, totals line now closes the dry-run diff.
+- Deferred: `--stat` on config/doctor/agents dry runs lands with those commands.
+- Stop point: next MCP (incl. `LspSession.shutdown()` on exit, `Watch.runScope` for watch="notify").
