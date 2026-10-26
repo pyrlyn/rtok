@@ -267,6 +267,14 @@ class RulesTest {
         removeDirAll(dir)
     }
 
+    @Test fun configValidateSeesTheRulesCheckOnceInstalled() {
+        val dir = tmpDir("rules-validate"); writeString("$dir/rules.toml", "[grep]\nmax_lines = \"many\"\n")
+        Rules.installValidateCheck()
+        val errs = rtok.config.Validate.rulesIssues("$dir/rules.toml", "$dir/rules.d")
+        assertEquals(1, errs.size, errs.toString()); assertTrue(errs[0].contains("max_lines"), errs.toString())
+        removeDirAll(dir)
+    }
+
     @Test fun issuesInNamesEveryMalformedFileFromVfs() {
         val v = VfsRuleFiles().apply { write("rules.d/bad.toml", "[grep]\nmax_lines = \"many\"\n"); write("rules.d/good.toml", "[echo]\nmax_lines = 2\n") }
         val errs = Rules.issuesIn(v, "no-such-rules.toml", "rules.d")

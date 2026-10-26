@@ -29,6 +29,8 @@ class ResidentTest {
     }
     @Test fun answersOwnFingerprintRefusesOthersAndFlagsStaleVersions() {
         val dir = "${tempDir()}/rtok-hr-${pid()}"; removeDirAll(dir); createDirAll(dir); val ep = "$dir/hook.sock"
+        // answer() chdirs into the request cwd (a resident server does); restore it so later tests keep a live cwd.
+        val prevCwd = cwd()
         val lfd = assertNotNull(Resident.bindPrivate(ep))
         Resident.runner = { r -> "out:${r.event}".encodeToByteArray() }
         val w = Worker.start()
@@ -41,6 +43,6 @@ class ResidentTest {
         assertEquals("out:PreToolUse", ok!!.getOrNull()!!.decodeToString()); assertFalse(s1)
         val (refused, s2) = call(Request(VERSION, 7uL, "PreToolUse", "", dir, ByteArray(0))); assertNull(refused!!.getOrNull()); assertFalse(s2)
         val (_, s3) = call(Request("0.0.0", 42uL, "PreToolUse", "", dir, ByteArray(0))); assertTrue(s3)
-        w.requestTermination().result; close(lfd); Resident.runner = null; removeDirAll(dir)
+        w.requestTermination().result; close(lfd); Resident.runner = null; setCwd(prevCwd); removeDirAll(dir)
     }
 }

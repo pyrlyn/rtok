@@ -35,7 +35,7 @@ Plan and per-phase checklist: [port-plan.md](port-plan.md).
 | src/plugins/docs | `rtok/plugins/docs/Docs.kt` | ✅ (fetch CLI pending zstd approval) | 12 → 13 |
 | (new) libs/http, libs/http-ktor | `rtok.http` interface, Ktor adapter | ✅ | – → 4 |
 | src/plugins/guard (mod, sed, skill), read/outline.rs markdown half, cmd/run.rs quoting | `rtok/plugins/guard/` (Guard, Sed, Skill), `plugins/read/Outline.kt`, `plugins/cmd/Run.kt` | ✅ (grep_symbol → graph) | 53 → 46 (+1 TypesTest) |
-| src/plugins/cmd (logfmt, gh, mise, loops, python, diffs, grep, compact, rules, bounded, formatters, tables, run.rs quoting) | `rtok/plugins/cmd/` | 🚧 (filter, run, hook, catfile pending) | 149 of 207 |
+| src/plugins/cmd (all files but catfile.rs) | `rtok/plugins/cmd/` + rtok-sys `Proc.kt` | ✅ except catfile (tree-sitter + read cache) | 207 Kotlin tests (Rust 207; catfile 4, cat re-read delta 1, Windows-only cmd.exe run 1 not ported) |
 | src/plugins/inject | `rtok/plugins/inject/` (Inject, Modes) | ✅ (hook-path halves → Phase 6) | 8 → 9 |
 | src/plugins/checkpoint.rs | `rtok/plugins/checkpoint/`, `rtok/plugins/memory/Private.kt`, `rtok-sys` Shlex/LineReader | ✅ (3 hook-dispatcher tests → Phase 6) | 27 → 27 |
 | src/plugins/compress | `rtok/plugins/compress/` (Compress, MustKeep, Llm, PromptToml) + Compressor, Queue; HTTP via `libs/http` + `libs/http-ktor` | ✅ (proxy-side `submit` call → Phase 7) | 19 → 22 (+4 KtorHttpTest) |
