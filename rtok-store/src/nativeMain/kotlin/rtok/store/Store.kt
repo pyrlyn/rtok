@@ -158,9 +158,6 @@ fun createPrivateDir(dir: String) {
     if (mkdir(dir, 0x1c0u) != 0 && !isDir(dir)) throw IoException(IoException.Kind.Other, "cannot create $dir")
 }
 
-fun isDir(p: String): Boolean = memScoped { val st = alloc<stat>(); stat(p, st.ptr) == 0 && (st.st_mode.toInt() and S_IFMT) == S_IFDIR }
-fun fileLen(p: String): Long? = memScoped { val st = alloc<stat>(); if (stat(p, st.ptr) == 0) st.st_size else null }
-fun fileMode(p: String): Int? = memScoped { val st = alloc<stat>(); if (stat(p, st.ptr) == 0) st.st_mode.toInt() and 0x1ff else null }
 
 /** Owner-only read/write for the database and its WAL/SHM siblings; best effort. */
 private fun restrictDbFiles(path: String) {

@@ -1,6 +1,8 @@
 // Port of crates/rtok-store/src/retention.rs (+ the retention SQL from sql_ext.rs).
 package rtok.store
 
+import rtok.sys.*
+
 import platform.posix.unlink
 import rtok.sys.isUnwalkableRoot
 
