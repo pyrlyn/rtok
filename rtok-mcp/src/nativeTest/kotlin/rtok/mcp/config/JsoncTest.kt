@@ -1,4 +1,4 @@
-package rtok.agents
+package rtok.mcp.config
 
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
