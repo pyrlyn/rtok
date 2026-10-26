@@ -590,6 +590,23 @@ object Scope {
         return capped(cx, notes, body)
     }
 
+    /** `review` from `git diff` in every project; one project keeps the plain answer, a non-repo adds nothing. */
+    fun reviewGit(
+        cx: Ctx,
+        scope: List<Member>,
+        since: String?,
+        staged: Boolean,
+        json: Boolean,
+    ): String {
+        if (scope.size == 1) return Review.review(cx, scope[0].root, since, staged, json)
+        val parts =
+            scope.mapNotNull { m ->
+                if (Git.stdout(m.root, listOf("rev-parse", "--is-inside-work-tree")) == null) return@mapNotNull null
+                Review.review(cx, m.root, since, staged, json).takeUnless { it.startsWith("no changes") }?.let { "[${m.name}]\n$it" }
+            }
+        return if (parts.isEmpty()) "no changes\n" else parts.joinToString("")
+    }
+
     fun affectedGit(
         cx: Ctx,
         scope: List<Member>,
