@@ -595,3 +595,11 @@ Next, in order:
   `takes_hook`, `mcp.json` `{type: "stdio", ...}` through `StdioMcp.register(typed = true)`); registered in `Agents`.
 - Tests: 5 (2 ported + enabled=false kept with its comment, broken config untouched, edited table left).
 - Stop point: next = kimi (`[[hooks]]` with refresh/prune, MCP spec, plugin marker offer), then group 3c.
+
+## Session: agents chunk 3b-3i — kimi (group 3b done)
+- `Kimi.kt`: `[[hooks]]` tables via `:toml-aot` (Claude spelling, refresh stale binary/timeout in place, prune unlisted
+  pairs, strip by `takes_hook`), `mcp.json` `{command, args}` through `McpRun` (`EntryShape.Command`), printed
+  `/plugins install <plugins/kimi>` offer, D21 strip while `plugins/managed/rtok/kimi.plugin.json` exists; registered.
+- Tests: 8. Group 3b (JSON/TOML hook hosts) is complete.
+- Stop point: next group 3c (opencode/mimo/kilo/zcode/zed/amp/omp/pi/aider/continue/goose/reasonix/antigravity/vscode/
+  codebuddy), then 3d (claude, cursor, codex, grok).
