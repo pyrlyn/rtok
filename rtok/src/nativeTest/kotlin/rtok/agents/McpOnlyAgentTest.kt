@@ -60,7 +60,7 @@ class McpOnlyAgentTest {
             }
             assertEquals(a, Agents.agent(a.id))
         }
-        assertNull(Agents.agent("claude"))
+        assertNull(Agents.agent("cursor"))
     }
 
     @Test fun theDefaultPathsAreTheHostsUserFiles() {
