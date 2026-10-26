@@ -24,6 +24,8 @@ sealed class OptSpec(
         val repeat: Boolean = false,
         /** A one-letter alias such as `o` for `-o`. */
         val short: Char? = null,
+        /** The value may be left out (clap `num_args = 0..=1`): a bare `--name` reads as "". */
+        val optional: Boolean = false,
     ) : OptSpec(name, help, global)
 }
 

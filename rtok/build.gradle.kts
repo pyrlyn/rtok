@@ -23,6 +23,7 @@ configure<KotlinMultiplatformExtension> {
         implementation(project(":rtok-log"))
         implementation(project(":http"))
         implementation(project(":http-ktor"))
+        implementation(project(":http-server-ktor"))
         implementation(project(":rtok-wasm"))
         implementation(project(":wasm-chasm"))
         implementation(project(":treesitter-native"))
