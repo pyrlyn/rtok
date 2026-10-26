@@ -5,12 +5,13 @@ package rtok.hooks
 import kotlinx.serialization.json.*
 import rtok.canonicalToolName
 
-data class PreToolUse(val toolName: String, val toolInput: JsonElement)
-data class PostToolUse(val toolName: String, val toolInput: JsonElement, val toolResponse: JsonElement)
-data class SessionStart(val source: String)
-data class PromptSubmit(val prompt: String)
-data class SubagentStart(val agentType: String, val taskDescription: String)
-data class PreCompact(val trigger: String, val transcriptPath: String)
+// The plugin events are the SDK's own types (no second copy).
+typealias PreToolUse = rtok.plugin.sdk.PreToolUse
+typealias PostToolUse = rtok.plugin.sdk.PostToolUse
+typealias SessionStart = rtok.plugin.sdk.SessionStart
+typealias PromptSubmit = rtok.plugin.sdk.PromptSubmit
+typealias SubagentStart = rtok.plugin.sdk.SubagentStart
+typealias PreCompact = rtok.plugin.sdk.PreCompact
 
 /** Union of every hook event's input. Event-specific fields are nullable. */
 data class HookInput(

@@ -109,3 +109,42 @@ internal class Spinner private constructor(private val label: String?) {
         private fun eprint(s: String) { val b = s.encodeToByteArray(); b.usePinned { write(2, it.addressOf(0), b.size.convert()) } }
     }
 }
+
+/** Path of the running executable (Rust `std::env::current_exe`), or null. */
+fun currentExe(): String? = memScoped {
+    val buf = allocArray<ByteVar>(4096)
+    if (rtok_current_exe(buf, 4096u) == 0) return buf.toKString()
+    val n = readlink("/proc/self/exe", buf, 4095u).toInt()
+    if (n > 0) { buf[n] = 0; buf.toKString() } else null
+}
+
+/**
+ * Starts [program] detached (Rust `ProgressRunner::quiet(..).output(Output::Detached)`): own session,
+ * stdout/stderr to /dev/null, [extraEnv] on top of ours, and [stdin] written to its stdin pipe.
+ * Not waited for; false when it could not be started.
+ */
+fun spawnDetached(program: String, args: List<String>, extraEnv: Map<String, String>, stdin: ByteArray): Boolean = memScoped {
+    val inPipe = allocArray<IntVar>(2)
+    if (pipe(inPipe) != 0) return false
+    val actions = alloc<posix_spawn_file_actions_tVar>(); posix_spawn_file_actions_init(actions.ptr)
+    posix_spawn_file_actions_adddup2(actions.ptr, inPipe[0], 0)
+    posix_spawn_file_actions_addclose(actions.ptr, inPipe[0]); posix_spawn_file_actions_addclose(actions.ptr, inPipe[1])
+    posix_spawn_file_actions_addopen(actions.ptr, 1, "/dev/null", O_WRONLY, 0u)
+    posix_spawn_file_actions_addopen(actions.ptr, 2, "/dev/null", O_WRONLY, 0u)
+    val attr = alloc<posix_spawnattr_tVar>(); posix_spawnattr_init(attr.ptr)
+    posix_spawnattr_setflags(attr.ptr, POSIX_SPAWN_SETSID.toShort())
+    val env = buildList {
+        val e = environPtr(); var i = 0
+        while (true) { val s = e?.get(i++)?.toKString() ?: break; if (s.substringBefore('=') !in extraEnv) add(s) }
+        extraEnv.forEach { (k, v) -> add("$k=$v") }
+    }
+    val argv = allocArrayOf((listOf(program) + args).map { it.cstr.ptr } + listOf(null))
+    val envp = allocArrayOf(env.map { it.cstr.ptr } + listOf(null))
+    val pid = alloc<pid_tVar>()
+    val rc = posix_spawn(pid.ptr, program, actions.ptr, attr.ptr, argv, envp)
+    posix_spawn_file_actions_destroy(actions.ptr); posix_spawnattr_destroy(attr.ptr)
+    close(inPipe[0])
+    if (rc == 0) stdin.usePinned { if (stdin.isNotEmpty()) write(inPipe[1], it.addressOf(0), stdin.size.convert()) }
+    close(inPipe[1])
+    rc == 0
+}

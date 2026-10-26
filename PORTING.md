@@ -67,7 +67,7 @@ Plan and per-phase checklist: [port-plan.md](port-plan.md).
 | src/web, agents/junk_web.rs, `rtok web/tui/dashboard` | – | ❌ excluded (web) | |
 | tests/*.rs (138 integration files) | `:rtok` commonTest | ⬜ | 0 / ~138 files |
 
-Totals: 929 unit (`macosArm64Test`, all modules) + 26 CLI (`cliTest`) + 14 e2e (`e2eTest`) tests passing on macosArm64 (see port-plan.md for the per-phase table).
+Totals: 955 unit (`macosArm64Test`, all modules) + 26 CLI (`cliTest`) + 14 e2e (`e2eTest`) tests passing on macosArm64 (see port-plan.md for the per-phase table).
 
 | Rust | Kotlin | Status | Tests |
 |---|---|---|---|
@@ -75,7 +75,7 @@ Totals: 929 unit (`macosArm64Test`, all modules) + 26 CLI (`cliTest`) + 14 e2e (
 | src/hooks/types.rs | `rtok/commonMain/hooks/Types.kt` | ✅ | 18 → 18 (guard cache_key assertion deferred to Phase 5) |
 | src/hooks/deadline.rs | `rtok/nativeMain/hooks/Deadline.kt` (Worker watchdog) | ✅ | 3 → 3 |
 | src/hooks/resident.rs | `rtok/nativeMain/hooks/Resident.kt` (poll loop, no tokio) | ✅ | 1 → 2 |
-| src/hooks/push.rs, mod.rs | — | ⬜ | 0 / 55 |
+| src/hooks/push.rs, mod.rs, src/cli/hook.rs, src/render.rs message frame | `rtok/hooks/Dispatch.kt`, `HostOutputs.kt`, `Push.kt`, `RenderMessages.kt`, `cli/HookCmd.kt`; rtok-sys `processAncestors`, `currentExe`, `spawnDetached`, `readFdBounded` | 🟡 dispatcher, all host shapers, push, resident wiring; worktree/otel/MCP steps via `HookLinks` no-ops | 55 → 26 |
 
 ## Test groups
 unit `./gradlew macosArm64Test`, CLI `./gradlew cliTest`, e2e `./gradlew e2eTest`, wasm `./gradlew wasmTest` (docs/testing.md).
