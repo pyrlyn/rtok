@@ -1,8 +1,8 @@
 // Port of src/agents/codex/mod.rs (MCP and hooks): the Codex CLI and app share `~/.codex`. MCP is the
 // `[mcp_servers.rtok]` table in `config.toml`, edited through [TomlDoc] so comments and other servers survive, with
 // `default_tools_approval_mode = "writes"` (T528); hooks are the `codex` rows of [HookEvents] in the sibling
-// `hooks.json`, Claude's layout spelled `rtok hook <event> --host codex` (T645); `--proxy` is [CodexProxy]. The plugin
-// comes in its own chunk.
+// `hooks.json`, Claude's layout spelled `rtok hook <event> --host codex` (T645); `--proxy` is [CodexProxy]; the plugin
+// is [CodexPlugin], the only hook path once enabled (D21).
 package rtok.agents
 
 import kotlinx.serialization.json.JsonArray
@@ -21,7 +21,9 @@ import tomlaot.TomlDoc
 import tomlaot.TomlTable
 import tomlaot.TomlValue
 
-class Codex : Agent {
+class Codex(
+    val plugin: CodexPlugin = CodexPlugin(),
+) : Agent {
     override val id = HOST
 
     override fun files(
@@ -32,12 +34,16 @@ class Codex : Agent {
     override fun installed(
         cfg: Config,
         kind: Kind,
-    ): List<String> =
-        listOfNotNull(
+    ): List<String> {
+        // The enabled plugin serves the hooks itself (D21); MCP is independent of it (T275/D33).
+        val plugin = CodexPlugin.installed(cfg)
+        return listOfNotNull(
             "mcp".takeIf { McpEntries.hasTomlEntry(cfg.setup.codex.configPath, SERVERS, NAME) },
             "proxy".takeIf { "[model_providers.rtok]" in read(cfg.setup.codex.configPath) },
-            "hooks".takeIf { " hook PreCompact" in read(hooksPath(cfg)) },
+            "hooks".takeIf { plugin || " hook PreCompact" in read(hooksPath(cfg)) },
+            "plugin".takeIf { plugin },
         )
+    }
 
     override fun apply(
         cfg: Config,
@@ -45,9 +51,13 @@ class Codex : Agent {
         mode: Mode,
     ): List<String> {
         val remove = mode == Mode.Remove
+        // Plugin first: once enabled it is the only hook path (D21), judged by Codex's own record, so a dry run or a
+        // declined offer still gets the file hooks.
+        val update = mode == Mode.Update && CodexPlugin.installed(cfg) && CodexPlugin.marketplaceState(cfg) == MarketplaceState.Current
+        val head = if (update) plugin.update(cfg) else plugin.offer(cfg, remove)
         // On the way out the provider block goes whether or not `--proxy` asked for it.
         val proxy = if (remove || cfg.setup.proxy) CodexProxy.run(cfg, remove) else null
-        return listOfNotNull(runMcp(cfg, remove), runHooks(cfg, remove), proxy)
+        return listOfNotNull(head, runMcp(cfg, remove), runHooks(cfg, remove || CodexPlugin.installed(cfg)), proxy)
     }
 
     companion object {

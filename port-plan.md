@@ -712,3 +712,13 @@ Next, in order:
 - `:toml-aot`: `TomlDoc.root`, `TomlTable.set(key, value, comment)`, `remove`, `comment`.
 - Tests: CodexProxyTest 4, TomlDocTest +1.
 - Stop point: next 3d-6c = codex plugin (marketplace add/repoint, `plugin_update`); then `libs/yaml-aot` + continue/goose.
+
+## Session: agents chunk 3d-6c — codex plugin
+- `CodexPlugin.kt`: `plugins/codex` from the GitHub marketplace `pyrlyn/rtok` by default once `codex` is on PATH
+  (`marketplace add` skipped when current, stale/old-repo marketplace re-pointed, an enabled plugin under a stale one
+  reinstalled), read from Codex's own `[marketplaces.rtok]` / `[plugins."rtok@rtok"]`; `CODEX_HOME` for a non-default
+  dir; failing or missing CLI keeps the offer. `update` = `marketplace upgrade rtok`, cache bytes compared, full
+  reinstall on a failed upgrade (T242.4). Enabled plugin = only hook path (D21), MCP independent (T275).
+- Codex host done except skill sync (pending for every host).
+- Tests: CodexPluginTest 5.
+- Stop point: next `libs/yaml-aot` (own lossless YAML editor), then continue and goose.
