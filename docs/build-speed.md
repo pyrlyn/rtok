@@ -24,3 +24,19 @@ Kotlin 2.2.21), `org.gradle.caching=true`, `org.gradle.configuration-cache=true`
 Measured on the Mac (one-line edit in `rtok/plugins/inject/Inject.kt`, then `:rtok:linkDebugTestMacosArm64`):
 8 s before the test-group split, 8 s after. Full `./gradlew build` (warm daemon/cache): 66 s; `e2eTest` 7 s;
 `:rtok:macosArm64Test` 7 s; `cliTest` 2 s (shares the already-linked test binary).
+
+## Remote build cache (planned, Cloudflare R2)
+
+Not wired up yet; these are the settings to use when it is. No extra Gradle plugin is added until then.
+
+- **What is cached.** Every cacheable task except release links: the root `build.gradle.kts` marks all
+  `linkRelease*` tasks `outputs.cacheIf { false }` in one place. Debug test binaries (`linkDebugTest*`,
+  up to ~13 MB) stay cacheable.
+- **Entry size.** Keep `maximumCachedObjectLength` at the cache plugin's default, or raise it so the largest
+  debug test binary always fits. Do not use it to keep release binaries out; `cacheIf` already does that.
+- **Who pushes.** Only CI pushes (`isPush = System.getenv("CI") != null`); local builds read only.
+- **Expiry.** An R2 lifecycle rule deletes entries older than 7-14 days.
+- **Total-size cap.** R2 has no size quota, so the cap is part of the cache design:
+  `rtok.remoteCache.maxTotalSize` in `gradle.properties` (currently `10GB`). A pruning job deletes the
+  oldest entries first until the bucket is under the cap. This runs on top of the lifecycle rule.
+- **Ownership.** The lifecycle rule and the pruning job live in Ansible in `pyrlyn/infra`, not in this repo.

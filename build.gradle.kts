@@ -20,6 +20,11 @@ subprojects {
     apply(plugin = "org.jetbrains.dokka")
     apply(plugin = "com.google.devtools.ksp")
     apply(plugin = "io.kotest")
+    // Release binaries are rebuilt only for shipping and are large, so they never enter the
+    // build cache (local or remote); debug test binaries stay cacheable (docs/build-speed.md).
+    tasks.matching { it.name.startsWith("linkRelease") }.configureEach {
+        outputs.cacheIf("release binaries are not cached") { false }
+    }
     extensions.configure<org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension> {
         macosArm64()
         if (providers.gradleProperty("rtok.allTargets").orNull == "true") { linuxX64(); linuxArm64() }
