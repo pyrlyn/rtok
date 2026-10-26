@@ -492,3 +492,17 @@ Next, in order:
   cases merged into one).
 - Deferred: `SkillCopy`/`skill_plan` (with skills), Windows owned-copy-by-default branch (no Windows target).
 - Stop point: next 3b-2b = `hook_events.rs`, `plugin_src` resolution, `HostPlugin`, then cline.
+
+## Session: agents chunk 3b-2b — hook events table, plugin sources, HostPlugin, cline
+- `rtok.agents.HookEvents` (hook_events.rs: every host's rows, `forHost`/`installerRows`/`installed`/`entries`).
+- `PluginSrc` (`resolve_plugin_src`: beside exe, symlink target, `<prefix>/share/rtok`, ketch store by version then
+  newest by SemVer, dev root, beside-exe fallback; `joinRel`), `VersionKey` (own SemVer precedence, no dependency),
+  `PluginSource`/`ShippedPlugins` (injectable source root; the Rust `CARGO_MANIFEST_DIR` fallback has no native
+  counterpart, so tests pass their own root).
+- `HostPlugin` (plugin.rs: `path`/`linked`/`ours`/`offer` fail-open/`problem`), `Cline` (5 hook links from the table,
+  MCP on the CLI and VS Code extension files), `mentionsRtok` shared with `McpOnlyAgent`; `Agents` registry has cline.
+- Tests: HookEventsTest 3, PluginSrcTest 8 (all Rust plugin_src/ketch/join_rel cases + SemVer order), ClineTest 6
+  (4 Rust + MCP surfaces + registry).
+- Deferred: `HostPlugin::all`, the default-install table test (with the plugin hosts), `markers`/`support`/`shared`
+  (in `Hosts`).
+- Stop point: next 3b-3 = JSON settings hooks (gemini, qwen, codewhale, commandcode, copilot, devin, kimi).
