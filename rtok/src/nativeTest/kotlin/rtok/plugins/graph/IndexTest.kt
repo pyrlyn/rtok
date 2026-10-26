@@ -171,4 +171,42 @@ class IndexTest {
         assertEquals("", Index.docAbove(src, 1))
         assertTrue(Index.docAbove("/// " + "é".repeat(400) + "\nfn x() {}\n", 2).encodeToByteArray().size <= Index.DOC_CAP)
     }
+
+    /** T546: deleting or emptying a file refreshes the rank document even though no rows were inserted. */
+    @Test fun rankDocumentDropsRemovedDefinitions() {
+        for ((delete, event) in listOf(true to false, false to true, false to false)) withRuntime("t546-rank") { rt ->
+            val cx = Ctx(rt); val dir = canonicalize(tmpDir("t546-rank"))!!; val key = k(dir)
+            put(dir, "a.rs", "pub fn alpha() {}\n"); put(dir, "b.rs", "pub fn beta() { alpha(); }\n")
+            index(rt, dir)
+            fun map() = Rank.map(cx, key, 500u, emptyList(), Long.MAX_VALUE)
+            assertTrue(map()!!.contains("beta"))
+            if (delete) removeFile("$dir/b.rs") else writeString("$dir/b.rs", "")
+            val report = if (delete || event) Index.runChanged(cx, dir, setOf("$dir/b.rs"), Graph()) else index(rt, dir)
+            assertEquals(0, report.inserted, "$report")
+            assertFalse(rt.has(dir, "beta"))
+            val shown = map().orEmpty()
+            assertFalse(shown.contains("beta"), "delete=$delete event=$event: $shown")
+            if (delete) assertFalse(Rank.ranks(cx, key).containsKey("b.rs"))
+            removeDirAll(dir)
+        }
+    }
+
+    /** T370: a changing index run stores the file graph, a dry run stores none, an idle run leaves it alone. */
+    @Test fun anIndexRunStoresTheFileGraphWhenItChangesSomething() = withRuntime("file-rank") { rt ->
+        val cx = Ctx(rt); val dir = canonicalize(tmpDir("file-rank"))!!; val key = k(dir)
+        put(dir, "a.rs", "pub fn alpha() {}\n"); put(dir, "b.rs", "pub fn beta() { alpha(); }\n")
+        index(rt, dir, dry = true)
+        assertNull(rt.fileRankGet(key), "dry run")
+        index(rt, dir)
+        val first = rt.fileRankGet(key)!!
+        val top = Rank.map(cx, key, 500u, emptyList(), Long.MAX_VALUE)!!
+        assertTrue(top.lines()[1].startsWith("a.rs"), top)
+        rt.fileRankPut(key, "$first ")
+        index(rt, dir)
+        assertEquals("$first ", rt.fileRankGet(key), "nothing changed, nothing rebuilt")
+        put(dir, "b.rs", "pub fn beta() {}\n")
+        index(rt, dir)
+        assertNotEquals(first, rt.fileRankGet(key))
+        removeDirAll(dir)
+    }
 }

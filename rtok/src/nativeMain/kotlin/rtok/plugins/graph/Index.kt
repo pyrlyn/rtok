@@ -40,7 +40,7 @@ interface IndexProgress {
 interface FileRanks {
     fun missing(cx: Ctx, root: String): Boolean
     fun refresh(cx: Ctx, root: String)
-    /** Until rank.rs is ported: nothing is stored, nothing is refreshed. */
+    /** Stores and refreshes nothing (tests, dry tools). */
     object None : FileRanks {
         override fun missing(cx: Ctx, root: String) = false
         override fun refresh(cx: Ctx, root: String) {}
@@ -60,7 +60,7 @@ object Index {
     /** The index key of a root (shared with the project registry). */
     fun canon(root: String): String = canonRoot(root)
 
-    var ranks: FileRanks = FileRanks.None
+    var ranks: FileRanks = Rank
 
     private fun graphCfg(cx: Ctx): Graph = (cx.host as? rtok.plugin.Runtime)?.config?.plugins?.graph ?: Graph()
 
@@ -310,9 +310,7 @@ object Index {
 
     /** Remember `git rev-parse HEAD` for [root]; git missing or a non-repo is a no-op. */
     fun rememberIndexedHead(cx: Ctx, root: String) {
-        val (out, _) = runCatching { ProgressRunner("", "git", listOf("-C", root, "rev-parse", "HEAD")).quiet().runCapped(1L shl 16) }.getOrNull() ?: return
-        if (out.exitCode != 0) return
-        val head = out.stdout.decodeToString().trim().ifEmpty { return }
+        val head = Git.stdout(root, listOf("rev-parse", "HEAD"))?.decodeToString()?.trim()?.ifEmpty { null } ?: return
         runCatching { cx.pluginStateSet("graph", headKey(root), Json.encodeToString(IndexedHead.serializer(), IndexedHead(head))) }
     }
 
