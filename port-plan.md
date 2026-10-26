@@ -259,3 +259,12 @@ Next, in order:
   (events, blast, follow, drill, scope, diff, export, health, lsp, watch, review, draw, projects, jobs, status);
   then grep_symbol (8), catfile (4), cat re-read delta (1); docs fetch + zstd, memory status, sync --stat, MCP,
   otel, worktree/task/batch/bench, 29 hook dispatch tests, worktree events; release size re-measure; completeness pass.
+
+## Session 2026-10-26 (night) — graph text + capability
+- `Capability.kt` (capability.rs: record, mirror in `plugin_state` with serde field names, `ask`/`serverReady`/
+  `held`/`reprobe`, `Refused`/`serverBroke`; probe is a `Probe` lambda until lsp.rs lands), `Text.kt` (text.rs,
+  `Text.Explore`), `ExploreParts` in `Core.kt`, `rtok.sys.Mutex`. 6 capability + 8 text tests (door-level capability
+  tests run through `ask`; the concurrency test waits for mod.rs `door`).
+- Stop point: next the mod.rs tools (`door`, symbol/callers/impact/explore + `assemble_explore`, `record_mode_row`;
+  enable the deferred cochange `impact` partner test), then events, blast, follow, drill, scope, diff, export, health,
+  lsp, watch, review, draw, projects, jobs, status; then the rest of the list above.

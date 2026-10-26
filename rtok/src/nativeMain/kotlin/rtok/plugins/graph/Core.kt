@@ -91,3 +91,16 @@ object GraphCore {
     /** An LSP answer saying the server found nothing; it is then checked against the tags index. */
     fun lspNoneAnswer(text: String): Boolean = text.trimStart().let { t -> t.isEmpty() || LSP_NONE.any(t::startsWith) }
 }
+
+/** The four questions `explore` asks a backend (mod.rs `ExploreParts`); tags, LSP and text each answer them. */
+interface ExploreParts {
+    /** Exact-then-prefix resolution of one query token to definition names (best 5). */
+    fun resolve(token: String): List<String>
+    /** `{path}:{line} {kind}` + body lines for every definition of [name]. */
+    fun defs(name: String): String
+    /** Call chains `a → … → b` in the caller direction, at most 3 hops. */
+    fun paths(a: String, b: String): List<String>
+    /** What `impact(name, 1)` would print, and the row count behind it. */
+    fun impact1(name: String): Pair<String, Int>
+    fun defCount(name: String): Int
+}
