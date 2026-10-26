@@ -7,9 +7,9 @@ import rtok.log.FileLog
 import rtok.plugin.sdk.Ctx
 import rtok.plugin.sdk.MemoryHost
 import rtok.plugin.sdk.Plugin
-import rtok.wasm.WasmException
-import rtok.wasm.chasm.ChasmRuntime
-import rtok.wasm.guestSlice
+import wasm.WasmException
+import wasm.chasm.ChasmRuntime
+import wasm.guestSlice
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -119,10 +119,5 @@ class WasmPluginTest {
         platform.posix.mkdir(tmp, 0x1c0u)
         rtok.sys.writeBytes("$tmp/spin.wasm", ByteArray(m.size) { m[it].toByte() })
         assertFailsWith<WasmException> { WasmPlugin.loadWithFuel("$tmp/spin.wasm", ChasmRuntime, env, 10_000) }
-    }
-
-    @Test fun unpackSplitsPointerAndLength() {
-        assertEquals(16 to 4, unpackI64((4L shl 32) or 16L))
-        assertEquals(-1 to 0, unpackI64(0xffff_ffffL))
     }
 }

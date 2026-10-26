@@ -4,8 +4,9 @@ Port of `src/plugins/wasm.rs`. Out-of-tree plugins compiled to WebAssembly are l
 and join the plugin registry like built-in ones (MCP, proxy and CLI surfaces; never `hook`).
 
 ## How it works
-- `:wasm` (`libs/wasm`) is rtok's own engine interface (`WasmRuntime`, `WasmInstance`, `WasmMemory`,
-  `HostFunction`, fuel). `:wasm-chasm` is the only code that sees the third-party engine,
+- `pyrlyn.wasm:wasm` is the engine interface (`WasmRuntime`, `WasmInstance`, `WasmMemory`,
+  `HostFunction`, fuel), shared with Octo in the kotlin-wasm package (an included build at
+  `../../packages/kotlin-wasm` or `KOTLIN_WASM_DIR`). `pyrlyn.wasm:wasm-chasm` is the only code that sees the third-party engine,
   [Chasm](https://github.com/CharlieTap/chasm) 2.3.0 (pure Kotlin Multiplatform interpreter).
 - `:rtok-wasm` is the host: `WasmPlugin.load` instantiates the module with the host imports
   `env.rtok_estimate`, `env.rtok_record_measurement`, `env.rtok_log`, reads the JSON manifest from
@@ -25,7 +26,7 @@ Each plugin can then be switched with `[plugins] <id> = false` like any other. A
 load is reported on stderr and in the log (`error wasm load ...`) and skipped.
 
 ## Test
-`./gradlew wasmTest` (`:rtok-wasm`, 5 tests) and `:wasm-chasm:macosArm64Test` (3). The fixture
+`./gradlew wasmTest` (`:rtok-wasm`, 5 tests) and the adapter's own tests in kotlin-wasm (`./gradlew check` there). The fixture
 `rtok-wasm/src/nativeTest/fixtures/wasm-demo.wasm` is the Rust crate `rtok-wasm-demo-guest`. Rebuild:
 ```sh
 cd ../rtok && CARGO_TARGET_DIR=/tmp/wasm-demo cargo build --locked -p rtok-wasm-demo-guest \

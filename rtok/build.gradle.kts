@@ -28,7 +28,7 @@ configure<KotlinMultiplatformExtension> {
         implementation(project(":http-ktor"))
         implementation(project(":http-server-ktor"))
         implementation(project(":rtok-wasm"))
-        implementation(project(":wasm-chasm"))
+        implementation("pyrlyn.wasm:wasm-chasm")
         implementation(project(":treesitter-native"))
         implementation(project(":zstd-native"))
         implementation("com.github.ajalt.clikt:clikt:5.1.0")

@@ -1,5 +1,5 @@
 // Port of src/plugins/wasm.rs — the out-of-tree `.wasm` plugin host (P32). Loaded only when
-// `[plugins.wasm] enabled = true`. The engine is anything behind rtok.wasm.WasmRuntime.
+// `[plugins.wasm] enabled = true`. The engine is anything behind wasm.WasmRuntime (kotlin-wasm).
 package rtok.plugins.wasm
 
 import kotlinx.serialization.SerialName
@@ -23,13 +23,14 @@ import rtok.plugin.sdk.Measurement
 import rtok.plugin.sdk.Plugin
 import rtok.plugin.sdk.Surface
 import rtok.plugin.sdk.ToolDef
-import rtok.wasm.HostFunction
-import rtok.wasm.WasmException
-import rtok.wasm.WasmInstance
-import rtok.wasm.WasmMemory
-import rtok.wasm.WasmRuntime
-import rtok.wasm.WasmType.I32
-import rtok.wasm.WasmValue
+import wasm.HostFunction
+import wasm.WasmException
+import wasm.WasmInstance
+import wasm.WasmMemory
+import wasm.WasmRuntime
+import wasm.WasmType.I32
+import wasm.WasmValue
+import wasm.readPacked
 
 /**
  * Fuel per guest call (about one unit per call or loop turn). Without a budget a guest `loop`
@@ -236,14 +237,3 @@ private fun memRead(
     ptr: WasmValue,
     len: WasmValue,
 ): ByteArray = (mem ?: throw WasmException("guest memory export missing")).read(ptr.i32(), len.i32())
-
-/** Reads the guest's packed `(ptr, len)` (low 32 bits pointer, high 32 bits length). */
-internal fun readPacked(
-    mem: WasmMemory?,
-    packed: Long,
-): ByteArray {
-    val (ptr, len) = unpackI64(packed)
-    return (mem ?: throw WasmException("guest memory export missing")).read(ptr, len)
-}
-
-internal fun unpackI64(packed: Long): Pair<Int, Int> = packed.toInt() to (packed ushr 32).toInt()

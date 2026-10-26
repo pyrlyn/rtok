@@ -4,12 +4,12 @@
 // (docs/wasm-plugins.md shows how to rebuild it). Tests: `./gradlew wasmTest`.
 configure<org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension> {
     sourceSets.commonMain.dependencies {
-        api(project(":wasm"))
+        api("pyrlyn.wasm:wasm")
         api(project(":rtok-plugin-sdk"))
         implementation(project(":rtok-log"))
         implementation(project(":rtok-sys"))
     }
-    sourceSets.commonTest.dependencies { implementation(project(":wasm-chasm")) }
+    sourceSets.commonTest.dependencies { implementation("pyrlyn.wasm:wasm-chasm") }
 }
 val fixtures =
     layout.projectDirectory

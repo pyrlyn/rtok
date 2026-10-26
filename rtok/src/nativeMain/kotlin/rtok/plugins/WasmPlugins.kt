@@ -10,7 +10,7 @@ import rtok.plugin.sdk.Plugin
 import rtok.plugins.wasm.WasmHostEnv
 import rtok.plugins.wasm.appendWasm
 import rtok.sys.eprint
-import rtok.wasm.chasm.ChasmRuntime
+import wasm.chasm.ChasmRuntime
 
 /** Appends `[plugins.wasm] dir`'s `.wasm` plugins when `[plugins.wasm] enabled`; load errors go to stderr and the log. */
 internal fun wasmPlugins(
