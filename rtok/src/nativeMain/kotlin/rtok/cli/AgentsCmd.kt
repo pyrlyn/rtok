@@ -1,5 +1,5 @@
 // Port of src/cli/agents.rs and cli/agents_host.rs (host side): `rtok agents install|uninstall|remove|update|list|info`.
-// Not ported yet: `update --check` and `outdated`, `--project`, the
+// Not ported yet: `--project`, the
 // desktop restart behind `--no-restart` (accepted, nothing to skip yet), and the session/usage/junk/message commands.
 package rtok.cli
 
@@ -10,6 +10,8 @@ import rtok.agents.AgentsJson
 import rtok.agents.AgentsList
 import rtok.agents.AgentsOutput
 import rtok.agents.Mode
+import rtok.agents.Outdated
+import rtok.agents.OutdatedSelection
 import rtok.config.Config
 
 private val HOST_ARG = ArgSpec("host", "Host id, or several comma-separated (`opencode,cursor`)")
@@ -80,6 +82,36 @@ private fun hostWriter(
     }
 }
 
+/** `agents outdated` and `update --check`: the report as a table or JSON; `--exit-code` exits 10 when one is behind. */
+private fun outdated(
+    inv: Invocation,
+    json: Boolean,
+    exitCode: Boolean,
+) {
+    val cfg = inv.loadConfig()
+    val hosts = inv.arg("host")?.let { refusals { AgentsCommand.parseHosts(it) } }.orEmpty()
+    val rep = refusals { Outdated.report(cfg, OutdatedSelection(hosts, inv.flag("cli"), inv.flag("desktop"), inv.flag("all"))) }
+    inv.io.out(if (json) Outdated.json(rep) + "\n" else Outdated.human(rep))
+    if (exitCode && rep.outdated.isNotEmpty()) throw CliExit(Outdated.EXIT_OUTDATED)
+}
+
+private val OPTIONAL_HOSTS = ArgSpec("host", "Host id(s), comma-separated; omitted = every host in `agents list`", required = false)
+
+private val OUTDATED =
+    CommandSpec(
+        "outdated",
+        "List installed rtok plugins older than this rtok",
+        options =
+            listOf(
+                CLI,
+                DESKTOP,
+                ALL,
+                OptSpec.Flag("json", "JSON instead of the table"),
+                OptSpec.Flag("exit-code", "Exit with code 10 when at least one plugin is outdated"),
+            ),
+        args = listOf(OPTIONAL_HOSTS),
+    ) { inv -> outdated(inv, inv.flag("json"), inv.flag("exit-code")) }
+
 private val UPDATE =
     CommandSpec(
         "update",
@@ -93,10 +125,12 @@ private val UPDATE =
                 NO_RESTART,
                 OptSpec.Flag("force", "Reinstall the plugin even when it is current"),
                 OptSpec.Value("source", "Where the plugin comes from: github, local or marketplace", "SOURCE"),
+                OptSpec.Flag("check", "List outdated plugins only (same output as `agents outdated`)"),
                 STAT,
             ),
         args = listOf(ArgSpec("host", "Host id(s); omitted updates every host with rtok in it", required = false)),
     ) { inv ->
+        if (inv.flag("check")) return@CommandSpec outdated(inv, json = false, exitCode = false)
         val source = inv.value("source")
         if (source != null && source !in AgentsCommand.SOURCES) throw CliFailure("--source: expected one of ${AgentsCommand.SOURCES.joinToString(", ")}, got $source")
         write(inv) {
@@ -131,6 +165,7 @@ val AGENTS =
                 hostWriter("uninstall", "Remove rtok from a host (every app of it)", remove = true),
                 hostWriter("remove", "Alias of `uninstall`", remove = true),
                 UPDATE,
+                OUTDATED,
                 LIST,
                 INFO,
             ),

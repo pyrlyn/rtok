@@ -1,7 +1,6 @@
 // Port of src/model/mod.rs `AgentListRow`, `agent_row`, `agents_list` and `agents_listed`: `rtok agents list|info --json`.
 // Keys follow the Rust struct's field order, enums are snake_case, printed as serde_json's pretty form (2 spaces).
-// Not ported yet: `plugin_version`/`plugin_source` (outdated.rs `plugin_status`); Rust omits them when unknown, so
-// the rows here read as a host whose plugin records no version.
+// `plugin_version`/`plugin_source` come from outdated.rs `plugin_status` and are omitted when unknown, as in Rust.
 package rtok.agents
 
 import kotlinx.serialization.json.Json
@@ -51,14 +50,16 @@ object AgentsJson {
         v: Variant,
         env: AgentsRun.Env = AgentsRun.Env(),
         appVersion: (Variant) -> String = { AppVersion.of(cfg, a.id, it) },
+        pluginStatus: (Agent, Variant) -> PluginStatus? = { ag, va -> Outdated.pluginStatus(ag, va.kind, cfg) },
     ): JsonObject {
         val present = env.present(cfg, a, v)
         val app = if (present) Locate.locate(cfg, a.id, v) else null
         val modules = if (present) Modules.rows(a, v.kind, cfg) else emptyList()
         val mcp = if (present) McpDoctor.rows(a, cfg, v.kind) else emptyList()
         val plugins = if (present) PluginRows.rows(a, v.kind, cfg, modules) else emptyList()
-        return JsonObject(
-            linkedMapOf(
+        val status = if (present) pluginStatus(a, v) else null
+        val m =
+            linkedMapOf<String, JsonElement>(
                 "host" to str(a.id),
                 "kind" to str(v.kind.word),
                 "name" to str(v.name),
@@ -69,8 +70,10 @@ object AgentsJson {
                 "modules" to JsonArray(modules.map(::module)),
                 "mcp" to JsonArray(mcp.map(::mcp)),
                 "plugins" to JsonArray(plugins.map(::plugin)),
-            ),
-        )
+            )
+        status?.version?.let { m["plugin_version"] = str(it) }
+        status?.source?.let { m["plugin_source"] = str(it) }
+        return JsonObject(m)
     }
 
     private fun str(s: String?): JsonElement = s?.let(::JsonPrimitive) ?: JsonNull

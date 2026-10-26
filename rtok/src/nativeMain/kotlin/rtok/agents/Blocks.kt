@@ -1,6 +1,5 @@
 // Port of src/agents/mod.rs `Outcome` and `block`: the block one host variant prints for `agents list|info|install|
-// update|remove`. Colourless (Rust's pipe output): no operation icon, diff lines unpainted. The installed plugin's
-// version note (outdated.rs `plugin_status`) lands with `rtok agents outdated`.
+// update|remove`. Colourless (Rust's pipe output): no operation icon, diff lines unpainted.
 package rtok.agents
 
 import rtok.StatPreview
@@ -68,9 +67,22 @@ object Blocks {
     ): String {
         val surfaces = McpDoctor.rows(agent, cfg, v.kind)
         val modules = Modules.rows(agent, v.kind, cfg)
-        val rows = modules.joinToString("") { row -> if (row.name == "mcp" && surfaces.isNotEmpty()) Modules.mcpLines(surfaces, "  ") else Modules.lines(listOf(row), "  ", true) }
+        val rows = modules.map { withStatus(it, agent, v, cfg) }.joinToString("") { row -> if (row.name == "mcp" && surfaces.isNotEmpty()) Modules.mcpLines(surfaces, "  ") else Modules.lines(listOf(row), "  ", true) }
         return rows + PluginRows.lines(PluginRows.rows(agent, v.kind, cfg, modules), "  ", true)
     }
+
+    /** The installed `plugin` row names its version and source (outdated.rs `plugin_status`, T382). */
+    private fun withStatus(
+        row: ModuleRow,
+        agent: Agent,
+        v: Variant,
+        cfg: Config,
+    ): ModuleRow =
+        if (row.name == "plugin" && row.state == ModuleState.Installed) {
+            Outdated.pluginStatus(agent, v.kind, cfg)?.let { row.copy(note = " ${it.note}") } ?: row
+        } else {
+            row
+        }
 
     private fun note(
         cfg: Config,
