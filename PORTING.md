@@ -12,7 +12,7 @@ Plan and per-phase checklist: [port-plan.md](port-plan.md).
 | crates/rtok-config `since.rs` | `rtok-config/commonMain/Since.kt` | ✅ | 0 → 5 (new) |
 | crates/rtok-config `layers.rs`, `lib.rs`, `validate.rs`, `error.rs` | `:rtok-config` | ⬜ | |
 | crates/rtok-log | `rtok-log/nativeMain/Log.kt` | ✅ | 12 → 12 |
-| crates/rtok-hook | `:rtok-hook` | ⬜ | |
+| crates/rtok-hook | `rtok-hook` (common `Hook.kt`, native `Connect.kt`) | ✅ (unix only) | 5 → 5 (+1 new) |
 | crates/rtok-store (SQLite ledger, 40 files) | `:rtok-store` | ⬜ | |
 | crates/rtok-sys | `:rtok-sys` | ⬜ (module currently hosts `rtok.sys.Fs`, the fs-kit replacement) | |
 | fs-kit (external crate) path helpers | `rtok-sys/nativeMain/Fs.kt` | 🟡 normalize/canon/ancestors/starts_with | via root tests |
@@ -34,4 +34,4 @@ Plan and per-phase checklist: [port-plan.md](port-plan.md).
 | src/web, agents/junk_web.rs, `rtok web/tui/dashboard` | – | ❌ excluded (web) | |
 | tests/*.rs (138 integration files) | `:rtok` commonTest | ⬜ | 0 / ~138 files |
 
-Totals: 47 Kotlin tests passing on macosArm64.
+Totals: 53 Kotlin tests passing on macosArm64.

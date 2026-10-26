@@ -49,6 +49,8 @@ jiff/humantime→kotlinx-datetime; shlex→own; wasmi→not portable (see risks)
 - [ ] TOML layers (`layers.rs`, figment → ktoml), `lib.rs` Config struct (2.7k lines), `validate.rs` + tests
 - [x] rtok-log append/format/rotation (same line format, rotation files, flock lock) + tests
 ### Phase 3 — rtok-hook protocol + `rtok hook`
+- [x] crates/rtok-hook wire protocol, fingerprint, home expansion, unix-socket client (ported early: rtok-config depends on it) + 6 tests
+- [ ] src/hooks (resident server, deadline, push, types) and `rtok hook` command
 - [ ] Tests: port matching Rust unit + integration tests to kotlin.test; phase done only when they pass on the Mac (`./gradlew macosArm64Test`)
 - [ ] Docs: `docs/<feature>.md` (how it works, enable, disable, test, limitations) + README section
 - [ ] host hook JSON in/out types (Claude Code etc.), deadline, push/resident + tests
