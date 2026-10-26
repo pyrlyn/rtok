@@ -43,6 +43,7 @@ Plan and per-phase checklist: [port-plan.md](port-plan.md).
 | fs-kit (external crate) path helpers | `rtok-sys/nativeMain/Fs.kt` | 🟡 normalize/canon/ancestors/starts_with | via root tests |
 | crates/rtok-mcp | `:rtok-mcp` | ⬜ | |
 | crates/rtok-agent-sdk | `:rtok-agent-sdk` | ⬜ | |
+| (new) WASM host module | `rtok-wasm/` — `WasmRuntime` interface; Chasm adapter next; tests via `./gradlew wasmTest` | 🚧 | |
 | crates/rtok-wasm-demo-guest | – | ❌ wasm guest, not needed | |
 | crates/rtok-webui | – | ❌ excluded (web) | |
 | src/tokens.rs | `rtok/…/rtok/Tokens.kt` | ✅ | 4 → 4 |
@@ -68,3 +69,6 @@ Totals: 498 Kotlin (+11 e2e via `./gradlew e2eTest`) tests passing on macosArm64
 | src/hooks/deadline.rs | `rtok/nativeMain/hooks/Deadline.kt` (Worker watchdog) | ✅ | 3 → 3 |
 | src/hooks/resident.rs | `rtok/nativeMain/hooks/Resident.kt` (poll loop, no tokio) | ✅ | 1 → 2 |
 | src/hooks/push.rs, mod.rs | — | ⬜ | 0 / 55 |
+
+## Test groups
+unit `./gradlew macosArm64Test`, CLI `./gradlew cliTest`, e2e `./gradlew e2eTest`, wasm `./gradlew wasmTest` (docs/testing.md).

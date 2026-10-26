@@ -29,6 +29,7 @@ fun <T> withHome(tag: String, body: (String) -> T): T {
 }
 
 class CliSpec : FunSpec({
+    tags(Cli)
     // A toy tree that exercises the parser layer on its own.
     val seen = ArrayList<String>()
     val toy = CommandSpec("rtok", options = listOf(CONFIG_OPT), subcommands = listOf(

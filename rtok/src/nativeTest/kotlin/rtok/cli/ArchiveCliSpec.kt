@@ -19,6 +19,7 @@ fun piMessages(n: Int): String = buildJsonArray {
 }.toString()
 
 class ArchiveCliSpec : FunSpec({
+    tags(Cli)
     context("archive rewrite --stdin") {
         test("non-JSON input is echoed byte for byte") {
             withHome("arch-echo") { cli("archive", "rewrite", "--stdin", stdin = "not json").also { it.err shouldBe ""; it.code shouldBe 0; it.out shouldBe "not json"; it.err shouldBe "" } }

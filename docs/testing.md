@@ -46,3 +46,16 @@ KSP adds roughly 1.5–3 s per changed test compilation; a full clean `macosArm6
 - Usage-error texts come from Clikt and differ from clap's wording (exit codes match).
 - `--since` against a real repo in e2e waits for Phase 6 `stats`/`discover`; `plugins --json`, `config show/get` wait for the model.
 - Native incremental caches must be cleaned once after a Kotlin version change.
+
+## Test groups
+Each group is its own Gradle task and can run alone:
+
+| Group | Command | What runs |
+|---|---|---|
+| unit | `./gradlew macosArm64Test` (one module: `./gradlew :rtok:macosArm64Test`) | kotlin.test + Kotest unit tests of every module; in `:rtok` the CLI specs are excluded (`filter.excludeTestsMatching("rtok.cli.*")`, `KOTEST_TAGS=!Cli`) |
+| CLI | `./gradlew cliTest` | `:rtok` Kotest CLI specs (tag `Cli`) and `rtok.cli.*` tests, same test binary, `KOTEST_TAGS=Cli` |
+| e2e | `./gradlew e2eTest` | `:rtok-e2e` Kotest specs against the linked `rtok.kexe` |
+| wasm | `./gradlew wasmTest` | `:rtok-wasm` (WASM plugin host behind our `WasmRuntime` interface; the Chasm adapter joins it) |
+
+`./gradlew build` runs unit + CLI (`check` depends on `cliTest`); e2e and wasm stay explicit.
+Kotest on Native ignores Gradle's test filter, so a new CLI spec must call `tags(Cli)`.
