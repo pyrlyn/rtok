@@ -143,7 +143,8 @@ object Layers {
         val pairs = ArrayList<Pair<String, String>>(); val warnings = ArrayList<String>(); val rejected = ArrayList<String>()
         for (path in files) {
             val text = try { readToString(path) } catch (e: IoException) { if (e.kind == IoException.Kind.NotFound) continue; warnings += "$path: ${e.message}"; continue }
-            val items = try { Dotenv.parse(text) } catch (e: ConfigException) { warnings += "$path: ${e.message}"; emptyList() }
+            val (items, bad) = Dotenv.parse(text)
+            bad?.let { warnings += "$path: $it" }
             for ((k, v) in items) {
                 val suffix = k.removePrefix("RTOK_").takeIf { k.startsWith("RTOK_") }?.uppercase() ?: continue
                 if (path != join(home, ".env")) {
@@ -191,6 +192,18 @@ object Layers {
         }
         return if (p.isEmpty()) null else buildJsonObject { put("proxy", p) }
     }
+
+    fun tuiFlags(tab: String?, tickSecs: ULong?): JsonObject? {
+        val t = buildJsonObject { tab?.let { put("tab", it) }; tickSecs?.let { put("tick_secs", it.coerceAtMost(Long.MAX_VALUE.toULong()).toLong()) } }
+        return if (t.isEmpty()) null else buildJsonObject { put("tui", t) }
+    }
+
+    fun webFlags(host: String?, port: UShort?): JsonObject? {
+        val w = buildJsonObject { host?.let { put("host", it) }; port?.let { put("port", it.toLong()) } }
+        return if (w.isEmpty()) null else buildJsonObject { put("web", w) }
+    }
+
+    internal fun dotenvPairs(home: String, cwd: String?) = readDotenv(home, cwd).pairs
 
     fun load(home: String, configFile: String?, flags: JsonObject?): Config {
         val cwd = runCatching { cwd() }.getOrNull()
@@ -241,8 +254,14 @@ object Layers {
 
 /** `.env` reader (dotenvy subset): `KEY=VALUE`, optional `export `, quotes, `#` comments. */
 object Dotenv {
-    fun parse(text: String): List<Pair<String, String>> {
+    /** Pairs up to the first malformed line, and that line's error (dotenvy stops there too). */
+    fun parse(text: String): Pair<List<Pair<String, String>>, String?> {
         val out = ArrayList<Pair<String, String>>()
+        try { parseInto(text, out) } catch (e: ConfigException) { return out to e.message }
+        return out to null
+    }
+
+    private fun parseInto(text: String, out: MutableList<Pair<String, String>>) {
         for ((n, raw) in text.lines().withIndex()) {
             var line = raw.trim()
             if (line.isEmpty() || line.startsWith("#")) continue
@@ -258,7 +277,6 @@ object Dotenv {
             }
             out += key to v
         }
-        return out
     }
 }
 
