@@ -250,6 +250,7 @@ Next, in order:
 - `Alerts.kt` (health.rs Kind/Alert/mirrored/all/describe/texts/reach/notice), `Score.kt` (health/score.rs), `Projects.resolve`; 6 tests. The checker loop (`Health` tick/backoff/run) is next.
 - `HealthCheck.kt` (health.rs Health findings/backend backoff/tick/load/recovered/persist, scope_of, run loop); 6 tests. Manifest ref discovery (project::refs) is an injected `refWarnings` until it is ported; backend backoff tests wait for lsp.rs; stat has no 2 s timeout thread.
 - `Projects.kt` (projects.rs rows/render/run/preview, `ProjectAction`), `Jobs.kt` (jobs.rs worker re-index), `rtok.table` (render.rs); 6 tests.
+- `Dead.kt` (mod.rs dead_rows/dead_candidates/has_test_attr/is_test_path/is_support_path/rust_impls; affected/affected_from_paths/changed_starts/name_linked_tests/git_changed_files/format_affected); 4 tests.
 - Stop point: next the mod.rs core types (`Filter`, `Mode`, `ExploreParts`, `backend_name`), then `text.rs`,
   `capability.rs`, the rest of mod.rs and the other submodules.
 
