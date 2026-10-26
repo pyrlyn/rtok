@@ -215,3 +215,13 @@ fun readFdBounded(fd: Int, limit: Long): ByteArray {
     }
     return out.toByteArray()
 }
+
+/** Last component, like Rust's `Path::file_name` (`None` for `..` and the root). */
+fun fileName(path: String): String? = components(path).lastOrNull()?.takeIf { it != ".." && it != "/" && it != "." }
+
+/** Rust's `Path::extension`: text after the last `.` of the file name, none for `.hidden` or `name.`-less names. */
+fun extension(path: String): String? {
+    val name = fileName(path) ?: return null
+    val dot = name.lastIndexOf('.')
+    return if (dot <= 0) null else name.substring(dot + 1)
+}

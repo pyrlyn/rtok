@@ -16,7 +16,8 @@ Not a release decision; nothing on `main` changes.
 
 ## Changes on the branch
 
-- `gradle.properties`: both `enableReleaseBinaryCache` properties.
+- Release cache is opt-in: `-Prtok.release.fast=true`, read only in the root `build.gradle.kts`, sets `kotlin.internal.native.enableReleaseBinaryCache` and the `enableReleaseBinaryCache` binary option on release binaries. Default (`rtok.release.fast=false` in `gradle.properties`) is unchanged: full LTO, no cache. `mise run release` / `mise run release-fast`.
+- `:rtok-e2e:e2eTest -Prtok.e2e.bin=<path>` runs the e2e suite against any binary.
 - `rtok-sys`: the C helpers moved from inline code in `spawn.def` to `src/nativeInterop/c/rtok_spawn.{c,h}`, compiled with `xcrun clang` into `build/native/macosArm64/librtok_spawn.a` and linked via `staticLibraries` + `-libraryPath`. macOS arm64 only for now.
 
 ## Results (median of 3, `--no-build-cache`, warm daemon and warm `~/.konan` dependency caches)
@@ -46,3 +47,15 @@ Another worker was building in a different checkout on the same Mac, so absolute
 - Splitting Kotlin modules into separate static/shared libraries is not viable in K/N (one runtime per library, C API only).
 
 Recommendation: keep LTO for shipped releases; enable the release cache for local/CI non-shipping release builds (e.g. a `-Prtok.fastRelease` switch), and reuse the `staticLibraries` pattern for tree-sitter.
+
+## Follow-up: opt-in flag (after merging origin/main)
+
+Same Mac, warm, `--no-build-cache`, `linkReleaseExecutableMacosArm64 --rerun`, 3 runs:
+
+| | default (`mise run release`) | `mise run release-fast` |
+|---|---|---|
+| Release link | 105 / 104 / 103 s, median 104 s | 15 / 14 / 19 s, median 15 s |
+| Binary | 17,968,472 B | 21,791,928 B |
+| e2e (`-Prtok.e2e.bin=`) | 14/14 passed | 14/14 passed |
+
+Shipped releases keep using the default; the fast flag is for local iteration and non-shipping CI artifacts.

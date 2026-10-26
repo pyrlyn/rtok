@@ -7,7 +7,9 @@ configure<KotlinMultiplatformExtension> {
     sourceSets.commonTest.dependencies { implementation(project(":rtok-sys")) }
 }
 
-val rtokBin = project(":rtok").layout.buildDirectory.file("bin/macosArm64/debugExecutable/rtok.kexe")
+// `-Prtok.e2e.bin=<path>` runs the suite against another binary (e.g. a release or fast-release build).
+val rtokBin = providers.gradleProperty("rtok.e2e.bin").map { layout.projectDirectory.file(it) }
+    .orElse(project(":rtok").layout.buildDirectory.file("bin/macosArm64/debugExecutable/rtok.kexe"))
 val testBin = layout.buildDirectory.file("bin/macosArm64/debugTest/test.kexe")
 
 // The fast default suite skips this module.
