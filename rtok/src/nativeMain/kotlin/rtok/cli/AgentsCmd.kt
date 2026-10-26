@@ -1,11 +1,12 @@
 // Port of src/cli/agents.rs and cli/agents_host.rs (host side): `rtok agents install|uninstall|remove|update|list|info`.
-// Not ported yet: `--json` of list/info (model.rs `agents_list`), `update --check` and `outdated`, `--project`, the
+// Not ported yet: `update --check` and `outdated`, `--project`, the
 // desktop restart behind `--no-restart` (accepted, nothing to skip yet), and the session/usage/junk/message commands.
 package rtok.cli
 
 import rtok.StatPreview
 import rtok.agents.AgentsCommand
 import rtok.agents.AgentsFailure
+import rtok.agents.AgentsJson
 import rtok.agents.AgentsList
 import rtok.agents.AgentsOutput
 import rtok.agents.Mode
@@ -104,14 +105,19 @@ private val UPDATE =
         }
     }
 
+private val JSON = OptSpec.Flag("json", "One JSON row per host app instead of the blocks")
+
 private val LIST =
-    CommandSpec("list", "Every known host and app: where it is, its config files and what of rtok is installed") { inv ->
-        inv.io.out(AgentsList.list(inv.loadConfig()))
+    CommandSpec("list", "Every known host and app: where it is, its config files and what of rtok is installed", options = listOf(JSON)) { inv ->
+        val cfg = inv.loadConfig()
+        inv.io.out(if (inv.flag("json")) AgentsJson.list(cfg) + "\n" else AgentsList.list(cfg))
     }
 
 private val INFO =
-    CommandSpec("info", "The `list` blocks of the named host(s)", args = listOf(HOST_ARG)) { inv ->
-        inv.io.out(refusals { AgentsList.info(inv.loadConfig(), AgentsCommand.parseHosts(inv.requireArg("host"))) })
+    CommandSpec("info", "The `list` blocks of the named host(s)", options = listOf(JSON), args = listOf(HOST_ARG)) { inv ->
+        val cfg = inv.loadConfig()
+        val hosts = refusals { AgentsCommand.parseHosts(inv.requireArg("host")) }
+        inv.io.out(refusals { if (inv.flag("json")) AgentsJson.info(cfg, hosts) + "\n" else AgentsList.info(cfg, hosts) })
     }
 
 val AGENTS =

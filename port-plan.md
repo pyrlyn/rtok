@@ -793,3 +793,11 @@ Next, in order:
 - Tests: CommandTest 5, AgentsCliSpec 3 (install/info/update/remove against a Windsurf config in a scratch home).
 - Stop point: next the other `rtok agents` subcommands (outdated/`update --check`, list/info `--json`, sessions,
   usage, junk, whoami, show, status, send, inbox), then restart.rs and the rest of phase 10.
+
+## Session: agents — `rtok agents list|info --json` (model.rs `agent_row`, `agents_list`, `agents_listed`)
+- `rtok.agents.AgentsJson`: one row per host × variant in Rust's key order (`host`, `kind`, `name`, `present`, `app`,
+  `version`, `config`, `modules`, `mcp`, `plugins`), snake_case states, serde_json's 2-space pretty form. Modules, MCP
+  surfaces and plugins only for a present app. `plugin_version`/`plugin_source` wait for outdated.rs `plugin_status`.
+- Tests: AgentsJsonTest 2, AgentsCliSpec (info/list `--json` against Windsurf).
+- Stop point: next `rtok agents outdated` / `update --check` (outdated.rs, with `plugin_version`/`plugin_source` in
+  the JSON rows), then sessions, usage, junk, whoami, show, status, send, inbox, `--project`, restart.rs.
