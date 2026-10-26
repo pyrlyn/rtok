@@ -26,14 +26,17 @@ Port of `src/agents/mod.rs` (install engine), `src/agents/command.rs` and `src/c
   installed rtok plugin older than this rtok, read from the plugin's `.rtok-plugin-version`, rtok's receipt or the
   host's own record (`PluginInstall` knows where each host keeps it). `--exit-code` exits 10 when one is behind.
   The `plugin` row of `list`/`info` names the installed version and source.
+- `rtok agents sessions [--all] [--json]`: the Sessions page (store rows, newest first, sub-agents indented; ended ones
+  with `--all`). `rtok agents sessions watch` redraws it in place on a terminal (cursor up, clear below; no raw mode)
+  and reprints the whole table on a pipe when it changes; it ends when its parent goes away.
 - `[setup] mcp = false` skips MCP entries; `[setup] backup = false` skips backups.
 
 ## Test
-`ModulesTest`, `InstallTest`, `OutdatedTest`, `InstallListTest`, `CommandTest` (`./gradlew macosArm64Test`) and `AgentsCliSpec`
+`ModulesTest`, `InstallTest`, `OutdatedTest`, `SessionsTableTest`, `InstallListTest`, `CommandTest` (`./gradlew macosArm64Test`) and `AgentsCliSpec`
 (`./gradlew cliTest`, against a Windsurf config in a scratch home).
 
 ## Limitations
 - Output is Rust's non-terminal form: marks, no colour or operation icons, no progress bar.
 - Not ported yet: `--project`, asking for a missing host's
   path on a terminal, the desktop app restart (`--no-restart` is accepted and has nothing to skip), the hook-client
-  link, and the session/usage/junk/message subcommands.
+  link, and the usage/junk/message subcommands.

@@ -27,6 +27,14 @@ object StdIo : CliIo {
     override fun readStdin() = rtok.sys.readFd(0)
 
     override fun writeBytes(bytes: ByteArray) = rtok.sys.writeFd(1, bytes)
+
+    @OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
+    override val tty: Boolean get() = platform.posix.isatty(1) == 1
+
+    @OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
+    override fun flush() {
+        platform.posix.fflush(platform.posix.stdout)
+    }
 }
 
 /** Runs the CLI; the process exit code. */

@@ -82,4 +82,15 @@ class AgentsCliSpec :
                 cli("agents", "outdated", "nope").err shouldContain "unknown host: nope"
             }
         }
+        test("sessions on an empty store: nothing is running, an empty JSON list") {
+            withHome("agents-sessions") { home ->
+                writeString("$home/config.toml", "[core]\ndb_path = \"$home/rtok.db\"\n")
+                cli("agents", "sessions").also {
+                    it.code shouldBe 0
+                    it.out shouldContain "nothing is running\n"
+                }
+                cli("agents", "sessions", "--all").out shouldContain "no sessions\n"
+                cli("agents", "sessions", "--json").out shouldBe "[]\n"
+            }
+        }
     })

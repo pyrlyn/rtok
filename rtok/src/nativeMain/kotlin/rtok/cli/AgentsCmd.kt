@@ -3,6 +3,7 @@
 // desktop restart behind `--no-restart` (accepted, nothing to skip yet), and the session/usage/junk/message commands.
 package rtok.cli
 
+import kotlinx.serialization.json.JsonArray
 import rtok.StatPreview
 import rtok.agents.AgentsCommand
 import rtok.agents.AgentsFailure
@@ -12,7 +13,11 @@ import rtok.agents.AgentsOutput
 import rtok.agents.Mode
 import rtok.agents.Outdated
 import rtok.agents.OutdatedSelection
+import rtok.agents.SessionsTable
 import rtok.config.Config
+import rtok.log.watchLoop
+import rtok.model.Agents
+import rtok.store.Store
 
 private val HOST_ARG = ArgSpec("host", "Host id, or several comma-separated (`opencode,cursor`)")
 private val DRY_RUN = OptSpec.Flag("dry-run", "Show what would change; write nothing")
@@ -154,6 +159,40 @@ private val INFO =
         inv.io.out(refusals { if (inv.flag("json")) AgentsJson.info(cfg, hosts) + "\n" else AgentsList.info(cfg, hosts) })
     }
 
+private val SESSIONS_ALL = OptSpec.Flag("all", "Also show sessions that have ended", global = true)
+
+/** The Sessions page's rows from the store, as `rtok agents sessions` lists them. */
+private fun sessionRows(
+    cfg: Config,
+    all: Boolean,
+    now: Long,
+) = Store.open(cfg.core.dbPath).use { Agents.agentSessions(it, cfg.agents.idle, all, now) }
+
+private val SESSIONS_WATCH =
+    CommandSpec("watch", "Redraw the sessions table in place as sessions appear, end or spend") { inv ->
+        val cfg = inv.loadConfig()
+        val all = inv.flag("all")
+        val ticker = SessionsTable.Ticker()
+        watchLoop(inv.io.tty, write = { text -> runCatching { inv.io.out(text) }.isSuccess.also { inv.io.flush() } }) {
+            val now = rtok.log.now()
+            runCatching { ticker.tick(sessionRows(cfg, all, now), all, now) }.getOrElse { ticker.keep() }
+        }
+    }
+
+private val SESSIONS =
+    CommandSpec(
+        "sessions",
+        "What is running in this project: host, provider, model, tokens, start, run time",
+        options = listOf(SESSIONS_ALL, OptSpec.Flag("json", "JSON instead of the table")),
+        subcommands = listOf(SESSIONS_WATCH),
+        runsBare = true,
+    ) { inv ->
+        val all = inv.flag("all")
+        val now = rtok.log.now()
+        val rows = sessionRows(inv.loadConfig(), all, now)
+        inv.io.out(if (inv.flag("json")) AgentsJson.PRETTY.encodeToString(JsonArray.serializer(), JsonArray(rows.map { it.toJson() })) + "\n" else SessionsTable.render(rows, all, now))
+    }
+
 val AGENTS =
     CommandSpec(
         "agents",
@@ -168,5 +207,6 @@ val AGENTS =
                 OUTDATED,
                 LIST,
                 INFO,
+                SESSIONS,
             ),
     )

@@ -12,7 +12,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import rtok.config.Config
 
 object AgentsJson {
-    private val PRETTY =
+    val PRETTY =
         Json {
             prettyPrint = true
             prettyPrintIndent = "  "
