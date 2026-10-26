@@ -22,6 +22,7 @@ on-disk formats (SQLite ledger `rtok.db`, payload files) stay interchangeable wi
 | crates/rtok-hook | `:rtok-hook` | `rtok.hook` |
 | crates/rtok-store | `:rtok-store` | `rtok.store` |
 | (Rust dep `humantime`) | `:humantime` (`libs/humantime`) | `humantime` — own code, no maintained K/N library fits |
+| (Rust dep `semver`) | `:semver` (`libs/semver`) | `semver` — own `VersionKey` (SemVer precedence) |
 | crates/rtok-sys | `:rtok-sys` | `rtok.sys` (cinterop/posix) |
 | crates/rtok-mcp | `:rtok-mcp` | `rtok.mcp` |
 | crates/rtok-agent-sdk | `:rtok-agent-sdk` | `rtok.agent.sdk` |
@@ -506,3 +507,8 @@ Next, in order:
 - Deferred: `HostPlugin::all`, the default-install table test (with the plugin hosts), `markers`/`support`/`shared`
   (in `Hosts`).
 - Stop point: next 3b-3 = JSON settings hooks (gemini, qwen, codewhale, commandcode, copilot, devin, kimi).
+
+## Session: libs/semver — VersionKey moved to its own module
+- `VersionKey` (SemVer precedence, from #58) moved out of `rtok/agents/PluginSrc.kt` into the leaf module `:semver`
+  (`libs/semver`, package `semver`, no dependencies); `PluginSrc` imports it. Test moved and extended: 1 → 3.
+- Stop point: next 3b-3a = shared helpers from agents/mod.rs, then gemini + qwen.

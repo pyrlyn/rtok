@@ -10,6 +10,6 @@ pluginManagement {
 // Remote build cache on Cloudflare R2 (docs/build-speed.md). Approved by Ivan 2026-10-26.
 // Repositories + R2 remote build cache (docs/build-speed.md), approved by Ivan 2026-10-26; logic in ci.diffuser.settings.
 plugins { id("com.github.burrunan.s3-build-cache") version "1.9.10"; id("ci.diffuser.settings") }
-include(":humantime", ":treesitter", ":treesitter-native", ":toml", ":toml-ktoml", ":db", ":db-room", ":rtok-plugin-sdk", ":rtok-config", ":rtok-log", ":rtok-hook", ":rtok-store", ":rtok-sys", ":rtok-mcp", ":rtok-agent-sdk", ":rtok", ":rtok-wasm", ":rtok-e2e", ":http", ":http-ktor", ":http-server", ":http-server-ktor", ":wasm", ":wasm-chasm", ":zstd", ":zstd-native")
-listOf("humantime", "treesitter", "treesitter-native", "toml", "toml-ktoml", "db", "db-room", "http", "http-ktor", "http-server", "http-server-ktor", "wasm", "wasm-chasm", "zstd", "zstd-native").forEach { project(":$it").projectDir = file("libs/$it") }
+include(":humantime", ":treesitter", ":treesitter-native", ":toml", ":toml-ktoml", ":db", ":db-room", ":rtok-plugin-sdk", ":rtok-config", ":rtok-log", ":rtok-hook", ":rtok-store", ":rtok-sys", ":rtok-mcp", ":rtok-agent-sdk", ":rtok", ":rtok-wasm", ":rtok-e2e", ":http", ":http-ktor", ":http-server", ":http-server-ktor", ":wasm", ":wasm-chasm", ":zstd", ":zstd-native", ":semver")
+listOf("humantime", "treesitter", "treesitter-native", "toml", "toml-ktoml", "db", "db-room", "http", "http-ktor", "http-server", "http-server-ktor", "wasm", "wasm-chasm", "zstd", "zstd-native", "semver").forEach { project(":$it").projectDir = file("libs/$it") }
 

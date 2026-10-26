@@ -80,14 +80,6 @@ class PluginSrcTest {
         removeDirAll(root)
     }
 
-    @Test fun versionKeyFollowsSemverPrecedence() {
-        val order = listOf("0.1.9", "0.1.10-alpha", "0.1.10-alpha.2", "0.1.10-alpha.10", "0.1.10-beta", "0.1.10", "1.0.0")
-        val keys = order.map { VersionKey.parse(it)!! }
-        assertEquals(keys, keys.shuffled().sorted())
-        assertNull(VersionKey.parse("current"))
-        assertNull(VersionKey.parse("1.2"))
-    }
-
     @Test fun joinRelSplitsSlashAndBackslash() {
         assertEquals("/tmp/root/plugins/cursor", PluginSrc.joinRel("/tmp/root", "plugins/cursor"))
         assertEquals("/tmp/root/plugins/cursor", PluginSrc.joinRel("/tmp/root", "plugins\\cursor"))

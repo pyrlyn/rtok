@@ -28,6 +28,7 @@ Plan and per-phase checklist: [port-plan.md](port-plan.md).
 | crates/rtok-store docs | `Docs.kt` | ✅ | 0 → 2 (new) |
 | crates/rtok-store messages | `Messages.kt` | ✅ | 7 → 8 |
 | humantime crate (dependency) | `libs/humantime` (`:humantime`) | ✅ own module | 0 → 3 |
+| semver crate (dependency) | `libs/semver` (`:semver`) | ✅ own module | 0 → 3 |
 | crates/rtok-store tests_archive (archive rows, retention, schema drift vs schema_snapshot.txt) | `ArchiveTest.kt` + fixtures | ✅ | 22 → 29 |
 | crates/rtok-store embed | `Embed.kt` | ✅ | 16 → 17 |
 | src/plugins/mod.rs registry, measure, proxy, render::plugins_table | `rtok/plugins/Registry.kt`, `Manifests.kt`, `Render.kt`, `ShellWord.kt` | ✅ | 3 → 4 |
