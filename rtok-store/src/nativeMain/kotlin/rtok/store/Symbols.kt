@@ -17,8 +17,6 @@ import rtok.sys.join
 
 /** Columns bound per inserted symbol row; SQLite's default variable limit is 999. */
 private const val INSERT_CHUNK = 999 / 16
-/** A BFS frontier is chunked below the bind limit. */
-private const val NAME_CHUNK = 500
 
 private const val NOT_IMPORT_REF = "is_def = 0 AND kind <> 'import'"
 
@@ -69,10 +67,6 @@ private fun replaceOne(db: Db, root: String, path: String, sha: String, stat: Pa
     clearStale(db, root, path)
     return rows.size
 }
-
-/** One query per chunk of `names`, bound as the trailing `IN (#)` list after `pre`. */
-private fun <T> Db.chunkedIn(sql: String, pre: List<Any?>, names: List<String>, map: (Row) -> T): List<T> =
-    names.chunked(NAME_CHUNK).flatMap { c -> query(sql.replace("#", inList(c.size)), *(pre + c).toTypedArray(), map = map) }
 
 private fun <K, V> groupByTip(rows: List<Pair<K, V>>, byTip: MutableMap<K, MutableList<V>>) {
     for ((tip, v) in rows) { val l = byTip.getOrPut(tip) { ArrayList() }; if (v !in l) l += v }
@@ -373,8 +367,10 @@ internal fun fileKey(file: String): List<String> {
 }
 
 /** Null for a bare identifier or an empty path. */
-private fun importPathSegs(spec: String): List<String>? =
-    if (spec.none { it == ':' || it == '/' || it == '.' || it == '\\' }) null else importSegs(spec).takeIf { it.isNotEmpty() }
+private fun importPathSegs(spec: String): List<String>? = if (!isImportPath(spec)) null else importSegs(spec).takeIf { it.isNotEmpty() }
+
+/** A bare identifier is a name, not a path. */
+internal fun isImportPath(spec: String) = spec.any { it == ':' || it == '/' || it == '.' || it == '\\' }
 
 private fun keyPrefixesImport(file: List<String>, imp: List<String>) = file.isNotEmpty() && file.size <= imp.size && imp.subList(0, file.size) == file
 
