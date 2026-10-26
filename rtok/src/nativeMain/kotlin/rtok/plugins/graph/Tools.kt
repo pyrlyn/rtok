@@ -19,6 +19,7 @@ interface LspBackend {
     fun symbol(cx: Ctx, root: String, name: String, filter: Filter): String
     fun callers(cx: Ctx, root: String, name: String, filter: Filter): String
     fun impact(cx: Ctx, root: String, name: String, depth: Int, filter: Filter, to: String?): String = throw Refused("lsp: unavailable")
+    fun explore(cx: Ctx, root: String, query: String, filter: Filter): String = throw Refused("lsp: unavailable")
     fun setTimeoutMs(ms: ULong) {}
 
     object None : LspBackend {

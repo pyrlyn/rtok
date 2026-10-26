@@ -283,5 +283,6 @@ Next, in order:
 - `Impact.kt` (mod.rs `impact`/`impact_filtered`/`impact_tags`, `with_cochange`, `reverse_call_chain`, `impact_bfs`,
   `impact_walk_roots`, `WalkMemo`), `Blast.kt` (blast.rs budgeted render; `WalkRow`, `Budget`, `linesText`).
   `LspBackend.impact`. 4 impact + 5 blast tests; the deferred cochange impact partner test is on.
-- Stop point: next `explore` (`assemble_explore`, tags `ExploreParts`), `outline`, `call` dispatch; then events,
+- `Explore.kt` (explore_tokens, assemble_explore/assemble_named, explore/explore_tags with FTS fallback, `TagsExplore`); 5 tests.
+- Stop point: next `outline`, `call` dispatch; then events,
   follow, drill, scope, diff, export, health, lsp, watch, review, draw, projects, jobs, status; then the rest.
