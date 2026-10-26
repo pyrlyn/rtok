@@ -46,6 +46,7 @@ Plan and per-phase checklist: [port-plan.md](port-plan.md).
 | src/agents/claude/mod.rs hook JSON walk (`HookForm`, `insert_ours[_as]`, `prune_ours`, `strip_ours[_as]`, `command[_for]`, `is_ours[_for]`) | `rtok/agents/` `ClaudeHooks.kt`, `HookInsert.kt`, `HookStrip.kt` | ✅ (claude host itself pending) | 5 → 7 |
 | src/agents/mod.rs `d21_plugin_apply`; src/agents/qwen | `rtok/agents/` `D21Plugin.kt`, `Qwen.kt` | ✅ | 5 → 4 (1 reads the Rust plugin tree) |
 | src/agents/commandcode | `rtok/agents/CommandCode.kt` | ✅ (`skill::sync` with skills) | 10 → 9 (payload test belongs to the hook dispatcher) |
+| src/agents/copilot; src/agents/mcp.rs `Writer`/`run`/`sync`/`install`/`remove` | `rtok/agents/` `Copilot.kt`, `McpRun.kt` | ✅ (`skill::sync` with skills) | 7 → 6 (PreCompact note belongs to the hook dispatcher) |
 | src/plugins/checkpoint.rs | `rtok/plugins/checkpoint/`, `rtok/plugins/memory/Private.kt`, `rtok-sys` Shlex/LineReader | ✅ (3 hook-dispatcher tests → Phase 6) | 27 → 27 |
 | src/plugins/compress | `rtok/plugins/compress/` (Compress, MustKeep, Llm, PromptToml) + Compressor, Queue; HTTP via `libs/http` + `libs/http-ktor` | ✅ (proxy-side `submit` call → Phase 7) | 19 → 22 (+4 KtorHttpTest) |
 | src/plugins/json_tree | `rtok/plugins/jsontree/JsonTree.kt`, `rtok-sys/Sha1.kt`, `Text.kt` jsonQuote | ✅ (3 MCP tests pending) | 15 → 12 |
