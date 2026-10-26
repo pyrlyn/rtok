@@ -50,6 +50,21 @@ class CochangeTest {
         removeDirAll(dir)
     }
 
+    @Test fun impactListsThePartnersOfTheDefiningFile() = withRuntime("cochange-impact") { rt ->
+        val dir = canonicalize(tmpDir("cochange-impact"))!!; val cx = Ctx(rt)
+        git(dir, "init", "-q", "-b", "main")
+        for (m in listOf("one", "two")) commit(dir, listOf("core.rs", "schema.sql", "docs/core.md"), m)
+        commit(dir, listOf("core.rs"), "three")
+        writeString("$dir/core.rs", "pub fn core_fn() {}\n")
+        writeString("$dir/caller.rs", "fn go() {\n    core_fn();\n}\n")
+        val out = Impact.impact(cx, dir, "core_fn", 2)
+        assertTrue(out.contains("caller.rs"), out)
+        assertTrue(out.trimEnd().endsWith("changes with: docs/core.md (2), schema.sql (2)"), out)
+        val silent = Impact.impact(cx, dir, "go", 2)
+        assertFalse(silent.contains("changes with"), silent)
+        removeDirAll(dir)
+    }
+
     @Test fun aRootThatIsNotARepoHasNoPairs() = withRuntime("cochange-norepo") { rt ->
         val dir = tmpDir("cochange-norepo"); val cx = Ctx(rt)
         assertTrue(Cochange.pairs(cx, dir).isEmpty())

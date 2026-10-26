@@ -18,6 +18,7 @@ interface LspBackend {
     fun probe(root: String): Absent?
     fun symbol(cx: Ctx, root: String, name: String, filter: Filter): String
     fun callers(cx: Ctx, root: String, name: String, filter: Filter): String
+    fun impact(cx: Ctx, root: String, name: String, depth: Int, filter: Filter, to: String?): String = throw Refused("lsp: unavailable")
     fun setTimeoutMs(ms: ULong) {}
 
     object None : LspBackend {
