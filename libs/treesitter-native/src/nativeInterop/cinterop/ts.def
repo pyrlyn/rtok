@@ -1,0 +1,5 @@
+headers = tree_sitter/api.h rtok_ts.h
+headerFilter = tree_sitter/api.h rtok_ts.h
+package = rtok.treesitter.native.c
+staticLibraries = librtok_ts.a
+noStringConversion = ts_parser_parse_string ts_query_new
