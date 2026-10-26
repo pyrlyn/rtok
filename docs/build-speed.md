@@ -62,13 +62,26 @@ size quota, so a pruning job also deletes the oldest entries first until the buc
 Configured via `diffuser.releaseSize=all` in `gradle.properties` (logic in ci-diffuser `NativeConventionPlugin`), release executables only (debug/test binaries untouched).
 K/N release already links in LTO mode (all modules optimized together), so no extra LTO flag.
 
-| option | flag | rtok size | link (median of 3) |
+Current main (bedb35b, macOS arm64; tree-sitter grammars, zstd, ktor-server and Room now reach the binary):
+
+| option | rtok size |
+|---|---|
+| `none` | 98.4 MB |
+| `all` (default) | 87.6 MB |
+
+Per-option breakdown measured earlier, before the grammars and servers were reachable (kept for the relative
+effect of each flag; link times are medians of 3):
+
+| option | flag | rtok size | link |
 |---|---|---|---|
 | baseline | – | 17.87 MB | 101 s |
 | `small` | `-Xbinary=smallBinary=true` (Oz) | 15.28 MB | 79 s |
 | `strip` | `-Wl,-dead_strip,-x,-S` (macOS) / `-Wl,--gc-sections,-s` (Linux) | 12.90 MB | 96 s |
 | `latin1` | `-Xbinary=latin1Strings=true` | 17.44 MB | 97 s |
-| all (default) | all of the above | 9.95 MB | 86 s |
+| all | all of the above | 9.95 MB | 86 s |
+
+A per-component size breakdown (grammars, zstd, ktor, sqlite, Kotlin code) and reduction plan come with the
+release size re-measure step in port-plan.md.
 
 `rtok --version` startup (hyperfine, 50 runs): 7.0 ms baseline vs 7.1 ms all, within noise.
 Pick a subset with `-Pdiffuser.releaseSize=none|all|small,strip,latin1`.

@@ -442,3 +442,16 @@ Next, in order:
 - Tests: OpsTest 8 (7 Rust + strict-JSON refusal), EditorsTest 4, JsoncTest 2 (moved). docs/mcp-config.md.
 - Stop point: next agents/mcp.rs (`McpSurface`, `McpRow`, per-host `surfaces`, doctor lines, `run`/`sync`) over the
   36 hosts' paths, then per-host files/installed/apply, `find_bin`, `app_version`; then the ping process side.
+
+## Session: agents chunk 2b — MCP surfaces and rows (agents/mcp.rs status side)
+- `rtok.agents.McpFiles` (every host variant's MCP file + servers key, one table row per host; VS Code stable/insiders),
+  `McpPaths` (OS defaults: VS Code user dirs, Claude/OpenCode desktop, CodeBuddy candidates), `HostPath.kt`
+  (join/parent/with_file_name, `loneSibling`).
+- `McpSurfaces` (`surfaces` with plugin/Grok `[compat.claude]` import, `status`, `spawnable`, `doctorLine`,
+  `jsonSpec`, `tilde`), `McpRow` (serves/found/text/JSON), `EntryState`, `McpArgv` (`argvOf`, `staleDiff`,
+  `unresolvedCommand`), `McpEntries` (`hasEntry`/`hasTomlEntry`), `isRtokBin`, `resolveMcpCommand`, `findOnPath`, `DiskFs`.
+- Tests: McpEntriesTest 9, McpSurfacesTest 8 (incl. the Rust every-host × 6-case surface test, row sources).
+- docs/build-speed.md: current release size 87.6 MB (`all`) / 98.4 MB (`none`) after #8.
+- Deferred: `rows`/`own_row` (per-host `installed`), `doctor_lines`, `run`/`sync`/`install`/`remove` (apply ctx),
+  plugin detection (`plugin_surfaces` + installed), Windows path branches (no Windows target).
+- Stop point: next per-host files/installed/apply, `find_bin`, `app_version`; then doctor_lines + run/sync; ping process side.
