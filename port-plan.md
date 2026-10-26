@@ -731,3 +731,14 @@ Next, in order:
   `block` (a top-level key and its lines), `lastContent`. Writing never re-serialises: callers swap only their lines.
 - Tests: YamlTest 6.
 - Stop point: next continue and goose (MCP only) on `:yaml-aot`.
+
+## Session: agents chunk 3c-7 — continue, goose (on `:yaml-aot`)
+- `YamlMcp.kt` (shared): read/validate through `Yaml.parse` (an unreadable document is refused, never rewritten),
+  `toJson`, `core` keys, `render`, owned removal through `judgeOwned`; `applyMcpOnly` now shared with Reasonix.
+- `Continue.kt`: the `- name: rtok` item of the block `mcpServers:` list (also at the key's own indent, `[]` or a bare
+  header), fresh file with `name`/`version`/`schema`, the header dropped with its last item, extra item keys not an edit.
+- `Goose.kt`: `extensions.rtok` `{name, type, cmd, args, enabled}`, Goose's re-saved defaults not an edit, the header
+  dropped when it held nothing else; flow or scalar `extensions` refused.
+- `:yaml-aot` `YamlText.block` end fixed for an empty block.
+- Tests: ContinueTest 8, GooseTest 8, YamlTest +2 asserts. Every host in the registry now has its install side.
+- Stop point: agents phase left: skill sync for every host (pending), then the rest of phase 10/11 per this plan.

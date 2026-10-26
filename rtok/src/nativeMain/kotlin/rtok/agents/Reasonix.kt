@@ -40,14 +40,7 @@ object Reasonix : Agent {
         cfg: Config,
         kind: Kind,
         mode: Mode,
-    ): List<String> =
-        listOf(
-            when {
-                mode == Mode.Remove -> unregister(cfg)
-                cfg.setup.mcp -> register(cfg)
-                else -> NO_CHANGES
-            },
-        )
+    ) = applyMcpOnly(cfg, mode, ::register, ::unregister)
 
     private fun isRtok(t: TomlTable) = t.str("name") == NAME
 

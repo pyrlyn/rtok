@@ -60,7 +60,8 @@ class McpOnlyAgentTest {
             }
             assertEquals(a, Agents.agent(a.id))
         }
-        assertNull(Agents.agent("goose"))
+        // Every host in the registry has its install side ported.
+        for (h in Hosts.ALL) assertTrue(Agents.agent(h.id) != null, h.id)
     }
 
     @Test fun theDefaultPathsAreTheHostsUserFiles() {
