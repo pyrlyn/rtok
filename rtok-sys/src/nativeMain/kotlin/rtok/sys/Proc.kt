@@ -140,6 +140,18 @@ internal class Bytes {
 
 private fun environPtr() = rtok_environ()
 
+/** Our environment as `KEY=value` entries with [extra] set on top (Rust `Command::env`). */
+internal fun mergedEnv(extra: Map<String, String>): List<String> =
+    buildList {
+        val e = environPtr()
+        var i = 0
+        while (true) {
+            val s = e?.get(i++)?.toKString() ?: break
+            if (s.substringBefore('=') !in extra) add(s)
+        }
+        extra.forEach { (k, v) -> add("$k=$v") }
+    }
+
 /** Like Rust `exit_code`: the code, or 1 when a signal ended the child. */
 fun exitCode(c: Captured): Int = c.exitCode ?: 1
 
@@ -221,16 +233,7 @@ fun spawnDetached(
         val attr = alloc<posix_spawnattr_tVar>()
         posix_spawnattr_init(attr.ptr)
         posix_spawnattr_setflags(attr.ptr, POSIX_SPAWN_SETSID.toShort())
-        val env =
-            buildList {
-                val e = environPtr()
-                var i = 0
-                while (true) {
-                    val s = e?.get(i++)?.toKString() ?: break
-                    if (s.substringBefore('=') !in extraEnv) add(s)
-                }
-                extraEnv.forEach { (k, v) -> add("$k=$v") }
-            }
+        val env = mergedEnv(extraEnv)
         val argv = allocArrayOf((listOf(program) + args).map { it.cstr.ptr } + listOf(null))
         val envp = allocArrayOf(env.map { it.cstr.ptr } + listOf(null))
         val pid = alloc<pid_tVar>()

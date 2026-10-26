@@ -312,3 +312,16 @@ Next, in order:
 - `guard/GrepSymbol.kt` (grep_symbol.rs, T369): symbol-shaped Grep answered from the index (classifier, path scope, stale-row check, inject budget fit, checkout-root fallback), wired into `GuardPlugin.preTool`; 9 tests (classifier table + 7 Rust tests; the linked-worktree test waits for the worktree port).
 - `cmd/CatFile.kt` (catfile.rs, T674): long `cat <source>` prints definitions with spans; `cat [-n] f` / `sed -n A,Bp f` re-reads go through the read cache (pointer when unchanged, delta when changed) in `emitFilteredTo`; 5 tests (4 catfile + the run.rs re-read delta).
 - Stop point: next lsp, watch; then docs zstd, memory status, sync --stat, MCP, otel, worktree, task, batch, bench, hook dispatcher tests; release re-measure, completeness pass.
+
+## Session 2026-10-26 (night) — graph lsp
+- `rtok.sys.PipedChild` (piped stdin/stdout child: queued non-blocking stdin, `read(deadline)` over poll, `tryWait`,
+  `kill`; cwd via `posix_spawn_file_actions_addchdir_np` in librtok_spawn; SIGPIPE ignored) + PipedTest (5).
+  `mergedEnv` shared with `spawnDetached`.
+- `LspWire.kt` (framing, file URIs, percent coding, `rel`, `sync_kind`, `kind_name`), `LspSession.kt` (Session:
+  deadline requests without reader/writer threads, server replies, did_open/open/close/refresh_open, cached
+  session `with`/`shutdown`), `Lsp.kt` (on_path with mise-shim/rustup-proxy checks, `rustup which`, probe, pick,
+  state dirs, spawn + initialize, symbol/callers/impact/call paths/explore/outline). `Tools.lsp` now defaults to
+  `Lsp`. LspTest (26: all Rust lsp.rs tests; the Windows drive test is not applicable).
+- Deferred: `LspSession.shutdown()` must run when `rtok mcp` ends (MCP wiring); health-check backend backoff tests.
+- Stop point: next watch; then docs zstd, memory status, sync --stat, MCP, otel, worktree, task, batch, bench, hook
+  dispatcher tests; release re-measure, completeness pass.
