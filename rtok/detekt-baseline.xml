@@ -439,6 +439,11 @@
     <ID>MagicNumber:Git.kt:Git$16L</ID>
     <ID>MagicNumber:Git.kt:Git$20</ID>
     <ID>MagicNumber:GraphCliSpec.kt:GraphCliSpec$20</ID>
+    <ID>MagicNumber:GrepSymbolTest.kt:GrepSymbolTest$3</ID>
+    <ID>MagicNumber:GrepSymbolTest.kt:GrepSymbolTest$30</ID>
+    <ID>MagicNumber:GrepSymbolTest.kt:GrepSymbolTest$4</ID>
+    <ID>MagicNumber:GrepSymbolTest.kt:GrepSymbolTest$6</ID>
+    <ID>MagicNumber:GrepSymbolTest.kt:GrepSymbolTest$60u</ID>
     <ID>MagicNumber:GrepTest.kt:GrepTest$160</ID>
     <ID>MagicNumber:GrepTest.kt:GrepTest$40</ID>
     <ID>MagicNumber:GrepTest.kt:GrepTest$80</ID>
@@ -861,6 +866,11 @@
     <ID>ReturnCount:Grep.kt:Grep$fun group: String?</ID>
     <ID>ReturnCount:Grep.kt:Grep$private fun parseArgv: Pair&lt;String, String?>?</ID>
     <ID>ReturnCount:Grep.kt:Grep$private fun window: String</ID>
+    <ID>ReturnCount:GrepSymbol.kt:GrepSymbol$fun answer: PreToolDecision?</ID>
+    <ID>ReturnCount:GrepSymbol.kt:GrepSymbol$fun symbolName: String?</ID>
+    <ID>ReturnCount:GrepSymbol.kt:GrepSymbol$private fun definitions: Pair&lt;String, List&lt;SymDef>>?</ID>
+    <ID>ReturnCount:GrepSymbol.kt:GrepSymbol$private fun reason: String?</ID>
+    <ID>ReturnCount:GrepSymbol.kt:GrepSymbol$private fun under: String?</ID>
     <ID>ReturnCount:Guard.kt:GuardPlugin$override fun postTool: String?</ID>
     <ID>ReturnCount:Guard.kt:GuardPlugin$override fun preTool: PreToolDecision?</ID>
     <ID>ReturnCount:Guard.kt:internal fun cacheKey: String?</ID>
@@ -1020,6 +1030,7 @@
     <ID>TooManyFunctions:Files.kt:rtok.plugins.memory.Files.kt</ID>
     <ID>TooManyFunctions:Formatters.kt:Formatters</ID>
     <ID>TooManyFunctions:FormattersTest.kt:FormattersTest</ID>
+    <ID>TooManyFunctions:GrepSymbolTest.kt:GrepSymbolTest</ID>
     <ID>TooManyFunctions:Guard.kt:rtok.plugins.guard.Guard.kt</ID>
     <ID>TooManyFunctions:GuardTest.kt:GuardTest</ID>
     <ID>TooManyFunctions:Handoff.kt:rtok.plugins.memory.Handoff.kt</ID>

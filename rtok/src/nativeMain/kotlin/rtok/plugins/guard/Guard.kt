@@ -1,5 +1,5 @@
 // Port of src/plugins/guard/mod.rs — deny duplicate Read/Bash when a prior archive id exists (plan T2.6).
-// `grep_symbol` (T369) is not ported: it answers from the graph plugin, which needs tree-sitter.
+// `grep_symbol` (T369) answers a symbol-shaped Grep from the graph index (GrepSymbol.kt).
 package rtok.plugins.guard
 
 import kotlinx.serialization.json.*
@@ -33,6 +33,8 @@ object GuardPlugin : Plugin {
         cx: Ctx,
     ): PreToolDecision? {
         if (ev.toolName == "Skill") return digest(ev, cx)
+        // T369: answer a symbol-shaped Grep before `nativeRedirect` would only point elsewhere.
+        if (ev.toolName == "Grep") GrepSymbol.answer(ev, cx)?.let { return it }
         nativeRedirect(ev.toolName, cx)?.let { return it }
         val key = cacheKey(ev.toolName, ev.toolInput, cx.agentId(), cx.cwd()) ?: return null
         val (id0, ts) = runCatching { cx.getReadCache(key) }.getOrNull() ?: return null
