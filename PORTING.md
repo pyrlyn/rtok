@@ -10,7 +10,10 @@ Plan and per-phase checklist: [port-plan.md](port-plan.md).
 | crates/rtok-config `estimator.rs` | `:rtok-config` `rtok.config.Estimator` | ✅ | – |
 | crates/rtok-config `root.rs` | `rtok-config/nativeMain/Root.kt` | ✅ | 7 → 7 |
 | crates/rtok-config `since.rs` | `rtok-config/commonMain/Since.kt` | ✅ | 0 → 5 (new) |
-| crates/rtok-config `layers.rs`, `lib.rs`, `validate.rs`, `error.rs` | `:rtok-config` | ⬜ | |
+| crates/rtok-config `lib.rs` (+ toml parser) | `Config.kt`, `Sections.kt`, `Toml.kt` | ✅ | 33 → 33 |
+| crates/rtok-config `layers.rs` | `Layers.kt` (figment → `Fig`) | ✅ | 18 (+2 rstest cases) → 20 |
+| crates/rtok-config `validate.rs` | `Validate.kt` (toml_edit → line editor) | ✅ | 26 → 27 |
+| crates/rtok-sys `change_preview` | `rtok-sys/commonMain/ChangePreview.kt` | ✅ | → 4 |
 | crates/rtok-log | `rtok-log/nativeMain/Log.kt` | ✅ | 12 → 12 |
 | crates/rtok-hook | `rtok-hook` (common `Hook.kt`, native `Connect.kt`) | ✅ (unix only) | 5 → 5 (+1 new) |
 | crates/rtok-store (SQLite ledger, 40 files) | `:rtok-store` | ⬜ | |

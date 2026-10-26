@@ -43,10 +43,10 @@ jiff/humantime→kotlinx-datetime; shlex→own; wasmi→not portable (see risks)
 - [x] `modes/` compress_prose (Lite/Full/Ultra), YAGNI ladder + all unit tests
 - Acceptance: every Rust unit test of these files translated and passing.
 ### Phase 2 — rtok-config + rtok-log
-- [ ] Tests: port matching Rust unit + integration tests to kotlin.test; phase done only when they pass on the Mac (`./gradlew macosArm64Test`)
-- [ ] Docs: `docs/<feature>.md` (how it works, enable, disable, test, limitations) + README section
+- [x] Tests: port matching Rust unit + integration tests to kotlin.test; phase done only when they pass on the Mac (`./gradlew macosArm64Test`)
+- [x] Docs: `docs/<feature>.md` (how it works, enable, disable, test, limitations) + README section
 - [x] root discovery (`root.rs`) + since (`since.rs`) + tests
-- [ ] TOML layers (`layers.rs`, figment → ktoml), `lib.rs` Config struct (2.7k lines), `validate.rs` + tests
+- [x] TOML layers (`layers.rs`, figment → ktoml), `lib.rs` Config struct (2.7k lines), `validate.rs` + tests
 - [x] rtok-log append/format/rotation (same line format, rotation files, flock lock) + tests
 ### Phase 3 — rtok-hook protocol + `rtok hook`
 - [x] crates/rtok-hook wire protocol, fingerprint, home expansion, unix-socket client (ported early: rtok-config depends on it) + 6 tests
@@ -87,13 +87,15 @@ jiff/humantime→kotlinx-datetime; shlex→own; wasmi→not portable (see risks)
 | incremental (1 file touched) `macosArm64Test` | 5.5 s |
 | incremental, phase 2 (all modules) `macosArm64Test` | 8.3 s |
 | `linkDebugExecutable` + `linkReleaseExecutable` | 23 s |
+| incremental, rtok-config source touched (`:rtok-config:macosArm64Test`) | 45–60 s (test-binary link dominates) |
 
 ## Test counts per phase
 | Phase | Rust tests in scope | Kotlin tests passing |
 |---|---|---|
 | 0 | 0 | 0 |
 | 1 | 23 (tokens 4, ladder 3, compress 16) | 23 |
-| 2 (partial) | 12 log + 7 root (+5 new since) | 24 |
+| 2 | log 12, root 7, lib 33, layers 20 (rstest cases folded), validate 27, change-preview 4, since 5 (new) | 108 |
+| **total** | | **137** |
 
 ## Test-porting
 Each Rust `#[cfg(test)]` module → `src/commonTest` in the matching module; `tests/*.rs` (138 files)

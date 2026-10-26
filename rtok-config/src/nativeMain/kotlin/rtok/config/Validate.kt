@@ -37,8 +37,8 @@ object Validate {
 
     private fun checkTyped(path: String, doc: TomlDoc, errors: MutableList<String>) {
         try { decodeConfig(deepMerge(Config().toJson(), doc.root)) } catch (e: ConfigException) {
-            val key = Regex("""\$\.([A-Za-z0-9_.\-]+)""").find(e.message ?: "")?.groupValues?.get(1)
-                ?: Regex("""key "([^"]+)"""").find(e.message ?: "")?.groupValues?.get(1)
+            val key = Regex("""key "([^"]+)"""").find(e.message ?: "")?.groupValues?.get(1)
+                ?: Regex("""\$\.([A-Za-z0-9_.\-]+)""").find(e.message ?: "")?.groupValues?.get(1)
             val msg = (e.message ?: "").lineSequence().first()
             errors += if (key == null) "$path:1: $msg" else "${loc(path, doc, key)}: $key: $msg"
         }
@@ -241,7 +241,14 @@ object Validate {
         val original = readToString(path)
         var source = original
         for ((k, _) in pairs) source = revealCommentedKey(source, k)
-        try { Toml.parse(source) } catch (e: TomlException) { throw ConfigException("$path: ${e.message}") }
+        val parsed = try { Toml.parse(source) } catch (e: TomlException) { throw ConfigException("$path: ${e.message}") }
+        for ((k, _) in pairs) {
+            val parts = k.split('.'); var cur: JsonElement? = parsed
+            for (i in 0 until parts.size - 1) {
+                cur = (cur as? JsonObject)?.get(parts[i]) ?: break
+                if (cur !is JsonObject) throw ConfigException("${parts.subList(0, i + 1).joinToString(".")} is not a table; cannot set $k")
+            }
+        }
         for ((k, raw) in pairs) source = TomlEdit.assign(source, k, TomlEdit.renderValue(raw))
         val errs = issuesIn(path, source)
         if (errs.isNotEmpty()) throw ConfigException(errs.joinToString("\n"))
@@ -268,7 +275,7 @@ object Validate {
         if (st < t.length) out += t.substring(st); return out
     }
 
-    private fun revealAssignment(text: String, table: String?, leaf: String): String {
+    internal fun revealAssignment(text: String, table: String?, leaf: String): String {
         var current: String? = null; var revealed = false; val out = StringBuilder(); val payload = payloadLines(text)
         for ((n, line) in splitInclusive(text).withIndex()) {
             if (n in payload) { out.append(line); continue }
@@ -286,7 +293,7 @@ object Validate {
     }
 
 
-    private fun liveKeyPresent(text: String, table: String?, leaf: String): Boolean {
+    internal fun liveKeyPresent(text: String, table: String?, leaf: String): Boolean {
         var current: String? = null; val payload = payloadLines(text)
         for ((n, line) in rustLines(text).withIndex()) {
             if (n in payload) continue

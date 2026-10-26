@@ -17,7 +17,7 @@ val ConfigJson = Json {
     namingStrategy = JsonNamingStrategy.SnakeCase
     encodeDefaults = true
     explicitNulls = false
-    isLenient = true
+    isLenient = false
     ignoreUnknownKeys = false
     allowSpecialFloatingPointValues = true
 }
@@ -168,9 +168,30 @@ fun writeFile(path: String, body: String) {
     if (platform.posix.rename(tmp, path) != 0) { platform.posix.unlink(tmp); throw ConfigException("cannot write $path") }
 }
 
-fun decodeConfig(root: JsonObject): Config = try { ConfigJson.decodeFromJsonElement(Config.serializer(), checkUnsigned(root, Config().toJson())) }
+fun decodeConfig(root: JsonObject): Config = try { rawDecode(root) } catch (e: ConfigException) {
+    val key = failingKey(root, Config().toJson())
+    if (key == null || (e.message ?: "").contains("\"$key\"")) throw e
+    throw ConfigException("${(e.message ?: "invalid config").lineSequence().first()} for key \"$key\"")
+}
+
+private fun rawDecode(root: JsonObject): Config = try { ConfigJson.decodeFromJsonElement(Config.serializer(), checkUnsigned(root, Config().toJson())) }
     catch (e: kotlinx.serialization.SerializationException) { throw ConfigException(e.message ?: "invalid config") }
     catch (e: IllegalArgumentException) { throw ConfigException(e.message ?: "invalid config") }
+
+/** kotlinx reports paths relative to the nested decoder; find the full dotted key by decoding one leaf at a time. */
+private fun failingKey(root: JsonObject, defaults: JsonObject): String? {
+    fun leaves(o: JsonObject, d: JsonElement?, at: List<String>, out: MutableList<List<String>>) {
+        for ((k, v) in o) { val dd = (d as? JsonObject)?.get(k); val p = at + k
+            if (v is JsonObject && dd is JsonObject) leaves(v, dd, p, out) else out += p }
+    }
+    val all = ArrayList<List<String>>(); leaves(root, defaults, emptyList(), all)
+    for (p in all) {
+        var v: JsonElement = p.fold(root as JsonElement) { acc, k -> (acc as JsonObject)[k]!! }
+        for (k in p.reversed()) v = JsonObject(mapOf(k to v))
+        if (runCatching { rawDecode(deepMerge(defaults, v as JsonObject)) }.isFailure) return p.joinToString(".")
+    }
+    return null
+}
 
 /** kotlinx wraps negative numbers into unsigned fields silently; Rust/serde rejects them. */
 private fun checkUnsigned(v: JsonObject, defaults: JsonObject, at: String = ""): JsonObject {
