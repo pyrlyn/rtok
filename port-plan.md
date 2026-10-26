@@ -784,3 +784,12 @@ Next, in order:
 - Test count check: 1734 → 1730 between reports was a counting difference, not lost tests: `@Test` in sources went
   1731 (75100fb) → 1754 (2c536ea) with no `@Test` removed.
 - Stop point: next `rtok agents list|info|install|update|remove` CLI over `AgentsRun`/`AgentsList`.
+
+## Session: agents — `rtok agents install|uninstall|remove|update|list|info` CLI
+- `AgentsCommand` (command.rs `parse_hosts`, `install`, `update`, `apply_hosts`; agents_host.rs `setup_flags` as a
+  `[setup]` overlay), `cli/AgentsCmd.kt` (`setup` and `remove` as aliases; `--stat` needs `--dry-run`; `--source`
+  checked; a failed Claude plugin reinstall exits 1 after printing). `update` names the missing host's key on stderr
+  before the run refuses it, as in Rust. docs/agents.md.
+- Tests: CommandTest 5, AgentsCliSpec 3 (install/info/update/remove against a Windsurf config in a scratch home).
+- Stop point: next the other `rtok agents` subcommands (outdated/`update --check`, list/info `--json`, sessions,
+  usage, junk, whoami, show, status, send, inbox), then restart.rs and the rest of phase 10.
