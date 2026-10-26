@@ -20,6 +20,9 @@ class TomlDoc private constructor(
     /** The `[path]` table, or null. */
     fun table(path: String): TomlTable? = blocks.firstOrNull { !it.arrayElement && it.path == path && it.headerAt >= 0 }
 
+    /** The root table: the keys before the first header. */
+    val root: TomlTable get() = blocks.first()
+
     /** What [path] names: a header of either kind, a key in its parent table, or nothing. */
     fun shape(path: String): Shape {
         val parent = path.substringBeforeLast('.', "")

@@ -1,8 +1,8 @@
 // Port of src/agents/codex/mod.rs (MCP and hooks): the Codex CLI and app share `~/.codex`. MCP is the
 // `[mcp_servers.rtok]` table in `config.toml`, edited through [TomlDoc] so comments and other servers survive, with
 // `default_tools_approval_mode = "writes"` (T528); hooks are the `codex` rows of [HookEvents] in the sibling
-// `hooks.json`, Claude's layout spelled `rtok hook <event> --host codex` (T645). The plugin and the proxy provider
-// come in their own chunks.
+// `hooks.json`, Claude's layout spelled `rtok hook <event> --host codex` (T645); `--proxy` is [CodexProxy]. The plugin
+// comes in its own chunk.
 package rtok.agents
 
 import kotlinx.serialization.json.JsonArray
@@ -35,6 +35,7 @@ class Codex : Agent {
     ): List<String> =
         listOfNotNull(
             "mcp".takeIf { McpEntries.hasTomlEntry(cfg.setup.codex.configPath, SERVERS, NAME) },
+            "proxy".takeIf { "[model_providers.rtok]" in read(cfg.setup.codex.configPath) },
             "hooks".takeIf { " hook PreCompact" in read(hooksPath(cfg)) },
         )
 
@@ -44,7 +45,9 @@ class Codex : Agent {
         mode: Mode,
     ): List<String> {
         val remove = mode == Mode.Remove
-        return listOf(runMcp(cfg, remove), runHooks(cfg, remove))
+        // On the way out the provider block goes whether or not `--proxy` asked for it.
+        val proxy = if (remove || cfg.setup.proxy) CodexProxy.run(cfg, remove) else null
+        return listOfNotNull(runMcp(cfg, remove), runHooks(cfg, remove), proxy)
     }
 
     companion object {
