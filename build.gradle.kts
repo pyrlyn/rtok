@@ -2,11 +2,11 @@
 // once KSP and Kotest join the build classpath; annotations are compile-time only, so the newer one is safe.
 buildscript { configurations.classpath { resolutionStrategy.force("org.jetbrains:annotations:23.0.0") } }
 plugins {
-    kotlin("multiplatform") version "2.2.21" apply false; kotlin("plugin.serialization") version "2.2.21" apply false
+    kotlin("multiplatform") version "2.4.10" apply false; kotlin("plugin.serialization") version "2.4.10" apply false
     // API docs: `./gradlew dokkaGenerate` only; never wired into build/test (docs/api-docs.md).
     id("org.jetbrains.dokka") version "2.2.0"
     // Tests: Kotest specs next to kotlin.test (docs/testing.md); KSP must come before Kotest.
-    id("com.google.devtools.ksp") version "2.2.21-2.0.5" apply false
+    id("com.google.devtools.ksp") version "2.3.12" apply false
     id("io.kotest") version "6.2.6" apply false
 }
 
