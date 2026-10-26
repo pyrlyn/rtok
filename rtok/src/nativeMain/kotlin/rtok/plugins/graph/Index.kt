@@ -304,7 +304,7 @@ object Index {
         return canonicalize(raw) ?: parent(event)?.let(::canonicalize)?.let { p -> fileName(event)?.let { join(p, it) } } ?: raw
     }
 
-    @Serializable private class IndexedHead(val head: String)
+    @Serializable internal class IndexedHead(val head: String)
 
     /** Remember `git rev-parse HEAD` for [root]; git missing or a non-repo is a no-op. */
     fun rememberIndexedHead(cx: Ctx, root: String) {
