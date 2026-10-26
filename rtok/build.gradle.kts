@@ -17,6 +17,7 @@ configure<KotlinMultiplatformExtension> {
         implementation(project(":rtok-plugin-sdk"))
         implementation(project(":rtok-config"))
         implementation(project(":rtok-sys"))
+        implementation(project(":semver"))
         implementation(project(":rtok-agent-sdk"))
         implementation(project(":rtok-mcp"))
         implementation(project(":rtok-store"))
