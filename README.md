@@ -8,4 +8,4 @@ Excluded by design: the TUI (`rtok tui`) and web UI (`rtok web`, `rtok dashboard
 Build & test (macOS arm64): `./gradlew macosArm64Test` · binary: `./gradlew :rtok:linkReleaseExecutableMacosArm64`
 → `rtok/build/bin/macosArm64/releaseExecutable/rtok.kexe`. Other targets: `-Prtok.allTargets=true`.
 
-Docs: [build speed](docs/build-speed.md) · [token estimator](docs/tokens.md) · [modes](docs/modes.md).
+Docs: [build speed](docs/build-speed.md) · [token estimator](docs/tokens.md) · [modes](docs/modes.md) · [log](docs/log.md) · [project root](docs/config-root.md) · [build speed](docs/build-speed.md).

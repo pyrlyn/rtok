@@ -8,11 +8,14 @@ Plan and per-phase checklist: [port-plan.md](port-plan.md).
 | crates/rtok-plugin-sdk `host.rs::Class`, `NoteHit` | `:rtok-plugin-sdk` `rtok.plugin.sdk` | 🟡 (types only) | – |
 | crates/rtok-plugin-sdk (rest) | `:rtok-plugin-sdk` | ⬜ | |
 | crates/rtok-config `estimator.rs` | `:rtok-config` `rtok.config.Estimator` | ✅ | – |
-| crates/rtok-config (layers, root, since, validate, error) | `:rtok-config` | ⬜ | |
-| crates/rtok-log | `:rtok-log` | ⬜ | |
+| crates/rtok-config `root.rs` | `rtok-config/nativeMain/Root.kt` | ✅ | 7 → 7 |
+| crates/rtok-config `since.rs` | `rtok-config/commonMain/Since.kt` | ✅ | 0 → 5 (new) |
+| crates/rtok-config `layers.rs`, `lib.rs`, `validate.rs`, `error.rs` | `:rtok-config` | ⬜ | |
+| crates/rtok-log | `rtok-log/nativeMain/Log.kt` | ✅ | 12 → 12 |
 | crates/rtok-hook | `:rtok-hook` | ⬜ | |
 | crates/rtok-store (SQLite ledger, 40 files) | `:rtok-store` | ⬜ | |
-| crates/rtok-sys | `:rtok-sys` | ⬜ | |
+| crates/rtok-sys | `:rtok-sys` | ⬜ (module currently hosts `rtok.sys.Fs`, the fs-kit replacement) | |
+| fs-kit (external crate) path helpers | `rtok-sys/nativeMain/Fs.kt` | 🟡 normalize/canon/ancestors/starts_with | via root tests |
 | crates/rtok-mcp | `:rtok-mcp` | ⬜ | |
 | crates/rtok-agent-sdk | `:rtok-agent-sdk` | ⬜ | |
 | crates/rtok-wasm-demo-guest | – | ❌ wasm guest, not needed | |
@@ -31,4 +34,4 @@ Plan and per-phase checklist: [port-plan.md](port-plan.md).
 | src/web, agents/junk_web.rs, `rtok web/tui/dashboard` | – | ❌ excluded (web) | |
 | tests/*.rs (138 integration files) | `:rtok` commonTest | ⬜ | 0 / ~138 files |
 
-Totals: 23 Kotlin tests passing on macosArm64.
+Totals: 47 Kotlin tests passing on macosArm64.

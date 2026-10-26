@@ -45,8 +45,9 @@ jiff/humantime→kotlinx-datetime; shlex→own; wasmi→not portable (see risks)
 ### Phase 2 — rtok-config + rtok-log
 - [ ] Tests: port matching Rust unit + integration tests to kotlin.test; phase done only when they pass on the Mac (`./gradlew macosArm64Test`)
 - [ ] Docs: `docs/<feature>.md` (how it works, enable, disable, test, limitations) + README section
-- [ ] TOML layers (defaults → user → project → env → flags), root discovery, since, validate + tests
-- [ ] rtok-log append/format (same log line format & file path) + tests
+- [x] root discovery (`root.rs`) + since (`since.rs`) + tests
+- [ ] TOML layers (`layers.rs`, figment → ktoml), `lib.rs` Config struct (2.7k lines), `validate.rs` + tests
+- [x] rtok-log append/format/rotation (same line format, rotation files, flock lock) + tests
 ### Phase 3 — rtok-hook protocol + `rtok hook`
 - [ ] Tests: port matching Rust unit + integration tests to kotlin.test; phase done only when they pass on the Mac (`./gradlew macosArm64Test`)
 - [ ] Docs: `docs/<feature>.md` (how it works, enable, disable, test, limitations) + README section
@@ -82,6 +83,7 @@ jiff/humantime→kotlinx-datetime; shlex→own; wasmi→not portable (see risks)
 |---|---|
 | clean `macosArm64Test` (first run, incl. Kotlin/Native toolchain + deps download) | 3 m 23 s |
 | incremental (1 file touched) `macosArm64Test` | 5.5 s |
+| incremental, phase 2 (all modules) `macosArm64Test` | 8.3 s |
 | `linkDebugExecutable` + `linkReleaseExecutable` | 23 s |
 
 ## Test counts per phase
@@ -89,6 +91,7 @@ jiff/humantime→kotlinx-datetime; shlex→own; wasmi→not portable (see risks)
 |---|---|---|
 | 0 | 0 | 0 |
 | 1 | 23 (tokens 4, ladder 3, compress 16) | 23 |
+| 2 (partial) | 12 log + 7 root (+5 new since) | 24 |
 
 ## Test-porting
 Each Rust `#[cfg(test)]` module → `src/commonTest` in the matching module; `tests/*.rs` (138 files)
