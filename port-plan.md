@@ -560,3 +560,11 @@ Next, in order:
 - Found: codewhale and kimi edit TOML `[[array-of-tables]]` keeping comments (toml_edit); the Kotlin side has only
   `rtok-mcp` `TomlEdit` (one `[a.b]` table). They need a lossless array-of-tables editor first (own module).
 - Stop point: next = commandcode, copilot (JSON), then the TOML array-of-tables editor, codewhale, kimi.
+
+## Session: agents chunk 3b-3f — commandcode
+- `CommandCode.kt`: `settings.json` hooks in Command Code's own walk (one definition per matcher, lifecycle rows with no
+  matcher, fixed 5 s `timeout`, no prune/refresh, strip by `<rtok-bin> hook <Event> --host commandcode`, empty
+  definitions and an empty `hooks` key go), stdio `mcpServers.rtok` in `mcp.json` (independent of the plugin, D33),
+  `plugins/commandcode` linked to `<dir>/plugins/rtok` behind `--yes`; registered in `Agents`.
+- Tests: 9 (all Rust cases but the dispatcher payload one). Deferred: `skill::sync` (with skills).
+- Stop point: next = copilot (hooks/rtok.json, `mcp-config.json` LocalAllTools, `copilot plugin`), then TOML editor check.
