@@ -321,7 +321,7 @@ Next, in order:
   deadline requests without reader/writer threads, server replies, did_open/open/close/refresh_open, cached
   session `with`/`shutdown`), `Lsp.kt` (on_path with mise-shim/rustup-proxy checks, `rustup which`, probe, pick,
   state dirs, spawn + initialize, symbol/callers/impact/call paths/explore/outline). `Tools.lsp` now defaults to
-  `Lsp`. LspTest (26: all Rust lsp.rs tests; the Windows drive test is not applicable).
+  `Lsp`. LspTest (27: all Rust lsp.rs tests; the Windows drive test is not applicable).
 - Deferred: `LspSession.shutdown()` must run when `rtok mcp` ends (MCP wiring); health-check backend backoff tests.
 - Stop point: next watch; then docs zstd, memory status, sync --stat, MCP, otel, worktree, task, batch, bench, hook
   dispatcher tests; release re-measure, completeness pass.
