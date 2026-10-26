@@ -518,6 +518,20 @@
     <ID>MagicNumber:HookTest.kt:HookTest$65</ID>
     <ID>MagicNumber:HookTest.kt:HookTest$65536</ID>
     <ID>MagicNumber:HookTest.kt:HookTest$8</ID>
+    <ID>MagicNumber:HttpTest.kt:HttpTest$10_000u</ID>
+    <ID>MagicNumber:HttpTest.kt:HttpTest$12</ID>
+    <ID>MagicNumber:HttpTest.kt:HttpTest$200</ID>
+    <ID>MagicNumber:HttpTest.kt:HttpTest$202</ID>
+    <ID>MagicNumber:HttpTest.kt:HttpTest$400</ID>
+    <ID>MagicNumber:HttpTest.kt:HttpTest$401</ID>
+    <ID>MagicNumber:HttpTest.kt:HttpTest$403</ID>
+    <ID>MagicNumber:HttpTest.kt:HttpTest$404</ID>
+    <ID>MagicNumber:HttpTest.kt:HttpTest$405</ID>
+    <ID>MagicNumber:HttpTest.kt:HttpTest$406</ID>
+    <ID>MagicNumber:HttpTest.kt:HttpTest$415</ID>
+    <ID>MagicNumber:HttpTest.kt:HttpTest$7</ID>
+    <ID>MagicNumber:HttpTest.kt:HttpTest$8</ID>
+    <ID>MagicNumber:HttpTest.kt:HttpTest$9</ID>
     <ID>MagicNumber:Impact.kt:Impact$4</ID>
     <ID>MagicNumber:ImpactTest.kt:ImpactTest$200u</ID>
     <ID>MagicNumber:ImpactTest.kt:ImpactTest$240</ID>
@@ -983,6 +997,7 @@
     <ID>ReturnCount:HostOutputs.kt:fun cursorOutput: ByteArray</ID>
     <ID>ReturnCount:HostOutputs.kt:fun geminiOutput: ByteArray</ID>
     <ID>ReturnCount:HostPaths.kt:HostPaths$fun isSecret: Boolean</ID>
+    <ID>ReturnCount:Http.kt:Http$fun bearerMatches: Boolean</ID>
     <ID>ReturnCount:Impact.kt:Impact$fun impactTags: String</ID>
     <ID>ReturnCount:Index.kt:Index$internal fun parse: Parsed</ID>
     <ID>ReturnCount:JsonTree.kt:fun foldJsonWith: Folded?</ID>
@@ -1101,6 +1116,7 @@
     <ID>ThrowsCount:Expand.kt:Expand$fun parseRange: Pair&lt;Int, Int></ID>
     <ID>ThrowsCount:Expand.kt:Expand$fun resolveId: String</ID>
     <ID>ThrowsCount:Export.kt:ExportView$fun parse: Export</ID>
+    <ID>ThrowsCount:Http.kt:Http.Addr.Companion$fun parse: Addr</ID>
     <ID>ThrowsCount:Jobs.kt:Jobs$fun start: String</ID>
     <ID>ThrowsCount:LspSession.kt:LspSession$fun requestWithin: JsonElement</ID>
     <ID>TooGenericExceptionCaught:Compressor.kt:Compressor$e: Exception</ID>
@@ -1144,6 +1160,7 @@
     <ID>TooManyFunctions:GuardTest.kt:GuardTest</ID>
     <ID>TooManyFunctions:Handoff.kt:rtok.plugins.memory.Handoff.kt</ID>
     <ID>TooManyFunctions:HookTest.kt:HookTest</ID>
+    <ID>TooManyFunctions:HttpTest.kt:HttpTest</ID>
     <ID>TooManyFunctions:Index.kt:Index</ID>
     <ID>TooManyFunctions:IndexTest.kt:IndexTest</ID>
     <ID>TooManyFunctions:JsonTree.kt:rtok.plugins.jsontree.JsonTree.kt</ID>

@@ -401,3 +401,16 @@ Next, in order:
 - Ivan approved ktor-server (CIO, pinned) for `--http`, behind our own HTTP server interface in its own module.
 - Stop point: next `rtok mcp --http` (mcp/http.rs), then agent host registry → `rtok mcp ping` → HookSupport → `rtok agents`
   CLI; server background jobs; otel.
+
+## Session: MCP chunk 4 — `rtok mcp --http` (mcp/http.rs)
+- New modules: `:http-server` (rtok.http.server: `HttpServer`, `RequestHandler`, `ServerRequest/Response`, serialized
+  handler calls, 413 body cap) and `:http-server-ktor` (`KtorHttpServer`, ktor-server-core + CIO 3.6.0 pinned; approved by Ivan).
+- `rtok.mcp.Http` (http.rs): `Addr` (SocketAddr parse, loopback/unspecified), `PublicUrl` (host + origin), `transport`
+  allow-lists, `exposureGuard`, `bearerToken`, constant-time `bearerMatches`, `httpServer` (fresh `mcp-http-<uuid>`
+  session, `restrictArchives`, AGENT_BOUND dropped, `http_tools` as the allow-list), `Endpoint` (rmcp stateless JSON
+  mode: 401 Bearer, 404, 403 Host/Origin, 405 non-POST, 406 Accept, 415 Content-Type, 400 MCP-Protocol-Version,
+  202 for notifications), `serveBlocking` (deny secrets, log the URL, never the token). `Server.handleLine(stateless)`.
+- CLI: `rtok mcp --http [ADDR]` (`OptSpec.Value(optional)` → clikt `optionalValue`); refuses `--` and `--call`.
+- Tests: HttpTest (9: the 6 Rust cases + Addr parse + endpoint gates + live socket initialize/401),
+  KtorHttpServerTest (1). Full suite 1511, 0 failures. Deferred: retention + otel tickers on `--http` (with otel).
+- Stop point: next agent host registry → `rtok mcp ping` → HookSupport → `rtok agents` CLI; server background jobs; otel.

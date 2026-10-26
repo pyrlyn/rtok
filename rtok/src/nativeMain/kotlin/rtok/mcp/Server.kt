@@ -34,28 +34,37 @@ class Server(
 
     fun allows(name: String) = listed.any { it.def.name == name }
 
-    /** One request line (or batch) to its answer line; `null` when nothing is owed. */
-    fun handleLine(line: String): String? {
+    /**
+     * One request line (or batch) to its answer line; `null` when nothing is owed. [stateless] is the HTTP surface:
+     * `initialize` links no agent and asks for no roots, and no notification or client response is answered.
+     */
+    fun handleLine(
+        line: String,
+        stateless: Boolean = false,
+    ): String? {
         if (line.isBlank()) return null
         val req = runCatching { Json.parseToJsonElement(line) }.getOrNull() ?: return Protocol.rpcError(JsonNull, Protocol.PARSE_ERROR, "parse error").toString()
         if (req is JsonArray) {
             if (req.isEmpty()) return Protocol.rpcError(JsonNull, Protocol.INVALID_REQUEST, "empty batch").toString()
-            val out = req.mapNotNull { handleValue(it) }
+            val out = req.mapNotNull { handleValue(it, stateless) }
             return out.takeIf { it.isNotEmpty() }?.let { JsonArray(it).toString() }
         }
-        return handleValue(req)?.toString()
+        return handleValue(req, stateless)?.toString()
     }
 
-    private fun handleValue(req: JsonElement): JsonObject? {
+    private fun handleValue(
+        req: JsonElement,
+        stateless: Boolean,
+    ): JsonObject? {
         val obj = req as? JsonObject ?: return Protocol.rpcError(JsonNull, Protocol.INVALID_REQUEST, "invalid request")
         val method = Protocol.str(obj, "method").orEmpty()
         val id = obj["id"]
-        if (id == null || method.startsWith("notifications/")) return notification(method)
-        if (method.isEmpty()) return response(id, obj)
+        if (id == null || method.startsWith("notifications/")) return if (stateless) null else notification(method)
+        if (method.isEmpty()) return if (stateless) null else response(id, obj)
         val params = obj["params"] as? JsonObject ?: JsonObject(emptyMap())
         val result =
             when (method) {
-                "initialize" -> initialize(params)
+                "initialize" -> if (stateless) Protocol.serverInfo(Protocol.negotiateProtocolVersion(params["protocolVersion"]), rtok.VERSION) else initialize(params)
                 "ping" -> JsonObject(emptyMap())
                 "tools/list" -> buildJsonObject { put("tools", JsonArray(listed.map { Protocol.toTool(it.def) })) }
                 "tools/call" -> callTool(Protocol.str(params, "name").orEmpty(), params["arguments"])
