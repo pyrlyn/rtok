@@ -5,8 +5,7 @@ Plan and per-phase checklist: [port-plan.md](port-plan.md).
 
 | Rust source | Kotlin location | Status | Tests (Rust → Kotlin) |
 |---|---|---|---|
-| crates/rtok-plugin-sdk `host.rs::Class`, `NoteHit` | `:rtok-plugin-sdk` `rtok.plugin.sdk` | 🟡 (types only) | – |
-| crates/rtok-plugin-sdk (rest) | `:rtok-plugin-sdk` | ⬜ | |
+| crates/rtok-plugin-sdk (lib, host, wire, task_prefix, testing) | `:rtok-plugin-sdk` `Lib.kt`, `Host.kt`, `Wire.kt`, `Testing.kt` | ✅ | 6 → 9 (+terse doc example, wire write-back, task prefix) |
 | crates/rtok-config `estimator.rs` | `:rtok-config` `rtok.config.Estimator` | ✅ | – |
 | crates/rtok-config `root.rs` | `rtok-config/nativeMain/Root.kt` | ✅ | 7 → 7 |
 | crates/rtok-config `since.rs` | `rtok-config/commonMain/Since.kt` | ✅ | 0 → 5 (new) |
