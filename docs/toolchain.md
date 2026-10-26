@@ -51,3 +51,9 @@ rtok-plugin-sdk        243       54   22.2%
 TOTAL (Kotlin/JVM)     530      176   33.2%
 tree-sitter C         9288     5311   57.2%
 ```
+
+## Affected runs: why scripts/smart.py and not Dropbox affectedmoduledetector
+Checked 2026-10-26 with 0.6.2 (latest): the repository was archived on 2026-06-16; its open issues
+include Gradle 9.2 and KMP support; with our Gradle 9.8.2 build the `runAffectedUnitTests` task discards
+the configuration cache ("incompatible task") and wires only Android test task names
+(`testDebugUnitTest`), so it ran nothing for `macosArm64Test`. `scripts/smart.py` stays.
