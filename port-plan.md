@@ -414,3 +414,14 @@ Next, in order:
 - Tests: HttpTest (9: the 6 Rust cases + Addr parse + endpoint gates + live socket initialize/401),
   KtorHttpServerTest (1). Full suite 1511, 0 failures. Deferred: retention + otel tickers on `--http` (with otel).
 - Stop point: next agent host registry → `rtok mcp ping` → HookSupport → `rtok agents` CLI; server background jobs; otel.
+
+## Session: agents chunk 1 — host registry descriptors (agents/mod.rs + 36 host folders)
+- `rtok.agents.Hosts` (`host`, `ALL` in rtok-config `HOSTS` order, `MODULES`, `wants`), `Kind`, `Variant`, `Support`
+  (Yes/Flag/Offer/No), `SupportRule` (first-match arms of each host's `support`), `Host` (`support`, `hookless`,
+  `shared`). The 36 rows (variants + support arms, incl. `support_mcp_only` hosts) were generated from the Rust
+  sources and checked by HostsTest (5).
+- `HostHookSupport` (link.rs `hookless`) is now the default for `AgentLink.resolve` and `AgentSession`: zed/warp and
+  other hookless hosts register their agent from the MCP process. Full suite 1516, 0 failures.
+- Deferred (agents chunk 2+): per-host `files`/`markers`/`installed`/`apply`, MCP config paths and writers
+  (agents/mcp.rs), `find_bin`/`probe_installed`/`app_version`, plugin surfaces.
+- Stop point: next `rtok mcp ping` (mcp/ping.rs: needs host MCP config paths from agents/mcp.rs), then `rtok agents` CLI.

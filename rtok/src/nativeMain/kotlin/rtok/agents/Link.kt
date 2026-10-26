@@ -55,7 +55,7 @@ fun interface HookSupport {
     fun hookless(host: String): Boolean
 
     companion object {
-        /** Until the agent host registry is ported every host counts as hooked. */
+        /** Every host counts as hooked (tests); production uses [HostHookSupport]. */
         val Unknown = HookSupport { false }
     }
 }
@@ -70,7 +70,7 @@ object AgentLink {
     fun resolve(
         store: Store,
         who: Caller,
-        hooks: HookSupport = HookSupport.Unknown,
+        hooks: HookSupport = HostHookSupport,
         env: (String) -> String?,
     ): Link {
         byEnv(store, who, env)?.let { return it }
