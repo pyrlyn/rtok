@@ -118,3 +118,12 @@ fun listDir(path: String): List<String> {
     } finally { closedir(d) }
     return out
 }
+
+/** `$HOME`, as `std::env::home_dir` reads it first. */
+fun homeDir(): String? = platform.posix.getenv("HOME")?.toKString()?.takeIf { it.isNotEmpty() }
+
+/** A root no walk may cover: the filesystem root or the home directory (fs-kit `is_unwalkable_root`). */
+fun isUnwalkableRoot(root: String, home: String?): Boolean {
+    val r = canon(root)
+    return parent(r) == null || (home != null && canon(home) == r)
+}

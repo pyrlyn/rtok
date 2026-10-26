@@ -1,1 +1,29 @@
+import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
+import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
 
+// migrations/<version>/up.sql are copied verbatim from crates/rtok-store/migrations and embedded
+// (like diesel's embed_migrations!), one constant per migration, sorted by version.
+val genDir = layout.buildDirectory.dir("generated/migrations")
+val genMigrations by tasks.registering {
+    val src = layout.projectDirectory.dir("migrations"); val out = genDir
+    inputs.dir(src); outputs.dir(out)
+    doLast {
+        val dirs = src.asFile.listFiles()!!.filter { it.isDirectory }.sortedBy { it.name }
+        fun esc(t: String) = t.replace("\\", "\\\\").replace("\"", "\\\"").replace("\$", "\\\$").replace("\n", "\\n").replace("\r", "\\r")
+        val sb = StringBuilder("// GENERATED from migrations/ — do not edit.\npackage rtok.store\n\n")
+        dirs.forEachIndexed { i, d -> sb.append("private const val M$i: String = \"${esc(File(d, "up.sql").readText())}\"\n") }
+        sb.append("\ninternal val EMBEDDED_MIGRATIONS: List<Pair<String, String>> = listOf(\n")
+        dirs.forEachIndexed { i, d -> sb.append("    \"${d.name}\" to M$i,\n") }
+        sb.append(")\n")
+        val f = out.get().file("rtok/store/Migrations.gen.kt").asFile; f.parentFile.mkdirs(); f.writeText(sb.toString())
+    }
+}
+configure<KotlinMultiplatformExtension> {
+    targets.withType<KotlinNativeTarget>().configureEach {
+        compilations.getByName("main").cinterops.create("sqlite3") { definitionFile.set(project.file("src/nativeInterop/cinterop/sqlite3.def")) }
+    }
+    sourceSets.commonMain {
+        kotlin.srcDir(genMigrations.map { genDir.get() })
+        dependencies { api(project(":rtok-plugin-sdk")); api(project(":rtok-sys")) }
+    }
+}

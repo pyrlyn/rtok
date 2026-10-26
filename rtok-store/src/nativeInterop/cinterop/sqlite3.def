@@ -1,0 +1,5 @@
+headers = sqlite3.h
+headerFilter = sqlite3*.h
+package = rtok.store.sqlite
+linkerOpts.osx = -lsqlite3
+linkerOpts.linux = -lsqlite3

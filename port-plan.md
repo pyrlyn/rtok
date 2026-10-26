@@ -61,7 +61,16 @@ jiff/humantime→kotlinx-datetime; shlex→own; wasmi→not portable (see risks)
 - [x] prerequisite: full rtok-plugin-sdk contract (Plugin, Ctx, Host traits, wire refs, MemoryHost) — 9 tests
 - [ ] Tests: port matching Rust unit + integration tests to kotlin.test; phase done only when they pass on the Mac (`./gradlew macosArm64Test`)
 - [ ] Docs: `docs/<feature>.md` (how it works, enable, disable, test, limitations) + README section
-- [ ] migrations identical to Rust; ledger/call_log/archive/payload-by-id; retention + tests
+- [x] sqlite3 cinterop (system libsqlite3 3.54, FTS5) + `Db` wrapper (prepare/bind/query, nested savepoints) — 2 tests
+- [x] sha256 (`rtok.sys.Sha256`) for archive ids — 1 test
+- [x] migrations embedded verbatim (52, generated at build) + diesel-compatible `__diesel_schema_migrations` (version = 4-digit prefix) + legacy `schema_migrations` bridge
+- [x] handle.rs/lib.rs: open (dir 0700, files 0600, pragmas, retry on lock), migrate under BEGIN EXCLUSIVE, archive file write, retention score — handle tests 10
+- [x] sanitize.rs — 11 (rstest cases folded, proptest → seeded random)
+- [x] hook_fields.rs pure split/rebuild — 3 (store-backed 4 wait for call_log)
+- [x] retention.rs, cache.rs, kv (code; store-backed retention tests wait for call_log/symbols)
+- [ ] call_log, measure_rows, session_rows, archive_rows (+ tests_store 31, tests_archive 22, tests_schema 9)
+- [ ] note_store, note_files, messages, agents, worktree/task claims+counters, projects/links
+- [ ] symbols, symbol_graph, docs, observations, embed, otel, graph_events, archive_summaries, host_usage
 ### Phase 5 — reduction plugins (src/plugins: compress, json_tree, toon, read, cmd, inject, guard, memory, measure, docs, archive, checkpoint)
 - [ ] Tests: port matching Rust unit + integration tests to kotlin.test; phase done only when they pass on the Mac (`./gradlew macosArm64Test`)
 - [ ] Docs: `docs/<feature>.md` (how it works, enable, disable, test, limitations) + README section
@@ -100,8 +109,8 @@ jiff/humantime→kotlinx-datetime; shlex→own; wasmi→not portable (see risks)
 | 1 | 23 (tokens 4, ladder 3, compress 16) | 23 |
 | 2 | log 12, root 7, lib 33, layers 20 (rstest cases folded), validate 27, change-preview 4, since 5 (new) | 108 |
 | 3 (partial) | types 18, deadline 3, resident 1 (+1 new), sys environ/lock 2 new — dispatch 55 waits for Phase 5 | 25 |
-| 4 (partial) | plugin-sdk 9 | 9 |
-| **total** | | **171** |
+| 4 (partial) | plugin-sdk 9, sha256 1, db 2, handle 10, sanitize 11, hook_fields 3 | 36 |
+| **total** | | **198** |
 
 ## Test-porting
 Each Rust `#[cfg(test)]` module → `src/commonTest` in the matching module; `tests/*.rs` (138 files)
