@@ -23,7 +23,7 @@ class Gemini(
                 { cmd, g -> RTOK_EVENT[g]?.let { e -> " hook $e --host $HOST".let { s -> cmd.endsWith(s) && isRtokBin(HookLine.unquoteBin(cmd.removeSuffix(s))) } } == true },
             )
 
-        fun hookSpec(timeoutS: Long) = HookSpec(RTOK_EVENT.keys.map { it to "" }, "timeout", timeoutS * MS)
+        fun hookSpec(timeoutS: Long) = HookSpec(RTOK_EVENT.keys.map { it to "" }, "timeout", timeoutS * MS, matcherless = true)
 
         private const val MS = 1000L
 

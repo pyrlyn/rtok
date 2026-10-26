@@ -20,12 +20,13 @@ object HookInsert {
         bin: String,
     ): Pair<JsonObject, String> {
         val changed = mutableListOf<String>()
-        val out = LinkedHashMap(prune(form, hooks as? JsonObject ?: JsonObject(emptyMap()), spec.entries, changed))
+        val obj = hooks as? JsonObject ?: JsonObject(emptyMap())
+        val out = LinkedHashMap(if (spec.matcherless) obj else prune(form, obj, spec.entries, changed))
         for ((event, matcher) in spec.entries) {
             val want = form.command(bin, event)
             val arr = (out[event] as? JsonArray).orEmpty()
             val slot = Slot(form, event, want, spec)
-            val updated = arr.map { if (hasOurs(form, it, event, matcher)) slot.refresh(it, matcher, changed) else it }
+            val updated = arr.map { if (hasOurs(form, it, event, matcher.takeUnless { spec.matcherless })) slot.refresh(it, matcher, changed) else it }
             out[event] = JsonArray(if (slot.found) updated else updated + fresh(matcher, want, spec).also { changed += "+ $event${ClaudeHooks.show(matcher)} $want" })
         }
         return JsonObject(out) to summary(changed)
@@ -71,8 +72,8 @@ object HookInsert {
         form: HookForm,
         entry: JsonElement,
         event: String,
-        matcher: String,
-    ) = matcherOf(entry) == matcher && innerHooks(entry).orEmpty().any { h -> str(h, "command")?.let { form.isOurs(it, event) } == true }
+        matcher: String?,
+    ) = (matcher == null || matcherOf(entry) == matcher) && innerHooks(entry).orEmpty().any { h -> str(h, "command")?.let { form.isOurs(it, event) } == true }
 
     private fun summary(changed: List<String>): String {
         if (changed.isEmpty()) return NO_CHANGES
