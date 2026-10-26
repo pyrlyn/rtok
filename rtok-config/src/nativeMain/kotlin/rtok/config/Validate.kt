@@ -267,7 +267,7 @@ object Validate {
         return out
     }
 
-    private fun payloadLines(text: String): Set<Int> = runCatching { Toml.parseDoc(text).mlStringLines }.getOrDefault(emptySet())
+    private fun payloadLines(text: String): Set<Int> = runCatching { Toml.parseDoc(text).multilineStringLines }.getOrDefault(emptySet())
 
     private fun splitInclusive(t: String): List<String> {
         val out = ArrayList<String>(); var st = 0

@@ -17,6 +17,6 @@ val genDefaultToml by tasks.registering {
 configure<KotlinMultiplatformExtension> {
     sourceSets.commonMain {
         kotlin.srcDir(genDefaultToml.map { genDir.get() })
-        dependencies { api(project(":rtok-sys")); api(project(":rtok-hook")) }
+        dependencies { api(project(":rtok-sys")); api(project(":rtok-hook")); api(project(":toml")); implementation(project(":toml-ktoml")) }
     }
 }
