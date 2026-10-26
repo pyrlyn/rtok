@@ -357,3 +357,10 @@ Next, in order:
 - `rtok.StatPreview` (stat_preview.rs: process-wide switch, colour-stripping `sides`, `show`/`showFile`/`shown`) + StatPreviewTest (4); `rtok memory sync --dry-run --stat`, totals line now closes the dry-run diff.
 - Deferred: `--stat` on config/doctor/agents dry runs lands with those commands.
 - Stop point: next MCP (incl. `LspSession.shutdown()` on exit, `Watch.runScope` for watch="notify").
+
+## Session: MCP core (stdio server)
+- `rtok/mcp`: `Protocol` (rpc errors, protocol negotiation, required-field gate with `anyOf`, search/docs_query aliases, read-only annotations, mem hit line), `LineReader` (8 MiB cap, lossy UTF-8), `Server` (initialize/ping/tools/list/tools/call, batches, notifications, roots handshake), `Tools` (expand, ping, mem_*, handoff, docs_*, read/search/tree, graph tools via `GraphTools`), `Record` (mcp_call rows + I/O + 3 token rows), `Roots`, `Mcp.run`/`Mcp.call`; CLI `rtok mcp [--call TOOL --args JSON]`.
+- `LspSession.shutdown()` now runs on every `rtok mcp` exit (served and `--call`); `Watch.runScope` starts on a worker when `[plugins.graph] watch` is not `off`.
+- Tests: ProtocolTest (9), LineReaderTest (2), ServerTest (11). Live: initialize + ping over stdio with an isolated HOME.
+- Deferred to the next MCP chunks: graph plugin registration (graph tools are dispatched but not yet listed — no `GraphPlugin.mcpTools`), whoami/agents/messages tools + agent link, worktree_* and task_* tools (with worktree/task), `--http`, `rtok mcp ping`, the foreign-server wrapper (`rtok mcp -- <cmd>`), retention/otel tickers, health-check loop, follow refresh, rooted-path annotation (mcp/paths.rs), description token cap test.
+- Stop point: next MCP chunk 2 (graph plugin tool defs + paths.rs), then otel.

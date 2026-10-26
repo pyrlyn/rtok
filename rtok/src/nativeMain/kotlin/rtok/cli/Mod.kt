@@ -14,7 +14,7 @@ val RTOK =
         name = "rtok",
         help = "Token reduction for coding agents (rtok $VERSION)",
         options = listOf(CONFIG_OPT),
-        subcommands = listOf(PLUGINS, CONFIG, EXPAND, ARCHIVE, MEMORY, RUN, FILTER, HOOK, GRAPH, DOCS),
+        subcommands = listOf(PLUGINS, CONFIG, EXPAND, ARCHIVE, MEMORY, RUN, FILTER, HOOK, GRAPH, DOCS, MCP),
     )
 
 object StdIo : CliIo {
