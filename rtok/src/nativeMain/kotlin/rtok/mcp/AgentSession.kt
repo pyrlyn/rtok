@@ -24,7 +24,7 @@ import rtok.sys.Mutex
 
 class AgentSession(
     private val cx: Runtime,
-    private val hooks: HookSupport = HookSupport.Unknown,
+    private val hooks: HookSupport = rtok.agents.HostHookSupport,
     private val env: (String) -> String? = { rtok.config.envVar(it) },
 ) {
     /** Unix seconds this process started: a cwd candidate must have been seen since. */
