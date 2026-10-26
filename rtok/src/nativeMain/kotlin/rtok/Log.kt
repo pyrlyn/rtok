@@ -2,12 +2,18 @@
 package rtok
 
 import rtok.config.Config
+import rtok.config.envUserHome
+import rtok.hook.expandWith
 import rtok.log.FileLog
 import rtok.store.Store
 import rtok.store.insertLog
 
-/** `[log]` as the rotating file the log library writes. */
-fun Config.fileLog(): FileLog = FileLog(log.path, log.maxBytes.toLong(), log.files.toInt(), log.level)
+/**
+ * `[log]` as the rotating file the log library writes. `log.path` is `~`-expanded here as well (Rust `finish`
+ * semantics: `~/.rtok/…` → rtok home, `~/…` → user home), so a config that skipped `finish` (e.g. `Config()`)
+ * never opens a literal `~/.rtok/logs/rtok.log` relative to the working directory.
+ */
+fun Config.fileLog(): FileLog = FileLog(expandWith(log.path, Config.homeDir(), envUserHome()), log.maxBytes.toLong(), log.files.toInt(), log.level)
 
 /** Append one line to the file log; never fails upward (D1). */
 fun appendLog(

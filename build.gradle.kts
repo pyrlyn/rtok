@@ -17,3 +17,17 @@ plugins {
 }
 
 extensions.configure<org.jetbrains.dokka.gradle.DokkaExtension> { moduleName.set("rtok-kotlin") }
+
+// Tests never see the real home: every native test run and the e2e suite get a per-module temp HOME and
+// RTOK_HOME under build/, and fail if anything created a literal `~` directory in the module (unexpanded path).
+subprojects {
+    val testHome = layout.buildDirectory.dir("test-home")
+    val strayTilde = layout.projectDirectory.dir("~").asFile
+    tasks.withType<org.jetbrains.kotlin.gradle.targets.native.tasks.KotlinNativeTest>().configureEach {
+        val h = testHome.get().asFile
+        doFirst { h.resolve(".rtok").mkdirs() }
+        environment("HOME", h.absolutePath)
+        environment("RTOK_HOME", h.resolve(".rtok").absolutePath)
+        doLast { if (strayTilde.exists()) throw GradleException("test created a literal '~' directory: $strayTilde") }
+    }
+}
