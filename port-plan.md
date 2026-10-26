@@ -618,3 +618,11 @@ Next, in order:
   `mimocode.jsonc` edited as JSONC). `:rtok-mcp` `EntryShape.LocalArgv` = `{type: local, command: [argv], enabled}`.
 - Tests: OpenCodeTest 6.
 - Stop point: next 3c-3 = zcode, zed.
+
+## Session: agents chunk 3c-3 — zcode, zed
+- `Zcode.kt`: Claude-layout hooks under `hooks.events` (`hooks.enabled`, `timeoutMs`, absolute binary via
+  `HookLine.desktopCommand`), `mcp.servers.rtok`, `plugins/zcode` linked to `plugins/local/rtok` + `plugins.dirs`;
+  linked plugin = only hook path (D21), MCP independent (D33).
+- `Zed.kt`: `context_servers.rtok` in JSONC through `McpSurfaces.jsoncSpec` (Amp moved onto it too).
+- Tests: ZcodeTest 5, ZedTest 4.
+- Stop point: next 3c-4 = aider, continue, goose.

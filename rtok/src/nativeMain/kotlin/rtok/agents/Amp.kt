@@ -5,12 +5,6 @@ package rtok.agents
 
 import rtok.agent.sdk.NO_CHANGES
 import rtok.config.Config
-import rtok.mcp.config.Client
-import rtok.mcp.config.DuplicateName
-import rtok.mcp.config.EntryShape
-import rtok.mcp.config.Format
-import rtok.mcp.config.Launch
-import rtok.mcp.config.McpSpec
 import rtok.mcp.config.RTOK
 
 object Amp : Agent {
@@ -22,19 +16,7 @@ object Amp : Agent {
     fun settingsPath(cfg: Config) = McpFiles.BY_HOST.getValue(HOST)(cfg, Kind.Cli).path
 
     /** `amp.mcpServers.rtok = {command, args}`; the key is one path segment, not a nested `amp` object. */
-    fun mcpSpec(cfg: Config) =
-        McpSpec(
-            host = HOST,
-            client = Client.Cli,
-            configPath = settingsPath(cfg),
-            format = Format.Jsonc,
-            keyPath = listOf(AMP_SERVERS),
-            server = RTOK,
-            launch = Launch(command = rtokMcpCommand(), hostArg = true),
-            entryShape = EntryShape.Command,
-            duplicateName = DuplicateName.ShowsBoth,
-            pluginServes = null,
-        )
+    fun mcpSpec(cfg: Config) = McpSurfaces.jsoncSpec(HOST, settingsPath(cfg), listOf(AMP_SERVERS))
 
     override fun files(
         cfg: Config,

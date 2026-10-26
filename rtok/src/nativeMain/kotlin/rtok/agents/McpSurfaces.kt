@@ -257,6 +257,13 @@ object McpSurfaces {
         pluginServes = null,
     )
 
+    /** rtok's bare `{command, args}` entry at [keyPath] of a host's JSONC [file], edited with its comments kept (Amp, Zed). */
+    fun jsoncSpec(
+        host: String,
+        file: String,
+        keyPath: List<String>,
+    ) = jsonSpec(host, Client.Cli, file, "", rtokMcpCommand(), EntryShape.Command).copy(format = Format.Jsonc, keyPath = keyPath)
+
     /** [path] with the home directory spelled `~`. */
     fun tilde(
         path: String,
