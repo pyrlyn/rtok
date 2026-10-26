@@ -325,3 +325,14 @@ Next, in order:
 - Deferred: `LspSession.shutdown()` must run when `rtok mcp` ends (MCP wiring); health-check backend backoff tests.
 - Stop point: next watch; then docs zstd, memory status, sync --stat, MCP, otel, worktree, task, batch, bench, hook
   dispatcher tests; release re-measure, completeness pass.
+
+## Session 2026-10-26 (night) — graph watch
+- `rtok.sys.FsWatch` (notify's part): `watchRecursive` = FSEvents on macOS (file events on a dispatch queue into
+  `FsEventQueue`, dropped/must-scan flags as rescan), inotify on Linux (watch per directory, new dirs added,
+  overflow as rescan; not compiled locally, linux targets are off by default) + FsWatchTest (3).
+- `graph/Watch.kt` (watch.rs: run, runScope with one worker per scope member and 2 s rescope, pump, settle,
+  root `.gitignore`, absorbEvent, pending sync) + WatchTest (14: all Rust watch.rs tests, FSEvents ones included).
+  `Matcher.root` is public.
+- Deferred: start `Watch.runScope` from `rtok mcp` when `[plugins.graph] watch = "notify"` (MCP wiring).
+- Stop point: next docs zstd; then memory status, sync --stat, MCP, otel, worktree, task, batch, bench, hook
+  dispatcher tests; release re-measure, completeness pass.
