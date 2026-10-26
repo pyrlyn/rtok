@@ -13,7 +13,7 @@ import rtok.sys.readBytes
 import rtok.sys.rustLines
 import kotlin.time.TimeSource
 
-/** The language-server side of the door. lsp.rs plugs in here; until then no server is ever found. */
+/** The language-server side of the door: [Lsp] (lsp.rs), or [LspBackend.None] where no server may be used. */
 interface LspBackend {
     fun probe(root: String): Absent?
 
@@ -87,7 +87,7 @@ data class Tag(
 )
 
 object Tools {
-    var lsp: LspBackend = LspBackend.None
+    var lsp: LspBackend = Lsp
 
     /** Not a saving, so before == after: `beforeBytes` is the milliseconds spent. Fails open. */
     fun recordModeRow(

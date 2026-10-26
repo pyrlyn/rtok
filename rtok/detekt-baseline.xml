@@ -88,6 +88,7 @@
     <ID>CyclomaticComplexMethod:Index.kt:Index$fun runWith: IndexReport</ID>
     <ID>CyclomaticComplexMethod:Index.kt:Index$internal fun docAbove: String</ID>
     <ID>CyclomaticComplexMethod:Logfmt.kt:private fun pairs: List&lt;Pair></ID>
+    <ID>CyclomaticComplexMethod:LspSession.kt:LspSession$fun requestWithin: JsonElement</ID>
     <ID>CyclomaticComplexMethod:Outline.kt:fun render: String</ID>
     <ID>CyclomaticComplexMethod:Pack.kt:fun packNotes: Pack</ID>
     <ID>CyclomaticComplexMethod:Portable.kt:Import$fun run: Report</ID>
@@ -131,6 +132,7 @@
     <ID>DestructuringDeclarationWithTooManyEntries:Tools.kt:Tools$val (path, name, kind, line) = parseSymbolId(id) ?: return "no definition of $id"</ID>
     <ID>EmptyFunctionBlock:QueueTest.kt:Scripted${}</ID>
     <ID>EmptyWhileBlock:QueueTest.kt:QueueTest${}</ID>
+    <ID>ExplicitItLambdaParameter:Lsp.kt:Lsp${ it -> if (it["name"].str != name) return@firstNotNullOfOrNull null val loc = it["location"] val uri = loc["uri"].str ?: return@firstNotNullOfOrNull null val start = loc["range"]["start"] Def( uri = uri, pos = start, kind = it["kind"].long ?: 0, path = LspWire.rel(root, uri), line = (start["line"].long ?: 0).toInt() + 1, endLine = (loc["range"]["end"]["line"].long ?: 0).toInt() + 1, ) }</ID>
     <ID>ForEachOnRange:CompressTest.kt:CompressTest$1..6</ID>
     <ID>FunctionOnlyReturningConstant:Tokens.kt:fun calibrateOrSkip: String</ID>
     <ID>LargeClass:Rules.kt:Rules</ID>
@@ -170,6 +172,8 @@
     <ID>LoopWithTooManyJumpStatements:Index.kt:Index$for</ID>
     <ID>LoopWithTooManyJumpStatements:Inject.kt:for</ID>
     <ID>LoopWithTooManyJumpStatements:Loops.kt:Loops$while</ID>
+    <ID>LoopWithTooManyJumpStatements:Lsp.kt:Lsp$for</ID>
+    <ID>LoopWithTooManyJumpStatements:LspSession.kt:LspSession$while</ID>
     <ID>LoopWithTooManyJumpStatements:Notes.kt:for</ID>
     <ID>LoopWithTooManyJumpStatements:Observe.kt:for</ID>
     <ID>LoopWithTooManyJumpStatements:Outline.kt:Outline$for</ID>
@@ -554,6 +558,24 @@
     <ID>MagicNumber:LogfmtTest.kt:LogfmtTest$5</ID>
     <ID>MagicNumber:LogfmtTest.kt:LogfmtTest$7</ID>
     <ID>MagicNumber:LogfmtTest.kt:LogfmtTest$8</ID>
+    <ID>MagicNumber:Lsp.kt:Lsp$1000</ID>
+    <ID>MagicNumber:LspTest.kt:LspTest$1000</ID>
+    <ID>MagicNumber:LspTest.kt:LspTest$10L</ID>
+    <ID>MagicNumber:LspTest.kt:LspTest$11L</ID>
+    <ID>MagicNumber:LspTest.kt:LspTest$12L</ID>
+    <ID>MagicNumber:LspTest.kt:LspTest$13L</ID>
+    <ID>MagicNumber:LspTest.kt:LspTest$20</ID>
+    <ID>MagicNumber:LspTest.kt:LspTest$2000</ID>
+    <ID>MagicNumber:LspTest.kt:LspTest$20_000u</ID>
+    <ID>MagicNumber:LspTest.kt:LspTest$23L</ID>
+    <ID>MagicNumber:LspTest.kt:LspTest$3</ID>
+    <ID>MagicNumber:LspTest.kt:LspTest$5L</ID>
+    <ID>MagicNumber:LspTest.kt:LspTest$6</ID>
+    <ID>MagicNumber:LspTest.kt:LspTest$6L</ID>
+    <ID>MagicNumber:LspTest.kt:LspTest$700_000u</ID>
+    <ID>MagicNumber:LspTest.kt:LspTest$99L</ID>
+    <ID>MagicNumber:LspWire.kt:LspWire$0xff</ID>
+    <ID>MagicNumber:LspWire.kt:LspWire$3</ID>
     <ID>MagicNumber:Memory.kt:10</ID>
     <ID>MagicNumber:Memory.kt:10u</ID>
     <ID>MagicNumber:Memory.kt:11u</ID>
@@ -910,6 +932,11 @@
     <ID>ReturnCount:JsonTree.kt:private fun rewriteBlock: Measurement?</ID>
     <ID>ReturnCount:Logfmt.kt:fun logfmtFactor: String?</ID>
     <ID>ReturnCount:Logfmt.kt:fun logfmtSummary: String?</ID>
+    <ID>ReturnCount:Lsp.kt:Lsp$internal fun isRustupProxy: Boolean</ID>
+    <ID>ReturnCount:Lsp.kt:Lsp$private fun callPaths: List&lt;String></ID>
+    <ID>ReturnCount:Lsp.kt:Lsp$private fun rustupComponentPath: String?</ID>
+    <ID>ReturnCount:LspSession.kt:LspSession$fun didOpen</ID>
+    <ID>ReturnCount:LspWire.kt:LspWire.Parser$fun next: JsonElement?</ID>
     <ID>ReturnCount:Memory.kt:fun memSaveGated: Saved</ID>
     <ID>ReturnCount:Memory.kt:internal fun recall: Injection?</ID>
     <ID>ReturnCount:Memory.kt:private fun promptRecall: Injection?</ID>
@@ -1005,6 +1032,7 @@
     <ID>ThrowsCount:Expand.kt:Expand$fun resolveId: String</ID>
     <ID>ThrowsCount:Export.kt:ExportView$fun parse: Export</ID>
     <ID>ThrowsCount:Jobs.kt:Jobs$fun start: String</ID>
+    <ID>ThrowsCount:LspSession.kt:LspSession$fun requestWithin: JsonElement</ID>
     <ID>TooGenericExceptionCaught:Compressor.kt:Compressor$e: Exception</ID>
     <ID>TooGenericExceptionCaught:Dispatch.kt:e: Exception</ID>
     <ID>TooGenericExceptionCaught:Dispatch.kt:e: Throwable</ID>
@@ -1051,6 +1079,9 @@
     <ID>TooManyFunctions:JsonTree.kt:rtok.plugins.jsontree.JsonTree.kt</ID>
     <ID>TooManyFunctions:JsonTreeTest.kt:JsonTreeTest</ID>
     <ID>TooManyFunctions:JsonTreeTest.kt:rtok.plugins.jsontree.JsonTreeTest.kt</ID>
+    <ID>TooManyFunctions:Lsp.kt:Lsp : LspBackend</ID>
+    <ID>TooManyFunctions:LspSession.kt:LspSession : AutoCloseable</ID>
+    <ID>TooManyFunctions:LspTest.kt:LspTest</ID>
     <ID>TooManyFunctions:Memory.kt:rtok.plugins.memory.Memory.kt</ID>
     <ID>TooManyFunctions:MemoryTest.kt:MemoryTest</ID>
     <ID>TooManyFunctions:Notes.kt:rtok.plugins.checkpoint.Notes.kt</ID>

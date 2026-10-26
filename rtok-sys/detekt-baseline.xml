@@ -3,6 +3,7 @@
   <ManuallySuppressedIssues/>
   <CurrentIssues>
     <ID>CyclomaticComplexMethod:Gitignore.kt:fun globToRegex: String</ID>
+    <ID>CyclomaticComplexMethod:Piped.kt:PipedChild$fun read: ByteArray?</ID>
     <ID>CyclomaticComplexMethod:Proc.kt:ProgressRunner$fun runCapped: Pair&lt;Captured, Long></ID>
     <ID>CyclomaticComplexMethod:Shlex.kt:Shlex$fun split: List&lt;String>?</ID>
     <ID>CyclomaticComplexMethod:Walk.kt:fun walk: Sequence&lt;WalkEntry></ID>
@@ -11,6 +12,8 @@
     <ID>LoopWithTooManyJumpStatements:Ancestors.kt:while</ID>
     <ID>LoopWithTooManyJumpStatements:Fs.kt:while</ID>
     <ID>LoopWithTooManyJumpStatements:Gitignore.kt:while</ID>
+    <ID>LoopWithTooManyJumpStatements:Piped.kt:PipedChild$while</ID>
+    <ID>LoopWithTooManyJumpStatements:PipedTest.kt:PipedTest$while</ID>
     <ID>LoopWithTooManyJumpStatements:Shlex.kt:Shlex$while</ID>
     <ID>LoopWithTooManyJumpStatements:Walk.kt:for</ID>
     <ID>MagicNumber:ChangePreview.kt:ChangePreview$3</ID>
@@ -23,6 +26,9 @@
     <ID>MagicNumber:ParallelTest.kt:ParallelTest$3</ID>
     <ID>MagicNumber:ParallelTest.kt:ParallelTest$4</ID>
     <ID>MagicNumber:ParallelTest.kt:ParallelTest$7</ID>
+    <ID>MagicNumber:PipedTest.kt:PipedTest$100</ID>
+    <ID>MagicNumber:PipedTest.kt:PipedTest$20</ID>
+    <ID>MagicNumber:PipedTest.kt:PipedTest$2000</ID>
     <ID>MagicNumber:Proc.kt:4096u</ID>
     <ID>MagicNumber:Proc.kt:ProgressRunner$0x7f</ID>
     <ID>MagicNumber:Proc.kt:ProgressRunner$0xff</ID>
@@ -65,6 +71,7 @@
     <ID>MagicNumber:Text.kt:10</ID>
     <ID>MagicNumber:Text.kt:16</ID>
     <ID>MagicNumber:Text.kt:32</ID>
+    <ID>MatchingDeclarationName:Piped.kt:PipedChild</ID>
     <ID>MatchingDeclarationName:Walk.kt:WalkEntry</ID>
     <ID>NestedBlockDepth:Shlex.kt:Shlex$fun split: List&lt;String>?</ID>
     <ID>ReturnCount:Ancestors.kt:@OptIn(ExperimentalForeignApi::class) fun parentOf: Int?</ID>

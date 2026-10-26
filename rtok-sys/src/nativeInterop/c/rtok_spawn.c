@@ -1,8 +1,12 @@
 /* rtok-sys native helpers, built into librtok_spawn.a (experiment/binary-split, docs/experiments/binary-split.md)
    and linked through cinterop `staticLibraries` instead of being compiled as inline functions of spawn.def. */
+#define _GNU_SOURCE
 #include <unistd.h>
 #include "rtok_spawn.h"
 extern char **environ;
+int rtok_spawn_addchdir(posix_spawn_file_actions_t *actions, const char *dir) {
+    return posix_spawn_file_actions_addchdir_np(actions, dir);
+}
 char **rtok_environ(void) { return environ; }
 #ifdef __APPLE__
 #include <libproc.h>
