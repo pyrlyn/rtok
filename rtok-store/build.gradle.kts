@@ -27,3 +27,7 @@ configure<KotlinMultiplatformExtension> {
         dependencies { api(project(":rtok-plugin-sdk")); api(project(":rtok-sys")) }
     }
 }
+// schema.rs + schema_snapshot.txt copied from the Rust crate: the drift test checks the Kotlin-migrated
+// database against the same golden files, so both builds keep one on-disk schema.
+val storeFixtures = layout.projectDirectory.dir("src/nativeTest/fixtures").asFile.absolutePath
+tasks.withType<org.jetbrains.kotlin.gradle.targets.native.tasks.KotlinNativeTest>().configureEach { environment("RTOK_FIXTURES", storeFixtures) }

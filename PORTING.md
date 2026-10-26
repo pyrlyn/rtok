@@ -20,7 +20,8 @@ Plan and per-phase checklist: [port-plan.md](port-plan.md).
 | crates/rtok-store retention, cache, kv | `Retention.kt`, `Cache.kt`, `Kv.kt` | ✅ | tests_schema 7 of 9 → 5 (+archive purge) |
 | crates/rtok-store call_log, measure_rows, session_rows, archive_rows, note_store, observations, archive_summaries, models | `CallLog.kt`, `MeasureRows.kt`, `SessionRows.kt`, `ArchiveRows.kt`, `NoteStore.kt`, `Observations.kt`, `Models.kt`, `Rows.kt` | ✅ | tests_store 31 → 31 |
 | crates/rtok-store otel, task_id, task_claims, task_counters | `Otel.kt`, `TaskId.kt`, `Tasks.kt` | ✅ | 8 → 8, 6 → 7 |
-| crates/rtok-store note_files, messages, agents, worktree_*, projects, project_links, symbols, symbol_graph, docs, embed, graph_events, host_usage (+ tests_archive) | `:rtok-store` | ⬜ | |
+| crates/rtok-store tests_archive (archive rows, retention, schema drift vs schema_snapshot.txt) | `ArchiveTest.kt` + fixtures | ✅ | 22 → 29 |
+| crates/rtok-store note_files, messages, agents, worktree_*, projects, project_links, symbols, symbol_graph, docs, embed, graph_events, host_usage | `:rtok-store` | ⬜ | |
 | crates/rtok-sys | `:rtok-sys` | ⬜ (module currently hosts `rtok.sys.Fs`, the fs-kit replacement) | |
 | fs-kit (external crate) path helpers | `rtok-sys/nativeMain/Fs.kt` | 🟡 normalize/canon/ancestors/starts_with | via root tests |
 | crates/rtok-mcp | `:rtok-mcp` | ⬜ | |
@@ -41,7 +42,7 @@ Plan and per-phase checklist: [port-plan.md](port-plan.md).
 | src/web, agents/junk_web.rs, `rtok web/tui/dashboard` | – | ❌ excluded (web) | |
 | tests/*.rs (138 integration files) | `:rtok` commonTest | ⬜ | 0 / ~138 files |
 
-Totals: 253 Kotlin tests passing on macosArm64 (see port-plan.md for the per-phase table).
+Totals: 282 Kotlin tests passing on macosArm64 (see port-plan.md for the per-phase table).
 
 | Rust | Kotlin | Status | Tests |
 |---|---|---|---|
