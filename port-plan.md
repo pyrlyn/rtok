@@ -611,3 +611,10 @@ Next, in order:
   `settings.jsonc` edited in place; `McpEntries.hasEntryAt` takes a segment list.
 - Tests: PiTest 5, AmpTest 4.
 - Stop point: next 3c-2 = opencode, mimo, kilo.
+
+## Session: agents chunk 3c-2 — opencode, kilo, mimo
+- `OpenCode.kt`: `OpenCodeFamily` (local argv `mcp.rtok` via the shared MCP core, `plugins/opencode/rtok.ts` linked
+  beside the config by default), `OpenCode` (+ `env.OPENAI_BASE_URL` proxy, Desktop file), `Kilo`, `Mimo` (lone
+  `mimocode.jsonc` edited as JSONC). `:rtok-mcp` `EntryShape.LocalArgv` = `{type: local, command: [argv], enabled}`.
+- Tests: OpenCodeTest 6.
+- Stop point: next 3c-3 = zcode, zed.

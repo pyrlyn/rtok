@@ -27,8 +27,8 @@ enum class Client { Cli, Desktop, Ide }
 /** What a host does when a plugin serves a server under the same name as a config entry (research.md §25). */
 enum class DuplicateName { ShowsBoth, OverridesByScope, Merges, Errors }
 
-/** `"type": "stdio"` + argv, the bare argv, or Copilot CLI's `"type": "local"` + `"tools": ["*"]`. */
-enum class EntryShape { TypedCommand, Command, LocalAllTools }
+/** `"type": "stdio"` + argv, the bare argv, Copilot CLI's `"type": "local"` + `"tools": ["*"]`, or OpenCode's local argv. */
+enum class EntryShape { TypedCommand, Command, LocalAllTools, LocalArgv }
 
 /** How a host starts the server when that is not the registry's bare `rtok mcp`. */
 data class Launch(
@@ -69,6 +69,7 @@ data class McpSpec(
             EntryShape.TypedCommand -> m["type"] = JsonPrimitive("stdio")
             EntryShape.LocalAllTools -> m["type"] = JsonPrimitive("local")
             EntryShape.Command -> Unit
+            EntryShape.LocalArgv -> return localArgv()
         }
         m["command"] = JsonPrimitive(command)
         m["args"] = JsonArray(args.map(::JsonPrimitive))
@@ -76,6 +77,16 @@ data class McpSpec(
         if (server.env.isNotEmpty()) m["env"] = JsonObject(server.env.associate { (k, v) -> k to JsonPrimitive(v) })
         return JsonObject(m)
     }
+
+    /** OpenCode's local shape: the whole argv in `command`, `enabled: true` (OpenCode, Kilo Code, MiMo Code). */
+    private fun localArgv() =
+        JsonObject(
+            mapOf(
+                "type" to JsonPrimitive("local"),
+                "command" to JsonArray((listOf(command) + args).map(::JsonPrimitive)),
+                "enabled" to JsonPrimitive(true),
+            ),
+        )
 
     companion object {
         /** `"a.b.c"` → `["a", "b", "c"]`. */
