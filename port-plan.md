@@ -1459,3 +1459,17 @@ Next, in order:
   healthy store, T207 totals (ledgers vs OTLP vs plugin pages), T385.12.2 lanes, T581 top sinks. The header check
   matches ` (30d)` and ` · store ` instead of recomputing the clock dates. tests/report*.rs are now fully ported.
 - Stop point: completions (tests/completions*.rs).
+
+## Session: completions
+- `rtok.completions`: `Shell`, `CompTree` (clap's view: own options, inherited globals, `--help`/`-h`, root
+  `--version`/`-V`, the implicit `help` subcommand), generators for bash, zsh, fish, PowerShell, elvish and Clink,
+  `Places` / `Install` / `Picker` (install.rs, picker.rs), and `rtok completions` (`cli/CompletionsCmd.kt`).
+- Deviations: the bash/zsh/fish/PowerShell/elvish scripts follow clap_complete's structure but are not
+  byte-identical to tests/trycmd/completions-*.stdout (those also need the whole clap tree: bench, demon, logs, man
+  and the rest are not ported yet); Clink follows shell-completions' generator line by line. The interactive
+  picker (inquire) is not ported: `Picker.pick` takes the prompt as a function, and a bare `rtok completions`
+  is refused like the no-terminal case. `--dry-run` prints the diff unpainted.
+- Tests: install.rs (9), picker.rs (6), generators (3), `CompletionsCliSpec` (6: completions.rs plus the
+  list / no-shell / dry-run trycmd cases; HOME and the XDG/ZDOTDIR/LOCALAPPDATA/SHELL overrides are isolated).
+- Stop point: `rtok man`, completions_shells.rs / completions_picker_pty.rs (need real shells / a pty), then
+  bench, demon, macOS/Linux split.
