@@ -1,6 +1,6 @@
 @file:Suppress("MagicNumber")
 
-// Port of the src/tasks/sync.rs tests (the GitHub read-only test waits for the github adapter).
+// Port of the src/tasks/sync.rs tests.
 
 package rtok.tasks
 
@@ -98,6 +98,21 @@ class TaskSyncTest {
         assertTrue(r.aboveCounter.isEmpty() && r.raised.isEmpty())
         assertFalse(r.isClean)
         assertEquals("fixed: next id A4\nduplicate ids: A2\nno id label: A5. Lost (label rtok:A5 is gone) https://github.com/me/app/issues/9\n", syncText(r))
+    }
+
+    @Test fun githubSyncOnlyReads() {
+        val fake = FakeHttp()
+        val issues = arr(issue(4, "A4", "open"), issue(11, "A11", "open"), issue(6, "A6", "open", labels = listOf("rtok")))
+        fake.onIf("GET", ISSUES, { c -> c.query.split('&').contains("labels=rtok") }) { ok(issues) }
+        val store = store()
+        store.seedTaskCounter("p", null, 5u)
+        val r = syncTasks(project(github(fake)), store)
+        assertEquals("github", r.adapter)
+        assertEquals(11u to listOf(id("A11")), r.counter to r.aboveCounter)
+        assertEquals(listOf(id("A6")), r.unlabelled.map { it.id })
+        // list and unlabelled each read once; a write would have hit no route and failed.
+        assertEquals(2, fake.calls.size)
+        assertTrue(fake.calls.all { it.method == "GET" })
     }
 
     @Test fun theReportSerializesForJson() {
