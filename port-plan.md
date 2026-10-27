@@ -1513,3 +1513,15 @@ Next, in order:
   `git clean` in the repo, so they are not used), RunBoundedTest (7).
 - Not ported yet: `--suite p28` (src/bench/p28.rs), the bench/ overlay tests, tests/*_bench.rs,
   tests/bench_fixtures.rs (needs an o200k_base tokenizer), tests/p28_must_keep.rs.
+
+## Session: macOS/Linux split, part 1
+- `fileLock` (expect in nativeMain; actual `platform.posix.flock` on macOS, `platform.linux.flock` on Linux,
+  where `platform.posix.flock` is the struct) in rtok-log and rtok-sys; Log rotation, rtok-sys locks and the demon
+  claim use it. tui raw mode masks termios flags width-neutrally (ULong on macOS, UInt on Linux).
+- `-Prtok.allTargets=true :rtok-log:compileKotlinLinux{X64,Arm64}` and `:tui:compileKotlinLinux{X64,Arm64}` compile.
+- Remaining Linux blockers (`compileKotlinLinuxX64`):
+  - rtok-sys: posix_spawn*, statvfs and utimensat live in `platform.linux` on Linux, so nativeMain cannot reach
+    them. Plan: own C wrappers in rtok_spawn.h, so every target sees them under `rtok.sys.spawn`.
+    `excludeDependentModules` in spawn.def did not help.
+  - http-ktor linuxMain: `io.ktor.client.engine.curl` is unresolved (the declared ktor-client-curl artifact).
+  - Modules downstream of rtok-sys are not checked yet.

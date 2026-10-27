@@ -60,9 +60,9 @@ class Terminal : AutoCloseable {
         memScoped {
             val t = alloc<termios>()
             tcgetattr(STDIN_FILENO, t.ptr)
-            t.c_iflag = t.c_iflag and (BRKINT or ICRNL or INPCK or ISTRIP or IXON).convert<ULong>().inv()
-            t.c_oflag = t.c_oflag and OPOST.convert<ULong>().inv()
-            t.c_lflag = t.c_lflag and (ECHO or ICANON or IEXTEN or ISIG).convert<ULong>().inv()
+            t.c_iflag = (t.c_iflag.toULong() and (BRKINT or ICRNL or INPCK or ISTRIP or IXON).toULong().inv()).convert()
+            t.c_oflag = (t.c_oflag.toULong() and (OPOST).toULong().inv()).convert()
+            t.c_lflag = (t.c_lflag.toULong() and (ECHO or ICANON or IEXTEN or ISIG).toULong().inv()).convert()
             tcsetattr(STDIN_FILENO, TCSAFLUSH, t.ptr)
         }
         raw = true

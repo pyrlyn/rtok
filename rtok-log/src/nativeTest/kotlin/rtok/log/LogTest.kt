@@ -85,7 +85,7 @@ class LogTest {
         val path = "$dir/app.log"
         writeText(path, "old\n")
         val held = openRotateLock(path)
-        assertEquals(0, flock(held, LOCK_EX))
+        assertEquals(0, fileLock(held, LOCK_EX))
         writeLine(log(path, 1, 1), "new")
         assertEquals("old\nnew\n", readText(path))
         assertFalse(exists(rotatedPath(path, 1)))
