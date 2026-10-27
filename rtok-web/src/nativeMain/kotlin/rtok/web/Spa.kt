@@ -10,8 +10,9 @@ import rtok.sys.readBytes
 
 const val DIST_ENV = "RTOK_WEB_DIST"
 
+// 'wasm-unsafe-eval' lets the Compose UI compile its .wasm modules; scripts still load only from 'self'.
 private const val CSP =
-    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
+    "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; " +
         "img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; " +
         "base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
 private const val IMMUTABLE = "public, max-age=31536000, immutable"
