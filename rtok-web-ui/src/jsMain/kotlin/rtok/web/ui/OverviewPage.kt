@@ -110,7 +110,7 @@ private fun FlowContent.kpis(o: OverviewModel) {
     kpi("plugins on", "${o.enabled} / ${o.plugins.size}", "${o.plugins.size - o.enabled} disabled")
 }
 
-private fun FlowContent.savingsTrend(days: List<JsonObject>) {
+internal fun FlowContent.savingsTrend(days: List<JsonObject>) {
     val rows = days.sumOf { it.num("rows") ?: 0.0 }
     panel("savings trend", "${days.size} days · ${fmt(rows)} Measurement rows", null, "span12") {
         if (days.none { it.num("saved") != null }) {

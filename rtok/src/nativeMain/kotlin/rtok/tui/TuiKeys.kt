@@ -29,6 +29,8 @@ val KEYS: List<Triple<String, String, String>> =
         Triple("sessions", "↑/↓", "move selection"),
         Triple("sessions", "Enter", "detail pane"),
         Triple("sessions", "l", "live-only filter"),
+        Triple("skills", "↑/↓", "move selection"),
+        Triple("skills", "n", "never-invoked only"),
         Triple("doctor", "f", "fix checklist"),
         Triple("doctor", "Space", "select entry"),
         Triple("doctor", "k", "keep this copy"),

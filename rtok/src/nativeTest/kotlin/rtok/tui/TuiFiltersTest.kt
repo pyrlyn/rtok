@@ -42,6 +42,38 @@ class TuiFiltersTest {
         assertTrue("bbb-ended" in screen(a))
     }
 
+    // view.rs `skills_tab_lists_three_rows_and_n_hides_invoked`.
+    @Suppress("MagicNumber")
+    @Test fun skillsTabListsRowsAndNHidesInvoked() {
+        val a = TuiApp("skills")
+        a.snapshot = snap("""{"skills":{"header":"","rows":[]}}""")
+        assertTrue("no skills listed" in screen(a), "listing-empty, not stats-empty")
+        a.snapshot =
+            snap(
+                """{"skills":{"header":"3 listed","rows":[
+                {"name":"hot","source":"user","desc_chars":40,"body_bytes":100,"invocations":3,"resident":1,"last_invoked":"today","never":false},
+                {"name":"cold","source":"project","desc_chars":10,"body_bytes":20,"invocations":0,"resident":0,"last_invoked":"-","never":true},
+                {"name":"plug","source":"plugin:x","desc_chars":8,"body_bytes":50,"invocations":1,"resident":1,"last_invoked":"today","never":false}]}}""",
+            )
+        val shown = screen(a)
+        assertTrue(listOf("3 listed", "hot", "cold", "plug", "never", "resident").all { it in shown }, shown)
+        assertEquals(3, a.rows())
+        a.key(Key.Char("n"))
+        val filtered = screen(a)
+        assertTrue("cold" in filtered && "hot" !in filtered, filtered)
+        assertEquals(1, a.rows())
+        a.key(Key.Char("n"))
+        assertFalse(a.neverOnly)
+    }
+
+    @Test fun statsTabShowsTheTextAndANullIsAFailedTick() {
+        val a = TuiApp("stats")
+        a.snapshot = snap("""{"stats":"sessions 2  compact 0"}""")
+        assertTrue("sessions 2" in screen(a))
+        a.snapshot = snap("""{"stats":null}""")
+        assertTrue("stats did not answer this tick" in screen(a), screen(a))
+    }
+
     @Test fun configSlashFiltersAndOwnsGlobalKeys() {
         val a = TuiApp("config")
         a.snapshot = snap("""{"config":"[proxy]\nport = 1\n[tui]\ntab = \"calls\""}""")
