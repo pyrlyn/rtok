@@ -224,6 +224,29 @@ private fun CssBuilder.tables() {
         put("font-variant-numeric", "tabular-nums")
     }
     rule(".check") { put("padding", "2px 0") }
+    rule(".toolbar") {
+        put("display", "flex")
+        put("flex-wrap", "wrap")
+        put("align-items", "center")
+        put("gap", "8px")
+        put("margin-bottom", "8px")
+    }
+    rule(".toggles button") { put("border-radius", "0") }
+    rule(".toggles button.on") {
+        put("background", v("accent"))
+        put("color", v("bg"))
+    }
+    rule(".search") {
+        put("font", "inherit")
+        put("color", v("fg"))
+        put("background", v("bg"))
+        put("border", "1px solid ${v("border")}")
+        put("border-radius", "6px")
+        put("padding", "2px 8px")
+        put("min-width", "200px")
+    }
+    rule("td .ok") { put("color", v("ok")) }
+    rule("td .wrap, td:last-child") { put("white-space", "normal") }
 }
 
 private fun CssBuilder.widgets() {

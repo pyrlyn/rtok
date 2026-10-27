@@ -83,7 +83,24 @@ class App(
         render()
     }
 
+    /** Re-renders from the current state (a filter changed). */
+    fun refresh() = render()
+
     private fun render() {
+        // A snapshot tick re-renders the page; the focused filter keeps its focus and caret.
+        val focused = document.activeElement as? org.w3c.dom.HTMLInputElement
+        val focusId = focused?.id?.takeIf { it.isNotEmpty() }
+        val caret = focused?.selectionStart
+        renderNow()
+        focusId?.let { id ->
+            (document.getElementById(id) as? org.w3c.dom.HTMLInputElement)?.let {
+                it.focus()
+                caret?.let { c -> it.setSelectionRange(c, c) }
+            }
+        }
+    }
+
+    private fun renderNow() {
         root.innerHTML = ""
         if (state.link == LinkState.CLOSED) {
             renderOffline()
@@ -197,6 +214,9 @@ fun toggleTheme() {
 fun main() {
     installStyles()
     Pages.register("overview", OverviewPage)
+    Pages.register("calls", CallsPage)
+    Pages.register("sessions", SessionsPage)
+    Pages.register("logs", LogsPage)
     val root = document.getElementById("root") as? HTMLElement ?: error("#root element not found")
     App(root).start()
 }

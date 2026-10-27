@@ -6,7 +6,6 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.intOrNull
-import kotlinx.serialization.json.jsonPrimitive
 
 /** The link to the server, as the status pill shows it. */
 enum class LinkState { CONNECTING, OPEN, CLOSED }
@@ -80,5 +79,8 @@ fun JsonObject.str(key: String): String? = (this[key] as? JsonPrimitive)?.takeIf
 /** A number field of [obj] as Double, or null. */
 fun JsonObject.num(key: String): Double? = (this[key] as? JsonPrimitive)?.takeIf { !it.isString }?.content?.toDoubleOrNull()
 
-/** True when [key] holds JSON `true`. */
-fun JsonObject.flag(key: String): Boolean = (this[key] as? JsonPrimitive)?.jsonPrimitive?.content == "true"
+/** JS truthiness of [key] for the flags the server sends: `true`, or a non-zero number (`CallRow.ok` is 0/1). */
+fun JsonObject.flag(key: String): Boolean {
+    val p = this[key] as? JsonPrimitive
+    return p != null && !p.isString && (p.content == "true" || (p.content.toDoubleOrNull() ?: 0.0) != 0.0)
+}
