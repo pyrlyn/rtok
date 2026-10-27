@@ -1293,3 +1293,5 @@ Next, in order:
   Both wired into `rtok mcp` (stdio) and `rtok mcp --http`; the proxy wires them when it is ported.
 - Tests: TickerTest 2 (export.rs ticker tests), RetentionTest 1.
 - Stop point: next model, report, completions, bench, demon, proxy batch tests, macOS/Linux split.
+- Session (web/dashboard worker): web Graph scene nodes are clickable (click or Enter): the same `open` as the drill
+  node list (a file toggles, a symbol is focused, in its own project when foreign); `data-node` delegation on the SVG.
