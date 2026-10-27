@@ -30,7 +30,7 @@ private val HEADS = listOf("Window", "Savings", "Calls", "Cache", "Expand", "Con
 private val ISOLATED = listOf("HOME", "ANTHROPIC_BASE_URL", "OPENAI_BASE_URL")
 
 /** [withHome] plus HOME = the temp home and no base-URL overrides; every variable is restored after. */
-private fun <T> withReportHome(
+internal fun <T> withReportHome(
     tag: String,
     body: (String) -> T,
 ): T =
@@ -45,7 +45,7 @@ private fun <T> withReportHome(
         }
     }
 
-private fun ok(vararg args: String): String {
+internal fun reportOk(vararg args: String): String {
     val r = cli(*args)
     r.err shouldBe ""
     r.code shouldBe 0
@@ -85,7 +85,7 @@ class ReportCliSpec :
         test("--ai is measurably smaller than md") {
             withReportHome("report-ai-smaller") { home ->
                 seed(home)
-                val (md, ai) = ok("report") to ok("report", "--ai")
+                val (md, ai) = reportOk("report") to reportOk("report", "--ai")
                 (tokens(ai) < tokens(md)) shouldBe true
                 ai shouldNotContain "| ---"
             }
@@ -93,7 +93,7 @@ class ReportCliSpec :
         test("--ai carries the section set with md numbers") {
             withReportHome("report-ai-sections") { home ->
                 seed(home)
-                val (md, ai) = ok("report") to ok("report", "--ai")
+                val (md, ai) = reportOk("report") to reportOk("report", "--ai")
                 ai.lines().filter { it.startsWith('#') } shouldBe HEADS.map { "#${it.lowercase()}" }
                 HEADS.forEach { md shouldContain "## $it" }
                 for (want in listOf("total_saved=210tok rows=2", "hooks 2", "dropped: none", "units:")) ai shouldContain want
@@ -105,7 +105,7 @@ class ReportCliSpec :
             withReportHome("report-ai-budget") { home ->
                 seed(home)
                 writeString("$home/config.toml", "[report]\nbudget_tokens = 100\n")
-                val ai = ok("report", "--ai")
+                val ai = reportOk("report", "--ai")
                 val dropped =
                     ai
                         .lines()
@@ -118,17 +118,17 @@ class ReportCliSpec :
         }
         test("an empty store --ai says so") {
             withReportHome("report-ai-empty") {
-                val ai = ok("report", "--ai")
+                val ai = reportOk("report", "--ai")
                 for (want in listOf("dropped: none", "no rows.", "no recommendations.", "hooks 0")) ai shouldContain want
             }
         }
         test("the pdf has the html headings in order and the charts") {
             withReportHome("report-pdf") { home ->
                 seed(home)
-                val html = ok("report", "--format", "html")
+                val html = reportOk("report", "--format", "html")
                 HEADS.forEach { html shouldContain ">$it</h2>" }
                 val path = "$home/report.pdf"
-                ok("report", "--format", "pdf", "--out", path).trim() shouldBe path
+                reportOk("report", "--format", "pdf", "--out", path).trim() shouldBe path
                 val pdf = latin1(path)
                 pdf shouldStartWith "%PDF-"
                 pdf.takeLast(8) shouldContain "%%EOF"
@@ -144,7 +144,7 @@ class ReportCliSpec :
         test("an empty store pdf keeps all headings") {
             withReportHome("report-pdf-empty") { home ->
                 val path = "$home/empty.pdf"
-                ok("report", "--format", "pdf", "--out", path)
+                reportOk("report", "--format", "pdf", "--out", path)
                 val pdf = latin1(path)
                 pdf shouldStartWith "%PDF-"
                 HEADS.forEach { positions(pdf, "($it").isNotEmpty() shouldBe true }
@@ -153,7 +153,7 @@ class ReportCliSpec :
         }
         test("an empty store says so rather than printing zeros") {
             withReportHome("report-empty") {
-                val out = ok("report")
+                val out = reportOk("report")
                 for (want in listOf("## Recommendations", "**No rows in window.** The store has no rows to report.", "No recommendations.", "| calls | 0 of 0 | window (30d) |", "| report.format | md | default |", "hooks 0")) {
                     out shouldContain want
                 }
@@ -165,7 +165,7 @@ class ReportCliSpec :
             withReportHome("report-out") { home ->
                 seed(home)
                 val path = "$home/report.md"
-                ok("report", "--out", path).trim() shouldBe path
+                reportOk("report", "--out", path).trim() shouldBe path
                 val written = readToString(path)
                 written shouldStartWith "# rtok report"
                 written shouldContain "| cmd | 1 | 100 | 40 | 60 |"
@@ -176,9 +176,9 @@ class ReportCliSpec :
                 val cfg = "$home/rtok.toml"
                 for (configured in listOf("html", "pdf")) {
                     writeString(cfg, "[report]\nformat = \"$configured\"\n")
-                    val explicit = ok("--config", cfg, "report", "--format", "md")
+                    val explicit = reportOk("--config", cfg, "report", "--format", "md")
                     (explicit.trimStart().startsWith('#') && "<html" !in explicit) shouldBe true
-                    ok("--config", cfg, "report").trimStart().startsWith('#') shouldBe false
+                    reportOk("--config", cfg, "report").trimStart().startsWith('#') shouldBe false
                 }
             }
         }
