@@ -113,6 +113,13 @@ private fun CssBuilder.charts() {
         put("height", "auto")
     }
     rule(".kpi .chart") { put("height", "32px") }
+    rule(".scene") {
+        put("display", "block")
+        put("width", "100%")
+        put("height", "auto")
+        put("max-height", "60vh")
+    }
+    rule(".ring") { put("vertical-align", "middle") }
     rule(".track, .mix") {
         put("display", "flex")
         put("height", "8px")

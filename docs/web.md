@@ -96,8 +96,9 @@ Snapshot fields, `/ws` actions and every TUI tab are ported. The web Graph page 
 `web/src/pages/graph3d` the TUI already has:
 - [x] health ring words, grouped alerts and alert toasts logic (health.ts, alerts.ts) — `GraphHealth.kt`
 - [x] drill state in the URL, breadcrumbs, editor links (drillState.ts) — `DrillState.kt`
-- [ ] drill view and panel (DrillView.tsx, DrillPanel.tsx) over the `graph` reply
-- [ ] compare panel and `markGraph` (ComparePanel.tsx, compare.ts) over the `diff` reply
-- [ ] export menu and imported view (ExportMenu.tsx, ImportedView.tsx); PNG waits on Ivan
-- [ ] projects overview with health rings and remove dry run (ProjectsOverview.tsx, HealthRing.tsx)
-- [ ] 2D force scene (Scene2D.tsx, layout.ts, scene.ts) as our own SVG layout; 3D (three.js) is not ported
+- [x] drill view and panel (DrillView.tsx, DrillPanel.tsx) over the `graph` reply — `GraphDrill.kt`, `DrillModel.kt`; the node list is the click target (the SVG has tooltips only)
+- [x] compare panel and `markGraph` (ComparePanel.tsx, compare.ts) over the `diff` reply (refs or a saved export) — `Compare.kt`, `GraphDrillPanels.kt`
+- [x] export menu (JSON/SVG, overview/symbols, focus) and imported view (ExportMenu.tsx, ImportedView.tsx); PNG waits on Ivan
+- [x] projects with health rings, `drill →` and the remove dry run (`project_plan`) (ProjectsOverview.tsx, HealthRing.tsx)
+- [x] 2D scene (Scene2D.tsx, layout.ts) as our own SVG over a deterministic force layout (`LayoutPoint.kt`, `GraphScene.kt`)
+- [ ] deferred: the 3D scene (Scene3D.tsx, stage3d.ts, three.js/d3-force-3d) and the layout web worker
