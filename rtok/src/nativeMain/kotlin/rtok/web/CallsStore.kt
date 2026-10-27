@@ -184,7 +184,7 @@ private fun ended(
 )
 
 class CallsStore(
-    cfg: Graph = Graph(),
+    private val cfg: Graph = Graph(),
 ) {
     val running = ArrayList<Running>()
 
@@ -202,6 +202,15 @@ class CallsStore(
     val bucketCount: Int get() = buckets.size
 
     val all = Totals()
+
+    /** calls_store.rs `Clone`: the picture `rtok tui`'s freeze holds while this store keeps folding. */
+    fun copy(): CallsStore =
+        CallsStore(cfg).also { c ->
+            c.running.addAll(running)
+            c.feed.addAll(feed)
+            buckets.mapTo(c.buckets) { it.first to it.second.copy() }
+            c.all.add(all)
+        }
 
     /** Folds one batch in; totals come from the batch `summary`, so a burst cut down still adds up. */
     fun fold(
