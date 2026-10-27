@@ -75,5 +75,7 @@ Previously excluded from the port (port-plan.md); now in progress in small steps
   termios/ANSI `Terminal` (raw mode, alternate screen, size, poll).
 - Step 7, part 2: `rtok tui [--tab] [--tick-secs]`: tabs from model::pages(), re-read of the same Snapshot
   every tick and on `r`, tables for plugins/calls/sessions, logs and the CLI text pages, overview totals with a
-  ctx sparkline, `?` help, the tty guard. Next: plugin toggles, filters, calls expand, doctor fix, junk clear,
+  ctx sparkline, `?` help, the tty guard. Part 3: Plugins Space/Enter toggle through `Validate.set`
+  (app.rs T15.4, status in the key line) and the Hosts `c`/`y` clear-safe-junk panel over `JunkWeb` (junk_clear.rs
+  T479), both through `rtok.tui.TuiActions`. Next: filters, calls expand, doctor fix,
   graph drill/compare/export and the live calls pane; reading the model off the input thread.

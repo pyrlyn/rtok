@@ -48,7 +48,8 @@ fun run(cfg: Config) {
         cfg.tui.tickSecs
             .toLong()
             .coerceAtLeast(1) * MS
-    val app = TuiApp(cfg.tui.tab)
+    val actions = TuiActions(cfg)
+    val app = TuiApp(cfg.tui.tab, actions)
     Terminal().use { term ->
         term.open()
         val start =
@@ -59,7 +60,7 @@ fun run(cfg: Config) {
         while (true) {
             val now = start.elapsedNow().inWholeMilliseconds
             if (now >= next) {
-                app.snapshot = Snapshot.build(cfg)
+                app.snapshot = Snapshot.build(actions.cfg)
                 next = now + tick
             }
             val s = term.size()
