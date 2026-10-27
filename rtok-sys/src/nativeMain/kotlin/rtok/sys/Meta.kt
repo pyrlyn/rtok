@@ -40,12 +40,7 @@ fun setModified(
     p: String,
     nanos: Long,
 ) {
-    memScoped {
-        val times = allocArray<timespec>(2)
-        for (i in 0..1) {
-            times[i].tv_sec = nanos / NANOS_PER_SECOND
-            times[i].tv_nsec = nanos % NANOS_PER_SECOND
-        }
-        if (utimensat(AT_FDCWD, p, times, 0) != 0) throw IoException(ioKind(errno), "utimensat $p: errno $errno")
+    if (rtok.sys.spawn.rtok_set_times(p, nanos / NANOS_PER_SECOND, (nanos % NANOS_PER_SECOND).convert()) != 0) {
+        throw IoException(ioKind(errno), "utimensat $p: errno $errno")
     }
 }

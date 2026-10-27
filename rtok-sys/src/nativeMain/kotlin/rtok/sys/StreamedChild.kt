@@ -117,25 +117,17 @@ class StreamedChild private constructor(
                 // The parent's read ends must not leak into a later child of this process.
                 fcntl(out[0], F_SETFD, FD_CLOEXEC)
                 fcntl(err[0], F_SETFD, FD_CLOEXEC)
-                val actions = alloc<posix_spawn_file_actions_tVar>()
-                posix_spawn_file_actions_init(actions.ptr)
-                posix_spawn_file_actions_addopen(actions.ptr, 0, "/dev/null", O_RDONLY, 0u)
-                posix_spawn_file_actions_adddup2(actions.ptr, out[1], 1)
-                posix_spawn_file_actions_adddup2(actions.ptr, err[1], 2)
-                for (fd in listOf(out[0], out[1], err[0], err[1])) posix_spawn_file_actions_addclose(actions.ptr, fd)
-                val argv = allocArrayOf((listOf(program) + args).map { it.cstr.ptr } + listOf(null))
-                val envp = allocArrayOf(mergedEnv(emptyMap()).map { it.cstr.ptr } + listOf(null))
-                val pid = alloc<pid_tVar>()
-                val rc = posix_spawn(pid.ptr, program, actions.ptr, null, argv, envp)
-                posix_spawn_file_actions_destroy(actions.ptr)
+                val actions = SpawnActions().open(0, "/dev/null", O_RDONLY).dup2(out[1], 1).dup2(err[1], 2)
+                for (fd in listOf(out[0], out[1], err[0], err[1])) actions.close(fd)
+                val spawned = runCatching { actions.spawn(program, args, mergedEnv(emptyMap()), search = false) }
                 close(out[1])
                 close(err[1])
-                if (rc != 0) {
+                spawned.exceptionOrNull()?.let {
                     close(out[0])
                     close(err[0])
-                    throw IoException(if (rc == ENOENT) IoException.Kind.NotFound else IoException.Kind.Other, "$program: spawn errno $rc")
+                    throw it
                 }
-                StreamedChild(pid.value, out[0], err[0])
+                StreamedChild(spawned.getOrThrow(), out[0], err[0])
             }
 
         /** Starts [program] in its own session with all three streams on /dev/null; its pid, or null. */
@@ -143,22 +135,12 @@ class StreamedChild private constructor(
             program: String,
             args: List<String>,
         ): Int? =
-            memScoped {
-                val actions = alloc<posix_spawn_file_actions_tVar>()
-                posix_spawn_file_actions_init(actions.ptr)
-                posix_spawn_file_actions_addopen(actions.ptr, 0, "/dev/null", O_RDONLY, 0u)
-                posix_spawn_file_actions_addopen(actions.ptr, 1, "/dev/null", O_WRONLY, 0u)
-                posix_spawn_file_actions_addopen(actions.ptr, 2, "/dev/null", O_WRONLY, 0u)
-                val attr = alloc<posix_spawnattr_tVar>()
-                posix_spawnattr_init(attr.ptr)
-                posix_spawnattr_setflags(attr.ptr, POSIX_SPAWN_SETSID.toShort())
-                val argv = allocArrayOf((listOf(program) + args).map { it.cstr.ptr } + listOf(null))
-                val envp = allocArrayOf(mergedEnv(emptyMap()).map { it.cstr.ptr } + listOf(null))
-                val pid = alloc<pid_tVar>()
-                val rc = posix_spawn(pid.ptr, program, actions.ptr, attr.ptr, argv, envp)
-                posix_spawn_file_actions_destroy(actions.ptr)
-                posix_spawnattr_destroy(attr.ptr)
-                if (rc == 0) pid.value else null
-            }
+            runCatching {
+                SpawnActions()
+                    .open(0, "/dev/null", O_RDONLY)
+                    .open(1, "/dev/null", O_WRONLY)
+                    .open(2, "/dev/null", O_WRONLY)
+                    .spawn(program, args, mergedEnv(emptyMap()), setsid = true, search = false)
+            }.getOrNull()
     }
 }

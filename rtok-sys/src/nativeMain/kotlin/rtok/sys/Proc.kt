@@ -51,25 +51,19 @@ class ProgressRunner(
             val outPipe = allocArray<IntVar>(2)
             val errPipe = allocArray<IntVar>(2)
             check(pipe(outPipe) == 0 && pipe(errPipe) == 0) { "pipe: errno $errno" }
-            val actions = alloc<posix_spawn_file_actions_tVar>()
-            posix_spawn_file_actions_init(actions.ptr)
-            posix_spawn_file_actions_adddup2(actions.ptr, outPipe[1], 1)
-            posix_spawn_file_actions_adddup2(actions.ptr, errPipe[1], 2)
-            dir?.let { rtok_spawn_addchdir(actions.ptr, it) }
-            stdinPath?.let { posix_spawn_file_actions_addopen(actions.ptr, 0, it, O_RDONLY, 0u) }
-            for (fd in listOf(outPipe[0], outPipe[1], errPipe[0], errPipe[1])) posix_spawn_file_actions_addclose(actions.ptr, fd)
-            val argv = allocArrayOf((listOf(program) + args).map { it.cstr.ptr } + listOf(null))
-            val pid = alloc<pid_tVar>()
-            val envp = if (extraEnv.isEmpty()) environPtr() else allocArrayOf(mergedEnv(extraEnv).map { it.cstr.ptr } + listOf(null))
-            val rc = posix_spawnp(pid.ptr, program, actions.ptr, null, argv, envp)
-            posix_spawn_file_actions_destroy(actions.ptr)
+            val actions = SpawnActions().dup2(outPipe[1], 1).dup2(errPipe[1], 2)
+            dir?.let { actions.chdir(it) }
+            stdinPath?.let { actions.open(0, it, O_RDONLY) }
+            for (fd in listOf(outPipe[0], outPipe[1], errPipe[0], errPipe[1])) actions.close(fd)
+            val spawned = runCatching { actions.spawn(program, args, if (extraEnv.isEmpty()) null else mergedEnv(extraEnv)) }
             close(outPipe[1])
             close(errPipe[1])
-            if (rc != 0) {
+            spawned.exceptionOrNull()?.let {
                 close(outPipe[0])
                 close(errPipe[0])
-                throw IoException(if (rc == ENOENT) IoException.Kind.NotFound else IoException.Kind.Other, "$program: spawn errno $rc")
+                throw it
             }
+            val pid = spawned.getOrThrow()
             val sinks = listOf(Sink(outPipe[0]), Sink(errPipe[0]))
             val spinner = if (quiet) Spinner.NONE else Spinner.pick(label)
             val deadline =
@@ -87,7 +81,7 @@ class ProgressRunner(
             var drainEnd: kotlin.time.TimeSource.Monotonic.ValueTimeMark? = null
             while (sinks.any { it.open } && drainEnd?.hasPassedNow() != true) {
                 if (exit == null) {
-                    exit = reapNow(pid.value)
+                    exit = reapNow(pid)
                     if (exit != null) {
                         drainEnd = kotlin.time.TimeSource.Monotonic
                             .markNow() + with(kotlin.time.Duration) { DRAIN_MS.milliseconds }
@@ -100,9 +94,9 @@ class ProgressRunner(
                     fds[i].revents = 0
                 }
                 if (deadline != null && deadline.hasPassedNow()) {
-                    kill(pid.value, SIGKILL)
+                    kill(pid, SIGKILL)
                     sinks.filter { it.open }.forEach { close(it.fd) }
-                    waitExit(pid.value)
+                    waitExit(pid)
                     spinner.finish()
                     throw IoException(IoException.Kind.Other, "$program: timed out after ${timeoutMs}ms")
                 }
@@ -130,7 +124,7 @@ class ProgressRunner(
                 close(it.fd)
             }
             spinner.finish()
-            Captured(sinks[0].bytes.toByteArray(), sinks[1].bytes.toByteArray(), exit?.code ?: waitExit(pid.value)) to dropped
+            Captured(sinks[0].bytes.toByteArray(), sinks[1].bytes.toByteArray(), exit?.code ?: waitExit(pid)) to dropped
         }
 
     /** A reaped exit: the code, or null for a signal. */
@@ -271,23 +265,14 @@ fun spawnDetached(
     memScoped {
         val inPipe = allocArray<IntVar>(2)
         if (pipe(inPipe) != 0) return false
-        val actions = alloc<posix_spawn_file_actions_tVar>()
-        posix_spawn_file_actions_init(actions.ptr)
-        posix_spawn_file_actions_adddup2(actions.ptr, inPipe[0], 0)
-        posix_spawn_file_actions_addclose(actions.ptr, inPipe[0])
-        posix_spawn_file_actions_addclose(actions.ptr, inPipe[1])
-        posix_spawn_file_actions_addopen(actions.ptr, 1, "/dev/null", O_WRONLY, 0u)
-        posix_spawn_file_actions_addopen(actions.ptr, 2, "/dev/null", O_WRONLY, 0u)
-        val attr = alloc<posix_spawnattr_tVar>()
-        posix_spawnattr_init(attr.ptr)
-        posix_spawnattr_setflags(attr.ptr, POSIX_SPAWN_SETSID.toShort())
-        val env = mergedEnv(extraEnv)
-        val argv = allocArrayOf((listOf(program) + args).map { it.cstr.ptr } + listOf(null))
-        val envp = allocArrayOf(env.map { it.cstr.ptr } + listOf(null))
-        val pid = alloc<pid_tVar>()
-        val rc = posix_spawn(pid.ptr, program, actions.ptr, attr.ptr, argv, envp)
-        posix_spawn_file_actions_destroy(actions.ptr)
-        posix_spawnattr_destroy(attr.ptr)
+        val actions =
+            SpawnActions()
+                .dup2(inPipe[0], 0)
+                .close(inPipe[0])
+                .close(inPipe[1])
+                .open(1, "/dev/null", O_WRONLY)
+                .open(2, "/dev/null", O_WRONLY)
+        val rc = if (runCatching { actions.spawn(program, args, mergedEnv(extraEnv), setsid = true, search = false) }.isSuccess) 0 else 1
         close(inPipe[0])
         if (rc == 0) stdin.usePinned { if (stdin.isNotEmpty()) write(inPipe[1], it.addressOf(0), stdin.size.convert()) }
         close(inPipe[1])

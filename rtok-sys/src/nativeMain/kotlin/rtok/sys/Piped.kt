@@ -207,42 +207,23 @@ class PipedChild private constructor(
                 val inPipe = allocArray<IntVar>(2)
                 val outPipe = allocArray<IntVar>(2)
                 check(pipe(inPipe) == 0 && pipe(outPipe) == 0) { "pipe: errno $errno" }
-                val actions = alloc<posix_spawn_file_actions_tVar>()
-                posix_spawn_file_actions_init(actions.ptr)
-                posix_spawn_file_actions_adddup2(actions.ptr, inPipe[0], 0)
-                posix_spawn_file_actions_adddup2(actions.ptr, outPipe[1], 1)
-                if (!inheritStderr) {
-                    posix_spawn_file_actions_addopen(
-                        actions.ptr,
-                        2,
-                        stderrPath ?: "/dev/null",
-                        O_WRONLY or O_CREAT or O_TRUNC,
-                        MODE_644.convert(),
-                    )
-                }
-                for (fd in listOf(inPipe[0], inPipe[1], outPipe[0], outPipe[1])) posix_spawn_file_actions_addclose(actions.ptr, fd)
-                cwd?.let { rtok_spawn_addchdir(actions.ptr, it) }
-                val argv = allocArrayOf((listOf(program) + args).map { it.cstr.ptr } + listOf(null))
-                val envp = allocArrayOf(mergedEnv(extraEnv).map { it.cstr.ptr } + listOf(null))
-                val pid = alloc<pid_tVar>()
-                val rc =
-                    if ('/' in program) {
-                        posix_spawn(pid.ptr, program, actions.ptr, null, argv, envp)
-                    } else {
-                        posix_spawnp(pid.ptr, program, actions.ptr, null, argv, envp)
-                    }
-                posix_spawn_file_actions_destroy(actions.ptr)
+                val actions = SpawnActions().dup2(inPipe[0], 0).dup2(outPipe[1], 1)
+                if (!inheritStderr) actions.open(2, stderrPath ?: "/dev/null", O_WRONLY or O_CREAT or O_TRUNC, MODE_644)
+                for (fd in listOf(inPipe[0], inPipe[1], outPipe[0], outPipe[1])) actions.close(fd)
+                cwd?.let { actions.chdir(it) }
+                val spawned = runCatching { actions.spawn(program, args, mergedEnv(extraEnv), search = '/' !in program) }
                 close(inPipe[0])
                 close(outPipe[1])
-                if (rc != 0) {
+                spawned.exceptionOrNull()?.let {
                     close(inPipe[1])
                     close(outPipe[0])
-                    throw IoException(if (rc == ENOENT) IoException.Kind.NotFound else IoException.Kind.Other, "$program: spawn errno $rc")
+                    throw it
                 }
+                val pid = spawned.getOrThrow()
                 fcntl(inPipe[1], F_SETFL, fcntl(inPipe[1], F_GETFL) or O_NONBLOCK)
                 fcntl(inPipe[1], F_SETFD, FD_CLOEXEC)
                 fcntl(outPipe[0], F_SETFD, FD_CLOEXEC)
-                PipedChild(pid.value, inPipe[1], outPipe[0])
+                PipedChild(pid, inPipe[1], outPipe[0])
             }
     }
 }

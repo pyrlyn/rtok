@@ -2,17 +2,13 @@
 package rtok.sys
 
 import kotlinx.cinterop.ExperimentalForeignApi
-import kotlinx.cinterop.alloc
-import kotlinx.cinterop.memScoped
-import kotlinx.cinterop.ptr
 import platform.posix.errno
-import rtok.sys.spawn.statvfs
+import rtok.sys.spawn.rtok_free_bytes
 
 /** `f_bavail × f_frsize` of the volume holding the existing [path]; IoException when statvfs fails. */
 @OptIn(ExperimentalForeignApi::class)
-fun freeBytes(path: String): Long =
-    memScoped {
-        val st = alloc<statvfs>()
-        if (statvfs(path, st.ptr) != 0) throw IoException(ioKind(errno), "statvfs $path failed (errno $errno)")
-        st.f_bavail.toLong() * st.f_frsize.toLong()
-    }
+fun freeBytes(path: String): Long {
+    val n = rtok_free_bytes(path)
+    if (n < 0) throw IoException(ioKind(errno), "statvfs $path failed (errno $errno)")
+    return n
+}
