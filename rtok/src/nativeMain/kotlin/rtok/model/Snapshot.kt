@@ -31,7 +31,10 @@ object Snapshot {
             val refIds = store?.let { s -> runCatching { s.archiveRefIds(calls.map { it.id }) }.getOrNull() }.orEmpty()
             val sessions =
                 store?.let { s -> runCatching { s.recentSessionTotals(0, Agents.SESSIONS_ROWS) }.getOrNull() }.orEmpty()
-            val (doctor, doctorPending) = DoctorPage.get(cfg)
+            val (report, doctorPending) = DoctorPage.read(cfg)
+            val doctor = report?.let(rtok.doctor.DoctorJson::of)
+            val scan = StatsSkillsPage.get(cfg)
+            val skills = StatsSkillsPage.skillsFrom(report?.skills, scan.skills, scan.usageInput, scan.scanned)
             val fields =
                 mutableMapOf<String, JsonElement>(
                     "type" to JsonPrimitive("snapshot"),
@@ -48,9 +51,10 @@ object Snapshot {
                     "config" to (ConfigPage.text(cfg)?.let(::JsonPrimitive) ?: JsonNull),
                     "doctor" to (doctor ?: JsonNull),
                     "doctor_pending" to JsonPrimitive(doctorPending),
-                    // Not ported yet (docs/web.md step 4): rendered as "pending", never as a failure.
-                    "stats" to JsonNull,
+                    "stats" to (scan.text?.let(::JsonPrimitive) ?: JsonNull),
+                    "skills" to skills.toJson(),
                     "junk" to (JunkPage.get(cfg)?.card ?: JsonNull),
+                    // Not ported yet (docs/web.md step 4): rendered as "pending", never as a failure.
                     "services" to JsonNull,
                     "worktrees" to JsonPrimitive(WorktreesPage.text()),
                     "tasks" to TasksPage.get(cfg).toJson(),
