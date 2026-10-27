@@ -256,7 +256,8 @@ class WorktreeE2eSpec :
 
                     // Dry run from the main checkout: its own cache is skipped, nothing is deleted.
                     val rows = s.json(work, "worktree", "clean", "--json")
-                    rows.size shouldBe 4
+                    val all = listOf("work", "wt-idle", "wt-fresh", "wt-orphan")
+                    rows.size shouldBe all.size
                     rows.byName("work")["action"].str() shouldBe "keep"
                     rows.byName("work")["note"].str() shouldContain "runs from"
                     rows.byName("wt-idle")["action"].str() shouldBe "clean"
@@ -264,7 +265,7 @@ class WorktreeE2eSpec :
                     rows.byName("wt-idle")["bytes"]!!.jsonPrimitive.long shouldBe bytes
                     rows.byName("wt-fresh")["action"].str() shouldBe "keep"
                     rows.byName("wt-orphan")["action"].str() shouldBe "clean"
-                    for (d in listOf("work", "wt-idle", "wt-fresh", "wt-orphan")) exists("$tmp/$d/target/debug/bin") shouldBe true
+                    for (d in all) exists("$tmp/$d/target/debug/bin") shouldBe true
                     val table = s.rtok("worktree", "clean", cwd = work).out
                     table shouldContain "dry run: 2 caches, "
                     // T416.2: a removal line per cache with its file count, then the totals.
