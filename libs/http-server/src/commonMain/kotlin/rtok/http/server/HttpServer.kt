@@ -2,12 +2,13 @@
 // callers depend only on this file.
 package rtok.http.server
 
-/** One request: [headers] keys are lower-case, values in arrival order. */
+/** One request: [headers] keys are lower-case, values in arrival order; [query] is the raw query string, if any. */
 class ServerRequest(
     val method: String,
     val path: String,
     val headers: Map<String, List<String>>,
     val body: ByteArray,
+    val query: String? = null,
 ) {
     /** The first value of header [name] (case-insensitive), or null. */
     fun header(name: String): String? = headers[name.lowercase()]?.firstOrNull()

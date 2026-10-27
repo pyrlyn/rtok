@@ -5,6 +5,7 @@ configure<KotlinMultiplatformExtension> {
     sourceSets.commonMain {
         dependencies {
             api(project(":rtok-sys"))
+            api(project(":http-server"))
         }
     }
 }

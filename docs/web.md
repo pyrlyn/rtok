@@ -1,19 +1,26 @@
 # Web UI and dashboard port (`rtok web`, `rtok dashboard`, `rtok tui`)
 
 Port of `src/web` (axum server + WebSocket protocol), the React SPA in `web/` and `src/tui` (ratatui).
+Everything is rewritten in Kotlin, the frontend included (Ivan, 2026-10-27): no prebuilt React bundle is embedded.
 Previously excluded from the port (port-plan.md); now in progress in small steps.
 
 ## Plan
-1. `:rtok-web` core (this step): `WebToken` (src/web/token.rs, S2 token file, 0600, constant-time compare,
+1. (done, #103) `:rtok-web` core: `WebToken` (src/web/token.rs, S2 token file, 0600, constant-time compare,
    Bearer/`?token=`) and `checkRemoteBind` (`RTOK_WEB_ALLOW_REMOTE`).
-2. `/health`, `/auth`, SPA static serving over `:http-server` (Ktor CIO), `rtok web --host --port` CLI.
+2. (this step) `/health`, `/auth`, SPA static serving over `:http-server` (Ktor CIO), `rtok web --host --port` CLI.
 3. WebSocket on `:http-server` (`ktor-server-websockets`, same Ktor version), origin check, snapshot ticks
    with build coalescing (T206), `protocol.rs` frames via kotlinx.serialization.
 4. Operator model (`src/model`, D23) shared by web and TUI: snapshot built from `:rtok-store`
    (calls, usage, sessions, projects, tasks, worktrees), config, agents, doctor, junk.
 5. Inbound actions: `set`, `expand`, `project`, `doctor`, `junk`, `graph`, `diff`, `export`, `import`, `calls`;
    live graph calls (`live.rs`), calls store/view.
-6. SPA: keep the existing React/Vite app from the Rust repo as-is (it only talks to `/ws`), embed its `dist`
-   in the binary; a Kotlin/JS rewrite is not worth it until the protocol is complete.
+6. Frontend: a Kotlin/JS module `:rtok-web-ui` (kotlinx.html for the DOM, kotlin-css for styles), speaking the
+   same `/ws` protocol and matching the Rust SPA's pages and features. Charts are drawn by our own small SVG
+   helpers in Kotlin (no JS chart library); the graph view uses our own Canvas/SVG force layout. The built
+   bundle is embedded in the binary as an `Assets` source; `RTOK_WEB_DIST` still overrides it for development.
 7. `rtok tui` / `rtok dashboard`: the same model rendered in a terminal. Own small `:tui` module over
    termios + ANSI (no stable Kotlin/Native ratatui equivalent; Mosaic is Compose-based and heavy).
+
+## Status
+- Step 2: `rtok web` serves `/health`, `/auth` and the UI files from `RTOK_WEB_DIST` (SPA routing, br/gzip
+  variants, ETag, CSP). Until step 6 the binary has no embedded UI, so page routes answer 503 with a hint.
