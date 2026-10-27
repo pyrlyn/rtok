@@ -879,3 +879,13 @@ Next, in order:
 - Tests: StrictJsonTest 2 (garbage table), TypesTest +2.
 - Stop point: next junk 2 = junk_cache.rs (`Policy`/`kept_because`/`usage_until`), then the rest of junk, `--project`,
   restart.rs, the rest of phase 10.
+
+## Session: agents — junk 2: the `cache` kind (junk_cache.rs, worktree clean `Policy`/`kept_because`, list.rs walk)
+- `rtok.sys`: `Meta`/`symlinkMeta` (lstat with blocks, nlink, dev, ino), `setModified` (utimensat), `readDir` (errno
+  kind; `listDir` keeps NotFound), `ioKind`, `DiskUsage`/`diskUsageUntil` (fs-kit `tree::usage_until`, hard links once).
+- `rtok.worktree`: `isCacheDir`, `Cache`, `Usage`, `usage`, `usageUntil` (list.rs walk: tagged roots, nested checkouts
+  skipped, incomplete reads), `Policy`, `keptBecause`, `AGE_UNKNOWN`/`KEPT_IDLE`/`KEPT_CURRENT` (clean.rs pure half).
+- `rtok.agents`: `JunkCache` constants, `JunkItem`, `OwnedCache`, `JunkCtx`, `cacheItems`, `dropNested`, `junkItem`.
+- Tests: JunkCacheTest 4, CleanTest 3, DiskUsageTest 2.
+- Stop point: next junk_kinds.rs, then junk_review, junk_sessions, junk_worktrees, junk_items, junk.rs (list/report),
+  junk_clear, CLI; then `--project`, restart.rs, the rest of phase 10.
