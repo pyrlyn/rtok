@@ -61,6 +61,7 @@ val VIEWS: Map<String, PageView> =
         "stats" to StatsPage,
         "skills" to SkillsPage,
         "tasks" to TasksPage,
+        "worktrees" to WorktreesPage,
     )
 
 /** Observable app state: link, last snapshot, route and theme. */
@@ -76,6 +77,18 @@ class AppState {
     var dark by mutableStateOf(runCatching { localStorage.getItem("rtok-theme") }.getOrNull() != "light")
 
     private val link0 = Link({ link = it }, ::onFrame)
+    private val replies = HashMap<String, MutableList<(Frame.Reply) -> Unit>>()
+
+    /** Registers a handler for typed reply frames ([type] = `junkplan`, `message`, ...). */
+    fun on(
+        type: String,
+        handler: (Frame.Reply) -> Unit,
+    ) {
+        replies.getOrPut(type) { ArrayList() } += handler
+    }
+
+    /** The Hosts junk card's controller. */
+    val junk by lazy { JunkController(this) }
 
     fun start() {
         window.addEventListener("popstate", {

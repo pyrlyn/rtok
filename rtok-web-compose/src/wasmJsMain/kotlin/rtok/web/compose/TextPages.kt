@@ -25,6 +25,7 @@ import rtok.web.ui.hostNote
 import rtok.web.ui.humanSecs
 import rtok.web.ui.matchesConfig
 import rtok.web.ui.moduleState
+import rtok.web.ui.obj
 import rtok.web.ui.parseConfig
 import rtok.web.ui.parseHosts
 import rtok.web.ui.parseServices
@@ -116,7 +117,7 @@ private fun Host(b: HostBlock) {
     }
 }
 
-/** The Hosts page: the host blocks (the junk card joins with the Worktrees batch). */
+/** The Hosts page: the host blocks, then the junk card. */
 @OptIn(ExperimentalLayoutApi::class)
 val HostsPage =
     PageView { snap, app ->
@@ -137,6 +138,7 @@ val HostsPage =
                 }
             }
         }
+        JunkCard(snap.obj("junk"), app.junk)
     }
 
 @Composable
