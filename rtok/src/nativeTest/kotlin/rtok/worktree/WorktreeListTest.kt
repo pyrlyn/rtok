@@ -7,6 +7,7 @@ import rtok.sys.createDirAll
 import rtok.sys.removeDirAll
 import rtok.sys.setModified
 import rtok.sys.writeString
+import snapshot.assertInlineSnapshot
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -105,7 +106,8 @@ class WorktreeListTest {
                     .copy(agent = Bound("0193ab12-0000-7000-8000-000000000000", "claude", "live")),
             )
         val now = OLD + 3 * DAY + 4 * HOUR
-        val want =
+        assertInlineSnapshot(
+            WorktreeList.toTable(rows, now).lines().joinToString("\n") { it.trimEnd() },
             """
             path branch owner                 agent                agent state state    origin seen  modified source  cache
             /w/x t1     Cursor / grok         seen claude b1e2c3d4 -           merged   other  4h00m 3d04h    1.0 KB 2.0 KB
@@ -116,8 +118,8 @@ class WorktreeListTest {
 
             5 worktrees: 5.0 KB source, 2.0 KB build cache (logical bytes; clones and hard links count in full)
 
-            """.trimIndent()
-        assertEquals(want, WorktreeList.toTable(rows, now).lines().joinToString("\n") { it.trimEnd() })
+            """,
+        )
     }
 
     /** T936: a row whose caches were not walked prints `-` and the footer says why. */
