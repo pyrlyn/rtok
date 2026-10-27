@@ -1312,7 +1312,8 @@ Next, in order:
   6 = mod.rs server (Ktor) + cli.rs + otel ticker/retention wiring; 7 = tests/batch_cli.rs (3).
 - Stop point: next proxy chunk 2.
 - Session (Compose web worker, worktree `~/Grok/rtok-compose-web`): Compose Multiplatform rewrite of the web UI (docs/web.md
-  "Compose UI"). PR 1: `:rtok-web-model` split from `:rtok-web-ui`, `:rtok-web-compose` (wasmJs) shell, navigation, Overview.
+  "Compose UI"). PR 1 (#199): `:rtok-web-model` split, `:rtok-web-compose` (wasmJs) shell, navigation, Overview.
+  PR 2: Calls, Sessions, Logs, Config, Hosts, Services, Plugins, Usage, Stats, Skills.
 
 ## Session: proxy chunk 2 — wire usage and the four dialects
 - `rtok.proxy.Wire` (wire.rs `Wire` trait: matches, provider, api, session id, model, usage from body/SSE,
