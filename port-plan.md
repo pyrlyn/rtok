@@ -968,3 +968,11 @@ Next, in order:
 - Stop point: next the remaining junk.rs unit tests (archive retention, host rows, VS Code CachedData, shared folders,
   `--all`, scan limit, unreadable folder, caches, shared tagged cache, temp/build/staging, sessions/index); then
   `--project`, the full restart.rs, worktree, junk_worktrees + `agent_worktrees`, the rest of phase 10.
+
+## Session: agents — junk 9: the remaining junk.rs report tests
+- Tests: JunkReportTest 7 (archive retention, host rows and the documented mark, VS Code CachedData, a shared folder,
+  `--all`, a scan past its limit, an unreadable folder), JunkReportKindsTest 4 (caches under their agent, a shared
+  tagged cache and a symlinked one, temp/build/staging against locks and swap, sessions and index classes). The
+  hard-link case of `disk_usage` is rtok-sys DiskUsageTest. Every junk*.rs test is now ported except what needs the
+  worktree module (junk_worktrees.rs, `stale-worktrees`).
+- Stop point: next `--project`, the full restart.rs, worktree, junk_worktrees + `agent_worktrees`, the rest of phase 10.
