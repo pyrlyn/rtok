@@ -6,6 +6,8 @@ import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
 configure<KotlinMultiplatformExtension> {
     sourceSets.commonTest.dependencies {
         implementation(project(":rtok-sys"))
+        // The hook-resident check connects to the resident's socket, as tests/demon.rs does through rtok_hook.
+        implementation(project(":rtok-hook"))
         // The task specs register agents straight in the sandbox store, as tests/task_cli.rs does.
         implementation(project(":rtok-store"))
         implementation(project(":db-room"))

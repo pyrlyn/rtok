@@ -1,0 +1,11 @@
+# T385.9.3 Gate P28 arms (research.md §16.11). Copy this directory out of the checkout and run
+# from the copy, so the paths below resolve the same against the file or the working directory:
+#   RTOK_BENCH_LIVE=1 rtok --config bench.toml bench --runs 1
+# Both arms run `proxy.mode = "compress"`; they differ only in `[plugins.compress.llm] enabled`.
+# The names reuse the built-in `a` and `b` because an overlay cannot drop them (maps merge).
+[bench]
+tasks = "tasks.toml"
+
+[bench.configs]
+a = "a-lossless.json"  # :8811 compress mode, compressor off: the v0.1 lossless path
+b = "b-llm.json"       # :8812 compress mode + RTOK_PLUGINS_COMPRESS_LLM_ENABLED=true
