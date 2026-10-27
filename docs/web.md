@@ -40,3 +40,7 @@ Previously excluded from the port (port-plan.md); now in progress in small steps
   which wait for the `doctor`, `stats`, `demon`/`otel`, `worktree list` and `junk` ports.
 - Step 5, slice 1: `rtok.web.Answer` replies to `expand` and `set` (allowlisted `plugins.<id>.enabled`, config
   reloaded for the next snapshot), tags replies with `req` (T623), and answers malformed requests with Rust's notices.
+- Step 5, slice 2: `rtok.web.GraphAnswer` answers the graph page: `project` (select, link/unlink, reindex on the
+  `Jobs` worker, remove as a `project_plan` dry run until `confirmed`), `graph` (drill-down), `diff` (Compare mode),
+  `export` (JSON/SVG; PNG still errors, see port-plan.md) and `import` (parse only). `doctor` and `junk` wait for
+  their web ports.
