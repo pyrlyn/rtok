@@ -46,6 +46,7 @@ private val PAGE_KEYS =
         "calls" to "Enter/z detail · e expand · / filter expand",
         "sessions" to "Enter detail · l live only",
         "config" to "/ filter",
+        "graph" to "s select · l link · u unlink · b both · Enter pick · y confirm · n/Esc decline · d drill · i re-index · x remove",
     )
 
 private fun objects(e: kotlinx.serialization.json.JsonElement?) = (e as? JsonArray).orEmpty().filterIsInstance<JsonObject>()
@@ -88,6 +89,10 @@ private fun help(
             "Enter/z          calls: detail pane of the selected call",
             "l                sessions: live-only filter; Enter: detail pane",
             "/                config: filter entries; Esc/Enter stops typing",
+            "s / l / u        graph: select, link to…, unlink from… the project under the cursor",
+            "b, Enter         graph: both ways; pick the target",
+            "y, n/Esc         graph: confirm the plan; decline",
+            "d, i, x          graph: drill, re-index, remove…",
         )
     b.paragraph(r, lines.map { listOf(Span(it)) })
 }
@@ -99,7 +104,11 @@ private fun page(
     clock: (Double) -> String,
 ) {
     val junk = if (app.page == "hosts") app.actions?.let { app.junk.panel(it) } else null
-    if (junk != null) junkPanel(b, r, app, junk) else field(b, r, app, clock)
+    when {
+        junk != null -> junkPanel(b, r, app, junk)
+        app.page == "graph" -> graphPage(b, r, app)
+        else -> field(b, r, app, clock)
+    }
 }
 
 private fun field(

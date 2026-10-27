@@ -1,4 +1,4 @@
-// Port of the writing parts of src/tui/app.rs (`toggle_selected`, T15.4) and src/tui/junk_clear.rs (T479): what a
+// Port of the writing parts of src/tui/app.rs (`toggle_selected`, T15.4, `graph_key`, T476) and src/tui/junk_clear.rs (T479): what a
 // key on the Plugins and Hosts tabs changes. No rules of their own: a toggle goes through `config set`'s writer
 // (Validate.set) and the junk panel through JunkWeb, the pair the web page calls.
 package rtok.tui
@@ -14,6 +14,11 @@ import rtok.config.Config
 import rtok.config.Validate
 import rtok.model.JunkPage
 import rtok.plugin.Runtime
+import rtok.plugins.graph.Drill
+import rtok.plugins.graph.DrillRequest
+import rtok.web.DrawnNode
+import rtok.web.GraphAnswer
+import rtok.web.ProjectRequest
 
 /** The writes `rtok tui` may make; tests hand in a config on a temp home and a fixture junk report. */
 class TuiActions(
@@ -21,6 +26,17 @@ class TuiActions(
     private val junkReport: (Config) -> JunkReport = Junk::report,
     private val expander: (Config, String) -> String? = ::expandPayload,
 ) {
+    /** app.rs `graph_key`: a Graph-tab registry write through the web page's own function; throws when refused. */
+    fun projectWrite(r: ProjectRequest): String = GraphAnswer.projectWrite(cfg, r)
+
+    /** drill.rs `load`: the page's `graph` answer at its own cap; a state other than `ok` is the refusal. */
+    fun drill(id: Int): Drawn =
+        Runtime.open(cfg, "tui-drill").use { rt ->
+            val g = Drill.run(rt, DrillRequest(project = id.toString()))
+            check(g.state == "ok") { g.state }
+            Drawn(g.nodes.map { DrawnNode(it.label, it.path) }, g.more)
+        }
+
     /** The config the loop builds snapshots from; a toggle swaps in the reloaded one, so the next tick agrees. */
     var cfg: Config = initial
         private set
