@@ -160,3 +160,13 @@ fun runAction(
 
 /** The shared `--since` option of stats, report and discover. */
 fun sinceOpt(help: String = "Window: <n>, <n>d (days) or <n>h (hours)") = OptSpec.Value("since", help, "SINCE")
+
+/** clap `conflicts_with`: both given is a usage error (exit 2); `path` is the positional `[PATH]`. */
+internal fun Invocation.conflict(
+    a: String,
+    b: String,
+) {
+    if (has(a) && has(b)) throw CliFailure("the argument '--$a' cannot be used with '${if (b == "path") "[PATH]" else "--$b"}'", ExitCode.USAGE)
+}
+
+private fun Invocation.has(name: String) = flag(name) || value(name) != null || arg(name) != null || values(name).isNotEmpty()

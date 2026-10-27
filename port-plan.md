@@ -846,3 +846,15 @@ Next, in order:
 - Tests: SqliteUsageTest 4, CopilotUsageTest 3, GeminiUsageTest 2, PiUsageTest 4, KimiUsageTest 2.
 - Stop point: next the `rtok agents usage` report and CLI (agents/usage.rs, `[agents.usage]` flags, zone handling),
   then junk, `--project`, restart.rs.
+
+## Session: agents — `rtok agents usage` (agents/usage.rs, cli/agents.rs usage, measure/stats.rs `row_cost`)
+- `rtok.agents.Usage` (`[agents.usage]` checks, window from a date in the zone or a duration, rtok/logs/both sources,
+  through-rtok tokens, coverage, ledger savings priced at the host's input rate, dearest-first sort), `UsageFormat`
+  (`price` with provider prefix and date suffix, `units`, `usd`, `grouped`), `UsageText` (screen, `--unpriced`, JSON in
+  the Rust struct order with flattened rows). `rtok.measure.rowCost`/`round6` (half away from zero, as Rust).
+- `rtok.sys.Zone`/`CivilDate`: IANA zones from the system tzdata via `localtime_r`/`mktime` with `TZ` swapped for the
+  call (no new dependency). `Invocation.conflict` moved from GraphCmd to Spec.kt for `--daily`/`--monthly`.
+- CLI `rtok agents usage [--source] [--host] [--since] [--until] [--daily|--monthly] [--by] [--tz] [--unpriced] [--json]`.
+  Fixture `fixtures/usage-logs` copied from the Rust trycmd input (claude, codex).
+- Tests: UsageReportTest 8, UsageLogsReportTest 5, ZoneTest 2, AgentsCliSpec +1.
+- Stop point: next junk (junk*.rs, several PRs), `--project`, restart.rs, then the rest of phase 10.

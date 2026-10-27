@@ -93,6 +93,17 @@ class AgentsCliSpec :
                 cli("agents", "sessions", "--json").out shouldBe "[]\n"
             }
         }
+        test("usage on an empty store, its JSON, and refused flags") {
+            withHome("agents-usage") {
+                cli("agents", "usage", "--source", "rtok", "--tz", "UTC").out shouldBe "rtok agents usage: through rtok, no usage recorded (UTC)\n"
+                cli("agents", "usage", "--source", "rtok", "--tz", "UTC", "--json").out shouldContain "\"source\": \"rtok\""
+                cli("agents", "usage", "--daily", "--monthly").code shouldBe 2
+                cli("agents", "usage", "--source", "rtok", "--tz", "Mars/Base").also {
+                    it.code shouldBe 1
+                    it.err shouldContain "agents.usage.tz `Mars/Base`"
+                }
+            }
+        }
         test("whoami, inbox and status outside an agent session; send without a recipient") {
             withHome("agents-messages") { home ->
                 writeString("$home/config.toml", "[core]\ndb_path = \"$home/rtok.db\"\n")

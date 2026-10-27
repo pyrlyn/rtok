@@ -1,11 +1,12 @@
 // Port of src/cli/agents.rs and cli/agents_host.rs (host side): `rtok agents install|uninstall|remove|update|list|info`.
 // Not ported yet: `--project`, the
-// desktop restart behind `--no-restart` (accepted, nothing to skip yet), and the usage/junk commands.
+// desktop restart behind `--no-restart` (accepted, nothing to skip yet), and the junk commands.
 package rtok.cli
 
 import kotlinx.cinterop.toKString
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import rtok.StatPreview
 import rtok.agents.AgentMessages
 import rtok.agents.AgentText
@@ -18,6 +19,9 @@ import rtok.agents.Mode
 import rtok.agents.Outdated
 import rtok.agents.OutdatedSelection
 import rtok.agents.SessionsTable
+import rtok.agents.Usage
+import rtok.agents.UsageException
+import rtok.agents.UsageText
 import rtok.config.Config
 import rtok.log.watchLoop
 import rtok.model.Agents
@@ -276,6 +280,55 @@ private val INBOX =
         inv.io.out(withMessages(inv.loadConfig()) { _, m -> m.inbox(inv.arg("id"), inv.flag("unread"), inv.value("task"), inv.flag("json")) })
     }
 
+/** The `[agents.usage]` overlay for the flags given; `hosts` is the one list key, split at commas. */
+private fun usageFlags(given: List<Pair<String, String?>>): JsonObject? {
+    val usage =
+        given
+            .mapNotNull { (k, v) -> v?.let { k to if (k == "hosts") JsonArray(it.split(',').map { h -> JsonPrimitive(h.trim()) }) else JsonPrimitive(it) } }
+            .toMap()
+    return if (usage.isEmpty()) null else JsonObject(mapOf("agents" to JsonObject(mapOf("usage" to JsonObject(usage)))))
+}
+
+private val USAGE =
+    CommandSpec(
+        "usage",
+        "Tokens and estimated cost per agent and month (or day), from the agents' logs or rtok",
+        options =
+            listOf(
+                OptSpec.Value("source", "Data source: `logs` (the agents' own session files, the default), `rtok` (what passed through rtok) or `both`", "SOURCE"),
+                OptSpec.Value("host", "Only these hosts, comma-separated (`claude,codex`)", "IDS"),
+                OptSpec.Value("since", "From a date (`2026-09-01`, whole days in `--tz`) or a duration back from now (`30d`)", "DATE|DUR"),
+                OptSpec.Value("until", "Through this date, inclusive", "DATE"),
+                OptSpec.Flag("daily", "Bottom table by day"),
+                OptSpec.Flag("monthly", "Bottom table by month (the default)"),
+                OptSpec.Value("by", "Middle table grouping: `agent` (the default) or `model`", "AGENT|MODEL"),
+                OptSpec.Value("tz", "IANA time zone for day and month boundaries (default: the system zone)", "ZONE"),
+                OptSpec.Flag("unpriced", "List the models without a price instead of the tables"),
+                OptSpec.Flag("json", "One JSON document"),
+            ),
+    ) { inv ->
+        inv.conflict("daily", "monthly")
+        val period =
+            if (inv.flag("daily")) {
+                "daily"
+            } else if (inv.flag("monthly")) {
+                "monthly"
+            } else {
+                null
+            }
+        val flags = usageFlags(listOf("source", "host", "since", "until", "by", "tz").map { (if (it == "host") "hosts" else it) to inv.value(it) } + ("period" to period))
+        val cfg = Config.loadWith(inv.configFile, flags)
+        val report = runCatching { Usage.openReport(cfg) }.getOrElse { throw if (it is UsageException) CliFailure(it.message.orEmpty()) else it }
+        for (s in report.skipped) inv.io.eprintln("skipped ${s.host}: ${s.reason} in ${s.path}")
+        inv.io.out(
+            when {
+                inv.flag("json") -> AgentsJson.PRETTY.encodeToString(JsonObject.serializer(), UsageText.json(report)) + "\n"
+                inv.flag("unpriced") -> UsageText.unpriced(report)
+                else -> UsageText.text(report)
+            },
+        )
+    }
+
 val AGENTS =
     CommandSpec(
         "agents",
@@ -291,6 +344,7 @@ val AGENTS =
                 LIST,
                 INFO,
                 SESSIONS,
+                USAGE,
                 WHOAMI,
                 SHOW,
                 STATUS,
