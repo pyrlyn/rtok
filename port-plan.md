@@ -1057,3 +1057,10 @@ Next, in order:
   the proxy port.
 - Stop point: next doctor, model, report, otel, tasks, completions, bench, demon, last_paths, repo_map, hooks
   dispatcher tests.
+## Session: graph repo map — mod.rs `repo_map` (SessionStart)
+- `rtok.plugins.graph.RepoMap` (mod.rs `repo_map`: off at `map_tokens = 0`, `map_rank = "pagerank"` through
+  `Rank.map` seeded by `last_paths` after a compact, the `symbol_top_refs` fallback trimmed line by line to the
+  cap, priority 1); `GraphPlugin.sessionStart` wires it.
+- Tests: RepoMapTest 3 (mod.rs `repo_map_off_by_default_and_empty_index`,
+  `repo_map_pagerank_lists_files_and_falls_back_without_a_graph`, `repo_map_ranked_byte_stable_and_trimmed`).
+- Stop point: next doctor, model, report, otel, tasks, completions, bench, demon, hooks dispatcher tests.
