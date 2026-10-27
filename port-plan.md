@@ -1474,6 +1474,10 @@ Next, in order:
   list / no-shell / dry-run trycmd cases; HOME and the XDG/ZDOTDIR/LOCALAPPDATA/SHELL overrides are isolated).
 - Stop point: `rtok man`, completions_shells.rs / completions_picker_pty.rs (need real shells / a pty), then
   bench, demon, macOS/Linux split.
+- tests/completions_shells.rs ported as `CompletionsShellsE2eSpec` (4, rtok-e2e): zsh Tab on a pty with a stale
+  compinit dump, bash `complete -p`, fish `complete -C`, PowerShell `TabExpansion2`; a missing shell skips its test
+  (no pwsh on the Mac). `Pty` (rtok-e2e) is the portable_pty part: posix_openpt, the command in the background on
+  the slave, no controlling terminal.
 
 ## Session: man pages
 - `rtok.man.Man` + `cli/ManCmd.kt`: `rtok man` prints `rtok.1`; `--dir` writes a page per command with `SEE ALSO`
