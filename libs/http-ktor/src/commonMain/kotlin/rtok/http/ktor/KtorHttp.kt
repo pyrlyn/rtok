@@ -13,6 +13,8 @@ import io.ktor.client.request.request
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsBytes
 import io.ktor.client.statement.bodyAsChannel
+import io.ktor.client.statement.request
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.utils.io.readAvailable
 import kotlinx.coroutines.CancellationException
@@ -99,17 +101,48 @@ class KtorHttp(
                     waiting(false)
                     val channel = resp.bodyAsChannel()
                     val buf = ByteArray(CHUNK)
+                    val want = declaredLength(method, resp)
+                    var got = 0L
                     val next: suspend () -> ByteArray? = {
                         guard(req) {
                             waiting(true)
                             val n = channel.readAvailable(buf, 0, buf.size)
-                            waiting(false)
-                            if (n < 0) null else buf.copyOf(n)
+                            if (n < 0) {
+                                waiting(false)
+                                checkComplete(req, want, got)
+                                null
+                            } else {
+                                waiting(false)
+                                got += n
+                                buf.copyOf(n)
+                            }
                         }
                     }
                     use(StreamedResponse(resp.status.value, headersOf(resp), next))
                 }
         }
+
+    /**
+     * The `content-length` the body must reach, or null when there is none to check. The Curl engine (Linux) ends the
+     * body quietly when the peer hangs up early; Darwin throws. Both must report the cut so a short body is never
+     * mistaken for a whole one (and, in the proxy, cached).
+     */
+    private fun declaredLength(
+        method: String,
+        resp: io.ktor.client.statement.HttpResponse,
+    ): Long? {
+        val bodiless = method.equals("HEAD", ignoreCase = true) || resp.status.value in NO_BODY
+        val encoded = resp.headers[HttpHeaders.ContentEncoding] != null
+        return if (bodiless || encoded) null else resp.headers[HttpHeaders.ContentLength]?.trim()?.toLongOrNull()
+    }
+
+    private fun checkComplete(
+        req: HttpRequest,
+        want: Long?,
+        got: Long,
+    ) {
+        if (want != null && got < want) throw HttpException(HttpException.Kind.Io, "${req.url}: body truncated at $got of $want bytes")
+    }
 
     /**
      * Runs [block] under [guard], and, when [idleLimitMs] is set, fails it with a socket timeout once a single wait for
@@ -164,7 +197,9 @@ class KtorHttp(
     ): HttpResponse =
         guard(req) {
             val resp = call()
-            HttpResponse(resp.status.value, resp.bodyAsBytes(), headersOf(resp))
+            val body = resp.bodyAsBytes()
+            checkComplete(req, declaredLength(resp.request.method.value, resp), body.size.toLong())
+            HttpResponse(resp.status.value, body, headersOf(resp))
         }
 
     private suspend fun <T> guard(
@@ -195,5 +230,8 @@ class KtorHttp(
     companion object {
         val FACTORY = HttpClientFactory { KtorHttp(it) }
         private const val CHUNK = 16 * 1024
+
+        /** 1xx, 204 and 304 carry no body whatever their `content-length` says. */
+        private val NO_BODY = setOf(100, 101, 102, 103, 204, 304)
     }
 }
