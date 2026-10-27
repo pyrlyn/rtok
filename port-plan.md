@@ -1205,3 +1205,7 @@ Next, in order:
   (task_cli.rs export test, plus the Linear team check). FakeHttp gained `onIf` (httpmock `is_true`).
 - Stop point: next task MCP tools (MCP halves of task_cli.rs), sync.rs's GitHub read-only test; then model, report,
   otel, completions, bench, demon, hooks dispatcher tests, worktree add/finish/whoami/clean/migrate, proxy batch tests.
+## Ownership: stats + skills (web/dashboard worker)
+- The web/dashboard worker owns `measure/stats.rs` (and what `rtok stats` needs: `cli/stats.rs`, `measure/baseline.rs`,
+  `measure/cache.rs`, `measure/skills_listing.rs`), the snapshot's `stats`/`skills` (model/mod.rs `stats_skills`,
+  `skills_from`, `stats_page_text`), the Stats and Skills pages and tui tabs. The main-port worker skips these.
