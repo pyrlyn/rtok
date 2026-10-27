@@ -28,3 +28,4 @@ Docs: [build speed](docs/build-speed.md) · [token estimator](docs/tokens.md) ·
 - [json_tree plugin](docs/json-tree.md)
 - [API docs (Dokka)](docs/api-docs.md)
 - [Testing (kotlin.test, Kotest, e2e)](docs/testing.md)
+- [Native C dependencies](docs/c-code.md)
