@@ -18,6 +18,7 @@ configure<KotlinMultiplatformExtension> {
         implementation(project(":rtok-config"))
         implementation(project(":rtok-sys"))
         implementation(project(":semver"))
+        implementation(project(":humantime"))
         implementation(project(":globset"))
         implementation(project(":json-strict"))
         implementation(project(":toml-aot"))

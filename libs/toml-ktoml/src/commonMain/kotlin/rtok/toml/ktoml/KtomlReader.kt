@@ -73,12 +73,22 @@ private class TreeBuilder(
         path: List<String>,
     ): JsonElement =
         when (n) {
-            is TomlTable -> if (n.type == TableType.ARRAY) JsonArray(n.children.filterIsInstance<TomlArrayOfTablesElement>().map { obj(it.children, path) }) else obj(n.children, path)
+            // `[[a.b.c]]` makes `a` and `b` synthetic ARRAY tables too; only the one holding elements is an array.
+            is TomlTable -> if (n.type == TableType.ARRAY && n.children.any { it is TomlArrayOfTablesElement }) array(n, path) else obj(n.children, path)
+
             is TomlInlineTable -> obj(n.children, path)
+
             is TomlKeyValuePrimitive -> value(n.value)
+
             is TomlKeyValueArray -> value(n.value)
+
             else -> obj(n.children, path)
         }
+
+    private fun array(
+        n: TomlTable,
+        path: List<String>,
+    ) = JsonArray(n.children.filterIsInstance<TomlArrayOfTablesElement>().map { obj(it.children, path) })
 
     private fun value(v: TomlValue): JsonElement =
         when (v) {

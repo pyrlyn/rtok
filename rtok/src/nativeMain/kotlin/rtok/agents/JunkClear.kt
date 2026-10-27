@@ -4,6 +4,12 @@
 // deletions need a flag. `stale-worktrees` items come with the worktree port.
 package rtok.agents
 
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import rtok.config.Config
 import rtok.config.HOSTS
 import rtok.store.Store
@@ -94,6 +100,21 @@ class Planned(
         this.failed = failed
     }
 
+    fun json(): JsonObject =
+        buildJsonObject {
+            put("agent", agent)
+            put("kind", kind)
+            put("path", path)
+            put("bytes", bytes)
+            put("files", files)
+            put("last_used", lastUsed?.let(::JsonPrimitive) ?: JsonNull)
+            put("reason", reason)
+            put("planned", planned)
+            put("action", action)
+            put("note", note)
+            put("failed", failed)
+        }
+
     /** junk_items.rs `Row::from(&Planned)`. */
     fun row(): JunkRow {
         val skipped = action == "skip"
@@ -108,6 +129,15 @@ class Cleared(
     val freedBytes: Long,
 ) {
     val failed: Boolean get() = items.any { it.failed }
+
+    /** The `--json` shape: serde's field order of `Cleared` and `Planned`. */
+    fun json(): JsonObject =
+        buildJsonObject {
+            put("yes", yes)
+            put("items", JsonArray(items.map(Planned::json)))
+            put("planned_bytes", plannedBytes)
+            put("freed_bytes", freedBytes)
+        }
 }
 
 object JunkClear {
