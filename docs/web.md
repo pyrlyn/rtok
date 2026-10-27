@@ -79,5 +79,6 @@ Previously excluded from the port (port-plan.md); now in progress in small steps
   (app.rs T15.4, status in the key line) and the Hosts `c`/`y` clear-safe-junk panel over `JunkWeb` (junk_clear.rs
   T479), both through `rtok.tui.TuiActions`. Part 4: Sessions `l` live-only filter (T60.10), Config `/` filter
   (T228) and the Calls `e` expand pane with its own `/` filter (T60.4), an open filter owning every key (T637).
-  Next: calls/sessions detail panes, doctor fix,
+  Part 5: the Calls Enter/z detail pane (view.rs `call_detail`, T15.5) and the Sessions Enter pane
+  (`session_pane` over model::session_detail, T60.3). Next: doctor fix,
   graph drill/compare/export and the live calls pane; reading the model off the input thread.

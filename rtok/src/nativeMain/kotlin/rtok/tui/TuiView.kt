@@ -43,8 +43,8 @@ private val PAGE_KEYS =
     mapOf(
         "plugins" to "Space/Enter toggle",
         "hosts" to "c clear safe junk",
-        "calls" to "e expand · / filter expand",
-        "sessions" to "l live only",
+        "calls" to "Enter/z detail · e expand · / filter expand",
+        "sessions" to "Enter detail · l live only",
         "config" to "/ filter",
     )
 
@@ -85,7 +85,8 @@ private fun help(
             "Space/Enter      plugins: toggle the plugin under the cursor",
             "c                hosts: clear safe junk (plan); y removes, n/Esc declines",
             "e                calls: expand the archived output; / filters it, Esc/e closes",
-            "l                sessions: live-only filter",
+            "Enter/z          calls: detail pane of the selected call",
+            "l                sessions: live-only filter; Enter: detail pane",
             "/                config: filter entries; Esc/Enter stops typing",
         )
     b.paragraph(r, lines.map { listOf(Span(it)) })
@@ -113,7 +114,7 @@ private fun field(
         app.page == "overview" && v is JsonObject -> overview(b, r, v)
         app.page == "plugins" -> grid(b, r, app, PLUGIN_COLS, objects(v).map(::pluginRow))
         app.page == "calls" -> calls(b, r, app, objects(v).map { callRow(it, clock) })
-        app.page == "sessions" -> grid(b, r, app, SESSION_COLS, app.sessionRows().map { sessionRow(it, clock) })
+        app.page == "sessions" -> sessions(b, r, app, clock)
         app.page == "logs" -> text(b, r, app, (v as? JsonArray).orEmpty().map { (it as? JsonPrimitive)?.content ?: it.toString() })
         v is JsonPrimitive -> text(b, r, app, pageLines(app, v.content))
         v is JsonObject && v["text"] is JsonPrimitive -> text(b, r, app, v.s("text").orEmpty().lines())
