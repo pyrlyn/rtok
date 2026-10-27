@@ -1480,3 +1480,12 @@ Next, in order:
   to parent and children (src/man.rs). The roff follows clap_mangen's sections but is this port's own text, not
   byte-identical (clap_mangen is a dependency the port does not take). Tests: ManTest (3).
 - Stop point: demon (src/demon.rs, tests/demon.rs), bench, macOS/Linux split.
+
+## Session: demon core (state, ownership, stop, status)
+- `rtok/demon/`: `Service` (proxy/mcp/web/hook, `hook --serve`, parse error names `[demon] services`), `Store`
+  (`<state_dir>/<svc>.json|.stop|.lock|.log`, atomic state writes, an `O_CLOEXEC` flock claim so spawned
+  services never inherit the lock), `Procs`/`OsProcs` (signal-0 liveness, TERM/KILL of positive pids only,
+  boot time from `/proc/stat` or `sysctl kern.boottime`), `Demon` (T597 ownership Live/Orphan/Stale,
+  revalidated escalation, retire, targets, stop, quiesce), `nextBackoff`, `rows`/`table` for `status`.
+- Tests: DemonStopTest (9) and DemonStatusTest (8), the src/demon.rs unit tests plus lock/row checks.
+- Stop point: next demon start/supervise/upgrade, the `rtok demon` CLI and the tests/demon.rs e2e suite.
