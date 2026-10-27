@@ -47,8 +47,10 @@ Port of `src/agents/mod.rs` (install engine), `src/agents/command.rs` and `src/c
 
 ## Limitations
 - Output is Rust's non-terminal form: marks, no colour or operation icons, no progress bar.
+- `install|uninstall|update` quit a running desktop app whose config the write changes, write, then reopen it
+  (RestartFlow.kt, macOS `osascript`/`open -a`); a running CLI gets a restart reminder; `--no-restart` skips it.
 - `install|uninstall <hosts> --project` (cursor, kilo, windsurf, devin) adds or removes the `rtok worktree adopt`
   entry in the project's post-create file (PostCreate.kt); `rtok worktree adopt` itself comes with the worktree port.
 - Not ported yet: asking for a missing host's
-  path on a terminal, the desktop app restart (`--no-restart` is accepted and has nothing to skip), the hook-client
+  path on a terminal, the hook-client
   link, and the junk subcommands.

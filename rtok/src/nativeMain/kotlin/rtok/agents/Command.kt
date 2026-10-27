@@ -1,6 +1,6 @@
 // Port of src/agents/command.rs host install side (`parse_hosts`, `install`, `update`, `apply_hosts`) and
-// cli/agents_host.rs `setup_flags`. Not ported yet: the desktop restart (restart.rs, T141), asking for a missing
-// host's path on a terminal (locate.rs `ask_missing`, T966). `--project` is PostCreate.kt.
+// cli/agents_host.rs `setup_flags`. The desktop restart around the write is RestartRun.kt; `--project` is
+// PostCreate.kt. Not ported yet: asking for a missing host's path on a terminal (locate.rs `ask_missing`, T966).
 package rtok.agents
 
 import kotlinx.serialization.json.JsonArray
@@ -60,7 +60,9 @@ object AgentsCommand {
         desktop: Boolean,
         all: Boolean,
         env: AgentsRun.Env = AgentsRun.Env(),
-    ): AgentsOutput = applyHosts(cfg, Request(parseHosts(host), mode, cli, desktop, all || mode == Mode.Remove), env) {}
+        noRestart: Boolean = false,
+        warn: (String) -> Unit = {},
+    ): AgentsOutput = applyHosts(cfg, Request(parseHosts(host), mode, cli, desktop, all || mode == Mode.Remove), env, noRestart, warn)
 
     /** T289.3 `--project`: the post-create entries of the checkout around [cwd] (a linked worktree gets its own). */
     fun installProject(
@@ -86,10 +88,11 @@ object AgentsCommand {
         all: Boolean,
         env: AgentsRun.Env = AgentsRun.Env(),
         warn: (String) -> Unit = {},
+        noRestart: Boolean = false,
     ): AgentsOutput {
         val hosts = host?.let(::parseHosts) ?: AgentsList.installedHosts(cfg, env)
         if (hosts.isEmpty()) return AgentsOutput("nothing to update: rtok is not installed in any host (rtok agents install <host>)\n")
-        return applyHosts(cfg, Request(hosts, Mode.Update, cli, desktop, all), env, warn)
+        return applyHosts(cfg, Request(hosts, Mode.Update, cli, desktop, all), env, noRestart, warn)
     }
 
     /** For `update` the key that would point rtok at a missing host is said to [warn] before the run refuses it. */
@@ -97,12 +100,13 @@ object AgentsCommand {
         cfg: Config,
         req: Request,
         env: AgentsRun.Env,
+        noRestart: Boolean,
         warn: (String) -> Unit,
     ): AgentsOutput {
         if (req.mode == Mode.Update) {
             val absent = AgentsRun.absent(cfg, AgentsRun.resolve(req.hosts, env.agent), req::wants, env.present)
             if (absent.isNotEmpty()) warn("warning: ${AgentsRun.notFound(absent).message}")
         }
-        return AgentsOutput(AgentsRun.run(cfg, req, env))
+        return AgentsOutput(RestartFlow.run(cfg, req, noRestart, env, warn) { AgentsRun.run(it, req, env) })
     }
 }

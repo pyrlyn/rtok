@@ -37,7 +37,7 @@ class CommandTest {
 
     @Test fun installThenUninstallThenUpdateHasNothingToDo() {
         val (cfg, dir) = windsurf()
-        val install = AgentsCommand.install(cfg, "windsurf", Mode.Install, cli = false, desktop = false, all = false, env = env())
+        val install = AgentsCommand.install(cfg, "windsurf", Mode.Install, cli = false, desktop = false, all = false, env = env(), noRestart = true)
         assertEquals("Windsurf Applied\n", install.out)
         assertFalse(install.reinstallFailed)
         assertEquals(
@@ -48,8 +48,8 @@ class CommandTest {
                 .lines()
                 .first() + "\n",
         )
-        AgentsCommand.install(cfg, "windsurf", Mode.Remove, cli = false, desktop = false, all = false, env = env(present = false))
-        val nothing = AgentsCommand.update(cfg, null, false, false, false, AgentsRun.Env(present = { _, _, _ -> true }, agent = { if (it == "windsurf") Agents.agent(it) else null }))
+        AgentsCommand.install(cfg, "windsurf", Mode.Remove, cli = false, desktop = false, all = false, env = env(present = false), noRestart = true)
+        val nothing = AgentsCommand.update(cfg, null, false, false, false, AgentsRun.Env(present = { _, _, _ -> true }, agent = { if (it == "windsurf") Agents.agent(it) else null }), noRestart = true)
         assertEquals("nothing to update: rtok is not installed in any host (rtok agents install <host>)\n", nothing.out)
         removeDirAll(dir)
     }
@@ -57,7 +57,7 @@ class CommandTest {
     @Test fun updateNamesTheKeyForAnAbsentHostBeforeTheRunRefusesIt() {
         val (cfg, dir) = windsurf()
         val warned = mutableListOf<String>()
-        assertFailsWith<AgentsFailure> { AgentsCommand.update(cfg, "windsurf", false, false, false, env(present = false), warned::add) }
+        assertFailsWith<AgentsFailure> { AgentsCommand.update(cfg, "windsurf", false, false, false, env(present = false), warned::add, noRestart = true) }
         assertTrue(warned.single().startsWith("warning: windsurf is not installed"), warned.toString())
         removeDirAll(dir)
     }

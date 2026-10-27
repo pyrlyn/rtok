@@ -24,14 +24,14 @@ class AgentsCliSpec :
         test("install, info and uninstall write and read Windsurf's MCP entry") {
             withHome("agents-install") { home ->
                 val file = windsurfHome(home)
-                val dry = cli("agents", "install", "windsurf", "--dry-run")
+                val dry = cli("agents", "install", "windsurf", "--dry-run", "--no-restart")
                 dry.code shouldBe 0
                 dry.out shouldContain "Desktop: Windsurf — dry run, nothing written"
-                val ran = cli("agents", "install", "windsurf")
+                val ran = cli("agents", "install", "windsurf", "--no-restart")
                 ran.code shouldBe 0
                 ran.out shouldContain "Desktop: Windsurf\n"
                 readToString(file) shouldContain "\"rtok\""
-                cli("agents", "install", "windsurf").out shouldContain "Desktop: Windsurf — already installed"
+                cli("agents", "install", "windsurf", "--no-restart").out shouldContain "Desktop: Windsurf — already installed"
                 val info = cli("agents", "info", "windsurf")
                 info.out shouldContain "  app     $home/Windsurf.app"
                 info.out shouldContain "✓ mcp"
@@ -41,8 +41,8 @@ class AgentsCliSpec :
                 json.out shouldContain "\"present\": true"
                 json.out shouldContain "\"entry\": \"present\""
                 cli("agents", "list", "--json").out shouldContain "\"kind\": \"desktop\""
-                cli("agents", "update").out shouldContain "Desktop: Windsurf — already current"
-                cli("agents", "remove", "windsurf").code shouldBe 0
+                cli("agents", "update", "--no-restart").out shouldContain "Desktop: Windsurf — already current"
+                cli("agents", "remove", "windsurf", "--no-restart").code shouldBe 0
                 readToString(file) shouldNotContain "\"rtok\""
             }
         }
