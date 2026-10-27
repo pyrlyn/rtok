@@ -86,7 +86,7 @@ Plan and per-phase checklist: [port-plan.md](port-plan.md).
 | src/proxy | `rtok.proxy` (Ktor) | ⬜ | |
 | src/mcp | `rtok.mcp` | ⬜ | |
 | src/hooks | `rtok.hooks` | ⬜ | |
-| src/agents (40+ hosts), src/doctor | `rtok.agents`, `rtok.doctor` | ⬜ | |
+| src/agents (40+ hosts), src/doctor | `rtok.agents`, `rtok.doctor` | ⬜ doctor: probe/hooks/dupes ✅ | hooks.rs 45 → HooksTest 43 |
 | src/otel, worktree, tasks, measure, model, report, bench, completions, project, store | matching packages | ⬜ | |
 | src/tui | – | ❌ excluded (TUI) | |
 | src/web, agents/junk_web.rs, `rtok web/tui/dashboard` | rtok-web (token.rs, remote bind) | ⏳ in progress, see docs/web.md | |
