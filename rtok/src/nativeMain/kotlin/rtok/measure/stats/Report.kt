@@ -20,7 +20,7 @@ private fun obj(vararg pairs: Pair<String, Any?>): JsonObject = JsonObject(pairs
 /** A field serde leaves out (`skip_serializing_if`). */
 internal object Skip
 
-internal fun json(v: Any?): JsonElement =
+fun json(v: Any?): JsonElement =
     when (v) {
         null -> JsonNull
         is JsonElement -> v
