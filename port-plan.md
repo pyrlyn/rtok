@@ -1311,3 +1311,14 @@ Next, in order:
   prepare_request; 3 = lane.rs, live.rs, flex.rs; 4 = tools_rewrite.rs, batch_results.rs; 5 = semantic_cache.rs;
   6 = mod.rs server (Ktor) + cli.rs + otel ticker/retention wiring; 7 = tests/batch_cli.rs (3).
 - Stop point: next proxy chunk 2.
+
+## Session: proxy chunk 2 — wire usage and the four dialects
+- `rtok.proxy.Wire` (wire.rs `Wire` trait: matches, provider, api, session id, model, usage from body/SSE,
+  `prepareRequest` returning the new body or null, saturating `providerTotal`), `Wires` (slugs, `forPath`),
+  `Usage`/`UsageFields`/`findUsage`/`intField`, `Responses.usage`/`serviceTier` (lossy SSE decode, T584),
+  `Upstream.join` (own URL split, dot segments refused), `SkillRefs` (`collect_skill_refs`).
+- Wires: `AnthropicWire` (+ usage, skill refs, `applyContextEdits`; file renamed from Anthropic.kt),
+  `OpenAiChatWire` (+ usage, skill refs, `include_usage`), `OpenAiResponsesWire`, `GeminiWire` (new).
+- Tests: WireTest 7, AnthropicUsageTest 4, ChatWireTest 3, ResponsesWireTest 4, GeminiWireTest 6 (all Rust tests of
+  wire.rs and the four dialect files, Anthropic's tool-result test was already ported).
+- Stop point: next proxy chunk 3 (lane.rs, live.rs, flex.rs).

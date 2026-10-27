@@ -148,7 +148,7 @@
     <ID>LongMethod:Projects.kt:Projects$fun run: String</ID>
     <ID>LongMethod:Read.kt:fun readWith: String</ID>
     <ID>LongMethod:Types.kt:HookInput$fun adaptCline</ID>
-    <ID>LoopWithTooManyJumpStatements:Anthropic.kt:AnthropicWire$for</ID>
+    <ID>LoopWithTooManyJumpStatements:AnthropicWire.kt:AnthropicWire$for</ID>
     <ID>LoopWithTooManyJumpStatements:Bounded.kt:Bounded$for</ID>
     <ID>LoopWithTooManyJumpStatements:Bounded.kt:Bounded$while</ID>
     <ID>LoopWithTooManyJumpStatements:Compact.kt:Compact$for</ID>
@@ -876,7 +876,6 @@
     <ID>MagicNumber:WatchTest.kt:WatchTest$50</ID>
     <ID>MagicNumber:WatchTest.kt:WatchTest$80</ID>
     <ID>MagicNumber:WrapTest.kt:WrapTest$64</ID>
-    <ID>MatchingDeclarationName:Anthropic.kt:AnthropicWire : ToolResults</ID>
     <ID>MatchingDeclarationName:Cache.kt:ReadCache</ID>
     <ID>MatchingDeclarationName:Compress.kt:CaveIntensity</ID>
     <ID>MatchingDeclarationName:Docs.kt:DocsPlugin : Plugin</ID>
