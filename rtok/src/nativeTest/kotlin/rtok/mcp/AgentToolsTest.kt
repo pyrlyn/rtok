@@ -16,6 +16,8 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
+private const val GIT_CAP = 65_536L
+
 class AgentToolsTest {
     private fun server(name: String): Server {
         val (base, _) = diskConfig(name)
@@ -113,6 +115,30 @@ class AgentToolsTest {
 
     @Test fun agentToolsAreListedInRustOrder() {
         val names = Server.listedFor(rtok.config.Config()).map { it.def.name }
-        assertEquals(listOf("expand", "ping", "whoami", "agent_send", "agent_inbox", "agents_list", "agent_show", "agent_status_set"), names.take(8))
+        val want =
+            listOf("expand", "ping", "whoami", "worktree_add", "worktree_list", "worktree_remove", "worktree_finish", "worktree_adopt") +
+                listOf("agent_send", "agent_inbox", "agents_list", "agent_show", "agent_status_set")
+        assertEquals(want, names.take(want.size))
     }
+
+    /** mcp.rs `worktree_add_refuses_a_repository_that_is_not_the_callers` (T924). */
+    @Test fun worktreeAddRefusesARepositoryThatIsNotTheCallers() =
+        server("worktree-wrong-repo").use { s ->
+            // The caller works in `theirs`; the server runs in this test's own checkout.
+            val theirs = "${rtok.support.tmpDir("mcp-wt-theirs")}/theirs"
+            rtok.sys.createDirAll(theirs)
+            val (g, _) =
+                rtok.sys
+                    .ProgressRunner("", "git", listOf("-C", theirs, "init", "-q"))
+                    .quiet()
+                    .runCapped(GIT_CAP)
+            assertEquals(0, g.exitCode)
+            val id = s.cx.store.registerAgent(s.cx.hostId!!, "sess-a", null, theirs, null)
+            val (err, text) = call(s, "worktree_add", """{"task":"T1","agent":"$id"}""")
+            assertTrue(err && "not yours" in text && "pass `repo`" in text, text)
+            assertTrue(call(s, "worktree_add", """{"task":"T1","agent":"$id","repo":"/"}""").first)
+            // The caller's own repository passes the check; git then has nothing to branch from.
+            val (_, own) = call(s, "worktree_add", """{"task":"T1","agent":"$id","repo":"$theirs"}""")
+            assertFalse("not yours" in own, own)
+        }
 }
