@@ -59,6 +59,7 @@ private val ADD =
             gated { inv, cfg ->
                 val plan =
                     Ops.add(cfg, rtok.sys.cwd(), inv.requireArg("task"), inv.arg("slug"), inv.value("owner"), inv.value("agent"), inv.flag("no-seed"))
+                rtok.agents.TaskList.writeFor(rtok.sys.cwd(), plan.path, plan.task)
                 inv.io.println(plan.path)
             },
     )
