@@ -1,10 +1,11 @@
 // Port of src/tui/app.rs, first slice: the pure state of `rtok tui` (tab, row cursors, help) over the same
 // snapshot `rtok web` serves, the global keys, the Plugins toggle (T15.4) and the Hosts junk panel (T479). Doctor
-// fix and drill follow; the filters and the Calls expand pane live in TuiFilters.kt.
+// fix follows; the Graph tab's registry keys and drill are TuiProjects.kt and TuiDrill.kt; the filters and the Calls expand pane live in TuiFilters.kt.
 package rtok.tui
 
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import rtok.web.ProjectRequest
 import tui.Key
 
 /** model::pages(): every tab with the snapshot field it renders (the web UI's sidebar is the same list). */
@@ -34,6 +35,7 @@ private const val MAX_DIGIT = 9
 enum class Effect { NONE, QUIT, REFRESH }
 
 /** `rtok tui` state; [snapshot] is replaced on every tick. */
+@Suppress("TooManyFunctions")
 class TuiApp(
     startTab: String,
     /** The writes keys may make; null for a read-only app (the tests of navigation). */
@@ -45,6 +47,17 @@ class TuiApp(
     var help = false
         private set
     var snapshot: JsonObject = JsonObject(emptyMap())
+        set(v) {
+            field = v
+            // app.rs `refresh`: a watched re-index reports its end on the next read.
+            projects.settle(projectEntries(v))
+        }
+
+    /** The Graph tab's registry cursor and the plan being made (T476). */
+    val projects = ProjectsState()
+
+    /** The Graph tab's one-project view (T561). */
+    val drill = TuiDrill()
 
     /** The Plugins tab's status line: the last toggle's outcome, `""` until one. */
     var pluginStatus = ""
@@ -103,6 +116,10 @@ class TuiApp(
     /** app.rs `key`: Ctrl+C / q / Esc quit, ←/→ (Tab, Shift+Tab) wrap, 1..9 jump, `?` help, `r` re-read, rows move. */
     fun key(k: Key): Effect {
         if (k == Key.Ctrl('c')) return Effect.QUIT
+        return (if (page == "graph") graph(k) else null) ?: pageKey(k)
+    }
+
+    private fun pageKey(k: Key): Effect {
         val pageKeyed =
             when (page) {
                 "calls" -> {
@@ -127,6 +144,52 @@ class TuiApp(
                 }
             }
         return if (pageKeyed) Effect.NONE else rest(k)
+    }
+
+    /**
+     * app.rs `graph_key` (T476): a confirmed plan is written through the web page's function, then the model is
+     * re-read so the table shows what the registry now holds. Null when the key is not the registry's.
+     */
+    private fun graph(k: Key): Effect? {
+        val a = actions ?: return null
+        val rows = projectEntries(snapshot)
+        return when (val r = projects.key(k, rows)) {
+            ProjectKey.Ignored -> {
+                null
+            }
+
+            ProjectKey.Handled -> {
+                Effect.NONE
+            }
+
+            is ProjectKey.Plan -> {
+                runCatching { a.projectWrite(ProjectRequest.Remove(r.id.toString(), false)) }
+                    .fold({ projects.confirmRemove(r.id, it) }, { projects.setStatus(it.message ?: it.toString()) })
+                Effect.NONE
+            }
+
+            is ProjectKey.Write -> {
+                val reindexed = (r.req as? ProjectRequest.Reindex)?.project?.toIntOrNull()
+                val out = runCatching { a.projectWrite(r.req) }
+                if (reindexed != null && out.isSuccess) {
+                    // The worker is running: the status line follows it from the next read.
+                    projects.watch(reindexed, rows)
+                } else {
+                    projects.setStatus(
+                        out.fold(
+                            { if (r.plan.startsWith("select ")) "${r.plan}: done" else it.trim().lines().joinToString("; ") },
+                            { it.message ?: it.toString() },
+                        ),
+                    )
+                }
+                Effect.REFRESH
+            }
+
+            is ProjectKey.Drill -> {
+                drill.toggle(r.id, r.name, a::drill)
+                Effect.NONE
+            }
+        }
     }
 
     /** app.rs `calls_key` with the pane keys: `e` opens / closes, Esc closes, the pane takes `/` and ↑/↓. */

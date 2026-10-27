@@ -78,7 +78,10 @@ fun colWidths(
         cols.map { if (it.width > 0) Size.Fixed(it.width) else Size.Fill() },
     )
 
-/** A header row and [rows] (cell texts) from row [scroll]; row [selected] is highlighted. */
+/**
+ * A header row and [rows] (cell texts) from row [scroll]; row [selected] is highlighted. [cellStyle] colours one cell
+ * of an unselected row (row index, column index), null for the row's own style.
+ */
 fun Buffer.table(
     r: Rect,
     cols: List<Col>,
@@ -87,6 +90,7 @@ fun Buffer.table(
     scroll: Int = 0,
     header: Style = Style(bold = true, underline = true),
     highlight: Style = Style(reverse = true),
+    cellStyle: (Int, Int) -> Style? = { _, _ -> null },
 ) {
     if (r.h <= 0) return
     val ws = colWidths(r.w, cols)
@@ -94,19 +98,19 @@ fun Buffer.table(
     fun row(
         y: Int,
         cells: List<String>,
-        st: Style,
+        st: (Int) -> Style,
     ) {
         var x = r.x
         cols.forEachIndexed { i, c ->
-            put(x, y, fit(cells.getOrElse(i) { "" }, ws[i], c.right), st, ws[i])
+            put(x, y, fit(cells.getOrElse(i) { "" }, ws[i], c.right), st(i), ws[i])
             x += ws[i] + 1
         }
     }
-    row(r.y, cols.map { it.header }, header)
+    row(r.y, cols.map { it.header }) { header }
     rows.drop(scroll).take(r.h - 1).forEachIndexed { i, cells ->
         val idx = i + scroll
         if (idx == selected) fill(Rect(r.x, r.y + 1 + i, r.w, 1), highlight)
-        row(r.y + 1 + i, cells, if (idx == selected) highlight else Style.Default)
+        row(r.y + 1 + i, cells) { c -> if (idx == selected) highlight else cellStyle(idx, c) ?: Style.Default }
     }
 }
 

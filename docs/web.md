@@ -80,5 +80,8 @@ Previously excluded from the port (port-plan.md); now in progress in small steps
   T479), both through `rtok.tui.TuiActions`. Part 4: Sessions `l` live-only filter (T60.10), Config `/` filter
   (T228) and the Calls `e` expand pane with its own `/` filter (T60.4), an open filter owning every key (T637).
   Part 5: the Calls Enter/z detail pane (view.rs `call_detail`, T15.5) and the Sessions Enter pane
-  (`session_pane` over model::session_detail, T60.3). Next: doctor fix,
-  graph drill/compare/export and the live calls pane; reading the model off the input thread.
+  (`session_pane` over model::session_detail, T60.3). Part 6: the Graph tab's registry (projects.rs T476/T477:
+  select, link/unlink with a target picker, re-index on the `Jobs` worker, remove after its dry run; all through
+  `GraphAnswer.projectWrite`, the page's own write), the health cells and breakdown (health.rs T481) and `d` drill
+  (drill.rs T561, loaded on the key until the loop has a worker). Next: compare, export, the live calls pane,
+  doctor fix; reading the model off the input thread.

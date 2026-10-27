@@ -102,43 +102,11 @@ class GraphAnswer(
     /** Nothing on success (the next snapshot shows it), a notice when refused, the dry run for an unconfirmed remove. */
     private fun project(r: ProjectRequest): String? {
         val planFor = (r as? ProjectRequest.Remove)?.takeIf { !it.confirmed }?.project
-        return runCatching { Runtime.open(cfg.value, "web-projects").use { write(it, r) } }.fold(
+        return runCatching { projectWrite(cfg.value, r) }.fold(
             { plan -> planFor?.let { frame("project_plan", "project" to JsonPrimitive(it), "plan" to JsonPrimitive(plan)) } },
             { failure(it) },
         )
     }
-
-    private fun write(
-        rt: Runtime,
-        r: ProjectRequest,
-    ): String =
-        when (r) {
-            is ProjectRequest.Select -> {
-                Projects.run(rt, ProjectAction.Select(r.project), false)
-            }
-
-            is ProjectRequest.Link -> {
-                Projects.run(rt, ProjectAction.Link(r.to, r.from, r.both, null), false)
-            }
-
-            is ProjectRequest.Unlink -> {
-                Projects.run(rt, ProjectAction.Unlink(r.to, r.from, r.both), false)
-            }
-
-            // The worker is the surface's own: the socket must keep answering while it indexes.
-            is ProjectRequest.Reindex -> {
-                Jobs.start(rt, r.project)
-            }
-
-            // The unconfirmed request is the dry run, so the guard is here and not in each surface.
-            is ProjectRequest.Remove -> {
-                if (r.confirmed) {
-                    Projects.run(rt, ProjectAction.Remove(r.project), false)
-                } else {
-                    Projects.preview(rt, ProjectAction.Remove(r.project), false)
-                }
-            }
-        }
 
     private fun graph(r: DrillRequest) = opened("web-drill") { frame("graph", "graph" to encode(DrillGraph.serializer(), Drill.run(it, r))) }
 
@@ -159,6 +127,47 @@ class GraphAnswer(
     ): String = runCatching { Runtime.open(cfg.value, session).use(body) }.getOrElse(::failure)
 
     companion object {
+        /**
+         * web/mod.rs `project_write`: the registry write behind the page's `project` request, shared with `rtok tui`'s
+         * Graph keys so the surfaces cannot disagree. An unconfirmed remove answers with its dry run.
+         */
+        fun projectWrite(
+            cfg: rtok.config.Config,
+            r: ProjectRequest,
+        ): String = Runtime.open(cfg, "web-projects").use { write(it, r) }
+
+        private fun write(
+            rt: Runtime,
+            r: ProjectRequest,
+        ): String =
+            when (r) {
+                is ProjectRequest.Select -> {
+                    Projects.run(rt, ProjectAction.Select(r.project), false)
+                }
+
+                is ProjectRequest.Link -> {
+                    Projects.run(rt, ProjectAction.Link(r.to, r.from, r.both, null), false)
+                }
+
+                is ProjectRequest.Unlink -> {
+                    Projects.run(rt, ProjectAction.Unlink(r.to, r.from, r.both), false)
+                }
+
+                // The worker is the surface's own: the socket must keep answering while it indexes.
+                is ProjectRequest.Reindex -> {
+                    Jobs.start(rt, r.project)
+                }
+
+                // The unconfirmed request is the dry run, so the guard is here and not in each surface.
+                is ProjectRequest.Remove -> {
+                    if (r.confirmed) {
+                        Projects.run(rt, ProjectAction.Remove(r.project), false)
+                    } else {
+                        Projects.preview(rt, ProjectAction.Remove(r.project), false)
+                    }
+                }
+            }
+
         /** Their order is the order Rust's untagged `ClientMessage` tries them in. */
         val KEYS = listOf("project", "graph", "diff", "export", "import")
 
