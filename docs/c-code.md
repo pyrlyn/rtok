@@ -10,7 +10,7 @@ Allowed for now, to move faster, when the Kotlin ecosystem has no equivalent.
 
 | Library | Module | Why it is needed | Why it can't be dropped |
 |---|---|---|---|
-| tree-sitter runtime + vendored grammars | `libs/treesitter-native` (built with CMake; grammars pinned in `grammars.json`, managed by `scripts/grammars.py`) | Parses source into syntax trees for tags/symbols, locals and highlights | tree-sitter and the generated grammar `parser.c` files exist only in C; there is no Kotlin port |
+| tree-sitter runtime + vendored grammars | `libs/treesitter-native` (built with CMake; grammars from one tree-sitter-language-pack release asset pinned by sha256, plus the runtime and 4 grammars at pinned commits, all in `grammars.json`, managed by `scripts/grammars.py`) | Parses source into syntax trees for tags/symbols, locals and highlights | tree-sitter and the generated grammar `parser.c` files exist only in C; there is no Kotlin port |
 | zstd decoder | `libs/zstd-native` (release tarball pinned with sha256 in `zstd.json`; only `lib/common` + `lib/decompress` compiled, no asm, no threads) | Decompresses zstd data | No zstd library for Kotlin/Native; writing our own decoder is slow and risky |
 | SQLite | `libs/db-room` via `androidx.sqlite:sqlite-bundled` | The whole store, including FTS5 full-text search | SQLite is C; it ships prebuilt in the dependency, we don't compile it |
 | libcurl (Linux only) | `libs/http-ktor` via `io.ktor:ktor-client-curl` | HTTP client on Linux | Ktor's only Kotlin/Native engine on Linux; macOS uses the Darwin engine (no C) |
