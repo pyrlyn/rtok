@@ -44,3 +44,6 @@ Previously excluded from the port (port-plan.md); now in progress in small steps
   `Jobs` worker, remove as a `project_plan` dry run until `confirmed`), `graph` (drill-down), `diff` (Compare mode),
   `export` (JSON/SVG; PNG still errors, see port-plan.md) and `import` (parse only). `doctor` and `junk` wait for
   their web ports.
+- Step 5, slice 3: `rtok.web.CallsStore` (calls_store.rs: running/feed, interrupt sweep, windowed totals,
+  sparklines, scope and folded counters, feed filters), `CallsView` (calls_view.rs, the `calls` frame) and
+  `coalesce`/`CallBatch` from live.rs. Pure logic; the poller, `Reader` and the `calls` subscription come next.
