@@ -266,6 +266,18 @@ private fun CssBuilder.widgets() {
     rule(".pill.info") { put("color", v("accent")) }
     rule(".pill.warn") { put("color", v("warn")) }
     rule(".pill.fail") { put("color", v("fail")) }
+    rule(".pill.muted") { put("color", v("fg-muted")) }
+    rule(".kv") {
+        put("display", "grid")
+        put("grid-template-columns", "minmax(0,16rem) minmax(0,1fr)")
+        put("gap", "4px 16px")
+        put("word-break", "break-all")
+    }
+    rule(".cards") { put("grid-template-columns", "repeat(auto-fill, minmax(320px, 1fr))") }
+    rule("ul.plain") {
+        put("list-style", "none")
+        put("padding", "0")
+    }
     rule(".muted") { put("color", v("fg-muted")) }
     rule("button") {
         put("font", "inherit")
