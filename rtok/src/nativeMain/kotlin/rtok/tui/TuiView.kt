@@ -24,8 +24,8 @@ import tui.tabs
 
 private const val DIGIT_TABS = 9
 private const val SPARK_LABEL = 14
-private val ACCENT = Style(fg = Color.Cyan)
-private val MUTED = Style(dim = true)
+internal val ACCENT = Style(fg = Color.Cyan)
+internal val MUTED = Style(dim = true)
 private val FAIL = Style(fg = Color.Red)
 
 private val COMMANDS =
@@ -43,6 +43,9 @@ private val PAGE_KEYS =
     mapOf(
         "plugins" to "Space/Enter toggle",
         "hosts" to "c clear safe junk",
+        "calls" to "e expand · / filter expand",
+        "sessions" to "l live only",
+        "config" to "/ filter",
     )
 
 private fun objects(e: kotlinx.serialization.json.JsonElement?) = (e as? JsonArray).orEmpty().filterIsInstance<JsonObject>()
@@ -81,6 +84,9 @@ private fun help(
             "?                this help",
             "Space/Enter      plugins: toggle the plugin under the cursor",
             "c                hosts: clear safe junk (plan); y removes, n/Esc declines",
+            "e                calls: expand the archived output; / filters it, Esc/e closes",
+            "l                sessions: live-only filter",
+            "/                config: filter entries; Esc/Enter stops typing",
         )
     b.paragraph(r, lines.map { listOf(Span(it)) })
 }
@@ -106,10 +112,10 @@ private fun field(
         v == null || v is JsonNull -> notReady(b, r, app.page)
         app.page == "overview" && v is JsonObject -> overview(b, r, v)
         app.page == "plugins" -> grid(b, r, app, PLUGIN_COLS, objects(v).map(::pluginRow))
-        app.page == "calls" -> grid(b, r, app, CALL_COLS, objects(v).map { callRow(it, clock) })
-        app.page == "sessions" -> grid(b, r, app, SESSION_COLS, objects(v).map { sessionRow(it, clock) })
+        app.page == "calls" -> calls(b, r, app, objects(v).map { callRow(it, clock) })
+        app.page == "sessions" -> grid(b, r, app, SESSION_COLS, app.sessionRows().map { sessionRow(it, clock) })
         app.page == "logs" -> text(b, r, app, (v as? JsonArray).orEmpty().map { (it as? JsonPrimitive)?.content ?: it.toString() })
-        v is JsonPrimitive -> text(b, r, app, v.content.lines())
+        v is JsonPrimitive -> text(b, r, app, pageLines(app, v.content))
         v is JsonObject && v["text"] is JsonPrimitive -> text(b, r, app, v.s("text").orEmpty().lines())
         else -> text(b, r, app, v.toString().lines())
     }
@@ -149,7 +155,7 @@ private fun overview(
     b.paragraph(r, lines)
 }
 
-private fun grid(
+internal fun grid(
     b: Buffer,
     r: Rect,
     app: TuiApp,
@@ -164,7 +170,7 @@ private fun grid(
     b.table(r, cols, rows, app.cursor, follow(app.cursor, 0, visible))
 }
 
-private fun text(
+internal fun text(
     b: Buffer,
     r: Rect,
     app: TuiApp,

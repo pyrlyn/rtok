@@ -88,7 +88,7 @@ class TuiActionsTest {
         val cfg = config("junk")
         try {
             val (stale, report) = junkFixture(cfg)
-            val a = TuiApp("hosts", TuiActions(cfg) { report })
+            val a = TuiApp("hosts", TuiActions(cfg, junkReport = { report }))
             assertEquals(Effect.NONE, a.key(Key.Char("c")))
             assertTrue(a.junk.stage is TuiJunk.Stage.Plan)
             assertTrue("dry run, nothing removed" in screen(a))
@@ -108,7 +108,7 @@ class TuiActionsTest {
         val cfg = config("junk-decline")
         try {
             val (stale, report) = junkFixture(cfg)
-            val a = TuiApp("hosts", TuiActions(cfg) { report })
+            val a = TuiApp("hosts", TuiActions(cfg, junkReport = { report }))
             a.key(Key.Char("c"))
             assertEquals(Effect.NONE, a.key(Key.Char("n")))
             assertTrue(a.junk.stage is TuiJunk.Stage.Closed)

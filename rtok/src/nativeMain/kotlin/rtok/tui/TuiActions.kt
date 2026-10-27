@@ -3,6 +3,7 @@
 // (Validate.set) and the junk panel through JunkWeb, the pair the web page calls.
 package rtok.tui
 
+import rtok.Expand
 import rtok.agents.Cleared
 import rtok.agents.Junk
 import rtok.agents.JunkClear
@@ -12,11 +13,13 @@ import rtok.agents.JunkWeb
 import rtok.config.Config
 import rtok.config.Validate
 import rtok.model.JunkPage
+import rtok.plugin.Runtime
 
 /** The writes `rtok tui` may make; tests hand in a config on a temp home and a fixture junk report. */
 class TuiActions(
     initial: Config,
     private val junkReport: (Config) -> JunkReport = Junk::report,
+    private val expander: (Config, String) -> String? = ::expandPayload,
 ) {
     /** The config the loop builds snapshots from; a toggle swaps in the reloaded one, so the next tick agrees. */
     var cfg: Config = initial
@@ -41,6 +44,9 @@ class TuiActions(
         )
     }
 
+    /** model.rs `expand_payload`: archive [id]'s body, `[expand] max_lines`-capped; null when it is gone. */
+    fun expand(id: String): String? = runCatching { expander(cfg, id) }.getOrNull()
+
     /** junk_clear.rs `c`: the dry run of `agents junk clear` for every agent. */
     fun junkPlan(): Cleared = JunkWeb.plan(cfg, junkReport(cfg))
 
@@ -50,3 +56,12 @@ class TuiActions(
     /** `agents junk clear`'s own text of [c]. */
     fun junkText(c: Cleared): String = JunkClear.toText(c, JunkView.of(cfg))
 }
+
+/** model.rs `expand_payload` without a grep: what the web `/ws` `expand` frame carries. */
+fun expandPayload(
+    cfg: Config,
+    id: String,
+): String? =
+    Runtime.open(cfg, "expand").use { cx ->
+        Expand.fetch(cx, id)?.let { Expand.renderLines(it.decodeToString(), id, null, null, 0, cfg.expand.maxLines) }
+    }
