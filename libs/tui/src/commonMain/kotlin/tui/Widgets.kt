@@ -138,3 +138,32 @@ fun follow(
         selected >= scroll + visible -> selected - visible + 1
         else -> scroll
     }
+
+/** [line] cut into rows of at most [cols] cells, spans keeping their style; an empty line stays one row. */
+fun wrap(
+    line: Line,
+    cols: Int,
+): List<Line> {
+    if (cols <= 0) return listOf(line)
+    val out = mutableListOf<Line>()
+    var row = mutableListOf<Span>()
+    var used = 0
+    for (s in line) {
+        val cur = StringBuilder()
+        for (cp in codePoints(s.text)) {
+            val w = cpWidth(cp)
+            if (used + w > cols && used > 0) {
+                if (cur.isNotEmpty()) row += Span(cur.toString(), s.style)
+                out += row
+                row = mutableListOf()
+                cur.clear()
+                used = 0
+            }
+            cur.append(cpString(cp))
+            used += w
+        }
+        if (cur.isNotEmpty()) row += Span(cur.toString(), s.style)
+    }
+    out += row
+    return out
+}

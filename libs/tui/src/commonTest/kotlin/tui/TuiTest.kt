@@ -77,4 +77,11 @@ class TuiTest {
         assertEquals(listOf(Key.Ctrl('c'), Key.Enter, Key.Tab, Key.Backspace), k("\u0003\r\t\u007f"))
         assertEquals(listOf(Key.Char("я"), Key.Home), k("я\u001bOH"))
     }
+
+    @Test fun wrapCutsSpansAtTheWidthAndKeepsTheirStyle() {
+        val bold = Style(bold = true)
+        val rows = wrap(listOf(Span("abc", bold), Span("defg")), 4)
+        assertEquals(listOf(listOf(Span("abc", bold), Span("d")), listOf(Span("efg"))), rows)
+        assertEquals(listOf(emptyList<Span>()), wrap(emptyList(), 4))
+    }
 }

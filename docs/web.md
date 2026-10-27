@@ -85,5 +85,6 @@ Previously excluded from the port (port-plan.md); now in progress in small steps
   `GraphAnswer.projectWrite`, the page's own write), the health cells and breakdown (health.rs T481) and `d` drill
   (drill.rs T561, loaded on the key until the loop has a worker). Part 7: the panel shell the Graph tab's panels
   share (panel.rs T329.48) and `c` compare (compare.rs T485) over `GraphDiffs.pageOf`, a typed ref list or a saved
-  export path. Next: export, the live calls pane,
+  export path. Part 8: `e` export form and `v` saved-export view (exporter.rs T329.41) over `ExportView.write`/`read`;
+  png is refused as `graph export` refuses it in this build. Panel text wraps to the width (`tui.wrap`). Next: the live calls pane,
   doctor fix; reading the model off the input thread.
