@@ -32,6 +32,7 @@ configure<KotlinMultiplatformExtension> {
         implementation(project(":http-ktor"))
         implementation(project(":http-server-ktor"))
         implementation(project(":rtok-web"))
+        implementation(project(":tui"))
         implementation(project(":rtok-wasm"))
         implementation("pyrlyn.wasm:wasm-chasm")
         implementation(project(":treesitter-native"))
