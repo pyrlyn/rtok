@@ -18,6 +18,10 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.utils.io.readAvailable
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import rtok.http.HttpClient
 import rtok.http.HttpClientFactory
 import rtok.http.HttpException
@@ -26,15 +30,24 @@ import rtok.http.HttpResponse
 import rtok.http.HttpSettings
 import rtok.http.StreamedResponse
 import rtok.http.StreamingHttpClient
+import kotlin.concurrent.Volatile
+import kotlin.time.TimeSource
 import io.ktor.client.HttpClient as Ktor
 
 /** The platform engine (Darwin / Curl). */
 internal expect fun platformEngine(): HttpClientEngine
 
+/** Whether the platform engine applies [HttpSettings.socketTimeoutMs] on its own. */
+internal expect val engineEnforcesSocketTimeout: Boolean
+
 class KtorHttp(
     settings: HttpSettings,
     engine: HttpClientEngine = platformEngine(),
+    /** Bound each wait for a streamed response (headers, then every chunk) by the socket timeout here. */
+    idleWatchdog: Boolean = !engineEnforcesSocketTimeout,
 ) : StreamingHttpClient {
+    private val idleLimitMs = settings.socketTimeoutMs.takeIf { idleWatchdog && it in 1 until Long.MAX_VALUE }
+
     private val client =
         Ktor(engine) {
             expectSuccess = false
@@ -78,24 +91,28 @@ class KtorHttp(
         req: HttpRequest,
         use: suspend (StreamedResponse) -> T,
     ): T =
-        guard(req) {
+        idleBounded(req) { waiting ->
             raw
                 .prepareRequest(req.url) {
                     this.method = HttpMethod.parse(method.uppercase())
                     req.headers.forEach { (k, v) -> headers.append(k, v) }
                     if (req.body.isNotEmpty()) setBody(req.body)
                 }.execute { resp ->
+                    waiting(false)
                     val channel = resp.bodyAsChannel()
                     val buf = ByteArray(CHUNK)
                     val want = declaredLength(method, resp)
                     var got = 0L
                     val next: suspend () -> ByteArray? = {
                         guard(req) {
+                            waiting(true)
                             val n = channel.readAvailable(buf, 0, buf.size)
                             if (n < 0) {
+                                waiting(false)
                                 checkComplete(req, want, got)
                                 null
                             } else {
+                                waiting(false)
                                 got += n
                                 buf.copyOf(n)
                             }
@@ -126,6 +143,50 @@ class KtorHttp(
     ) {
         if (want != null && got < want) throw HttpException(HttpException.Kind.Io, "${req.url}: body truncated at $got of $want bytes")
     }
+
+    /**
+     * Runs [block] under [guard], and, when [idleLimitMs] is set, fails it with a socket timeout once a single wait for
+     * the upstream (marked by `waiting(true)` … `waiting(false)`) outlasts the limit. Time the caller spends between
+     * reads does not count, as with a socket read timeout.
+     */
+    private suspend fun <T> idleBounded(
+        req: HttpRequest,
+        block: suspend (waiting: (Boolean) -> Unit) -> T,
+    ): T {
+        val limit = idleLimitMs ?: return guard(req) { block {} }
+        val clock = TimeSource.Monotonic.markNow()
+        val since = IdleMark(0)
+        return coroutineScope {
+            val work = async { guard(req) { block { on -> since.ms = if (on) clock.elapsedNow().inWholeMilliseconds else -1 } } }
+            var timedOut = false
+            val dog =
+                launch {
+                    while (work.isActive) {
+                        val start = since.ms
+                        val idle = if (start < 0) 0 else clock.elapsedNow().inWholeMilliseconds - start
+                        if (idle >= limit) {
+                            timedOut = true
+                            work.cancel()
+                            break
+                        }
+                        delay((limit - idle).coerceIn(1, limit))
+                    }
+                }
+            try {
+                work.await()
+            } catch (e: CancellationException) {
+                if (timedOut) throw HttpException(HttpException.Kind.SocketTimeout, "socket timeout: ${req.url}", e)
+                throw e
+            } finally {
+                dog.cancel()
+            }
+        }
+    }
+
+    /** When the current wait for the upstream began (ms on the call's clock), or -1 while not waiting. */
+    private class IdleMark(
+        @Volatile var ms: Long,
+    )
 
     private fun headersOf(resp: io.ktor.client.statement.HttpResponse) = resp.headers.entries().flatMap { (k, vs) -> vs.map { k.lowercase() to it } }
 

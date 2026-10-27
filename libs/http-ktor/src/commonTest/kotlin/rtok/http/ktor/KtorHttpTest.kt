@@ -15,6 +15,12 @@ private fun client(
     handler: MockRequestHandler,
 ) = KtorHttp(settings, MockEngine(handler))
 
+/** A client whose own idle watchdog is on, as on Linux where the Curl engine ignores the socket timeout. */
+private fun watched(
+    settings: HttpSettings,
+    handler: MockRequestHandler,
+) = KtorHttp(settings, MockEngine(handler), idleWatchdog = true)
+
 class KtorHttpTest {
     @Test fun headersIncludingAuthAndTheBodyReachTheServerUnchanged() =
         runBlocking {
@@ -131,6 +137,29 @@ class KtorHttpTest {
             client { respond("{}", HttpStatusCode.OK, headersOf(HttpHeaders.ContentLength, "2")) }.use { c ->
                 assertEquals("{}", c.post(HttpRequest("http://x/")).text())
                 c.stream("POST", HttpRequest("http://x/")) { r -> while (r.read() != null) Unit }
+            }
+        }
+
+    @Test fun aStreamThatWaitsPastTheSocketTimeoutFailsAsASocketTimeout() =
+        runBlocking {
+            watched(HttpSettings(requestTimeoutMs = 60_000, socketTimeoutMs = 100)) {
+                delay(2_000)
+                respond("late")
+            }.use { c ->
+                val e = assertFailsWith<HttpException> { c.stream("POST", HttpRequest("http://x/")) { it.status } }
+                assertEquals(HttpException.Kind.SocketTimeout, e.kind)
+            }
+        }
+
+    @Test fun aStreamWithinTheSocketTimeoutCompletesAndSlowReadersAreNotTimedOut() =
+        runBlocking {
+            watched(HttpSettings(socketTimeoutMs = 300)) { respond("{}") }.use { c ->
+                val body =
+                    c.stream("POST", HttpRequest("http://x/")) { r ->
+                        delay(600)
+                        buildList { while (true) add(r.read() ?: break) }.fold(ByteArray(0)) { a, b -> a + b }
+                    }
+                assertEquals("{}", body.decodeToString())
             }
         }
 }
