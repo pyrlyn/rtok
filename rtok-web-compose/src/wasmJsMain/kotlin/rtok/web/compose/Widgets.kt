@@ -44,11 +44,15 @@ fun Txt(
     bold: Boolean = false,
 ) {
     val p = LocalPalette.current
-    BasicText(
-        s,
-        modifier,
-        style = TextStyle(color = color ?: p.fg, fontSize = size.sp, fontWeight = if (bold) FontWeight.SemiBold else FontWeight.Normal),
-    )
+    val c = color ?: p.fg
+    val style = TextStyle(color = c, fontSize = size.sp, fontWeight = if (bold) FontWeight.SemiBold else FontWeight.Normal)
+    if (hasGlyph(s)) {
+        // Symbols missing from the font are drawn as vectors (Glyphs.kt).
+        val (text, content) = withGlyphs(s, c)
+        BasicText(text, modifier, style = style, inlineContent = content)
+    } else {
+        BasicText(s, modifier, style = style)
+    }
 }
 
 /** Muted secondary text. */
