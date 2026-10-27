@@ -1,4 +1,5 @@
-// Port of the walk in src/worktree/list.rs (`is_cache_dir`, `Usage`, `Cache`, `usage`, `usage_until`): what a tree
+// Port of the walk in src/worktree/list.rs (`is_cache_dir`, `Usage`, `Cache`, `usage`, `usage_sources`, `usage_until`,
+// `newest_until`): what a tree
 // costs, split into source and tagged build cache (`CACHEDIR.TAG`). Read-only.
 package rtok.worktree
 
@@ -41,6 +42,25 @@ data class Usage(
 /** `usage`. */
 fun usage(dir: String): Usage = TreeWalk(null).run(dir).first
 
+/**
+ * `usage_sources` (T936): [usage] without the tagged cache roots, which hold nearly every file of a built worktree.
+ * Cache bytes stay zero and `modified` is the newest source file, as for [newestUntil].
+ */
+fun usageSources(dir: String): Usage = TreeWalk(null, sourcesOnly = true).run(dir).first
+
+/**
+ * `newest_until` (T948): the newest mtime (nanoseconds) of [dir]'s source files, tagged cache roots left out, except
+ * that the walk ends at the first file whose mtime satisfies [enough]; [enough] must hold for every later mtime too.
+ * Null when the walk could not read everything and found no file that settles it.
+ */
+fun newestUntil(
+    dir: String,
+    enough: (Long) -> Boolean,
+): Long? {
+    val (total, settled) = TreeWalk(null, sourcesOnly = true, enough = enough).run(dir)
+    return total.modified?.takeIf { settled || !total.incomplete }
+}
+
 /** `usage_until`: the flag says the walk was cut at [deadline], so the result (and every mtime) is a lower bound. */
 fun usageUntil(
     dir: String,
@@ -49,6 +69,8 @@ fun usageUntil(
 
 private class TreeWalk(
     private val deadline: TimeSource.Monotonic.ValueTimeMark?,
+    private val sourcesOnly: Boolean = false,
+    private val enough: (Long) -> Boolean = { false },
 ) {
     private var source = 0L
     private var cacheBytes = 0L
@@ -71,13 +93,14 @@ private class TreeWalk(
         if (cache != null) caches[cache] = caches[cache].copy(incomplete = true)
     }
 
-    /** False when the deadline stopped the walk (`ControlFlow::Break`). */
+    /** False when the deadline or [enough] stopped the walk (`ControlFlow::Break`). */
     private fun walk(
         dir: String,
         root: Boolean,
         inCache: Int?,
     ): Boolean = deadline?.hasPassedNow() != true && visitDir(dir, root, inCache)
 
+    @Suppress("ReturnCount")
     private fun visitDir(
         dir: String,
         root: Boolean,
@@ -85,20 +108,23 @@ private class TreeWalk(
     ): Boolean {
         // A nested checkout (another worktree, a submodule) is its own row.
         val names = read(inCache) { readDir(dir) }?.takeUnless { !root && ".git" in it && exists("$dir/.git") } ?: return true
-        val cache = inCache ?: tagRoot(dir, names)
+        val tagged = inCache == null && "CACHEDIR.TAG" in names && isCacheDir(dir)
+        if (tagged && sourcesOnly) return true
+        val cache = inCache ?: tagRoot(dir, tagged)
         return names.all { entry("$dir/$it", cache) }
     }
 
     /** The index of a new cache root when [dir] carries a valid tag. */
     private fun tagRoot(
         dir: String,
-        names: List<String>,
+        tagged: Boolean,
     ): Int? {
-        if ("CACHEDIR.TAG" !in names || !isCacheDir(dir)) return null
+        if (!tagged) return null
         caches += Cache(dir)
         return caches.size - 1
     }
 
+    @Suppress("ReturnCount")
     private fun entry(
         path: String,
         cache: Int?,
@@ -113,6 +139,7 @@ private class TreeWalk(
 
             else -> {
                 add(cache, meta.len, meta.mtimeNanos)
+                return !enough(meta.mtimeNanos)
             }
         }
         return true

@@ -1004,3 +1004,11 @@ Next, in order:
 - Tests: WorktreesTest 9 (mod.rs 6 incl. the rstest tables as loops, git.rs 2, locked_by 1).
 - Stop point: next worktree list.rs, ops.rs, remove.rs, gc.rs, claim/adopt, the `rtok worktree` CLI; then
   junk_worktrees + `agent_worktrees`, the rest of phase 10.
+## Session: worktree 2 — list.rs and origin.rs
+- `rtok.worktree.Origin` (origin.rs: pools, `evicts`, `hosts`, `of`/`ofWith` with `$CODEX_HOME`). CacheUsage.kt gains
+  `usageSources` (T936) and `newestUntil` (T948, stops at the first file that is enough). `WorktreeList` (list.rs:
+  `Row`/`Bound`/`Seen` with Rust's JSON names, `orphans`, `bind`, `attribute`, `rows`/`rowsSized`,
+  `attributeWithStore`, `toTable`).
+- Tests: OriginTest 3, WorktreeListTest 6 (the list.rs tests not already in CleanTest).
+- Stop point: next ops.rs, remove.rs, gc.rs, claim/adopt, the `rtok worktree` CLI; then junk_worktrees +
+  `agent_worktrees`, the rest of phase 10.
