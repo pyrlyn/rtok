@@ -88,7 +88,8 @@ Plan and per-phase checklist: [port-plan.md](port-plan.md).
 | src/hooks | `rtok.hooks` | ⬜ | |
 | src/agents (40+ hosts), src/doctor | `rtok.agents`, `rtok.doctor` | ⬜ doctor: probe/hooks/dupes ✅ | hooks.rs 45 → HooksTest 43 |
 | src/tasks mod/meta/adapter/ready | `rtok/tasks` Tasks.kt, Meta.kt, Adapter.kt, Ready.kt | 🟡 | 11 → 14 |
-| src/otel, worktree, tasks (rest), measure, model, report, bench, completions, project, store | matching packages | ⬜ | |
+| src/otel (otlp, map, metrics, export), src/cli/otel.rs | `rtok/otel/`, `cli/OtelCmd.kt`; rtok-sys `lockExclusive` | 🟡 all but `spawn_ticker` (proxy/mcp periodic flush) | export.rs 9 + tests/otel.rs 12 → ExportTest 20, OtelCliSpec 2 |
+| src/worktree, tasks (rest), measure, model, report, bench, completions, project, store | matching packages | ⬜ | |
 | src/tui | – | ❌ excluded (TUI) | |
 | src/web, agents/junk_web.rs, `rtok web/tui/dashboard` | rtok-web (token.rs, remote bind) | ⏳ in progress, see docs/web.md | |
 | tests/*.rs (138 integration files) | `:rtok` commonTest | ⬜ | 0 / ~138 files |

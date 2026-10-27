@@ -57,3 +57,17 @@ fun lockHeld(path: String): Boolean {
 
 /** `rtok_sys::process_alive`: a signal-0 probe of a positive [pid]. */
 fun processAlive(pid: Int): Boolean = pid > 0 && kill(pid, 0) == 0
+
+/** Opens (creating, with its parent) `path` and blocks until it holds an exclusive flock; close the fd to release. */
+fun lockExclusive(path: String): Int {
+    path.substringBeforeLast('/', "").takeIf { it.isNotEmpty() }?.let(::createDirAll)
+    val fd = open(path, O_CREAT or O_WRONLY, 0x1a4) // 0644
+    if (fd < 0) throw IoException(ioKind(errno), "cannot open $path: errno $errno")
+    while (flock(fd, LOCK_EX) != 0) {
+        if (errno == EINTR) continue
+        val e = errno
+        close(fd)
+        throw IoException(ioKind(e), "flock $path: errno $e")
+    }
+    return fd
+}
