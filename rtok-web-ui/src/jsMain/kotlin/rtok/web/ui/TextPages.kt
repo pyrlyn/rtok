@@ -19,7 +19,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
 /** parts.tsx `TextPage`: the missing-field alert, a note and the raw/parsed switch. */
-private fun FlowContent.textPage(
+internal fun FlowContent.textPage(
     app: App,
     snap: JsonObject,
     page: String,
@@ -49,12 +49,12 @@ private fun FlowContent.textPage(
     }
 }
 
-private fun FlowContent.otherLines(lines: List<String>) {
+internal fun FlowContent.otherLines(lines: List<String>) {
     if (lines.isEmpty()) return
     panel("other lines", "not charted yet, verbatim") { pre { +lines.joinToString("\n") } }
 }
 
-private fun FlowContent.kv(rows: List<Pair<String, FlowContent.() -> Unit>>) {
+internal fun FlowContent.kv(rows: List<Pair<String, FlowContent.() -> Unit>>) {
     dl("kv") {
         rows.forEach { (k, v) ->
             dt("muted") { +k }
@@ -147,6 +147,8 @@ val HostsPage =
                 }
             }
         }
+        // Hosts.tsx renders the junk card under the hosts; not ready until junk reaches the snapshot.
+        pendingPage("junk", "rtok agents junk report").render(out, snap, app)
     }
 
 private fun FlowContent.service(s: ServiceRow) {

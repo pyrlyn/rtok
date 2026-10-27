@@ -52,6 +52,7 @@ fun stylesheet(): String =
             }
             layout()
             widgets()
+            controls()
             charts()
             grid()
             text()
@@ -249,6 +250,31 @@ private fun CssBuilder.tables() {
     rule("td .wrap, td:last-child") { put("white-space", "normal") }
 }
 
+/** Split list/detail layouts, link buttons and switches. */
+private fun CssBuilder.controls() {
+    rule(".split") {
+        put("display", "grid")
+        put("grid-template-columns", "minmax(0,3fr) minmax(0,2fr)")
+        put("gap", "12px")
+        put("align-items", "start")
+    }
+    rule("button.link") {
+        put("background", "none")
+        put("border", "none")
+        put("padding", "0")
+        put("text-align", "left")
+    }
+    rule("button.switch") {
+        put("min-width", "40px")
+        put("border-radius", "999px")
+        put("font-size", "11px")
+    }
+    rule("button.switch.on") {
+        put("background", v("accent"))
+        put("color", v("bg"))
+    }
+}
+
 private fun CssBuilder.widgets() {
     rule(".card") {
         put("background", v("surface"))
@@ -300,7 +326,7 @@ private fun CssBuilder.widgets() {
         put("text-align", "center")
     }
     rule("@media (max-width: 767px)") {
-        rule(".layout") { put("grid-template-columns", "1fr") }
+        rule(".layout, .split") { put("grid-template-columns", "1fr") }
         rule(".sidebar") { put("border-right", "none") }
     }
 }
