@@ -1322,3 +1322,15 @@ Next, in order:
 - Tests: WireTest 7, AnthropicUsageTest 4, ChatWireTest 3, ResponsesWireTest 4, GeminiWireTest 6 (all Rust tests of
   wire.rs and the four dialect files, Anthropic's tool-result test was already ported).
 - Stop point: next proxy chunk 3 (lane.rs, live.rs, flex.rs).
+
+## Session: proxy chunk 3 — lanes, live ring, Flex policy
+- `rtok.lane.LaneKinds` (src/lane.rs: lane `calls.kind`s, `x-rtok-lane`, `isApiRequest`, `laneOfKind`); stats
+  `Attach`, otel `Export` and compress `Compressor` now use it instead of their own copies.
+- `rtok.proxy.Lane` (lane.rs: classify by path, `/lane/<name>/` prefix or header; policy, route, passesThrough, kind).
+- `LiveRing` + `Live` (live.rs): lock-free copy-on-write newest-first ring capped at 120, plain-mode alerts. Tests use
+  their own ring, so Rust's `test_lock` is not needed.
+- `Flex` (flex.rs policy half): lane timeout, `Retry-After` delta seconds, `apply` (byte splice when absent),
+  `Retry.next`/fallback. Deviation: `flex::send` (the retrying send loop) lands with the server chunk, which owns
+  the HTTP client.
+- Tests: LaneTest 10 (rstest cases as loops), LiveRingTest 2, FlexTest 10.
+- Stop point: next proxy chunk 4 (tools_rewrite.rs, batch_results.rs).

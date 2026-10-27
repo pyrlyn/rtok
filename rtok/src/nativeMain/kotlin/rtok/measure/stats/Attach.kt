@@ -20,7 +20,7 @@ import rtok.store.usageByLaneTier
 import rtok.store.usageByModelTier
 
 /** `lane::lane_of_kind`: the lane a `kind` names; plain agent turns are `agent`. */
-fun laneOfKind(kind: String): String = if (kind.startsWith("api_request:")) kind.removePrefix("api_request:") else "agent"
+fun laneOfKind(kind: String): String = rtok.lane.LaneKinds.laneOfKind(kind)
 
 /** One bucket's counters with its prompt-cache hit rate over every billed input token. */
 fun apiRow(
