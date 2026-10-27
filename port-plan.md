@@ -909,3 +909,10 @@ Next, in order:
 - Tests: JunkSessionsTest 5.
 - Stop point: next junk_review, junk_items, junk.rs (list/report), junk_clear, CLI; then `--project`, restart.rs,
   worktree (then junk_worktrees + `agent_worktrees`), the rest of phase 10.
+
+## Session: libs/globset (own globset 0.4.20 port)
+- `:globset` (no dependencies): `Glob.new`/`GlobOptions`/`GlobSet`/`GlobError` with globset's parser, `**` rules,
+  nested `{}` alternates, classes, escapes, error messages; `(?-u)^…$` byte semantics as a Thompson NFA.
+- Tests: GlobsetCasesTest 1 (globset's 125 Unix `matches!`/`nmatches!` cases), GlobTest 4.
+- Stop point: next junk_review (uses `:globset` for `[agents.junk] exclude`), junk_items, junk.rs (list/report),
+  junk_clear, CLI; then `--project`, restart.rs, worktree, junk_worktrees + `agent_worktrees`, the rest of phase 10.
