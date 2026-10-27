@@ -127,7 +127,7 @@ private fun FlowContent.host(b: HostBlock) {
     }
 }
 
-/** The Hosts page; the junk card follows once junk reaches the snapshot. */
+/** The Hosts page (Hosts.tsx): the host blocks, then the junk card. */
 val HostsPage =
     PageView { out, snap, app ->
         out.textPage(app, snap, "hosts", "rtok agents list", "`rtok agents list`, one block per host variant, cached so the 2 s tick never waits") { text ->
@@ -147,8 +147,7 @@ val HostsPage =
                 }
             }
         }
-        // Hosts.tsx renders the junk card under the hosts; not ready until junk reaches the snapshot.
-        pendingPage("junk", "rtok agents junk report").render(out, snap, app)
+        out.junkCard(snap.obj("junk"))
     }
 
 private fun FlowContent.service(s: ServiceRow) {
