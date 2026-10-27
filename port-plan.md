@@ -1028,3 +1028,12 @@ Next, in order:
 - Tests: RemoveTest 3 (remove.rs 1 table + removal_preview.rs 2), GcTest 6 (the gc.rs rstest tables as loops).
 - Stop point: next ops.rs and the `rtok worktree` CLI (list/claim/adopt/remove/gc); then add.rs, whoami, finish,
   clean run, migrate, junk_worktrees + `agent_worktrees`, the rest of phase 10.
+## Session: worktree 5 — ops.rs and the `rtok worktree` CLI (list, claim, adopt, remove, gc)
+- `rtok.worktree.Ops` (ops.rs `claim`, `adopt`, `remove`, `list`, `live_ids`, `ended_ids`, `pending_paths`; the store
+  is opened per call and closed after, the scan runs before it). `cli/WorktreeCmd.kt` (`rtok worktree claim|adopt|
+  remove|list|gc`, the T410 `[worktree] enabled` gate, serde's pretty JSON: two-space indent, nulls kept, `pending`
+  and a real removal's `bytes`/`files` omitted). add, finish, whoami, clean and migrate land with their modules.
+- Tests: WorktreeE2eSpec 2 (tests/worktree.rs `list_splits_cache_from_source_and_reports_an_orphan`,
+  `gc_removes_only_finished_worktrees_and_never_opens_a_foreign_lock`).
+- Stop point: next add.rs (+ `rtok worktree add`, claim `add`/`add_with`, seed), whoami, finish, clean run, migrate
+  and the remaining tests/worktree.rs cases; then junk_worktrees + `agent_worktrees`, the rest of phase 10.

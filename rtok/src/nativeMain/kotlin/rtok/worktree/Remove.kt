@@ -2,6 +2,8 @@
 // is the single-worktree removal `gc` applies too; [WorktreeRemove.run] refuses before it touches anything.
 package rtok.worktree
 
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import rtok.RemovalPreview
 import rtok.store.AgentDetail
@@ -26,8 +28,8 @@ data class Removed(
     val branch: String?,
     val note: String,
     /** Set by a dry run: what the removal would free. Absent after a real removal. */
-    val bytes: Long? = null,
-    val files: Long? = null,
+    @OptIn(ExperimentalSerializationApi::class) @EncodeDefault(EncodeDefault.Mode.NEVER) val bytes: Long? = null,
+    @OptIn(ExperimentalSerializationApi::class) @EncodeDefault(EncodeDefault.Mode.NEVER) val files: Long? = null,
 ) {
     /** The dry-run text: the shared removal line and totals, then what happens to the branch. */
     fun previewText(): String = RemovalPreview.render(listOf(Triple(path, bytes ?: 0, files ?: 0))) + note + "\n"
