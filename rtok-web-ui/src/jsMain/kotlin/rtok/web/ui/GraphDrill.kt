@@ -134,7 +134,11 @@ object GraphDrill {
             if (g.state != "ok") p("warn small") { +"index ${g.state}" }
             if (g.partial) p("muted small") { +"partial: capped at $DRILL_LIMIT nodes" }
             focusTools(s)
-            drillScene(m)
+            drillScene(m) { id ->
+                m.graph.nodes
+                    .firstOrNull { it.id == id }
+                    ?.let { open(s, g, it) }
+            }
             nodeList(s, g, m)
         }
         compare(s, dp)
@@ -154,6 +158,17 @@ object GraphDrill {
         }
     }
 
+    /** A node picked in the list or the scene: a file toggles, a symbol is focused (in its own project). */
+    private fun open(
+        s: DrillState,
+        g: DGraph,
+        n: DNode,
+    ) = when {
+        n.kind == "file" -> go(toggleFile(s, n.path))
+        n.project != g.project -> go(openSymbol(n.project, DrillFocus(n.path, n.label)))
+        else -> go(s.copy(focus = DrillFocus(n.path, n.label)))
+    }
+
     private fun FlowContent.nodeList(
         s: DrillState,
         g: DGraph,
@@ -167,13 +182,7 @@ object GraphDrill {
                     pill("muted", n.kind)
                     +" "
                     button(classes = "link") {
-                        onClickFunction = {
-                            when {
-                                n.kind == "file" -> go(toggleFile(s, n.path))
-                                n.project != g.project -> go(openSymbol(n.project, DrillFocus(n.path, n.label)))
-                                else -> go(s.copy(focus = DrillFocus(n.path, n.label)))
-                            }
-                        }
+                        onClickFunction = { open(s, g, n) }
                         +n.label
                     }
                     a(editorLink(g.root, n.path, n.line) { js("encodeURIComponent")(it) as String }, classes = "muted small") {

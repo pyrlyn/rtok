@@ -113,6 +113,7 @@ private fun CssBuilder.charts() {
         put("height", "auto")
     }
     rule(".kpi .chart") { put("height", "32px") }
+    rule(".scene .node") { put("cursor", "pointer") }
     rule(".scene") {
         put("display", "block")
         put("width", "100%")
