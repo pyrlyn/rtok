@@ -58,6 +58,13 @@ Previously excluded from the port (port-plan.md); now in progress in small steps
 - Step 6, part 3 (#132): Calls, Sessions and Logs with filters kept in the URL query.
 - Step 6, part 4: Config and Hosts (text.ts `parseConfig`/`parseHosts`, raw-text switch in `?raw=`).
 - Step 6, part 5: Services (text.ts `parseServices`, otel exporter tiles).
-- Step 6, next: Plugins, Doctor (plan/fix), Usage, Stats, Skills, Worktrees, Tasks,
-  Junk, then Graph (2D force layout, drill, compare, export/import) and the live calls feed; the command palette
-  and shortcuts last. Pure logic goes to commonMain so the native gate tests it.
+- Step 6, part 6 (#137-#143): Plugins (switch sends `set`), Usage, Graph (projects, alerts, status, dead
+  symbols), the live graph-calls feed (`{"calls":{"subscribe":...}}` while the Graph page is open) and the
+  command palette with `g <key>` shortcuts. Doctor, Stats, Skills, Worktrees, Tasks and the Hosts junk card
+  show "not ready" while the server sends null for their field.
+- Step 6, next: full Doctor (plan/fix), Stats, Skills, Worktrees, Tasks and Junk views once their backends
+  reach the snapshot; Graph 2D force layout, drill, compare, export/import. Pure logic goes to commonMain so
+  the native gate tests it.
+- Step 7, part 1: `libs/tui` (`:tui`), no dependencies: styles/SGR, display width, a cell buffer with
+  diff rendering, layout, widgets (block, paragraph, tabs, table, sparkline), key decoding, and a
+  termios/ANSI `Terminal` (raw mode, alternate screen, size, poll). Next: `rtok tui` over the snapshot model.
