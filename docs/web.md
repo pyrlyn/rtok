@@ -56,6 +56,7 @@ Previously excluded from the port (port-plan.md); now in progress in small steps
   (token, backoff, Offline screen), theme toggle. A page not ported yet shows its snapshot field as JSON.
 - Step 6, part 2 (#130): Overview (format.ts, model.ts `overview`) and our own SVG charts.
 - Step 6, part 3 (#132): Calls, Sessions and Logs with filters kept in the URL query.
-- Step 6, next: Plugins, Doctor (plan/fix), Config, Hosts, Usage, Stats, Skills, Services, Worktrees, Tasks,
+- Step 6, part 4: Config and Hosts (text.ts `parseConfig`/`parseHosts`, raw-text switch in `?raw=`).
+- Step 6, next: Plugins, Doctor (plan/fix), Usage, Stats, Skills, Services, Worktrees, Tasks,
   Junk, then Graph (2D force layout, drill, compare, export/import) and the live calls feed; the command palette
   and shortcuts last. Pure logic goes to commonMain so the native gate tests it.
