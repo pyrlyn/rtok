@@ -3,6 +3,13 @@
 package rtok.web.ui
 
 import kotlinx.html.FlowContent
+import kotlinx.html.div
+import kotlinx.html.js.onClickFunction
+import kotlinx.html.js.onKeyDownFunction
+import kotlinx.html.unsafe
+import org.w3c.dom.Element
+import org.w3c.dom.events.Event
+import org.w3c.dom.events.KeyboardEvent
 import kotlin.math.PI
 
 private const val W = 640
@@ -44,13 +51,19 @@ private fun nodeSvg(
     val fill = if (c == null && n.kind == "file") "var(--accent)" else colorOf(c)
     val at = if (n.line > 0) ":${n.line}" else ""
     val dim = if (n.stale) " opacity=\"0.5\"" else ""
-    return "<g><title>${esc("$mark${n.kind} ${n.label} ${n.path}$at")}</title>" +
+    return "<g class=\"node\" data-node=\"${esc(n.id)}\" tabindex=\"0\" role=\"button\"><title>${esc("$mark${n.kind} ${n.label} ${n.path}$at")}</title>" +
         "<circle cx=\"${x(n.id)}\" cy=\"${y(n.id)}\" r=\"$r\" fill=\"$fill\"$dim/>" +
         "<text x=\"${x(n.id)}\" y=\"${y(n.id)}\" dx=\"9\" dy=\"3\" font-size=\"10\" fill=\"var(--fg)\">${esc(mark + n.label)}</text></g>"
 }
 
-/** The scene of a (marked) drill frame. */
-fun FlowContent.drillScene(m: Marked) {
+/** The node id under a click or key event in the scene, if any. */
+private fun nodeAt(e: Event): String? = (e.target as? Element)?.closest("[data-node]")?.getAttribute("data-node")
+
+/** The scene of a (marked) drill frame; clicking a node (or Enter on it) calls [onNode] with its id. */
+fun FlowContent.drillScene(
+    m: Marked,
+    onNode: (String) -> Unit,
+) {
     val g = m.graph
     if (g.nodes.isEmpty()) return
     val at = forceLayout(g.nodes.map { it.id }, g.edges.map { it.from to it.to })
@@ -61,8 +74,12 @@ fun FlowContent.drillScene(m: Marked) {
     val sb = StringBuilder()
     g.edges.forEach { sb.append(edgeSvg(it, m.edges[edgeId(it)], ::x, ::y)) }
     m.graph.nodes.forEach { sb.append(nodeSvg(it, m.nodes[it.id], ::x, ::y)) }
-    consumer.onTagContentUnsafe {
-        +"<svg class=\"scene\" viewBox=\"0 0 $W $H\" role=\"img\" aria-label=\"drill scene\"><title>${esc(g.name)} drill-down</title>$sb</svg>"
+    div("scene-box") {
+        onClickFunction = { e -> nodeAt(e)?.let(onNode) }
+        onKeyDownFunction = { e -> if ((e as? KeyboardEvent)?.key == "Enter") nodeAt(e)?.let(onNode) }
+        unsafe {
+            +"<svg class=\"scene\" viewBox=\"0 0 $W $H\" role=\"img\" aria-label=\"drill scene\"><title>${esc(g.name)} drill-down</title>$sb</svg>"
+        }
     }
 }
 

@@ -1269,6 +1269,11 @@ Next, in order:
   rtok-sys `freeBytes` (statvfs through the spawn cinterop). Tests: AddTest 6 (add.rs; Windows-only dropped), AddRunTest 5 own.
   Not yet: `seed.rs` (`Seed.fromSiblings` is a no-op until the copy-on-write clone lands) and `task_list::write_for`
   (the new worktree's task list id). Next: seed, task_list, finish, clean run, migrate, hooks dispatcher tests.
+- Session (web/dashboard worker): `seed.rs` (`Seed.run`/`positions`/`freshest`/`fromSiblings`; `--no-seed` now skips a
+  real seed) on rtok-sys `cloneTree`/`Cloned` (fs-kit `clone_tree`: APFS `clonefile`, Linux `FICLONE`, else a full
+  copy; links kept, mtimes kept; C helper `rtok_clone_or_copy` in librtok_spawn.a), and `agents/task_list.rs`
+  (`TaskList.writeFor`, called by `rtok worktree add`; the MCP `worktree_add` call lands with the MCP worktree tools).
+  Tests: SeedTest 4, TaskListTest 5 (all Rust cases). Next: finish, clean run, migrate, hooks dispatcher tests.
 ## Session: otel part 2 — export.rs, `rtok otel flush|status`
 - `rtok.otel.Export` (export.rs): flush per stream past the watermarks (traces = ended sessions + calls, stopping in
   front of an in-flight call; logs; metrics sums every flush), marks only on 2xx, a 404 stream skipped and not logged,
@@ -1293,6 +1298,8 @@ Next, in order:
   Both wired into `rtok mcp` (stdio) and `rtok mcp --http`; the proxy wires them when it is ported.
 - Tests: TickerTest 2 (export.rs ticker tests), RetentionTest 1.
 - Stop point: next model, report, completions, bench, demon, proxy batch tests, macOS/Linux split.
+- Session (web/dashboard worker): web Graph scene nodes are clickable (click or Enter): the same `open` as the drill
+  node list (a file toggles, a symbol is focused, in its own project when foreign); `data-node` delegation on the SVG.
 
 ## Session: proxy chunk 1 — route, gate, noise, chat ToolResults
 - `rtok.proxy.Route` (route.rs: lane model routing, closed without a named bench), `Gate` (gate.rs: per-lane
