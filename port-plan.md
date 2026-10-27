@@ -899,3 +899,13 @@ Next, in order:
 - Tests: JunkKindsTest 5, JunkFindsTest 3.
 - Stop point: next junk_worktrees (+ `agent_worktrees`), junk_review, junk_sessions, junk_items, junk.rs
   (list/report), junk_clear, CLI; then `--project`, restart.rs, the rest of phase 10.
+
+## Session: agents — junk 4: the `sessions` kind (junk_sessions.rs)
+- `rtok.agents`: `JunkSessions` (`IN_USE`, `isSessionId`), `sessionItems` (Claude Code transcript, `<session>/`,
+  `file-history/<session>/`, one verdict per session), `retention` (Claude `cleanupPeriodDays`, Gemini
+  `general.sessionRetention.maxAge`); `JunkClear.kt` starts with `newest`; `JunkCache.AGENT_SCAN_LIMIT`.
+- Junk order change: junk_worktrees needs the worktree module (list rows, gc judge, ops, remove::detach), so it moves
+  after the phase-10 worktree port; junk.rs report runs without the `stale-worktrees` rows until then.
+- Tests: JunkSessionsTest 5.
+- Stop point: next junk_review, junk_items, junk.rs (list/report), junk_clear, CLI; then `--project`, restart.rs,
+  worktree (then junk_worktrees + `agent_worktrees`), the rest of phase 10.

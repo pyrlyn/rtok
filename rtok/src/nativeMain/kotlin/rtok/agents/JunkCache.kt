@@ -14,6 +14,7 @@ import rtok.worktree.keptBecause
 import rtok.worktree.usageUntil
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
 
 object JunkCache {
@@ -26,6 +27,9 @@ object JunkCache {
 
     /** `rtok worktree gc` would remove it: its verdict is the evidence. */
     const val GC_VERDICT = "gc verdict"
+
+    /** src/disk_usage.rs `AGENT_SCAN_LIMIT`: how long one agent's folders may be walked. */
+    val AGENT_SCAN_LIMIT: Duration = 10.seconds
 
     /** A walk that hit its deadline: its newest mtime is a lower bound, so it never reads as idle. */
     const val SCAN_STOPPED = "scan stopped: not cleared"
