@@ -17,20 +17,28 @@ configure<KotlinMultiplatformExtension> {
 val e2eRelease = providers.gradleProperty("e2e.release").isPresent
 val rtokKind = if (e2eRelease) "release" else "debug"
 val customBin = providers.gradleProperty("rtok.e2e.bin")
+// `-Prtok.test.target=linuxArm64|linuxX64` (with `-Prtok.allTargets=true`) links the suite and the binary for that target
+// instead of the macOS host; the task then runs them on the Gradle host, so use it on a host of that target or
+// only link here and run scripts/lima-test.sh (docs/testing.md "Linux").
+val target =
+    providers.gradleProperty("rtok.test.target").getOrElse(
+        if (org.jetbrains.kotlin.konan.target.HostManager.host == org.jetbrains.kotlin.konan.target.KonanTarget.LINUX_X64) "linuxX64" else "macosArm64",
+    )
+val cap = target.replaceFirstChar(Char::uppercase)
 val rtokBin =
     customBin
         .map { layout.projectDirectory.file(it) }
-        .orElse(project(":rtok").layout.buildDirectory.file("bin/macosArm64/${rtokKind}Executable/rtok.kexe"))
-val testBin = layout.buildDirectory.file("bin/macosArm64/debugTest/test.kexe")
+        .orElse(project(":rtok").layout.buildDirectory.file("bin/$target/${rtokKind}Executable/rtok.kexe"))
+val testBin = layout.buildDirectory.file("bin/$target/debugTest/test.kexe")
 
 // The fast default suite skips this module.
-tasks.named("macosArm64Test") { enabled = false }
+tasks.withType<org.jetbrains.kotlin.gradle.targets.native.tasks.KotlinNativeTest>().configureEach { enabled = false }
 
 tasks.register<Exec>("e2eTest") {
     group = "verification"
     description = "Runs the end-to-end CLI suite against the debug rtok binary."
-    dependsOn("linkDebugTestMacosArm64")
-    if (!customBin.isPresent) dependsOn(if (e2eRelease) ":rtok:linkReleaseExecutableMacosArm64" else ":rtok:linkDebugExecutableMacosArm64")
+    dependsOn("linkDebugTest$cap")
+    if (!customBin.isPresent) dependsOn(if (e2eRelease) ":rtok:linkReleaseExecutable$cap" else ":rtok:linkDebugExecutable$cap")
     inputs.file(rtokBin)
     inputs.file(testBin)
     executable(testBin.get().asFile)
