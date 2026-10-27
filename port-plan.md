@@ -1435,3 +1435,28 @@ Next, in order:
 - Tests: mod.rs (4), markdown.rs (4, the full-id case checks Markdown and HTML; AI and PDF join with their
   renderers), html.rs (3), advice.rs (4). The six Rust `.snap` files are copied unchanged and match.
 - Stop point: ai.rs, pdf.rs, then tests/report*.rs and the `rtok report` command.
+
+## Session: report `--ai` and PDF renderers
+- `rtok.report.Ai` (+ `aiTable`): the budgeted `--ai` text, whole sections dropped and named, toon tables.
+- `rtok.report.Pdf` / `PdfSections` / `PdfText` / `PdfWriter`: the eight sections paged on A4 with a contents page
+  and bookmarks. Deviation: Rust links `printpdf`; adding a PDF library is a new dependency, so `PdfWriter` is a
+  small own writer (uncompressed streams, builtin Helvetica/Helvetica-Bold, flat outline). Bytes differ from
+  printpdf's; every structure the Rust tests read (`/Kids[`, `/Contents`, `(Title  N)`, `/Title<FEFF..>/Dest[`)
+  is the same. Draw ops are a `PdfOp` model, so the T632 margin test reads them instead of printpdf `Op`s.
+- Tests: ai.rs (11, with the full-archive-id case), pdf.rs (6 cases folded into 6 tests), and the two
+  tests/report_pdf.rs checks run on fixture documents (the CLI part joins with `rtok report`).
+- Stop point: tests/report.rs, report_ai.rs and the `rtok report` command.
+
+## Session: `rtok report` command
+- `cli/ReportCmd.kt`: `--format md|html|pdf` (checked like clap's value enum, exit 2), `--out`, `--since`, `--ai`,
+  merged into `[report]` only when typed (T587); `emit` prints the body or writes `--out` and prints its path.
+  No progress spinner (Rust wraps the build in `ProgressRunner::wait`; cosmetic stderr only).
+- `ReportCliSpec` (10): report_ai.rs (4), the CLI half of report_pdf.rs (2), report.rs empty store, `--out`, T587,
+  plus a bad `--format`. HOME is the temp home and the base-URL variables are unset, so doctor probes nothing real.
+- Stop point: the remaining tests/report.rs checks (traceable numbers, html numbers, advice stores, T207, lanes, T581).
+
+## Session: tests/report.rs store checks
+- `ReportStoreCliSpec` (7): T22.1 traceable numbers, T22.2 html numbers/no fetch, T22.5/T22.6 advice order, the
+  healthy store, T207 totals (ledgers vs OTLP vs plugin pages), T385.12.2 lanes, T581 top sinks. The header check
+  matches ` (30d)` and ` · store ` instead of recomputing the clock dates. tests/report*.rs are now fully ported.
+- Stop point: completions (tests/completions*.rs).
