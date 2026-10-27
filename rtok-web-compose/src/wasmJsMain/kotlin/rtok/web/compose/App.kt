@@ -60,6 +60,7 @@ val VIEWS: Map<String, PageView> =
         "usage" to UsagePage,
         "stats" to StatsPage,
         "skills" to SkillsPage,
+        "tasks" to TasksPage,
     )
 
 /** Observable app state: link, last snapshot, route and theme. */
