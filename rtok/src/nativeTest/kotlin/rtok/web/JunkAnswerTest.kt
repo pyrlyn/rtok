@@ -48,7 +48,7 @@ class JunkAnswerTest {
         return Fixture(cfg, dir, stale, JunkReport(listOf(row), emptyList(), 0, 0, 0))
     }
 
-    private fun answer(f: Fixture) = Answer(LiveConfig(f.cfg)) { f.report }
+    private fun answer(f: Fixture) = Answer(LiveConfig(f.cfg), junkReport = { f.report })
 
     @Test fun aPlanListsTheItemAndWritesNothing() {
         val f = fixture("junk-web-plan")

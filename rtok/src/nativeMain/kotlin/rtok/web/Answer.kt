@@ -1,8 +1,9 @@
 // Port of src/web/mod.rs `inbound`/`answer`, `allowlisted_plugin_enabled`, `message_frame` and protocol.rs
 // `tag_reply` and `junk_reply` (T623, T330.7): the reply to one `/ws` client message; the graph page's requests are in
-// GraphAnswer.kt. `doctor` answers with the notice Rust sends for a malformed one until its port lands.
+// GraphAnswer.kt. `doctor` is mod.rs `doctor_reply` (T331.12) over DoctorWeb's plan and apply.
 package rtok.web
 
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -16,6 +17,10 @@ import rtok.agents.JunkReport
 import rtok.agents.JunkWeb
 import rtok.config.Config
 import rtok.config.Validate
+import rtok.doctor.DoctorWeb
+import rtok.doctor.FixPlan
+import rtok.doctor.Fixed
+import rtok.doctor.Selection
 import rtok.model.JunkPage
 import rtok.plugin.Runtime
 import rtok.plugins.Registry
@@ -38,6 +43,10 @@ class Answer(
     private val cfg: LiveConfig,
     /** The junk scan `plan` and `apply` run over; tests hand in a fixture report instead of the real home's. */
     private val junkReport: (Config) -> JunkReport = Junk::report,
+    /** The `doctor` plan; tests hand in one that never reads the real host configs. */
+    private val doctorPlan: (Config, Selection) -> FixPlan = DoctorWeb::planHere,
+    /** The `doctor` apply, given the confirmed token. */
+    private val doctorApply: (Config, Selection, String) -> Fixed = DoctorWeb::applyHere,
 ) : Inbound {
     /** The reply to [text], `req` written in when the request carried one; null for none. */
     override fun answer(text: String): String? {
@@ -58,6 +67,10 @@ class Answer(
 
             "junk" in v -> {
                 junk(v.getValue("junk"))
+            }
+
+            "doctor" in v -> {
+                doctor(v.getValue("doctor"))
             }
 
             GraphAnswer.KEYS.any { it in v } -> {
@@ -138,14 +151,37 @@ class Answer(
         }
     }
 
+    /**
+     * mod.rs `doctor_reply`: the upgrade's token and origin checks cover it like `set`; only `apply` writes, through
+     * the engine's backup and refusals, and only the preview whose token it is given.
+     */
+    private fun doctor(body: JsonElement): String {
+        val r = runCatching { STRICT.decodeFromJsonElement(DoctorRequest.serializer(), body) }.getOrNull()
+        if (r == null || r.action !in JUNK_ACTIONS) return message("doctor needs an action and a selection")
+        val c = cfg.value
+        return if (r.action == "plan") {
+            frame("doctorplan", "plan" to STRICT.encodeToJsonElement(FixPlan.serializer(), doctorPlan(c, r.selection)))
+        } else {
+            frame("doctorfixed", "fixed" to STRICT.encodeToJsonElement(Fixed.serializer(), doctorApply(c, r.selection, r.confirmed.orEmpty())))
+        }
+    }
+
+    /** protocol.rs `DoctorRequest`. */
+    @Serializable
+    private class DoctorRequest(
+        val action: String,
+        val selection: Selection = Selection(),
+        val confirmed: String? = null,
+    )
+
     companion object {
+        private val STRICT = Json { ignoreUnknownKeys = true }
         private val JUNK_ACTIONS = setOf("plan", "apply")
 
         /** A request whose shape did not parse, by its key, in Rust's order. */
         private val MALFORMED =
             listOf(
                 "calls" to "calls needs a subscribe flag",
-                "doctor" to "doctor needs an action and a selection",
             )
 
         /** Only `plugins.<compiled-in id>.enabled` may be flipped from the page. */

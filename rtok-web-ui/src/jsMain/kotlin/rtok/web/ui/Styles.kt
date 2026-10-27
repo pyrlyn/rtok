@@ -52,6 +52,7 @@ fun stylesheet(): String =
             }
             layout()
             widgets()
+            fixStyles()
             controls()
             charts()
             grid()
@@ -358,4 +359,18 @@ fun installStyles() {
     val style = document.createElement("style")
     style.textContent = stylesheet()
     document.head?.appendChild(style)
+}
+
+private fun CssBuilder.fixStyles() {
+    // DoctorFix.tsx: the checklist rows and the diff's added and removed lines.
+    rule(".fix-list") {
+        put("list-style", "none")
+        put("padding", "0")
+    }
+    rule(".diff") {
+        put("max-height", "20rem")
+        put("overflow", "auto")
+    }
+    rule(".diff .ok") { put("color", v("ok")) }
+    rule(".diff .fail") { put("color", v("fail")) }
 }
