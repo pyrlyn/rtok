@@ -68,6 +68,7 @@ fun run(cfg: Config) {
                 term.invalidate()
                 size = s
             }
+            app.tick()
             val b = Buffer(s.first, s.second)
             draw(b, app, ::localHms)
             term.draw(b)

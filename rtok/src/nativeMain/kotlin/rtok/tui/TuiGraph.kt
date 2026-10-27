@@ -7,6 +7,8 @@ import kotlinx.serialization.json.JsonPrimitive
 import rtok.plugins.graph.Level
 import rtok.plugins.graph.ProjectRow
 import rtok.plugins.graph.Score
+import rtok.web.ScopeRow
+import rtok.web.scopeNames
 import tui.Buffer
 import tui.Col
 import tui.Color
@@ -25,6 +27,10 @@ private const val MAX_REASONS = 3
 /** Seven rows and the header: the table scrolls to the cursor beyond that. */
 private const val TABLE_MAX = 8
 private const val NOTE_MAX = 3
+private const val LIVE_MAX = 18
+
+/** The metrics, the filters and three feed rows: below that the feed would be cut to nothing. */
+private const val LIVE_MIN = 12
 private const val HEALTH_COL = 5
 private const val SCOPE_COL = 6
 
@@ -70,11 +76,16 @@ private fun two(x: Double): String {
 /** The Graph tab: with no registered project there is nothing for the keys to act on, so only the text shows. */
 internal fun graphPage(
     b: Buffer,
-    r: Rect,
+    whole: Rect,
     app: TuiApp,
+    clock: (Double) -> String,
 ) {
-    if (app.compare.render(b, r) || app.exporter.render(b, r)) return
+    if (app.compare.render(b, whole) || app.exporter.render(b, whole)) return
     val rows = projectEntries(app.snapshot)
+    // The live calls pane takes half the body, capped, so the index health stays readable.
+    val (r, calls) = whole.rows(Size.Fill(), Size.Fixed((whole.h / 2).coerceAtMost(LIVE_MAX).coerceAtLeast(LIVE_MIN)))
+    val scope = scopeNames(rows.map { ScopeRow(it.id, it.name, it.selected, it.links.map { l -> l.to }) }, app.drill.project)
+    app.live.render(b, calls, scope, app.drill.drawn, clock)
     val textLines = (app.snapshot["graph"] as? JsonPrimitive)?.content?.lines()
     if (rows.isEmpty()) {
         if (textLines == null) graphMissing(b, r) else text(b, r, app, textLines)
