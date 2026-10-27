@@ -1,5 +1,5 @@
-# posix_spawn, the process environment and a process parent lookup, which Kotlin/Native's platform.posix does not export.
+# posix_spawn, the process environment, a process parent lookup and statvfs, which Kotlin/Native's platform.posix does not export.
 # The rtok_* helpers live in src/nativeInterop/c and are linked from librtok_spawn.a (docs/experiments/binary-split.md).
-headers = spawn.h unistd.h rtok_spawn.h
+headers = spawn.h unistd.h sys/statvfs.h rtok_spawn.h
 package = rtok.sys.spawn
 staticLibraries = librtok_spawn.a

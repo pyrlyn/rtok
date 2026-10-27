@@ -1,4 +1,4 @@
-// Port of src/cli/worktree.rs (subset): `rtok worktree list|claim|adopt|remove|gc`. add, finish, whoami, clean and
+// Port of src/cli/worktree.rs (subset): `rtok worktree add|whoami|list|claim|adopt|remove|gc`. finish, clean and
 // migrate land with their modules.
 package rtok.cli
 
@@ -35,6 +35,45 @@ private fun gated(body: (Invocation, rtok.config.Config) -> Unit): (Invocation) 
         if (!cfg.worktree.enabled) throw CliFailure(Worktrees.DISABLED)
         body(inv, cfg)
     }
+
+private val ADD =
+    CommandSpec(
+        "add",
+        "Create the worktree for a task: one location, one name, one locked owner; prints its path",
+        options =
+            listOf(
+                OptSpec.Value(
+                    "owner",
+                    "Who holds it, as `<provider> / <model>`; written into the lock reason. Defaults to `<host> / <model>` of the agent",
+                    "OWNER",
+                ),
+                OptSpec.Value("agent", "The rtok agent id (any unique prefix) to bind it to; defaults to `RTOK_AGENT_ID`", "AGENT"),
+                OptSpec.Flag("no-seed", "Do not seed `[worktree] seed_dirs` from a sibling checkout this time"),
+            ),
+        args =
+            listOf(
+                ArgSpec("task", "Task id, e.g. `t158`; directory `<repo>-<task>`, branch `<task>[-<slug>]`"),
+                ArgSpec("slug", "Optional branch suffix", required = false),
+            ),
+        action =
+            gated { inv, cfg ->
+                val plan =
+                    Ops.add(cfg, rtok.sys.cwd(), inv.requireArg("task"), inv.arg("slug"), inv.value("owner"), inv.value("agent"), inv.flag("no-seed"))
+                inv.io.println(plan.path)
+            },
+    )
+
+private val WHOAMI =
+    CommandSpec(
+        "whoami",
+        "Your agent, where new worktrees go, the worktree you are in and the ones you hold",
+        options = listOf(OptSpec.Flag("json", "JSON instead of the text lines")),
+        action =
+            gated { inv, cfg ->
+                val me = Ops.whoami(cfg, rtok.sys.cwd())
+                if (inv.flag("json")) inv.printJson(me) else inv.io.out(rtok.worktree.WhoamiRun.toText(me))
+            },
+    )
 
 private val CLAIM =
     CommandSpec(
@@ -171,5 +210,5 @@ val WORKTREE =
     CommandSpec(
         "worktree",
         "Git worktrees of this repository: owner, state and disk cost",
-        subcommands = listOf(CLAIM, ADOPT, REMOVE, LIST, GC),
+        subcommands = listOf(ADD, CLAIM, ADOPT, REMOVE, LIST, WHOAMI, GC),
     )

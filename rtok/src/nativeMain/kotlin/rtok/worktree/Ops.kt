@@ -1,5 +1,5 @@
 // Port of src/worktree/ops.rs: the store-backed `rtok worktree` operations. The CLI parses flags and prints; the
-// store open lives here. `add`, `finish`, `whoami` and `migrate` come with their modules.
+// store open lives here. `finish` and `migrate` come with their modules.
 package rtok.worktree
 
 import rtok.config.Config
@@ -22,6 +22,32 @@ object Ops {
             store?.close()
         }
     }
+
+    /** `rtok worktree add`: the caller's agent (or `--owner` alone), `--no-seed` for this call only. */
+    fun add(
+        cfg: Config,
+        cwd: String,
+        task: String,
+        slug: String?,
+        owner: String?,
+        agent: String?,
+        noSeed: Boolean,
+    ): AddPlan =
+        withStore(cfg) { store ->
+            val a = Claim.caller(store, agent)
+            val wt = cfg.worktree.copy(seed = cfg.worktree.seed && !noSeed)
+            AddClaim.add(store, cwd, wt, task to slug, a to owner, cfg.plugins.graph.autoAddProjects)
+        }
+
+    /** `rtok worktree whoami`: an unknown `RTOK_AGENT_ID` still leaves the root and the cwd worth printing. */
+    fun whoami(
+        cfg: Config,
+        cwd: String,
+    ): Whoami =
+        withStore(cfg) { store ->
+            val a = runCatching { Claim.caller(store, null) }.getOrNull()
+            WhoamiRun.run(cwd, cfg.worktree.root, a, store)
+        }
 
     fun claim(
         cfg: Config,
