@@ -9,6 +9,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.longOrNull
+import rtok.json.StrictJson
 import rtok.project.Refs
 
 internal operator fun JsonElement?.get(key: String): JsonElement? = (this as? JsonObject)?.get(key)
@@ -58,7 +59,7 @@ object LspWire {
             if (buf.size - pos < n) return null
             val body = buf.copyOfRange(pos, pos + n).decodeToString()
             buf = buf.copyOfRange(pos + n, buf.size)
-            return runCatching { Json.parseToJsonElement(body) }.getOrElse { error("lsp json: ${it.message}") }
+            return runCatching { StrictJson.parse(body) }.getOrElse { error("lsp json: ${it.message}") }
         }
     }
 

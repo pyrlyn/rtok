@@ -7,6 +7,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import rtok.json.StrictJson
 import rtok.sys.PipedChild
 import kotlin.time.Duration
 import kotlin.time.TimeSource
@@ -71,7 +72,7 @@ object Roundtrip {
                 pending.deleteRange(0, nl + 1)
                 line
             }
-        }.mapNotNull { runCatching { Json.parseToJsonElement(it) }.getOrNull() }
+        }.mapNotNull { runCatching { StrictJson.parse(it) }.getOrNull() }
 
     private fun done(
         v: JsonElement,

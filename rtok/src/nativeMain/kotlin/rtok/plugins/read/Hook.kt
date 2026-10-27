@@ -3,6 +3,7 @@ package rtok.plugins.read
 
 import kotlinx.serialization.json.*
 import rtok.HostPaths
+import rtok.json.StrictJson
 import rtok.plugin.sdk.*
 import rtok.sys.canonicalize
 import rtok.sys.extension
@@ -109,7 +110,7 @@ object ReadHook {
         val bodies = runCatching { cx.recentHookInputsForEvent("PostToolUse", WINDOW_TOOL_CALLS.toLong()) }.getOrElse { return true }
         for (b in bodies) {
             if (b.isEmpty()) return true
-            val v = runCatching { Json.parseToJsonElement(b) }.getOrNull() as? JsonObject ?: continue
+            val v = runCatching { StrictJson.parse(b) }.getOrNull() as? JsonObject ?: continue
             if (editsPath(v, path)) return true
         }
         return false

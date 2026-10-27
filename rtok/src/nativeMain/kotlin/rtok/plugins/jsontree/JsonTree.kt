@@ -5,6 +5,7 @@ package rtok.plugins.jsontree
 
 import kotlinx.serialization.json.*
 import rtok.MIN_PREFIX
+import rtok.json.StrictJson
 import rtok.plugin.sdk.*
 import rtok.plugins.JSON_TREE_PREFIX
 import rtok.plugins.TOON_PREFIX
@@ -70,7 +71,7 @@ private fun rewriteBlock(
         r.content = JsonPrimitive(d.pointer)
         return measurement(cx, orig, d.pointer, d.archiveId)
     }
-    val value = runCatching { Json.parseToJsonElement(orig) }.getOrNull() ?: return null
+    val value = runCatching { StrictJson.parse(orig) }.getOrNull() ?: return null
     val folded = foldJson(value) ?: return null
     val preview = "$JSON_TREE_PREFIX${"0".repeat(MIN_PREFIX)}]\n${folded.text}"
     if (cx.estimate(preview, Class.Code) >= cx.estimate(orig, Class.Code)) return null

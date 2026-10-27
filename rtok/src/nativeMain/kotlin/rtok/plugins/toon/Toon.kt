@@ -4,6 +4,7 @@ package rtok.plugins.toon
 
 import kotlinx.serialization.json.*
 import rtok.MIN_PREFIX
+import rtok.json.StrictJson
 import rtok.plugin.sdk.*
 import rtok.plugins.TOON_PREFIX
 import rtok.plugins.archive.blockText
@@ -52,7 +53,7 @@ private fun rewriteBlock(
         r.content = JsonPrimitive(d.pointer)
         return Measurement(ID, "encode", orig.utf8Len(), d.pointer.utf8Len(), cx.estimate(orig, Class.Code), cx.estimate(d.pointer, Class.Code), d.archiveId)
     }
-    val table = runCatching { Json.parseToJsonElement(orig) }.getOrNull() ?: return null
+    val table = runCatching { StrictJson.parse(orig) }.getOrNull() ?: return null
     val keys = tabularKeys(table, minRows) ?: return null
     val encoded = encode(table.jsonArray, keys)
     // Decide before writing anything, so a skipped block leaves no decision behind.

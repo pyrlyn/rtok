@@ -3,6 +3,7 @@ package rtok.plugins.memory
 
 import kotlinx.serialization.json.*
 import rtok.config.Config
+import rtok.json.StrictJson
 import rtok.plugin.Runtime
 import rtok.store.*
 import rtok.sys.readBytes
@@ -82,7 +83,7 @@ object Import {
 
     /** serde's derive for `Line`: required strings, optional typed numbers (null allowed), unknown keys ignored. */
     private fun parse(text: String): Line? {
-        val o = runCatching { Json.parseToJsonElement(text) }.getOrNull() as? JsonObject ?: return null
+        val o = runCatching { StrictJson.parse(text) }.getOrNull() as? JsonObject ?: return null
 
         fun req(k: String) = (o[k] as? JsonPrimitive)?.takeIf { it.isString }?.content
         var bad = false

@@ -6,6 +6,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import rtok.json.StrictJson
 
 object JsoncEdit {
     private class Member(
@@ -176,7 +177,7 @@ object JsoncEdit {
             while (i < s.length && s[i] != '"') i += if (s[i] == '\\') 2 else 1
             if (i >= s.length) fail("unclosed string")
             i++
-            return (Json.parseToJsonElement(s.substring(start, i)) as JsonPrimitive).content
+            return (StrictJson.parse(s.substring(start, i)) as JsonPrimitive).content
         }
 
         private fun literal(): Span {

@@ -12,6 +12,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import rtok.config.Config
+import rtok.json.StrictJson
 import rtok.plugin.Runtime
 import rtok.plugin.sdk.ToolDef
 import rtok.plugins.Registry
@@ -43,7 +44,7 @@ class Server(
         stateless: Boolean = false,
     ): String? {
         if (line.isBlank()) return null
-        val req = runCatching { Json.parseToJsonElement(line) }.getOrNull() ?: return Protocol.rpcError(JsonNull, Protocol.PARSE_ERROR, "parse error").toString()
+        val req = runCatching { StrictJson.parse(line) }.getOrNull() ?: return Protocol.rpcError(JsonNull, Protocol.PARSE_ERROR, "parse error").toString()
         if (req is JsonArray) {
             if (req.isEmpty()) return Protocol.rpcError(JsonNull, Protocol.INVALID_REQUEST, "empty batch").toString()
             val out = req.mapNotNull { handleValue(it, stateless) }

@@ -4,6 +4,7 @@ package rtok.plugins.memory
 
 import kotlinx.serialization.json.*
 import rtok.config.Memory
+import rtok.json.StrictJson
 import rtok.plugin.fitBudget
 import rtok.plugin.sdk.*
 import rtok.shortId
@@ -88,7 +89,7 @@ private fun ledger(cx: Ctx): List<Pointer> {
     val touched = mutableListOf<Touched>()
     val bodies = runCatching { cx.recentHookInputsForEvent("PreToolUse", LEDGER_SCAN_ROWS) }.getOrNull() ?: return emptyList()
     for (b in bodies) {
-        val v = runCatching { Json.parseToJsonElement(b) }.getOrNull() ?: continue
+        val v = runCatching { StrictJson.parse(b) }.getOrNull() ?: continue
         val tool = v.str("tool_name") ?: ""
         val cwd = v.str("cwd") ?: "."
         val input = (v as? JsonObject)?.get("tool_input")

@@ -4,6 +4,7 @@ package rtok.plugins.guard
 
 import kotlinx.serialization.json.*
 import rtok.config.envUserHome
+import rtok.json.StrictJson
 import rtok.plugin.sdk.*
 import rtok.plugins.read.markdownDigest
 import rtok.shortId
@@ -84,7 +85,7 @@ internal fun pluginRoot(
     plugin: String,
     cwd: String?,
 ): String? {
-    val v = runCatching { Json.parseToJsonElement(readToString(manifest)) }.getOrNull() ?: return null
+    val v = runCatching { StrictJson.parse(readToString(manifest)) }.getOrNull() ?: return null
     val plugins = (v as? JsonObject)?.get("plugins") as? JsonObject ?: return null
     val keys = plugins.entries.filter { it.key.split('@').first() == plugin }
     if (keys.size != 1) return null

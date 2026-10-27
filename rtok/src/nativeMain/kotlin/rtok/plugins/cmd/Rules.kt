@@ -5,6 +5,7 @@ package rtok.plugins.cmd
 import kotlinx.serialization.json.*
 import rtok.config.Config
 import rtok.config.Toml
+import rtok.json.StrictJson
 import rtok.plugins.toon.tabularKeys
 import rtok.sys.Utf8Order
 import rtok.sys.asciiLowercase
@@ -703,7 +704,7 @@ object Rules {
     internal fun parseJsonBody(s: String): JsonElement? {
         val t = s.trim()
         if (t.firstOrNull().let { it != '{' && it != '[' }) return null
-        return runCatching { sortKeys(Json.parseToJsonElement(t)) }.getOrNull()
+        return runCatching { sortKeys(StrictJson.parse(t)) }.getOrNull()
     }
 
     private fun sortKeys(e: JsonElement): JsonElement =

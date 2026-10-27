@@ -4,6 +4,7 @@
 package rtok.plugins.archive
 
 import kotlinx.serialization.json.*
+import rtok.json.StrictJson
 import rtok.plugin.sdk.*
 import rtok.plugins.TOON_PREFIX
 import rtok.plugins.isForeignToArchive
@@ -226,7 +227,7 @@ private fun isBlobCandidate(text: String): Boolean {
     val t = text.trimStart()
     if (t.startsWith("data:")) return true
     return when (t.firstOrNull()) {
-        '{', '[' -> runCatching { Json.parseToJsonElement(t) }.isSuccess
+        '{', '[' -> runCatching { StrictJson.parse(t) }.isSuccess
         else -> t.length > 4096 && t.all { it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' || it == '+' || it == '/' || it == '=' }
     }
 }

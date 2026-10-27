@@ -9,6 +9,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import rtok.config.Toml
 import rtok.config.TomlException
+import rtok.json.StrictJson
 import rtok.sys.exists
 import rtok.sys.readToString
 import tomlaot.TomlDoc
@@ -35,7 +36,7 @@ object HostToml {
                     is TomlValue.Str -> JsonPrimitive(v.value)
                     is TomlValue.Int -> JsonPrimitive(v.value)
                     is TomlValue.Bool -> JsonPrimitive(v.value)
-                    is TomlValue.Raw -> runCatching { Json.parseToJsonElement(v.text) }.getOrDefault(JsonPrimitive(v.text)) as JsonElement
+                    is TomlValue.Raw -> runCatching { StrictJson.parse(v.text) }.getOrDefault(JsonPrimitive(v.text)) as JsonElement
                     null -> JsonPrimitive(null as String?)
                 }
             },

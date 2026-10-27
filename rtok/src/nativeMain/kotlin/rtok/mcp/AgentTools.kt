@@ -11,6 +11,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
+import rtok.json.StrictJson
 import rtok.model.Agents
 import rtok.plugin.Runtime
 import rtok.plugin.sdk.ToolDef
@@ -24,7 +25,7 @@ object AgentTools {
     private const val INBOX_LIMIT = 20L
     private const val INBOX_MAX = 100L
 
-    private fun schema(s: String) = Json.parseToJsonElement(s).jsonObject
+    private fun schema(s: String) = StrictJson.parse(s).jsonObject
 
     /** T924: the optional `agent` argument of every tool that acts as the session's agent. */
     fun withAgent(schema: JsonObject): JsonObject {

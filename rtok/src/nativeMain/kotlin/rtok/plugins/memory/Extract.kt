@@ -3,6 +3,7 @@
 package rtok.plugins.memory
 
 import kotlinx.serialization.json.*
+import rtok.json.StrictJson
 import rtok.plugin.Runtime
 import rtok.sys.*
 
@@ -72,7 +73,7 @@ fun parseCandidates(
     out
         .lines()
         .mapNotNull { l ->
-            val o = runCatching { Json.parseToJsonElement(l.trim()) }.getOrNull() as? JsonObject ?: return@mapNotNull null
+            val o = runCatching { StrictJson.parse(l.trim()) }.getOrNull() as? JsonObject ?: return@mapNotNull null
 
             fun f(k: String): String? =
                 when (val v = o[k]) {
@@ -101,7 +102,7 @@ fun parseCandidates(
 fun transcriptText(jsonl: String): String =
     buildString {
         for (line in jsonl.lines()) {
-            val v = runCatching { Json.parseToJsonElement(line) }.getOrNull() ?: continue
+            val v = runCatching { StrictJson.parse(line) }.getOrNull() ?: continue
             val role = ((v as? JsonObject)?.get("type") as? JsonPrimitive)?.takeIf { it.isString }?.content ?: ""
             if (role != "user" && role != "assistant") continue
             val content = ((v as JsonObject)["message"] as? JsonObject)?.get("content")

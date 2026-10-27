@@ -9,6 +9,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import rtok.config.Toml
+import rtok.json.StrictJson
 import rtok.sys.IoException
 import rtok.sys.components
 import rtok.sys.exists
@@ -104,7 +105,7 @@ object Refs {
         fun json(path: String): JsonObject? {
             val text = read(path) ?: return null
             return try {
-                Json.parseToJsonElement(text) as? JsonObject ?: throw IllegalArgumentException("not an object")
+                StrictJson.parse(text) as? JsonObject ?: throw IllegalArgumentException("not an object")
             } catch (e: Exception) {
                 warn(path, e.message ?: "invalid JSON")
                 null

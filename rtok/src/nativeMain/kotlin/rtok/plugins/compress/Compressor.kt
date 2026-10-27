@@ -10,6 +10,7 @@ import rtok.http.HttpClientFactory
 import rtok.http.HttpRequest
 import rtok.http.HttpSettings
 import rtok.http.ktor.KtorHttp
+import rtok.json.StrictJson
 import rtok.recordLog
 import rtok.store.*
 
@@ -147,7 +148,7 @@ class Compressor private constructor(
     ): String {
         val res = http.post(HttpRequest(url, requestHeaders(auth), requestBody(text, spans).toString().encodeToByteArray()))
         check(res.isSuccess) { "upstream status ${statusLine(res.status)}" }
-        val reply = Json.parseToJsonElement(res.text()).jsonObject
+        val reply = StrictJson.parse(res.text()).jsonObject
         check((reply["stop_reason"] as? JsonPrimitive)?.contentOrNull != "max_tokens") { "summary cut off at max_output_tokens" }
         return (reply["content"] as? JsonArray)
             .orEmpty()

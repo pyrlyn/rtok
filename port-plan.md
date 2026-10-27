@@ -867,3 +867,15 @@ Next, in order:
 - Stop point: next junk 2 = junk_cache.rs (the `cache` item model; needs worktree clean `Policy`/`kept_because` and
   `usage_until`), then junk_kinds, junk_review, junk_sessions, junk_worktrees, junk_items, junk.rs (list/report),
   junk_clear, CLI; then `--project`, restart.rs, the rest of phase 10.
+
+## Session: json — one strict JSON tree reader (serde_json strictness)
+- New leaf module `:json-strict` (`libs/json-strict`, `rtok.json.StrictJson.parse`/`parseOrNull`): kotlinx's tree
+  reader takes unquoted words (`garbage`, `NaN`, `01`, `TRUE`) as literals even with `isLenient = false`; serde rejects
+  them. Every `parseToJsonElement` in main code (rtok, plugin-sdk, agent-sdk, store, mcp, wasm; 40+ files) now goes
+  through it; `parseJson` (measure), `SerdeJson.parse` and `parseStrictJson` delegate to it. JSONC keeps its comment and
+  trailing-comma stripping, then parses strictly (as agents/jsonc.rs feeds serde). Typed `decodeFromString` calls were
+  already strict (`isLenient = false`, concrete field types).
+- Fixed on the way: Cursor `tool_output` of a bare word became an unquoted literal; now it stays a string, as in Rust.
+- Tests: StrictJsonTest 2 (garbage table), TypesTest +2.
+- Stop point: next junk 2 = junk_cache.rs (`Policy`/`kept_because`/`usage_until`), then the rest of junk, `--project`,
+  restart.rs, the rest of phase 10.

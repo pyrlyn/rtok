@@ -10,6 +10,7 @@ import rtok.http.HttpClientFactory
 import rtok.http.HttpRequest
 import rtok.http.HttpSettings
 import rtok.http.ktor.KtorHttp
+import rtok.json.StrictJson
 import rtok.log.now
 import rtok.plugin.Runtime
 import rtok.plugin.sdk.*
@@ -28,14 +29,14 @@ object DocsPlugin : Plugin {
             ToolDef(
                 "docs_resolve",
                 "Exact crate name and version from Cargo.lock for a dependency name.",
-                Json.parseToJsonElement("""{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}"""),
+                StrictJson.parse("""{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}"""),
             ),
             ToolDef(
                 "docs_query",
                 "FTS snippets for one cached crate version; ids only, docs_get loads a body.",
-                Json.parseToJsonElement("""{"type":"object","properties":{"name":{"type":"string"},"version":{"type":"string"},"query":{"type":"string"},"question":{"type":"string","description":"alias of query"},"userQuery":{"type":"string","description":"alias of query"}},"required":["name"],"anyOf":[{"required":["query"]},{"required":["question"]},{"required":["userQuery"]}]}"""),
+                StrictJson.parse("""{"type":"object","properties":{"name":{"type":"string"},"version":{"type":"string"},"query":{"type":"string"},"question":{"type":"string","description":"alias of query"},"userQuery":{"type":"string","description":"alias of query"}},"required":["name"],"anyOf":[{"required":["query"]},{"required":["question"]},{"required":["userQuery"]}]}"""),
             ),
-            ToolDef("docs_get", "One cached doc item by id.", Json.parseToJsonElement("""{"type":"object","properties":{"id":{"type":"integer"}},"required":["id"]}""")),
+            ToolDef("docs_get", "One cached doc item by id.", StrictJson.parse("""{"type":"object","properties":{"id":{"type":"integer"}},"required":["id"]}""")),
         )
 }
 
@@ -236,7 +237,7 @@ fun fetchCrate(
     val (status, bytes) = get("https://docs.rs/crate/$n/$ver/json.zst")
     if (status != 200) return "docs.rs returned ${statusLine(status)}"
     val sha = hexSha256(bytes)
-    val json = Json.parseToJsonElement(decode(bytes).decodeToString())
+    val json = StrictJson.parse(decode(bytes).decodeToString())
     val (formatVersion, items) = indexRustdoc(json)
     val dir = "${rt.config.home}/docs/$n/$ver"
     createDirAll(dir)

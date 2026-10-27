@@ -4,6 +4,7 @@
 package rtok.plugins.archive
 
 import kotlinx.serialization.json.*
+import rtok.json.StrictJson
 import rtok.plugin.sdk.*
 
 /** pi's message array as a wire: turns are user messages counted from the end, as the proxy wires count them. */
@@ -64,7 +65,7 @@ fun rewriteStdin(
     input: ByteArray,
     cx: Ctx,
 ): ByteArray {
-    val messages = runCatching { Json.parseToJsonElement(input.decodeToString(throwOnInvalidSequence = true)) }.getOrNull()
+    val messages = runCatching { StrictJson.parse(input.decodeToString(throwOnInvalidSequence = true)) }.getOrNull()
     if (messages !is JsonArray || !archiveCfg(cx).enabled) return input
     // The shared rewrite writes a plain pointer string; pi renders `content[].text`, so restore the array shape.
     val wasArray = messages.map { (it as? JsonObject)?.let { o -> (o["role"] as? JsonPrimitive)?.contentOrNull == "toolResult" && o["content"] is JsonArray } == true }

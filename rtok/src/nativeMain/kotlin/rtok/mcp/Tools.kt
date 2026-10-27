@@ -6,6 +6,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import rtok.Expand
+import rtok.json.StrictJson
 import rtok.mcp.Protocol.bool
 import rtok.mcp.Protocol.int
 import rtok.mcp.Protocol.long
@@ -21,7 +22,7 @@ object Tools {
         ToolDef(
             "expand",
             "Return archived payload by id; optional lines a-b, regex grep (hits as N:line), context N.",
-            Json.parseToJsonElement(
+            StrictJson.parse(
                 """{"type":"object","properties":{"id":{"type":"string"},"lines":{"type":"string"},"grep":{"type":"string"},"context":{"type":"integer"}},"required":["id"]}""",
             ),
         )
@@ -30,7 +31,7 @@ object Tools {
         ToolDef(
             "ping",
             "Alive check. Returns MCP <agent> жив for the host display name.",
-            Json.parseToJsonElement("""{"type":"object","properties":{"agent":{"type":"string"}}}"""),
+            StrictJson.parse("""{"type":"object","properties":{"agent":{"type":"string"}}}"""),
         )
 
     private const val PACK_LIMIT = 8L

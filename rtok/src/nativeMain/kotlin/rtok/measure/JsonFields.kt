@@ -9,19 +9,10 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.longOrNull
+import rtok.json.StrictJson
 
-/**
- * `serde_json::from_str::<Value>`: null when [line] is not JSON. kotlinx reads a bare word (`garbage`) as an unquoted
- * literal, which serde rejects, so every non-string literal must be `true`, `false`, `null` or a number.
- */
-internal fun parseJson(line: String): JsonElement? = runCatching { Json.parseToJsonElement(line) }.getOrNull()?.takeIf(::strict)
-
-private fun strict(e: JsonElement): Boolean =
-    when (e) {
-        is JsonObject -> e.values.all(::strict)
-        is JsonArray -> e.all(::strict)
-        is JsonPrimitive -> e.isString || e is kotlinx.serialization.json.JsonNull || e.booleanOrNull != null || e.content.toDoubleOrNull() != null
-    }
+/** `serde_json::from_str::<Value>`: null when [line] is not JSON ([StrictJson]). */
+internal fun parseJson(line: String): JsonElement? = StrictJson.parseOrNull(line)
 
 /** `v.get(key)`. */
 internal fun JsonElement?.field(key: String): JsonElement? = (this as? JsonObject)?.get(key)

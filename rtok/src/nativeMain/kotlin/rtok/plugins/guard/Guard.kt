@@ -5,6 +5,7 @@ package rtok.plugins.guard
 import kotlinx.serialization.json.*
 import rtok.canonicalToolName
 import rtok.cmdStem
+import rtok.json.StrictJson
 import rtok.plugin.sdk.*
 import rtok.shortId
 import rtok.skipWord
@@ -101,7 +102,7 @@ fun check(
     host: Capabilities,
 ): String {
     val name = canonicalToolName(tool)
-    var input: JsonElement = runCatching { Json.parseToJsonElement(rawInput) }.getOrDefault(JsonNull)
+    var input: JsonElement = runCatching { StrictJson.parse(rawInput) }.getOrDefault(JsonNull)
     if (input is JsonObject && "filePath" in input) {
         val m = LinkedHashMap(input)
         val fp = m.remove("filePath")!!

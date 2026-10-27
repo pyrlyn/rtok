@@ -190,6 +190,16 @@ class TypesTest {
         assertNull(i.toolResponse)
     }
 
+    @Test fun cursorToolOutputBareWordStaysAString() {
+        val i = HookInput.fromJson(o("hook_event_name" to "postToolUse", "tool_name" to "Shell", "tool_output" to "done"))
+        i.adaptCursor("PostToolUse")
+        assertEquals(JsonPrimitive("done"), i.toolResponse)
+    }
+
+    @Test fun hookInputRejectsGarbage() {
+        for (bad in listOf("garbage", "{\"session_id\":nope}", "NaN")) assertFails(bad) { HookInput.parse(bad) }
+    }
+
     @Test fun cursorPostToolUseMapsMcpToolOutput() {
         val i = HookInput.fromJson(o("hook_event_name" to "postToolUse", "tool_name" to "MCP:list_issues", "tool_input" to o("team" to "eng"), "tool_output" to "{\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}", "conversation_id" to "sess-mcp", "mcp_server_name" to "linear"))
         i.adaptCursor("PostToolUse")

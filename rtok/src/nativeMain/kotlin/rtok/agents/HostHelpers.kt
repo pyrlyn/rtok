@@ -12,6 +12,7 @@ import rtok.agent.sdk.KETCH_INSTALL
 import rtok.agent.sdk.NO_CHANGES
 import rtok.agent.sdk.keepEdited
 import rtok.config.Config
+import rtok.json.StrictJson
 import rtok.mcp.config.RTOK
 import rtok.sys.ProgressRunner
 import rtok.sys.join
@@ -134,7 +135,7 @@ object PluginOffers {
         manifest: String,
         name: String,
     ): Boolean {
-        val root = runCatching { Json.parseToJsonElement(readToString(join(dir, manifest))) }.getOrNull() as? JsonObject
+        val root = runCatching { StrictJson.parse(readToString(join(dir, manifest))) }.getOrNull() as? JsonObject
         return (root?.get("name") as? JsonPrimitive)?.takeIf { it.isString }?.content == name
     }
 

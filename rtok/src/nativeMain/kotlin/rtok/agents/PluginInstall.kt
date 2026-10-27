@@ -6,6 +6,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import rtok.config.Config
+import rtok.json.StrictJson
 import rtok.sys.isDir
 import rtok.sys.isFile
 import rtok.sys.join
@@ -94,7 +95,7 @@ object PluginInstall {
         MANIFESTS.firstNotNullOfOrNull { m ->
             val path = join(dir, m)
             val text = if (isFile(path)) runCatching { readToString(path) }.getOrDefault("") else ""
-            val root = text.takeIf { it.isNotEmpty() }?.let { runCatching { Json.parseToJsonElement(it) }.getOrNull() } as? JsonObject
+            val root = text.takeIf { it.isNotEmpty() }?.let { runCatching { StrictJson.parse(it) }.getOrNull() } as? JsonObject
             (root?.get("version") as? JsonPrimitive)?.takeIf { it.isString }?.content
         }
 

@@ -18,6 +18,7 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.jsonObject
 import platform.posix.getpid
 import rtok.config.Config
+import rtok.json.StrictJson
 import rtok.plugin.Runtime
 import rtok.plugin.sdk.Class
 import rtok.plugin.sdk.Measurement
@@ -119,7 +120,7 @@ object Wrap {
             true
         }.getOrDefault(false)
 
-    private fun parse(frame: ByteArray): JsonElement? = runCatching { json.parseToJsonElement(frame.decodeToString()) }.getOrNull()
+    private fun parse(frame: ByteArray): JsonElement? = runCatching { StrictJson.parse(frame.decodeToString()) }.getOrNull()
 
     /** `tools/call` ids the client sent and the server has not answered, keyed by the id's JSON text (`1` ≠ `"1"`). */
     class Pending {
@@ -226,7 +227,7 @@ object Wrap {
     ): String? {
         if (!cx.config.plugins.jsonTree.enabled) return null
         if (tool.equals("read", ignoreCase = true) || tool.equals("search", ignoreCase = true)) return null
-        val value = runCatching { json.parseToJsonElement(text) }.getOrNull() ?: return null
+        val value = runCatching { StrictJson.parse(text) }.getOrNull() ?: return null
         val folded = foldJson(value) ?: return null
         if (folded.text
                 .rustLines()
