@@ -67,7 +67,7 @@ fun cloneTree(
     return Cloned(cloned, copied)
 }
 
-private fun copyLink(
+internal fun copyLink(
     from: String,
     to: String,
 ) {
