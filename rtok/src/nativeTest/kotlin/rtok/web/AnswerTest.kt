@@ -21,7 +21,9 @@ class AnswerTest {
         removeDirAll(dir)
         createDirAll(dir)
         val c = Config.loadFrom(dir)
-        return LiveConfig(c.copy(core = c.core.copy(dbPath = "$dir/rtok.db", archiveDir = "$dir/archive"))) to dir
+        // `home` is transient: a data-class copy drops it, and `set` would then write into the cwd.
+        val scoped = c.copy(core = c.core.copy(dbPath = "$dir/rtok.db", archiveDir = "$dir/archive")).also { it.home = dir }
+        return LiveConfig(scoped) to dir
     }
 
     @Test fun setFlipsAnAllowlistedPluginAndReloads() {
@@ -29,8 +31,9 @@ class AnswerTest {
         try {
             assertTrue(l.value.plugins.guard.enabled)
             assertNull(Answer(l).answer("""{"set":{"key":"plugins.guard.enabled","value":false}}"""))
-            assertTrue("enabled = false" in readBytes("$dir/config.toml").decodeToString())
+            assertTrue(Regex("""\[plugins\.guard][^\[]*enabled = false""").containsMatchIn(readBytes("$dir/config.toml").decodeToString()))
             assertFalse(l.value.plugins.guard.enabled)
+            assertEquals(dir, l.value.home)
         } finally {
             removeDirAll(dir)
         }
