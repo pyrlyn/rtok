@@ -45,8 +45,7 @@ internal fun serveWeb(
     val (assets, notice) = resolveAssets(env(DIST_ENV), NoAssets)
     val bound = BoundAddr(cfg.web.host, cfg.web.port.toInt())
     val app = WebApp(bound, assets, token)
-    // The operator model (docs/web.md step 4) fills the snapshot; until then every tick is an empty one.
-    val ws = WsEndpoint(app, Snapshots { """{"type":"snapshot"}""" })
+    val ws = WsEndpoint(app, Snapshots { rtok.model.Snapshot.frame(cfg) })
     KtorHttpServer.serveBlocking(cfg.web.host, cfg.web.port.toInt(), app, websockets = mapOf("/ws" to ws), onBound = { addr ->
         bound.port = addr.substringAfterLast(':').toIntOrNull() ?: bound.port
         io.eprintln("rtok web http://$addr  (ws://$addr/ws)")

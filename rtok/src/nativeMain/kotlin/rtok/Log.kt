@@ -40,3 +40,32 @@ fun recordLog(
         runCatching { store.insertLog(level, source, name, message, session, callId, null) }
     }
 }
+
+/** log.rs `whole_lines`: the piece after the last `\n` is not a line yet. */
+private fun wholeLines(bytes: ByteArray): List<String> = bytes.decodeToString().split('\n').dropLast(1)
+
+/**
+ * log.rs `tail`: the last [n] lines (default `[log] lines`) across the log, then `.1`, `.2`, … newest first.
+ * Stops at the first rotated file that does not exist; empty when nothing was logged.
+ */
+fun logTail(
+    cfg: Config,
+    n: Int? = null,
+): List<String> {
+    val want =
+        n ?: cfg.log.lines
+            .coerceAtMost(Int.MAX_VALUE.toULong())
+            .toInt()
+    val path = cfg.fileLog().path
+    val out = wholeLines(runCatching { rtok.sys.readBytes(path) }.getOrDefault(ByteArray(0))).asReversed().take(want).toMutableList()
+    var i = 1
+    while (out.size < want) {
+        val text = runCatching { rtok.sys.readToString(rtok.log.rotatedPath(path, i)) }.getOrNull() ?: break
+        out += rustLines(text).asReversed().take(want - out.size)
+        i++
+    }
+    return out
+}
+
+/** Rust `str::lines`: no trailing empty line, `\r\n` endings trimmed. */
+private fun rustLines(text: String): List<String> = if (text.isEmpty()) emptyList() else text.removeSuffix("\n").split('\n').map { it.removeSuffix("\r") }
