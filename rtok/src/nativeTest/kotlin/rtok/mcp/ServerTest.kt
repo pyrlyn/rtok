@@ -129,6 +129,14 @@ class ServerTest {
         assertFalse("mem_search" in names, names.toString())
     }
 
+    @Test fun theTaskToolsAreListedAfterTheAgentTools() {
+        val (cfg, _) = diskConfig("mcp-tasks")
+        val names = Server.listedFor(cfg).map { it.def.name }
+        val tasks = names.filter { it.startsWith("task_") }
+        assertEquals(TaskTools.DEFS.map { it.name }, tasks)
+        assertTrue(names.indexOf("agent_status_set") < names.indexOf("task_create"), names.toString())
+    }
+
     @Test fun toolsCallIsRecordedAsAnMcpCall() {
         val (cfg, _) = diskConfig("mcp-record")
         Server.open(cfg, "mcp-t8").use { s -> assertEquals("no notes match", text(call(s, "mem_search", """{"query":"nothing"}"""))) }

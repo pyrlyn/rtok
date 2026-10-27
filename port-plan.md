@@ -1224,10 +1224,29 @@ Next, in order:
 - Tests: all 35 stats.rs tests except the `parse_since` trio (already ported with `rtok.config.parseSince`):
   StatsCollectTest 10, StatsFoldTest 15, StatsStoreTest 7.
 - Next: `rtok stats` CLI + baseline.rs + cache.rs, then the snapshot `stats`/`skills`, pages and TUI tabs.
-## Session: stats part 3 — `rtok stats` (cli/stats.rs), baseline.rs, cache.rs
+
+## Session: tasks part 8 — task MCP tools (mcp/tasks.rs), MCP halves of task_cli.rs, sync.rs GitHub test
+- `rtok.mcp.TaskTools` (mcp/tasks.rs): the 12 `task_*` tools, listed after the agent tools and dispatched before the
+  rooted tools; config re-read for the cwd on every call; JSON identical to `rtok task … --json`.
+- `rtok mcp --call` now matches cli/mcp.rs: arguments in `--json` (was `--args`), text on stdout without a newline,
+  a tool failure printed on stdout with exit 1.
+- Tests: ServerTest +1 (task tools listed after the agent tools), TaskSyncTest +1 (`github_sync_only_reads`, FakeHttp),
+  TaskE2eSpec +1 (`mcp_tools_answer_like_the_cli`) and the MCP half of the markers test.
+- Deviations: `the_task_skill_names_exactly_these_tools` not ported — the Kotlin repo ships no `skills/` yet.
+- Stop point: next model, report, otel, completions, bench, demon, hooks dispatcher tests, worktree
+  add/finish/whoami/clean/migrate, proxy batch tests, macOS/Linux split.
+## Session: stats part 3 — `rtok stats` (cli/stats.rs), baseline.rs, cache.rs, snapshot stats/skills
 - `rtok stats` (`cli/StatsCmd.kt`): `--since/--json/--plugin/--save-baseline/--compare/--calibrate/--cache/--price`
   merged into `[stats]` like `stats_flags`; pages from `rtok.model.StatsPage` (`stats_report`, `plugin_stats`,
   `cache_health` of model/mod.rs).
 - `measure/stats/Baseline.kt` (baseline.rs; the load reads back only what `compare` prints), `CacheHealth.kt` (cache.rs).
 - Tests: CacheHealthTest 4 (cache.rs 3 + baseline.rs 1), StatsCliSpec 8 (tests/stats_price.rs 4, the stats checks of
   commands_e2e.rs/plugins_e2e.rs, `--since`, baselines, `--cache`, `--plugin archive`).
+- Snapshot: `stats` (the `--price` table plus `--cache`'s, "reading transcripts…" until the first scan) and `skills`
+  (`SkillsPage` header + rows) from `rtok.model.StatsSkillsPage` — one Background scan (300 s TTL, keyed on
+  `transcripts_dir`+`since`) feeds both; the doctor report is read once for `doctor` and the skills listing.
+- `measure/SkillsListing.kt` (skills_listing.rs). Tests: SkillsListingTest 2 (its unit test + the fixture count of
+  tests/skill_listing.rs), StatsSkillsTest 3 (`skills_from`, `stats_skills_never_waits_on_the_transcript_scan`,
+  snapshot keys).
+- Deviation: tests/skill_listing.rs's proxy-capture half (axum + httpmock) is not ported; the measure is.
+- Next: the Stats and Skills pages (Kotlin/JS) and TUI tabs.

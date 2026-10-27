@@ -1,7 +1,7 @@
 @file:Suppress("MagicNumber")
 
 // Port of tests/task_cli.rs (T441.5): `rtok task …` end to end on the disk adapter, in a throwaway checkout with its
-// own home. The MCP halves wait for the task MCP tools.
+// own home, CLI and MCP (`rtok mcp --call`) halves.
 
 package rtok.e2e
 
@@ -36,6 +36,15 @@ private class TaskBox(
         vararg args: String,
         agent: String? = null,
     ): Proc = sh(listOf(RTOK, "task") + args, repo, mapOf("RTOK_HOME" to sb.home, "HOME" to sb.user, "RTOK_CONFIG" to null, "NO_COLOR" to "1", "RTOK_AGENT_ID" to agent), null)
+
+    /** The MCP tool [name] through `rtok mcp --call`: (exited 0, the tool's text). */
+    fun mcp(
+        name: String,
+        args: String,
+    ): Pair<Boolean, String> {
+        val p = sh(listOf(RTOK, "mcp", "--call", name, "--json", args), repo, mapOf("RTOK_HOME" to sb.home, "HOME" to sb.user, "RTOK_CONFIG" to null, "NO_COLOR" to "1", "RTOK_AGENT_ID" to null), null)
+        return (p.code == 0) to p.out
+    }
 
     /** The sandbox store, wherever the config puts it under the sandbox's homes. */
     fun db(): String = listOf("${sb.home}/rtok.db", "${sb.user}/.rtok/rtok.db").firstOrNull(::exists) ?: error("no store yet")
@@ -178,8 +187,14 @@ class TaskE2eSpec :
                 b.task("claim", "K1", agent = agent).code shouldBe 0
                 b.ok("ready") shouldBe "K2  Second  (conflicts with K1 in progress)\nK3  Third  [parallel]\n"
                 b.task("claim", "K2", agent = agent).code shouldBe 0
-                val cli = Json.parseToJsonElement(b.ok("conflict", "K1", "K3", "--json")).jsonObject
-                cli["conflicts_with"] shouldBe Json.parseToJsonElement("""["K2","K3"]""")
+                // CLI and MCP answer alike; a repeat leaves the task as it is.
+                val (ok, out) = b.mcp("task_conflict", """{"id":"K1","other":"K3"}""")
+                ok shouldBe true
+                val viaMcp = Json.parseToJsonElement(out)
+                viaMcp shouldBe Json.parseToJsonElement(b.ok("conflict", "K1", "K3", "--json"))
+                viaMcp.jsonObject["conflicts_with"] shouldBe Json.parseToJsonElement("""["K2","K3"]""")
+                val (pOk, pOut) = b.mcp("task_parallel", """{"id":"K3","on":false}""")
+                (pOk && !pOut.contains("parallel")) shouldBe true
                 b.ok("conflict", "K1", "K2", "--remove") shouldBe "K1: no longer conflicts with K2\n"
                 b.ok("show", "K2") shouldNotContain "conflicts with"
                 b.ok("parallel", "K3", "--off") shouldBe "K3: not parallel\n"
@@ -187,6 +202,41 @@ class TaskE2eSpec :
                     val p = b.task(*args.toTypedArray())
                     (p.code != 0 && p.err.isNotEmpty()) shouldBe true
                 }
+            }
+        }
+
+        test("mcp tools answer like the cli") {
+            TaskBox("mcp").use { b ->
+                b.ok("init", "--prefix", "M")
+
+                fun json(s: String) = Json.parseToJsonElement(s)
+
+                fun mcp(
+                    name: String,
+                    args: String,
+                ): kotlinx.serialization.json.JsonElement {
+                    val (ok, out) = b.mcp(name, args)
+                    check(ok) { "$name $args: $out" }
+                    return json(out)
+                }
+                mcp("task_create", """{"title":"Parent","description":"Why."}""").jsonObject["id"] shouldBe JsonPrimitive("M1")
+                mcp("task_create", """{"title":"Child","parent":"M1"}""").jsonObject["id"] shouldBe JsonPrimitive("M1.1")
+                json(b.ok("create", "Other", "--json")).jsonObject["id"] shouldBe JsonPrimitive("M2")
+                mcp("task_list", "{}") shouldBe json(b.ok("list", "--json"))
+                mcp("task_get", """{"id":"M1"}""") shouldBe json(b.ok("show", "M1", "--json"))
+                mcp("task_next", "{}") shouldBe json(b.ok("next", "--json"))
+                val (refusedOk, refused) = b.mcp("task_status", """{"id":"M1","status":"done"}""")
+                refusedOk shouldBe false
+                refused shouldContain "M1.1"
+                mcp("task_status", """{"id":"M1.1","status":"done"}""").jsonObject["status"] shouldBe JsonPrimitive("done")
+                mcp("task_status", """{"id":"M1"}""") shouldBe json(b.ok("status", "M1", "--json"))
+                mcp("task_list", """{"status":["done"]}""") shouldBe json(b.ok("list", "--status", "done", "--json"))
+                val (noIdOk, noId) = b.mcp("task_get", "{}")
+                noIdOk shouldBe false
+                noId shouldContain "missing `id`"
+                val (unknownOk, unknown) = b.mcp("task_get", """{"id":"M9"}""")
+                unknownOk shouldBe false
+                unknown shouldContain "no task M9"
             }
         }
     })
