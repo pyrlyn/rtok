@@ -1434,3 +1434,14 @@ Next, in order:
 - Tests: mod.rs (4), markdown.rs (4, the full-id case checks Markdown and HTML; AI and PDF join with their
   renderers), html.rs (3), advice.rs (4). The six Rust `.snap` files are copied unchanged and match.
 - Stop point: ai.rs, pdf.rs, then tests/report*.rs and the `rtok report` command.
+
+## Session: report `--ai` and PDF renderers
+- `rtok.report.Ai` (+ `aiTable`): the budgeted `--ai` text, whole sections dropped and named, toon tables.
+- `rtok.report.Pdf` / `PdfSections` / `PdfText` / `PdfWriter`: the eight sections paged on A4 with a contents page
+  and bookmarks. Deviation: Rust links `printpdf`; adding a PDF library is a new dependency, so `PdfWriter` is a
+  small own writer (uncompressed streams, builtin Helvetica/Helvetica-Bold, flat outline). Bytes differ from
+  printpdf's; every structure the Rust tests read (`/Kids[`, `/Contents`, `(Title  N)`, `/Title<FEFF..>/Dest[`)
+  is the same. Draw ops are a `PdfOp` model, so the T632 margin test reads them instead of printpdf `Op`s.
+- Tests: ai.rs (11, with the full-archive-id case), pdf.rs (6 cases folded into 6 tests), and the two
+  tests/report_pdf.rs checks run on fixture documents (the CLI part joins with `rtok report`).
+- Stop point: tests/report.rs, report_ai.rs and the `rtok report` command.
