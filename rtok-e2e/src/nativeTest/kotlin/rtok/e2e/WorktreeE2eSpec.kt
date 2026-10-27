@@ -1,4 +1,6 @@
-// Port of tests/worktree.rs (the list and gc tests): `rtok worktree list|gc` against real git repositories.
+// Port of tests/worktree.rs (the list, gc and clean tests): `rtok worktree list|gc|clean` against real git repositories.
+@file:OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
+
 package rtok.e2e
 
 import io.kotest.core.spec.style.FunSpec
@@ -21,6 +23,9 @@ import rtok.sys.*
 private const val ME = "Claude Code / sonnet"
 private const val BIN = 4096
 private const val REPORT = 100
+private const val W = "worktree"
+private const val STALE_SECS = 3 * 86_400L
+private const val NANOS = 1_000_000_000L
 private const val TAG = "Signature: 8a477f597d28d172789f06886806bc55\n"
 
 private fun Sandbox.g(
@@ -46,7 +51,10 @@ private fun Sandbox.json(
     return Json.parseToJsonElement(p.out).jsonArray
 }
 
-private fun JsonArray.byName(name: String): JsonObject = map { it.jsonObject }.firstOrNull { it["path"]!!.jsonPrimitive.content.endsWith("/$name") } ?: error("$name missing in $this")
+private fun JsonArray.byName(
+    name: String,
+    key: String = "path",
+): JsonObject = map { it.jsonObject }.firstOrNull { it[key]!!.jsonPrimitive.content.endsWith("/$name") } ?: error("$name missing in $this")
 
 private fun JsonElement?.str() = (this as JsonPrimitive).content
 
@@ -218,6 +226,82 @@ class WorktreeE2eSpec :
                     readDir("$work/.git/worktrees").sorted() shouldContainExactly
                         listOf("wt-bare-lock", "wt-dirty", "wt-gone-fresh", "wt-open", "wt-theirs")
                     after shouldContain "locked $theirs"
+                }
+            }
+        }
+        context("rtok worktree clean") {
+            test("T152: clean deletes idle tagged caches and nothing else") {
+                Sandbox("wt-clean").use { s ->
+                    val tmp = s.root
+                    s.g(tmp, "init", "-q", "work")
+                    val work = "$tmp/work"
+                    s.commit(work, "a.txt")
+                    writeString("$work/.git/info/exclude", "target/\nout/\n")
+                    for (name in listOf("idle", "fresh", "orphan")) s.addWt(work, name, null)
+                    removeDirAll("$work/.git/worktrees/wt-orphan")
+                    val old = (platform.posix.time(null) - STALE_SECS) * NANOS
+
+                    fun cache(
+                        dir: String,
+                        stale: Boolean,
+                    ) {
+                        createDirAll("$dir/target/debug")
+                        writeString("$dir/target/CACHEDIR.TAG", TAG)
+                        writeString("$dir/target/debug/bin", "\u0000".repeat(BIN))
+                        if (stale) for (f in listOf("target/CACHEDIR.TAG", "target/debug/bin")) setModified("$dir/$f", old)
+                    }
+                    val idle = "$tmp/wt-idle"
+                    cache(idle, true)
+                    cache("$tmp/wt-fresh", false)
+                    cache("$tmp/wt-orphan", true)
+                    cache(work, true)
+                    // Same name, no tag: never touched.
+                    createDirAll("$idle/out")
+                    writeString("$idle/out/report", "\u0000".repeat(REPORT))
+                    val bytes = BIN.toLong() + TAG.length
+
+                    // Dry run from the main checkout: its own cache is skipped, nothing is deleted.
+                    val rows = s.json(work, "worktree", "clean", "--json")
+                    val all = listOf("work", "wt-idle", "wt-fresh", "wt-orphan")
+                    rows.size shouldBe all.size
+                    rows.byName("work", W)["action"].str() shouldBe "keep"
+                    rows.byName("work", W)["note"].str() shouldContain "runs from"
+                    rows.byName("wt-idle", W)["action"].str() shouldBe "clean"
+                    rows.byName("wt-idle", W)["cache"].str() shouldBe "target"
+                    rows.byName("wt-idle", W)["bytes"]!!.jsonPrimitive.long shouldBe bytes
+                    rows.byName("wt-fresh", W)["action"].str() shouldBe "keep"
+                    rows.byName("wt-orphan", W)["action"].str() shouldBe "clean"
+                    for (d in all) exists("$tmp/$d/target/debug/bin") shouldBe true
+                    val table = s.rtok("worktree", "clean", cwd = work).out
+                    table shouldContain "dry run: 2 caches, "
+                    // T416.2: a removal line per cache with its file count, then the totals.
+                    rows.byName("wt-idle", W)["files"]!!.jsonPrimitive.long shouldBe 2
+                    rows.byName("wt-fresh", W)["files"]!!.jsonPrimitive.long shouldBe 0
+                    table shouldContain "2 paths, 4 files"
+                    table shouldContain "  2 files"
+                    val age = Regex("^\\d+[smhd]$")
+
+                    fun words(out: String) = out.split(Regex("\\s+")).map { if (age.matches(it)) "AGE" else it }
+                    for (flag in listOf("--stat", "--dry-run")) {
+                        words(s.rtok("worktree", "clean", flag, cwd = work).out) shouldBe words(s.rtok("worktree", "clean", cwd = work).out)
+                    }
+
+                    val applied = s.rtok("worktree", "clean", "--yes", cwd = work)
+                    applied.code shouldBe 0
+                    applied.err shouldBe ""
+                    exists("$idle/target") shouldBe false
+                    exists("$tmp/wt-orphan/target") shouldBe false
+                    exists("$tmp/wt-fresh/target/debug/bin") shouldBe true
+                    exists("$work/target/debug/bin") shouldBe true
+                    (exists("$idle/out/report") && exists("$idle/a.txt")) shouldBe true
+
+                    // Named: the current worktree goes too; a stranger to the repository is refused.
+                    s.rtok("worktree", "clean", "--yes", ".", cwd = work).code shouldBe 0
+                    (!exists("$work/target") && exists("$work/a.txt")) shouldBe true
+                    val stranger = s.rtok("worktree", "clean", "--yes", "..", cwd = work)
+                    (stranger.code != 0) shouldBe true
+                    stranger.err shouldContain "not a worktree of this repository"
+                    exists("$tmp/wt-fresh/target/debug/bin") shouldBe true
                 }
             }
         }

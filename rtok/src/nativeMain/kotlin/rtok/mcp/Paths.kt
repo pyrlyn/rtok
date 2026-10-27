@@ -21,6 +21,7 @@ object Paths {
     ): Pair<String, Boolean> =
         when {
             AgentTools.handles(name) -> runCatching { AgentTools.call(cx, agents, name, args) }.fold({ it to true }) { (it.message ?: it.toString()) to false }
+            WorktreeTools.handles(name) -> runCatching { WorktreeTools.call(cx, agents, name, args) }.fold({ it to true }) { (it.message ?: it.toString()) to false }
             TaskTools.handles(name) -> runCatching { TaskTools.call(cx, name, args) }.fold({ it to true }) { (it.message ?: it.toString()) to false }
             !isRooted(name) -> Tools.invokeText(cx, name, args)
             else -> rooted(cx, agents, name, args)

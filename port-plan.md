@@ -1336,3 +1336,20 @@ Next, in order:
   the HTTP client.
 - Tests: LaneTest 10 (rstest cases as loops), LiveRingTest 2, FlexTest 10.
 - Stop point: next proxy chunk 4 (tools_rewrite.rs, batch_results.rs).
+## Session (worktree worker): finish.rs — `rtok worktree finish`
+- `rtok.worktree.Finish` (finish.rs: `message_for`, `open_pr`, `for_agent`), `FinishOptions`, `Finished` (`to_text`,
+  JSON as Rust: `committed`/`warnings` omitted when empty), `GhRunner` (the `gh` seam; `HOST` spawns gh in the worktree),
+  `Ops.finish`, `rtok worktree finish [PATH] [-m] [--repo] [--no-auto-merge] [--agent] [--owner] [--json]`.
+  rtok-sys `ProgressRunner.cwd` (posix_spawn addchdir).
+- Tests: FinishTest 3 (the message_for cases; the tests/worktree.rs finish test against temp origin/clone and a scripted
+  gh; the text form).
+- Deviation: the finish test injects the gh seam instead of a fake `gh` first on `PATH`.
+- Same PR: clean.rs rest (`Clean.run`/`toTable`, `CleanOutcome`; `rtok worktree clean [PATHS…] [--idle] [--yes]
+  [--dry-run] [--stat] [--json]`), migrate.rs (`Migrate.plan`/`run`/`toTable`, `MigrateMe`, `MigrateHeld`,
+  `MigrateOutcome`; `Ops.migrate`; `rtok worktree migrate [--yes] [--owner] [--json]`), mcp/worktrees.rs
+  (`rtok.mcp.WorktreeTools`: `worktree_add` (+ `TaskList.writeFor`), `worktree_list`, `worktree_remove`,
+  `worktree_finish`, `worktree_adopt`, `with_repo`, `ensure_callers_repo`; listed right after `whoami` as in mcp.rs).
+- Tests: MigrateTest 3 (both tests/worktree.rs migrate tests + the table), WorktreeE2eSpec clean test (T152),
+  AgentToolsTest: the listing order now with the worktree tools, worktree_add wrong-repo test (T924).
+- Deviations: clean has no progress bar for several caches (no batch bar in rtok-sys yet).
+- Stop point: next hooks dispatcher tests.
