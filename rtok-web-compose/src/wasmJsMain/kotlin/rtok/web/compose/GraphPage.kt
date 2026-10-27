@@ -1,6 +1,6 @@
 // The Graph page in Compose: grouped health alerts, the project registry (select, re-index, removal plan then
-// confirmed removal, links, health rings) and the `rtok graph status` body. Drill, compare, export, the removal
-// dry run, the scene and live calls come in the next slices.
+// confirmed removal with its dry run, links, health rings), the drill-down (GraphDrill*.kt) and the
+// `rtok graph status` body. Live calls come in the next slice.
 // Compose UI: @Composable functions are PascalCase and layout sizes are literal dp/sp values.
 @file:Suppress("FunctionNaming", "MagicNumber")
 
@@ -98,6 +98,7 @@ private fun ProjectRow(
             val level = h.str("level") ?: levelOf(h.num("score") ?: 0.0)
             HealthRing(h.num("score"), level, "health ${healthScore(p)?.let { fixed(it, 0) } ?: level}")
         }
+        Box(Modifier.clickable { app.openDrill(id) }) { Txt("drill →", color = pal.accent) }
         Muted(p.str("origin") ?: "")
     }
 }
@@ -128,6 +129,7 @@ private fun Current(
         Action("plan removal") { app.send(projectRequest("remove", mapOf("project" to id, "confirmed" to false))) }
         Action("remove from registry") { app.send(projectRequest("remove", mapOf("project" to id, "confirmed" to true))) }
     }
+    RemovalPlan(app, id)
     ProjectLinks(app, p, id)
 }
 
@@ -184,6 +186,7 @@ val GraphPage =
         val rows = snap.objects("projects")
         Alerts(rows)
         Projects(app, rows)
+        if (DrillView(app, rows)) return@PageView
         if (snap["graph"] == null || snap["graph"] is JsonNull) {
             Panel("graph") { Muted("Graph page off. The graph feature is not built in, or the store read failed (Snapshot.graph = null).") }
         } else {
