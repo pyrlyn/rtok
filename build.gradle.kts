@@ -34,7 +34,7 @@ subprojects {
     }
 }
 
-// Kotlin/JS (:rtok-web-ui) keeps its yarn.lock under build/, so a gate run writes nothing into the
+// Kotlin/JS (the js target of :rtok-web-model) keeps its yarn.lock under build/, so a gate run writes nothing into the
 // source tree (the default is kotlin-js-store/ at the root). The lock is regenerated from Gradle pins.
 plugins.withType<org.jetbrains.kotlin.gradle.targets.js.yarn.YarnPlugin> {
     extensions.configure<org.jetbrains.kotlin.gradle.targets.js.yarn.YarnRootExtension> {

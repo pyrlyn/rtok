@@ -1317,7 +1317,8 @@ Next, in order:
   PR 3 (#205): Tasks, Worktrees, junk card, Doctor + fix panel. PR 4 (#207): Graph base. PR 5 (#209): Graph drill,
   compare, export/import, removal dry run. PR 6 (#211): live calls, command palette,
   WebGL graph cloud (`kotlin-webgl` included build). PR 7 (#217): binary embedDir, `:rtok-web` serves
-  the Compose UI. Next: old UI removal, browser e2e.
+  the Compose UI. PR 8 (#REMOVE): `:rtok-web-ui` removed. Next:
+  browser e2e.
 
 ## Session: proxy chunk 2 — wire usage and the four dialects
 - `rtok.proxy.Wire` (wire.rs `Wire` trait: matches, provider, api, session id, model, usage from body/SSE,

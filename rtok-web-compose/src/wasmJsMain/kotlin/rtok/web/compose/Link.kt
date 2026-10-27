@@ -1,4 +1,4 @@
-// The browser `/ws` link with reconnect backoff (same protocol as :rtok-web-ui Link.kt), for Kotlin/Wasm.
+// The browser `/ws` link with reconnect backoff (the `/ws` protocol of docs/web.md), for Kotlin/Wasm.
 @file:OptIn(ExperimentalWasmJsInterop::class)
 
 package rtok.web.compose
