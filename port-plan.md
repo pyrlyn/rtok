@@ -1064,3 +1064,13 @@ Next, in order:
 - Tests: RepoMapTest 3 (mod.rs `repo_map_off_by_default_and_empty_index`,
   `repo_map_pagerank_lists_files_and_falls_back_without_a_graph`, `repo_map_ranked_byte_stable_and_trimmed`).
 - Stop point: next doctor, model, report, otel, tasks, completions, bench, demon, hooks dispatcher tests.
+## Session: doctor — hooks check (doctor/probe.rs, hooks.rs, dupes.rs)
+- `rtok.doctor.Probes` (probe.rs `Fs`/`Env`/`Which` and the real ones; `Writer` lands with `--fix`), `Problem`,
+  `HookCommand` (hooks.rs command half: POSIX and Windows word rules, `expand`, `target`, `normalize`, `classify`,
+  PATHEXT lookup, unmounted `/Volumes`), `Hooks` (settings sources and ranks, other hosts' JSON/TOML hook files,
+  enabled Claude plugins, host plugin links, `check`/`check_for`/`check_with_plugins`, `host_id`, `render`, doctor.rs
+  `plugin_install_paths`), `Dupes` (dupes.rs `find`, `render`, `render_mcp`). Object keys are walked sorted, as
+  serde_json's map does.
+- Tests: HooksTest 43 (hooks.rs 44 unix + Windows-rule tests; the source-scanning `only_the_probe_module_touches_the_machine`
+  guard is not ported: it reads the crate's own files).
+- Stop point: next doctor checklist.rs, fix.rs, mcp_dupes.rs, mcp_fix.rs, web.rs, then doctor.rs + `rtok doctor`.
