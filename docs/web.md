@@ -89,4 +89,4 @@ Previously excluded from the port (port-plan.md); now in progress in small steps
   png is refused as `graph export` refuses it in this build. Panel text wraps to the width (`tui.wrap`). Part 9: the live
   calls pane (live_calls.rs T480) under the Graph tab: the web's `Reader` polled from the loop every `POLL_MS` while
   the tab is up, folded by the web's `CallsStore` (`copy()` holds a freeze), `f`/`w`/`a`/`t`/`o`, the scope mark and
-  the drill's folded counters. Next: doctor fix; reading the model off the input thread.
+  the drill's folded counters. Part 10: model reads and the Graph drill run on `TuiWorker` (app.rs `Worker`: one thread, queued requests collapse to the newest, inline when the thread will not start), the key line shows `◌ loading` mid-read. Next: per-panel `?` help, doctor fix.
