@@ -2,7 +2,7 @@
 package rtok.proxy
 
 import kotlinx.serialization.json.*
-import rtok.plugin.sdk.WireRequest
+import rtok.plugin.sdk.*
 
 internal fun JsonElement?.str(key: String): String? = ((this as? JsonObject)?.get(key) as? JsonPrimitive)?.takeIf { it.isString }?.content
 
@@ -29,4 +29,57 @@ internal fun turnEntries(
         if (o.str("role") == "user") seen++
         TurnEntry(i, o, total - seen)
     }
+}
+
+/** A provider request/response shape supported by the proxy (Rust `Wire`). */
+interface Wire : ToolResults {
+    /** Whether this wire owns the request path. */
+    fun matches(path: String): Boolean
+
+    /** Provider slug for the request's dimension row. */
+    val provider: String get() = Wires.OPENAI_PROVIDER
+
+    /** `usage.api` discriminator (T11.6). */
+    val api: String
+
+    /** Provider session identity; defaults to the non-empty `user` field of both OpenAI wires. */
+    fun sessionId(body: JsonElement): String? = body.str("user")?.takeIf { it.isNotEmpty() }
+
+    /** Model slug; defaults to the body's `model` field. */
+    fun model(
+        path: String,
+        body: JsonElement?,
+    ): String? = body.str("model")
+
+    fun usageFromBody(body: JsonElement): Usage?
+
+    fun usageFromSse(event: JsonElement): Usage?
+
+    /** Request shaping before forwarding; the new body, or null when nothing changed. */
+    fun prepareRequest(
+        body: JsonElement,
+        includeUsage: Boolean,
+    ): JsonElement? = null
+
+    /** The billable total the `tokens` ledger records; the four counters are disjoint. */
+    fun providerTotal(u: Usage): Long =
+        u.input
+            .satAdd(u.cacheCreate)
+            .satAdd(u.cacheRead)
+            .satAdd(u.output)
+}
+
+object Wires {
+    const val ANTHROPIC_PROVIDER = "anthropic"
+    const val OPENAI_PROVIDER = "openai"
+    const val GEMINI_PROVIDER = "gemini"
+    const val API_ANTHROPIC = "anthropic"
+    const val API_OPENAI_CHAT = "openai_chat"
+    const val API_OPENAI_RESPONSES = "openai_responses"
+    const val API_GEMINI = "gemini"
+
+    private val all: List<Wire> by lazy { listOf(AnthropicWire, OpenAiChatWire, OpenAiResponsesWire, GeminiWire) }
+
+    /** The wire matching [path], if this build understands it. */
+    fun forPath(path: String): Wire? = all.firstOrNull { it.matches(path) }
 }
