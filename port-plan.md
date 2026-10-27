@@ -1259,3 +1259,20 @@ Next, in order:
   snapshot keys).
 - Deviation: tests/skill_listing.rs's proxy-capture half (axum + httpmock) is not ported; the measure is.
 - Next: the Stats and Skills pages (Kotlin/JS) and TUI tabs.
+## Session: otel part 2 — export.rs, `rtok otel flush|status`
+- `rtok.otel.Export` (export.rs): flush per stream past the watermarks (traces = ended sessions + calls, stopping in
+  front of an in-flight call; logs; metrics sums every flush), marks only on 2xx, a 404 stream skipped and not logged,
+  errors joined into one report line and one `logs` row; the cross-process flush lock (`rtok.otel-flush.lock`, blocking
+  flock via new rtok-sys `lockExclusive`) and the T143 queued slot (`flushCoalesced`, `queuedLockHeld`); `status`,
+  `statusJson` (model `otel_status`); `spawnChild` (detached `rtok otel flush --coalesce`) now wired as
+  `HookLinks.spawnOtelExport`; `FlushTrace` (`RTOK_OTEL_FLUSH_TRACE`). HTTP goes through `rtok.http.HttpClientFactory`
+  (KtorHttp by default), timeout `otel.flush_secs`.
+- `rtok otel flush [--coalesce]`, `rtok otel status [--json]` (`cli/OtelCmd.kt`).
+- Tests: ExportTest 20 (export.rs unit tests minus the 2 ticker ones, tests/otel.rs exporter tests against the scripted
+  `FakeHttp` collector, refused port and a never-answering loopback socket via the real client, coalesce back-off),
+  OtelCliSpec 2.
+- Deviations: `spawn_ticker` (periodic flush in proxy/mcp) not ported yet; `--coalesce` is visible in help (the CLI
+  model has no hidden flags); no "flushing telemetry…" spinner; `telemetry.sdk.language` = `kotlin`; the T143/T161
+  multi-process hook tests (spawned children, `.spawned` marker) not ported — `spawnDetached` returns no pid.
+- Stop point: next spawn_ticker wiring, model, report, completions, bench, demon, proxy batch tests, macOS/Linux split.
+  (worktree add/finish/whoami/clean/migrate and the hooks dispatcher tests moved to the second worker.)
