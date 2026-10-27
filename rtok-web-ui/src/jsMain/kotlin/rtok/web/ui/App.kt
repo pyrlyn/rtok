@@ -222,6 +222,7 @@ fun main() {
     Pages.register("hosts", HostsPage)
     Pages.register("services", ServicesPage)
     Pages.register("usage", UsagePage)
+    Pages.register("graph", GraphPage)
     Pages.register("doctor", pendingPage("doctor", "rtok doctor"))
     Pages.register("stats", pendingPage("stats", "rtok stats"))
     Pages.register("skills", pendingPage("skills", "rtok skills list"))
