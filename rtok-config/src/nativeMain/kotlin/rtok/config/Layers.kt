@@ -367,6 +367,9 @@ object Layers {
         return if (p.isEmpty()) null else buildJsonObject { put("proxy", p) }
     }
 
+    /** `rtok doctor --instructions`: `[doctor] instructions = true`. */
+    fun doctorFlags(instructions: Boolean): JsonObject? = if (instructions) buildJsonObject { put("doctor", buildJsonObject { put("instructions", true) }) } else null
+
     fun tuiFlags(
         tab: String?,
         tickSecs: ULong?,

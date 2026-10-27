@@ -1114,3 +1114,15 @@ Next, in order:
   ported: no `skills/` or `ketch.toml` in this repo; `hook_client_link_silences_the_advice` waits for
   `ensure_hook_client_link`).
 - Stop point: next doctor.rs part 2 (`page`, MCP server probe, proxy chain, read-share) + `rtok doctor` CLI.
+## Session: doctor.rs part 2 — page() and `rtok doctor`
+- `rtok.doctor.Page` (`page`: settings + plugin-carried hooks, MCP servers spawned through `Roundtrip` for tool counts
+  and description tokens, tool search, Anthropic and OpenAI proxy chains over `/health`, advice, overlaps, agents
+  module rows, hook and MCP checks, graph alerts and health, config notes), `McpServer`, `DoctorJson` (the serde
+  `--json` shape with its skips), `Layers.doctorFlags`, and `rtok doctor` (`--instructions`, `--json`, `--agent`,
+  `--fix` with `--yes`, `--dry-run`, `--stat`, `--only`, the checklist on a terminal).
+- Deviations: read-share and skill usage counts report "no data" until measure/transcript_cache.rs is ported (so the
+  read-share fraction test is not ported yet); no progress bar while MCP servers are probed; the proxy probe goes
+  through the `:http` client instead of a hand-rolled socket.
+- Tests: DoctorPageTest 12.
+- Stop point: next tasks, model, report, otel, completions, bench, demon, hooks dispatcher tests; worktree
+  add/finish/whoami/clean/migrate; transcript_cache (unblocks doctor read-share).
