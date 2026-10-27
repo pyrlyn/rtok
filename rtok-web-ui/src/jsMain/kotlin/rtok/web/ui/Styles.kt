@@ -373,4 +373,22 @@ private fun CssBuilder.fixStyles() {
     }
     rule(".diff .ok") { put("color", v("ok")) }
     rule(".diff .fail") { put("color", v("fail")) }
+    // Doctor.tsx: the hooks bars and the agents × modules grid.
+    rule(".bar-row") {
+        put("display", "grid")
+        put("grid-template-columns", "9rem 1fr 2rem")
+        put("gap", "0.5rem")
+        put("align-items", "center")
+    }
+    rule(".bar") {
+        put("height", "6px")
+        put("border-radius", "999px")
+        put("background", v("surface-2"))
+    }
+    rule(".bar .fill") {
+        put("height", "100%")
+        put("border-radius", "999px")
+        put("background", v("accent"))
+    }
+    rule(".modules") { put("grid-template-columns", "repeat(auto-fill, minmax(8rem, 1fr))") }
 }

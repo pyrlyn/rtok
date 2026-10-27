@@ -1,10 +1,11 @@
 // Port of web/src/pages/DoctorFix.tsx and the Doctor page's shell (T331.12): the "Fix selected" checklist `rtok doctor
 // --fix` shows in a terminal. The server builds the list, the defaults and the diff (DoctorWeb's plan and apply over
 // `/ws` `doctor`); this panel only sends what the user changed and writes nothing until the explicit confirm. The
-// report above it renders once the server sends the `doctor` field; until then it is the not-ready note.
+// report above it is Doctor.tsx: summary tiles, the checks and the Report's panels.
 package rtok.web.ui
 
 import kotlinx.html.FlowContent
+import kotlinx.html.b
 import kotlinx.html.button
 import kotlinx.html.checkBoxInput
 import kotlinx.html.div
@@ -192,9 +193,144 @@ private fun kotlinx.html.UL.fixRow(
     if (item.flag("can_keep")) act("Keep this copy", busy) { DoctorFixCard.dispatch(FixEvent.Keep(ref)) }
 }
 
-/** The Doctor page: the report (once the server sends it), then the fix panel. */
+/** Doctor.tsx `DoctorBody`: the summary tiles, the checks, the report's panels once it landed, then the fix panel. */
 val DoctorPage =
-    PageView { out, snap, app ->
-        pendingPage("doctor", "rtok doctor").render(out, snap, app)
+    PageView { out, snap, _ ->
+        val d = snap.obj("doctor")
+        val checks = doctorChecks(d, snap.flag("doctor_pending"))
+        out.div("grid kpis") { doctorSummary(checks).forEach { (s, n) -> kpi(s.second, n.toString(), s.first) } }
+        out.div("grid wide") {
+            panel("checks", "derived from the doctor report; it has no verdict of its own", cls = "span7") {
+                ul("fix-list") {
+                    checks.forEach { c ->
+                        li("check") {
+                            pill(toneOf(c.st), c.st)
+                            b { +" ${c.label}" }
+                            div("muted small") { +c.detail }
+                        }
+                    }
+                }
+            }
+            d?.let { reportPanels(it) }
+        }
         out.doctorFix()
+    }
+
+private fun FlowContent.reportPanels(d: JsonObject) {
+    panel("hooks", "${fmt(d.num("hooks_total"))} total", cls = "span5") {
+        val bars = hookBars(d)
+        if (bars.isEmpty()) p("muted") { +"No hooks installed." }
+        bars.forEach { (name, n, share) ->
+            div("bar-row small") {
+                span("muted") { +name }
+                div("bar") { div("fill") { attributes["style"] = "width:${share * PERCENT}%" } }
+                span { +fmt(n) }
+            }
+        }
+    }
+    panel("proxy chains", cls = "span5") {
+        chain("anthropic", d.str("proxy"))
+        chain("openai", d.str("proxy_openai"))
+        if (d.flag("mcp_tool_search_disabled")) {
+            val t = d.obj("mcp_tool_search")
+            p("small pill warn") { +"mcp_tool_search ${t?.str("state")} (${t?.str("source") ?: "default"})" }
+        }
+    }
+    val mcp = d.objects("mcp")
+    panel("MCP servers", "${mcp.size} probed", cls = "span7") {
+        if (mcp.isEmpty()) p("muted") { +"No MCP server probed." }
+        ul("fix-list") {
+            mcp.forEach { s ->
+                li {
+                    b { +(s.str("name") ?: "") }
+                    span("muted small") { +"  ${fmt(s.num("tools"))} tools · ~${fmt(s.num("desc_tokens"))} desc tok" }
+                    div("muted small") { +(s.str("cmd") ?: "") }
+                }
+            }
+        }
+    }
+    environment(d)
+    d.obj("instructions")?.let { i ->
+        panel("instructions", cls = "span7") {
+            ul("fix-list") {
+                i.objects("rows").forEach { r ->
+                    li {
+                        b { +(r.str("name") ?: "") }
+                        if (r.flag("warn")) pill("warn", "warn")
+                        span("muted small") { +"  ${fmt(r.num("tokens"))} tok" }
+                        div("muted small") { +(r.str("path") ?: "") }
+                    }
+                }
+            }
+        }
+    }
+    panel("agents × modules", cls = "span5") { agents(d.objects("agents")) }
+}
+
+private const val PERCENT = 100
+private const val BYTES_PER_TOKEN = 4
+
+private fun FlowContent.environment(d: JsonObject) =
+    panel("environment", cls = "span5") {
+        val rs = d.obj("read_share")
+        val skills = d.obj("skills")
+        kv(
+            listOf(
+                "BASH_MAX_OUTPUT_LENGTH" to { +(d.str("bash_max_output_length") ?: "(unset)") },
+                "autoCompactWindow" to { +(d.str("auto_compact_window") ?: "(unset)") },
+                "read share" to {
+                    if (rs == null) {
+                        +"-"
+                    } else {
+                        +"${pct(rs.num("share") ?: 0.0)} "
+                        span("muted") { +"grep ${compact(rs.num("grep_tokens"))} · glob ${compact(rs.num("glob_tokens"))} · read ${compact(rs.num("read_tokens"))}" }
+                    }
+                },
+                "skills desc bytes" to {
+                    val bytes = skills?.num("desc_bytes")
+                    if (bytes == null) {
+                        +"-"
+                    } else {
+                        +"${fmt(bytes)} "
+                        span("muted") { +"≈ ${fmt(kotlin.math.round(bytes / BYTES_PER_TOKEN))} tok per request" }
+                    }
+                },
+            ),
+        )
+    }
+
+private fun FlowContent.chain(
+    label: String,
+    chain: String?,
+) = div("row small") {
+    span("muted") { +"$label " }
+    val hops = chainHops(chain)
+    if (hops.isEmpty()) span("muted") { +"not set" }
+    hops.forEachIndexed { i, h ->
+        if (i > 0) span { +" → " }
+        pill("info", h)
+    }
+}
+
+private fun FlowContent.agents(agents: List<JsonObject>) =
+    ul("fix-list") {
+        agents.forEach { a ->
+            li {
+                p {
+                    b { +(a.str("host") ?: "") }
+                    span("muted") { +" ${a.str("kind") ?: ""}" }
+                }
+                div("grid modules") {
+                    MODULES.forEach { m ->
+                        val c = moduleCell(a, m)
+                        div("card small") {
+                            c.note?.let { attributes["title"] = it }
+                            span("muted") { +"$m " }
+                            pill(c.tone, c.text)
+                            c.note?.let { div("muted") { +it } }
+                        }
+                    }
+                }
+            }
+        }
     }

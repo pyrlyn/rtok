@@ -31,6 +31,7 @@ object Snapshot {
             val refIds = store?.let { s -> runCatching { s.archiveRefIds(calls.map { it.id }) }.getOrNull() }.orEmpty()
             val sessions =
                 store?.let { s -> runCatching { s.recentSessionTotals(0, Agents.SESSIONS_ROWS) }.getOrNull() }.orEmpty()
+            val (doctor, doctorPending) = DoctorPage.get(cfg)
             val fields =
                 mutableMapOf<String, JsonElement>(
                     "type" to JsonPrimitive("snapshot"),
@@ -45,15 +46,17 @@ object Snapshot {
                     "hosts" to JsonPrimitive(HostsPage.text(cfg)),
                     "agent_usage" to UsagePage.get(cfg).toJson(),
                     "config" to (ConfigPage.text(cfg)?.let(::JsonPrimitive) ?: JsonNull),
+                    "doctor" to (doctor ?: JsonNull),
+                    "doctor_pending" to JsonPrimitive(doctorPending),
                     // Not ported yet (docs/web.md step 4): rendered as "pending", never as a failure.
-                    "doctor" to JsonNull,
-                    "doctor_pending" to JsonPrimitive(true),
                     "stats" to JsonNull,
                     "junk" to (JunkPage.get(cfg)?.card ?: JsonNull),
                     "services" to JsonNull,
                     "worktrees" to JsonPrimitive(WorktreesPage.text()),
                 )
-            opened.exceptionOrNull()?.let { fields["error"] = JsonPrimitive(it.message ?: it.toString()) }
+            // mod.rs `snapshot`: a store that will not open wins; else a probe that landed without a report.
+            val err = opened.exceptionOrNull()?.let { it.message ?: it.toString() } ?: "doctor probe failed".takeIf { doctor == null && !doctorPending }
+            err?.let { fields["error"] = JsonPrimitive(it) }
             return sorted(JsonObject(fields)) as JsonObject
         } finally {
             store?.close()

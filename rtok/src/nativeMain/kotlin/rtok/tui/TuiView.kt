@@ -80,6 +80,8 @@ private fun page(
         // view.rs: the open checklist replaces the report; the cursor's row (two lines an item) stays in view.
         fix != null -> b.paragraph(r, fix, follow(1 + 2 * app.doctorFix.cursor, 0, r.h).coerceAtMost((fix.size - r.h).coerceAtLeast(0)))
 
+        app.page == "doctor" && app.actions != null -> doctor(b, r, app)
+
         junk != null -> junkPanel(b, r, app, junk)
 
         app.page == "graph" -> graphPage(b, r, app, clock)
@@ -181,5 +183,25 @@ private fun junkPanel(
             else -> Style(dim = true, bold = true)
         }
     val lines = listOf(listOf(Span(head, color))) + panel.second.lines().map { listOf(Span(it)) }
+    b.paragraph(r, lines, follow(app.cursor, 0, r.h).coerceAtMost((lines.size - r.h).coerceAtLeast(0)))
+}
+
+/**
+ * view.rs `doctor` (T15.6): the same text `rtok doctor` prints, from the report the snapshot's cache holds (no second
+ * probe); section heads (unindented lines) are bold. The snapshot carries the report as JSON for the web page, so the
+ * terminal reads the cached `Report` itself.
+ */
+private fun doctor(
+    b: Buffer,
+    r: Rect,
+    app: TuiApp,
+) {
+    val (report, pending) = rtok.model.DoctorPage.read(app.actions!!.cfg)
+    val lines =
+        when {
+            report != null -> report.toText().lines().map { listOf(Span(it, if (it.startsWith(" ")) tui.Style.Default else tui.Style(bold = true))) }
+            pending -> listOf(listOf(Span("running doctor…", MUTED)))
+            else -> listOf(listOf(Span("doctor did not answer this tick — `rtok doctor` has the details", MUTED)))
+        }
     b.paragraph(r, lines, follow(app.cursor, 0, r.h).coerceAtMost((lines.size - r.h).coerceAtLeast(0)))
 }
