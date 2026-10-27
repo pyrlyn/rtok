@@ -16,13 +16,6 @@ private val SURFACE_COLORS = listOf("var(--accent)", "var(--ok)", "var(--warn)")
 private const val SEC = 1000.0
 private const val TURNS = 40
 
-private fun hms(ts: Double): String {
-    val d = Date(ts * SEC)
-
-    fun pad(n: Int) = n.toString().padStart(2, '0')
-    return "${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}"
-}
-
 /** The Overview page. */
 val OverviewPage =
     PageView { out, snap, _ ->
