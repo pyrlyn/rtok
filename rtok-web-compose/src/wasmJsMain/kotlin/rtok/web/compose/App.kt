@@ -95,6 +95,9 @@ class AppState {
     /** The Doctor fix panel's controller. */
     val fix by lazy { FixController(this) }
 
+    /** The Graph drill-down's controller. */
+    val drill by lazy { DrillController(this).also { installExport() } }
+
     fun start() {
         window.addEventListener("popstate", {
             path = window.location.pathname
