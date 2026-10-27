@@ -10,6 +10,7 @@ import io.ktor.server.cio.CIO
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.request.httpMethod
 import io.ktor.server.request.path
+import io.ktor.server.request.queryString
 import io.ktor.server.request.receiveChannel
 import io.ktor.server.response.header
 import io.ktor.server.response.respondBytes
@@ -77,7 +78,7 @@ object KtorHttpServer : HttpServer {
                 .entries()
                 .groupBy({ it.key.lowercase() }, { it.value })
                 .mapValues { (_, v) -> v.flatten() }
-        return handler.handle(ServerRequest(call.request.httpMethod.value, call.request.path(), headers, body))
+        return handler.handle(ServerRequest(call.request.httpMethod.value, call.request.path(), headers, body, call.request.queryString().ifEmpty { null }))
     }
 
     private suspend fun respond(
