@@ -1264,6 +1264,11 @@ Next, in order:
 - Web/dashboard worker (worktree `~/Grok/rtok-web-dashboard`): web Graph page gaps (docs/web.md "Audit"), then
   worktree add/finish/whoami/clean run/migrate with their modules, and the hooks dispatcher tests. The main-port
   worker skips these.
+- Session (web/dashboard worker): `add.rs` (`Add.plan`/`landing`/`ensureIgnored`/`ensureRoom`/`run`, `Seams`, `Undo`),
+  claim.rs `add`/`add_with`/`copy_symbol_index` (`AddClaim.kt`), `whoami.rs` (`Whoami.kt`), `rtok worktree add|whoami`,
+  rtok-sys `freeBytes` (statvfs through the spawn cinterop). Tests: AddTest 6 (add.rs; Windows-only dropped), AddRunTest 5 own.
+  Not yet: `seed.rs` (`Seed.fromSiblings` is a no-op until the copy-on-write clone lands) and `task_list::write_for`
+  (the new worktree's task list id). Next: seed, task_list, finish, clean run, migrate, hooks dispatcher tests.
 ## Session: otel part 2 — export.rs, `rtok otel flush|status`
 - `rtok.otel.Export` (export.rs): flush per stream past the watermarks (traces = ended sessions + calls, stopping in
   front of an in-flight call; logs; metrics sums every flush), marks only on 2xx, a 404 stream skipped and not logged,
