@@ -1420,3 +1420,9 @@ Next, in order:
   frames the body it is given; the T205 `/health` polls reuse one client (a fresh client per poll churned sockets
   until connects were refused, unlike reqwest's pooled client).
 - Stop point: model, report, completions, bench, demon, macOS/Linux split.
+
+## Session: model/report.rs (report ledgers)
+- `rtok.model.ReportLedgers` (+ `ReportSections`): window, savings (net of `expand` cost, every plugin seen), top-ten
+  actionable sinks with their switch, per-surface p50/p95 (nearest rank) and hook events, cache busts by cause,
+  lane/tier cells, expand rate and cost; one store open. Tests: `report_pct_is_nearest_rank` plus a seeded read.
+- Stop point: src/report (markdown, html with the six `.snap` files, advice, ai, pdf), tests/report*.rs.
