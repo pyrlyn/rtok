@@ -1,4 +1,6 @@
 // Port of tests/worktree.rs (the list, gc and clean tests): `rtok worktree list|gc|clean` against real git repositories.
+@file:OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
+
 package rtok.e2e
 
 import io.kotest.core.spec.style.FunSpec
