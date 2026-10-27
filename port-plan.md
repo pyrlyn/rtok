@@ -1400,3 +1400,10 @@ Next, in order:
   session_start` is covered by the existing Retention tests. The tests/proxy*.rs integration suites (lanes, gate,
   flex, routing, cache replay, service tier, batch results, bench) are next.
 - Stop point: next tests/proxy*.rs, then model, report, completions, bench, demon, macOS/Linux split.
+
+## Session: proxy integration suites part 1 + `rtok proxy --dry-run` CLI spec
+- Ported tests/proxy_lanes.rs (3), proxy_lane_gate.rs (2), proxy_service_tier.rs (1), proxy_cache_replay.rs (2),
+  proxy_routing.rs (4), proxy_flex.rs (8), proxy_lane_policy.rs (8), proxy_batch_results.rs (6) onto `ProxyHarness`
+  (fake loopback upstreams: matched mocks, a held upstream, a scripted 429 upstream). `ProxyCliSpec`: `--dry-run`
+  prints the effective settings with flags applied; a bad `--port` fails.
+- Stop point: next tests/proxy.rs (35) and proxy_bench.rs (2), then model, report, completions, bench, demon, split.

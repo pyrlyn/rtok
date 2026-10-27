@@ -77,6 +77,10 @@ class Mock(
     val status: Int = ProxyHttp.OK,
     val headers: List<Pair<String, String>> = emptyList(),
     val chunks: List<String> = listOf(""),
+    /** Raw chunks instead of [chunks] (bytes that are not valid UTF-8). */
+    val bytes: List<ByteArray>? = null,
+    /** How long to wait before answering. */
+    val delayMs: Long = 0,
 ) {
     private val count = AtomicInt(0)
     val hits: Int get() = count.value
@@ -107,7 +111,9 @@ class FakeUpstream private constructor(
                 if (seen.compareAndSet(cur, cur + s)) break
             }
             val m = mocks.firstOrNull { it.accept(s) } ?: return StreamingResponse(NOT_FOUND)
-            return StreamingResponse(m.status, m.headers) { sink -> m.chunks.forEach { sink.write(it.encodeToByteArray()) } }
+            if (m.delayMs > 0) delay(m.delayMs)
+            val out = m.bytes ?: m.chunks.map { it.encodeToByteArray() }
+            return StreamingResponse(m.status, m.headers) { sink -> out.forEach { sink.write(it) } }
         }
     }
 
@@ -154,3 +160,14 @@ fun eventually(
         delay(POLL_MS)
     }
 }
+
+/** One request to [url] through a fresh client; any method, the body sent when non-empty. */
+fun call(
+    method: String,
+    url: String,
+    body: String = "",
+    vararg headers: Pair<String, String>,
+): rtok.http.HttpResponse =
+    rtok.http.ktor.KtorHttp(rtok.http.HttpSettings()).use { c ->
+        runBlocking { c.request(method, rtok.http.HttpRequest(url, headers.toList(), body.encodeToByteArray())) }
+    }
