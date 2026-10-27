@@ -63,6 +63,14 @@ class TuiApp(
     /** The Calls tab's open expand pane (`e`, T60.4), null when closed. */
     var expand: ExpandPane? = null
         private set
+
+    /** The Calls tab's detail pane (Enter/z, T15.5). */
+    var callsDetail = false
+        private set
+
+    /** The Sessions tab's detail pane (Enter, T60.3). */
+    var sessionsDetail = false
+        private set
     private val cursors = IntArray(TABS.size)
 
     val page: String get() = TABS[tab].first
@@ -97,10 +105,26 @@ class TuiApp(
         if (k == Key.Ctrl('c')) return Effect.QUIT
         val pageKeyed =
             when (page) {
-                "calls" -> calls(k)
-                "sessions" -> (k == Key.Char("l")).also { if (it) liveOnly = !liveOnly }
-                "config" -> configFilter.key(k)
-                else -> false
+                "calls" -> {
+                    calls(k)
+                }
+
+                // app.rs `sessions_key`: `l` toggles live-only, Enter the detail pane when rows exist.
+                "sessions" -> {
+                    when {
+                        k == Key.Char("l") -> true.also { liveOnly = !liveOnly }
+                        k == Key.Enter && rows() > 0 -> true.also { sessionsDetail = !sessionsDetail }
+                        else -> false
+                    }
+                }
+
+                "config" -> {
+                    configFilter.key(k)
+                }
+
+                else -> {
+                    false
+                }
             }
         return if (pageKeyed) Effect.NONE else rest(k)
     }
@@ -111,6 +135,7 @@ class TuiApp(
             expand?.key(k) == true -> true
             expand != null && (k == Key.Esc || k == Key.Char("e")) -> true.also { expand = null }
             k == Key.Char("e") -> true.also { openExpand() }
+            (k == Key.Enter || k == Key.Char("z")) && rows() > 0 -> true.also { callsDetail = !callsDetail }
             else -> false
         }
 
