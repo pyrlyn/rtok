@@ -44,7 +44,8 @@ class TuiFiltersTest {
 
     // view.rs `skills_tab_lists_three_rows_and_n_hides_invoked`.
     @Suppress("MagicNumber")
-    @Test fun skillsTabListsRowsAndNHidesInvoked() {
+    @Test
+    fun skillsTabListsRowsAndNHidesInvoked() {
         val a = TuiApp("skills")
         a.snapshot = snap("""{"skills":{"header":"","rows":[]}}""")
         assertTrue("no skills listed" in screen(a), "listing-empty, not stats-empty")

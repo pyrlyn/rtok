@@ -1,8 +1,8 @@
-@file:Suppress("MagicNumber")
-
 // Port of web/src/pages/Stats.tsx: the `stats` Snapshot field (`rtok stats --price` plus `--cache` as one text) parsed
 // into KPIs, the cost-per-model and cache-health tables and the busts, with the raw text one toggle away, plus the
 // savings trend from `usage.savings`.
+@file:Suppress("MagicNumber")
+
 package rtok.web.ui
 
 import kotlinx.html.FlowContent
