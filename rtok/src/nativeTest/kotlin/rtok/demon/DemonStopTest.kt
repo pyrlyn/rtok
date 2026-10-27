@@ -90,6 +90,18 @@ class DemonStopTest {
         }
     }
 
+    /** DemonE2eSpec flake: the supervisor counted a restart between stop's read and its TERM; stop left that state. */
+    @Test fun aStateTheSameSupervisorRewroteDuringStopIsRetired() {
+        val s = store("rewrite")
+        s.claim(Service.WEB)!!.use {
+            val st = state(4242, 4243, now())
+            s.write(st)
+            val p = Recorder(1000, listOf(4242, 4243), ignoresTerm = true, onPause = { s.write(st.copy(restarts = 1)) })
+            Demon(s, p) {}.stop(web, false)
+            assertFalse(exists(s.file(Service.WEB, "json")), "the same supervisor's newer state goes with it")
+        }
+    }
+
     @Test fun aSupervisorThatReleasedItsLockIsNotKilled() {
         val s = store("released")
         val lock = s.claim(Service.WEB)!!
