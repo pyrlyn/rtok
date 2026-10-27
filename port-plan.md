@@ -1474,3 +1474,9 @@ Next, in order:
   list / no-shell / dry-run trycmd cases; HOME and the XDG/ZDOTDIR/LOCALAPPDATA/SHELL overrides are isolated).
 - Stop point: `rtok man`, completions_shells.rs / completions_picker_pty.rs (need real shells / a pty), then
   bench, demon, macOS/Linux split.
+
+## Session: man pages
+- `rtok.man.Man` + `cli/ManCmd.kt`: `rtok man` prints `rtok.1`; `--dir` writes a page per command with `SEE ALSO`
+  to parent and children (src/man.rs). The roff follows clap_mangen's sections but is this port's own text, not
+  byte-identical (clap_mangen is a dependency the port does not take). Tests: ManTest (3).
+- Stop point: demon (src/demon.rs, tests/demon.rs), bench, macOS/Linux split.
