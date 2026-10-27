@@ -5,12 +5,10 @@ package rtok.web
 object EmbeddedAssets : Assets {
     private val files = HashMap<String, AssetFile>()
 
-    override fun read(name: String): AssetFile? {
-        val cached = files[name]
-        if (cached != null) return cached
-        val (chunks, etag) = EMBEDDED_UI[name] ?: return null
-        return AssetFile(chunks.joinToString("").encodeToByteArray(), etag).also { files[name] = it }
-    }
+    override fun read(name: String): AssetFile? =
+        files[name] ?: EMBEDDED_UI[name]?.let { (chunks, etag) ->
+            AssetFile(chunks.joinToString("").encodeToByteArray(), etag).also { files[name] = it }
+        }
 
     override fun placeholder() = "index.html" !in EMBEDDED_UI
 }
