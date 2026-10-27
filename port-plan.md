@@ -1098,3 +1098,9 @@ Next, in order:
 - Tests: FixTest 20 (fix.rs file-writing tests; the two proptests run as seeded 64-case loops, no property-test
   dependency). `FixMachine` is the shared in-memory machine (fix.rs `tests::Machine`) for the doctor web tests.
 - Stop point: next doctor web.rs, then doctor.rs + `rtok doctor` (--json, --fix).
+## Session: doctor — web.rs (the web page's --fix plan and apply)
+- `rtok.doctor.DoctorWeb` (`plan`, `apply` with the preview token, `prepare` keep swaps + toggles, `defaultOpts`,
+  `planHere`, `applyHere`) and the serializable `Ref`, `Selection`, `FixItem`, `FixPlan`, `Fixed` (snake_case JSON
+  names as in Rust). The web socket's `doctor` call can now be wired to it by the web worker.
+- Tests: DoctorWebTest 8 (web.rs 8).
+- Stop point: next doctor.rs + `rtok doctor` (--json, --fix).
