@@ -75,6 +75,15 @@ class TuiApp(
     /** The Hosts tab's clear-safe-junk panel. */
     val junk = TuiJunk()
 
+    /** The Doctor tab's `doctor --fix` checklist (T478); without writes (navigation tests) it never opens. */
+    var doctorFix = TuiDoctorFix(actions?.let { DoctorEngine.machine() })
+        private set
+
+    /** app.rs `set_doctor_engine`: tests run the checklist on an injected plan and write. */
+    fun doctorEngine(e: DoctorEngine) {
+        doctorFix = TuiDoctorFix(e)
+    }
+
     /** The Sessions tab shows only sessions still running (`l`, T60.10). */
     var liveOnly = false
         private set
@@ -290,8 +299,13 @@ class TuiApp(
 
     private fun rest(k: Key): Effect {
         val a = actions
-        val junkKeyed = if (page == "hosts" && a != null) junk.key(k, a) else Keyed.PASS
-        return when (junkKeyed) {
+        val keyed =
+            when {
+                page == "doctor" -> doctorFix.key(k, a?.cfg ?: rtok.config.Config())
+                page == "hosts" && a != null -> junk.key(k, a)
+                else -> Keyed.PASS
+            }
+        return when (keyed) {
             Keyed.TAKEN -> Effect.NONE
             Keyed.WROTE -> Effect.REFRESH
             Keyed.PASS -> (if (page == "plugins") plugins(k) else null) ?: global(k)

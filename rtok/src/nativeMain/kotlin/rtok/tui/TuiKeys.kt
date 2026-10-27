@@ -1,6 +1,6 @@
 // Port of src/tui/app.rs `KEYS` / `keys_for` and view.rs `render_help` (T60.8): the one key table the footer and the
 // `?` overlay render from, so no key hint is written twice. The Graph rows list the registry keys before the live
-// calls ones (Rust lists them first) so the footer keeps the page's actions on a narrow screen. The Doctor fix and Skills rows join when those pages do.
+// calls ones (Rust lists them first) so the footer keeps the page's actions on a narrow screen. The Skills rows join when that page does.
 package rtok.tui
 
 import tui.Buffer
@@ -29,6 +29,10 @@ val KEYS: List<Triple<String, String, String>> =
         Triple("sessions", "↑/↓", "move selection"),
         Triple("sessions", "Enter", "detail pane"),
         Triple("sessions", "l", "live-only filter"),
+        Triple("doctor", "f", "fix checklist"),
+        Triple("doctor", "Space", "select entry"),
+        Triple("doctor", "k", "keep this copy"),
+        Triple("doctor", "Enter/y", "apply selected (confirm)"),
         Triple("hosts", "c", "clear safe junk (plan)"),
         Triple("hosts", "y", "remove planned (confirm)"),
         Triple("hosts", "n/Esc", "decline"),

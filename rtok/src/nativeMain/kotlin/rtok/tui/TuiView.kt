@@ -75,9 +75,15 @@ private fun page(
     clock: (Double) -> String,
 ) {
     val junk = if (app.page == "hosts") app.actions?.let { app.junk.panel(it) } else null
+    val fix = if (app.page == "doctor") app.doctorFix.lines() else null
     when {
+        // view.rs: the open checklist replaces the report; the cursor's row (two lines an item) stays in view.
+        fix != null -> b.paragraph(r, fix, follow(1 + 2 * app.doctorFix.cursor, 0, r.h).coerceAtMost((fix.size - r.h).coerceAtLeast(0)))
+
         junk != null -> junkPanel(b, r, app, junk)
+
         app.page == "graph" -> graphPage(b, r, app, clock)
+
         else -> field(b, r, app, clock)
     }
 }
