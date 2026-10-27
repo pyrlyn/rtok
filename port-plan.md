@@ -1205,3 +1205,14 @@ Next, in order:
   (task_cli.rs export test, plus the Linear team check). FakeHttp gained `onIf` (httpmock `is_true`).
 - Stop point: next task MCP tools (MCP halves of task_cli.rs), sync.rs's GitHub read-only test; then model, report,
   otel, completions, bench, demon, hooks dispatcher tests, worktree add/finish/whoami/clean/migrate, proxy batch tests.
+
+## Session: tasks part 8 — task MCP tools (mcp/tasks.rs), MCP halves of task_cli.rs, sync.rs GitHub test
+- `rtok.mcp.TaskTools` (mcp/tasks.rs): the 12 `task_*` tools, listed after the agent tools and dispatched before the
+  rooted tools; config re-read for the cwd on every call; JSON identical to `rtok task … --json`.
+- `rtok mcp --call` now matches cli/mcp.rs: arguments in `--json` (was `--args`), text on stdout without a newline,
+  a tool failure printed on stdout with exit 1.
+- Tests: ServerTest +1 (task tools listed after the agent tools), TaskSyncTest +1 (`github_sync_only_reads`, FakeHttp),
+  TaskE2eSpec +1 (`mcp_tools_answer_like_the_cli`) and the MCP half of the markers test.
+- Deviations: `the_task_skill_names_exactly_these_tools` not ported — the Kotlin repo ships no `skills/` yet.
+- Stop point: next model, report, otel, completions, bench, demon, hooks dispatcher tests, worktree
+  add/finish/whoami/clean/migrate, proxy batch tests, macOS/Linux split.

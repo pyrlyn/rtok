@@ -43,7 +43,7 @@ val MCP =
         options =
             listOf(
                 OptSpec.Value("call", "Run one tool and print its result instead of serving", "TOOL"),
-                OptSpec.Value("args", "JSON arguments for --call", "ARGS"),
+                OptSpec.Value("json", "JSON arguments for `--call`", "ARGS"),
                 // T283.1
                 OptSpec.Value(
                     "host",
@@ -67,7 +67,7 @@ val MCP =
         val http = inv.value("http")
         if (http != null) {
             if (wrap.isNotEmpty()) throw CliFailure("rtok mcp --http serves rtok's own tools; it takes no subcommand or `--`")
-            if (name != null || inv.value("args") != null) throw CliFailure("rtok mcp --http cannot be used with --call or --args")
+            if (name != null || inv.value("json") != null) throw CliFailure("rtok mcp --http cannot be used with --call or --json")
             Http.serveBlocking(cfg, http.ifEmpty { cfg.mcp.http })
             return@CommandSpec
         }
@@ -78,7 +78,13 @@ val MCP =
         } else if (name == null) {
             Mcp.run(cfg)
         } else {
-            val raw = inv.value("args") ?: "{}"
-            inv.io.println(Mcp.call(cfg, name, StrictJson.parse(raw)))
+            val raw = inv.value("json") ?: "{}"
+            // cli/mcp.rs: the text either way, on stdout without a newline; a tool failure exits 1.
+            try {
+                inv.io.out(Mcp.call(cfg, name, StrictJson.parse(raw)))
+            } catch (e: rtok.mcp.ToolException) {
+                inv.io.out(e.message.orEmpty())
+                throw CliExit(1)
+            }
         }
     }
