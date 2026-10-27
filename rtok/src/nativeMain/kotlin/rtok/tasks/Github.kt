@@ -252,24 +252,29 @@ class GithubAdapter(
     override fun unlabelled() = issues(LABEL, "all").filter { it.taskId() == null }.map { Stray(it.title, it.htmlUrl, titleId(it.title)) }
 }
 
-/** `data` of a GraphQL answer; the server answers 200 with `errors` for a missing scope or an unknown project. */
+/**
+ * `data` of a GraphQL answer; the server answers 200 with `errors` for a missing scope or an unknown project.
+ * [path] is the endpoint under the client's base; [what] starts the message an `errors` answer bails with.
+ */
 internal fun graphql(
     http: RemoteHttp,
     query: String,
     variables: JsonObject,
+    path: String = "/graphql",
+    what: String = "GraphQL",
 ): JsonObject {
     val res =
         http.send(
             "POST",
-            "/graphql",
+            path,
             buildJsonObject {
                 put("query", query)
                 put("variables", variables)
             },
-        ) as? JsonObject ?: bail("GraphQL: unexpected answer")
+        ) as? JsonObject ?: bail("$what: unexpected answer")
     val errors = res["errors"] as? JsonArray
     if (!errors.isNullOrEmpty()) {
-        bail("GraphQL: " + errors.mapNotNull { ((it as? JsonObject)?.get("message") as? JsonPrimitive)?.content }.joinToString("; "))
+        bail("$what: " + errors.mapNotNull { ((it as? JsonObject)?.get("message") as? JsonPrimitive)?.content }.joinToString("; "))
     }
     return res["data"] as? JsonObject ?: JsonObject(emptyMap())
 }

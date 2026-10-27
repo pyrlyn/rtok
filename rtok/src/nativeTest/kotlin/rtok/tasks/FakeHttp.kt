@@ -30,6 +30,7 @@ class FakeHttp : HttpClient {
         val query: String?,
         val bodyHas: String?,
         val reply: (Call) -> HttpResponse,
+        val test: (Call) -> Boolean = { true },
     )
 
     private val routes = mutableListOf<Route>()
@@ -43,6 +44,14 @@ class FakeHttp : HttpClient {
         bodyHas: String? = null,
         reply: (Call) -> HttpResponse,
     ) = apply { routes.add(0, Route(method, path, query, bodyHas, reply)) }
+
+    /** Answer [method] [path] only for a call [test] accepts (httpmock's `is_true`); later routes win. */
+    fun onIf(
+        method: String,
+        path: String,
+        test: (Call) -> Boolean,
+        reply: (Call) -> HttpResponse,
+    ) = apply { routes.add(0, Route(method, path, null, null, reply, test)) }
 
     /** Calls to [method] [path] whose body contains [bodyHas]. */
     fun hits(
@@ -66,7 +75,7 @@ class FakeHttp : HttpClient {
     ): HttpResponse {
         val call = Call(method.uppercase(), req.url, req.headers, req.body.decodeToString())
         calls += call
-        val r = routes.firstOrNull { it.method == call.method && it.path == call.path && (it.query == null || it.query in call.query) && (it.bodyHas == null || it.bodyHas in call.body) }
+        val r = routes.firstOrNull { it.method == call.method && it.path == call.path && (it.query == null || it.query in call.query) && (it.bodyHas == null || it.bodyHas in call.body) && it.test(call) }
         return r?.reply?.invoke(call) ?: HttpResponse(404, """{"message":"no mock for ${call.method} ${call.path}"}""".encodeToByteArray())
     }
 
