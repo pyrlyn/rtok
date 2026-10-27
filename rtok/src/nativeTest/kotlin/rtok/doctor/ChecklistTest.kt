@@ -1,7 +1,7 @@
 @file:Suppress("MagicNumber")
 
 // The pure tests of src/doctor/fix.rs (`is_rtok_own`, `parse_path`) and the checklist (checklist.rs) over scripted
-// answers; the file-writing fix.rs tests land with the rest of fix.rs.
+// answers; the file-writing fix.rs tests are in FixTest.
 
 package rtok.doctor
 

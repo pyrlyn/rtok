@@ -1090,3 +1090,11 @@ Next, in order:
   file-writing fix.rs tests land with the rest of fix.rs).
 - Stop point: next fix.rs rest (`Writer` backup + atomic swap, `fix_found`, `fix_file`, `render`, `interactive`), web.rs,
   then doctor.rs + `rtok doctor`.
+## Session: doctor — fix.rs rest (backup + atomic write, per-file apply, report, interactive)
+- `rtok.doctor.Writer` + `RealWriter` (probe.rs: `rtok-agent-sdk` `backup` then `writeAtomic`), `Outcome`, `FileFix`,
+  `FixReport` (`exitCode`), `FixOpts`; `Fix.removeEntries`, `hookList`, `edit`/`editHooks` (the re-parse check),
+  `fixBroken`, `fixFor`, `candidates`, `fixFound` (broken copies keep the extras, refusals), `fixFile` (re-read before
+  the write, backup, swap), `refusals`, `diffs`, `label`, `render` (`--stat` aware), `run`, `interactive`.
+- Tests: FixTest 20 (fix.rs file-writing tests; the two proptests run as seeded 64-case loops, no property-test
+  dependency). `FixMachine` is the shared in-memory machine (fix.rs `tests::Machine`) for the doctor web tests.
+- Stop point: next doctor web.rs, then doctor.rs + `rtok doctor` (--json, --fix).
