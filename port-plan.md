@@ -1504,8 +1504,9 @@ Next, in order:
   that returns the pid.
 - Tests: DemonE2eSpec (6), tests/demon.rs on the real binary in a sandbox home; the proxy check uses a local
   port derived from the pid. `Sandbox.rtok` takes extra env.
-- Deviations: `upgrade`/`supervise` are listed in help (the spec has no hidden flag); the hook-resident socket
-  e2e check is not ported (sandbox paths exceed the Unix socket limit); output is unstyled.
+- Deviations: `upgrade`/`supervise` are listed in help (the spec has no hidden flag); output is unstyled. The hook-resident
+  socket check (DemonE2eSpec, 7th) runs on a short `/tmp/rtd-<pid>` RTOK_HOME, because sandbox paths exceed the
+  Unix socket limit; rtok-e2e now depends on :rtok-hook for `endpoint`/`connect`.
 - Stop point: bench, macOS/Linux split.
 
 ## Session: bench (default + graph suites)
