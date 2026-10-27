@@ -200,9 +200,17 @@ fun tempDir(): String = (getenv("TMPDIR")?.toKString() ?: "/tmp").trimEnd('/')
 
 fun pid(): Int = getpid()
 
-/** Entry names of a directory (no `.`/`..`), unsorted like `std::fs::read_dir`. */
-fun listDir(path: String): List<String> {
-    val d = opendir(path) ?: throw IoException(IoException.Kind.NotFound, "cannot read dir $path")
+/** Entry names of a directory (no `.`/`..`), unsorted like `std::fs::read_dir`; every failure reads as NotFound. */
+fun listDir(path: String): List<String> = openDir(path) { IoException.Kind.NotFound }
+
+/** [listDir] whose failure carries the errno's kind (`io::Error::kind`), for walks that tell a denied read apart. */
+fun readDir(path: String): List<String> = openDir(path, ::ioKind)
+
+private fun openDir(
+    path: String,
+    kind: (Int) -> IoException.Kind,
+): List<String> {
+    val d = opendir(path) ?: throw IoException(kind(errno), "cannot read dir $path")
     val out = ArrayList<String>()
     try {
         while (true) {
@@ -215,6 +223,15 @@ fun listDir(path: String): List<String> {
     }
     return out
 }
+
+/** `io::Error::kind` of an errno. */
+fun ioKind(err: Int): IoException.Kind =
+    when (err) {
+        ENOENT, ENOTDIR -> IoException.Kind.NotFound
+        EACCES, EPERM -> IoException.Kind.PermissionDenied
+        EINVAL -> IoException.Kind.InvalidInput
+        else -> IoException.Kind.Other
+    }
 
 /** `$HOME`, as `std::env::home_dir` reads it first. */
 fun homeDir(): String? =
