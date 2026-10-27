@@ -1,6 +1,6 @@
 // Port of src/tui/app.rs, first slice: the pure state of `rtok tui` (tab, row cursors, help) over the same
 // snapshot `rtok web` serves, the global keys, the Plugins toggle (T15.4) and the Hosts junk panel (T479). Doctor
-// fix, filters and drill follow.
+// fix and drill follow; the filters and the Calls expand pane live in TuiFilters.kt.
 package rtok.tui
 
 import kotlinx.serialization.json.JsonArray
@@ -52,6 +52,17 @@ class TuiApp(
 
     /** The Hosts tab's clear-safe-junk panel. */
     val junk = TuiJunk()
+
+    /** The Sessions tab shows only sessions still running (`l`, T60.10). */
+    var liveOnly = false
+        private set
+
+    /** The Config tab's `/` filter (T228). */
+    val configFilter = LineFilter()
+
+    /** The Calls tab's open expand pane (`e`, T60.4), null when closed. */
+    var expand: ExpandPane? = null
+        private set
     private val cursors = IntArray(TABS.size)
 
     val page: String get() = TABS[tab].first
@@ -61,7 +72,9 @@ class TuiApp(
     val cursor: Int get() = cursors[tab].coerceIn(0, (rows() - 1).coerceAtLeast(0))
 
     /** Rows the current tab lists (the cursor's range). */
-    fun rows(): Int =
+    fun rows(): Int = if (page == "sessions") sessionRows().size else fieldRows()
+
+    private fun fieldRows(): Int =
         when (val v = snapshot[field]) {
             is JsonArray -> v.size
             is kotlinx.serialization.json.JsonPrimitive -> if (v.isString) v.content.lines().size else 0
@@ -75,17 +88,46 @@ class TuiApp(
     }
 
     private fun move(d: Int) {
+        if (page == "calls") expand = null
         cursors[tab] = (cursor + d).coerceIn(0, (rows() - 1).coerceAtLeast(0))
     }
 
     /** app.rs `key`: Ctrl+C / q / Esc quit, ←/→ (Tab, Shift+Tab) wrap, 1..9 jump, `?` help, `r` re-read, rows move. */
     fun key(k: Key): Effect {
+        if (k == Key.Ctrl('c')) return Effect.QUIT
+        val pageKeyed =
+            when (page) {
+                "calls" -> calls(k)
+                "sessions" -> (k == Key.Char("l")).also { if (it) liveOnly = !liveOnly }
+                "config" -> configFilter.key(k)
+                else -> false
+            }
+        return if (pageKeyed) Effect.NONE else rest(k)
+    }
+
+    /** app.rs `calls_key` with the pane keys: `e` opens / closes, Esc closes, the pane takes `/` and ↑/↓. */
+    private fun calls(k: Key): Boolean =
+        when {
+            expand?.key(k) == true -> true
+            expand != null && (k == Key.Esc || k == Key.Char("e")) -> true.also { expand = null }
+            k == Key.Char("e") -> true.also { openExpand() }
+            else -> false
+        }
+
+    /** app.rs `open_expand`: the selected call's archive through `expand_payload`; nothing when it has none. */
+    private fun openExpand() {
+        val row = (snapshot["calls"] as? JsonArray)?.getOrNull(cursor) as? JsonObject ?: return
+        val ref = (snapshot["ref_ids"] as? JsonObject)?.s(row["id"].toString().trim('"')) ?: return
+        actions?.expand(ref)?.let { expand = ExpandPane(ref, it) }
+    }
+
+    private fun rest(k: Key): Effect {
         val a = actions
-        val junkKeyed = if (k != Key.Ctrl('c') && page == "hosts" && a != null) junk.key(k, a) else Keyed.PASS
+        val junkKeyed = if (page == "hosts" && a != null) junk.key(k, a) else Keyed.PASS
         return when (junkKeyed) {
             Keyed.TAKEN -> Effect.NONE
             Keyed.WROTE -> Effect.REFRESH
-            Keyed.PASS -> (if (page == "plugins" && k != Key.Ctrl('c')) plugins(k) else null) ?: global(k)
+            Keyed.PASS -> (if (page == "plugins") plugins(k) else null) ?: global(k)
         }
     }
 
