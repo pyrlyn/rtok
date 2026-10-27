@@ -22,5 +22,8 @@
 - Snapshot tests use `pyrlyn.snapshot:snapshot` (`../../packages/kotlin-snapshot`); see
   docs/testing.md "Snapshot tests".
 
+## Native C
+- Keep [docs/c-code.md](docs/c-code.md) current: update it whenever own C code or a C library is added or removed.
+
 ## Git
 - Commit locally in small green steps. Do not push `main` and never force-push; every change ends in a PR.
