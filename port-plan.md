@@ -1012,3 +1012,11 @@ Next, in order:
 - Tests: OriginTest 3, WorktreeListTest 6 (the list.rs tests not already in CleanTest).
 - Stop point: next ops.rs, remove.rs, gc.rs, claim/adopt, the `rtok worktree` CLI; then junk_worktrees +
   `agent_worktrees`, the rest of phase 10.
+## Session: worktree 3 — claim.rs (without `add`)
+- `rtok.worktree.Claim` (`Held`, `heldAgainst` with T527's stale holder, `caller` with T973's provider/model refusal,
+  `owner`, `run`/`bind`/`bindUnattended`, `staleLock` = gc.rs `stale_lock`), `ClaimStore` (`remember` with T934's
+  retries, `release`, `completePending`, `registerProject`), `Adopted`, `WorktreeException`. `add`/`add_with` move to
+  the add.rs PR. Test helper `holdWriteLock` (store `hold_write_lock`, Immediate).
+- Tests: ClaimTest 8 (claim.rs tests 5 + lock_tests 3).
+- Stop point: next remove.rs, gc.rs, ops.rs, the `rtok worktree` CLI (list/claim/adopt/remove/gc); then add.rs,
+  junk_worktrees + `agent_worktrees`, the rest of phase 10.
