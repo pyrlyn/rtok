@@ -36,3 +36,24 @@ class Mutex {
         }
     }
 }
+
+/**
+ * Whether another open file description holds an exclusive flock on the existing [path] (`File::try_lock` probe as
+ * junk_kinds.rs `lock_held`): opened read-write, falling back to read-only; a lock taken here is released at once.
+ * @throws IoException when the file cannot be opened or locked for another reason.
+ */
+fun lockHeld(path: String): Boolean {
+    var fd = open(path, O_RDWR)
+    if (fd < 0) fd = open(path, O_RDONLY)
+    if (fd < 0) throw IoException(ioKind(errno), "open $path: errno $errno")
+    try {
+        if (flock(fd, LOCK_EX or LOCK_NB) == 0) return false
+        if (errno == EWOULDBLOCK) return true
+        throw IoException(ioKind(errno), "flock $path: errno $errno")
+    } finally {
+        close(fd)
+    }
+}
+
+/** `rtok_sys::process_alive`: a signal-0 probe of a positive [pid]. */
+fun processAlive(pid: Int): Boolean = pid > 0 && kill(pid, 0) == 0
