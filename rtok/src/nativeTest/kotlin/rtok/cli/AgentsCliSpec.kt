@@ -20,7 +20,7 @@ private fun windsurfHome(home: String): String {
 
 class AgentsCliSpec :
     FunSpec({
-        tags(Cli)
+        tags(Cli, Agents)
         test("install, info and uninstall write and read Windsurf's MCP entry") {
             withHome("agents-install") { home ->
                 val file = windsurfHome(home)

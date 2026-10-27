@@ -41,3 +41,22 @@ plugins.withType<org.jetbrains.kotlin.gradle.targets.js.yarn.YarnPlugin> {
         lockFileDirectory = layout.buildDirectory.dir("kotlin-js-store").get().asFile
     }
 }
+
+// Test commands (docs/testing.md "Agent tests"): `agentTest` = agent tests only (default while working on
+// agents), `testNoAgents` = everything except them, `fullTest` = the whole suite (same as the merge gate).
+tasks.register("agentTest") {
+    group = "verification"
+    description = "Runs only the agent tests (:rtok:agentTest)."
+    dependsOn(":rtok:agentTest")
+}
+tasks.register("testNoAgents") {
+    group = "verification"
+    description = "Runs every test except the agent tests: unit tests of all modules, :rtok unit+CLI without agents, e2e."
+    dependsOn(":rtok:noAgentTest", ":rtok-e2e:e2eTest")
+    subprojects.filter { it.path != ":rtok" }.forEach { p -> dependsOn(p.tasks.matching { it.name == "macosArm64Test" }) }
+}
+tasks.register("fullTest") {
+    group = "verification"
+    description = "Runs the whole suite including the agent tests (macosArm64Test cliTest e2eTest)."
+    subprojects.forEach { p -> dependsOn(p.tasks.matching { it.name == "macosArm64Test" || it.name == "cliTest" || it.name == "e2eTest" }) }
+}

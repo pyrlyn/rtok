@@ -57,6 +57,20 @@ Each group is its own Gradle task and can run alone:
 | e2e | `./gradlew e2eTest` | `:rtok-e2e` Kotest specs against the linked `rtok.kexe` |
 | wasm | `./gradlew wasmTest` | `:rtok-wasm` (WASM plugin host behind our `WasmRuntime` interface; the Chasm adapter joins it) |
 
+## Agent tests
+Agent tests = agent-install / host-app behaviour of `:rtok`: package `rtok.agents.*`, `rtok.model.AgentsTest`
+and the CLI spec `rtok.cli.AgentsCliSpec`. Kotest specs among them carry the `Agents` tag
+(`rtok/cli/CliTag.kt`); the selection is by Gradle filter + `KOTEST_TAGS`, tests are not moved.
+
+| Command | What runs |
+|---|---|
+| `./gradlew agentTest` | only the agent tests (`:rtok:agentTest`, `KOTEST_TAGS=Agents`). **Default while working on agent code** — run only this, not the full suite |
+| `./gradlew testNoAgents` | everything except the agent tests: `:rtok:noAgentTest` (unit + CLI, `KOTEST_TAGS=!Agents`), `macosArm64Test` of the other modules, `e2eTest` |
+| `./gradlew fullTest` | the whole suite incl. agents (`macosArm64Test cliTest e2eTest`); still the merge gate |
+
+`macosArm64Test` and `cliTest` keep including the agent tests. Nightly: `.github/workflows/agent-tests-nightly.yml`
+runs `./gradlew agentTest` at 03:00 UTC (05:00 Kyiv in winter, 06:00 in summer) and on `workflow_dispatch`.
+
 `./gradlew build` runs unit + CLI (`check` depends on `cliTest`); e2e and wasm stay explicit.
 Kotest on Native ignores Gradle's test filter, so a new CLI spec must call `tags(Cli)`.
 

@@ -7,7 +7,7 @@ Excluded by design: the TUI (`rtok tui`) and web UI (`rtok web`, `rtok dashboard
 
 Toolchain: `mise install` (JDK, Kotlin, Gradle, Rust, cmake, tree-sitter CLI; see [docs/toolchain.md](docs/toolchain.md)).
 
-Build & test (macOS arm64): `./gradlew macosArm64Test` · binary: `./gradlew :rtok:linkReleaseExecutableMacosArm64`
+Build & test (macOS arm64): `./gradlew macosArm64Test`; agent work: `./gradlew agentTest` (default while working on agents), without agents: `./gradlew testNoAgents`, everything: `./gradlew fullTest` (docs/testing.md) · binary: `./gradlew :rtok:linkReleaseExecutableMacosArm64`
 → `rtok/build/bin/macosArm64/releaseExecutable/rtok.kexe`. Other targets: `-Prtok.allTargets=true`.
 
 Docs: [build speed](docs/build-speed.md) · [token estimator](docs/tokens.md) · [modes](docs/modes.md) · [log](docs/log.md) · [project root](docs/config-root.md) · [hook protocol](docs/hook-protocol.md) · [toolchain](docs/toolchain.md).
