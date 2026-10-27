@@ -1,6 +1,5 @@
 // Port of src/cli/agents.rs and cli/agents_host.rs (host side): `rtok agents install|uninstall|remove|update|list|info`.
-// Not ported yet: `--project`, the
-// desktop restart behind `--no-restart` (accepted, nothing to skip yet). The junk commands are in AgentsJunkCmd.kt.
+// Not ported yet: the desktop restart behind `--no-restart` (accepted, nothing to skip yet). The junk commands are in AgentsJunkCmd.kt.
 package rtok.cli
 
 import kotlinx.cinterop.toKString
@@ -59,7 +58,16 @@ private fun hostWriter(
 ): CommandSpec {
     val flags =
         if (remove) {
-            listOf(DRY_RUN, NO_RESTART, OptSpec.Flag("yes", "Also remove what asks first (a linked plugin, an edited copy)"), STAT)
+            listOf(
+                DRY_RUN,
+                NO_RESTART,
+                OptSpec.Flag("yes", "Also remove what asks first (a linked plugin, an edited copy)"),
+                OptSpec.Flag(
+                    "project",
+                    "Take rtok out of the project's post-create script (`cursor`, `kilo`, `windsurf`, `devin`) instead of the host's config",
+                ),
+                STAT,
+            )
         } else {
             listOf(
                 DRY_RUN,
@@ -72,6 +80,11 @@ private fun hostWriter(
                 DESKTOP,
                 ALL,
                 NO_RESTART,
+                OptSpec.Flag(
+                    "project",
+                    "Add rtok to the project's post-create script, so a worktree the host makes joins rtok " +
+                        "(`cursor`, `kilo`, `windsurf`, `devin`); run it inside the repository",
+                ),
                 STAT,
             )
         }
@@ -92,6 +105,7 @@ private fun hostWriter(
                     else -> Mode.Install
                 }
             val cfg = Config.loadWith(inv.configFile, overlay)
+            if (inv.flag("project")) return@write AgentsCommand.installProject(cfg, inv.requireArg("host"), remove)
             AgentsCommand.install(cfg, inv.requireArg("host"), mode, inv.flag("cli"), inv.flag("desktop"), inv.flag("all"))
         }
     }

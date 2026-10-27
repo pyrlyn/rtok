@@ -1,6 +1,6 @@
 // Port of src/agents/command.rs host install side (`parse_hosts`, `install`, `update`, `apply_hosts`) and
 // cli/agents_host.rs `setup_flags`. Not ported yet: the desktop restart (restart.rs, T141), asking for a missing
-// host's path on a terminal (locate.rs `ask_missing`, T966) and `--project` (post_create.rs, T289.3).
+// host's path on a terminal (locate.rs `ask_missing`, T966). `--project` is PostCreate.kt.
 package rtok.agents
 
 import kotlinx.serialization.json.JsonArray
@@ -61,6 +61,21 @@ object AgentsCommand {
         all: Boolean,
         env: AgentsRun.Env = AgentsRun.Env(),
     ): AgentsOutput = applyHosts(cfg, Request(parseHosts(host), mode, cli, desktop, all || mode == Mode.Remove), env) {}
+
+    /** T289.3 `--project`: the post-create entries of the checkout around [cwd] (a linked worktree gets its own). */
+    fun installProject(
+        cfg: Config,
+        host: String,
+        remove: Boolean,
+        cwd: String = rtok.sys.cwd(),
+    ): AgentsOutput {
+        val hosts = parseHosts(host)
+        val root =
+            rtok.config.ProjectRoot
+                .find(cwd)
+                ?.checkout ?: throw AgentsFailure("--project: run it inside the project's git repository")
+        return AgentsOutput(PostCreate.run(cfg, hosts, remove, root))
+    }
 
     /** `rtok agents update`: the named hosts, else every host with rtok in it. */
     fun update(
