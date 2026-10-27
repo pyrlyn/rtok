@@ -1382,3 +1382,19 @@ Next, in order:
 
 ### Session: http streaming (additive)
 - `:http` StreamingHttpClient/StreamedResponse, `:http-server` StreamingHttpServer/StreamingHandler/BodySink; Ktor adapters (no redirects on stream, unserialized CIO server, 413 on maxBody). Existing APIs unchanged.
+
+## Session: proxy server — mod.rs, cli.rs, flex::send, `rtok proxy`, tests/batch_cli.rs
+- `rtok.proxy.ProxyState` (lane clients/upstreams/gates, plain mode, semantic cache behind a Mutex, summary queue),
+  `ProxyHandler` (`/health`, loopback-only `/live`, forward fallback; concurrent on `StreamingHttpServer`),
+  `Shape` (route, record, compress + noise, prepare, context edits, tools rewrite, Flex), `Ledger` (record, usage,
+  finish, cache hit), `Forward` (flex send loop + tee: chunks reach the client as they arrive, a capped copy feeds
+  the ledger after the stream), `ProxyHttp` (hops T442, hop-by-hop, Batch/Files split, peer check, error bodies),
+  `ProxyServer` (retention + OTel ticker wired) and `rtok proxy` (`--port/--upstream/--mode/--dry-run`).
+- Tests: mod.rs/cli.rs cases (batch paths, loopback peers, hops incl. 508, log funnel, cache off/on, compress noise,
+  base path, query key kept out of errors and logs) plus SSE streaming with usage; tests/batch_cli.rs (3 cases)
+  through a real proxy against fake loopback upstreams (`ProxyHarness`).
+- Deviations: the request body is read by the server before the lane gate (Rust takes the slot first); the
+  transport error text is scrubbed of the URL query instead of reqwest's `without_url`; `retention_runs_on_proxy_
+  session_start` is covered by the existing Retention tests. The tests/proxy*.rs integration suites (lanes, gate,
+  flex, routing, cache replay, service tier, batch results, bench) are next.
+- Stop point: next tests/proxy*.rs, then model, report, completions, bench, demon, macOS/Linux split.
