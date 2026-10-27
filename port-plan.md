@@ -1269,6 +1269,11 @@ Next, in order:
   rtok-sys `freeBytes` (statvfs through the spawn cinterop). Tests: AddTest 6 (add.rs; Windows-only dropped), AddRunTest 5 own.
   Not yet: `seed.rs` (`Seed.fromSiblings` is a no-op until the copy-on-write clone lands) and `task_list::write_for`
   (the new worktree's task list id). Next: seed, task_list, finish, clean run, migrate, hooks dispatcher tests.
+- Session (web/dashboard worker): `seed.rs` (`Seed.run`/`positions`/`freshest`/`fromSiblings`; `--no-seed` now skips a
+  real seed) on rtok-sys `cloneTree`/`Cloned` (fs-kit `clone_tree`: APFS `clonefile`, Linux `FICLONE`, else a full
+  copy; links kept, mtimes kept; C helper `rtok_clone_or_copy` in librtok_spawn.a), and `agents/task_list.rs`
+  (`TaskList.writeFor`, called by `rtok worktree add`; the MCP `worktree_add` call lands with the MCP worktree tools).
+  Tests: SeedTest 4, TaskListTest 5 (all Rust cases). Next: finish, clean run, migrate, hooks dispatcher tests.
 ## Session: otel part 2 — export.rs, `rtok otel flush|status`
 - `rtok.otel.Export` (export.rs): flush per stream past the watermarks (traces = ended sessions + calls, stopping in
   front of an in-flight call; logs; metrics sums every flush), marks only on 2xx, a 404 stream skipped and not logged,

@@ -8,4 +8,7 @@ int rtok_current_exe(char *buf, unsigned int size);
 #include <spawn.h>
 /* posix_spawn_file_actions_addchdir_np (macOS 10.15+, glibc 2.29+): the child starts in `dir`; 0 on success. */
 int rtok_spawn_addchdir(posix_spawn_file_actions_t *actions, const char *dir);
+/* Copy-on-write clone of the regular file `from` to the new path `to` where the volume can make one (APFS clonefile,
+   Linux FICLONE), else a full copy: 1 cloned, 0 copied, -1 with errno set (reflink_copy::reflink_or_copy). */
+int rtok_clone_or_copy(const char *from, const char *to);
 #endif
