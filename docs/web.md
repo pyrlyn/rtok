@@ -36,8 +36,9 @@ Previously excluded from the port (port-plan.md); now in progress in small steps
 - Step 4, slice 6: `hosts` (`agents list` blocks through a `Background` worker cache, 30 s TTL; the junk
   section reads "measuring folders…" until the junk port lands).
 - Step 4, slice 7: `agent_usage` (`agents usage` text and JSON rows, read off the tick, 120 s TTL).
-  Still to come: `tasks`; then `skills`, `stats`, `services`, `worktrees`, `doctor` and `junk`,
-  which wait for the `doctor`, `stats`, `demon`/`otel`, `worktree list` and `junk` ports.
+- Step 4, slice 8: `worktrees` (`worktree list` table, 300 s `WORKTREES_TTL` worker cache) and `junk` (one cached
+  `agents junk` report: the Hosts page's junk section text and the `JunkCard` JSON, same TTL).
+  Still to come: `tasks`, `skills`, `stats`, `doctor`, waiting for their ports.
 - Step 5, slice 1: `rtok.web.Answer` replies to `expand` and `set` (allowlisted `plugins.<id>.enabled`, config
   reloaded for the next snapshot), tags replies with `req` (T623), and answers malformed requests with Rust's notices.
 - Step 5, slice 2: `rtok.web.GraphAnswer` answers the graph page: `project` (select, link/unlink, reindex on the
@@ -62,7 +63,8 @@ Previously excluded from the port (port-plan.md); now in progress in small steps
   symbols), the live graph-calls feed (`{"calls":{"subscribe":...}}` while the Graph page is open) and the
   command palette with `g <key>` shortcuts. Doctor, Stats, Skills, Worktrees, Tasks and the Hosts junk card
   show "not ready" while the server sends null for their field.
-- Step 6, next: full Doctor (plan/fix), Stats, Skills, Worktrees, Tasks and Junk views once their backends
+- Step 6, part 2: the Worktrees page (Worktrees.tsx: state filter, search, totals).
+- Step 6, next: full Doctor (plan/fix), Stats, Skills, Tasks and the Hosts junk card with its clear button once their backends
   reach the snapshot; Graph 2D force layout, drill, compare, export/import. Pure logic goes to commonMain so
   the native gate tests it.
 - Step 7, part 1: `libs/tui` (`:tui`), no dependencies: styles/SGR, display width, a cell buffer with

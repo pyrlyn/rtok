@@ -49,9 +49,9 @@ object Snapshot {
                     "doctor" to JsonNull,
                     "doctor_pending" to JsonPrimitive(true),
                     "stats" to JsonNull,
-                    "junk" to JsonNull,
+                    "junk" to (JunkPage.get(cfg)?.card ?: JsonNull),
                     "services" to JsonNull,
-                    "worktrees" to JsonNull,
+                    "worktrees" to JsonPrimitive(WorktreesPage.text()),
                 )
             opened.exceptionOrNull()?.let { fields["error"] = JsonPrimitive(it.message ?: it.toString()) }
             return sorted(JsonObject(fields)) as JsonObject
