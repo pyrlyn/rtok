@@ -23,6 +23,7 @@ import rtok.sys.*
 private const val ME = "Claude Code / sonnet"
 private const val BIN = 4096
 private const val REPORT = 100
+private const val W = "worktree"
 private const val STALE_SECS = 3 * 86_400L
 private const val NANOS = 1_000_000_000L
 private const val TAG = "Signature: 8a477f597d28d172789f06886806bc55\n"
@@ -50,7 +51,10 @@ private fun Sandbox.json(
     return Json.parseToJsonElement(p.out).jsonArray
 }
 
-private fun JsonArray.byName(name: String): JsonObject = map { it.jsonObject }.firstOrNull { it["path"]!!.jsonPrimitive.content.endsWith("/$name") } ?: error("$name missing in $this")
+private fun JsonArray.byName(
+    name: String,
+    key: String = "path",
+): JsonObject = map { it.jsonObject }.firstOrNull { it[key]!!.jsonPrimitive.content.endsWith("/$name") } ?: error("$name missing in $this")
 
 private fun JsonElement?.str() = (this as JsonPrimitive).content
 
@@ -260,19 +264,19 @@ class WorktreeE2eSpec :
                     val rows = s.json(work, "worktree", "clean", "--json")
                     val all = listOf("work", "wt-idle", "wt-fresh", "wt-orphan")
                     rows.size shouldBe all.size
-                    rows.byName("work")["action"].str() shouldBe "keep"
-                    rows.byName("work")["note"].str() shouldContain "runs from"
-                    rows.byName("wt-idle")["action"].str() shouldBe "clean"
-                    rows.byName("wt-idle")["cache"].str() shouldBe "target"
-                    rows.byName("wt-idle")["bytes"]!!.jsonPrimitive.long shouldBe bytes
-                    rows.byName("wt-fresh")["action"].str() shouldBe "keep"
-                    rows.byName("wt-orphan")["action"].str() shouldBe "clean"
+                    rows.byName("work", W)["action"].str() shouldBe "keep"
+                    rows.byName("work", W)["note"].str() shouldContain "runs from"
+                    rows.byName("wt-idle", W)["action"].str() shouldBe "clean"
+                    rows.byName("wt-idle", W)["cache"].str() shouldBe "target"
+                    rows.byName("wt-idle", W)["bytes"]!!.jsonPrimitive.long shouldBe bytes
+                    rows.byName("wt-fresh", W)["action"].str() shouldBe "keep"
+                    rows.byName("wt-orphan", W)["action"].str() shouldBe "clean"
                     for (d in all) exists("$tmp/$d/target/debug/bin") shouldBe true
                     val table = s.rtok("worktree", "clean", cwd = work).out
                     table shouldContain "dry run: 2 caches, "
                     // T416.2: a removal line per cache with its file count, then the totals.
-                    rows.byName("wt-idle")["files"]!!.jsonPrimitive.long shouldBe 2
-                    rows.byName("wt-fresh")["files"]!!.jsonPrimitive.long shouldBe 0
+                    rows.byName("wt-idle", W)["files"]!!.jsonPrimitive.long shouldBe 2
+                    rows.byName("wt-fresh", W)["files"]!!.jsonPrimitive.long shouldBe 0
                     table shouldContain "2 paths, 4 files"
                     table shouldContain "  2 files"
                     val age = Regex("^\\d+[smhd]$")
