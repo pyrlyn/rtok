@@ -67,3 +67,42 @@ int rtok_clone_or_copy(const char *from, const char *to) {
     return rc;
 }
 #endif
+
+#include <sys/statvfs.h>
+#include <time.h>
+int rtok_spawn(int *pid, const char *prog, char *const argv[], char *const envp[], int n, const int *kind,
+               const int *fd, const int *arg, const int *mode, const char *const *path, int setsid, int search) {
+    posix_spawn_file_actions_t actions;
+    posix_spawnattr_t attr;
+    int rc = posix_spawn_file_actions_init(&actions);
+    if (rc != 0) return rc;
+    for (int i = 0; i < n && rc == 0; i++) {
+        switch (kind[i]) {
+        case 0: rc = posix_spawn_file_actions_adddup2(&actions, arg[i], fd[i]); break;
+        case 1: rc = posix_spawn_file_actions_addopen(&actions, fd[i], path[i], arg[i], (mode_t)mode[i]); break;
+        case 2: rc = posix_spawn_file_actions_addclose(&actions, fd[i]); break;
+        case 3: rc = posix_spawn_file_actions_addchdir_np(&actions, path[i]); break;
+        default: rc = EINVAL;
+        }
+    }
+    if (rc == 0) rc = posix_spawnattr_init(&attr);
+    else { posix_spawn_file_actions_destroy(&actions); return rc; }
+    if (rc == 0 && setsid) rc = posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSID);
+    pid_t child = 0;
+    if (rc == 0) rc = search ? posix_spawnp(&child, prog, &actions, &attr, argv, envp)
+                             : posix_spawn(&child, prog, &actions, &attr, argv, envp);
+    posix_spawnattr_destroy(&attr);
+    posix_spawn_file_actions_destroy(&actions);
+    if (rc == 0) *pid = (int)child;
+    return rc;
+}
+long long rtok_free_bytes(const char *path) {
+    struct statvfs st;
+    if (statvfs(path, &st) != 0) return -1;
+    return (long long)st.f_bavail * (long long)st.f_frsize;
+}
+int rtok_set_times(const char *path, long long sec, long nsec) {
+    struct timespec t[2];
+    for (int i = 0; i < 2; i++) { t[i].tv_sec = (time_t)sec; t[i].tv_nsec = nsec; }
+    return utimensat(AT_FDCWD, path, t, 0);
+}

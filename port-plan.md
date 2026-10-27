@@ -1525,3 +1525,17 @@ Next, in order:
     `excludeDependentModules` in spawn.def did not help.
   - http-ktor linuxMain: `io.ktor.client.engine.curl` is unresolved (the declared ktor-client-curl artifact).
   - Modules downstream of rtok-sys are not checked yet.
+
+## Session: macOS/Linux split, part 2 (every module compiles for Linux)
+- rtok-sys: `SpawnActions` builds an ordered list of file actions (dup2/open/close/chdir) for the own
+  `rtok_spawn` C helper (rtok_spawn.h), with `rtok_free_bytes` (statvfs) and `rtok_set_times` (utimensat), so
+  no Kotlin code names posix_spawn types. On Linux those types live in platform.linux. Proc, Piped and
+  StreamedChild spawn through it.
+- `moveToTrash` is now per OS: NSFileManager on macOS, and on Linux the freedesktop home trash
+  (`files/` rename plus `info/*.trashinfo`, same volume only).
+- rtok-store: the mutex type converts for Linux's Int. http-ktor: `ktor-client-curl` (already declared) is added
+  through a lazy `linuxMain` match, because `findByName` ran before the hierarchy existed. No new artifact.
+- `-Prtok.allTargets=true compileKotlinLinuxX64 compileKotlinLinuxArm64` passes for all modules.
+- Next: linking for Linux. ld.lld reports the rtok_* and tree-sitter C symbols as undefined, because the
+  `ci.diffuser.cstatic` plugin (external ci-diffuser) builds the static C libraries for the host target only.
+  Running and testing on Linux also needs a Linux host or CI.

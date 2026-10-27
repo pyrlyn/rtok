@@ -1,17 +1,8 @@
-// `fs::remove_dir_all` with its errors (the shelled `removeDirAll` ignores them), and the `trash` crate's macOS
-// delete through `NSFileManager` (no Finder: no Automation prompt, no sound).
-@file:OptIn(kotlinx.cinterop.ExperimentalForeignApi::class, kotlinx.cinterop.BetaInteropApi::class)
+// `fs::remove_dir_all` with its errors (the shelled `removeDirAll` ignores them), and the `trash` crate's delete
+// (per OS: Trash.macos.kt, Trash.linux.kt).
 
 package rtok.sys
 
-import kotlinx.cinterop.ObjCObjectVar
-import kotlinx.cinterop.alloc
-import kotlinx.cinterop.memScoped
-import kotlinx.cinterop.ptr
-import kotlinx.cinterop.value
-import platform.Foundation.NSError
-import platform.Foundation.NSFileManager
-import platform.Foundation.NSURL
 import platform.posix.errno
 import platform.posix.rmdir
 
@@ -26,10 +17,4 @@ fun removeTree(path: String) {
 }
 
 /** Moves [path] to the user's trash. @throws IoException */
-fun moveToTrash(path: String) {
-    memScoped {
-        val err = alloc<ObjCObjectVar<NSError?>>()
-        val ok = NSFileManager.defaultManager.trashItemAtURL(NSURL.fileURLWithPath(path), null, err.ptr)
-        if (!ok) throw IoException(IoException.Kind.Other, err.value?.localizedDescription ?: "cannot move $path to trash")
-    }
-}
+expect fun moveToTrash(path: String)

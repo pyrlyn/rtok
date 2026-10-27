@@ -118,7 +118,7 @@ internal class ConnLock {
         memScoped {
             val a = alloc<pthread_mutexattr_t>()
             pthread_mutexattr_init(a.ptr)
-            pthread_mutexattr_settype(a.ptr, PTHREAD_MUTEX_RECURSIVE)
+            pthread_mutexattr_settype(a.ptr, PTHREAD_MUTEX_RECURSIVE.convert())
             pthread_mutex_init(m.ptr, a.ptr)
             pthread_mutexattr_destroy(a.ptr)
         }
