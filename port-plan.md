@@ -1193,3 +1193,7 @@ Next, in order:
 - Tests: GitlabTest 11 (gitlab.rs 10 + run.rs's gitlab open test).
 - Stop point: next export (export.rs, export/github.rs, export/linear.rs), `rtok task export`, task MCP tools, wire
   `taskWarningSink` to the CLI; sync.rs's GitHub read-only test.
+## Ownership: stats + skills (web/dashboard worker)
+- The web/dashboard worker owns `measure/stats.rs` (and what `rtok stats` needs: `cli/stats.rs`, `measure/baseline.rs`,
+  `measure/cache.rs`, `measure/skills_listing.rs`), the snapshot's `stats`/`skills` (model/mod.rs `stats_skills`,
+  `skills_from`, `stats_page_text`), the Stats and Skills pages and tui tabs. The main-port worker skips these.
