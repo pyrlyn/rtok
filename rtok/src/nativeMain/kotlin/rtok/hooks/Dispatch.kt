@@ -49,7 +49,7 @@ internal const val DEFERRED_ENV = "RTOK_HOOK_DEFERRED"
 object HookLinks {
     var completePendingWorktree: (rt: Runtime, cwd: String, agent: String) -> Unit = { _, _, _ -> }
     var unlockEndedWorktree: (cwd: String, agent: String) -> Unit = { _, _ -> }
-    var spawnOtelExport: (rt: Runtime) -> Unit = {}
+    var spawnOtelExport: (rt: Runtime) -> Unit = rtok.otel.Export::spawnChild
 
     /** MCP `shorten_result` for a foreign tool's result under Cursor; true when it shortened [result] in place. */
     var shortenMcpResult: (rt: Runtime, server: String, tool: String, result: Array<JsonElement>) -> Boolean = { _, _, _, _ -> false }
