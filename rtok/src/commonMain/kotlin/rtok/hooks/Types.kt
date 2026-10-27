@@ -4,6 +4,7 @@ package rtok.hooks
 
 import kotlinx.serialization.json.*
 import rtok.canonicalToolName
+import rtok.json.StrictJson
 
 // The plugin events are the SDK's own types (no second copy).
 typealias PreToolUse = rtok.plugin.sdk.PreToolUse
@@ -275,14 +276,14 @@ data class HookInput(
     private fun takeJsonish(key: String): JsonElement? {
         val v = extra.remove(key) ?: return null
         val s = v.str() ?: return v
-        return runCatching { Json.parseToJsonElement(s) }.getOrNull() ?: JsonPrimitive(s)
+        return runCatching { StrictJson.parse(s) }.getOrNull() ?: JsonPrimitive(s)
     }
 
     companion object {
         private val STRING_KEYS = setOf("session_id", "hook_event_name")
         private val OPT_STRING = setOf("agent_id", "agent_type", "task_description", "transcript_path", "cwd", "permission_mode", "tool_name", "tool_use_id", "prompt", "source", "trigger", "custom_instructions")
 
-        fun parse(text: String): HookInput = fromJson(Json.parseToJsonElement(text))
+        fun parse(text: String): HookInput = fromJson(StrictJson.parse(text))
 
         /** Mirrors serde: typed fields must have their type (null = absent for Options); others go to `extra`. */
         fun fromJson(v: JsonElement): HookInput {
@@ -325,7 +326,7 @@ internal fun JsonElement?.str(): String? = (this as? JsonPrimitive)?.takeIf { it
 /** Copilot documents `toolArgs` as a JSON string; only a string that parses to an object is replaced. */
 private fun decodeToolArgs(args: JsonElement): JsonElement {
     val s = args.str() ?: return args
-    return (runCatching { Json.parseToJsonElement(s) }.getOrNull() as? JsonObject) ?: args
+    return (runCatching { StrictJson.parse(s) }.getOrNull() as? JsonObject) ?: args
 }
 
 private fun cursorEvent(
@@ -449,7 +450,7 @@ data class HookOutput(
                 o["updatedMcpToolOutput"]?.takeUnless { it is JsonNull },
             )
 
-        fun parse(text: String) = fromJson(Json.parseToJsonElement(text).jsonObject)
+        fun parse(text: String) = fromJson(StrictJson.parse(text).jsonObject)
     }
 }
 

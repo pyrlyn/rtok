@@ -5,6 +5,7 @@ package rtok.plugins.graph
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import rtok.json.StrictJson
 import rtok.plugin.sdk.Ctx
 import rtok.plugin.sdk.DashboardPage
 import rtok.plugin.sdk.Manifest
@@ -34,7 +35,7 @@ object GraphPlugin : Plugin {
         name: String,
         description: String,
         schema: String,
-    ) = ToolDef(name, description, Json.parseToJsonElement(schema))
+    ) = ToolDef(name, description, StrictJson.parse(schema))
 
     private val TOOLS =
         listOf(

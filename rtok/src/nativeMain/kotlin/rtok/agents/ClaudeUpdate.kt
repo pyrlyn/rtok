@@ -10,6 +10,7 @@ import kotlinx.serialization.json.JsonObject
 import rtok.VERSION
 import rtok.agent.sdk.NO_CHANGES
 import rtok.config.Config
+import rtok.json.StrictJson
 import rtok.sys.canonicalize
 import rtok.sys.exists
 import rtok.sys.isDir
@@ -150,7 +151,7 @@ class ClaudeUpdate(
         fun claudeInstall(cfg: Config): Pair<String?, String>? {
             val dir = Claude.configDir(cfg)
             val path = "$dir/plugins/installed_plugins.json"
-            val root = runCatching { Json.parseToJsonElement(readToString(path)) as JsonObject }.getOrNull()?.takeIf { exists(path) }
+            val root = runCatching { StrictJson.parse(readToString(path)) as JsonObject }.getOrNull()?.takeIf { exists(path) }
             val entry = ((root?.get("plugins") as? JsonObject)?.get(Claude.PLUGIN_ID) as? JsonArray)?.firstOrNull() ?: return null
             val version = str(entry, "version")
             return (str(entry, "installPath") ?: version?.let { "$dir/$PLUGIN_CACHE/$it" })?.let { version to it }

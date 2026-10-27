@@ -3,6 +3,7 @@
 package rtok.plugins.checkpoint
 
 import kotlinx.serialization.json.*
+import rtok.json.StrictJson
 import rtok.plugins.memory.redactPrivate
 import rtok.sys.Shlex
 import rtok.sys.compareUtf8
@@ -72,7 +73,7 @@ internal class Extraction(
 
 /** serde_json's `from_str`: kotlinx also accepts bare words, which Rust rejects. */
 private fun parseStrict(line: String): JsonElement? {
-    val v = runCatching { Json.parseToJsonElement(line) }.getOrNull() ?: return null
+    val v = runCatching { StrictJson.parse(line) }.getOrNull() ?: return null
     if (v is JsonPrimitive && v.isString && !line.trimStart().startsWith('"')) return null
     return v
 }

@@ -4,10 +4,11 @@ package rtok.mcp.config
 
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+import rtok.json.StrictJson
 
 object Jsonc {
     /** Parse JSONC into a tree. @throws kotlinx.serialization.SerializationException on invalid input. */
-    fun parse(raw: String): JsonElement = Json.parseToJsonElement(stripTrailingCommas(stripComments(raw)))
+    fun parse(raw: String): JsonElement = StrictJson.parse(stripTrailingCommas(stripComments(raw)))
 
     fun parseOrNull(raw: String): JsonElement? = runCatching { parse(raw) }.getOrNull()
 

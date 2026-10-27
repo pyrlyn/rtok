@@ -4,14 +4,10 @@
 package rtok.store
 
 import kotlinx.serialization.json.*
+import rtok.json.StrictJson
 
 object SerdeJson {
-    fun parse(text: String): JsonElement? =
-        try {
-            Json.parseToJsonElement(text)
-        } catch (_: Exception) {
-            null
-        }
+    fun parse(text: String): JsonElement? = StrictJson.parseOrNull(text)
 
     fun encode(e: JsonElement): String = StringBuilder().also { write(it, e) }.toString()
 

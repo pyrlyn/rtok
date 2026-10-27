@@ -12,6 +12,7 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import platform.posix.isatty
+import rtok.json.StrictJson
 
 /** Says whether a string names the rtok binary (the binary's own check knows `rtok.exe` and its running path). */
 typealias IsBin = (String) -> Boolean
@@ -29,7 +30,7 @@ fun parseStrictJson(
 ): JsonElement {
     if (raw.isBlank()) return JsonObject(emptyMap())
     return try {
-        Json.parseToJsonElement(raw)
+        StrictJson.parse(raw)
     } catch (e: SerializationException) {
         throw StrictJsonException(
             "$path: not strict JSON: ${e.message?.lineSequence()?.firstOrNull()}. rtok refuses to rewrite this file " +

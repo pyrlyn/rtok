@@ -4,6 +4,7 @@ package rtok.plugin.sdk
 
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.json.*
+import rtok.json.StrictJson
 
 enum class Class { Code, Prose, Json, Cjk }
 
@@ -240,7 +241,7 @@ interface Ledger {
         limit: Long,
     ): List<String> =
         recentHookInputs(limit).filter { body ->
-            runCatching { (Json.parseToJsonElement(body) as? JsonObject)?.get("hook_event_name")?.let { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content } }.getOrNull() == event
+            runCatching { (StrictJson.parse(body) as? JsonObject)?.get("hook_event_name")?.let { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content } }.getOrNull() == event
         }
 
     fun callsSince(ts: Long): Long

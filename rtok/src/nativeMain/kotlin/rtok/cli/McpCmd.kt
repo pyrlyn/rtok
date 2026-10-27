@@ -4,6 +4,7 @@ package rtok.cli
 import kotlinx.serialization.json.Json
 import rtok.config.Config
 import rtok.config.Layers
+import rtok.json.StrictJson
 import rtok.mcp.Http
 import rtok.mcp.Mcp
 import rtok.mcp.PingOpts
@@ -78,6 +79,6 @@ val MCP =
             Mcp.run(cfg)
         } else {
             val raw = inv.value("args") ?: "{}"
-            inv.io.println(Mcp.call(cfg, name, Json.parseToJsonElement(raw)))
+            inv.io.println(Mcp.call(cfg, name, StrictJson.parse(raw)))
         }
     }

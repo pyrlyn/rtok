@@ -12,6 +12,7 @@ import rtok.agent.sdk.HostJson
 import rtok.agent.sdk.KETCH_INSTALL
 import rtok.agent.sdk.NO_CHANGES
 import rtok.config.Config
+import rtok.json.StrictJson
 import rtok.mcp.config.Client
 import rtok.mcp.config.EntryShape
 import rtok.sys.exists
@@ -39,7 +40,7 @@ class Claude(
         if (kind == Kind.Desktop) return listOfNotNull("mcp".takeIf { McpEntries.hasEntry(McpPaths.claudeDesktop(), KEY, NAME) })
         val plugin = pluginInstalled(cfg)
         val files = filesServeRtok(cfg)
-        val root = runCatching { Json.parseToJsonElement(read(cfg.setup.claude.settingsPath)) as JsonObject }.getOrNull()
+        val root = runCatching { StrictJson.parse(read(cfg.setup.claude.settingsPath)) as JsonObject }.getOrNull()
         val proxy = root != null && ProxyEnv.value(root, PROXY_KEY) == ProxyEnv.anthropic(cfg)
         return listOfNotNull(
             "hooks".takeIf { "hooks" in files || plugin },
@@ -176,7 +177,7 @@ class Claude(
             cfg: Config,
             target: String,
         ): MarketplaceState {
-            val root = runCatching { Json.parseToJsonElement(read("${configDir(cfg)}/plugins/known_marketplaces.json")) as JsonObject }.getOrNull()
+            val root = runCatching { StrictJson.parse(read("${configDir(cfg)}/plugins/known_marketplaces.json")) as JsonObject }.getOrNull()
             val src = (root?.get(NAME) as? JsonObject ?: return MarketplaceState.Absent)["source"]
             val at =
                 when (str(src, "source")) {

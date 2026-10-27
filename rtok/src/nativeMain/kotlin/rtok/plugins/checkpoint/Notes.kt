@@ -4,6 +4,7 @@ package rtok.plugins.checkpoint
 import kotlinx.serialization.json.*
 import rtok.config.Memory
 import rtok.config.ProjectRoot
+import rtok.json.StrictJson
 import rtok.plugin.fitBudget
 import rtok.plugin.sdk.*
 import rtok.plugins.memory.redactPrivate
@@ -57,7 +58,7 @@ fun promptCounts(rows: List<Pair<String, String>>): Pair<ULong, ULong> {
     val best = HashMap<String, Pair<ULong, ULong>>()
     for ((key, value) in rows) {
         val session = listOf(":checkpoint:", ":session:").firstNotNullOfOrNull { m -> key.indexOf(m).takeIf { it >= 0 }?.let { key.substring(it + m.length) } } ?: continue
-        val v = runCatching { Json.parseToJsonElement(value) }.getOrNull() as? JsonObject ?: continue
+        val v = runCatching { StrictJson.parse(value) }.getOrNull() as? JsonObject ?: continue
 
         fun n(k: String) =
             (v[k] as? JsonPrimitive)

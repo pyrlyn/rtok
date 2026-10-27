@@ -3,6 +3,7 @@
 package rtok.plugins.graph
 
 import kotlinx.serialization.json.*
+import rtok.json.StrictJson
 import rtok.plugin.sdk.Ctx
 import rtok.sys.isFile
 import rtok.sys.join
@@ -72,7 +73,7 @@ object Cochange {
 
     internal fun decode(text: String?): Pair<String, List<CochangePair>>? =
         runCatching {
-            val o = Json.parseToJsonElement(text ?: return null).jsonObject
+            val o = StrictJson.parse(text ?: return null).jsonObject
             val pairs =
                 o["pairs"]!!.jsonArray.map { e ->
                     val t = e.jsonArray

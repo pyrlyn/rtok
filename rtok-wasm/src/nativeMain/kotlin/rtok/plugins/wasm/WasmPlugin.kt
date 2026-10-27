@@ -12,6 +12,7 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
+import rtok.json.StrictJson
 import rtok.log.FileLog
 import rtok.log.appendSplit
 import rtok.log.errorPath
@@ -195,7 +196,7 @@ private fun hostFunctions(
     },
     HostFunction("env", "rtok_record_measurement", listOf(I32, I32), listOf(I32)) { mem, a ->
         val m =
-            runCatching { json.parseToJsonElement(memRead(mem, a[0], a[1]).decodeToString()).jsonObject }
+            runCatching { StrictJson.parse(memRead(mem, a[0], a[1]).decodeToString()).jsonObject }
                 .getOrElse { throw WasmException(it.message ?: "bad measurement", it) }
         val plugin = m.str("plugin") ?: ""
         if (plugin != state.pluginId) throw WasmException("measurement plugin mismatch")

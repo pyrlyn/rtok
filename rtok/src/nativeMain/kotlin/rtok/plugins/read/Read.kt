@@ -6,6 +6,7 @@ import rtok.Expand
 import rtok.HostPaths
 import rtok.config.HostFs
 import rtok.config.ReadFs
+import rtok.json.StrictJson
 import rtok.plugin.identicalResult
 import rtok.plugin.sdk.*
 import rtok.sys.*
@@ -53,7 +54,7 @@ object ReadPlugin : Plugin {
             ),
         )
 
-    private fun schema(s: String) = Json.parseToJsonElement(s)
+    private fun schema(s: String) = StrictJson.parse(s)
 }
 
 internal fun readCfg(cx: Ctx) = cx.pluginConfig("read", ReadCfg.serializer(), ReadCfg())
