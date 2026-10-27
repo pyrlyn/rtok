@@ -53,6 +53,7 @@ object Snapshot {
                     "junk" to (JunkPage.get(cfg)?.card ?: JsonNull),
                     "services" to JsonNull,
                     "worktrees" to JsonPrimitive(WorktreesPage.text()),
+                    "tasks" to TasksPage.get(cfg).toJson(),
                 )
             // mod.rs `snapshot`: a store that will not open wins; else a probe that landed without a report.
             val err = opened.exceptionOrNull()?.let { it.message ?: it.toString() } ?: "doctor probe failed".takeIf { doctor == null && !doctorPending }

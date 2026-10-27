@@ -70,6 +70,15 @@ class TuiAppTest {
         assertTrue("not ready" in b2.lines().joinToString("\n"))
     }
 
+    /** view.rs `tasks_tab_renders_the_task_list` (T441.13.7): the Tasks tab shows the snapshot's `tasks.text`. */
+    @Test fun tasksTabRendersTheTaskList() {
+        val a = TuiApp("tasks")
+        a.snapshot = snap("""{"tasks":{"state":"ready","text":"R1  open  Ship the board\n","board":null}}""")
+        val b = Buffer(80, 8)
+        draw(b, a, { "00:00:00" })
+        assertTrue("R1  open  Ship the board" in b.lines().joinToString("\n"))
+    }
+
     @Test fun ttyGuardAndCompact() {
         assertNull(checkTty(true, true))
         assertNotNull(checkTty(false, true))

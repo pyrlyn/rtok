@@ -236,7 +236,7 @@ fun main() {
     Pages.register("stats", pendingPage("stats", "rtok stats"))
     Pages.register("skills", pendingPage("skills", "rtok skills list"))
     Pages.register("worktrees", WorktreesPage)
-    Pages.register("tasks", pendingPage("tasks", "rtok tasks"))
+    Pages.register("tasks", TasksPage)
     val root = document.getElementById("root") as? HTMLElement ?: error("#root element not found")
     val app = App(root)
     LiveCalls.install(app)
