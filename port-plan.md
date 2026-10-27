@@ -1048,3 +1048,12 @@ Next, in order:
   `stale_worktrees_are_what_gc_removes_and_clear_removes_only_those`; fakes only Claude Code, Rust fakes every host).
 - Stop point: next the rest of phase 10: doctor, model, report, otel, tasks, completions, bench, batch, demon,
   last_paths, repo_map, hooks dispatcher tests; worktree add/finish/whoami/clean/migrate with their modules.
+## Session: batch — batch.rs and `rtok batch`
+- `rtok.BatchApi`/`BatchProvider` (batch.rs: submit/status/fetch through the proxy over the engine-neutral
+  `rtok.http` client, `validate`, `checkId`, reqwest's `StatusCode` display for the error line), `cli/BatchCmd.kt`
+  (`rtok batch submit|status|fetch`, `--provider`, `--url`). rtok-sys `createNewBytes` (`create_new`). A fetch writes
+  the whole body once it has arrived (Rust streams and removes a torn file), so no partial file is left either way.
+- Tests: BatchTest 4 (batch.rs). tests/batch_cli.rs (3, through a real proxy against httpmock upstreams) waits for
+  the proxy port.
+- Stop point: next doctor, model, report, otel, tasks, completions, bench, demon, last_paths, repo_map, hooks
+  dispatcher tests.

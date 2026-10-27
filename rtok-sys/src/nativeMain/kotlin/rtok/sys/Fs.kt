@@ -166,6 +166,21 @@ fun writeBytes(
     }
 }
 
+/** `OpenOptions::new().write(true).create_new(true)` then `write_all`: fails when [path] exists. */
+fun createNewBytes(
+    path: String,
+    b: ByteArray,
+) {
+    val f = fopen(path, "wbx") ?: throw IoException(IoException.Kind.Other, "$path: errno $errno")
+    try {
+        if (b.isNotEmpty() && fwrite(b.refTo(0), 1u, b.size.convert(), f).toInt() != b.size) {
+            throw IoException(IoException.Kind.Other, "$path: short write, errno $errno")
+        }
+    } finally {
+        fclose(f)
+    }
+}
+
 /** Rust `Path::is_file`: exists (following links) and is a regular file. */
 fun isFile(p: String): Boolean =
     memScoped {
