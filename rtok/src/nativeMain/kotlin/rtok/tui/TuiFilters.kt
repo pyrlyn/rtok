@@ -61,3 +61,9 @@ fun TuiApp.sessionRows(): List<JsonObject> =
     (snapshot["sessions"] as? JsonArray).orEmpty().filterIsInstance<JsonObject>().filter {
         !liveOnly || it["ended_at"] == null || it["ended_at"] is JsonNull
     }
+
+/** The Skills tab's visible rows: all, or the never-invoked ones while `n` is on (app.rs `visible_skills`). */
+fun TuiApp.skillRows(): List<JsonObject> =
+    ((snapshot["skills"] as? JsonObject)?.get("rows") as? JsonArray).orEmpty().filterIsInstance<JsonObject>().filter {
+        !neverOnly || (it["never"] as? kotlinx.serialization.json.JsonPrimitive)?.content == "true"
+    }

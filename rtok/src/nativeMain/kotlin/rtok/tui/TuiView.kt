@@ -90,6 +90,7 @@ private fun page(
     }
 }
 
+@Suppress("CyclomaticComplexMethod")
 private fun field(
     b: Buffer,
     r: Rect,
@@ -98,14 +99,27 @@ private fun field(
 ) {
     val v = app.snapshot[app.field]
     when {
+        // view.rs `stats`: a null field is a failed tick, not an empty page.
+        app.page == "stats" && v is JsonNull -> b.paragraph(r, listOf(listOf(Span("stats did not answer this tick — `rtok stats` has the details", MUTED))))
+
         v == null || v is JsonNull -> notReady(b, r, app.page)
+
+        app.page == "skills" && v is JsonObject -> skills(b, r, app, v)
+
         app.page == "overview" && v is JsonObject -> overview(b, r, v)
+
         app.page == "plugins" -> grid(b, r, app, PLUGIN_COLS, objects(v).map(::pluginRow))
+
         app.page == "calls" -> calls(b, r, app, objects(v).map { callRow(it, clock) })
+
         app.page == "sessions" -> sessions(b, r, app, clock)
+
         app.page == "logs" -> text(b, r, app, (v as? JsonArray).orEmpty().map { (it as? JsonPrimitive)?.content ?: it.toString() })
+
         v is JsonPrimitive -> text(b, r, app, pageLines(app, v.content))
+
         v is JsonObject && v["text"] is JsonPrimitive -> text(b, r, app, v.s("text").orEmpty().lines())
+
         else -> text(b, r, app, v.toString().lines())
     }
 }

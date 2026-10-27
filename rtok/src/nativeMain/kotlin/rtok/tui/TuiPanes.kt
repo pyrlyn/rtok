@@ -3,7 +3,9 @@ package rtok.tui
 
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import tui.Buffer
+import tui.Col
 import tui.Rect
 import tui.Size
 import tui.Span
@@ -73,4 +75,42 @@ internal fun calls(
     val inner = b.block(below, if (f.typing) "expand ${pane.id}  /${f.text}" else "expand ${pane.id}", ACCENT)
     val body = pane.text().lines()
     b.paragraph(inner, body.map { listOf(Span(it)) }, pane.scroll.coerceAtMost(body.size))
+}
+
+/** view.rs `skills_table` columns. */
+internal val SKILL_COLS =
+    listOf(Col("name", 12), Col("source", 10), Col("desc", 5, true), Col("body", 6, true), Col("calls", 5, true), Col("resident", 8, true), Col("last"))
+
+/** view.rs `render_skills`: the listing's header line above the table; a never-invoked row is the finding. */
+internal fun skills(
+    b: Buffer,
+    r: Rect,
+    app: TuiApp,
+    page: JsonObject,
+) {
+    val (head, body) = r.rows(Size.Fixed(1), Size.Fill())
+    b.put(head.x, head.y, page.s("header").orEmpty(), MUTED, head.w)
+    val rows = app.skillRows()
+    if (rows.isEmpty()) {
+        b.paragraph(body, listOf(listOf(Span(if (app.neverOnly) "no never-invoked skills" else "no skills listed", MUTED))))
+        return
+    }
+
+    fun n(
+        o: JsonObject,
+        k: String,
+    ) = o.n(k)?.toLong()?.toString() ?: "0"
+    val cells =
+        rows.map {
+            listOf(
+                it.s("name").orEmpty(),
+                it.s("source").orEmpty(),
+                n(it, "desc_chars"),
+                n(it, "body_bytes"),
+                n(it, "invocations"),
+                n(it, "resident"),
+                (it.s("last_invoked") ?: "-") + if ((it["never"] as? JsonPrimitive)?.content == "true") " · never" else "",
+            )
+        }
+    grid(b, body, app, SKILL_COLS, cells)
 }

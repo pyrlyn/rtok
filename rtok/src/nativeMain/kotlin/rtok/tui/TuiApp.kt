@@ -88,6 +88,10 @@ class TuiApp(
     var liveOnly = false
         private set
 
+    /** The Skills tab shows only never-invoked skills (`n`, app.rs `SkillsState.never_only`). */
+    var neverOnly = false
+        private set
+
     /** The Config tab's `/` filter (T228). */
     val configFilter = LineFilter()
 
@@ -111,7 +115,12 @@ class TuiApp(
     val cursor: Int get() = cursors[tab].coerceIn(0, (rows() - 1).coerceAtLeast(0))
 
     /** Rows the current tab lists (the cursor's range). */
-    fun rows(): Int = if (page == "sessions") sessionRows().size else fieldRows()
+    fun rows(): Int =
+        when (page) {
+            "sessions" -> sessionRows().size
+            "skills" -> skillRows().size
+            else -> fieldRows()
+        }
 
     private fun fieldRows(): Int =
         when (val v = snapshot[field]) {
@@ -180,6 +189,7 @@ class TuiApp(
         return (if (page == "graph") graph(k) else null) ?: pageKey(k)
     }
 
+    @Suppress("CyclomaticComplexMethod")
     private fun pageKey(k: Key): Effect {
         val pageKeyed =
             when (page) {
@@ -198,6 +208,11 @@ class TuiApp(
 
                 "config" -> {
                     configFilter.key(k)
+                }
+
+                // app.rs `skills_key`: `n` toggles never-invoked only.
+                "skills" -> {
+                    (k == Key.Char("n")).also { if (it) neverOnly = !neverOnly }
                 }
 
                 else -> {
