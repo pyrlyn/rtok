@@ -1235,3 +1235,12 @@ Next, in order:
 - Deviations: `the_task_skill_names_exactly_these_tools` not ported — the Kotlin repo ships no `skills/` yet.
 - Stop point: next model, report, otel, completions, bench, demon, hooks dispatcher tests, worktree
   add/finish/whoami/clean/migrate, proxy batch tests, macOS/Linux split.
+
+## Session: otel part 1 — otlp.rs, map.rs, metrics.rs
+- `rtok.otel.Otlp` (OTLP/HTTP JSON bodies for traces, logs and cumulative sums; trace/span ids from SHA-256),
+  `rtok.otel.Map` (session root span, call spans by surface hook/mcp/proxy, content cap on UTF-8 boundaries with the
+  archive id, log records), `rtok.otel.Metrics` (`rtok.tokens`, `rtok.tokens.saved`, `rtok.calls`).
+- Tests: OtlpTest 3, MapTest 4 (all of otlp.rs and map.rs).
+- Stop point: next otel export.rs (flush, coalesced flush, status, HTTP via fake server), `rtok otel flush|status`,
+  then model, report, completions, bench, demon, hooks dispatcher tests, worktree add/finish/whoami/clean/migrate,
+  proxy batch tests, macOS/Linux split.
