@@ -1453,3 +1453,9 @@ Next, in order:
 - `ReportCliSpec` (10): report_ai.rs (4), the CLI half of report_pdf.rs (2), report.rs empty store, `--out`, T587,
   plus a bad `--format`. HOME is the temp home and the base-URL variables are unset, so doctor probes nothing real.
 - Stop point: the remaining tests/report.rs checks (traceable numbers, html numbers, advice stores, T207, lanes, T581).
+
+## Session: tests/report.rs store checks
+- `ReportStoreCliSpec` (7): T22.1 traceable numbers, T22.2 html numbers/no fetch, T22.5/T22.6 advice order, the
+  healthy store, T207 totals (ledgers vs OTLP vs plugin pages), T385.12.2 lanes, T581 top sinks. The header check
+  matches ` (30d)` and ` · store ` instead of recomputing the clock dates. tests/report*.rs are now fully ported.
+- Stop point: completions (tests/completions*.rs).
