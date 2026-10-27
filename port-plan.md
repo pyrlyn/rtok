@@ -858,3 +858,12 @@ Next, in order:
   Fixture `fixtures/usage-logs` copied from the Rust trycmd input (claude, codex).
 - Tests: UsageReportTest 8, UsageLogsReportTest 5, ZoneTest 2, AgentsCliSpec +1.
 - Stop point: next junk (junk*.rs, several PRs), `--project`, restart.rs, then the rest of phase 10.
+
+## Session: agents — junk 1: the host junk map (junk_map.rs)
+- `rtok.agents.JunkMap` (`specs` per host from research.md §22, documented vs listed-only, VS Code per-commit
+  `CachedData`, Electron folders, `NO_ROWS`) and `JunkRoots` (`{home}`, `{claude}`, `{codex}`, XDG, `{copilot_cache}`,
+  `{rtok_cache}` with env overrides; relative ones ignored).
+- Tests: JunkMapTest 7.
+- Stop point: next junk 2 = junk_cache.rs (the `cache` item model; needs worktree clean `Policy`/`kept_because` and
+  `usage_until`), then junk_kinds, junk_review, junk_sessions, junk_worktrees, junk_items, junk.rs (list/report),
+  junk_clear, CLI; then `--project`, restart.rs, the rest of phase 10.
