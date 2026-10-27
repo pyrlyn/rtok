@@ -107,6 +107,7 @@ class App(
             return
         }
         val page = pageFor(window.location.pathname)
+        LiveCalls.want(page?.id == "graph", state.link == LinkState.OPEN)
         val title = page?.id ?: "not found"
         document.title = "$title · rtok"
         root.append {
@@ -229,5 +230,7 @@ fun main() {
     Pages.register("worktrees", pendingPage("worktrees", "rtok worktree list"))
     Pages.register("tasks", pendingPage("tasks", "rtok tasks"))
     val root = document.getElementById("root") as? HTMLElement ?: error("#root element not found")
-    App(root).start()
+    val app = App(root)
+    LiveCalls.install(app)
+    app.start()
 }

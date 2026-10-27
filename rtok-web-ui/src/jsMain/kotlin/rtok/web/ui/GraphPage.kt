@@ -182,6 +182,7 @@ val GraphPage =
         val rows = snap.objects("projects")
         out.alerts(rows)
         out.projects(app, rows)
+        if (rows.isNotEmpty()) out.liveCalls()
         if (snap["graph"] == null || snap["graph"] is kotlinx.serialization.json.JsonNull) {
             out.panel("graph") {
                 p("muted") { +"Graph page off. The graph feature is not built in, or the store read failed (Snapshot.graph = null)." }
