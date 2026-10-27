@@ -11,9 +11,9 @@ import rtok.web.ALLOW_REMOTE_ENV
 import rtok.web.Answer
 import rtok.web.BoundAddr
 import rtok.web.DIST_ENV
+import rtok.web.EmbeddedAssets
 import rtok.web.LiveCalls
 import rtok.web.LiveConfig
-import rtok.web.EmbeddedAssets
 import rtok.web.RemoteBindRefused
 import rtok.web.Snapshots
 import rtok.web.WebApp
