@@ -15,10 +15,12 @@ import io.ktor.server.request.queryString
 import io.ktor.server.request.receiveChannel
 import io.ktor.server.response.header
 import io.ktor.server.response.respondBytes
+import io.ktor.server.response.respondBytesWriter
 import io.ktor.server.routing.routing
 import io.ktor.server.websocket.WebSockets
 import io.ktor.server.websocket.webSocket
 import io.ktor.utils.io.readRemaining
+import io.ktor.utils.io.writeFully
 import io.ktor.websocket.Frame
 import io.ktor.websocket.readText
 import kotlinx.coroutines.delay
@@ -27,14 +29,18 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.io.readByteArray
 import rtok.http.server.BindException
+import rtok.http.server.BodySink
 import rtok.http.server.HttpServer
 import rtok.http.server.RequestHandler
 import rtok.http.server.ServerRequest
 import rtok.http.server.ServerResponse
+import rtok.http.server.StreamingHandler
+import rtok.http.server.StreamingHttpServer
+import rtok.http.server.StreamingResponse
 import rtok.http.server.WsHandler
 import rtok.http.server.WsSocket
 
-object KtorHttpServer : HttpServer {
+object KtorHttpServer : HttpServer, StreamingHttpServer {
     private const val STOP_TICK_MS = 200L
     private const val PAYLOAD_TOO_LARGE = 413
 
@@ -88,6 +94,81 @@ object KtorHttpServer : HttpServer {
             }
         } finally {
             server.stop(0, 0)
+        }
+    }
+
+    override fun serveStreaming(
+        host: String,
+        port: Int,
+        handler: StreamingHandler,
+        maxBody: Long,
+        stop: () -> Boolean,
+        onBound: (String) -> Unit,
+    ) {
+        val server =
+            embeddedServer(CIO, port = port, host = host) {
+                intercept(ApplicationCallPipeline.Plugins) {
+                    val res = receive(context, maxBody)?.let { handler.handle(it, context.request.local.remoteAddress) } ?: StreamingResponse(PAYLOAD_TOO_LARGE)
+                    stream(context, res)
+                    finish()
+                }
+            }
+        run(server, host, port, stop, onBound)
+    }
+
+    private fun run(
+        server: io.ktor.server.engine.EmbeddedServer<*, *>,
+        host: String,
+        port: Int,
+        stop: () -> Boolean,
+        onBound: (String) -> Unit,
+    ) {
+        try {
+            server.start(wait = false)
+        } catch (e: Exception) {
+            throw BindException("bind $host:$port: ${e.message}", e)
+        }
+        try {
+            runBlocking {
+                val bound = server.engine.resolvedConnectors().first()
+                onBound("${bound.host}:${bound.port}")
+                while (!stop()) delay(STOP_TICK_MS)
+            }
+        } finally {
+            server.stop(0, 0)
+        }
+    }
+
+    /** The request with its body, or null when the body is over [maxBody]. */
+    private suspend fun receive(
+        call: ApplicationCall,
+        maxBody: Long,
+    ): ServerRequest? {
+        val declared = call.request.headers[HttpHeaders.ContentLength]?.toLongOrNull()
+        val body = if (declared != null && declared > maxBody) null else call.receiveChannel().readRemaining(maxBody + 1).readByteArray()
+        return body?.takeIf { it.size <= maxBody }?.let { request(call, it) }
+    }
+
+    private suspend fun stream(
+        call: ApplicationCall,
+        res: StreamingResponse,
+    ) {
+        var type: ContentType? = null
+        for ((name, value) in res.headers) {
+            if (name.equals(HttpHeaders.ContentType, ignoreCase = true)) {
+                type = ContentType.parse(value)
+            } else if (!name.equals(HttpHeaders.ContentLength, ignoreCase = true) && !name.equals(HttpHeaders.TransferEncoding, ignoreCase = true)) {
+                call.response.header(name, value)
+            }
+        }
+        call.respondBytesWriter(type, HttpStatusCode.fromValue(res.status)) {
+            val channel = this
+            res.body(
+                BodySink { bytes ->
+                    channel.writeFully(bytes)
+                    channel.flush()
+                },
+            )
         }
     }
 
