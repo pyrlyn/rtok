@@ -1539,3 +1539,37 @@ Next, in order:
 - Next: linking for Linux. ld.lld reports the rtok_* and tree-sitter C symbols as undefined, because the
   `ci.diffuser.cstatic` plugin (external ci-diffuser) builds the static C libraries for the host target only.
   Running and testing on Linux also needs a Linux host or CI.
+
+## Remaining work (2026-10-27)
+
+### P0 — in flight (open PRs, not merged)
+
+- [ ] #232 `linux-link`: C libs cross-compiled with Kotlin/Native clang + sysroot; full link for linuxX64/linuxArm64; 2898 tests green on macOS.
+- [ ] #235 (on #232): Linux test run + `scripts/lima-test.sh`; fixes for macOS-only tests.
+- [ ] #236 (on #235): `rtok bench --suite p28`.
+- [ ] #234: shared user-level plugin cache (`~/.rtok/cache/plugins`, or `$RTOK_HOME/cache/plugins`); not yet wired into `PluginLink`.
+
+### P1 — Linux (~1–2 days)
+
+- [ ] P1: proxy stores a truncated body in the cache on Linux.
+- [ ] P1: per-lane timeout is not applied on Linux.
+- [ ] P2: `rtok_clone_or_copy` loses file times on Linux.
+- [ ] P2: trash fails across filesystems (EXDEV).
+- [ ] P2: e2e `junk clear --yes` behaves differently on Linux.
+- [ ] P2: ktoml silently drops arrays of inline tables whose strings contain `{`, `}` or escaped quotes (affects user configs; worked around only in the p28 fixture).
+- [ ] Flaky `TuiProjectsTest.removeShowsThePlan...` on Linux.
+- [ ] P3: attr destroyed after a failed `posix_spawnattr_init`; no EINTR retry; trash race; UTC `DeletionDate`; `/tmp` fallback; seed tie on equal mtimes.
+- [ ] Linux CI job (missing).
+
+### P2 — rest of the port plan (weeks)
+
+- [ ] Next queue: overlay bench tests; `completions_shells` / `picker_pty`; hook-resident socket test.
+- [ ] hooks: resident server and `rtok hook` command; 29 tests waiting on worktree/otel/MCP.
+- [ ] read: 101 tests.
+- [ ] graph: ~275 tests, incl. `grep_symbol` via tree-sitter and CLI wiring.
+- [ ] CLI tests per subcommand: stats, info, expand, filter, run, config, plugins, logs, report, completions, man.
+- [ ] Skill sync for all hosts.
+- [ ] `rtok doctor`.
+- [ ] Worktree removal in junk.
+- [ ] continue + goose (YAML library decision needed).
+- [ ] Windows `mingwX64` target (absent).
