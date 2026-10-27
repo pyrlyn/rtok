@@ -1,4 +1,4 @@
-// Port of src/web/mod.rs routing: `/health`, the `/auth` probe and the SPA fallback. `/ws` comes next (docs/web.md step 3).
+// Port of src/web/mod.rs routing: `/health`, the `/auth` probe and the SPA fallback. `/ws` is [WsEndpoint].
 package rtok.web
 
 import rtok.http.server.RequestHandler

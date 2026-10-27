@@ -13,6 +13,7 @@ tok=${'$'}(cat "${'$'}RTOK_HOME/web-token")
 echo "health=${'$'}(curl -s "http://${'$'}addr/health")"
 echo "noauth=${'$'}(curl -s -o /dev/null -w '%{http_code}' "http://${'$'}addr/auth")"
 echo "auth=${'$'}(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer ${'$'}tok" "http://${'$'}addr/auth")"
+echo "ws=${'$'}(curl -s -o /dev/null -w '%{http_code}' -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13' -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' "http://${'$'}addr/ws")"
 echo "page=${'$'}(curl -s -o /dev/null -w '%{http_code}' "http://${'$'}addr/")"
 kill ${'$'}pid
 cat "${'$'}LOG"
@@ -29,6 +30,7 @@ class WebE2eSpec :
                 p.out shouldContain "noauth=401"
                 p.out shouldContain "auth=204"
                 p.out shouldContain "page=503"
+                p.out shouldContain "ws=401"
                 p.out shouldContain "rtok web: /ws needs the token in "
                 p.out shouldContain "built without the SPA"
             }
