@@ -33,13 +33,23 @@ class Demon(
         st: State,
     ): Boolean = store.read(service)?.let { it.copy(service = st.service) == st } ?: false
 
-    /** Drop the state file, unless a new supervisor has published its own since [st] was read. */
+    /**
+     * Drop the state file, unless a new supervisor has published its own since [st] was read. A newer write by the
+     * same supervisor (a restart counted or a child spawned between the read and the signal) is still its state and
+     * goes too; keeping it left a stopped service looking alive.
+     */
     fun retire(
         service: Service,
         st: State,
     ) {
-        if (unchanged(service, st)) store.remove(service, "json")
+        if (sameSupervisor(service, st)) store.remove(service, "json")
     }
+
+    /** True while the state file was written by the supervisor [st] names. */
+    private fun sameSupervisor(
+        service: Service,
+        st: State,
+    ): Boolean = store.read(service)?.let { it.supervisor == st.supervisor } ?: false
 
     /** TERM (or KILL when [force]) [pids], wait, and KILL the ones that stayed while ownership still holds. */
     fun bringDown(
