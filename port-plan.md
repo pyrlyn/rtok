@@ -916,3 +916,11 @@ Next, in order:
 - Tests: GlobsetCasesTest 1 (globset's 125 Unix `matches!`/`nmatches!` cases), GlobTest 4.
 - Stop point: next junk_review (uses `:globset` for `[agents.junk] exclude`), junk_items, junk.rs (list/report),
   junk_clear, CLI; then `--project`, restart.rs, worktree, junk_worktrees + `agent_worktrees`, the rest of phase 10.
+
+## Session: agents — junk 5: the review kinds (junk_review.rs)
+- `rtok.agents`: `JunkReview` (`EXTRA`, `EXCLUDED`, `SNAPSHOT`, `REPORT_EXT`), `logItems`, `backupItems`,
+  `snapshotItems`, `crashDumpItems`, `processNames`, `diagnosticReports`, `extraItems`, `junkHours`; `exclude`
+  (`[agents.junk] exclude` on `:globset`, a folder holding a match is kept, a bad glob keeps all) in `JunkExclude.kt`.
+- Tests: JunkReviewTest 8.
+- Stop point: next junk_items, junk.rs (list/report), junk_clear, CLI; then `--project`, restart.rs, worktree,
+  junk_worktrees + `agent_worktrees`, the rest of phase 10.
