@@ -52,6 +52,10 @@ fun stylesheet(): String =
             }
             layout()
             widgets()
+            charts()
+            grid()
+            text()
+            tables()
         }.toString()
 
 private fun CssBuilder.layout() {
@@ -97,6 +101,129 @@ private fun CssBuilder.layout() {
         put("gap", "12px")
         put("padding", "4px 12px 24px")
     }
+}
+
+private fun CssBuilder.charts() {
+    rule(".chart") {
+        put("display", "block")
+        put("width", "100%")
+        put("height", "auto")
+    }
+    rule(".kpi .chart") { put("height", "32px") }
+    rule(".track, .mix") {
+        put("display", "flex")
+        put("height", "8px")
+        put("border-radius", "999px")
+        put("overflow", "hidden")
+        put("background", v("surface-2"))
+        put("min-width", "60px")
+    }
+    rule(".legend") {
+        put("display", "flex")
+        put("flex-wrap", "wrap")
+        put("justify-content", "space-between")
+        put("gap", "4px 12px")
+        put("font-size", "11px")
+        put("color", v("fg-muted"))
+        put("margin-top", "6px")
+    }
+    rule(".legend i, .dot") {
+        put("display", "inline-block")
+        put("width", "8px")
+        put("height", "8px")
+        put("border-radius", "2px")
+        put("margin-right", "4px")
+    }
+}
+
+private fun CssBuilder.grid() {
+    rule(".stack") {
+        put("display", "flex")
+        put("flex-direction", "column")
+        put("gap", "12px")
+    }
+    rule(".grid") {
+        put("display", "grid")
+        put("gap", "12px")
+    }
+    rule(".kpis") { put("grid-template-columns", "repeat(auto-fill, minmax(170px, 1fr))") }
+    rule(".wide") { put("grid-template-columns", "repeat(12, minmax(0, 1fr))") }
+    "4 5 7 8 12".split(' ').forEach { n -> rule(".span$n") { put("grid-column", "span $n") } }
+    rule("@media (max-width: 1279px)") { rule(".wide > *") { put("grid-column", "span 12") } }
+    rule(".panel-head") {
+        put("display", "flex")
+        put("align-items", "baseline")
+        put("gap", "8px")
+        put("margin-bottom", "8px")
+    }
+    rule(".panel-head h2") {
+        put("font-size", "13px")
+        put("margin", "0")
+    }
+    rule(".panel-head .go") { put("margin-left", "auto") }
+}
+
+private fun CssBuilder.text() {
+    rule(".kicker") {
+        put("font-size", "10px")
+        put("letter-spacing", ".12em")
+        put("text-transform", "uppercase")
+        put("color", v("fg-muted"))
+        put("margin", "0")
+    }
+    rule(".kpi .value, .big") {
+        put("font-size", "22px")
+        put("font-weight", "600")
+        put("margin", "2px 0")
+    }
+    rule(".big") { put("font-size", "28px") }
+    rule(".accent, .delta") { put("color", v("accent")) }
+    rule(".small") {
+        put("font-size", "11px")
+        put("margin", "0")
+    }
+    rule(".saved") {
+        put("display", "flex")
+        put("flex-wrap", "wrap")
+        put("gap", "16px 32px")
+        put("align-items", "center")
+    }
+    rule(".budget") {
+        put("flex", "1")
+        put("min-width", "180px")
+        put("max-width", "320px")
+        put("margin-left", "auto")
+    }
+}
+
+private fun CssBuilder.tables() {
+    rule(".scroll") {
+        put("overflow", "auto")
+        put("max-height", "360px")
+    }
+    rule("table") {
+        put("width", "100%")
+        put("border-collapse", "collapse")
+    }
+    rule("th, td") {
+        put("text-align", "left")
+        put("padding", "4px 6px")
+        put("border-bottom", "1px solid ${v("border")}")
+        put("white-space", "nowrap")
+    }
+    rule("th") {
+        put("font-size", "10px")
+        put("text-transform", "uppercase")
+        put("color", v("fg-muted"))
+        put("position", "sticky")
+        put("top", "0")
+        put("background", v("surface"))
+    }
+    rule(".r") {
+        put("text-align", "right")
+        put("font-variant-numeric", "tabular-nums")
+    }
+    rule(".check") { put("padding", "2px 0") }
 }
 
 private fun CssBuilder.widgets() {
