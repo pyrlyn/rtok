@@ -119,8 +119,14 @@ The frontend is being rewritten in Compose Multiplatform, replacing the kotlinx.
 - Pages done in Compose: Overview (#199); Calls, Sessions, Logs, Config, Hosts, Services, Plugins, Usage, Stats, Skills
   (#204); Tasks, Worktrees, the Hosts junk card, Doctor with the fix panel (#205); Graph base: alerts, projects with health rings, re-index/remove/unlink, status
   body (#207); Graph drill with breadcrumb, focus depth, node list, compare with change marks, JSON export/import,
-  removal dry run and an interim Canvas scene (#209). Left: live calls, the command palette, the WebGL cloud scene
-  (`kotlin-webgl`, replaces the Canvas scene).
+  removal dry run (#209); live calls, the command palette (⌘K/Ctrl+K, `g <key>`, `?`) and the WebGL cloud (#211).
+- Graph cloud: the Graph page draws every registered project as a cluster in one WebGL2 scene (`GraphCloud.kt`,
+  generic renderer from `kotlin-webgl`, included via `KOTLIN_WEBGL_DIR`, default `../../packages/kotlin-webgl`).
+  `cloudClusters` (`:rtok-web-model`) is the rtok mapping: one cluster per `projects` row, radius from indexed files,
+  tone from health; the drilled project also carries its drill graph with change marks. Zoomed out a cluster is a
+  summary disc, zoomed in (or focused) its nodes and edges. Drag pans, the wheel zooms about the cursor, a click on a
+  cluster flies the camera in and opens its drill-down, a click on a node opens it, "← all projects" flies back.
+  Cluster titles are not drawn in the scene yet (no text in WebGL); the projects list above names them.
 - Serving: open. `embedDir` embeds text files only and the Compose distribution is ~11 MB of binary `.wasm`; embedding
   needs binary (base64) entries in `embedDir`/`Spa` and a size decision before `:rtok-web` switches to `web-dist` of
   `:rtok-web-compose`. `Spa` already maps `.wasm` and now `.mjs`.

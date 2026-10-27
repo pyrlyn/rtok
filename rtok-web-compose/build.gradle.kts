@@ -1,7 +1,8 @@
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
 
 // The `rtok web` frontend in Compose Multiplatform (docs/web.md "Compose UI"): wasmJs only, pure logic from
-// :rtok-web-model, charts and the graph on Compose Canvas. `webDist` collects the production webpack
+// :rtok-web-model, charts on Compose Canvas, the graph cloud on WebGL
+// (kotlin-webgl). `webDist` collects the production webpack
 // distribution into build/web-dist; :rtok-web embeds it with -Prtok.web.ui=compose until it reaches parity.
 plugins {
     id("org.jetbrains.compose")
@@ -23,6 +24,8 @@ configure<KotlinMultiplatformExtension> {
         implementation("org.jetbrains.compose.runtime:runtime:1.12.2")
         implementation("org.jetbrains.compose.foundation:foundation:1.12.2")
         implementation("org.jetbrains.compose.ui:ui:1.12.2")
+        implementation("pyrlyn.webgl:webgl-compose")
+        implementation("pyrlyn.webgl:graph")
     }
 }
 

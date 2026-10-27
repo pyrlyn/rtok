@@ -1,6 +1,6 @@
 // The Graph page in Compose: grouped health alerts, the project registry (select, re-index, removal plan then
 // confirmed removal with its dry run, links, health rings), the drill-down (GraphDrill*.kt) and the
-// `rtok graph status` body. Live calls come in the next slice.
+// `rtok graph status` body, with live calls (LiveCalls.kt) and the WebGL cloud of project graphs (GraphCloud.kt).
 // Compose UI: @Composable functions are PascalCase and layout sizes are literal dp/sp values.
 @file:Suppress("FunctionNaming", "MagicNumber")
 
@@ -26,8 +26,10 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import rtok.web.ui.ALERT_WORDS
 import rtok.web.ui.DeadSymbol
+import rtok.web.ui.DrillState
 import rtok.web.ui.GraphAlert
 import rtok.web.ui.GraphView
+import rtok.web.ui.cloudClusters
 import rtok.web.ui.describeGroup
 import rtok.web.ui.fixed
 import rtok.web.ui.flag
@@ -186,7 +188,12 @@ val GraphPage =
         val rows = snap.objects("projects")
         Alerts(rows)
         Projects(app, rows)
+        if (rows.isNotEmpty()) {
+            val d = app.drill
+            GraphCloud(cloudClusters(rows, d.marked()), d.state()?.project, { id -> d.go(id?.let { DrillState(it) }) }, { _, id -> d.openNode(id) })
+        }
         if (DrillView(app, rows)) return@PageView
+        if (rows.isNotEmpty()) LiveCalls(app.live)
         if (snap["graph"] == null || snap["graph"] is JsonNull) {
             Panel("graph") { Muted("Graph page off. The graph feature is not built in, or the store read failed (Snapshot.graph = null).") }
         } else {
