@@ -127,6 +127,8 @@ The frontend is being rewritten in Compose Multiplatform, replacing the kotlinx.
   summary disc, zoomed in (or focused) its nodes and edges. Drag pans, the wheel zooms about the cursor, a click on a
   cluster flies the camera in and opens its drill-down, a click on a node opens it, "← all projects" flies back.
   Cluster titles are not drawn in the scene yet (no text in WebGL); the projects list above names them.
+- Symbols the bundled font lacks (⌘, ●, arrows, ≈, −, ×, ✓, ✗, ☐, ☑, Σ, §) are drawn as inline SVG-path vectors
+  (`Glyphs.kt`); `Txt` swaps them in, so page code keeps plain strings.
 - Serving: `:rtok-web` embeds `:rtok-web-compose`'s `webDist` (source maps excluded). `embedDir` keeps text files as
   is and embeds binary ones (not UTF-8 or with NUL: the `.wasm` modules) as base64 chunks that `EmbeddedAssets`
   decodes once on first request. The CSP adds `'wasm-unsafe-eval'` so the browser may compile the modules. The debug
