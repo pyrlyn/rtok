@@ -3,6 +3,7 @@
 package rtok.agents
 
 import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.convert
 import platform.posix.chmod
 import rtok.config.Config
 import rtok.store.Store
@@ -272,10 +273,10 @@ class JunkClearApplyTest {
         assertEquals(null, JunkClearCheck.lockfileUnder("$dir/cache", far).getOrThrow())
         val closed = "$dir/cache/closed"
         createDirAll(closed)
-        chmod(closed, CLOSED.toUShort())
+        chmod(closed, CLOSED.toUShort().convert())
         val readable = runCatching { listDir(closed) }.isSuccess
         val res = JunkClearCheck.lockfileUnder("$dir/cache", far)
-        chmod(closed, OPEN.toUShort())
+        chmod(closed, OPEN.toUShort().convert())
         // Running as root reads everything; the refusal is only observable otherwise.
         assertTrue(readable || res.isFailure, "$res")
         assertTrue(JunkClearCheck.lockfileUnder("$dir/cache", TimeSource.Monotonic.markNow()).isFailure)

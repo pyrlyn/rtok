@@ -1,6 +1,9 @@
+@file:OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
+
 // Port of src/worktree/seed.rs tests.
 package rtok.worktree
 
+import kotlinx.cinterop.convert
 import platform.posix.chmod
 import platform.posix.symlink
 import rtok.support.tmpDir
@@ -78,12 +81,12 @@ class SeedTest {
         val (main, new) = "$tmp/main" to "$tmp/new"
         touch("$main/target/a", OLD)
         touch("$main/target/locked/b", OLD)
-        chmod("$main/target/locked", LOCKED.toUShort())
+        chmod("$main/target/locked", LOCKED.toUShort().convert())
         createDirAll(new)
         touch("$tmp/elsewhere/secret", OLD)
         symlink("$tmp/elsewhere", "$main/node_modules")
         val seeded = Seed.run(listOf(main, new), new, listOf("target", "node_modules"))
-        chmod("$main/target/locked", OPEN.toUShort())
+        chmod("$main/target/locked", OPEN.toUShort().convert())
         assertTrue(seeded.isEmpty(), "$seeded")
         assertFalse(exists("$new/target") || exists("$new/node_modules"))
     }

@@ -3,6 +3,7 @@
 
 package rtok.plugins.guard
 
+import kotlinx.cinterop.convert
 import kotlinx.serialization.json.*
 import rtok.config.Config
 import rtok.plugin.Runtime
@@ -398,7 +399,7 @@ class GuardTest {
             try {
                 assertTrue(denies(pre(Ctx(r), "Read", path)), "only metadata was consulted")
             } finally {
-                platform.posix.chmod(file, "644".toUInt(8).toUShort())
+                platform.posix.chmod(file, "644".toUInt(8).convert())
             }
         }
 

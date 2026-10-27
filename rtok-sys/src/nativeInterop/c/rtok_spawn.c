@@ -3,10 +3,25 @@
 #define _GNU_SOURCE
 #include <unistd.h>
 #include "rtok_spawn.h"
+#include <errno.h>
 extern char **environ;
-int rtok_spawn_addchdir(posix_spawn_file_actions_t *actions, const char *dir) {
+#ifndef __APPLE__
+/* Kotlin/Native links Linux binaries against an old glibc sysroot (2.19 on x64) whose headers have neither
+   posix_spawn_file_actions_addchdir_np (glibc 2.29) nor POSIX_SPAWN_SETSID (glibc 2.26). Both are resolved
+   against the running glibc: the chdir action weakly (ENOSYS when absent), the flag by its glibc value
+   (an older glibc rejects it with EINVAL). */
+extern int posix_spawn_file_actions_addchdir_np(posix_spawn_file_actions_t *, const char *) __attribute__((weak));
+#ifndef POSIX_SPAWN_SETSID
+#define POSIX_SPAWN_SETSID 0x80
+#endif
+#endif
+static int rtok_addchdir(posix_spawn_file_actions_t *actions, const char *dir) {
+#ifndef __APPLE__
+    if (!posix_spawn_file_actions_addchdir_np) return ENOSYS;
+#endif
     return posix_spawn_file_actions_addchdir_np(actions, dir);
 }
+int rtok_spawn_addchdir(posix_spawn_file_actions_t *actions, const char *dir) { return rtok_addchdir(actions, dir); }
 char **rtok_environ(void) { return environ; }
 #ifdef __APPLE__
 #include <libproc.h>
@@ -81,7 +96,7 @@ int rtok_spawn(int *pid, const char *prog, char *const argv[], char *const envp[
         case 0: rc = posix_spawn_file_actions_adddup2(&actions, arg[i], fd[i]); break;
         case 1: rc = posix_spawn_file_actions_addopen(&actions, fd[i], path[i], arg[i], (mode_t)mode[i]); break;
         case 2: rc = posix_spawn_file_actions_addclose(&actions, fd[i]); break;
-        case 3: rc = posix_spawn_file_actions_addchdir_np(&actions, path[i]); break;
+        case 3: rc = rtok_addchdir(&actions, path[i]); break;
         default: rc = EINVAL;
         }
     }

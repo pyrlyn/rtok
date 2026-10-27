@@ -14,32 +14,49 @@ val fetchGrammars by tasks.registering(Exec::class) {
     outputs.dir(vendor)
     commandLine("python3", rootDir.resolve("scripts/grammars.py").absolutePath, "fetch")
 }
-val buildGrammars by tasks.registering(Exec::class) {
-    description = "Builds librtok_ts.a (runtime + grammars + grammar table) with CMake/Ninja."
-    dependsOn(fetchGrammars)
-    inputs.dir(vendor)
-    inputs.file("CMakeLists.txt")
-    inputs.dir("src/nativeInterop/c")
-    outputs.dir(cmakeDir)
-    workingDir(projectDir)
-    inputs.property("coverage", cCoverage)
-    commandLine("sh", "-c", "cmake -S . -B build/cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -DRTOK_TS_COVERAGE=${if (cCoverage) "ON" else "OFF"} >/dev/null && cmake --build build/cmake")
+
+/** Builds librtok_ts.a (runtime + grammars + grammar table) for one Kotlin/Native target with CMake/Ninja, using that target's C toolchain (buildSrc CrossCc). */
+fun buildGrammarsFor(target: KotlinNativeTarget): TaskProvider<Exec> {
+    val cap = target.name.replaceFirstChar(Char::uppercase)
+    val out = cmakeDir.get().dir(target.name).asFile
+    val cc = CrossCc.forTarget(target.konanTarget.name)
+    val cmake = listOf("cmake", "-S", ".", "-B", "'${out.path}'", "-G", "Ninja", "-DCMAKE_BUILD_TYPE=Release", "-DRTOK_TS_COVERAGE=${if (cCoverage) "ON" else "OFF"}") + cc.cmakeArgs()
+    return tasks.register<Exec>("buildGrammars$cap") {
+        description = "Builds librtok_ts.a (runtime + grammars + grammar table) for ${target.name} with CMake/Ninja."
+        dependsOn(fetchGrammars)
+        inputs.dir(vendor)
+        inputs.file("CMakeLists.txt")
+        inputs.dir("src/nativeInterop/c")
+        outputs.dir(out)
+        workingDir(projectDir)
+        inputs.property("coverage", cCoverage)
+        commandLine("sh", "-c", cmake.joinToString(" ") + " >/dev/null && cmake --build '${out.path}'")
+    }
 }
 configure<KotlinMultiplatformExtension> {
     sourceSets.commonMain.dependencies { api(project(":treesitter")) }
     targets.withType<KotlinNativeTarget>().configureEach {
+        val target = name
+        val lib = cmakeDir.map { it.file("$target/librtok_ts.a") }
         compilations.getByName("main").cinterops.create("ts") {
             defFile(file("src/nativeInterop/cinterop/ts.def"))
             includeDirs(vendor.get().dir("tree-sitter/lib/include").asFile, file("src/nativeInterop/c"))
-            extraOpts("-libraryPath", cmakeDir.get().asFile.absolutePath)
+            extraOpts(
+                "-libraryPath",
+                cmakeDir
+                    .get()
+                    .dir(target)
+                    .asFile.absolutePath,
+            )
         }
         if (cCoverage) binaries.getTest("DEBUG").linkerOpts(clangProfileRuntime())
+        // The static library is embedded in the cinterop klib, so it is an input of the cinterop task.
+        val build = buildGrammarsFor(this)
+        tasks.matching { it.name == "cinteropTs" + target.replaceFirstChar(Char::uppercase) }.configureEach {
+            dependsOn(build)
+            inputs.file(lib)
+        }
     }
-}
-// The static library is embedded in the cinterop klib, so it is an input of the cinterop task.
-tasks.matching { it.name.startsWith("cinteropTs") }.configureEach {
-    dependsOn(buildGrammars)
-    inputs.file(cmakeDir.map { it.file("librtok_ts.a") })
 }
 
 /** clang's profile runtime, needed only when the runtime is instrumented. */
