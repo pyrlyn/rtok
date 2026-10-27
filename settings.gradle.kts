@@ -13,6 +13,8 @@ includeBuild(System.getenv("KOTLIN_WASM_DIR") ?: "../../packages/kotlin-wasm")
 // insta-style snapshot assertions for tests (docs/testing.md "Snapshot tests"): a checkout of
 // kotlin-snapshot. KOTLIN_SNAPSHOT_DIR overrides the path.
 includeBuild(System.getenv("KOTLIN_SNAPSHOT_DIR") ?: "../../packages/kotlin-snapshot")
+// WebGL2 wrapper, Compose host and the generic graph cloud for :rtok-web-compose.
+includeBuild(System.getenv("KOTLIN_WEBGL_DIR") ?: "../../packages/kotlin-webgl")
 // Remote build cache on Cloudflare R2 (docs/build-speed.md). Approved by Ivan 2026-10-26.
 // Repositories + R2 remote build cache (docs/build-speed.md), approved by Ivan 2026-10-26; logic in ci.diffuser.settings.
 plugins { id("com.github.burrunan.s3-build-cache") version "1.9.10"; id("ci.diffuser.settings") }
