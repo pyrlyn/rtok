@@ -51,16 +51,17 @@ object Pages {
 
 /** Typed replies (`message`, `expand`, ...) go to whichever page listens for that type. */
 object Replies {
-    private val listeners = HashMap<String, (Frame.Reply) -> Unit>()
+    private val listeners = HashMap<String, MutableList<(Frame.Reply) -> Unit>>()
 
+    /** Adds [listener] for frames of [type]; several pages may listen to one type (`message`). */
     fun on(
         type: String,
         listener: (Frame.Reply) -> Unit,
     ) {
-        listeners[type] = listener
+        listeners.getOrPut(type) { mutableListOf() }.add(listener)
     }
 
     fun dispatch(f: Frame.Reply) {
-        listeners[f.type]?.invoke(f)
+        listeners[f.type]?.toList()?.forEach { it(f) }
     }
 }

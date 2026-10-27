@@ -1,17 +1,22 @@
 // Port of src/web/mod.rs `inbound`/`answer`, `allowlisted_plugin_enabled`, `message_frame` and protocol.rs
-// `tag_reply` (T623): the reply to one `/ws` client message; the graph page's requests are in GraphAnswer.kt. `doctor` and `junk` answer with the notice Rust sends for a malformed one
-// until their ports land.
+// `tag_reply` and `junk_reply` (T623, T330.7): the reply to one `/ws` client message; the graph page's requests are in
+// GraphAnswer.kt. `doctor` answers with the notice Rust sends for a malformed one until its port lands.
 package rtok.web
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.longOrNull
 import rtok.Expand
+import rtok.agents.Junk
+import rtok.agents.JunkReport
+import rtok.agents.JunkWeb
 import rtok.config.Config
 import rtok.config.Validate
+import rtok.model.JunkPage
 import rtok.plugin.Runtime
 import rtok.plugins.Registry
 import kotlin.concurrent.AtomicReference
@@ -31,6 +36,8 @@ class LiveConfig(
 
 class Answer(
     private val cfg: LiveConfig,
+    /** The junk scan `plan` and `apply` run over; tests hand in a fixture report instead of the real home's. */
+    private val junkReport: (Config) -> JunkReport = Junk::report,
 ) : Inbound {
     /** The reply to [text], `req` written in when the request carried one; null for none. */
     override fun answer(text: String): String? {
@@ -47,6 +54,10 @@ class Answer(
 
             "set" in v -> {
                 set(v.getValue("set"))
+            }
+
+            "junk" in v -> {
+                junk(v.getValue("junk"))
             }
 
             GraphAnswer.KEYS.any { it in v } -> {
@@ -101,12 +112,39 @@ class Answer(
             { message("config set $key: ${it.message ?: it}") },
         )
 
+    /**
+     * mod.rs `junk_reply`: the upgrade's token and origin checks cover it; only `apply` removes, through the same plan,
+     * re-checks and refusals as `agents junk clear`.
+     */
+    private fun junk(body: JsonElement): String {
+        val o = body as? JsonObject
+        val action = (o?.get("action") as? JsonPrimitive)?.takeIf { it.isString }?.content
+        val raw = o?.get("paths")
+        val paths =
+            when (raw) {
+                null -> emptyList()
+                is JsonArray -> raw.map { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content }
+                else -> listOf(null)
+            }
+        if (action !in JUNK_ACTIONS || null in paths) return message("junk needs an action")
+        val c = cfg.value
+        val report = junkReport(c)
+        return if (action == "plan") {
+            frame("junkplan", "plan" to JunkWeb.plan(c, report).json())
+        } else {
+            val cleared = JunkWeb.apply(c, report, paths.filterNotNull())
+            JunkPage.forget()
+            frame("junkcleared", "cleared" to cleared.json())
+        }
+    }
+
     companion object {
+        private val JUNK_ACTIONS = setOf("plan", "apply")
+
         /** A request whose shape did not parse, by its key, in Rust's order. */
         private val MALFORMED =
             listOf(
                 "calls" to "calls needs a subscribe flag",
-                "junk" to "junk needs an action",
                 "doctor" to "doctor needs an action and a selection",
             )
 
