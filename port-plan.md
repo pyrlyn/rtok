@@ -1193,3 +1193,15 @@ Next, in order:
 - Tests: GitlabTest 11 (gitlab.rs 10 + run.rs's gitlab open test).
 - Stop point: next export (export.rs, export/github.rs, export/linear.rs), `rtok task export`, task MCP tools, wire
   `taskWarningSink` to the CLI; sync.rs's GitHub read-only test.
+
+## Session: tasks part 7 — export (export.rs, export/github.rs, export/linear.rs), `rtok task export`, warnings
+- `rtok.tasks.Export.kt` (diff, drift, run, render, `openExporter`), `GithubExporter.kt` (drives `GithubAdapter`,
+  issues only), `LinearExporter.kt` (GraphQL: team states by type, label ids created on demand, paging, archived
+  issues kept). `graphql()` takes an endpoint path and message prefix so Linear reuses it. `TaskOps.export` (disk
+  adapter only) and `rtok task export <github|linear> [--dry-run] [--json]` (unknown backend: usage error, exit 2).
+- `StderrLog.kt`: Rust's `log` + env_logger on stderr (RUST_LOG directives, default line format). Every `rtok task`
+  action now points `taskWarningSink` at it (target `rtok::tasks`, level warn), like `log::warn!`.
+- Tests: ExportTest 6, GithubExporterTest 5, LinearExporterTest 7 (all fake HTTP), StderrLogTest 3, TaskE2eSpec +1
+  (task_cli.rs export test, plus the Linear team check). FakeHttp gained `onIf` (httpmock `is_true`).
+- Stop point: next task MCP tools (MCP halves of task_cli.rs), sync.rs's GitHub read-only test; then model, report,
+  otel, completions, bench, demon, hooks dispatcher tests, worktree add/finish/whoami/clean/migrate, proxy batch tests.

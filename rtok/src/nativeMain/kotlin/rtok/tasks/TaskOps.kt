@@ -37,6 +37,20 @@ object TaskOps {
         project: TaskProject,
     ) = withStore(cfg) { syncTasks(project, it) }
 
+    /** `rtok task export`: the disk tasks, all statuses, mirrored into [backend]. */
+    fun export(
+        cfg: Config,
+        cwd: String,
+        backend: String,
+        dryRun: Boolean,
+    ): ExportReport {
+        if (cfg.tasks.adapter != "disk") {
+            bail("rtok task export mirrors the disk adapter, but [tasks] adapter is ${rtok.plugin.sdk.debugStr(cfg.tasks.adapter)}")
+        }
+        val project = TaskProject.open(cfg.tasks, cwd)
+        return openExporter(cfg.tasks, project.key, backend).use { runExport(it, project.adapter.list(Filter(all = true)), dryRun) }
+    }
+
     fun next(
         cfg: Config,
         project: TaskProject,

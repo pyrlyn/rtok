@@ -1,7 +1,7 @@
 @file:Suppress("MagicNumber")
 
 // Port of tests/task_cli.rs (T441.5): `rtok task …` end to end on the disk adapter, in a throwaway checkout with its
-// own home. The MCP halves and the export test wait for the task MCP tools and the export adapters.
+// own home. The MCP halves wait for the task MCP tools.
 
 package rtok.e2e
 
@@ -106,6 +106,22 @@ class TaskE2eSpec :
                 }
                 b.ok("next") shouldBe "no ready task\n"
                 b.ok("next", "--json") shouldBe "null\n"
+            }
+        }
+
+        test("export mirrors the disk adapter only and names the backends") {
+            TaskBox("export").use { b ->
+                // A github-adapter checkout is refused before any token lookup or request.
+                writeString(b.file(".rtok.toml"), "[tasks]\nadapter = \"github\"\nprefix = \"E\"\n")
+                val refused = b.task("export", "github", "--dry-run")
+                refused.code shouldBe 1
+                refused.err shouldContain "mirrors the disk adapter"
+                val unknown = b.task("export", "jira")
+                unknown.code shouldBe 2
+                unknown.err shouldContain "invalid value"
+                // A disk checkout without a Linear team stops before the key lookup.
+                writeString(b.file(".rtok.toml"), "[tasks]\nadapter = \"disk\"\nprefix = \"E\"\n")
+                b.task("export", "linear", "--dry-run").err shouldContain "[tasks.export.linear] team"
             }
         }
 
