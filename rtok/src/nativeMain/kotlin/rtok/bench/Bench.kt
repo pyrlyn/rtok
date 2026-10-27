@@ -54,6 +54,7 @@ object Bench {
     fun run(cfg: Config): String =
         when (cfg.bench.suite) {
             "graph" -> GraphSuite.run(cfg)
+            "p28" -> P28Suite.run(cfg)
             "" -> defaultSuite(cfg)
             else -> throw BenchException("unknown bench suite \"${cfg.bench.suite}\"")
         }

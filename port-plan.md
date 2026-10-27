@@ -1511,8 +1511,11 @@ Next, in order:
   pipes cannot stall the caller (Rust T638).
 - Tests: BenchTest (7) on temp fixtures with `true`/`false` checks (the real bench/tasks.toml checks run
   `git clean` in the repo, so they are not used), RunBoundedTest (7).
-- Not ported yet: `--suite p28` (src/bench/p28.rs), the bench/ overlay tests, tests/*_bench.rs,
-  tests/bench_fixtures.rs (needs an o200k_base tokenizer), tests/p28_must_keep.rs.
+- `--suite p28` (src/bench/p28.rs) ported: rtok/bench/P28Suite.kt, its 7 tests in P28Test.kt over the shipped suite
+  copied to rtok/src/commonTest/fixtures/bench (p28.toml, p28/, p28_must_keep.toml; `keep` rewritten as
+  `[[body.keep]]` tables because ktoml drops inline tables whose strings hold braces or escaped quotes).
+- Not ported yet: the bench/ overlay tests, tests/*_bench.rs, tests/bench_fixtures.rs (needs an o200k_base
+  tokenizer), tests/p28_must_keep.rs.
 
 ## Session: macOS/Linux split, part 1
 - `fileLock` (expect in nativeMain; actual `platform.posix.flock` on macOS, `platform.linux.flock` on Linux,
