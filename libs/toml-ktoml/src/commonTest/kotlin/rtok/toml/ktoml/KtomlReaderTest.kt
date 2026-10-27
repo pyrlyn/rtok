@@ -44,6 +44,31 @@ class KtomlReaderTest {
         assertEquals("s", r["t"]!!.jsonObject["y"]!!.jsonPrimitive.content)
     }
 
+    /** ktoml split these at a `}` or `,` after an escaped quote (p28 must-keep spans hold JSON and Rust code). */
+    @Test fun arraysOfInlineTablesKeepStringsWithEscapedQuotesAndBraces() {
+        val r =
+            p(
+                "a = [{ x = \"\\\"}\" }, { x = \"r\" }]\n" +
+                    "b = [\n  { kind = \"e\", text = \"\\\"code\\\": {\\\"x\\\": 1}\", n = 1 },\n  { kind = \"i\", text = \"Err { leg: id }\" },\n]\n" +
+                    "c = \"\"\"m \\\"q\\\" }\"\"\"\n" +
+                    "d = 'lit \\\" stays'\n",
+            )
+        assertEquals(listOf("\"}", "r"), r["a"]!!.jsonArray.map { it.jsonObject["x"]!!.jsonPrimitive.content })
+        val b = r["b"]!!.jsonArray
+        assertEquals(2, b.size)
+        assertEquals("\"code\": {\"x\": 1}", b[0].jsonObject["text"]!!.jsonPrimitive.content)
+        assertEquals("1", b[0].jsonObject["n"]!!.jsonPrimitive.content)
+        assertEquals("Err { leg: id }", b[1].jsonObject["text"]!!.jsonPrimitive.content)
+        assertEquals("m \"q\" }", r["c"]!!.jsonPrimitive.content)
+        assertEquals("lit \\\" stays", r["d"]!!.jsonPrimitive.content)
+    }
+
+    @Test fun anEscapedQuoteRewriteKeepsCommentsAndLiteralStrings() {
+        val src = "# \"a\\\"\" in a comment\nx = 'c:\\\\\"'\ny = \"\\\\\"\n"
+        assertEquals(src, escapeQuotesForKtoml(src))
+        assertEquals("z = \"a\\u0022b\"\n", escapeQuotesForKtoml("z = \"a\\\"b\"\n"))
+    }
+
     @Test fun arrays() {
         val r = p("a = [1, 2]\nb = [[1], [\"x\"]]\nc = [\n  \"m\",\n  \"n\",\n]\n")
         assertEquals(2, r["a"]!!.jsonArray.size)

@@ -16,7 +16,7 @@ object KtomlReader : TomlReader {
     override fun read(text: String): TomlDocument {
         val file =
             try {
-                parser.parseString(text)
+                parser.parseString(escapeQuotesForKtoml(text))
             } catch (e: Exception) {
                 throw TomlException("TOML parse error: ${e.message}", e)
             }
