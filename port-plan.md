@@ -1126,3 +1126,11 @@ Next, in order:
 - Tests: DoctorPageTest 12.
 - Stop point: next tasks, model, report, otel, completions, bench, demon, hooks dispatcher tests; worktree
   add/finish/whoami/clean/migrate; transcript_cache (unblocks doctor read-share).
+## Session: measure/transcript_cache.rs (+ doctor read-share and skill usage)
+- `rtok.measure.TranscriptCache` (`FileAgg` with the Rust JSON field names, `scan` through the process cache seeded
+  from `transcripts-cache.json` beside the store, `scanWith`, `aggregate`, `estTokens`, `load`, atomic `save`);
+  `Parsed` (jsonl.rs) gains `toolUses`, `toolResults`, `injected` and `compactions`.
+- `rtok.doctor.Usage` (`readShare`, `skillUsage`): doctor's read-share line and the skills audit's call counts,
+  never-invoked flags and repeat loads now come from the transcripts.
+- Tests: TranscriptCacheTest 2, DoctorPageTest +1 (read-share fraction).
+- Stop point: next tasks, model, report, otel, completions, bench, demon, hooks dispatcher tests; worktree verbs.

@@ -145,6 +145,17 @@ class DoctorPageTest {
     fun readShareWithoutTranscriptsIsNoData() = withSettings("t504-empty", "{}") { cfg, _ -> assertTrue("read-share no data" in Page.page(cfg).toText()) }
 
     @Test
+    fun readShareReportsGrepGlobFraction() =
+        withSettings("t504-doc", "{}") { cfg0, dir ->
+            createDirAll("$dir/t")
+            val pair = { uid: String, name: String, body: String -> rtok.measure.toolPair(uid, name, "{}", body) }
+            writeString("$dir/t/s.jsonl", pair("u-read", "Read", "R".repeat(40)) + pair("u-grep", "Grep", "G".repeat(20)) + pair("u-glob", "Glob", "g".repeat(12)))
+            val cfg = cfg0.copy(stats = cfg0.stats.copy(transcriptsDir = "$dir/t"))
+            val s = Page.page(cfg).toText()
+            assertTrue("read-share grep+glob 44.4% of read-class tokens (read 10, grep 5, glob 3)" in s, s)
+        }
+
+    @Test
     fun listsAnthropicAndOpenaiProxyChains() =
         withSettings("t115-doctor", """{"env":{"ANTHROPIC_BASE_URL":"http://127.0.0.1:1"}}""") { cfg0, dir ->
             writeString("$dir/opencode.json", """{"env":{"OPENAI_BASE_URL":"http://127.0.0.1:1/v1"}}""")
