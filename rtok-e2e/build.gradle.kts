@@ -4,7 +4,12 @@
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
 
 configure<KotlinMultiplatformExtension> {
-    sourceSets.commonTest.dependencies { implementation(project(":rtok-sys")) }
+    sourceSets.commonTest.dependencies {
+        implementation(project(":rtok-sys"))
+        // The task specs register agents straight in the sandbox store, as tests/task_cli.rs does.
+        implementation(project(":rtok-store"))
+        implementation(project(":db-room"))
+    }
 }
 
 // `-Pe2e.release` runs the suite against the release binary: some K/N bugs only show with release optimizations.
