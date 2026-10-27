@@ -1,5 +1,5 @@
 // Port of src/cli/agents.rs and cli/agents_host.rs (host side): `rtok agents install|uninstall|remove|update|list|info`.
-// Not ported yet: the desktop restart behind `--no-restart` (accepted, nothing to skip yet). The junk commands are in AgentsJunkCmd.kt.
+// The junk commands are in AgentsJunkCmd.kt.
 package rtok.cli
 
 import kotlinx.cinterop.toKString
@@ -31,6 +31,14 @@ import rtok.store.StoreException
 private val HOST_ARG = ArgSpec("host", "Host id, or several comma-separated (`opencode,cursor`)")
 private val DRY_RUN = OptSpec.Flag("dry-run", "Show what would change; write nothing")
 private val STAT = OptSpec.Flag("stat", "With --dry-run: per-file +/- counts instead of the diff")
+private val PROJECT_OFF =
+    OptSpec.Flag("project", "Take rtok out of the project's post-create script (`cursor`, `kilo`, `windsurf`, `devin`) instead of the host's config")
+private val PROJECT_ON =
+    OptSpec.Flag(
+        "project",
+        "Add rtok to the project's post-create script, so a worktree the host makes joins rtok (`cursor`, `kilo`, `windsurf`, `devin`); " +
+            "run it inside the repository",
+    )
 private val NO_RESTART = OptSpec.Flag("no-restart", "Do not quit and reopen a running desktop app")
 private val CLI = OptSpec.Flag("cli", "Only the CLI app")
 private val DESKTOP = OptSpec.Flag("desktop", "Only the desktop app")
@@ -62,10 +70,7 @@ private fun hostWriter(
                 DRY_RUN,
                 NO_RESTART,
                 OptSpec.Flag("yes", "Also remove what asks first (a linked plugin, an edited copy)"),
-                OptSpec.Flag(
-                    "project",
-                    "Take rtok out of the project's post-create script (`cursor`, `kilo`, `windsurf`, `devin`) instead of the host's config",
-                ),
+                PROJECT_OFF,
                 STAT,
             )
         } else {
@@ -80,11 +85,7 @@ private fun hostWriter(
                 DESKTOP,
                 ALL,
                 NO_RESTART,
-                OptSpec.Flag(
-                    "project",
-                    "Add rtok to the project's post-create script, so a worktree the host makes joins rtok " +
-                        "(`cursor`, `kilo`, `windsurf`, `devin`); run it inside the repository",
-                ),
+                PROJECT_ON,
                 STAT,
             )
         }
@@ -106,7 +107,16 @@ private fun hostWriter(
                 }
             val cfg = Config.loadWith(inv.configFile, overlay)
             if (inv.flag("project")) return@write AgentsCommand.installProject(cfg, inv.requireArg("host"), remove)
-            AgentsCommand.install(cfg, inv.requireArg("host"), mode, inv.flag("cli"), inv.flag("desktop"), inv.flag("all"))
+            AgentsCommand.install(
+                cfg,
+                inv.requireArg("host"),
+                mode,
+                inv.flag("cli"),
+                inv.flag("desktop"),
+                inv.flag("all"),
+                noRestart = inv.flag("no-restart"),
+                warn = inv.io::eprintln,
+            )
         }
     }
 }
@@ -164,7 +174,7 @@ private val UPDATE =
         if (source != null && source !in AgentsCommand.SOURCES) throw CliFailure("--source: expected one of ${AgentsCommand.SOURCES.joinToString(", ")}, got $source")
         write(inv) {
             val cfg = Config.loadWith(inv.configFile, AgentsCommand.setupFlags(dryRun = inv.flag("dry-run"), force = inv.flag("force"), source = source))
-            AgentsCommand.update(cfg, inv.arg("host"), inv.flag("cli"), inv.flag("desktop"), inv.flag("all"), warn = inv.io::eprintln)
+            AgentsCommand.update(cfg, inv.arg("host"), inv.flag("cli"), inv.flag("desktop"), inv.flag("all"), warn = inv.io::eprintln, noRestart = inv.flag("no-restart"))
         }
     }
 
