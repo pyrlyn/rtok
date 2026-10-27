@@ -147,6 +147,8 @@ val HostsPage =
                 }
             }
         }
+        // Hosts.tsx renders the junk card under the hosts; not ready until junk reaches the snapshot.
+        pendingPage("junk", "rtok agents junk report").render(out, snap, app)
     }
 
 private fun FlowContent.service(s: ServiceRow) {
