@@ -889,3 +889,13 @@ Next, in order:
 - Tests: JunkCacheTest 4, CleanTest 3, DiskUsageTest 2.
 - Stop point: next junk_kinds.rs, then junk_review, junk_sessions, junk_worktrees, junk_items, junk.rs (list/report),
   junk_clear, CLI; then `--project`, restart.rs, the rest of phase 10.
+
+## Session: agents — junk 3: the leftover kinds (junk_kinds.rs)
+- `rtok.sys`: `lockHeld` (flock probe, read-write then read-only), `processAlive` (signal 0), `listDirOrEmpty`.
+- `rtok.agents`: `JunkKinds` constants (`NOT_DOCUMENTED`, `PACKAGE_LOCKS`, `DEPS`, `BUILD_DIRS`), `foundItems`
+  (locks/swap/index/backups), `tempItems`, `agedItems`, `buildItems` (tagged `build`, listed-only `build`/`deps`),
+  `stagingCaches` (T279), `staleCodeCaches` (§22.2); file predicates and swap/lock reasons in `JunkFinds.kt`.
+  `agent_worktrees`/`in_hosts` move to the junk_worktrees PR (they need `junk_worktrees::worktrees`).
+- Tests: JunkKindsTest 5, JunkFindsTest 3.
+- Stop point: next junk_worktrees (+ `agent_worktrees`), junk_review, junk_sessions, junk_items, junk.rs
+  (list/report), junk_clear, CLI; then `--project`, restart.rs, the rest of phase 10.

@@ -203,6 +203,9 @@ fun pid(): Int = getpid()
 /** Entry names of a directory (no `.`/`..`), unsorted like `std::fs::read_dir`; every failure reads as NotFound. */
 fun listDir(path: String): List<String> = openDir(path) { IoException.Kind.NotFound }
 
+/** `read_dir(p).into_iter().flatten()`: the entry names, or none when the directory cannot be read. */
+fun listDirOrEmpty(path: String): List<String> = runCatching { listDir(path) }.getOrDefault(emptyList())
+
 /** [listDir] whose failure carries the errno's kind (`io::Error::kind`), for walks that tell a denied read apart. */
 fun readDir(path: String): List<String> = openDir(path, ::ioKind)
 
