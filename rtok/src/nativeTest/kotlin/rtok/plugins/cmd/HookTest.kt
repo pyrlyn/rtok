@@ -1,5 +1,6 @@
 package rtok.plugins.cmd
 
+import kotlinx.cinterop.convert
 import kotlinx.serialization.json.*
 import rtok.config.Cmd
 import rtok.plugin.Runtime
@@ -281,7 +282,7 @@ class HookTest {
         val dir = "${tempDir()}/rtok-t922-${pid()}"
         createDirAll(dir)
         writeString("$dir/rtok", "#!/bin/sh\nfor a; do echo \"[\$a]\"; done\n")
-        platform.posix.chmod("$dir/rtok", 0b111101101.toUShort())
+        platform.posix.chmod("$dir/rtok", 0b111101101.toUShort().convert())
         val got = runLine("/bin/sh", rewritten(decide("echo hi")), "$dir:/usr/bin:/bin")
         removeDirAll(dir)
         assertEquals("[run]\n[--]\n[echo hi]\n" to 0, got)

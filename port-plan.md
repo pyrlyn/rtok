@@ -1468,12 +1468,18 @@ Next, in order:
 - Deviations: the bash/zsh/fish/PowerShell/elvish scripts follow clap_complete's structure but are not
   byte-identical to tests/trycmd/completions-*.stdout (those also need the whole clap tree: bench, demon, logs, man
   and the rest are not ported yet); Clink follows shell-completions' generator line by line. The interactive
-  picker (inquire) is not ported: `Picker.pick` takes the prompt as a function, and a bare `rtok completions`
-  is refused like the no-terminal case. `--dry-run` prints the diff unpainted.
+  picker (inquire's MultiSelect) is `ShellSelect` on tui's raw-mode `Terminal`; `Picker.pick` takes it as the
+  prompt, and a bare `rtok completions` without a terminal is refused. `--dry-run` prints the diff unpainted.
 - Tests: install.rs (9), picker.rs (6), generators (3), `CompletionsCliSpec` (6: completions.rs plus the
   list / no-shell / dry-run trycmd cases; HOME and the XDG/ZDOTDIR/LOCALAPPDATA/SHELL overrides are isolated).
 - Stop point: `rtok man`, completions_shells.rs / completions_picker_pty.rs (need real shells / a pty), then
   bench, demon, macOS/Linux split.
+- tests/completions_shells.rs ported as `CompletionsShellsE2eSpec` (4, rtok-e2e): zsh Tab on a pty with a stale
+  compinit dump, bash `complete -p`, fish `complete -C`, PowerShell `TabExpansion2`; a missing shell skips its test
+  (no pwsh on the Mac). `Pty` (rtok-e2e) is the portable_pty part: posix_openpt, the command in the background on
+  the slave, no controlling terminal.
+- tests/completions_picker_pty.rs ported as `CompletionsPickerPtyE2eSpec` (3: check installs, uncheck removes, esc
+  changes nothing) over `Pty`; the keys are unit-tested in `ShellSelectTest` (5).
 
 ## Session: man pages
 - `rtok.man.Man` + `cli/ManCmd.kt`: `rtok man` prints `rtok.1`; `--dir` writes a page per command with `SEE ALSO`
@@ -1498,8 +1504,9 @@ Next, in order:
   that returns the pid.
 - Tests: DemonE2eSpec (6), tests/demon.rs on the real binary in a sandbox home; the proxy check uses a local
   port derived from the pid. `Sandbox.rtok` takes extra env.
-- Deviations: `upgrade`/`supervise` are listed in help (the spec has no hidden flag); the hook-resident socket
-  e2e check is not ported (sandbox paths exceed the Unix socket limit); output is unstyled.
+- Deviations: `upgrade`/`supervise` are listed in help (the spec has no hidden flag); output is unstyled. The hook-resident
+  socket check (DemonE2eSpec, 7th) runs on a short `/tmp/rtd-<pid>` RTOK_HOME, because sandbox paths exceed the
+  Unix socket limit; rtok-e2e now depends on :rtok-hook for `endpoint`/`connect`.
 - Stop point: bench, macOS/Linux split.
 
 ## Session: bench (default + graph suites)
@@ -1511,8 +1518,13 @@ Next, in order:
   pipes cannot stall the caller (Rust T638).
 - Tests: BenchTest (7) on temp fixtures with `true`/`false` checks (the real bench/tasks.toml checks run
   `git clean` in the repo, so they are not used), RunBoundedTest (7).
-- Not ported yet: `--suite p28` (src/bench/p28.rs), the bench/ overlay tests, tests/*_bench.rs,
-  tests/bench_fixtures.rs (needs an o200k_base tokenizer), tests/p28_must_keep.rs.
+- `--suite p28` (src/bench/p28.rs) ported: rtok/bench/P28Suite.kt, its 7 tests in P28Test.kt over the shipped suite
+  copied to rtok/src/commonTest/fixtures/bench (p28.toml, p28/, p28_must_keep.toml; `keep` rewritten as
+  `[[body.keep]]` tables because ktoml drops inline tables whose strings hold braces or escaped quotes).
+- Overlay tests (src/bench.rs T385.3, T385.9.3): BenchOverlayTest (2) loads bench/configs/defaults/bench.toml and
+  bench/p28/bench.toml (copied to fixtures/bench with their settings and tasks) through `Layers.load`.
+- Not ported yet: tests/*_bench.rs, tests/bench_fixtures.rs (needs an o200k_base
+  tokenizer), tests/p28_must_keep.rs.
 
 ## Session: macOS/Linux split, part 1
 - `fileLock` (expect in nativeMain; actual `platform.posix.flock` on macOS, `platform.linux.flock` on Linux,
