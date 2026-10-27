@@ -1185,3 +1185,11 @@ Next, in order:
   CLI wires it); run.rs/sync.rs GitHub tests still wait (sync read-only test next with gitlab).
 - Stop point: next gitlab.rs, then export (export.rs, export/github.rs, export/linear.rs), `rtok task export`, task MCP
   tools, wire `taskWarningSink` to the CLI.
+## Session: tasks part 6 — gitlab adapter (gitlab.rs)
+- `rtok.tasks.Gitlab.kt`: `GitlabAdapter` (REST v4, `status::*` scoped labels, `relates_to` parent link as a warning
+  on failure, minimal label diff on save), `gitlabInstance` (plain https base, own parser instead of `url::Url`),
+  `gitlabApiBase`, `gitlabProject` (config, numeric id or origin under the instance path). `TaskProject.open` builds it
+  (token from GITLAB_TOKEN/GITLAB_ACCESS_TOKEN/GL_TOKEN, else `glab config get token --host`); `remoteClient()` shared.
+- Tests: GitlabTest 11 (gitlab.rs 10 + run.rs's gitlab open test).
+- Stop point: next export (export.rs, export/github.rs, export/linear.rs), `rtok task export`, task MCP tools, wire
+  `taskWarningSink` to the CLI; sync.rs's GitHub read-only test.

@@ -75,11 +75,15 @@ class TaskProject(
                     "github" -> {
                         val repo = githubRepo(cfg.github.repo, key)
                         val token = token("github", listOf("GH_TOKEN", "GITHUB_TOKEN"), listOf("gh", "auth", "token"))
-                        GithubAdapter(GITHUB_API, repo, token, WRITE_GAP, rtok.http.ktor.KtorHttp(rtok.http.HttpSettings(requestTimeoutMs = 30_000)), cfg.github.project.toLong())
+                        GithubAdapter(GITHUB_API, repo, token, WRITE_GAP, remoteClient(), cfg.github.project.toLong())
                     }
 
                     "gitlab" -> {
-                        bail("rtok task: the gitlab adapter is not ported yet")
+                        val instance = gitlabInstance(cfg.gitlab.url)
+                        val project = gitlabProject(cfg.gitlab.project, instance, key)
+                        val vars = listOf("GITLAB_TOKEN", "GITLAB_ACCESS_TOKEN", "GL_TOKEN")
+                        val token = token("gitlab", vars, listOf("glab", "config", "get", "token", "--host", instance.host))
+                        GitlabAdapter(gitlabApiBase(instance), project, token, WRITE_GAP, remoteClient())
                     }
 
                     else -> {
