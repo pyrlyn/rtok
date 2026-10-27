@@ -3,9 +3,11 @@ package rtok.agents
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldStartWith
+import rtok.cli.Agents
 
 class AgentsJsonTest :
     FunSpec({
+        tags(Agents)
         test("module states are serde's snake_case") {
             AgentsJson.state(ModuleState.Installed) shouldBe "installed"
             AgentsJson.state(ModuleState.NotInstalled) shouldBe "not_installed"

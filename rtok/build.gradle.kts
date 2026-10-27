@@ -80,3 +80,35 @@ tasks.register<org.jetbrains.kotlin.gradle.targets.native.tasks.KotlinNativeHost
     binaryResultsDirectory.set(layout.buildDirectory.dir("test-results/cliTest/binary"))
 }
 tasks.named("check") { dependsOn("cliTest") }
+
+// Agent test group (docs/testing.md "Agent tests"): agent-install / host-app tests, i.e. package rtok.agents,
+// rtok.model.AgentsTest and the CLI spec rtok.cli.AgentsCliSpec. Kotest specs among them carry the `Agents` tag.
+// `agentTest` runs only them; `noAgentTest` runs the rest of the :rtok binary (unit + CLI). The default
+// `macosArm64Test` and `cliTest` stay unchanged and still include the agent tests.
+val agentPatterns = listOf("rtok.agents.*", "rtok.model.AgentsTest", "rtok.model.AgentsTest.*", "rtok.cli.AgentsCliSpec", "rtok.cli.AgentsCliSpec.*")
+
+fun registerGroupTest(
+    name: String,
+    text: String,
+    tags: String,
+    configureFilter: org.gradle.api.tasks.testing.TestFilter.() -> Unit,
+) = tasks.register<org.jetbrains.kotlin.gradle.targets.native.tasks.KotlinNativeHostTest>(name) {
+    group = "verification"
+    description = text
+    val unit = tasks.named<org.jetbrains.kotlin.gradle.targets.native.tasks.KotlinNativeHostTest>("macosArm64Test").get()
+    dependsOn("linkDebugTestMacosArm64")
+    executableProperty.set(unit.executableProperty)
+    environment("RTOK_FIXTURES", fixtures)
+    targetName = unit.targetName
+    filter.configureFilter()
+    environment("KOTEST_TAGS", tags)
+    reports.html.outputLocation.set(layout.buildDirectory.dir("reports/tests/$name"))
+    reports.junitXml.outputLocation.set(layout.buildDirectory.dir("test-results/$name"))
+    binaryResultsDirectory.set(layout.buildDirectory.dir("test-results/$name/binary"))
+}
+registerGroupTest("agentTest", "Runs only the agent tests of :rtok (default while working on agent code).", "Agents") {
+    agentPatterns.forEach { includeTestsMatching(it) }
+}
+registerGroupTest("noAgentTest", "Runs the unit and CLI tests of :rtok except the agent tests.", "!Agents") {
+    agentPatterns.forEach { excludeTestsMatching(it) }
+}

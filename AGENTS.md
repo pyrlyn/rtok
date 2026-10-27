@@ -16,6 +16,12 @@
   (and `./gradlew :rtok:linkReleaseExecutableMacosArm64` for a release).
 
 ## Testing
+- **Working on agent code** (`rtok/src/*/kotlin/rtok/agents`, agent install/host apps, `rtok agents …`):
+  run only `./gradlew agentTest` — it is the default command for agent work; the other tests rarely
+  change, so do not run the full suite for every agent edit. Other commands:
+  `./gradlew testNoAgents` (everything except agent tests), `./gradlew fullTest` (whole suite, same as
+  `macosArm64Test cliTest e2eTest`; still required before a merge). Agent tests also run nightly
+  (`.github/workflows/agent-tests-nightly.yml`, 03:00 UTC). Details: docs/testing.md "Agent tests".
 - Packages/libraries contain only tests of the package itself. Tests that verify the app
   (rtok-kotlin) through a package live in the app next to its other tests. Applies to the whole
   Kotlin port, including snapshot tests.
