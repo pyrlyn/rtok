@@ -1,7 +1,7 @@
 // Port of src/agents/junk.rs: `rtok agents junk clear` for rtok's own log siblings and archives (T182, `scan`, `run`,
 // `to_table`) and the report `agents junk list` prints (T330.1, T330.2): every installed host's folders from the
 // `junk_map` of `research.md` §22, read-only, sized with a per-agent time limit, and the items `clear` may remove.
-// The `stale-worktrees` rows and the agent worktrees `build` looks in come with the worktree module (junk_worktrees.rs).
+// `reportInRepo` adds the agent worktrees `build` looks in and the `stale-worktrees` gc would remove (JunkWorktrees.kt).
 package rtok.agents
 
 import rtok.Col
@@ -203,13 +203,19 @@ object Junk {
     fun report(cfg: Config): JunkReport = reportInRepo(cfg, false)
 
     /**
-     * [report] for [all] hosts or only the installed ones. The agent worktrees `build` looks in and the
-     * `stale-worktrees` gc would remove come with the worktree port (junk_worktrees.rs); until then both are empty.
+     * [report] over the repository the command runs in, for [all] hosts or only the installed ones: the agent worktrees
+     * `build` looks in and the `stale-worktrees` gc would remove.
      */
     fun reportInRepo(
         cfg: Config,
         all: Boolean,
-    ): JunkReport = reportWith(cfg, JunkRoots.fromEnv(), JunkOptions(all = all), JunkCache.AGENT_SCAN_LIMIT)
+    ): JunkReport {
+        val opts = JunkOptions(all = all)
+        val found = JunkWorktrees.worktrees(cfg, opts.cwd)
+        val stale = JunkWorktrees.items(cfg, opts.cwd, found, opts.now, JunkCache.AGENT_SCAN_LIMIT)
+        val options = opts.copy(worktrees = JunkWorktrees.inHosts(found), staleWorktrees = stale)
+        return reportWith(cfg, JunkRoots.fromEnv(), options, JunkCache.AGENT_SCAN_LIMIT)
+    }
 
     @Suppress("LongMethod")
     fun reportWith(

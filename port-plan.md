@@ -1012,7 +1012,7 @@ Next, in order:
 - Tests: OriginTest 3, WorktreeListTest 6 (the list.rs tests not already in CleanTest).
 - Stop point: next ops.rs, remove.rs, gc.rs, claim/adopt, the `rtok worktree` CLI; then junk_worktrees +
   `agent_worktrees`, the rest of phase 10.
-## Session: worktree 3 — claim.rs (without `add`)
+## Session: worktree 3 — claim.rs (without `add`) (#139)
 - `rtok.worktree.Claim` (`Held`, `heldAgainst` with T527's stale holder, `caller` with T973's provider/model refusal,
   `owner`, `run`/`bind`/`bindUnattended`, `staleLock` = gc.rs `stale_lock`), `ClaimStore` (`remember` with T934's
   retries, `release`, `completePending`, `registerProject`), `Adopted`, `WorktreeException`. `add`/`add_with` move to
@@ -1020,7 +1020,7 @@ Next, in order:
 - Tests: ClaimTest 8 (claim.rs tests 5 + lock_tests 3).
 - Stop point: next remove.rs, gc.rs, ops.rs, the `rtok worktree` CLI (list/claim/adopt/remove/gc); then add.rs,
   junk_worktrees + `agent_worktrees`, the rest of phase 10.
-## Session: worktree 4 — remove.rs, gc.rs, removal_preview.rs
+## Session: worktree 4 — remove.rs, gc.rs, removal_preview.rs (#141)
 - `rtok.RemovalPreview` (removal_preview.rs `size_of`, `render`; never painted). `WorktreeRemove` (`detach`, `run`/
   `preview`, `forAgent`/`previewForAgent`, `isTask` with ASCII-only folding), `Caller`, `Removed`. `Gc` (`decide` with
   T418/T453/T656/T949/T950, `judge`, `run`, `toTable`, `STALE_LOCK_DEFAULT`), `GcPolicy` (gc.rs `Policy`; `now` in
@@ -1028,7 +1028,7 @@ Next, in order:
 - Tests: RemoveTest 3 (remove.rs 1 table + removal_preview.rs 2), GcTest 6 (the gc.rs rstest tables as loops).
 - Stop point: next ops.rs and the `rtok worktree` CLI (list/claim/adopt/remove/gc); then add.rs, whoami, finish,
   clean run, migrate, junk_worktrees + `agent_worktrees`, the rest of phase 10.
-## Session: worktree 5 — ops.rs and the `rtok worktree` CLI (list, claim, adopt, remove, gc)
+## Session: worktree 5 — ops.rs and the `rtok worktree` CLI (list, claim, adopt, remove, gc) (#144)
 - `rtok.worktree.Ops` (ops.rs `claim`, `adopt`, `remove`, `list`, `live_ids`, `ended_ids`, `pending_paths`; the store
   is opened per call and closed after, the scan runs before it). `cli/WorktreeCmd.kt` (`rtok worktree claim|adopt|
   remove|list|gc`, the T410 `[worktree] enabled` gate, serde's pretty JSON: two-space indent, nulls kept, `pending`
@@ -1037,3 +1037,14 @@ Next, in order:
   `gc_removes_only_finished_worktrees_and_never_opens_a_foreign_lock`).
 - Stop point: next add.rs (+ `rtok worktree add`, claim `add`/`add_with`, seed), whoami, finish, clean run, migrate
   and the remaining tests/worktree.rs cases; then junk_worktrees + `agent_worktrees`, the rest of phase 10.
+## Session: junk 8 — junk_worktrees.rs and agent_worktrees
+- `rtok.agents.JunkWorktrees` (junk_worktrees.rs: `KIND`, `worktrees` over `Ops.list` with the host from the bound agent,
+  the session or the T289 pool, `policy` = gc's with `stale_worktree_days` and no "ours" lock, `items` with gc's
+  wording per verdict plus orphans, `Remover` judging once per `clear` run and removing through
+  `WorktreeRemove.detach`), junk_kinds.rs `agent_worktrees`/`in_hosts`. `Junk.reportInRepo` now fills `worktrees`
+  and `staleWorktrees` as Rust's `report_in_repo`; `JunkClear.apply` removes `stale-worktrees` (refuses `--trash`:
+  git unregisters a worktree) instead of skipping them as not ported.
+- Tests: JunkWorktreesTest 1 (junk_kinds.rs agent worktree test), AgentsJunkE2eSpec +1 (tests/agents_junk.rs
+  `stale_worktrees_are_what_gc_removes_and_clear_removes_only_those`; fakes only Claude Code, Rust fakes every host).
+- Stop point: next the rest of phase 10: doctor, model, report, otel, tasks, completions, bench, batch, demon,
+  last_paths, repo_map, hooks dispatcher tests; worktree add/finish/whoami/clean/migrate with their modules.
