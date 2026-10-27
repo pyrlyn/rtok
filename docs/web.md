@@ -67,4 +67,8 @@ Previously excluded from the port (port-plan.md); now in progress in small steps
   the native gate tests it.
 - Step 7, part 1: `libs/tui` (`:tui`), no dependencies: styles/SGR, display width, a cell buffer with
   diff rendering, layout, widgets (block, paragraph, tabs, table, sparkline), key decoding, and a
-  termios/ANSI `Terminal` (raw mode, alternate screen, size, poll). Next: `rtok tui` over the snapshot model.
+  termios/ANSI `Terminal` (raw mode, alternate screen, size, poll).
+- Step 7, part 2: `rtok tui [--tab] [--tick-secs]`: tabs from model::pages(), re-read of the same Snapshot
+  every tick and on `r`, tables for plugins/calls/sessions, logs and the CLI text pages, overview totals with a
+  ctx sparkline, `?` help, the tty guard. Next: plugin toggles, filters, calls expand, doctor fix, junk clear,
+  graph drill/compare/export and the live calls pane; reading the model off the input thread.

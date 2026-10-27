@@ -72,11 +72,6 @@ class TuiApp(
     /** app.rs `key`: Ctrl+C / q / Esc quit, ←/→ (Tab, Shift+Tab) wrap, 1..9 jump, `?` help, `r` re-read, rows move. */
     fun key(k: Key): Effect =
         when {
-            help && k != Key.Char("?") && k != Key.Ctrl('c') -> {
-                help = false
-                Effect.NONE
-            }
-
             k == Key.Ctrl('c') || k == Key.Char("q") || k == Key.Esc -> {
                 Effect.QUIT
             }

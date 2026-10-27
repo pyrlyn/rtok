@@ -36,8 +36,10 @@ class TuiAppTest {
         assertEquals(Effect.QUIT, a.key(Key.Ctrl('c')))
         a.key(Key.Char("?"))
         assertTrue(a.help)
-        assertEquals(Effect.NONE, a.key(Key.Char("q")))
+        a.key(Key.Char("?"))
         assertEquals(false, a.help)
+        a.key(Key.Char("?"))
+        assertEquals(Effect.QUIT, a.key(Key.Char("q")))
     }
 
     @Test fun cursorStaysInRange() {
