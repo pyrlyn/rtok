@@ -75,6 +75,11 @@ int rtok_clone_or_copy(const char *from, const char *to) {
         }
         if (n < 0) rc = -1;
     }
+    /* Keep the source's access and modification times, as clonefile/copyfile(COPYFILE_STAT) do on macOS. */
+    if (rc >= 0) {
+        struct timespec times[2] = {st.st_atim, st.st_mtim};
+        if (futimens(out, times) != 0) rc = -1;
+    }
     int e = errno;
     close(in);
     if (close(out) != 0 && rc >= 0) { e = errno; rc = -1; }
