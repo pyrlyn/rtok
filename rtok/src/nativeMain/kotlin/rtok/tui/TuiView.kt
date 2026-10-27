@@ -66,7 +66,12 @@ fun draw(
     val status = app.pluginStatus.takeIf { app.page == "plugins" && it.isNotEmpty() }
     when {
         err != null -> b.put(foot.x, foot.y, "store: $err", FAIL, foot.w)
+
         status != null -> b.put(foot.x, foot.y, status, ACCENT, foot.w)
+
+        // view.rs: the loading mark leads the key line while a model read is on the worker.
+        app.loading -> b.put(foot.x, foot.y, "◌ loading  $keys", tui.Style(fg = tui.Color.Yellow), foot.w)
+
         else -> b.put(foot.x, foot.y, keys, MUTED, foot.w)
     }
 }

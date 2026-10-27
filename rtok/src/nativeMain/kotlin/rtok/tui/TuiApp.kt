@@ -112,6 +112,46 @@ class TuiApp(
             else -> 0
         }
 
+    private var model: TuiWorker<rtok.config.Config, JsonObject>? = null
+    private var requested = 0L
+    private var shown = 0L
+
+    /** app.rs `loading`: a model read was asked for and has not landed yet. */
+    val loading: Boolean get() = requested > shown
+
+    /**
+     * app.rs `App::background`: every model read (and the Graph drill) runs off the key thread; the screen paints
+     * over the last snapshot meanwhile. A thread that will not start leaves the inline reads (fail open, D1).
+     */
+    fun background(read: (rtok.config.Config) -> JsonObject) {
+        model = TuiWorker("rtok-tui-model", read).takeIf { it.running }
+        actions?.let { a -> drill.background(a::drill) }
+    }
+
+    /** app.rs `request`: asks for a fresh snapshot of [cfg]; skipped mid-read, inline without a worker. */
+    fun request(
+        cfg: rtok.config.Config,
+        read: (rtok.config.Config) -> JsonObject,
+    ) {
+        val w = model
+        if (w == null) {
+            snapshot = read(cfg)
+            return
+        }
+        if (loading) return
+        requested++
+        w.request(requested, cfg)
+    }
+
+    /** app.rs `poll`: lands the newest worker answers (model and drill); a failed read keeps the last snapshot. */
+    fun poll() {
+        model?.poll()?.let { d ->
+            shown = maxOf(shown, d.seq)
+            d.result.onSuccess { snapshot = it }
+        }
+        drill.poll()
+    }
+
     /** app.rs `refresh`'s per-frame part: the live calls pane reads while the Graph tab is up. */
     fun tick(at: Long = rtok.web.clockMs()) = live.poll(page == "graph", at)
 
