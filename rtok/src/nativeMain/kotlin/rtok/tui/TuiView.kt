@@ -39,16 +39,6 @@ private val COMMANDS =
     )
 
 /** app.rs `KEYS` of the pages that edit, after the global ones in the key line. */
-private val PAGE_KEYS =
-    mapOf(
-        "plugins" to "Space/Enter toggle",
-        "hosts" to "c clear safe junk",
-        "calls" to "Enter/z detail · e expand · / filter expand",
-        "sessions" to "Enter detail · l live only",
-        "config" to "/ filter",
-        "graph" to "s select · l link · u unlink · b both · Enter pick · y confirm · n/Esc decline · c compare · e export · v view export · d drill · i re-index · x remove · f freeze calls · w window · a/t/o filter calls",
-    )
-
 private fun objects(e: kotlinx.serialization.json.JsonElement?) = (e as? JsonArray).orEmpty().filterIsInstance<JsonObject>()
 
 /** Draws the whole screen for [app] into [b]; [clock] formats unix seconds for the time columns. */
@@ -60,9 +50,11 @@ fun draw(
     val (top, body, foot) = b.area.rows(Size.Fixed(1), Size.Fill(), Size.Fixed(1))
     b.tabs(top, TABS.mapIndexed { i, t -> if (i < DIGIT_TABS) "${i + 1} ${t.first}" else t.first }, app.tab)
     val inner = b.block(body, app.page, ACCENT)
-    if (app.help) help(b, inner) else page(b, inner, app, clock)
+    page(b, inner, app, clock)
+    if (app.help) helpOverlay(b, body, app)
     val err = app.snapshot.s("error")
-    val keys = "q quit · ←/→ tab · 1-9 jump · ↑/↓ row · r refresh · ? help" + (PAGE_KEYS[app.page]?.let { " · $it" } ?: "")
+    // The page's own rows lead so they survive a narrow cut; the globals follow (view.rs hints, T60.8).
+    val keys = (pageKeys(app.page) + keysFor("")).joinToString(" · ") { (k, d) -> "$k $d" }
     val status = app.pluginStatus.takeIf { app.page == "plugins" && it.isNotEmpty() }
     when {
         err != null -> b.put(foot.x, foot.y, "store: $err", FAIL, foot.w)
@@ -74,36 +66,6 @@ fun draw(
 
         else -> b.put(foot.x, foot.y, keys, MUTED, foot.w)
     }
-}
-
-private fun help(
-    b: Buffer,
-    r: Rect,
-) {
-    val lines =
-        listOf(
-            "q, Esc, Ctrl+C   quit",
-            "←/→, Tab         previous / next tab (wraps)",
-            "1..9             jump to a tab",
-            "↑/↓, j/k         move the row cursor; PgUp/PgDn, Home/End",
-            "r                re-read the model now",
-            "?                this help",
-            "Space/Enter      plugins: toggle the plugin under the cursor",
-            "c                hosts: clear safe junk (plan); y removes, n/Esc declines",
-            "e                calls: expand the archived output; / filters it, Esc/e closes",
-            "Enter/z          calls: detail pane of the selected call",
-            "l                sessions: live-only filter; Enter: detail pane",
-            "/                config: filter entries; Esc/Enter stops typing",
-            "s / l / u        graph: select, link to…, unlink from… the project under the cursor",
-            "b, Enter         graph: both ways; pick the target",
-            "y, n/Esc         graph: confirm the plan; decline",
-            "d, i, x          graph: drill, re-index, remove…",
-            "e, v             graph: export the graph to a file; view a saved export (read-only)",
-            "f, w             graph: freeze / unfreeze the live calls; cycle the window (1, 5, 15 min)",
-            "a, t, o          graph: filter the live calls by caller, tool, project",
-            "c                graph: compare with a ref or a saved export; Enter runs, Esc closes",
-        )
-    b.paragraph(r, lines.map { listOf(Span(it)) })
 }
 
 private fun page(
