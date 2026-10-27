@@ -119,7 +119,7 @@ The frontend is being rewritten in Compose Multiplatform, replacing the kotlinx.
 - Pages done in Compose: Overview (#199); Calls, Sessions, Logs, Config, Hosts, Services, Plugins, Usage, Stats, Skills
   (#204); Tasks, Worktrees, the Hosts junk card, Doctor with the fix panel (#205); Graph base: alerts, projects with health rings, re-index/remove/unlink, status
   body (#207); Graph drill with breadcrumb, focus depth, node list, compare with change marks, JSON export/import,
-  removal dry run (#209); live calls, the command palette (⌘K/Ctrl+K, `g <key>`, `?`) and the WebGL cloud (#210).
+  removal dry run (#209); live calls, the command palette (⌘K/Ctrl+K, `g <key>`, `?`) and the WebGL cloud (#211).
 - Graph cloud: the Graph page draws every registered project as a cluster in one WebGL2 scene (`GraphCloud.kt`,
   generic renderer from `kotlin-webgl`, included via `KOTLIN_WEBGL_DIR`, default `../../packages/kotlin-webgl`).
   `cloudClusters` (`:rtok-web-model`) is the rtok mapping: one cluster per `projects` row, radius from indexed files,
