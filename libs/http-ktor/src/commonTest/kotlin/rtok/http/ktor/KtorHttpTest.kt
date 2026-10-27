@@ -106,4 +106,31 @@ class KtorHttpTest {
                 assertTrue("connection refused" in e.message!!)
             }
         }
+
+    @Test fun aBodyShorterThanItsContentLengthIsAnIoErrorNotAResponse() =
+        runBlocking {
+            client { respond("{\"cut", HttpStatusCode.OK, headersOf(HttpHeaders.ContentLength, "40")) }.use { c ->
+                val e = assertFailsWith<HttpException> { c.post(HttpRequest("http://x/v1/messages")) }
+                assertEquals(HttpException.Kind.Io, e.kind)
+            }
+        }
+
+    @Test fun aStreamShorterThanItsContentLengthFailsAtTheEnd() =
+        runBlocking {
+            client { respond("{\"cut", HttpStatusCode.OK, headersOf(HttpHeaders.ContentLength, "40")) }.use { c ->
+                val e =
+                    assertFailsWith<HttpException> {
+                        c.stream("POST", HttpRequest("http://x/v1/messages")) { r -> while (r.read() != null) Unit }
+                    }
+                assertEquals(HttpException.Kind.Io, e.kind)
+            }
+        }
+
+    @Test fun aWholeBodyWithItsContentLengthPasses() =
+        runBlocking {
+            client { respond("{}", HttpStatusCode.OK, headersOf(HttpHeaders.ContentLength, "2")) }.use { c ->
+                assertEquals("{}", c.post(HttpRequest("http://x/")).text())
+                c.stream("POST", HttpRequest("http://x/")) { r -> while (r.read() != null) Unit }
+            }
+        }
 }
