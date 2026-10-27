@@ -14,8 +14,7 @@ Previously excluded from the port (port-plan.md); now in progress in small steps
    (calls, usage, sessions, projects, tasks, worktrees), config, agents, doctor, junk.
 5. Inbound actions: `set`, `expand`, `project`, `doctor`, `junk`, `graph`, `diff`, `export`, `import`, `calls`;
    live graph calls (`live.rs`), calls store/view.
-6. Frontend: first a Kotlin/JS module `:rtok-web-ui` (kotlinx.html, kotlin-css; removed in #221), now Compose
-   Multiplatform on wasmJs (`:rtok-web-compose`, "Compose UI" below), speaking the
+6. (in progress, #128 #130 #132) Frontend: a Kotlin/JS module `:rtok-web-ui` (kotlinx.html for the DOM, kotlin-css for styles), speaking the
    same `/ws` protocol and matching the Rust SPA's pages and features. Charts are drawn by our own small SVG
    helpers in Kotlin (no JS chart library); the graph view uses our own Canvas/SVG force layout. The built
    bundle is embedded in the binary as an `Assets` source; `RTOK_WEB_DIST` still overrides it for development.
@@ -24,7 +23,7 @@ Previously excluded from the port (port-plan.md); now in progress in small steps
 
 ## Status
 - Step 2: `rtok web` serves `/health`, `/auth` and the UI files from `RTOK_WEB_DIST` (SPA routing, br/gzip
-  variants, ETag, CSP). Since step 6 the binary embeds the web UI (now `:rtok-web-compose`, `EmbeddedAssets`); a build without it answers page routes with 503 and a hint.
+  variants, ETag, CSP). Since step 6 the binary embeds the Kotlin/JS UI (`:rtok-web-ui`, `EmbeddedAssets`); a build without it answers page routes with 503 and a hint.
 - Step 3: `/ws` is admitted under the same token and origin gate as `/auth`, then sends a snapshot at once, every
   2 s and after each inbound frame; concurrent ticks share one build (T206). Until step 4 the snapshot is
   `{"type":"snapshot"}`.
@@ -116,7 +115,7 @@ The frontend is being rewritten in Compose Multiplatform, replacing the kotlinx.
     state, formatting) with its tests (run on macosArm64 in the gate). Targets js + wasmJs + macosArm64.
   - `:rtok-web-compose`: the Compose app (shell, routing over the History API, `/ws` link, pages). `webDist` syncs the
     production webpack distribution (`index.html`, `app.js`, two `.wasm` files) into `build/web-dist`.
-  - `:rtok-web-ui`: the former kotlinx.html UI, removed in #221 once Compose reached parity.
+  - `:rtok-web-ui`: the current kotlinx.html UI, still embedded by `:rtok-web` until Compose reaches parity, then removed.
 - Pages done in Compose: Overview (#199); Calls, Sessions, Logs, Config, Hosts, Services, Plugins, Usage, Stats, Skills
   (#204); Tasks, Worktrees, the Hosts junk card, Doctor with the fix panel (#205); Graph base: alerts, projects with health rings, re-index/remove/unlink, status
   body (#207); Graph drill with breadcrumb, focus depth, node list, compare with change marks, JSON export/import,

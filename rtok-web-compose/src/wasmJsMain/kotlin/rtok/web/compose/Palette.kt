@@ -1,4 +1,4 @@
-// Colors of the dark/light themes (the tokens of the former Kotlin/JS UI) and small text helpers.
+// Colors of the dark/light themes (the same tokens as :rtok-web-ui Styles.kt) and small text helpers.
 package rtok.web.compose
 
 import androidx.compose.runtime.staticCompositionLocalOf
