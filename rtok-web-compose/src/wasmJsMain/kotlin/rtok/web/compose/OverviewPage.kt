@@ -91,7 +91,7 @@ val OverviewPage =
     }
 
 @Composable
-private fun SavingsTrend(days: List<JsonObject>) {
+fun SavingsTrend(days: List<JsonObject>) {
     val rows = days.sumOf { it.num("rows") ?: 0.0 }
     Panel("savings trend", "${days.size} days · ${fmt(rows)} Measurement rows") {
         if (days.none { it.num("saved") != null }) {

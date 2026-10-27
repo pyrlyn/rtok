@@ -47,7 +47,23 @@ fun interface PageView {
 }
 
 /** The pages ported to Compose so far; the rest show a placeholder until they land. */
-val VIEWS: Map<String, PageView> = mapOf("overview" to OverviewPage)
+val VIEWS: Map<String, PageView> =
+    mapOf(
+        "overview" to OverviewPage,
+        "calls" to CallsPage,
+        "sessions" to SessionsPage,
+        "logs" to LogsPage,
+        "config" to ConfigPage,
+        "hosts" to HostsPage,
+        "services" to ServicesPage,
+        "plugins" to PluginsPage,
+        "usage" to UsagePage,
+        "stats" to StatsPage,
+        "skills" to SkillsPage,
+        "tasks" to TasksPage,
+        "worktrees" to WorktreesPage,
+        "doctor" to DoctorPage,
+    )
 
 /** Observable app state: link, last snapshot, route and theme. */
 class AppState {
@@ -56,12 +72,33 @@ class AppState {
     var error by mutableStateOf<String?>(null)
     var updatedAt by mutableStateOf<Double?>(null)
     var path by mutableStateOf(window.location.pathname)
+
+    /** The location query; page filters live there (`?q=`, `?surface=`, ...), as in the kotlinx.html UI. */
+    var query by mutableStateOf(window.location.search)
     var dark by mutableStateOf(runCatching { localStorage.getItem("rtok-theme") }.getOrNull() != "light")
 
     private val link0 = Link({ link = it }, ::onFrame)
+    private val replies = HashMap<String, MutableList<(Frame.Reply) -> Unit>>()
+
+    /** Registers a handler for typed reply frames ([type] = `junkplan`, `message`, ...). */
+    fun on(
+        type: String,
+        handler: (Frame.Reply) -> Unit,
+    ) {
+        replies.getOrPut(type) { ArrayList() } += handler
+    }
+
+    /** The Hosts junk card's controller. */
+    val junk by lazy { JunkController(this) }
+
+    /** The Doctor fix panel's controller. */
+    val fix by lazy { FixController(this) }
 
     fun start() {
-        window.addEventListener("popstate", { path = window.location.pathname })
+        window.addEventListener("popstate", {
+            path = window.location.pathname
+            query = window.location.search
+        })
         link0.start()
     }
 
@@ -71,7 +108,8 @@ class AppState {
 
     fun go(to: String) {
         window.history.pushState(null, "", to)
-        path = to
+        path = window.location.pathname
+        query = window.location.search
     }
 
     fun toggleTheme() {
