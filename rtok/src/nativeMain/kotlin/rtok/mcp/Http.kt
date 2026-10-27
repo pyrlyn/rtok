@@ -203,6 +203,8 @@ object Http {
         // The HTTP surface gets its own allow-list through the same filter as stdio's `tools`.
         val httpCfg = cfg.copy(mcp = cfg.mcp.copy(tools = cfg.mcp.httpTools))
         httpServer(httpCfg).use { server ->
+            rtok.Retention.spawn(httpCfg, "mcp")
+            rtok.otel.Ticker.spawn(httpCfg)
             http.serveBlocking(addr.ip, addr.port, Endpoint(server, token, transport(addr, public)), stop = stop) { local ->
                 val url = "http://$local$PATH"
                 // The token is never printed: this line lands in terminals and logs.
