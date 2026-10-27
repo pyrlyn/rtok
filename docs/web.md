@@ -83,5 +83,7 @@ Previously excluded from the port (port-plan.md); now in progress in small steps
   (`session_pane` over model::session_detail, T60.3). Part 6: the Graph tab's registry (projects.rs T476/T477:
   select, link/unlink with a target picker, re-index on the `Jobs` worker, remove after its dry run; all through
   `GraphAnswer.projectWrite`, the page's own write), the health cells and breakdown (health.rs T481) and `d` drill
-  (drill.rs T561, loaded on the key until the loop has a worker). Next: compare, export, the live calls pane,
+  (drill.rs T561, loaded on the key until the loop has a worker). Part 7: the panel shell the Graph tab's panels
+  share (panel.rs T329.48) and `c` compare (compare.rs T485) over `GraphDiffs.pageOf`, a typed ref list or a saved
+  export path. Next: export, the live calls pane,
   doctor fix; reading the model off the input thread.
