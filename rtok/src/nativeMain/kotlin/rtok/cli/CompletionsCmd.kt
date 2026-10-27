@@ -7,6 +7,7 @@ import rtok.completions.Install
 import rtok.completions.Picker
 import rtok.completions.Places
 import rtok.completions.Shell
+import rtok.completions.ShellSelect
 import rtok.sys.PreviewMode
 
 private fun parseShell(raw: String): Shell = Shell.parse(raw) ?: throw CliFailure("invalid value '$raw' for '[SHELL]'\n  [possible values: ${Shell.entries.joinToString(", ") { it.cliName }}]", ExitCode.USAGE)
@@ -62,7 +63,11 @@ val COMPLETIONS: CommandSpec =
                     emptyList()
                 }
 
-                // The interactive picker (inquire in Rust) is not ported: a bare call is refused everywhere.
+                // A bare call opens the picker on a terminal; without one it is refused.
+                tui.isInteractive() -> {
+                    Picker.pick(Places.fromEnv(), RTOK, ShellSelect::ask)
+                }
+
                 else -> {
                     throw CliFailure(
                         "no shell named and no terminal for the picker; run `rtok completions <shell>` to print a script, " +
