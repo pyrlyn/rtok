@@ -1104,3 +1104,13 @@ Next, in order:
   names as in Rust). The web socket's `doctor` call can now be wired to it by the web worker.
 - Tests: DoctorWebTest 8 (web.rs 8).
 - Stop point: next doctor.rs + `rtok doctor` (--json, --fix).
+## Session: doctor.rs part 1 — Report, renderers, advice, skills and instruction audits
+- `rtok.doctor.Report` (+ `AgentModules`, `ServerInfo`, `Instructions`, `InstructionRow`, `ReadShare`, `ToolSearch`,
+  `ToolSearchState`) with `toText`/`toConsole`/`toCompactText`; `Advice` (`resolveToolSearch`, `anthropicBase`,
+  `toolsRewriteAdvice`, `alwaysLoadAdvice`, `overlapLines`, `hookClientAdvice`, `countHooks`/`hooksObject`,
+  `pluginInstallPaths`); `SkillsAuditProbe` (`SKILL_ROOTS`, `auditFrom`, per-host duplicates, `repeatRows`, plugin
+  skill dirs) and `InstructionAudit` (injectors, symlink-aware sources, linked-worktree project files, duplicates).
+- Tests: DoctorReportTest 23 (doctor.rs render/advice/audit tests; the hub-skill and ketch-manifest tests are not
+  ported: no `skills/` or `ketch.toml` in this repo; `hook_client_link_silences_the_advice` waits for
+  `ensure_hook_client_link`).
+- Stop point: next doctor.rs part 2 (`page`, MCP server probe, proxy chain, read-share) + `rtok doctor` CLI.
