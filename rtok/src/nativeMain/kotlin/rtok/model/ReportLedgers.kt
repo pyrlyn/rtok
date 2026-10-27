@@ -23,17 +23,17 @@ data class ReportWindow(
     val toDate: String,
     val dbPath: String,
     /** `calls` rows with `ts` in the window: the one ledger whose reader returns row times. */
-    val callsInWindow: Long,
-    val callsTotal: Long,
+    val callsInWindow: ULong,
+    val callsTotal: ULong,
     /** Whole-ledger counts: the measurements and usage readers return no row time to filter on. */
-    val measurements: Long,
-    val usage: Long,
+    val measurements: ULong,
+    val usage: ULong,
 )
 
 /** One plugin's savings, from `Measurement` rows only; `saved` is net (an `expand` row counts negative). */
 data class ReportSavings(
     val plugin: String,
-    val rows: Long,
+    val rows: ULong,
     val estBefore: Long,
     val estAfter: Long,
     val saved: Long,
@@ -41,7 +41,7 @@ data class ReportSavings(
 
 data class ReportSavingsSection(
     val rows: List<ReportSavings>,
-    val totalRows: Long,
+    val totalRows: ULong,
     val totalSaved: Long,
     /** Every distinct `Measurement` kind present, sorted. */
     val kinds: List<String>,
@@ -50,16 +50,16 @@ data class ReportSavingsSection(
 /** Latency of one surface (`hook` | `mcp` | `proxy`); p50/p95 are nearest-rank over the timed calls. */
 data class ReportCalls(
     val surface: String,
-    val calls: Long,
-    val timed: Long,
+    val calls: ULong,
+    val timed: ULong,
     val p50Ms: Double?,
     val p95Ms: Double?,
 )
 
 data class ReportCallsSection(
     val rows: List<ReportCalls>,
-    val inWindow: Long,
-    val total: Long,
+    val inWindow: ULong,
+    val total: ULong,
     /** Hook-surface calls in window by event, busiest first. */
     val hooks: List<ReportHook>,
 )
@@ -67,23 +67,23 @@ data class ReportCallsSection(
 /** One hook event's in-window `calls` rows; `"unknown"` when the row names no event. */
 data class ReportHook(
     val name: String,
-    val calls: Long,
+    val calls: ULong,
 )
 
 /** Cache busts and their cause, aggregated from the `stats --cache` page. */
 data class ReportCache(
-    val sessions: Long,
-    val turns: Long,
-    val busts: Long,
+    val sessions: ULong,
+    val turns: ULong,
+    val busts: ULong,
     /** Busts per cause, cause order. */
-    val byCause: List<Pair<String, Long>>,
+    val byCause: List<Pair<String, ULong>>,
     /** Every bust with its 1-based turn, in session/turn order. */
     val detail: List<ReportBust>,
 )
 
 data class ReportBust(
     val session: String,
-    val turn: Long,
+    val turn: ULong,
     val cause: String,
     val cacheCreate: Long,
     val cacheRead: Long,
@@ -98,7 +98,7 @@ data class ReportExpand(
     val expandedIds: List<String>,
     /** Σ est_after over the `expand` rows: what the re-reads cost. */
     val cost: Long,
-    val costRows: Long,
+    val costRows: ULong,
 )
 
 /** One token sink ranked by raw bytes in `Measurement` rows (T59.8). */
@@ -108,7 +108,7 @@ data class ReportSink(
     /** File path, command stem, or `server/tool`. */
     val sink: String,
     val beforeBytes: Long,
-    val rows: Long,
+    val rows: ULong,
     /** Which rtok switch would shorten this sink. */
     val switch: String,
 )
@@ -175,10 +175,10 @@ data class ReportLedgers(
                 fromDate = date(from),
                 toDate = date(to),
                 dbPath = cfg.core.dbPath,
-                callsInWindow = calls.count { it.ts >= from }.toLong(),
-                callsTotal = calls.size.toLong(),
-                measurements = store.countMeasurements(),
-                usage = store.countUsage(),
+                callsInWindow = calls.count { it.ts >= from }.toULong(),
+                callsTotal = calls.size.toULong(),
+                measurements = store.countMeasurements().toULong(),
+                usage = store.countUsage().toULong(),
             )
         }
     }

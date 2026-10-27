@@ -1426,3 +1426,11 @@ Next, in order:
   actionable sinks with their switch, per-surface p50/p95 (nearest rank) and hook events, cache busts by cause,
   lane/tier cells, expand rate and cost; one store open. Tests: `report_pct_is_nearest_rank` plus a seeded read.
 - Stop point: src/report (markdown, html with the six `.snap` files, advice, ai, pdf), tests/report*.rs.
+
+## Session: report document, Markdown, HTML, advice
+- `rtok.report`: `Document` (+ `ReportDocument.build`: ledgers, `config show --sources` entries, doctor page, advice),
+  `ReportText` (bar shares, shown archive id, `dec`/`ms`, `flat`), `Markdown`, `Html`, `Advice` (the seven T22.5
+  rules). The ledger counters that are `u64` in Rust are `ULong` now, so `u64::MAX` prints as Rust does.
+- Tests: mod.rs (4), markdown.rs (4, the full-id case checks Markdown and HTML; AI and PDF join with their
+  renderers), html.rs (3), advice.rs (4). The six Rust `.snap` files are copied unchanged and match.
+- Stop point: ai.rs, pdf.rs, then tests/report*.rs and the `rtok report` command.
