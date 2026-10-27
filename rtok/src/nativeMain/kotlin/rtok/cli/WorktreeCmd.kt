@@ -1,10 +1,11 @@
-// Port of src/cli/worktree.rs (subset): `rtok worktree add|whoami|list|claim|adopt|remove|gc`. finish, clean and
+// Port of src/cli/worktree.rs (subset): `rtok worktree add|whoami|list|claim|adopt|remove|finish|gc`. clean and
 // migrate land with their modules.
 package rtok.cli
 
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.serializer
 import rtok.store.parseIdleFrom
+import rtok.worktree.FinishOptions
 import rtok.worktree.Gc
 import rtok.worktree.GcPolicy
 import rtok.worktree.Ops
@@ -140,6 +141,29 @@ private val REMOVE =
             },
     )
 
+private val FINISH =
+    CommandSpec(
+        "finish",
+        "Hand your task worktree to review: commit what is left, push, open or reuse the PR, ask for squash auto-merge, " +
+            "then unlock. Refuses the main checkout, another agent's lock and credential files; never closes the task",
+        options =
+            listOf(
+                OptSpec.Value("message", "Commit message for uncommitted work; defaults to `<task>: <branch slug>`", "MESSAGE", short = 'm'),
+                OptSpec.Value("repo", "`owner/name` for gh, when the `origin` URL does not name the repository", "REPO"),
+                OptSpec.Flag("no-auto-merge", "Open the PR without auto-merge"),
+                AGENT_OPT,
+                OWNER_OPT,
+                OptSpec.Flag("json", "JSON instead of the text lines"),
+            ),
+        args = listOf(ArgSpec("path", "The worktree, or a directory inside it; defaults to the current directory", required = false)),
+        action =
+            gated { inv, cfg ->
+                val opts = FinishOptions(inv.value("message"), inv.value("repo"), inv.flag("no-auto-merge"))
+                val done = Ops.finish(cfg, inv.arg("path") ?: rtok.sys.cwd(), inv.value("agent"), inv.value("owner"), opts)
+                if (inv.flag("json")) inv.printJson(done) else inv.io.out(done.toText())
+            },
+    )
+
 private val LIST =
     CommandSpec(
         "list",
@@ -211,5 +235,5 @@ val WORKTREE =
     CommandSpec(
         "worktree",
         "Git worktrees of this repository: owner, state and disk cost",
-        subcommands = listOf(ADD, CLAIM, ADOPT, REMOVE, LIST, WHOAMI, GC),
+        subcommands = listOf(ADD, CLAIM, ADOPT, REMOVE, FINISH, LIST, WHOAMI, GC),
     )

@@ -1,5 +1,5 @@
 // Port of src/worktree/ops.rs: the store-backed `rtok worktree` operations. The CLI parses flags and prints; the
-// store open lives here. `finish` and `migrate` come with their modules.
+// store open lives here. `migrate` comes with its module.
 package rtok.worktree
 
 import rtok.config.Config
@@ -77,6 +77,15 @@ object Ops {
                 Claim.bind(store, p, a, owner, task, true, cfg.plugins.graph.autoAddProjects)
             }
         }
+
+    /** `rtok worktree finish` and MCP `worktree_finish`. */
+    fun finish(
+        cfg: Config,
+        path: String,
+        agent: String?,
+        owner: String?,
+        opts: FinishOptions,
+    ): Finished = withStore(cfg) { store -> Finish.forAgent(store, path, Claim.caller(store, agent), owner, opts) }
 
     @Suppress("LongParameterList")
     fun remove(

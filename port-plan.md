@@ -1300,3 +1300,12 @@ Next, in order:
 - Stop point: next model, report, completions, bench, demon, proxy batch tests, macOS/Linux split.
 - Session (web/dashboard worker): web Graph scene nodes are clickable (click or Enter): the same `open` as the drill
   node list (a file toggles, a symbol is focused, in its own project when foreign); `data-node` delegation on the SVG.
+## Session (worktree worker): finish.rs — `rtok worktree finish`
+- `rtok.worktree.Finish` (finish.rs: `message_for`, `open_pr`, `for_agent`), `FinishOptions`, `Finished` (`to_text`,
+  JSON as Rust: `committed`/`warnings` omitted when empty), `GhRunner` (the `gh` seam; `HOST` spawns gh in the worktree),
+  `Ops.finish`, `rtok worktree finish [PATH] [-m] [--repo] [--no-auto-merge] [--agent] [--owner] [--json]`.
+  rtok-sys `ProgressRunner.cwd` (posix_spawn addchdir).
+- Tests: FinishTest 3 (the message_for cases; the tests/worktree.rs finish test against temp origin/clone and a scripted
+  gh; the text form).
+- Deviation: the finish test injects the gh seam instead of a fake `gh` first on `PATH`.
+- Stop point: next clean run, migrate, worktree MCP tools, hooks dispatcher tests.
