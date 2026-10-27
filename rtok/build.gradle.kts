@@ -39,6 +39,7 @@ configure<KotlinMultiplatformExtension> {
         implementation(project(":zstd-native"))
         implementation("com.github.ajalt.clikt:clikt:5.1.0")
     }
+    sourceSets.commonTest.dependencies { implementation("pyrlyn.snapshot:snapshot") }
 }
 val fixtures =
     layout.projectDirectory
@@ -47,6 +48,14 @@ val fixtures =
 tasks.withType<org.jetbrains.kotlin.gradle.targets.native.tasks.KotlinNativeTest>().configureEach {
     environment("RTOK_FIXTURES", fixtures)
     environment("RTOK_WASM_FIXTURES", rootDir.resolve("rtok-wasm/src/nativeTest/fixtures").absolutePath)
+    // Snapshot tests (docs/testing.md): `.snap` files next to the tests; SNAPSHOT_UPDATE=always accepts changes.
+    environment(
+        "SNAPSHOT_DIR",
+        layout.projectDirectory
+            .dir("src/commonTest/snapshots")
+            .asFile.absolutePath,
+    )
+    listOf("SNAPSHOT_UPDATE", "INSTA_UPDATE", "CI").forEach { name -> System.getenv(name)?.let { environment(name, it) } }
 }
 
 // Test groups (docs/testing.md): `macosArm64Test` = unit tests without the CLI specs, `cliTest` = the
