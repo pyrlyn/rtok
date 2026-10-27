@@ -17,7 +17,7 @@ import rtok.store.*
 private const val DEFAULT_ANTHROPIC_VERSION = "2023-06-01"
 
 /** Rust `crate::lane::HEADER`: the proxy keeps internal calls out of the agent's accounting. */
-private const val LANE_HEADER = "x-rtok-lane"
+private const val LANE_HEADER = rtok.lane.LaneKinds.HEADER
 private const val CONNECT_TIMEOUT_MS = 10_000L
 
 sealed class Outcome {
