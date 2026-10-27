@@ -62,6 +62,21 @@ class KtorHttpTest {
             assertEquals("rtok/t", seen!!.headers["User-Agent"])
         }
 
+    @Test fun anyMethodSendsItsBodyAndReturnsTheResponseHeaders() =
+        runBlocking {
+            var seen: io.ktor.client.request.HttpRequestData? = null
+            client { req ->
+                seen = req
+                respond("{}", HttpStatusCode.OK, headersOf("Link" to listOf("<http://x/l?page=2>; rel=\"next\""), "X-RateLimit-Remaining" to listOf("9")))
+            }.use { c ->
+                val r = c.request("patch", HttpRequest("http://x/issues/1", listOf("content-type" to "application/json"), "{\"a\":1}".encodeToByteArray()))
+                assertEquals("<http://x/l?page=2>; rel=\"next\"", r.header("link"))
+                assertEquals("9", r.header("x-ratelimit-remaining"))
+            }
+            assertEquals(HttpMethod.Patch, seen!!.method)
+            assertEquals("{\"a\":1}", (seen!!.body as io.ktor.http.content.OutgoingContent.ByteArrayContent).bytes().decodeToString())
+        }
+
     @Test fun aNonSuccessStatusIsAResponseNotAnException() =
         runBlocking {
             client { respond("overloaded", HttpStatusCode.ServiceUnavailable) }.use { c ->
