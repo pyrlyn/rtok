@@ -52,7 +52,7 @@ internal const val FLUSH_LOCK = "otel-flush.lock"
 internal const val QUEUED_LOCK = "otel-flush-queued.lock"
 
 /** `lane::is_api_request`: the bare agent lane or any `api_request:<lane>`. */
-private fun isApiRequest(kind: String) = kind == "api_request" || kind.startsWith("api_request:")
+private fun isApiRequest(kind: String) = rtok.lane.LaneKinds.isApiRequest(kind)
 
 internal fun inFlight(
     c: Call,
