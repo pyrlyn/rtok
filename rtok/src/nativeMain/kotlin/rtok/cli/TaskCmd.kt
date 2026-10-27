@@ -1,5 +1,4 @@
 // Port of src/cli/task.rs: `rtok task …` (T441.5). Every subcommand but `init` opens the project's adapter.
-// `export` lands with the export adapters.
 package rtok.cli
 
 import kotlinx.serialization.json.Json
@@ -7,11 +6,14 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.encodeToJsonElement
+import rtok.StderrLog
 import rtok.store.StoreException
 import rtok.store.TaskId
 import rtok.sys.IoException
 import rtok.sys.readToString
 import rtok.tasks.ClaimConflict
+import rtok.tasks.EXPORT_BACKENDS
+import rtok.tasks.ExportReport
 import rtok.tasks.NewTask
 import rtok.tasks.Status
 import rtok.tasks.SyncReport
@@ -25,6 +27,7 @@ import rtok.tasks.block
 import rtok.tasks.conflict
 import rtok.tasks.initTasks
 import rtok.tasks.readyText
+import rtok.tasks.renderExport
 import rtok.tasks.setParallel
 import rtok.tasks.setPriority
 import rtok.tasks.syncText
@@ -73,7 +76,22 @@ private fun Invocation.open() = TaskProject.open(loadConfig().tasks, cwd())
 
 private fun id(s: String) = TaskId.parse(s)
 
-private fun action(body: (Invocation) -> Unit): (Invocation) -> Unit = { inv -> taskCall { body(inv) } }
+private fun action(body: (Invocation) -> Unit): (Invocation) -> Unit =
+    { inv ->
+        // The adapters' skip and link warnings go where Rust's `log::warn!` goes: stderr, while RUST_LOG enables them.
+        rtok.tasks.taskWarningSink = { msg -> taskWarning(inv.io, msg) }
+        taskCall { body(inv) }
+    }
+
+internal fun taskWarning(
+    io: CliIo,
+    message: String,
+    spec: String? = StderrLog.spec(),
+) {
+    if (StderrLog.enabled(StderrLog.Level.Warn, TASK_LOG_TARGET, spec)) io.eprintln(StderrLog.line(StderrLog.Level.Warn, TASK_LOG_TARGET, message))
+}
+
+private const val TASK_LOG_TARGET = "rtok::tasks"
 
 private val INIT =
     CommandSpec(
@@ -324,9 +342,30 @@ private val SYNC =
             },
     )
 
+private val EXPORT =
+    CommandSpec(
+        "export",
+        "Mirror the disk tasks one way into an issue tracker; the files stay the source of truth. A second run with nothing changed sends no write.",
+        options =
+            listOf(
+                OptSpec.Flag("dry-run", "Print the planned creates, updates and closes and send nothing"),
+                OptSpec.Flag("json", "JSON instead of the text"),
+            ),
+        args = listOf(ArgSpec("backend", "Where to mirror the tasks")),
+        action =
+            action { inv ->
+                val backend = inv.requireArg("backend")
+                if (backend !in EXPORT_BACKENDS) {
+                    throw CliFailure("invalid value '$backend' for '<BACKEND>'\n  [possible values: ${EXPORT_BACKENDS.joinToString(", ")}]", ExitCode.USAGE)
+                }
+                val r = TaskOps.export(inv.loadConfig(), cwd(), backend, inv.flag("dry-run"))
+                if (inv.flag("json")) inv.io.println(REPORT_PRETTY.encodeToString(ExportReport.serializer(), r)) else inv.io.out(renderExport(r))
+            },
+    )
+
 val TASK_CMD =
     CommandSpec(
         "task",
         "This project's tasks: numbered by rtok, stored by the `[tasks]` adapter",
-        subcommands = listOf(CREATE, LIST, SHOW, STATUS, NEXT, READY, CLAIM, RELEASE, DEP, PRIORITY, CONFLICT, PARALLEL, SYNC, INIT),
+        subcommands = listOf(CREATE, LIST, SHOW, STATUS, NEXT, READY, CLAIM, RELEASE, DEP, PRIORITY, CONFLICT, PARALLEL, SYNC, EXPORT, INIT),
     )
