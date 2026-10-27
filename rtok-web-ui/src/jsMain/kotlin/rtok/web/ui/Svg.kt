@@ -4,7 +4,7 @@ package rtok.web.ui
 
 import kotlinx.html.FlowContent
 
-private fun esc(s: String) =
+internal fun esc(s: String) =
     s
         .replace("&", "&amp;")
         .replace("<", "&lt;")
