@@ -123,6 +123,9 @@ internal fun tokenWith(
     return t
 }
 
+/** The real client of the github and gitlab adapters: Ktor, 30 s per request (Rust `timeout(30 s)`). */
+internal fun remoteClient(): HttpClient = rtok.http.ktor.KtorHttp(rtok.http.HttpSettings(requestTimeoutMs = 30_000))
+
 /**
  * A blocking JSON client for one API base. The adapter interface is synchronous (CLI, stdio MCP), so each call
  * runs the suspend client to completion. [headers] carry the auth and API version every request sends; [gap] is the
