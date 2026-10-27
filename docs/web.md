@@ -117,8 +117,8 @@ The frontend is being rewritten in Compose Multiplatform, replacing the kotlinx.
     production webpack distribution (`index.html`, `app.js`, two `.wasm` files) into `build/web-dist`.
   - `:rtok-web-ui`: the current kotlinx.html UI, still embedded by `:rtok-web` until Compose reaches parity, then removed.
 - Pages done in Compose: Overview (#199); Calls, Sessions, Logs, Config, Hosts, Services, Plugins, Usage, Stats, Skills
-  (#204); Tasks, Worktrees, the Hosts junk card, Doctor with the fix panel (PR 3). Left: Graph (drill, compare,
-  export/import, health rings, projects, 2D scene, live calls) and the command palette.
+  (#204); Tasks, Worktrees, the Hosts junk card, Doctor with the fix panel (#205); Graph base: alerts, projects with health rings, re-index/remove/unlink, status
+  body (Graph slice 1). Left: Graph drill, compare, export/import, removal dry run, 2D scene, live calls; the command palette.
 - Serving: open. `embedDir` embeds text files only and the Compose distribution is ~11 MB of binary `.wasm`; embedding
   needs binary (base64) entries in `embedDir`/`Spa` and a size decision before `:rtok-web` switches to `web-dist` of
   `:rtok-web-compose`. `Spa` already maps `.wasm` and now `.mjs`.
