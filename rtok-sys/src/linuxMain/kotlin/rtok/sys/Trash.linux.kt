@@ -1,11 +1,12 @@
 // The `trash` crate's Linux delete: the freedesktop.org home trash (`$XDG_DATA_HOME/Trash`, else
 // `~/.local/share/Trash`), a `files/<name>` rename plus its `info/<name>.trashinfo`. Only the home trash: a path on
-// another volume fails with the rename's error instead of being copied.
+// another volume (rename fails with EXDEV) is copied into it and then deleted, as the crate does.
 @file:OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
 
 package rtok.sys
 
 import kotlinx.cinterop.toKString
+import platform.posix.EXDEV
 import platform.posix.errno
 import platform.posix.getenv
 import platform.posix.rename
@@ -24,8 +25,13 @@ actual fun moveToTrash(path: String) {
     writeString("$trash/info/$name.trashinfo", "[Trash Info]\nPath=${percentEncode(abs)}\nDeletionDate=$now\n")
     if (rename(abs, "$trash/files/$name") != 0) {
         val e = errno
-        removeFile("$trash/info/$name.trashinfo")
-        throw IoException(ioKind(e), "cannot move $path to trash: errno $e")
+        try {
+            if (e != EXDEV) throw IoException(ioKind(e), "cannot move $path to trash: errno $e")
+            moveByCopy(abs, "$trash/files/$name")
+        } catch (x: IoException) {
+            removeFile("$trash/info/$name.trashinfo")
+            throw x
+        }
     }
 }
 
