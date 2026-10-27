@@ -1081,3 +1081,12 @@ Next, in order:
   rtok's own entries), `Loc` + `locations` for `--fix`. BTreeMap groups are walked in key order as in Rust.
 - Tests: McpDupesTest 19 (mcp_dupes.rs 18 + URL normal form).
 - Stop point: next doctor mcp_fix.rs, checklist.rs, fix.rs, web.rs, then doctor.rs + `rtok doctor`.
+## Session: doctor — mcp_fix.rs, checklist.rs, fix.rs part 1
+- `rtok.doctor.McpFix` (`remove`: JSONC member removal through `JsoncItems.removeAt`, a TOML server table or inline
+  key through `:toml-aot`, then the servers and the rest of the file are parsed back and compared).
+- `rtok.doctor.Checklist` (`Prompt`, `Choice`, `copyOf`, `keepCopy`, `sharedIn`, `defaults`, `items`, `run`) and
+  `rtok.doctor.Fix` part 1 (`KINDS`, `isRtokOwn`, `isOwn`, `parsePath`, `wanted`, `removable`).
+- Tests: McpFixTest 3 (mcp_fix.rs 1 + JSONC and TOML removals), ChecklistTest 4 (fix.rs `is_rtok_own`, `parse_path` + scripted checklist runs; the
+  file-writing fix.rs tests land with the rest of fix.rs).
+- Stop point: next fix.rs rest (`Writer` backup + atomic swap, `fix_found`, `fix_file`, `render`, `interactive`), web.rs,
+  then doctor.rs + `rtok doctor`.
