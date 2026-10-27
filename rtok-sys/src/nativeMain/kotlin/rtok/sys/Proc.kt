@@ -81,7 +81,19 @@ class ProgressRunner(
             var dropped = 0L
             val fds = allocArray<pollfd>(2)
             val buf = ByteArray(64 * 1024)
-            while (sinks.any { it.open }) {
+            // Once the child exits only a finite drain follows: a descendant that inherited the pipes and outlives
+            // the child must not hold the caller until it exits too (Rust ProgressRunner, T638).
+            var exit: Exit? = null
+            var drainEnd: kotlin.time.TimeSource.Monotonic.ValueTimeMark? = null
+            while (sinks.any { it.open } && drainEnd?.hasPassedNow() != true) {
+                if (exit == null) {
+                    exit = reapNow(pid.value)
+                    if (exit != null) {
+                        drainEnd = kotlin.time.TimeSource.Monotonic
+                            .markNow() + with(kotlin.time.Duration) { DRAIN_MS.milliseconds }
+                    }
+                }
+
                 sinks.forEachIndexed { i, s ->
                     fds[i].fd = if (s.open) s.fd else -1
                     fds[i].events = POLLIN.toShort()
@@ -113,9 +125,32 @@ class ProgressRunner(
                     dropped += n - keep
                 }
             }
+            sinks.filter { it.open }.forEach {
+                it.open = false
+                close(it.fd)
+            }
             spinner.finish()
-            Captured(sinks[0].bytes.toByteArray(), sinks[1].bytes.toByteArray(), waitExit(pid.value)) to dropped
+            Captured(sinks[0].bytes.toByteArray(), sinks[1].bytes.toByteArray(), exit?.code ?: waitExit(pid.value)) to dropped
         }
+
+    /** A reaped exit: the code, or null for a signal. */
+    private class Exit(
+        val code: Int?,
+    )
+
+    /** The child's exit when it already ended (WNOHANG), else null. */
+    private fun reapNow(pid: pid_t): Exit? =
+        memScoped {
+            val status = alloc<IntVar>()
+            if (waitpid(pid, status.ptr, WNOHANG) != pid) return null
+            val s = status.value
+            Exit(if (s and 0x7f == 0) (s shr 8) and 0xff else null)
+        }
+
+    private companion object {
+        /** How long the pipes are drained after the child exited. */
+        const val DRAIN_MS = 500L
+    }
 
     private class Sink(
         val fd: Int,

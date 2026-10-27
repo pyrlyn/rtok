@@ -1501,3 +1501,15 @@ Next, in order:
 - Deviations: `upgrade`/`supervise` are listed in help (the spec has no hidden flag); the hook-resident socket
   e2e check is not ported (sandbox paths exceed the Unix socket limit); output is unstyled.
 - Stop point: bench, macOS/Linux split.
+
+## Session: bench (default + graph suites)
+- `rtok.bench` (src/bench.rs): `Bench.run` (six-task default suite over `[bench.configs]`, `--dry-run` schedule,
+  offline zero rows, the averaged table and `<tasks dir>/results/<arm>.json`), `GraphSuite` (`--suite graph`:
+  graph.toml checks, both arms, per-question rows and TOTAL), `runBounded`/`parseUsage`/`countToolUses`.
+  Live `claude -p` runs stay gated on RTOK_BENCH_LIVE. `cli/BenchCmd.kt` merges typed flags into `[bench]`.
+- `ProgressRunner.runCapped` now drains for at most 500 ms after the child exits, so a descendant holding the
+  pipes cannot stall the caller (Rust T638).
+- Tests: BenchTest (7) on temp fixtures with `true`/`false` checks (the real bench/tasks.toml checks run
+  `git clean` in the repo, so they are not used), RunBoundedTest (7).
+- Not ported yet: `--suite p28` (src/bench/p28.rs), the bench/ overlay tests, tests/*_bench.rs,
+  tests/bench_fixtures.rs (needs an o200k_base tokenizer), tests/p28_must_keep.rs.
