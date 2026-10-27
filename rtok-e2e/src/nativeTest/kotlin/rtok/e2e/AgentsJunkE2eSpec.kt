@@ -21,6 +21,8 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import rtok.sys.*
+import kotlin.native.OsFamily
+import kotlin.native.Platform
 
 private const val DAY = 86_400L
 private const val NANOS = 1_000_000_000L
@@ -55,7 +57,10 @@ private class JunkHome(
             removeDirAll(it)
             createDirAll("$it/.fake-hosts")
         }
-    val cache = "$home/Library/Caches/rtok"
+
+    /** rtok's own cache where `agents junk` looks for it: ~/Library/Caches on macOS, $XDG_CACHE_HOME elsewhere. */
+    @OptIn(kotlin.experimental.ExperimentalNativeApi::class)
+    val cache = if (Platform.osFamily == OsFamily.MACOSX) "$home/Library/Caches/rtok" else "$home/.cache/rtok"
     val log = "$home/logs/rtok.log"
     private val env =
         mapOf(
