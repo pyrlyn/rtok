@@ -53,6 +53,7 @@ fun stylesheet(): String =
             layout()
             widgets()
             fixStyles()
+            taskStyles()
             controls()
             charts()
             grid()
