@@ -1314,7 +1314,8 @@ Next, in order:
 - Session (Compose web worker, worktree `~/Grok/rtok-compose-web`): Compose Multiplatform rewrite of the web UI (docs/web.md
   "Compose UI"). PR 1 (#199): `:rtok-web-model` split, `:rtok-web-compose` (wasmJs) shell, navigation, Overview.
   PR 2 (#204): Calls, Sessions, Logs, Config, Hosts, Services, Plugins, Usage, Stats, Skills.
-  PR 3 (#205): Tasks, Worktrees, junk card, Doctor + fix panel. Next: Graph, command palette, serving, old UI removal.
+  PR 3 (#205): Tasks, Worktrees, junk card, Doctor + fix panel. PR 4 (#207): Graph base. PR 5 (#209): Graph drill,
+  compare, export/import, removal dry run. Next: live calls, command palette, WebGL cloud, serving, old UI removal.
 
 ## Session: proxy chunk 2 — wire usage and the four dialects
 - `rtok.proxy.Wire` (wire.rs `Wire` trait: matches, provider, api, session id, model, usage from body/SSE,
