@@ -15,7 +15,8 @@ import rtok.sys.ProgressRunner
 /** A bench that cannot run (bad suite, task file or count). */
 class BenchException(
     message: String,
-) : Exception(message)
+    cause: Throwable? = null,
+) : Exception(message, cause)
 
 internal data class Task(
     val id: String,

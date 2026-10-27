@@ -102,13 +102,14 @@ internal object P28Suite {
                 val o = it.jsonObject
                 P28Body(o.need("id", fixture), o.need("text", fixture), o["keep"]?.jsonArray.orEmpty().map { k -> k.jsonObject.need("text", fixture) })
             }
-        if (arms.size < MIN_ARMS) throw BenchException("p28 suite needs ≥ $MIN_ARMS arms, got ${arms.size}")
-        arms.forEachIndexed { i, a ->
-            // A shared id merges two arms' totals; a shared home mixes their compressor spend.
-            if (arms.take(i).any { it.id == a.id || it.home == a.home }) throw BenchException("arm ${a.id} repeats an earlier arm's id or home")
-        }
         val tasks = root["tasks"]?.jsonArray.orEmpty().map { task(it.jsonObject, path, bodies) }
-        if (tasks.isEmpty()) throw BenchException("p28 suite has no tasks")
+        // A shared id merges two arms' totals; a shared home mixes their compressor spend.
+        val repeated = arms.withIndex().firstOrNull { (i, a) -> arms.take(i).any { it.id == a.id || it.home == a.home } }?.value
+        listOfNotNull(
+            "p28 suite needs ≥ $MIN_ARMS arms, got ${arms.size}".takeIf { arms.size < MIN_ARMS },
+            repeated?.let { "arm ${it.id} repeats an earlier arm's id or home" },
+            "p28 suite has no tasks".takeIf { tasks.isEmpty() },
+        ).firstOrNull()?.let { throw BenchException(it) }
         return P28File(arms, tasks, bodies)
     }
 
@@ -119,18 +120,21 @@ internal object P28Suite {
     ): P28Task {
         val id = o.need("id", path)
         val first = o.need("first", path)
-        val b = bodies.firstOrNull { it.id == first } ?: throw BenchException("task $id first $first is not a fixture body")
-        val re =
-            try {
-                Regex(o.need("expect", path))
-            } catch (
-                @Suppress("SwallowedException") e: IllegalArgumentException,
-            ) {
-                throw BenchException("$id expect: ${e.message}")
+        val b = bodies.firstOrNull { it.id == first }
+        val re = runCatching { Regex(o.need("expect", path)) }
+        val problem =
+            when {
+                b == null -> "task $id first $first is not a fixture body"
+
+                re.isFailure -> "$id expect: ${re.exceptionOrNull()?.message}"
+
+                // The answer must be a span the compressor is bound to keep, or the gate tests nothing.
+                b.keep.none { re.getOrThrow().containsMatchIn(it) } -> "task $id expect matches no must-keep span of $first"
+
+                else -> null
             }
-        // The answer must be a span the compressor is bound to keep, or the gate tests nothing.
-        if (b.keep.none { re.containsMatchIn(it) }) throw BenchException("task $id expect matches no must-keep span of $first")
-        return P28Task(id, first, o.need("question", path), re)
+        problem?.let { throw BenchException(it) }
+        return P28Task(id, first, o.need("question", path), re.getOrThrow())
     }
 
     fun run(cfg: Config): String {
@@ -204,15 +208,15 @@ internal object P28Suite {
         timeoutS: Long,
     ): Pair<Usage, String> {
         val none = Usage() to ""
-        if (!exists(arm.settings) || !live()) return none
         val dir = "${tempDir()}/rtok-p28-${pid()}-${arm.id}"
-        runCatching { removeDirAll(dir) }
-        val wrote =
-            runCatching {
-                createDirAll(dir)
-                bodies.forEach { writeString("$dir/${it.id}.txt", it.text) }
-            }.isSuccess
-        if (!wrote) return none
+        val ready =
+            exists(arm.settings) && live() &&
+                runCatching {
+                    removeDirAll(dir)
+                    createDirAll(dir)
+                    bodies.forEach { writeString("$dir/${it.id}.txt", it.text) }
+                }.isSuccess
+        if (!ready) return none
         val cmd =
             ProgressRunner(
                 "running claude -p…",
@@ -221,8 +225,7 @@ internal object P28Suite {
             ).quiet().cwd(dir)
         val out = runBounded(cmd, maxOf(1, timeoutS) * MS)
         runCatching { removeDirAll(dir) }
-        out ?: return none
-        return parseUsage(out) to parseJson(out).text("result")
+        return out?.let { parseUsage(it) to parseJson(it).text("result") } ?: none
     }
 
     /** The arm proxy's store at `home/rtok.db`; all zeros when it does not exist yet (never created here). */
@@ -239,7 +242,7 @@ internal object P28Suite {
             } catch (
                 @Suppress("TooGenericExceptionCaught") e: Exception,
             ) {
-                throw BenchException("$db: ${e.message}")
+                throw BenchException("$db: ${e.message}", e)
             }
         return store.use { tally(it, home, bodies, prices) }
     }
@@ -260,11 +263,10 @@ internal object P28Suite {
         }
         for ((id, summary) in store.archiveSummaries()) {
             r = r.copy(summaries = r.summaries + 1)
-            val original = store.getArchive(id, "$home/archive")?.decodeToString() ?: continue
+            val original = store.getArchive(id, "$home/archive")?.decodeToString()
             // The archived Read output carries line numbers, so the body is found by its spans.
-            val b = bodies.firstOrNull { b -> b.keep.all { original.contains(it) } } ?: continue
-            r = r.copy(recovered = r.recovered + 1)
-            if (b.keep.all { summary.contains(it) }) r = r.copy(kept = r.kept + 1)
+            val b = original?.let { o -> bodies.firstOrNull { b -> b.keep.all { o.contains(it) } } } ?: continue
+            r = r.copy(recovered = r.recovered + 1, kept = r.kept + if (b.keep.all { summary.contains(it) }) 1 else 0)
         }
         return r
     }
