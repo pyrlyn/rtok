@@ -171,11 +171,6 @@ private fun DrillBody(
         if (g.state != "ok") Txt("index ${g.state}", color = LocalPalette.current.warn)
         if (g.partial) Muted("partial: capped at $DRILL_LIMIT nodes")
         FocusTools(c, s)
-        Scene(m) { id ->
-            m.graph.nodes
-                .firstOrNull { it.id == id }
-                ?.let { open(c, s, g, it) }
-        }
         NodeList(c, s, g, m)
     }
     DrillPanels(c, s, dp)
@@ -211,7 +206,7 @@ private fun FocusTools(
 }
 
 /** A node picked in the list or the scene: a file toggles, a symbol is focused (in its own project). */
-private fun open(
+internal fun openIn(
     c: DrillController,
     s: DrillState,
     g: DGraph,
@@ -235,7 +230,7 @@ private fun NodeList(
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             m.nodes[n.id]?.let { Pill(CHANGE_TONE[it] ?: "muted", "${CHANGE_MARK[it]} $it") }
             Pill("muted", n.kind)
-            Box(Modifier.clickable { open(c, s, g, n) }) { Txt(n.label, color = p.accent) }
+            Box(Modifier.clickable { openIn(c, s, g, n) }) { Txt(n.label, color = p.accent) }
             Box(Modifier.clickable { uri.openUri(editorLink(g.root, n.path, n.line, ::encode)) }) {
                 Muted("${n.path}${if (n.line > 0) ":${n.line}" else ""}")
             }

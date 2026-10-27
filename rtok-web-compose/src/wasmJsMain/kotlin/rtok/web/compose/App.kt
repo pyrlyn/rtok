@@ -21,6 +21,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -95,6 +96,12 @@ class AppState {
     /** The Doctor fix panel's controller. */
     val fix by lazy { FixController(this) }
 
+    /** The command palette and global shortcuts. */
+    val palette = PaletteController(this)
+
+    /** The Graph page's live calls. */
+    val live by lazy { LiveCallsController(this) }
+
     /** The Graph drill-down's controller. */
     val drill by lazy { DrillController(this).also { installExport() } }
 
@@ -103,6 +110,7 @@ class AppState {
             path = window.location.pathname
             query = window.location.search
         })
+        palette.install()
         link0.start()
     }
 
@@ -150,6 +158,7 @@ fun App(state: AppState) {
         val p = LocalPalette.current
         Box(Modifier.fillMaxSize().background(p.bg)) {
             if (state.link == LinkState.CLOSED && state.snapshot == null) Offline(state) else Shell(state)
+            PaletteOverlay(state.palette)
         }
     }
 }
@@ -158,6 +167,7 @@ fun App(state: AppState) {
 private fun Shell(state: AppState) {
     val p = LocalPalette.current
     val page = pageFor(state.path)
+    SideEffect { state.live.want(page?.id == "graph", state.link == LinkState.OPEN) }
     document.title = "${page?.id ?: "not found"} · rtok"
     Row(Modifier.fillMaxSize()) {
         Column(
@@ -217,6 +227,7 @@ private fun Header(
                 LinkState.CLOSED -> "fail" to "closed"
             }
         Pill(tone, label)
+        Box(Modifier.clickable { state.palette.show() }.padding(4.dp)) { Txt("⌘K") }
         Box(Modifier.clickable { state.toggleTheme() }.padding(4.dp)) { Txt("theme") }
     }
 }
