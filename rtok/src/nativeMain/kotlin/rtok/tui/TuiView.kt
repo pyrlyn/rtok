@@ -38,6 +38,13 @@ private val COMMANDS =
         "tasks" to "rtok tasks",
     )
 
+/** app.rs `KEYS` of the pages that edit, after the global ones in the key line. */
+private val PAGE_KEYS =
+    mapOf(
+        "plugins" to "Space/Enter toggle",
+        "hosts" to "c clear safe junk",
+    )
+
 private fun objects(e: kotlinx.serialization.json.JsonElement?) = (e as? JsonArray).orEmpty().filterIsInstance<JsonObject>()
 
 /** Draws the whole screen for [app] into [b]; [clock] formats unix seconds for the time columns. */
@@ -51,8 +58,13 @@ fun draw(
     val inner = b.block(body, app.page, ACCENT)
     if (app.help) help(b, inner) else page(b, inner, app, clock)
     val err = app.snapshot.s("error")
-    val keys = "q quit · ←/→ tab · 1-9 jump · ↑/↓ row · r refresh · ? help"
-    b.put(foot.x, foot.y, err?.let { "store: $it" } ?: keys, if (err != null) FAIL else MUTED, foot.w)
+    val keys = "q quit · ←/→ tab · 1-9 jump · ↑/↓ row · r refresh · ? help" + (PAGE_KEYS[app.page]?.let { " · $it" } ?: "")
+    val status = app.pluginStatus.takeIf { app.page == "plugins" && it.isNotEmpty() }
+    when {
+        err != null -> b.put(foot.x, foot.y, "store: $err", FAIL, foot.w)
+        status != null -> b.put(foot.x, foot.y, status, ACCENT, foot.w)
+        else -> b.put(foot.x, foot.y, keys, MUTED, foot.w)
+    }
 }
 
 private fun help(
@@ -67,11 +79,23 @@ private fun help(
             "↑/↓, j/k         move the row cursor; PgUp/PgDn, Home/End",
             "r                re-read the model now",
             "?                this help",
+            "Space/Enter      plugins: toggle the plugin under the cursor",
+            "c                hosts: clear safe junk (plan); y removes, n/Esc declines",
         )
     b.paragraph(r, lines.map { listOf(Span(it)) })
 }
 
 private fun page(
+    b: Buffer,
+    r: Rect,
+    app: TuiApp,
+    clock: (Double) -> String,
+) {
+    val junk = if (app.page == "hosts") app.actions?.let { app.junk.panel(it) } else null
+    if (junk != null) junkPanel(b, r, app, junk) else field(b, r, app, clock)
+}
+
+private fun field(
     b: Buffer,
     r: Rect,
     app: TuiApp,
@@ -148,4 +172,21 @@ private fun text(
 ) {
     val scroll = follow(app.cursor, 0, r.h).coerceAtMost((lines.size - r.h).coerceAtLeast(0))
     b.paragraph(r, lines.map { listOf(Span(it)) }, scroll)
+}
+
+private fun junkPanel(
+    b: Buffer,
+    r: Rect,
+    app: TuiApp,
+    panel: Pair<Pair<String, String>, String>,
+) {
+    val (head, tone) = panel.first
+    val color =
+        when (tone) {
+            "ok" -> Style(fg = Color.Green, bold = true)
+            "warn" -> Style(fg = Color.Yellow, bold = true)
+            else -> Style(dim = true, bold = true)
+        }
+    val lines = listOf(listOf(Span(head, color))) + panel.second.lines().map { listOf(Span(it)) }
+    b.paragraph(r, lines, follow(app.cursor, 0, r.h).coerceAtMost((lines.size - r.h).coerceAtLeast(0)))
 }
