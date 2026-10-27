@@ -73,7 +73,7 @@ internal fun graphPage(
     r: Rect,
     app: TuiApp,
 ) {
-    if (app.compare.render(b, r)) return
+    if (app.compare.render(b, r) || app.exporter.render(b, r)) return
     val rows = projectEntries(app.snapshot)
     val textLines = (app.snapshot["graph"] as? JsonPrimitive)?.content?.lines()
     if (rows.isEmpty()) {

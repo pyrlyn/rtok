@@ -59,6 +59,9 @@ class TuiApp(
     /** The Graph tab's compare view (T485). */
     val compare = TuiCompare()
 
+    /** The Graph tab's export form and saved-export view (T329.41). */
+    val exporter = TuiExport()
+
     /** The Graph tab's one-project view (T561). */
     val drill = TuiDrill()
 
@@ -158,10 +161,13 @@ class TuiApp(
         val rows = projectEntries(snapshot)
         val target = rows.getOrNull(projects.cursor(rows))?.let { it.id to it.name }
         // Typing goes to the field first; `?` and `r` are the shell's otherwise, then the panel, then the registry.
+        // One panel is open at a time, so a key goes to the export form or to compare, never both.
         return when {
             compare.typing && compare.key(k, target, a) -> Effect.NONE
+            exporter.typing && exporter.key(k, target, a) -> Effect.NONE
             k == Key.Char("?") || k == Key.Char("r") -> null
-            compare.key(k, target, a) -> Effect.NONE
+            !compare.isOpen && exporter.key(k, target, a) -> Effect.NONE
+            !exporter.isOpen && compare.key(k, target, a) -> Effect.NONE
             else -> registry(k, a, rows)
         }
     }

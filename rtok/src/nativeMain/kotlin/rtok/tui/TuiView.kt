@@ -46,7 +46,7 @@ private val PAGE_KEYS =
         "calls" to "Enter/z detail · e expand · / filter expand",
         "sessions" to "Enter detail · l live only",
         "config" to "/ filter",
-        "graph" to "s select · l link · u unlink · b both · Enter pick · y confirm · n/Esc decline · c compare · d drill · i re-index · x remove",
+        "graph" to "s select · l link · u unlink · b both · Enter pick · y confirm · n/Esc decline · c compare · e export · v view export · d drill · i re-index · x remove",
     )
 
 private fun objects(e: kotlinx.serialization.json.JsonElement?) = (e as? JsonArray).orEmpty().filterIsInstance<JsonObject>()
@@ -93,6 +93,7 @@ private fun help(
             "b, Enter         graph: both ways; pick the target",
             "y, n/Esc         graph: confirm the plan; decline",
             "d, i, x          graph: drill, re-index, remove…",
+            "e, v             graph: export the graph to a file; view a saved export (read-only)",
             "c                graph: compare with a ref or a saved export; Enter runs, Esc closes",
         )
     b.paragraph(r, lines.map { listOf(Span(it)) })

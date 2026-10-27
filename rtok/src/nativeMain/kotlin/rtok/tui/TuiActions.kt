@@ -17,8 +17,13 @@ import rtok.plugin.Runtime
 import rtok.plugins.graph.DiffReport
 import rtok.plugins.graph.Drill
 import rtok.plugins.graph.DrillRequest
+import rtok.plugins.graph.Export
+import rtok.plugins.graph.ExportImage
+import rtok.plugins.graph.ExportQuery
+import rtok.plugins.graph.ExportView
 import rtok.plugins.graph.GraphDiffs
 import rtok.plugins.graph.Saved
+import rtok.plugins.graph.Scope
 import rtok.web.DrawnNode
 import rtok.web.GraphAnswer
 import rtok.web.ProjectRequest
@@ -48,6 +53,19 @@ class TuiActions(
                 GraphDiffs.pageOf(rt, project, input.split(' ', '\t').filter { it.isNotEmpty() }, null, null)
             }
         }
+
+    /** exporter.rs `write`: the command's own call with its defaults (scale 1, an opaque background, pretty JSON). */
+    fun writeExport(
+        project: String,
+        f: ExportForm,
+    ): Int =
+        Runtime.open(cfg, "tui-export").use { rt ->
+            val q = ExportQuery(f.level, null, 2, redact = f.redact, pretty = true)
+            ExportView.write(rt, Scope.resolve(rt.store, project, "."), q, ExportImage(f.format), f.path.trim())
+        }
+
+    /** exporter.rs `view`: the importer the page and `--from` use; nothing is written, no store is opened. */
+    fun readExport(path: String): Export = ExportView.read(path)
 
     /** drill.rs `load`: the page's `graph` answer at its own cap; a state other than `ok` is the refusal. */
     fun drill(id: Int): Drawn =

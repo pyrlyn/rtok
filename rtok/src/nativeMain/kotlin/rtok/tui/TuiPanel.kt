@@ -14,6 +14,7 @@ import tui.Span
 import tui.Style
 import tui.paragraph
 import tui.rows
+import tui.wrap
 
 /** Rows one PageUp or PageDown moves. */
 private const val PAGE = 10
@@ -139,7 +140,9 @@ abstract class TuiPanel<A>(
                 is PanelStage.Shown -> s.lines
             }
         val (text, foot) = r.rows(Size.Fill(), Size.Fixed(HINT_ROWS))
-        b.paragraph(text, lines, scroll.coerceAtMost((lines.size - 1).coerceAtLeast(0)))
+        // Rows wrap to the width, as ratatui's `Wrap { trim: false }` does; the scroll counts logical lines.
+        val shown = lines.drop(scroll.coerceAtMost((lines.size - 1).coerceAtLeast(0))).flatMap { wrap(it, text.w) }
+        b.paragraph(text, shown)
         b.paragraph(foot, listOf(listOf(Span("$label: $hints", MUTED))))
         return true
     }
