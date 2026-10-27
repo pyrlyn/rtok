@@ -314,7 +314,7 @@ private fun CssBuilder.widgets() {
     }
     rule(".pill.ok") { put("color", v("ok")) }
     rule(".pill.info") { put("color", v("accent")) }
-    rule(".pill.warn") { put("color", v("warn")) }
+    rule(".pill.warn, .warn-fg") { put("color", v("warn")) }
     rule(".pill.fail") { put("color", v("fail")) }
     rule(".pill.muted") { put("color", v("fg-muted")) }
     rule(".kv") {

@@ -1259,6 +1259,11 @@ Next, in order:
   snapshot keys).
 - Deviation: tests/skill_listing.rs's proxy-capture half (axum + httpmock) is not ported; the measure is.
 - Next: the Stats and Skills pages (Kotlin/JS) and TUI tabs.
+
+## Ownership (2026-10-27)
+- Web/dashboard worker (worktree `~/Grok/rtok-web-dashboard`): web Graph page gaps (docs/web.md "Audit"), then
+  worktree add/finish/whoami/clean run/migrate with their modules, and the hooks dispatcher tests. The main-port
+  worker skips these.
 ## Session: otel part 2 — export.rs, `rtok otel flush|status`
 - `rtok.otel.Export` (export.rs): flush per stream past the watermarks (traces = ended sessions + calls, stopping in
   front of an in-flight call; logs; metrics sums every flush), marks only on 2xx, a 404 stream skipped and not logged,
