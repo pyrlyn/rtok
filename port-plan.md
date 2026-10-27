@@ -1173,3 +1173,15 @@ Next, in order:
   sync.rs's GitHub read-only test waits for the github adapter.
 - Stop point: next github/gitlab adapters (remote.rs, github.rs, github_project.rs, gitlab.rs), then export
   (export.rs, export/github.rs, export/linear.rs) and `rtok task export`; task MCP tools.
+## Session: tasks part 5 — github adapter (remote.rs, github.rs, github_project.rs)
+- `:http`: `HttpClient.request(method, req)` and `HttpResponse.headers`/`header()`; `KtorHttp` implements both.
+- `rtok.tasks`: `Remote.kt` (labels/titles, token lookup env then `gh auth token`, `RemoteHttp` with write pacing,
+  rate-limit waits, `Link: rel="next"` paging kept on the API host), `Github.kt` (`GithubAdapter`, `githubRepo`,
+  shared `graphql`), `GithubProject.kt` (Projects v2 Status sync, failures go to `taskWarningSink`).
+  `TaskProject.open` now builds the github adapter (Ktor client, 30 s timeout).
+- Tests: KtorHttpTest +1, RemoteTest 6, GithubTest 9, GithubProjectTest 5. A scripted `FakeHttp` (`rtok.http.HttpClient`)
+  replaces httpmock; no new dependency.
+- Deviations: sub-issue link and project failures are warnings through `taskWarningSink` (still silent until the
+  CLI wires it); run.rs/sync.rs GitHub tests still wait (sync read-only test next with gitlab).
+- Stop point: next gitlab.rs, then export (export.rs, export/github.rs, export/linear.rs), `rtok task export`, task MCP
+  tools, wire `taskWarningSink` to the CLI.

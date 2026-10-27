@@ -8,8 +8,10 @@ import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.request.get
 import io.ktor.client.request.post
+import io.ktor.client.request.request
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsBytes
+import io.ktor.http.HttpMethod
 import kotlinx.coroutines.CancellationException
 import rtok.http.HttpClient
 import rtok.http.HttpClientFactory
@@ -48,6 +50,18 @@ class KtorHttp(
 
     override suspend fun get(req: HttpRequest): HttpResponse = send(req) { client.get(req.url) { req.headers.forEach { (k, v) -> headers.append(k, v) } } }
 
+    override suspend fun request(
+        method: String,
+        req: HttpRequest,
+    ): HttpResponse =
+        send(req) {
+            client.request(req.url) {
+                this.method = HttpMethod.parse(method.uppercase())
+                req.headers.forEach { (k, v) -> headers.append(k, v) }
+                if (req.body.isNotEmpty()) setBody(req.body)
+            }
+        }
+
     /** One request with every transport failure mapped to an [HttpException] kind. */
     private suspend fun send(
         req: HttpRequest,
@@ -55,7 +69,8 @@ class KtorHttp(
     ): HttpResponse =
         try {
             val resp = call()
-            HttpResponse(resp.status.value, resp.bodyAsBytes())
+            val headers = resp.headers.entries().flatMap { (k, vs) -> vs.map { k.lowercase() to it } }
+            HttpResponse(resp.status.value, resp.bodyAsBytes(), headers)
         } catch (e: HttpRequestTimeoutException) {
             throw HttpException(HttpException.Kind.RequestTimeout, "request timeout: ${req.url}", e)
         } catch (e: CancellationException) {

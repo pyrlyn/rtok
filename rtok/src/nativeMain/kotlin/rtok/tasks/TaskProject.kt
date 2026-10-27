@@ -68,9 +68,23 @@ class TaskProject(
             val prefix = resolvePrefix(cfg.prefix, rtok.projectName(cwd))
             val adapter =
                 when (cfg.adapter) {
-                    "disk" -> diskAdapter(cfg.disk, root)
-                    "github", "gitlab" -> bail("rtok task: the ${cfg.adapter} adapter is not ported yet")
-                    else -> bail("rtok task: unknown [tasks] adapter \"${cfg.adapter}\"")
+                    "disk" -> {
+                        diskAdapter(cfg.disk, root)
+                    }
+
+                    "github" -> {
+                        val repo = githubRepo(cfg.github.repo, key)
+                        val token = token("github", listOf("GH_TOKEN", "GITHUB_TOKEN"), listOf("gh", "auth", "token"))
+                        GithubAdapter(GITHUB_API, repo, token, WRITE_GAP, rtok.http.ktor.KtorHttp(rtok.http.HttpSettings(requestTimeoutMs = 30_000)), cfg.github.project.toLong())
+                    }
+
+                    "gitlab" -> {
+                        bail("rtok task: the gitlab adapter is not ported yet")
+                    }
+
+                    else -> {
+                        bail("rtok task: unknown [tasks] adapter \"${cfg.adapter}\"")
+                    }
                 }
             return TaskProject(key, root, prefix, adapter)
         }

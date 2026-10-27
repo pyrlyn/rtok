@@ -18,8 +18,13 @@ data class HttpRequest(
 data class HttpResponse(
     val status: Int,
     val body: ByteArray,
+    /** Response headers, names lower-cased; empty from clients that do not report them. */
+    val headers: List<Pair<String, String>> = emptyList(),
 ) {
     val isSuccess get() = status in 200..299
+
+    /** The first value of header [name] (any case), or null. */
+    fun header(name: String): String? = headers.firstOrNull { it.first.equals(name, ignoreCase = true) }?.second
 
     fun text() = body.decodeToString()
 }
@@ -39,6 +44,17 @@ interface HttpClient : AutoCloseable {
 
     /** GET [req] (its body is ignored); errors as for [post]. */
     suspend fun get(req: HttpRequest): HttpResponse = throw HttpException(HttpException.Kind.Io, "GET is not supported by this client")
+
+    /** Any [method] (`GET`, `POST`, `PATCH`, `PUT`, `DELETE`); the body is sent when non-empty. Errors as for [post]. */
+    suspend fun request(
+        method: String,
+        req: HttpRequest,
+    ): HttpResponse =
+        when (method.uppercase()) {
+            "GET" -> get(req)
+            "POST" -> post(req)
+            else -> throw HttpException(HttpException.Kind.Io, "$method is not supported by this client")
+        }
 }
 
 /** Builds clients; the composition root picks the engine adapter. */
