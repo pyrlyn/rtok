@@ -1,6 +1,6 @@
 // Port of src/tui/app.rs, first slice: the pure state of `rtok tui` (tab, row cursors, help) over the same
-// snapshot `rtok web` serves, and the global keys. Pages that edit (plugin toggles, doctor fix, junk clear,
-// filters, drill) follow.
+// snapshot `rtok web` serves, the global keys, the Plugins toggle (T15.4) and the Hosts junk panel (T479). Doctor
+// fix, filters and drill follow.
 package rtok.tui
 
 import kotlinx.serialization.json.JsonArray
@@ -36,6 +36,8 @@ enum class Effect { NONE, QUIT, REFRESH }
 /** `rtok tui` state; [snapshot] is replaced on every tick. */
 class TuiApp(
     startTab: String,
+    /** The writes keys may make; null for a read-only app (the tests of navigation). */
+    val actions: TuiActions? = null,
 ) {
     /** app.rs `new`: `[tui] tab` when it names a page, else the first tab. */
     var tab: Int = TABS.indexOfFirst { it.first == startTab }.coerceAtLeast(0)
@@ -43,6 +45,13 @@ class TuiApp(
     var help = false
         private set
     var snapshot: JsonObject = JsonObject(emptyMap())
+
+    /** The Plugins tab's status line: the last toggle's outcome, `""` until one. */
+    var pluginStatus = ""
+        private set
+
+    /** The Hosts tab's clear-safe-junk panel. */
+    val junk = TuiJunk()
     private val cursors = IntArray(TABS.size)
 
     val page: String get() = TABS[tab].first
@@ -70,7 +79,40 @@ class TuiApp(
     }
 
     /** app.rs `key`: Ctrl+C / q / Esc quit, ←/→ (Tab, Shift+Tab) wrap, 1..9 jump, `?` help, `r` re-read, rows move. */
-    fun key(k: Key): Effect =
+    fun key(k: Key): Effect {
+        val a = actions
+        val junkKeyed = if (k != Key.Ctrl('c') && page == "hosts" && a != null) junk.key(k, a) else Keyed.PASS
+        return when (junkKeyed) {
+            Keyed.TAKEN -> Effect.NONE
+            Keyed.WROTE -> Effect.REFRESH
+            Keyed.PASS -> (if (page == "plugins" && k != Key.Ctrl('c')) plugins(k) else null) ?: global(k)
+        }
+    }
+
+    /** app.rs `plugins_key`: ↑/↓ clear the status line; Space/Enter toggle the row under the cursor. */
+    private fun plugins(k: Key): Effect? {
+        if (k == Key.Up || k == Key.Down) pluginStatus = ""
+        val row = (snapshot["plugins"] as? JsonArray)?.getOrNull(cursor) as? JsonObject
+        val id = row?.s("id")
+        val a = actions
+        return when {
+            k != Key.Char(" ") && k != Key.Enter -> {
+                null
+            }
+
+            id == null || a == null -> {
+                pluginStatus = "no plugin to toggle"
+                Effect.NONE
+            }
+
+            else -> {
+                pluginStatus = a.toggle(id, !row.on("enabled"))
+                if (pluginStatus.startsWith("config set ")) Effect.NONE else Effect.REFRESH
+            }
+        }
+    }
+
+    private fun global(k: Key): Effect =
         when {
             k == Key.Ctrl('c') || k == Key.Char("q") || k == Key.Esc -> {
                 Effect.QUIT

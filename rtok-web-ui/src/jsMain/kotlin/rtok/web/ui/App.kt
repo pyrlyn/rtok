@@ -240,5 +240,6 @@ fun main() {
     val root = document.getElementById("root") as? HTMLElement ?: error("#root element not found")
     val app = App(root)
     LiveCalls.install(app)
+    JunkCard.install(app)
     app.start()
 }

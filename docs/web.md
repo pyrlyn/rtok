@@ -64,7 +64,10 @@ Previously excluded from the port (port-plan.md); now in progress in small steps
   command palette with `g <key>` shortcuts. Doctor, Stats, Skills, Worktrees, Tasks and the Hosts junk card
   show "not ready" while the server sends null for their field.
 - Step 6, part 2: the Worktrees page (Worktrees.tsx: state filter, search, totals).
-- Step 6, next: full Doctor (plan/fix), Stats, Skills, Tasks and the Hosts junk card with its clear button once their backends
+- Step 6, part 3: the Hosts junk card (Junk.tsx, junkState.ts) and `{"junk":{"action":"plan"|"apply"}}` on `/ws`
+  (`rtok.agents.JunkWeb`, junk_web.rs): `plan` is the dry run of `agents junk clear` for every agent, `apply`
+  re-plans and removes only the confirmed paths, then drops the cached card.
+- Step 6, next: full Doctor (plan/fix), Stats, Skills and Tasks once their backends
   reach the snapshot; Graph 2D force layout, drill, compare, export/import. Pure logic goes to commonMain so
   the native gate tests it.
 - Step 7, part 1: `libs/tui` (`:tui`), no dependencies: styles/SGR, display width, a cell buffer with
@@ -72,5 +75,7 @@ Previously excluded from the port (port-plan.md); now in progress in small steps
   termios/ANSI `Terminal` (raw mode, alternate screen, size, poll).
 - Step 7, part 2: `rtok tui [--tab] [--tick-secs]`: tabs from model::pages(), re-read of the same Snapshot
   every tick and on `r`, tables for plugins/calls/sessions, logs and the CLI text pages, overview totals with a
-  ctx sparkline, `?` help, the tty guard. Next: plugin toggles, filters, calls expand, doctor fix, junk clear,
+  ctx sparkline, `?` help, the tty guard. Part 3: Plugins Space/Enter toggle through `Validate.set`
+  (app.rs T15.4, status in the key line) and the Hosts `c`/`y` clear-safe-junk panel over `JunkWeb` (junk_clear.rs
+  T479), both through `rtok.tui.TuiActions`. Next: filters, calls expand, doctor fix,
   graph drill/compare/export and the live calls pane; reading the model off the input thread.
