@@ -154,7 +154,7 @@ class TuiExportTest {
     @Test fun typedKeysStayInTheFileNameAndAnEmptyNameWritesNothing() =
         fixture("typing") { f ->
             val page = screen(f.app, 260)
-            assertTrue("e export" in page && "v view export" in page, page)
+            assertTrue("e export" in page && "v view saved export" in page, page)
             press(f.app, Key.Char("e"))
             type(f.app, "r?qe3")
             assertTrue("r?qe3▏" in screen(f.app))

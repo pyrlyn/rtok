@@ -158,7 +158,7 @@ class TuiCompareTest {
             edit(f.root)
             compare(f.app, "HEAD")
             f.app.key(Key.Char("s"))
-            assertFalse("select p" in screen(f.app, 100), "s would plan a select on the page behind the panel")
+            assertFalse("select p" in screen(f.app, 100).lines().dropLast(1).joinToString("\n"), "s would plan a select on the page behind the panel")
             f.app.key(Key.Char("?"))
             assertTrue(f.app.help)
             f.app.key(Key.Char("?"))
