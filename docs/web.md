@@ -102,3 +102,21 @@ Snapshot fields, `/ws` actions and every TUI tab are ported. The web Graph page 
 - [x] projects with health rings, `drill →` and the remove dry run (`project_plan`) (ProjectsOverview.tsx, HealthRing.tsx)
 - [x] 2D scene (Scene2D.tsx, layout.ts) as our own SVG over a deterministic force layout (`LayoutPoint.kt`, `GraphScene.kt`)
 - [ ] deferred: the 3D scene (Scene3D.tsx, stage3d.ts, three.js/d3-force-3d) and the layout web worker
+
+## Compose UI (in progress, Ivan 2026-10-27)
+
+The frontend is being rewritten in Compose Multiplatform, replacing the kotlinx.html UI once it reaches parity.
+
+- Target: `wasmJs` only (the target JetBrains recommends for Compose on the web; Canvas rendering via Skiko).
+  Kotlin 2.4.21 (`kotlin("plugin.compose")` at the repo's Kotlin version), Compose Multiplatform 1.12.2
+  (runtime, foundation, ui). No Material: own widgets and Canvas charts in `rtok.web.compose`.
+- Modules:
+  - `:rtok-web-model`: pure UI logic moved out of `:rtok-web-ui` (snapshot frames, page models, drill/compare/fix
+    state, formatting) with its tests (run on macosArm64 in the gate). Targets js + wasmJs + macosArm64.
+  - `:rtok-web-compose`: the Compose app (shell, routing over the History API, `/ws` link, pages). `webDist` syncs the
+    production webpack distribution (`index.html`, `app.js`, two `.wasm` files) into `build/web-dist`.
+  - `:rtok-web-ui`: the current kotlinx.html UI, still embedded by `:rtok-web` until Compose reaches parity, then removed.
+- Pages done in Compose: Overview (shell + navigation + Overview, PR 1). The rest show "Not ported to Compose yet".
+- Serving: open. `embedDir` embeds text files only and the Compose distribution is ~11 MB of binary `.wasm`; embedding
+  needs binary (base64) entries in `embedDir`/`Spa` and a size decision before `:rtok-web` switches to `web-dist` of
+  `:rtok-web-compose`. `Spa` already maps `.wasm` and now `.mjs`.

@@ -1311,6 +1311,8 @@ Next, in order:
   prepare_request; 3 = lane.rs, live.rs, flex.rs; 4 = tools_rewrite.rs, batch_results.rs; 5 = semantic_cache.rs;
   6 = mod.rs server (Ktor) + cli.rs + otel ticker/retention wiring; 7 = tests/batch_cli.rs (3).
 - Stop point: next proxy chunk 2.
+- Session (Compose web worker, worktree `~/Grok/rtok-compose-web`): Compose Multiplatform rewrite of the web UI (docs/web.md
+  "Compose UI"). PR 1: `:rtok-web-model` split from `:rtok-web-ui`, `:rtok-web-compose` (wasmJs) shell, navigation, Overview.
 
 ## Session: proxy chunk 2 — wire usage and the four dialects
 - `rtok.proxy.Wire` (wire.rs `Wire` trait: matches, provider, api, session id, model, usage from body/SSE,

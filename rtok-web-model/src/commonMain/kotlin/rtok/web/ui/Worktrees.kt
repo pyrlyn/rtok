@@ -28,7 +28,7 @@ data class WorktreesView(
 private val CELL_GAP = Regex("\\s{2,}")
 
 /** text.ts `cells`: columns are separated by two or more spaces. */
-internal fun cells(line: String) = line.trim().split(CELL_GAP)
+fun cells(line: String) = line.trim().split(CELL_GAP)
 
 private fun WorktreeRow.with(
     header: String,
