@@ -33,14 +33,20 @@ Port of `src/agents/mod.rs` (install engine), `src/agents/command.rs` and `src/c
   `rtok agents send <id-prefix> <text|->` or `send --all-live <text|->` (`--task ID`), `rtok agents inbox [<id>]
   [--unread] [--task ID] [--json]`. The caller is `RTOK_AGENT_ID`, else the host session's main agent; the user at a
   terminal sends as `user`. Messages print framed with the fixed note; the host session id stays in `--json` only.
+- `rtok agents usage [--source logs|rtok|both] [--host IDS] [--since DATE|DUR] [--until DATE] [--daily|--monthly]
+  [--by agent|model] [--tz ZONE] [--unpriced] [--json]` (`[agents.usage]`): tokens and estimated cost per agent and
+  month (or day). `logs` reads the agents' own session files (Claude Code, Codex, OpenCode, Kilo, Copilot CLI, Gemini
+  CLI, pi, Kimi; droid, grok, zcode and antigravity are named as unsupported), `rtok` the store's `usage` rows, `both`
+  the logs plus how much of each agent passed through rtok. Costs come from `[stats.prices]`; an unpriced model counts
+  in the tokens only. Days and months are cut in `--tz` (system tzdata through the C library, no bundled zones).
 - `[setup] mcp = false` skips MCP entries; `[setup] backup = false` skips backups.
 
 ## Test
-`ModulesTest`, `InstallTest`, `OutdatedTest`, `SessionsTableTest`, `AgentMessagesTest`, `InstallListTest`, `CommandTest` (`./gradlew macosArm64Test`) and `AgentsCliSpec`
+`ModulesTest`, `InstallTest`, `OutdatedTest`, `SessionsTableTest`, `AgentMessagesTest`, `InstallListTest`, `CommandTest`, `UsageReportTest`, `UsageLogsReportTest`, `UsageLogsTest` and the `rtok.measure.usage` reader tests (`./gradlew macosArm64Test`) and `AgentsCliSpec`
 (`./gradlew cliTest`, against a Windsurf config in a scratch home).
 
 ## Limitations
 - Output is Rust's non-terminal form: marks, no colour or operation icons, no progress bar.
 - Not ported yet: `--project`, asking for a missing host's
   path on a terminal, the desktop app restart (`--no-restart` is accepted and has nothing to skip), the hook-client
-  link, and the usage/junk subcommands.
+  link, and the junk subcommands.

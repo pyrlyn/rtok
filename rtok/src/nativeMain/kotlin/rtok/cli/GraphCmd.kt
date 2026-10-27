@@ -31,15 +31,6 @@ private fun withGraph(
     body: (Runtime) -> Unit,
 ) = Runtime.open(inv.loadConfig(), "graph").use(body)
 
-private fun Invocation.conflict(
-    a: String,
-    b: String,
-) {
-    if (has(a) && has(b)) throw CliFailure("the argument '--$a' cannot be used with '${if (b == "path") "[PATH]" else "--$b"}'", ExitCode.USAGE)
-}
-
-private fun Invocation.has(name: String) = flag(name) || value(name) != null || arg(name) != null || values(name).isNotEmpty()
-
 /** `--project` (id or directory) else `[path]` else the cwd, as `cli_root_for`. */
 private fun rootFor(
     rt: Runtime,
