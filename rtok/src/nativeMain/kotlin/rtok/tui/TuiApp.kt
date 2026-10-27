@@ -56,6 +56,9 @@ class TuiApp(
     /** The Graph tab's registry cursor and the plan being made (T476). */
     val projects = ProjectsState()
 
+    /** The Graph tab's compare view (T485). */
+    val compare = TuiCompare()
+
     /** The Graph tab's one-project view (T561). */
     val drill = TuiDrill()
 
@@ -153,7 +156,22 @@ class TuiApp(
     private fun graph(k: Key): Effect? {
         val a = actions ?: return null
         val rows = projectEntries(snapshot)
-        return when (val r = projects.key(k, rows)) {
+        val target = rows.getOrNull(projects.cursor(rows))?.let { it.id to it.name }
+        // Typing goes to the field first; `?` and `r` are the shell's otherwise, then the panel, then the registry.
+        return when {
+            compare.typing && compare.key(k, target, a) -> Effect.NONE
+            k == Key.Char("?") || k == Key.Char("r") -> null
+            compare.key(k, target, a) -> Effect.NONE
+            else -> registry(k, a, rows)
+        }
+    }
+
+    private fun registry(
+        k: Key,
+        a: TuiActions,
+        rows: List<rtok.plugins.graph.ProjectRow>,
+    ): Effect? =
+        when (val r = projects.key(k, rows)) {
             ProjectKey.Ignored -> {
                 null
             }
@@ -190,7 +208,6 @@ class TuiApp(
                 Effect.NONE
             }
         }
-    }
 
     /** app.rs `calls_key` with the pane keys: `e` opens / closes, Esc closes, the pane takes `/` and ↑/↓. */
     private fun calls(k: Key): Boolean =

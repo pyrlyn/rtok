@@ -14,8 +14,11 @@ import rtok.config.Config
 import rtok.config.Validate
 import rtok.model.JunkPage
 import rtok.plugin.Runtime
+import rtok.plugins.graph.DiffReport
 import rtok.plugins.graph.Drill
 import rtok.plugins.graph.DrillRequest
+import rtok.plugins.graph.GraphDiffs
+import rtok.plugins.graph.Saved
 import rtok.web.DrawnNode
 import rtok.web.GraphAnswer
 import rtok.web.ProjectRequest
@@ -28,6 +31,23 @@ class TuiActions(
 ) {
     /** app.rs `graph_key`: a Graph-tab registry write through the web page's own function; throws when refused. */
     fun projectWrite(r: ProjectRequest): String = GraphAnswer.projectWrite(cfg, r)
+
+    /**
+     * compare.rs `answer`: one typed line is a saved export when it names a file, otherwise the old sides as
+     * `rtok graph diff --from` takes them. A file named like a ref wins, as with git's own ambiguity.
+     */
+    fun compare(
+        project: String,
+        input: String,
+    ): DiffReport =
+        Runtime.open(cfg, "tui-compare").use { rt ->
+            val file = input.trim()
+            if (file.isNotEmpty() && rtok.sys.isFile(file)) {
+                GraphDiffs.pageOf(rt, project, emptyList(), null, Saved.read(file))
+            } else {
+                GraphDiffs.pageOf(rt, project, input.split(' ', '\t').filter { it.isNotEmpty() }, null, null)
+            }
+        }
 
     /** drill.rs `load`: the page's `graph` answer at its own cap; a state other than `ok` is the refusal. */
     fun drill(id: Int): Drawn =
