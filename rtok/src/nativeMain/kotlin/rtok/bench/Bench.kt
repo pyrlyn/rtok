@@ -15,7 +15,8 @@ import rtok.sys.ProgressRunner
 /** A bench that cannot run (bad suite, task file or count). */
 class BenchException(
     message: String,
-) : Exception(message)
+    cause: Throwable? = null,
+) : Exception(message, cause)
 
 internal data class Task(
     val id: String,
@@ -54,6 +55,7 @@ object Bench {
     fun run(cfg: Config): String =
         when (cfg.bench.suite) {
             "graph" -> GraphSuite.run(cfg)
+            "p28" -> P28Suite.run(cfg)
             "" -> defaultSuite(cfg)
             else -> throw BenchException("unknown bench suite \"${cfg.bench.suite}\"")
         }

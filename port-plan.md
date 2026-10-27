@@ -1468,12 +1468,18 @@ Next, in order:
 - Deviations: the bash/zsh/fish/PowerShell/elvish scripts follow clap_complete's structure but are not
   byte-identical to tests/trycmd/completions-*.stdout (those also need the whole clap tree: bench, demon, logs, man
   and the rest are not ported yet); Clink follows shell-completions' generator line by line. The interactive
-  picker (inquire) is not ported: `Picker.pick` takes the prompt as a function, and a bare `rtok completions`
-  is refused like the no-terminal case. `--dry-run` prints the diff unpainted.
+  picker (inquire's MultiSelect) is `ShellSelect` on tui's raw-mode `Terminal`; `Picker.pick` takes it as the
+  prompt, and a bare `rtok completions` without a terminal is refused. `--dry-run` prints the diff unpainted.
 - Tests: install.rs (9), picker.rs (6), generators (3), `CompletionsCliSpec` (6: completions.rs plus the
   list / no-shell / dry-run trycmd cases; HOME and the XDG/ZDOTDIR/LOCALAPPDATA/SHELL overrides are isolated).
 - Stop point: `rtok man`, completions_shells.rs / completions_picker_pty.rs (need real shells / a pty), then
   bench, demon, macOS/Linux split.
+- tests/completions_shells.rs ported as `CompletionsShellsE2eSpec` (4, rtok-e2e): zsh Tab on a pty with a stale
+  compinit dump, bash `complete -p`, fish `complete -C`, PowerShell `TabExpansion2`; a missing shell skips its test
+  (no pwsh on the Mac). `Pty` (rtok-e2e) is the portable_pty part: posix_openpt, the command in the background on
+  the slave, no controlling terminal.
+- tests/completions_picker_pty.rs ported as `CompletionsPickerPtyE2eSpec` (3: check installs, uncheck removes, esc
+  changes nothing) over `Pty`; the keys are unit-tested in `ShellSelectTest` (5).
 
 ## Session: man pages
 - `rtok.man.Man` + `cli/ManCmd.kt`: `rtok man` prints `rtok.1`; `--dir` writes a page per command with `SEE ALSO`
@@ -1498,8 +1504,9 @@ Next, in order:
   that returns the pid.
 - Tests: DemonE2eSpec (6), tests/demon.rs on the real binary in a sandbox home; the proxy check uses a local
   port derived from the pid. `Sandbox.rtok` takes extra env.
-- Deviations: `upgrade`/`supervise` are listed in help (the spec has no hidden flag); the hook-resident socket
-  e2e check is not ported (sandbox paths exceed the Unix socket limit); output is unstyled.
+- Deviations: `upgrade`/`supervise` are listed in help (the spec has no hidden flag); output is unstyled. The hook-resident
+  socket check (DemonE2eSpec, 7th) runs on a short `/tmp/rtd-<pid>` RTOK_HOME, because sandbox paths exceed the
+  Unix socket limit; rtok-e2e now depends on :rtok-hook for `endpoint`/`connect`.
 - Stop point: bench, macOS/Linux split.
 
 ## Session: bench (default + graph suites)
@@ -1511,8 +1518,13 @@ Next, in order:
   pipes cannot stall the caller (Rust T638).
 - Tests: BenchTest (7) on temp fixtures with `true`/`false` checks (the real bench/tasks.toml checks run
   `git clean` in the repo, so they are not used), RunBoundedTest (7).
-- Not ported yet: `--suite p28` (src/bench/p28.rs), the bench/ overlay tests, tests/*_bench.rs,
-  tests/bench_fixtures.rs (needs an o200k_base tokenizer), tests/p28_must_keep.rs.
+- `--suite p28` (src/bench/p28.rs) ported: rtok/bench/P28Suite.kt, its 7 tests in P28Test.kt over the shipped suite
+  copied to rtok/src/commonTest/fixtures/bench (p28.toml, p28/, p28_must_keep.toml; `keep` rewritten as
+  `[[body.keep]]` tables because ktoml drops inline tables whose strings hold braces or escaped quotes).
+- Overlay tests (src/bench.rs T385.3, T385.9.3): BenchOverlayTest (2) loads bench/configs/defaults/bench.toml and
+  bench/p28/bench.toml (copied to fixtures/bench with their settings and tasks) through `Layers.load`.
+- Not ported yet: tests/*_bench.rs, tests/bench_fixtures.rs (needs an o200k_base
+  tokenizer), tests/p28_must_keep.rs.
 
 ## Session: macOS/Linux split, part 1
 - `fileLock` (expect in nativeMain; actual `platform.posix.flock` on macOS, `platform.linux.flock` on Linux,
@@ -1539,3 +1551,41 @@ Next, in order:
 - Next: linking for Linux. ld.lld reports the rtok_* and tree-sitter C symbols as undefined, because the
   `ci.diffuser.cstatic` plugin (external ci-diffuser) builds the static C libraries for the host target only.
   Running and testing on Linux also needs a Linux host or CI.
+
+## Remaining work (2026-10-27)
+
+### P0 — landed (merged to main 2026-10-27)
+
+- [x] #232 `linux-link` (6a7a9ef): C libs cross-compiled with Kotlin/Native clang + sysroot; full link for linuxX64/linuxArm64.
+- [x] #235 (315b9a0): Linux test run + `scripts/lima-test.sh`; fixes for macOS-only tests.
+- [x] #234 (92aeaef): shared user-level plugin cache (`~/.rtok/cache/plugins`, or `$RTOK_HOME/cache/plugins`); not yet wired into `PluginLink`.
+- [x] #236 (150e682): `rtok bench --suite p28`.
+- [x] #237 (371e311): bench overlay tests.
+- [x] #239 (a97a0e4): `completions_shells` e2e.
+- [x] #240 (b9fb4c1): `completions_picker_pty`; `rtok completions` with no argument on a terminal opens the shell picker.
+- [x] #241 (588a882): demon hook-resident socket test.
+
+### P1 — Linux (~1–2 days)
+
+- [ ] P1: proxy stores a truncated body in the cache on Linux.
+- [ ] P1: per-lane timeout is not applied on Linux.
+- [ ] P2: `rtok_clone_or_copy` loses file times on Linux.
+- [ ] P2: trash fails across filesystems (EXDEV).
+- [ ] P2: e2e `junk clear --yes` behaves differently on Linux.
+- [ ] P2: ktoml silently drops arrays of inline tables whose strings contain `{`, `}` or escaped quotes (affects user configs; worked around only in the p28 fixture).
+- [ ] Flaky `TuiProjectsTest.removeShowsThePlan...` on Linux.
+- [ ] P3: flaky `DemonE2eSpec` (the supervisor can write its state after `stop`).
+- [ ] P3: attr destroyed after a failed `posix_spawnattr_init`; no EINTR retry; trash race; UTC `DeletionDate`; `/tmp` fallback; seed tie on equal mtimes.
+- [ ] Linux CI job (missing).
+
+### P2 — rest of the port plan (weeks)
+
+- [ ] hooks: resident server and `rtok hook` command; 29 tests waiting on worktree/otel/MCP.
+- [ ] read: 101 tests.
+- [ ] graph: ~275 tests, incl. `grep_symbol` via tree-sitter and CLI wiring.
+- [ ] CLI tests per subcommand: stats, info, expand, filter, run, config, plugins, logs, report, completions, man.
+- [ ] Skill sync for all hosts.
+- [ ] `rtok doctor`.
+- [ ] Worktree removal in junk.
+- [ ] continue + goose (YAML library decision needed).
+- [ ] Windows `mingwX64` target (absent).

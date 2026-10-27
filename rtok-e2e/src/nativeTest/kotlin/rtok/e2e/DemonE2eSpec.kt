@@ -155,4 +155,25 @@ class DemonE2eSpec :
                 s.waitRestarts(1)
             }
         }
+        test("the hook service runs the resident and stop takes it down") {
+            // Short: a Unix socket path must fit 104 bytes, and the sandbox's temp path does not.
+            val short = "/tmp/rtd-${pid()}"
+            removeDirAll(short)
+            createDirAll(short)
+            Sandbox("demon-hook").use { s ->
+                val env = mapOf("RTOK_HOME" to short)
+                val sock = rtok.hook.endpoint(short) ?: error("endpoint too long: $short")
+
+                fun listening() = rtok.hook.connect(sock)?.also { platform.posix.close(it) } != null
+                try {
+                    s.rtok("demon", "start", "hook", env = env).code shouldBe 0
+                    until("the resident listens") { listening() }
+                    s.rtok("demon", "stop", "hook", env = env).code shouldBe 0
+                    until("the resident is gone") { !listening() }
+                } finally {
+                    s.rtok("demon", "kill", env = env)
+                    removeDirAll(short)
+                }
+            }
+        }
     })
