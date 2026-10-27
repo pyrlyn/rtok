@@ -1259,3 +1259,8 @@ Next, in order:
   snapshot keys).
 - Deviation: tests/skill_listing.rs's proxy-capture half (axum + httpmock) is not ported; the measure is.
 - Next: the Stats and Skills pages (Kotlin/JS) and TUI tabs.
+
+## Ownership (2026-10-27)
+- Web/dashboard worker (worktree `~/Grok/rtok-web-dashboard`): web Graph page gaps (docs/web.md "Audit"), then
+  worktree add/finish/whoami/clean run/migrate with their modules, and the hooks dispatcher tests. The main-port
+  worker skips these.
