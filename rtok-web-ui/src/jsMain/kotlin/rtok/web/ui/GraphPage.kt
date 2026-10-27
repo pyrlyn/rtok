@@ -65,7 +65,16 @@ private fun UL.projectRow(
             attributes["title"] = hint
             pill(tone, state)
         }
-        healthScore(p)?.let { span("muted small") { +" health ${fixed(it, 0)}" } }
+        p.obj("health")?.let { h ->
+            val level = h.str("level") ?: levelOf(h.num("score") ?: 0.0)
+            +" "
+            healthRing(h.num("score"), level, "health ${healthScore(p)?.let { fixed(it, 0) } ?: level}")
+        }
+        +" "
+        button(classes = "link") {
+            onClickFunction = { GraphDrill.go(openProject(id.toLong())) }
+            +"drill →"
+        }
         span("muted small") { +" ${p.str("origin") ?: ""}" }
     }
 }
@@ -98,6 +107,7 @@ private fun FlowContent.current(
             action(app, "plan removal", projectRequest("remove", mapOf("project" to id, "confirmed" to false)))
             action(app, "remove from registry", projectRequest("remove", mapOf("project" to id, "confirmed" to true)))
         }
+        with(GraphDrill) { plan(id) }
         links(app, p, id)
     }
 }
@@ -186,6 +196,11 @@ val GraphPage =
         val rows = snap.objects("projects")
         out.alerts(rows)
         out.projects(app, rows)
+        val drill = GraphDrill.state()
+        if (drill != null) {
+            with(GraphDrill) { out.drill(drill, rows.firstOrNull { it.num("id")?.toLong()?.toString() == drill.project }) }
+            return@PageView
+        }
         if (rows.isNotEmpty()) out.liveCalls()
         if (snap["graph"] == null || snap["graph"] is kotlinx.serialization.json.JsonNull) {
             out.panel("graph") {
