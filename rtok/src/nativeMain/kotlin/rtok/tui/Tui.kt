@@ -1,6 +1,6 @@
 // Port of src/tui/mod.rs: the `rtok tui` event loop. Alternate screen and raw mode until q / Esc / Ctrl+C;
 // the terminal is restored on every exit path. Every `[tui] tick_secs` (and on `r`) the model is re-read
-// through the same Snapshot `rtok web` serves.
+// through the same Snapshot `rtok web` serves, on a background worker so keys never wait on the model.
 @file:OptIn(ExperimentalForeignApi::class)
 
 package rtok.tui
@@ -50,6 +50,7 @@ fun run(cfg: Config) {
             .coerceAtLeast(1) * MS
     val actions = TuiActions(cfg)
     val app = TuiApp(cfg.tui.tab, actions)
+    app.background(Snapshot::build)
     Terminal().use { term ->
         term.open()
         val start =
@@ -60,7 +61,7 @@ fun run(cfg: Config) {
         while (true) {
             val now = start.elapsedNow().inWholeMilliseconds
             if (now >= next) {
-                app.snapshot = Snapshot.build(actions.cfg)
+                app.request(actions.cfg, Snapshot::build)
                 next = now + tick
             }
             val s = term.size()
@@ -68,6 +69,7 @@ fun run(cfg: Config) {
                 term.invalidate()
                 size = s
             }
+            app.poll()
             app.tick()
             val b = Buffer(s.first, s.second)
             draw(b, app, ::localHms)

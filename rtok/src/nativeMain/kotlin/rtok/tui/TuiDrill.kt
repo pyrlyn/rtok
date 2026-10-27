@@ -1,6 +1,6 @@
 // Port of src/tui/drill.rs (T561): the Graph tab's one-project view, the terminal counterpart of the web page's
 // drill-down. It draws nothing of its own: the nodes and the count the cap left out are Drill.run's answer at the
-// page's own cap. The loop has no worker yet, so the load runs on the key, as Rust's foreground path does.
+// page's own cap. The running TUI loads on a TuiWorker (drill.rs `spawn`); tests and a failed thread load inline.
 package rtok.tui
 
 import rtok.web.DrawnNode
@@ -14,6 +14,8 @@ data class Drawn(
 class TuiDrill {
     /** The registry id and name of the project the tab is drilled into. */
     private var open: Pair<Int, String>? = null
+    private var worker: TuiWorker<Int, Drawn>? = null
+    private var seq = 0L
 
     var drawn = Drawn()
         private set
@@ -23,6 +25,15 @@ class TuiDrill {
         private set
 
     val project: Int? get() = open?.first
+
+    /** True while the open project's nodes are on the worker. */
+    var loading = false
+        private set
+
+    /** Moves later loads onto a background thread built over [load]. */
+    fun background(load: (Int) -> Drawn) {
+        worker = TuiWorker("rtok-tui-drill", load).takeIf { it.running }
+    }
 
     /** Opens the view on [id], or closes it when [id] is already the one drilled into. */
     fun toggle(
@@ -34,9 +45,32 @@ class TuiDrill {
         open = null
         drawn = Drawn()
         note = ""
+        loading = false
+        seq++
         if (leaving) return
         open = id to name
-        runCatching { load(id) }.fold(
+        val w = worker
+        if (w == null) {
+            land(runCatching { load(id) })
+        } else {
+            loading = true
+            note = "$name: loading…"
+            w.request(seq, id)
+        }
+    }
+
+    /** Takes the worker's answer when it is for the project still open; an older one is dropped. */
+    fun poll() {
+        val d = worker?.poll() ?: return
+        if (d.seq == seq && open != null) {
+            loading = false
+            land(d.result)
+        }
+    }
+
+    private fun land(r: Result<Drawn>) {
+        val name = open?.second ?: return
+        r.fold(
             {
                 drawn = it
                 note = "$name: ${it.nodes.size} nodes drawn, +${it.more} more"
