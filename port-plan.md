@@ -1490,3 +1490,15 @@ Next, in order:
   revalidated escalation, retire, targets, stop, quiesce), `nextBackoff`, `rows`/`table` for `status`.
 - Tests: DemonStopTest (9) and DemonStatusTest (8), the src/demon.rs unit tests plus lock/row checks.
 - Stop point: next demon start/supervise/upgrade, the `rtok demon` CLI and the tests/demon.rs e2e suite.
+
+## Session: demon CLI, supervisor and upgrade
+- `rtok demon start|stop|restart|status [--json]|kill|upgrade|supervise` (`cli/DemonCmd.kt`, src/cli/demon.rs);
+  `rtok.demon.Lifecycle` (start, restart, upgrade with `RTOK_UPDATE_CMD` / `ketch` / `rtok-update`) and
+  `supervise` (respawn loop with backoff, stop marker, child stdout/stderr into `<svc>.log` through the rotating
+  log sink). `rtok.sys.StreamedChild`: a child with both streams piped and polled, plus a detached session spawn
+  that returns the pid.
+- Tests: DemonE2eSpec (6), tests/demon.rs on the real binary in a sandbox home; the proxy check uses a local
+  port derived from the pid. `Sandbox.rtok` takes extra env.
+- Deviations: `upgrade`/`supervise` are listed in help (the spec has no hidden flag); the hook-resident socket
+  e2e check is not ported (sandbox paths exceed the Unix socket limit); output is unstyled.
+- Stop point: bench, macOS/Linux split.

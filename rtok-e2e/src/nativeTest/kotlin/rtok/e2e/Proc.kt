@@ -71,7 +71,8 @@ class Sandbox(
         vararg args: String,
         cwd: String = root,
         stdin: String? = null,
-    ) = sh(listOf(RTOK) + args, cwd, env, stdin)
+        env: Map<String, String?> = emptyMap(),
+    ) = sh(listOf(RTOK) + args, cwd, this.env + env, stdin)
 
     fun git(
         cwd: String,
