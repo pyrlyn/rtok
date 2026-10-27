@@ -28,6 +28,11 @@ class CommandCode(
         kind: Kind,
     ) = listOf(settingsPath(cfg), mcpPath(cfg))
 
+    override fun markers(
+        cfg: Config,
+        kind: Kind,
+    ) = files(cfg, kind) + pluginDest(cfg)
+
     override fun installed(
         cfg: Config,
         kind: Kind,

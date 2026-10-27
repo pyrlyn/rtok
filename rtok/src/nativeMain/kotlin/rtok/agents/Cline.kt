@@ -16,6 +16,11 @@ class Cline(
         kind: Kind,
     ) = listOf(mcpPath(cfg, kind))
 
+    override fun markers(
+        cfg: Config,
+        kind: Kind,
+    ) = files(cfg, kind) + cfg.setup.cline.hooksPath
+
     override fun installed(
         cfg: Config,
         kind: Kind,

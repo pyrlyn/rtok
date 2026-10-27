@@ -17,6 +17,14 @@ class Antigravity(
         kind: Kind,
     ) = emptyList<String>()
 
+    override fun markers(
+        cfg: Config,
+        kind: Kind,
+    ) = when (kind) {
+        Kind.Cli -> listOf(cliPluginDest(cfg), cfg.setup.antigravity.cliPluginsPath)
+        Kind.Desktop -> listOf(PLUGIN.path(cfg), cfg.setup.antigravity.pluginsPath)
+    }
+
     override fun installed(
         cfg: Config,
         kind: Kind,

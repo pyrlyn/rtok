@@ -16,6 +16,11 @@ class Omp(
         kind: Kind,
     ) = listOf(cfg.setup.omp.mcpPath)
 
+    override fun markers(
+        cfg: Config,
+        kind: Kind,
+    ) = listOf(PLUGIN.path(cfg), cfg.setup.omp.extensionsPath)
+
     override fun installed(
         cfg: Config,
         kind: Kind,

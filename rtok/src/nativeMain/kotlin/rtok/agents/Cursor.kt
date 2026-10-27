@@ -32,6 +32,11 @@ class Cursor(
         kind: Kind,
     ) = listOf(cfg.setup.cursor.hooksPath, mcpPath(cfg))
 
+    override fun markers(
+        cfg: Config,
+        kind: Kind,
+    ) = files(cfg, kind) + PLUGIN.path(cfg)
+
     override fun installed(
         cfg: Config,
         kind: Kind,

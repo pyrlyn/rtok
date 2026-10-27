@@ -924,3 +924,15 @@ Next, in order:
 - Tests: JunkReviewTest 8.
 - Stop point: next junk_items, junk.rs (list/report), junk_clear, CLI; then `--project`, restart.rs, worktree,
   junk_worktrees + `agent_worktrees`, the rest of phase 10.
+
+## Session: agents — junk 6: the report and the item breakdown (junk.rs, junk_items.rs)
+- `rtok.agents`: `Junk` (`KINDS`, `report`/`reportInRepo`/`reportWith`, rtok's folders and owned caches, project LSP
+  dirs, `kindRows`, `topLevelBytes`), `JunkOwn` (T182 `scan`/`run`/`toTable`, `removalPreview`), `JunkHosts` (host
+  folders, marker dirs, symlink targets, shared folders, every kind per host), `JunkList` (`toList`, OSC 8
+  `folderLink`), `JunkItems` (`JunkView`, `JunkSort`, `JunkRow`, `groups`, `json`, `stampPlanned`, `whenUsed`).
+- `Agent.markers` (default `files`; opencode, mimo, vscode, antigravity, commandcode, omp, pi, zcode, grok, cursor,
+  cline add their plugin dirs); `rtok.worktree.notedTable`; `Zone.minute`.
+- `reportInRepo` runs without agent worktrees and `stale-worktrees` rows until the worktree port.
+- Tests: JunkTest 7, JunkItemsTest 6.
+- Stop point: next junk_clear.rs (`Planned`, plan/apply, `Row::from(&Planned)`), then the `agents junk list|report|clear`
+  CLI; then `--project`, restart.rs, worktree, junk_worktrees + `agent_worktrees`, the rest of phase 10.

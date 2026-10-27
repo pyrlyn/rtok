@@ -101,6 +101,18 @@ class Zone private constructor(
             }
         }
 
+    /** [epoch] (unix seconds) as `YYYY-MM-DD HH:MM` in this zone (jiff's `%Y-%m-%d %H:%M`). */
+    fun minute(epoch: Long): String =
+        within {
+            memScoped {
+                val t = alloc<time_tVar>().apply { value = epoch.convert() }
+                val out = alloc<tm>()
+                localtime_r(t.ptr, out.ptr)
+                val p = { n: Int -> n.toString().padStart(2, '0') }
+                "${CivilDate(out.tm_year + TM_YEAR, out.tm_mon + 1, out.tm_mday)} ${p(out.tm_hour)}:${p(out.tm_min)}"
+            }
+        }
+
     /** The first second of [day] in this zone (a midnight skipped by a DST jump resolves as the C library does). */
     fun startOf(day: CivilDate): Long =
         within {
