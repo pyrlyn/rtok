@@ -232,7 +232,7 @@ fun main() {
     Pages.register("services", ServicesPage)
     Pages.register("usage", UsagePage)
     Pages.register("graph", GraphPage)
-    Pages.register("doctor", pendingPage("doctor", "rtok doctor"))
+    Pages.register("doctor", DoctorPage)
     Pages.register("stats", pendingPage("stats", "rtok stats"))
     Pages.register("skills", pendingPage("skills", "rtok skills list"))
     Pages.register("worktrees", WorktreesPage)
@@ -241,5 +241,6 @@ fun main() {
     val app = App(root)
     LiveCalls.install(app)
     JunkCard.install(app)
+    DoctorFixCard.install(app)
     app.start()
 }
