@@ -10,6 +10,7 @@ import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
+import kotlinx.cinterop.convert
 import kotlinx.cinterop.toKString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -93,7 +94,7 @@ private class JunkHome(
     fun fakeHost(bin: String) {
         val p = "$home/.fake-hosts/$bin"
         writeString(p, "#!/bin/sh\n[ \"$1\" = --version ] && { echo 0.0.0; exit 0; }\necho \"fake host: unsupported\" >&2\nexit 1\n")
-        platform.posix.chmod(p, EXEC.toUShort(OCTAL))
+        platform.posix.chmod(p, EXEC.toUShort(OCTAL).convert())
     }
 
     override fun close() = removeDirAll(home)

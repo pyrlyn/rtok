@@ -3,6 +3,7 @@
 package rtok.agents
 
 import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.convert
 import platform.posix.chmod
 import rtok.config.Config
 import rtok.config.envVar
@@ -24,7 +25,7 @@ private fun script(
     dir: String,
     name: String,
     body: String,
-): String = "$dir/$name".also { writeString(it, "#!/bin/sh\n$body") }.also { chmod(it, EXEC_MODE) }
+): String = "$dir/$name".also { writeString(it, "#!/bin/sh\n$body") }.also { chmod(it, EXEC_MODE.convert()) }
 
 class HostBinsTest {
     @Test fun expandSpecResolvesHomeAndEnvVars() {

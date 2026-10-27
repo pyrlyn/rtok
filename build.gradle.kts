@@ -34,6 +34,24 @@ subprojects {
     }
 }
 
+// The Kotest Gradle plugin wires its symbol processor (spec discovery) only into the host's native test
+// compilation, so a cross-built Linux test binary would hold no Kotest specs (0 tests). Add it for every other
+// native target (`-Prtok.allTargets=true`); the version is the plugin's own.
+subprojects {
+    plugins.withId("io.kotest") {
+        plugins.withId("com.google.devtools.ksp") {
+            val kotest = "io.kotest:kotest-framework-symbol-processor:6.2.6"
+            extensions.configure<org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension> {
+                targets.withType<org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget>().configureEach {
+                    if (konanTarget.family == org.jetbrains.kotlin.konan.target.Family.LINUX) {
+                        dependencies.add("ksp${name.replaceFirstChar(Char::uppercase)}Test", kotest)
+                    }
+                }
+            }
+        }
+    }
+}
+
 // Kotlin/JS (:rtok-web-ui) keeps its yarn.lock under build/, so a gate run writes nothing into the
 // source tree (the default is kotlin-js-store/ at the root). The lock is regenerated from Gradle pins.
 plugins.withType<org.jetbrains.kotlin.gradle.targets.js.yarn.YarnPlugin> {

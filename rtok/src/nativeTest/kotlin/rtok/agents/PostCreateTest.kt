@@ -1,7 +1,9 @@
 @file:Suppress("MagicNumber")
+@file:OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
 
 package rtok.agents
 
+import kotlinx.cinterop.convert
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -210,7 +212,7 @@ class PostCreateTest {
         val marker = join(p.home, "adopt-ran")
         val rtok = join(fake, "rtok")
         writeString(rtok, "#!/bin/sh\necho \"\$@\" > '$marker'\nexit 3\n")
-        platform.posix.chmod(rtok, 0x1ED.toUShort())
+        platform.posix.chmod(rtok, 0x1ED.toUShort().convert())
         assertFalse('\'' in cmd, cmd)
         val status = platform.posix.system("PATH='$fake:/usr/bin:/bin' HOME='${p.home}' sh -c '$cmd'")
         assertEquals(0, status, cmd)

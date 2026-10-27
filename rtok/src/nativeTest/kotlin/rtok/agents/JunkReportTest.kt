@@ -4,6 +4,7 @@
 package rtok.agents
 
 import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.convert
 import platform.posix.chmod
 import rtok.config.HOSTS
 import rtok.store.Store
@@ -174,9 +175,9 @@ class JunkReportTest {
         val (_, dir) = diskConfig("junk-denied")
         val locked = "$dir/locked"
         write("$locked/f", SMALL)
-        chmod(locked, CLOSED.toUShort())
+        chmod(locked, CLOSED.toUShort().convert())
         val usage = diskUsageUntil(locked, null)
-        chmod(locked, OPEN.toUShort())
+        chmod(locked, OPEN.toUShort().convert())
         // A superuser reads it anyway, which is not the case under test.
         if (!usage.denied) assertTrue(usage.bytes > 0)
         assertTrue(usage.denied || usage.bytes > BLOCK)
