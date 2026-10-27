@@ -1205,6 +1205,17 @@ Next, in order:
   (task_cli.rs export test, plus the Linear team check). FakeHttp gained `onIf` (httpmock `is_true`).
 - Stop point: next task MCP tools (MCP halves of task_cli.rs), sync.rs's GitHub read-only test; then model, report,
   otel, completions, bench, demon, hooks dispatcher tests, worktree add/finish/whoami/clean/migrate, proxy batch tests.
+## Ownership: stats + skills (web/dashboard worker)
+- The web/dashboard worker owns `measure/stats.rs` (and what `rtok stats` needs: `cli/stats.rs`, `measure/baseline.rs`,
+  `measure/cache.rs`, `measure/skills_listing.rs`), the snapshot's `stats`/`skills` (model/mod.rs `stats_skills`,
+  `skills_from`, `stats_page_text`), the Stats and Skills pages and tui tabs. The main-port worker skips these.
+## Session: stats part 1 — measure deps (jsonl stats fields, image.rs, dictionary.rs, subagents.rs)
+- `Jsonl.kt`: assistant texts, thinking blocks, image blocks, `firstUserText`, `subagentStartContext`; byte sizes are
+  UTF-8 lengths (`Sizes.kt` `utf8Len`, `estTokens`, `pct`, `toolPath`, `samePath`).
+- `ImageCost.kt` (image.rs), `Dictionary.kt` (dictionary.rs), `Subagents.kt` (full subagents.rs: `SubagentScan`,
+  `SubagentParent`, brief split).
+- Tests: JsonlTest 7, ImageCostTest 2, DictionaryTest 5, SubagentsTest 2.
+- Next: stats.rs (Report, fold, table, store attaches, cost), `rtok stats`, baseline.rs, cache.rs, then the snapshot.
 
 ## Session: tasks part 8 — task MCP tools (mcp/tasks.rs), MCP halves of task_cli.rs, sync.rs GitHub test
 - `rtok.mcp.TaskTools` (mcp/tasks.rs): the 12 `task_*` tools, listed after the agent tools and dispatched before the
