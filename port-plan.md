@@ -1377,3 +1377,6 @@ Next, in order:
   and every non-BMP code point as a symbol.
 - Tests: CacheKeyTest 11, ResponseCacheTest 9 (all 19 Rust tests; rstest cases as loops).
 - Stop point: next the proxy server (mod.rs) + cli.rs + Flex send loop + otel ticker/retention wiring.
+
+### Session: http streaming (additive)
+- `:http` StreamingHttpClient/StreamedResponse, `:http-server` StreamingHttpServer/StreamingHandler/BodySink; Ktor adapters (no redirects on stream, unserialized CIO server, 413 on maxBody). Existing APIs unchanged.
