@@ -171,3 +171,20 @@ fun call(
     rtok.http.ktor.KtorHttp(rtok.http.HttpSettings()).use { c ->
         runBlocking { c.request(method, rtok.http.HttpRequest(url, headers.toList(), body.encodeToByteArray())) }
     }
+
+/** A `tests/fixtures/proxy` file, as bytes. */
+fun proxyFixture(name: String): ByteArray = rtok.sys.readBytes("${rtok.config.envVar("RTOK_FIXTURES")}/proxy/$name")
+
+/** tests/proxy.rs `MockUpstream`: one POST route serving a fixture. */
+fun fixtureMock(
+    path: String,
+    fixture: String,
+    contentType: String,
+) = Mock({ it.method == "POST" && it.path == path }, headers = listOf("content-type" to contentType), bytes = listOf(proxyFixture(fixture)))
+
+/** POST [body] as JSON and keep the raw answer. */
+fun postJson(
+    url: String,
+    body: String,
+    vararg headers: Pair<String, String>,
+) = call("POST", url, body, "content-type" to "application/json", *headers)
