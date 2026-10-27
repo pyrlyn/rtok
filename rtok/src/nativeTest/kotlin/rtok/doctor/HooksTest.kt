@@ -18,6 +18,8 @@ import rtok.sys.removeDirAll
 import rtok.sys.removeFile
 import rtok.sys.symlink
 import rtok.sys.tempDir
+import kotlin.native.OsFamily
+import kotlin.native.Platform
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -212,7 +214,12 @@ class HooksTest {
 
     @Test fun aPathOnAnUnmountedVolumeIsBroken() {
         val v = verdicts(Mock(), listOf("/Volumes/X/hook.js"))
-        assertEquals("broken-hook" to "path is on /Volumes/X, which is not mounted", v[0])
+
+        // `/Volumes` is macOS-only; elsewhere the path is ordinary and the missing-file rule reports it.
+        @OptIn(kotlin.experimental.ExperimentalNativeApi::class)
+        val mac = Platform.osFamily == OsFamily.MACOSX
+        val want = if (mac) "path is on /Volumes/X, which is not mounted" else "file not found: /Volumes/X/hook.js"
+        assertEquals("broken-hook" to want, v[0])
     }
 
     @Test fun everyInterpreterWithAMissingScriptIsBrokenAndWithAPresentOneIsFine() {

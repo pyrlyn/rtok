@@ -37,7 +37,10 @@ class IndexTest {
         path: String,
         plusSeconds: Long,
     ) {
-        check(platform.posix.system("touch -t $(date -v+${plusSeconds}S +%Y%m%d%H%M.%S) '$path'") == 0)
+        val now =
+            kotlin.time.Clock.System
+                .now()
+        setModified(path, (now.epochSeconds + plusSeconds) * NANOS_PER_SEC + now.nanosecondsOfSecond)
     }
 
     /** T356: `/` and home are refused by every entry point; a project directory is indexed. */
@@ -324,3 +327,5 @@ class IndexTest {
             removeDirAll(dir)
         }
 }
+
+private const val NANOS_PER_SEC = 1_000_000_000L

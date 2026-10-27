@@ -78,3 +78,18 @@ and the inline snapshots of `removal_preview.rs`, `worktree/list.rs` and `plugin
 `report/{html,markdown}.rs` and `worktree/clean.rs` follow when those are ported.
 
 Where tests live: Packages/libraries contain only tests of the package itself. Tests that verify the app (rtok-kotlin) through a package live in the app next to its other tests. Applies to the whole Kotlin port, including snapshot tests.
+
+## Linux
+
+`-Prtok.allTargets=true` adds linuxX64/linuxArm64; every C library is cross-compiled per target (buildSrc `CrossCc`).
+
+- On a Linux x64 host the usual tasks run there: `linuxX64Test`, `cliTest` and `e2eTest` pick the host target.
+- From the Mac, `-Prtok.test.target=linuxArm64` makes `e2eTest` link for that target; run the binaries in a Lima VM
+  with `scripts/lima-test.sh` (Kotlin/Native has no Linux arm64 host):
+
+```
+./gradlew -Prtok.allTargets=true linkDebugTestLinuxArm64 :rtok:linkDebugExecutableLinuxArm64
+LIMA_VM=rtok-linux LIMA_MOUNT=~/lima-rtok scripts/lima-test.sh            # all modules, or name some
+```
+
+Results land in `$LIMA_MOUNT/rtok-kotlin/build/lima-results/`.

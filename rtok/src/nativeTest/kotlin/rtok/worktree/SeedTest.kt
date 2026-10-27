@@ -15,6 +15,8 @@ import rtok.sys.readToString
 import rtok.sys.setModified
 import rtok.sys.symlinkMeta
 import rtok.sys.writeString
+import kotlin.native.OsFamily
+import kotlin.native.Platform
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -51,6 +53,9 @@ class SeedTest {
         touch("$old/target/debug/deps/a", OLD)
         touch("$old/target/debug/x", OLD)
         touch("$recent/target/debug/x", NEW)
+        // Pin the directories' own mtimes too: on filesystems with coarse timestamps both trees tie at "now".
+        for (d in listOf("target", "target/debug", "target/debug/deps")) setModified("$old/$d", OLD * NANOS)
+        for (d in listOf("target", "target/debug")) setModified("$recent/$d", NEW * NANOS)
         createDirAll(new)
         val siblings = listOf(old, new, recent)
         assertEquals(recent, Seed.freshest(siblings, new, "target"))
@@ -69,8 +74,9 @@ class SeedTest {
             seeded.map { it.dir to it.files.cloned + it.files.copied },
         )
         assertTrue(seeded.all { it.source == main })
-        // APFS clones every file.
-        assertTrue(seeded.all { it.files.copied == 0L }, "$seeded")
+        // APFS clones every file; other filesystems (tmpfs, ext4) may copy instead.
+        @OptIn(kotlin.experimental.ExperimentalNativeApi::class)
+        if (Platform.osFamily == OsFamily.MACOSX) assertTrue(seeded.all { it.files.copied == 0L }, "$seeded")
         val rlib = "$new/target/debug/deps/libx.rlib"
         assertEquals(readToString("$main/target/debug/deps/libx.rlib"), readToString(rlib))
         assertEquals(OLD * NANOS, symlinkMeta(rlib).mtimeNanos)

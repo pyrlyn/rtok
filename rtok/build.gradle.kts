@@ -61,15 +61,21 @@ tasks.withType<org.jetbrains.kotlin.gradle.targets.native.tasks.KotlinNativeTest
 // Test groups (docs/testing.md): `macosArm64Test` = unit tests without the CLI specs, `cliTest` = the
 // Kotest CLI specs (package rtok.cli, tagged `Cli`; Kotest ignores Gradle's filter, so KOTEST_TAGS selects them) from the same test binary; e2e lives in :rtok-e2e (`e2eTest`).
 val cliPattern = "rtok.cli.*"
-tasks.named<org.jetbrains.kotlin.gradle.targets.native.tasks.KotlinNativeHostTest>("macosArm64Test") {
+// The host's own native test task (macosArm64Test on the Mac, linuxX64Test on a Linux x64 host with -Prtok.allTargets=true).
+val hostTarget =
+    when (org.jetbrains.kotlin.konan.target.HostManager.host) {
+        org.jetbrains.kotlin.konan.target.KonanTarget.LINUX_X64 -> "linuxX64"
+        else -> "macosArm64"
+    }
+tasks.named<org.jetbrains.kotlin.gradle.targets.native.tasks.KotlinNativeHostTest>("${hostTarget}Test") {
     filter.excludeTestsMatching(cliPattern)
     environment("KOTEST_TAGS", "!Cli")
 }
 tasks.register<org.jetbrains.kotlin.gradle.targets.native.tasks.KotlinNativeHostTest>("cliTest") {
     group = "verification"
     description = "Runs the Kotest CLI specs (rtok.cli.*) of :rtok."
-    val unit = tasks.named<org.jetbrains.kotlin.gradle.targets.native.tasks.KotlinNativeHostTest>("macosArm64Test").get()
-    dependsOn("linkDebugTestMacosArm64")
+    val unit = tasks.named<org.jetbrains.kotlin.gradle.targets.native.tasks.KotlinNativeHostTest>("${hostTarget}Test").get()
+    dependsOn("linkDebugTest${hostTarget.replaceFirstChar(Char::uppercase)}")
     executableProperty.set(unit.executableProperty)
     environment("RTOK_FIXTURES", fixtures)
     targetName = unit.targetName
