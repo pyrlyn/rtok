@@ -1362,3 +1362,9 @@ Next, in order:
 - Fixture: tests/fixtures/mcp_catalog_github.json copied to rtok/src/commonTest/fixtures.
 - Tests: ToolsRewriteTest 7, ToolsSchemaCompactTest 5 (all 12 Rust tests).
 - Stop point: next proxy chunk 5 (batch_results.rs), then semantic_cache.rs.
+
+## Session: proxy chunk 5 — batch results
+- `rtok.proxy.BatchResults` (batch_results.rs: `source`, `record` with T583 per-location dedupe keys, JSONL `parse`
+  split on bytes, Anthropic and OpenAI line shapes).
+- Tests: BatchResultsTest 6 (5 Rust tests + `source`).
+- Stop point: next semantic_cache.rs.
