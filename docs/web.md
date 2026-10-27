@@ -35,5 +35,6 @@ Previously excluded from the port (port-plan.md); now in progress in small steps
 - Step 4, slice 5: `config` (`config show --sources` rows, secrets redacted, never writes the user file).
 - Step 4, slice 6: `hosts` (`agents list` blocks through a `Background` worker cache, 30 s TTL; the junk
   section reads "measuring folders…" until the junk port lands).
-  Still to come: `agent_usage`, `tasks`; then `skills`, `stats`, `services`, `worktrees`, `doctor` and `junk`,
+- Step 4, slice 7: `agent_usage` (`agents usage` text and JSON rows, read off the tick, 120 s TTL).
+  Still to come: `tasks`; then `skills`, `stats`, `services`, `worktrees`, `doctor` and `junk`,
   which wait for the `doctor`, `stats`, `demon`/`otel`, `worktree list` and `junk` ports.
