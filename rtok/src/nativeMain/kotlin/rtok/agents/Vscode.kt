@@ -28,6 +28,11 @@ class Vscode(
         kind: Kind,
     ) = PROFILES.map { mcpPath(cfg, it) } + PROFILES.map { settingsPath(cfg, it) }
 
+    override fun markers(
+        cfg: Config,
+        kind: Kind,
+    ) = files(cfg, kind) + pluginDest(cfg, false) + pluginDest(cfg, true)
+
     override fun installed(
         cfg: Config,
         kind: Kind,

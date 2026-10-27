@@ -32,6 +32,11 @@ class Grok(
         kind: Kind,
     ) = listOf(cfg.setup.grok.configPath)
 
+    override fun markers(
+        cfg: Config,
+        kind: Kind,
+    ) = listOf(cfg.setup.grok.configPath, pluginMarker(cfg))
+
     override fun installed(
         cfg: Config,
         kind: Kind,

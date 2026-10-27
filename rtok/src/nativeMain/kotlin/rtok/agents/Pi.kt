@@ -16,6 +16,11 @@ class Pi(
         kind: Kind,
     ) = emptyList<String>()
 
+    override fun markers(
+        cfg: Config,
+        kind: Kind,
+    ) = listOf(PLUGIN.path(cfg), cfg.setup.pi.extensionsPath)
+
     /** T75: only what remove takes back counts; a foreign directory at the dest is not ours. */
     override fun installed(
         cfg: Config,

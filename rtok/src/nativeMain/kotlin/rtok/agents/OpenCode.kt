@@ -58,6 +58,11 @@ class OpenCode(
         kind: Kind,
     ) = listOf(configPath(cfg, kind))
 
+    override fun markers(
+        cfg: Config,
+        kind: Kind,
+    ) = files(cfg, kind) + PLUGIN.path(forKind(cfg, kind))
+
     override fun installed(
         cfg: Config,
         kind: Kind,
@@ -143,6 +148,11 @@ class Mimo(
         cfg: Config,
         kind: Kind,
     ) = listOf(configPath(cfg))
+
+    override fun markers(
+        cfg: Config,
+        kind: Kind,
+    ) = files(cfg, kind) + PLUGIN.path(cfg)
 
     override fun installed(
         cfg: Config,

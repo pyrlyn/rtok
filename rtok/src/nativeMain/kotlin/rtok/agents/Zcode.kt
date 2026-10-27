@@ -25,6 +25,11 @@ class Zcode(
         kind: Kind,
     ) = listOf(cfg.setup.zcode.configPath)
 
+    override fun markers(
+        cfg: Config,
+        kind: Kind,
+    ) = files(cfg, kind) + PLUGIN.path(cfg)
+
     override fun installed(
         cfg: Config,
         kind: Kind,

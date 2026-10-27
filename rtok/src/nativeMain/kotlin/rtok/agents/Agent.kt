@@ -40,6 +40,15 @@ interface Agent {
         kind: Kind,
     ): List<String>
 
+    /**
+     * Paths inside the host's own folders; `agents junk list` lists their parents. Not proof the app is installed — a
+     * folder outlives its app (T426). Defaults to [files]; a host adds its plugin directory.
+     */
+    fun markers(
+        cfg: Config,
+        kind: Kind,
+    ): List<String> = files(cfg, kind)
+
     /** The modules found installed for [kind] (`hooks`, `mcp`, `proxy`, `plugin`). */
     fun installed(
         cfg: Config,
