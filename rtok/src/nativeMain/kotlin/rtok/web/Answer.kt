@@ -1,6 +1,6 @@
 // Port of src/web/mod.rs `inbound`/`answer`, `allowlisted_plugin_enabled`, `message_frame` and protocol.rs
-// `tag_reply` (T623): the reply to one `/ws` client message. Slice 1 of docs/web.md step 5: `expand` and `set`;
-// the other requests answer with the notice Rust sends for a malformed one until their slices land.
+// `tag_reply` (T623): the reply to one `/ws` client message; the graph page's requests are in GraphAnswer.kt. `doctor` and `junk` answer with the notice Rust sends for a malformed one
+// until their ports land.
 package rtok.web
 
 import kotlinx.serialization.json.Json
@@ -41,14 +41,26 @@ class Answer(
 
     private fun reply(v: JsonObject): String? =
         when {
-            "expand" in v -> (v["expand"] as? JsonPrimitive)?.takeIf { it.isString }?.content?.let(::expand)
+            "expand" in v -> {
+                (v["expand"] as? JsonPrimitive)?.takeIf { it.isString }?.content?.let(::expand)
+            }
 
-            "set" in v -> set(v.getValue("set"))
+            "set" in v -> {
+                set(v.getValue("set"))
+            }
+
+            GraphAnswer.KEYS.any { it in v } -> {
+                GraphAnswer(cfg).reply(v)
+            }
 
             // Handled by the socket loop, which owns the subscription; a stray one here is a no-op.
-            subscribe(v) != null -> null
+            subscribe(v) != null -> {
+                null
+            }
 
-            else -> MALFORMED.firstOrNull { it.first in v }?.let { message(it.second) }
+            else -> {
+                MALFORMED.firstOrNull { it.first in v }?.let { message(it.second) }
+            }
         }
 
     private fun subscribe(v: JsonObject): Boolean? = ((v["calls"] as? JsonObject)?.get("subscribe") as? JsonPrimitive)?.booleanOrNull
@@ -93,11 +105,6 @@ class Answer(
         /** A request whose shape did not parse, by its key, in Rust's order. */
         private val MALFORMED =
             listOf(
-                "export" to "export needs a project, a level and a format",
-                "import" to "import needs a name and the file's text",
-                "project" to "unknown project request",
-                "graph" to "graph needs a project",
-                "diff" to "diff needs a project",
                 "calls" to "calls needs a subscribe flag",
                 "junk" to "junk needs an action",
                 "doctor" to "doctor needs an action and a selection",
