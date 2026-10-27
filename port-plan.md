@@ -1020,3 +1020,11 @@ Next, in order:
 - Tests: ClaimTest 8 (claim.rs tests 5 + lock_tests 3).
 - Stop point: next remove.rs, gc.rs, ops.rs, the `rtok worktree` CLI (list/claim/adopt/remove/gc); then add.rs,
   junk_worktrees + `agent_worktrees`, the rest of phase 10.
+## Session: worktree 4 — remove.rs, gc.rs, removal_preview.rs
+- `rtok.RemovalPreview` (removal_preview.rs `size_of`, `render`; never painted). `WorktreeRemove` (`detach`, `run`/
+  `preview`, `forAgent`/`previewForAgent`, `isTask` with ASCII-only folding), `Caller`, `Removed`. `Gc` (`decide` with
+  T418/T453/T656/T949/T950, `judge`, `run`, `toTable`, `STALE_LOCK_DEFAULT`), `GcPolicy` (gc.rs `Policy`; `now` in
+  nanoseconds), `Verdict`, `Outcome`, `Judged`. gc's progress bar is not ported (non-terminal output).
+- Tests: RemoveTest 3 (remove.rs 1 table + removal_preview.rs 2), GcTest 6 (the gc.rs rstest tables as loops).
+- Stop point: next ops.rs and the `rtok worktree` CLI (list/claim/adopt/remove/gc); then add.rs, whoami, finish,
+  clean run, migrate, junk_worktrees + `agent_worktrees`, the rest of phase 10.

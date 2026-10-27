@@ -115,11 +115,8 @@ private fun sameDir(
 }
 
 object Claim {
-    /** gc.rs `STALE_LOCK_DEFAULT`: how long an unseen holder keeps its lock (T418). */
-    private const val STALE_LOCK_DEFAULT = "7d"
-
     /** gc.rs `stale_lock`. */
-    fun staleLock(): Duration = parseSince(STALE_LOCK_DEFAULT).seconds
+    fun staleLock(): Duration = parseSince(Gc.STALE_LOCK_DEFAULT).seconds
 
     /**
      * The lock [record] has against `(owner, agent)` — null when there is none. Otherwise the holder it names, with
