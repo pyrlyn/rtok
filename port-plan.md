@@ -1317,7 +1317,8 @@ Next, in order:
   PR 3 (#205): Tasks, Worktrees, junk card, Doctor + fix panel. PR 4 (#207): Graph base. PR 5 (#209): Graph drill,
   compare, export/import, removal dry run. PR 6 (#211): live calls, command palette,
   WebGL graph cloud (`kotlin-webgl` included build). PR 7 (#217): binary embedDir, `:rtok-web` serves
-  the Compose UI. Next: old UI removal, browser e2e.
+  the Compose UI. PR 8 (#221): `:rtok-web-ui` removed. Next:
+  browser e2e.
 
 ## Session: proxy chunk 2 — wire usage and the four dialects
 - `rtok.proxy.Wire` (wire.rs `Wire` trait: matches, provider, api, session id, model, usage from body/SSE,
@@ -1480,3 +1481,24 @@ Next, in order:
   to parent and children (src/man.rs). The roff follows clap_mangen's sections but is this port's own text, not
   byte-identical (clap_mangen is a dependency the port does not take). Tests: ManTest (3).
 - Stop point: demon (src/demon.rs, tests/demon.rs), bench, macOS/Linux split.
+
+## Session: demon core (state, ownership, stop, status)
+- `rtok/demon/`: `Service` (proxy/mcp/web/hook, `hook --serve`, parse error names `[demon] services`), `Store`
+  (`<state_dir>/<svc>.json|.stop|.lock|.log`, atomic state writes, an `O_CLOEXEC` flock claim so spawned
+  services never inherit the lock), `Procs`/`OsProcs` (signal-0 liveness, TERM/KILL of positive pids only,
+  boot time from `/proc/stat` or `sysctl kern.boottime`), `Demon` (T597 ownership Live/Orphan/Stale,
+  revalidated escalation, retire, targets, stop, quiesce), `nextBackoff`, `rows`/`table` for `status`.
+- Tests: DemonStopTest (9) and DemonStatusTest (8), the src/demon.rs unit tests plus lock/row checks.
+- Stop point: next demon start/supervise/upgrade, the `rtok demon` CLI and the tests/demon.rs e2e suite.
+
+## Session: demon CLI, supervisor and upgrade
+- `rtok demon start|stop|restart|status [--json]|kill|upgrade|supervise` (`cli/DemonCmd.kt`, src/cli/demon.rs);
+  `rtok.demon.Lifecycle` (start, restart, upgrade with `RTOK_UPDATE_CMD` / `ketch` / `rtok-update`) and
+  `supervise` (respawn loop with backoff, stop marker, child stdout/stderr into `<svc>.log` through the rotating
+  log sink). `rtok.sys.StreamedChild`: a child with both streams piped and polled, plus a detached session spawn
+  that returns the pid.
+- Tests: DemonE2eSpec (6), tests/demon.rs on the real binary in a sandbox home; the proxy check uses a local
+  port derived from the pid. `Sandbox.rtok` takes extra env.
+- Deviations: `upgrade`/`supervise` are listed in help (the spec has no hidden flag); the hook-resident socket
+  e2e check is not ported (sandbox paths exceed the Unix socket limit); output is unstyled.
+- Stop point: bench, macOS/Linux split.
