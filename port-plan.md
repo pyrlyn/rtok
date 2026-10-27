@@ -1134,3 +1134,11 @@ Next, in order:
   never-invoked flags and repeat loads now come from the transcripts.
 - Tests: TranscriptCacheTest 2, DoctorPageTest +1 (read-share fraction).
 - Stop point: next tasks, model, report, otel, completions, bench, demon, hooks dispatcher tests; worktree verbs.
+## Session: tasks part 1 — domain, labels, adapter interface, ready queue
+- `rtok.tasks`: `Tasks.kt` (tasks/mod.rs: `Status` with host words, `Task`/`NewTask`/`ExternalRef` in the serde JSON
+  shape with its skips, `ReadyItem`/`ClaimOutcome` flattened JSON, `ClaimConflict`, `defaultPrefix`/`resolvePrefix`),
+  `Meta.kt` (meta.rs managed labels), `Adapter.kt` (adapter.rs `TaskAdapter`, `Filter`, `Taken`, `Stray`,
+  `setStatus` parent guard), `Ready.kt` (ready.rs `select`, `holderIsStale`, `activeBlocker`, `findCycles`).
+- Tests: TasksTest 6 + ReadyTest 8 (TaskId's mod.rs tests were already covered in :rtok-store).
+- Stop point: next tasks part 2: disk.rs + plan_dir.rs (disk adapter), then run.rs/sync.rs/ops.rs and `rtok task`;
+  github/gitlab/export adapters after.
