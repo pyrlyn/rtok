@@ -62,6 +62,7 @@ val VIEWS: Map<String, PageView> =
         "skills" to SkillsPage,
         "tasks" to TasksPage,
         "worktrees" to WorktreesPage,
+        "doctor" to DoctorPage,
     )
 
 /** Observable app state: link, last snapshot, route and theme. */
@@ -89,6 +90,9 @@ class AppState {
 
     /** The Hosts junk card's controller. */
     val junk by lazy { JunkController(this) }
+
+    /** The Doctor fix panel's controller. */
+    val fix by lazy { FixController(this) }
 
     fun start() {
         window.addEventListener("popstate", {
