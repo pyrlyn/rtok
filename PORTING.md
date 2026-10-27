@@ -106,3 +106,8 @@ unit `./gradlew macosArm64Test`, CLI `./gradlew cliTest`, e2e `./gradlew e2eTest
 
 ## Dependencies added 2026-10-26 (Ivan approved)
 Ktor client (now 3.6.0) (`ktor-client-core`, `-darwin`, `-curl` on Linux, `-mock` tests only) and kotlinx-coroutines-core 1.10.2 (the version Ktor requires), in `libs/http` / `libs/http-ktor` only.
+
+## libs/globset (globset 0.4.20)
+Own dependency-free `:globset` module (package `globset`): `Glob.new(glob, GlobOptions)`, `GlobSet`, `GlobError`
+with globset's messages. Same parser (tokens, `**` rules, nested `{}` alternates, classes, escapes) and the same
+`(?-u)^…$` byte semantics, run as a Thompson NFA over the path's UTF-8 bytes. Tests: globset's own matches table.
