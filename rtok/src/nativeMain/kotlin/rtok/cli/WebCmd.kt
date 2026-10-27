@@ -11,6 +11,7 @@ import rtok.web.ALLOW_REMOTE_ENV
 import rtok.web.Answer
 import rtok.web.BoundAddr
 import rtok.web.DIST_ENV
+import rtok.web.LiveCalls
 import rtok.web.LiveConfig
 import rtok.web.NoAssets
 import rtok.web.RemoteBindRefused
@@ -48,7 +49,7 @@ internal fun serveWeb(
     val bound = BoundAddr(cfg.web.host, cfg.web.port.toInt())
     val app = WebApp(bound, assets, token)
     val live = LiveConfig(cfg)
-    val ws = WsEndpoint(app, Snapshots { rtok.model.Snapshot.frame(live.value) }, Answer(live))
+    val ws = WsEndpoint(app, Snapshots { rtok.model.Snapshot.frame(live.value) }, Answer(live), calls = LiveCalls({ live.value }))
     KtorHttpServer.serveBlocking(cfg.web.host, cfg.web.port.toInt(), app, websockets = mapOf("/ws" to ws), onBound = { addr ->
         bound.port = addr.substringAfterLast(':').toIntOrNull() ?: bound.port
         io.eprintln("rtok web http://$addr  (ws://$addr/ws)")
