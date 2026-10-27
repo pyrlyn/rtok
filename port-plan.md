@@ -1224,3 +1224,10 @@ Next, in order:
 - Tests: all 35 stats.rs tests except the `parse_since` trio (already ported with `rtok.config.parseSince`):
   StatsCollectTest 10, StatsFoldTest 15, StatsStoreTest 7.
 - Next: `rtok stats` CLI + baseline.rs + cache.rs, then the snapshot `stats`/`skills`, pages and TUI tabs.
+## Session: stats part 3 — `rtok stats` (cli/stats.rs), baseline.rs, cache.rs
+- `rtok stats` (`cli/StatsCmd.kt`): `--since/--json/--plugin/--save-baseline/--compare/--calibrate/--cache/--price`
+  merged into `[stats]` like `stats_flags`; pages from `rtok.model.StatsPage` (`stats_report`, `plugin_stats`,
+  `cache_health` of model/mod.rs).
+- `measure/stats/Baseline.kt` (baseline.rs; the load reads back only what `compare` prints), `CacheHealth.kt` (cache.rs).
+- Tests: CacheHealthTest 4 (cache.rs 3 + baseline.rs 1), StatsCliSpec 8 (tests/stats_price.rs 4, the stats checks of
+  commands_e2e.rs/plugins_e2e.rs, `--since`, baselines, `--cache`, `--plugin archive`).
