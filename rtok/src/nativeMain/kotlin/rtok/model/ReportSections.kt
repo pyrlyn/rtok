@@ -24,7 +24,7 @@ internal object ReportSections {
             totals.groupBy { it.plugin }.entries.sortedBy { it.key }.map { (plugin, ts) ->
                 val before = ts.sumOf { it.estBefore }
                 val after = ts.sumOf { it.estAfter }
-                ReportSavings(plugin, ts.sumOf { it.rows }, before, after, before - after)
+                ReportSavings(plugin, ts.sumOf { it.rows }.toULong(), before, after, before - after)
             }
         return ReportSavingsSection(rows, rows.sumOf { it.rows }, rows.sumOf { it.saved }, totals.map { it.kind }.distinct().sorted())
     }
@@ -49,7 +49,7 @@ internal object ReportSections {
         }
         val rows =
             by
-                .map { (k, v) -> ReportSink(k.first, k.second, v[0], v[1], sinkSwitch(cfg, k.first, k.second)) }
+                .map { (k, v) -> ReportSink(k.first, k.second, v[0], v[1].toULong(), sinkSwitch(cfg, k.first, k.second)) }
                 .sortedWith(compareByDescending<ReportSink> { it.beforeBytes }.thenBy { it.sink }.thenBy { it.cls })
         return ReportSinksSection(rows.take(TOP_SINKS))
     }
@@ -105,9 +105,9 @@ internal object ReportSections {
             SURFACES.map { surface ->
                 val group = inWindow.filter { it.surface == surface }
                 val ms = group.mapNotNull { it.ms }.sorted()
-                ReportCalls(surface, group.size.toLong(), ms.size.toLong(), pct(ms, P50), pct(ms, P95))
+                ReportCalls(surface, group.size.toULong(), ms.size.toULong(), pct(ms, P50), pct(ms, P95))
             }
-        return ReportCallsSection(rows, inWindow.size.toLong(), all.size.toLong(), hooks(inWindow))
+        return ReportCallsSection(rows, inWindow.size.toULong(), all.size.toULong(), hooks(inWindow))
     }
 
     /** Hook-surface rows grouped by event name, busiest first. */
@@ -116,14 +116,14 @@ internal object ReportSections {
             .filter { it.surface == "hook" }
             .groupingBy { it.name ?: "unknown" }
             .eachCount()
-            .map { (name, n) -> ReportHook(name, n.toLong()) }
+            .map { (name, n) -> ReportHook(name, n.toULong()) }
             .sortedWith(compareByDescending<ReportHook> { it.calls }.thenBy { it.name })
 
     fun cache(store: Store): ReportCache {
         val health = CacheHealth.report(store)
         val detail =
             health.flatMap { h ->
-                h.turns.withIndex().mapNotNull { (i, t) -> t.bust?.let { ReportBust(h.session, i + 1L, it, t.cacheCreate, t.cacheRead) } }
+                h.turns.withIndex().mapNotNull { (i, t) -> t.bust?.let { ReportBust(h.session, i.toULong() + 1uL, it, t.cacheCreate, t.cacheRead) } }
             }
         val byCause =
             detail
@@ -131,8 +131,8 @@ internal object ReportSections {
                 .eachCount()
                 .entries
                 .sortedBy { it.key }
-                .map { (c, n) -> c to n.toLong() }
-        return ReportCache(health.size.toLong(), health.sumOf { it.turns.size }.toLong(), health.sumOf { it.busts }.toLong(), byCause, detail)
+                .map { (c, n) -> c to n.toULong() }
+        return ReportCache(health.size.toULong(), health.sumOf { it.turns.size }.toULong(), health.sumOf { it.busts }.toULong(), byCause, detail)
     }
 
     fun expand(store: Store): ReportExpand {
@@ -144,7 +144,7 @@ internal object ReportSections {
             rate = if (decisions > 0) expanded.toDouble() / decisions else 0.0,
             expandedIds = rows.mapNotNull { it.refId },
             cost = rows.sumOf { it.estAfter.toLong() },
-            costRows = rows.size.toLong(),
+            costRows = rows.size.toULong(),
         )
     }
 
