@@ -219,6 +219,7 @@ fun main() {
     Pages.register("logs", LogsPage)
     Pages.register("config", ConfigPage)
     Pages.register("hosts", HostsPage)
+    Pages.register("services", ServicesPage)
     val root = document.getElementById("root") as? HTMLElement ?: error("#root element not found")
     App(root).start()
 }
