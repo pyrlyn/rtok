@@ -1,7 +1,7 @@
 // Port of src/agents/junk_clear.rs: `rtok agents junk clear` with filters (T330.4). The plan is the `list` report's own
 // items (no second scanner) cut by `--agent`, `--kind`, `--include review` and `--older-than`, and each item is checked
 // again right before it goes. With no filter, or `--agent rtok` alone, the command is T182's run unchanged (T344): new
-// deletions need a flag. `stale-worktrees` items come with the worktree port.
+// deletions need a flag. `stale-worktrees` items are removed through gc's own `detach` (JunkWorktrees.Remover).
 package rtok.agents
 
 import kotlinx.serialization.json.JsonArray
@@ -162,7 +162,7 @@ object JunkClear {
         )
 
     /** junk_worktrees.rs `KIND`. */
-    const val WORKTREES = "stale-worktrees"
+    const val WORKTREES = JunkWorktrees.KIND
 
     /** Kinds a running agent may be writing right now; a §22 cache joins them (T342). */
     internal val LIVE_KINDS = listOf("temp", "locks", "swap", "index")
@@ -289,6 +289,7 @@ object JunkClear {
     ) {
         val keep = JunkClearCheck.protected(cfg)
         val archives = ArrayList<Planned>()
+        val worktrees = JunkWorktrees.Remover()
         for (p in items.filter { it.action == "clear" }) {
             if (p.kind == "archive") {
                 archives += p
@@ -300,8 +301,16 @@ object JunkClear {
                     p.skip(refused.first, refused.second)
                 }
 
+                // git unregisters a worktree, so there is no folder to move to the trash.
+                p.kind == WORKTREES && f.trash -> {
+                    p.skip("git removes a worktree: not moved to trash", true)
+                }
+
                 p.kind == WORKTREES -> {
-                    p.skip("worktree removal is not ported yet", true)
+                    worktrees
+                        .remove(cfg, now, p.path)
+                        .onSuccess { p.note = it }
+                        .onFailure { p.skip(it.message.orEmpty(), true) }
                 }
 
                 else -> {

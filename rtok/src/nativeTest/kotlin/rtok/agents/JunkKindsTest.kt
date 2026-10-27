@@ -1,4 +1,4 @@
-// Port of src/agents/junk_kinds.rs tests (agent_worktrees comes with junk_worktrees).
+// Port of src/agents/junk_kinds.rs tests (agent_worktrees is in JunkWorktreesTest).
 package rtok.agents
 
 import rtok.support.tmpDir

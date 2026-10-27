@@ -1,7 +1,7 @@
 // Port of src/agents/junk_kinds.rs: the `temp`, `build`, `deps`, `locks`, `swap`, `index` and `backups` junk kinds and
 // rtok's plugin staging caches, on top of the `cache` item model of JunkCache.kt. D36: only a path with evidence may be
 // cleared; a lock or swap file has none, so it is listed read-only with the reason a live owner would give first.
-// Nothing here deletes. `agent_worktrees`/`in_hosts` come with junk_worktrees.
+// Nothing here deletes. `agent_worktrees`/`in_hosts` live in JunkWorktrees.kt next to the worktree list they read.
 package rtok.agents
 
 import kotlinx.serialization.json.JsonArray

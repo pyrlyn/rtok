@@ -1,8 +1,8 @@
 @file:OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
 
 // Port of tests/agents_junk.rs: `rtok agents junk list|clear` through the binary over a fixture home that is both
-// `HOME` and `RTOK_HOME`. Not here yet: the host folders test (every host faked), `--trash` (Linux only in Rust),
-// stale worktrees (the worktree port) and doctor's reclaimable line (the doctor port).
+// `HOME` and `RTOK_HOME`. Not here yet: the host folders test (every host faked), `--trash` (Linux only in Rust)
+// and doctor's reclaimable line (the doctor port).
 
 package rtok.e2e
 
@@ -10,6 +10,7 @@ import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
+import kotlinx.cinterop.toKString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -39,6 +40,8 @@ private const val MIN_TWO = "15"
 private const val THREE = 3
 private const val USAGE = 2
 private const val FAILED = 1
+private const val STALE_DAYS = 20L
+private const val ROWS = 8
 private const val EXEC = "755"
 private const val OCTAL = 8
 
@@ -69,6 +72,17 @@ private class JunkHome(
         )
 
     fun rtok(vararg args: String) = sh(listOf(RTOK) + args, home, env)
+
+    fun rtokIn(
+        cwd: String,
+        vararg args: String,
+    ) = sh(listOf(RTOK) + args, cwd, env)
+
+    /** `rtok agents junk clear <args>` in [cwd]: the exit code and the JSON it printed (T182's plain form is an array). */
+    fun clearIn(
+        cwd: String,
+        vararg args: String,
+    ): Pair<Int, JsonElement> = rtokIn(cwd, "agents", "junk", "clear", *args).let { it.code to Json.parseToJsonElement(it.out) }
 
     /** `rtok agents junk clear <args>`, which must exit 0. */
     fun clear(vararg args: String): JsonObject = ok("agents", "junk", "clear", *args).let { Json.parseToJsonElement(it).jsonObject }
@@ -109,6 +123,55 @@ private fun planned(
     plan: JsonObject,
     kind: String,
 ): List<String> = items(plan).filter { it.str("action") == "clear" && it.str("kind") == kind }.map { fileName(it.str("path"))!! }.sorted()
+
+private val GIT_ENV =
+    mapOf(
+        "GIT_CONFIG_GLOBAL" to "/dev/null",
+        "GIT_AUTHOR_NAME" to "t",
+        "GIT_AUTHOR_EMAIL" to "t@t",
+        "GIT_COMMITTER_NAME" to "t",
+        "GIT_COMMITTER_EMAIL" to "t@t",
+    )
+
+/** tests/agents_junk.rs `git`: must succeed; stdout. */
+private fun git(
+    dir: String,
+    vararg args: String,
+): String {
+    val p = sh(listOf("git", "-c", "commit.gpgsign=false") + args, dir, GIT_ENV)
+    check(p.code == 0) { "git ${args.toList()}: ${p.err}" }
+    return p.out
+}
+
+/** Every file under [dir], the worktree's `.git` pointer included, last modified [secs] ago. */
+private fun ageAll(
+    dir: String,
+    secs: Long,
+) {
+    for (name in listDir(dir)) {
+        val p = "$dir/$name"
+        if (isDir(p) && name != ".git") {
+            ageAll(p, secs)
+        } else if (isFile(p)) {
+            age(p, secs)
+        }
+    }
+}
+
+/** File names of the [items] that [keep] picks, sorted. */
+private fun names(
+    items: List<JsonObject>,
+    keep: (JsonObject) -> Boolean,
+): List<String> = items.filter(keep).map { fileName(it.str("path"))!! }.sorted()
+
+/** Where the git binary is, from this process's PATH. */
+private fun realGit(): String =
+    platform.posix
+        .getenv("PATH")!!
+        .toKString()
+        .split(':')
+        .map { "$it/git" }
+        .first(::isFile)
 
 /** Three stray log siblings past `[log] files` = 5, of 30, 10 and 20 bytes. */
 private fun JunkHome.strayLogs(): List<String> {
@@ -286,6 +349,97 @@ class AgentsJunkE2eSpec :
                 paths.forEach { age(it, HOUR) }
                 h.ok("agents", "junk", "clear", "--kind", "log", "--min-size", MIN_TWO, "--yes")
                 (!exists(paths[0]) && !exists(paths[2]) && exists(paths[1])) shouldBe true
+            }
+        }
+
+        // T330.5.3: `stale-worktrees` is `rtok worktree gc`'s verdict. `list` shows the one it would remove and every
+        // other worktree with gc's reason, `--include review --yes` removes the first through `detach` with its merged
+        // branch, and nothing else is touched: not a dirty, unmerged, locked or fresh worktree, not a record whose
+        // directory is gone (no `prune`), not an orphan, and not through `--trash` or a plain `clear --yes`.
+        test("stale worktrees are what gc removes and clear removes only those") {
+            JunkHome("stale-wt").use { h ->
+                // Rust fakes every host; Claude Code is the one whose row this test reads.
+                h.fakeHost("claude")
+                // The fixture PATH holds only the fake hosts; rtok needs git, and no real agent.
+                symlink(realGit(), "${h.home}/.fake-hosts/git")
+                val repo = "${h.home}/repo".also(::createDirAll)
+                git(repo, "init", "-q", "-b", "main")
+                git(repo, "commit", "-q", "--allow-empty", "-m", "base")
+                // gc judges "merged" against `origin/HEAD`, so the repository needs an origin.
+                val origin = "${h.home}/origin.git"
+                git(h.home, "init", "-q", "--bare", "-b", "main", origin)
+                git(repo, "remote", "add", "origin", origin)
+                git(repo, "push", "-q", "origin", "main")
+                git(repo, "remote", "set-head", "origin", "main")
+                val pool = "${h.home}/pool"
+                val add = { dir: String, branch: String -> dir.also { git(repo, "worktree", "add", "-q", "-b", branch, it) } }
+                val days = { n: Long -> n * DAY }
+                val old = add("$pool/old", "old").also { ageAll(it, days(STALE_DAYS)) }
+                // Claude Code's own pool, so the item sits under that host's row.
+                val claude = add("$repo/.claude/worktrees/c1", "c1").also { ageAll(it, days(STALE_DAYS)) }
+                add("$pool/fresh", "fresh")
+                val dirty = add("$pool/dirty", "dirty")
+                write("$dirty/wip.txt", STALE_BYTES)
+                ageAll(dirty, days(STALE_DAYS))
+                val unmerged = add("$pool/unmerged", "unmerged")
+                write("$unmerged/work.txt", STALE_BYTES)
+                git(unmerged, "add", ".")
+                git(unmerged, "commit", "-q", "-m", "work")
+                ageAll(unmerged, days(STALE_DAYS))
+                val locked = add("$pool/locked", "locked")
+                git(repo, "worktree", "lock", "--reason", "Cursor / grok | t9 | 2026-09-01", locked)
+                ageAll(locked, days(STALE_DAYS))
+                val gone = add("$pool/gone", "gone")
+                removeDirAll(gone)
+                val orphan = "$pool/orphan"
+                write("$orphan/f", STALE_BYTES)
+                writeString("$orphan/.git", "gitdir: $repo/.git/worktrees/orphan\n")
+
+                // `list`: the removable ones are counted; each other worktree says why gc keeps it.
+                val list = Json.parseToJsonElement(h.rtokIn(repo, "agents", "junk", "list", "--json").out).jsonObject
+                val rows =
+                    list["agents"]!!.jsonArray.map { it.jsonObject }.flatMap { a ->
+                        a["items"]!!.jsonArray.map { it.jsonObject }.filter { it.str("kind") == "stale-worktrees" }.map { i ->
+                            val reason = (i["skip_reason"] as? JsonPrimitive)?.takeIf { it.isString }?.content.orEmpty()
+                            Triple(a.str("name"), fileName(i.str("path"))!!, reason.removePrefix("review kind: add --include review"))
+                        }
+                    }
+                val row = { name: String -> rows.firstOrNull { it.second == name } ?: error("$name: $rows") }
+                (row("old").first to row("old").third) shouldBe ("rtok" to "")
+                (row("c1").first to row("c1").third) shouldBe ("claude" to "")
+                row("fresh").third shouldContain "idle window"
+                row("dirty").third shouldContain "uncommitted"
+                row("unmerged").third shouldContain "not merged"
+                row("locked").third shouldContain "lock by Cursor / grok"
+                row("gone").third shouldContain "directory is gone"
+                row("orphan").third shouldContain "orphan"
+                rows.size shouldBe ROWS
+
+                // The plan is gc's dry run (its lock override switched off, which junk never takes).
+                val plan = h.clearIn(repo, "--include", "review", "--json")
+                plan.first shouldBe 0
+                val planned = names(items(plan.second)) { it.str("kind") == "stale-worktrees" && it.str("action") == "clear" }
+                val gc = Json.parseToJsonElement(h.rtokIn(repo, "worktree", "gc", "--json", "--idle", "14d", "--stale-lock", "3650d").out)
+                val gcRemoves = names(gc.jsonArray.map { it.jsonObject }) { it.str("action") == "remove" }
+                planned shouldBe listOf("c1", "old")
+                planned shouldBe gcRemoves
+
+                // No flag, or `--trash`, removes no worktree.
+                h.clearIn(repo, "--yes", "--json").first shouldBe 0
+                h.clearIn(repo, "--include", "review", "--trash", "--yes", "--json").first shouldBe FAILED
+                (isDir(old) && isDir(claude)) shouldBe true
+
+                h.clearIn(repo, "--include", "review", "--yes", "--json").first shouldBe 0
+                (!exists(old) && !exists(claude)) shouldBe true
+                val branches = git(repo, "branch", "--format=%(refname:short)").lines()
+                listOf("old", "c1").forEach { (it in branches) shouldBe false }
+                listOf("fresh", "dirty", "unmerged", "locked", "gone").forEach { (it in branches) shouldBe true }
+                listOf("fresh", "dirty", "unmerged", "locked", "orphan").forEach { isDir("$pool/$it") shouldBe true }
+                git(repo, "worktree", "list", "--porcelain") shouldContain "pool/gone"
+
+                val again = h.clearIn(repo, "--include", "review", "--yes", "--json")
+                again.first shouldBe 0
+                names(items(again.second)) { it.str("kind") == "stale-worktrees" }.isEmpty() shouldBe true
             }
         }
     })
