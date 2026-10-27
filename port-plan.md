@@ -1153,3 +1153,12 @@ Next, in order:
   killed-holder lock test uses a `perl` flock child instead of re-running the test binary; a status accepted by
   `Status.parse` (host words) also parses from front matter.
 - Stop point: next run.rs/sync.rs/ops.rs and `rtok task`; github/gitlab/export adapters after.
+## Session: tasks part 3 — run.rs (project, claims, edges, texts)
+- `rtok.tasks`: `TaskProject.kt` (run.rs `Project`: open with the disk adapter picker, create with counter seeding and
+  Taken retries, seed, status with closing report, show, ready/next; `closeIfActive`), `TaskClaims.kt` (claim,
+  release, refusal order), `TaskEdges.kt` (block with cycle check, symmetric conflicts, parallel, priority),
+  `TaskText.kt` (`initTasks` on `:toml-aot` keeping other lines, `requireAgent`, `taskFilter`, ready/list/show texts).
+- Tests: TaskProjectTest 7 (the race test runs two Workers on one in-memory store).
+- Deviations: `Project` is `TaskProject`; the github/gitlab arms of `open` fail with "not ported yet" until those
+  adapters land, so run.rs's GitLab origin test waits for them.
+- Stop point: next sync.rs, ops.rs and the `rtok task` command; then github/gitlab/export adapters.
