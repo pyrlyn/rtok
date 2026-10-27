@@ -12,8 +12,10 @@ import rtok.web.BoundAddr
 import rtok.web.DIST_ENV
 import rtok.web.NoAssets
 import rtok.web.RemoteBindRefused
+import rtok.web.Snapshots
 import rtok.web.WebApp
 import rtok.web.WebToken
+import rtok.web.WsEndpoint
 import rtok.web.checkRemoteBind
 import rtok.web.resolveAssets
 
@@ -43,7 +45,9 @@ internal fun serveWeb(
     val (assets, notice) = resolveAssets(env(DIST_ENV), NoAssets)
     val bound = BoundAddr(cfg.web.host, cfg.web.port.toInt())
     val app = WebApp(bound, assets, token)
-    KtorHttpServer.serveBlocking(cfg.web.host, cfg.web.port.toInt(), app) { addr ->
+    // The operator model (docs/web.md step 4) fills the snapshot; until then every tick is an empty one.
+    val ws = WsEndpoint(app, Snapshots { """{"type":"snapshot"}""" })
+    KtorHttpServer.serveBlocking(cfg.web.host, cfg.web.port.toInt(), app, websockets = mapOf("/ws" to ws), onBound = { addr ->
         bound.port = addr.substringAfterLast(':').toIntOrNull() ?: bound.port
         io.eprintln("rtok web http://$addr  (ws://$addr/ws)")
         io.eprintln("rtok web: /ws needs the token in ${WebToken.path(cfg.home)}")
@@ -52,7 +56,7 @@ internal fun serveWeb(
             io.eprintln(it)
             appendLog(cfg, "warn", "web", "spa", it)
         }
-    }
+    })
 }
 
 val WEB =

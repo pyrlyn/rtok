@@ -25,6 +25,26 @@ fun interface RequestHandler {
     fun handle(req: ServerRequest): ServerResponse
 }
 
+/** One open WebSocket, text frames only. */
+interface WsSocket {
+    /** Sends one text frame; false once the peer is gone. */
+    suspend fun send(text: String): Boolean
+
+    /** The next text frame, or null when the socket closed. Binary and control frames are skipped. */
+    suspend fun receive(): String?
+}
+
+/**
+ * A WebSocket route. [admit] runs before the upgrade, serialized with [RequestHandler] calls: a status
+ * refuses the upgrade with that status, null accepts it. [run] then owns the socket until it returns and is
+ * NOT serialized with anything: it runs concurrently with requests and other sockets.
+ */
+interface WsHandler {
+    fun admit(req: ServerRequest): Int?
+
+    suspend fun run(socket: WsSocket)
+}
+
 /** Raised when the listener cannot bind. */
 class BindException(
     message: String,
@@ -34,7 +54,7 @@ class BindException(
 interface HttpServer {
     /**
      * Binds [host]:[port] (0 picks a free port), reports the bound `host:port` to [onBound], then serves
-     * until [stop] returns true (checked between requests and on a short tick) or the process ends.
+     * ([websockets] by exact path) until [stop] returns true (checked between requests and on a short tick) or the process ends.
      * Requests with a body over [maxBody] bytes get 413 without reaching [handler].
      */
     fun serveBlocking(
@@ -43,6 +63,7 @@ interface HttpServer {
         handler: RequestHandler,
         maxBody: Long = DEFAULT_MAX_BODY,
         stop: () -> Boolean = { false },
+        websockets: Map<String, WsHandler> = emptyMap(),
         onBound: (String) -> Unit = {},
     )
 

@@ -5,8 +5,11 @@ configure<org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension> {
         api(project(":http-server"))
         implementation("io.ktor:ktor-server-core:$ktor")
         implementation("io.ktor:ktor-server-cio:$ktor")
+        implementation("io.ktor:ktor-server-websockets:$ktor")
     }
     sourceSets.commonTest.dependencies {
         implementation(project(":http-ktor"))
+        implementation("io.ktor:ktor-client-cio:$ktor")
+        implementation("io.ktor:ktor-client-websockets:$ktor")
     }
 }

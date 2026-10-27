@@ -7,8 +7,8 @@ Previously excluded from the port (port-plan.md); now in progress in small steps
 ## Plan
 1. (done, #103) `:rtok-web` core: `WebToken` (src/web/token.rs, S2 token file, 0600, constant-time compare,
    Bearer/`?token=`) and `checkRemoteBind` (`RTOK_WEB_ALLOW_REMOTE`).
-2. (this step) `/health`, `/auth`, SPA static serving over `:http-server` (Ktor CIO), `rtok web --host --port` CLI.
-3. WebSocket on `:http-server` (`ktor-server-websockets`, same Ktor version), origin check, snapshot ticks
+2. (done, #105) `/health`, `/auth`, SPA static serving over `:http-server` (Ktor CIO), `rtok web --host --port` CLI.
+3. (this step) WebSocket on `:http-server` (`ktor-server-websockets`, same Ktor version), origin check, snapshot ticks
    with build coalescing (T206), `protocol.rs` frames via kotlinx.serialization.
 4. Operator model (`src/model`, D23) shared by web and TUI: snapshot built from `:rtok-store`
    (calls, usage, sessions, projects, tasks, worktrees), config, agents, doctor, junk.
@@ -24,3 +24,6 @@ Previously excluded from the port (port-plan.md); now in progress in small steps
 ## Status
 - Step 2: `rtok web` serves `/health`, `/auth` and the UI files from `RTOK_WEB_DIST` (SPA routing, br/gzip
   variants, ETag, CSP). Until step 6 the binary has no embedded UI, so page routes answer 503 with a hint.
+- Step 3: `/ws` is admitted under the same token and origin gate as `/auth`, then sends a snapshot at once, every
+  2 s and after each inbound frame; concurrent ticks share one build (T206). Until step 4 the snapshot is
+  `{"type":"snapshot"}`.
