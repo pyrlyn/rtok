@@ -37,6 +37,8 @@ object Mcp {
         out: (String) -> Unit = { println(it) },
     ) {
         Server.open(cfg, session()).use { server ->
+            rtok.Retention.spawn(cfg, "mcp")
+            rtok.otel.Ticker.spawn(cfg)
             val stop = AtomicInt(0)
             val watcher =
                 if (server.cx.config.plugins.graph.watch != "off") {

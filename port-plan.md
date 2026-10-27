@@ -1291,3 +1291,10 @@ Next, in order:
   multi-process hook tests (spawned children, `.spawned` marker) not ported — `spawnDetached` returns no pid.
 - Stop point: next spawn_ticker wiring, model, report, completions, bench, demon, proxy batch tests, macOS/Linux split.
   (worktree add/finish/whoami/clean/migrate and the hooks dispatcher tests moved to the second worker.)
+## Session: otel ticker and retention — export.rs `spawn_ticker`, store/mod.rs `spawn_retention`
+- `rtok.otel.Ticker.spawn` (export.rs `spawn_ticker`: no endpoint → nothing starts and no store opens; otherwise a
+  worker with its own runtime flushes after each full `flush_secs` period, no stop handle), `rtok.Retention`
+  (`spawn_retention`: housekeeping on its own worker, warnings to stderr and the file log as `rtok <surface>: …`).
+  Both wired into `rtok mcp` (stdio) and `rtok mcp --http`; the proxy wires them when it is ported.
+- Tests: TickerTest 2 (export.rs ticker tests), RetentionTest 1.
+- Stop point: next model, report, completions, bench, demon, proxy batch tests, macOS/Linux split.
