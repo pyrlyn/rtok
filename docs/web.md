@@ -23,7 +23,7 @@ Previously excluded from the port (port-plan.md); now in progress in small steps
 
 ## Status
 - Step 2: `rtok web` serves `/health`, `/auth` and the UI files from `RTOK_WEB_DIST` (SPA routing, br/gzip
-  variants, ETag, CSP). Until step 6 the binary has no embedded UI, so page routes answer 503 with a hint.
+  variants, ETag, CSP). Since step 6 the binary embeds the Kotlin/JS UI (`:rtok-web-ui`, `EmbeddedAssets`); a build without it answers page routes with 503 and a hint.
 - Step 3: `/ws` is admitted under the same token and origin gate as `/auth`, then sends a snapshot at once, every
   2 s and after each inbound frame; concurrent ticks share one build (T206). Until step 4 the snapshot is
   `{"type":"snapshot"}`.
