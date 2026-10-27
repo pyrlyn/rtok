@@ -70,7 +70,7 @@ Plan and per-phase checklist: [port-plan.md](port-plan.md).
 | crates/rtok-mcp | `:rtok-mcp` | ⬜ | |
 | src/plugins/wasm.rs (WASM plugin host) | `libs/wasm` interface, `libs/wasm-chasm` (Chasm 2.3.0 adapter, fuel), `rtok-wasm` `WasmPlugin.kt`, `rtok/plugins/WasmPlugins.kt` (registry wiring); docs/wasm-plugins.md | ✅ | 3 → 5 + 1 registry + 3 adapter |
 | crates/rtok-wasm-demo-guest | – (built `.wasm` kept as test fixture) | ❌ wasm guest, not ported | |
-| crates/rtok-webui | – | ❌ excluded (web) | |
+| crates/rtok-webui | – | ⏳ in progress, see docs/web.md | |
 | src/tokens.rs | `rtok/…/rtok/Tokens.kt` | ✅ | 4 → 4 |
 | src/modes/ladder.rs | `rtok/…/rtok/modes/Ladder.kt` | ✅ | 3 → 3 |
 | src/modes/compress.rs | `rtok/…/rtok/modes/Compress.kt` | ✅ | 16 → 16 |
@@ -88,7 +88,7 @@ Plan and per-phase checklist: [port-plan.md](port-plan.md).
 | src/agents (40+ hosts), src/doctor | `rtok.agents`, `rtok.doctor` | ⬜ | |
 | src/otel, worktree, tasks, measure, model, report, bench, completions, project, store | matching packages | ⬜ | |
 | src/tui | – | ❌ excluded (TUI) | |
-| src/web, agents/junk_web.rs, `rtok web/tui/dashboard` | – | ❌ excluded (web) | |
+| src/web, agents/junk_web.rs, `rtok web/tui/dashboard` | rtok-web (token.rs, remote bind) | ⏳ in progress, see docs/web.md | |
 | tests/*.rs (138 integration files) | `:rtok` commonTest | ⬜ | 0 / ~138 files |
 
 Totals: 1098 unit + 26 CLI + 15 e2e unit (`macosArm64Test`, all modules) + 26 CLI (`cliTest`) + 14 e2e (`e2eTest`) tests passing on macosArm64 (see port-plan.md for the per-phase table).
