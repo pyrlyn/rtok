@@ -235,7 +235,7 @@ fun main() {
     Pages.register("doctor", pendingPage("doctor", "rtok doctor"))
     Pages.register("stats", pendingPage("stats", "rtok stats"))
     Pages.register("skills", pendingPage("skills", "rtok skills list"))
-    Pages.register("worktrees", pendingPage("worktrees", "rtok worktree list"))
+    Pages.register("worktrees", WorktreesPage)
     Pages.register("tasks", pendingPage("tasks", "rtok tasks"))
     val root = document.getElementById("root") as? HTMLElement ?: error("#root element not found")
     val app = App(root)

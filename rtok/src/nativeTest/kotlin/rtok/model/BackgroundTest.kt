@@ -44,8 +44,8 @@ class BackgroundTest {
     @Test fun hostsPageProbesOffTheTick() {
         HostsPage.forget()
         val c = Config()
-        assertEquals(HostsPage.PROBING, HostsPage.text(c) { "claude  cli\n" })
-        val page = await { HostsPage.text(c) { "claude  cli\n" }.takeIf { it != HostsPage.PROBING } }
+        assertEquals(HostsPage.PROBING, HostsPage.text(c, probe = { "claude  cli\n" }, junk = { null }))
+        val page = await { HostsPage.text(c, probe = { "claude  cli\n" }, junk = { null }).takeIf { it != HostsPage.PROBING } }
         assertEquals("claude  cli\n\njunk\n${HostsPage.JUNK_PENDING}", page)
     }
 }

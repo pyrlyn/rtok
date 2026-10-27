@@ -11,7 +11,7 @@ object HostsPage {
 
     const val PROBING = "probing hosts…\n"
 
-    /** Until the junk port lands (docs/web.md) the junk section stays in its "first measurement" state. */
+    /** The junk section before its first measurement lands. */
     const val JUNK_PENDING = "measuring folders…\n"
 
     private val hosts = Background<String>("web-hosts")
@@ -20,9 +20,10 @@ object HostsPage {
     fun text(
         cfg: Config,
         probe: (Config) -> String = { AgentsList.list(it) },
+        junk: (Config) -> String? = { JunkPage.get(it)?.text },
     ): String {
         val blocks = hosts.get(TTL) { probe(cfg) } ?: return PROBING
-        return "$blocks\njunk\n$JUNK_PENDING"
+        return "$blocks\njunk\n${junk(cfg) ?: JUNK_PENDING}"
     }
 
     internal fun forget() = hosts.forget()
