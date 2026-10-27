@@ -39,7 +39,10 @@ class App(
     private val state = AppState()
     private val link = Link(::onState, ::onFrame)
 
+    private val palette = Palette({ state.snapshot }) { go(it) }
+
     fun start() {
+        palette.install()
         window.addEventListener("popstate", { render() })
         // Every in-app link (`/page`) routes client-side, panels' "page →" links included.
         root.addEventListener("click", { e ->
@@ -107,6 +110,7 @@ class App(
             return
         }
         val page = pageFor(window.location.pathname)
+        LiveCalls.want(page?.id == "graph", state.link == LinkState.OPEN)
         val title = page?.id ?: "not found"
         document.title = "$title · rtok"
         root.append {
@@ -133,6 +137,11 @@ class App(
                                 LinkState.CLOSED -> "fail" to "closed"
                             }
                         span("pill $tone") { +label }
+                        button {
+                            attributes["aria-label"] = "Open the command palette"
+                            onClickFunction = { palette.open() }
+                            +"⌘K"
+                        }
                         button {
                             attributes["aria-label"] = "Toggle theme"
                             onClickFunction = { toggleTheme() }
@@ -229,5 +238,7 @@ fun main() {
     Pages.register("worktrees", pendingPage("worktrees", "rtok worktree list"))
     Pages.register("tasks", pendingPage("tasks", "rtok tasks"))
     val root = document.getElementById("root") as? HTMLElement ?: error("#root element not found")
-    App(root).start()
+    val app = App(root)
+    LiveCalls.install(app)
+    app.start()
 }

@@ -264,6 +264,28 @@ private fun CssBuilder.controls() {
         put("padding", "0")
         put("text-align", "left")
     }
+    rule(".overlay") {
+        put("position", "fixed")
+        put("inset", "0")
+        put("z-index", "50")
+        put("display", "flex")
+        put("justify-content", "center")
+        put("align-items", "flex-start")
+        put("padding-top", "12vh")
+        put("background", "rgba(0,0,0,0.45)")
+    }
+    rule(".palette") {
+        put("width", "min(32rem, 92vw)")
+        put("max-height", "70vh")
+        put("overflow-y", "auto")
+    }
+    rule(".search.wide") { put("width", "100%") }
+    rule(".palette .item") {
+        put("padding", "4px 8px")
+        put("border-radius", "6px")
+        put("cursor", "pointer")
+    }
+    rule(".palette .item.on") { put("background", v("surface-2")) }
     rule("button.switch") {
         put("min-width", "40px")
         put("border-radius", "999px")
