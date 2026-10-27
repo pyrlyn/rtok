@@ -1313,8 +1313,7 @@ Next, in order:
 - Stop point: next proxy chunk 2.
 - Session (Compose web worker, worktree `~/Grok/rtok-compose-web`): Compose Multiplatform rewrite of the web UI (docs/web.md
   "Compose UI"). PR 1 (#199): `:rtok-web-model` split, `:rtok-web-compose` (wasmJs) shell, navigation, Overview.
-  PR 2 (#204): Calls, Sessions, Logs, Config, Hosts, Services, Plugins, Usage, Stats, Skills.
-  PR 3: Tasks, Worktrees, junk card, Doctor + fix panel. Next: Graph, command palette, serving, old UI removal.
+  PR 2: Calls, Sessions, Logs, Config, Hosts, Services, Plugins, Usage, Stats, Skills.
 
 ## Session: proxy chunk 2 — wire usage and the four dialects
 - `rtok.proxy.Wire` (wire.rs `Wire` trait: matches, provider, api, session id, model, usage from body/SSE,
@@ -1370,3 +1369,17 @@ Next, in order:
   split on bytes, Anthropic and OpenAI line shapes).
 - Tests: BatchResultsTest 6 (5 Rust tests + `source`).
 - Stop point: next semantic_cache.rs.
+
+## Session: proxy chunk 6 — semantic cache
+- `CachePrompt`/`CacheKey` (prompt building, caller identity, cache scope, eligibility, canonical and scope hashes),
+  `CacheText` (canonical JSON, typed digests, block text), `ResponseCache` (direct + semantic tiers, TTL pruning on
+  store, 2xx only, `measurement`, feature-hashed embedding, cosine; injectable `TimeSource` instead of Rust's
+  rewritten `Instant`s in tests), `CacheAudit` (`audit_corpus`).
+- Fixture: tests/fixtures/p9_semantic_cache_corpus copied to rtok/src/commonTest/fixtures.
+- Deviation: the embedding tokenizer treats BMP letters/digits via `Char.isLetterOrDigit` (Rust `is_alphanumeric`)
+  and every non-BMP code point as a symbol.
+- Tests: CacheKeyTest 11, ResponseCacheTest 9 (all 19 Rust tests; rstest cases as loops).
+- Stop point: next the proxy server (mod.rs) + cli.rs + Flex send loop + otel ticker/retention wiring.
+
+### Session: http streaming (additive)
+- `:http` StreamingHttpClient/StreamedResponse, `:http-server` StreamingHttpServer/StreamingHandler/BodySink; Ktor adapters (no redirects on stream, unserialized CIO server, 413 on maxBody). Existing APIs unchanged.

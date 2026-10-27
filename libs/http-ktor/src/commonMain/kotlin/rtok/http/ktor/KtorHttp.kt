@@ -8,10 +8,13 @@ import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.request.get
 import io.ktor.client.request.post
+import io.ktor.client.request.prepareRequest
 import io.ktor.client.request.request
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsBytes
+import io.ktor.client.statement.bodyAsChannel
 import io.ktor.http.HttpMethod
+import io.ktor.utils.io.readAvailable
 import kotlinx.coroutines.CancellationException
 import rtok.http.HttpClient
 import rtok.http.HttpClientFactory
@@ -19,6 +22,8 @@ import rtok.http.HttpException
 import rtok.http.HttpRequest
 import rtok.http.HttpResponse
 import rtok.http.HttpSettings
+import rtok.http.StreamedResponse
+import rtok.http.StreamingHttpClient
 import io.ktor.client.HttpClient as Ktor
 
 /** The platform engine (Darwin / Curl). */
@@ -27,7 +32,7 @@ internal expect fun platformEngine(): HttpClientEngine
 class KtorHttp(
     settings: HttpSettings,
     engine: HttpClientEngine = platformEngine(),
-) : HttpClient {
+) : StreamingHttpClient {
     private val client =
         Ktor(engine) {
             expectSuccess = false
@@ -62,15 +67,52 @@ class KtorHttp(
             }
         }
 
+    /** A second client that never follows redirects: a proxy hands a 3xx to its caller as it came. */
+    private var rawInit = false
+    private val raw by lazy { client.config { followRedirects = false }.also { rawInit = true } }
+
+    override suspend fun <T> stream(
+        method: String,
+        req: HttpRequest,
+        use: suspend (StreamedResponse) -> T,
+    ): T =
+        guard(req) {
+            raw
+                .prepareRequest(req.url) {
+                    this.method = HttpMethod.parse(method.uppercase())
+                    req.headers.forEach { (k, v) -> headers.append(k, v) }
+                    if (req.body.isNotEmpty()) setBody(req.body)
+                }.execute { resp ->
+                    val channel = resp.bodyAsChannel()
+                    val buf = ByteArray(CHUNK)
+                    val next: suspend () -> ByteArray? = {
+                        guard(req) {
+                            val n = channel.readAvailable(buf, 0, buf.size)
+                            if (n < 0) null else buf.copyOf(n)
+                        }
+                    }
+                    use(StreamedResponse(resp.status.value, headersOf(resp), next))
+                }
+        }
+
+    private fun headersOf(resp: io.ktor.client.statement.HttpResponse) = resp.headers.entries().flatMap { (k, vs) -> vs.map { k.lowercase() to it } }
+
     /** One request with every transport failure mapped to an [HttpException] kind. */
     private suspend fun send(
         req: HttpRequest,
         call: suspend () -> io.ktor.client.statement.HttpResponse,
     ): HttpResponse =
-        try {
+        guard(req) {
             val resp = call()
-            val headers = resp.headers.entries().flatMap { (k, vs) -> vs.map { k.lowercase() to it } }
-            HttpResponse(resp.status.value, resp.bodyAsBytes(), headers)
+            HttpResponse(resp.status.value, resp.bodyAsBytes(), headersOf(resp))
+        }
+
+    private suspend fun <T> guard(
+        req: HttpRequest,
+        block: suspend () -> T,
+    ): T =
+        try {
+            block()
         } catch (e: HttpRequestTimeoutException) {
             throw HttpException(HttpException.Kind.RequestTimeout, "request timeout: ${req.url}", e)
         } catch (e: CancellationException) {
@@ -85,9 +127,13 @@ class KtorHttp(
             throw HttpException(HttpException.Kind.Io, "${req.url}: ${e.message}", e)
         }
 
-    override fun close() = client.close()
+    override fun close() {
+        if (rawInit) raw.close()
+        client.close()
+    }
 
     companion object {
         val FACTORY = HttpClientFactory { KtorHttp(it) }
+        private const val CHUNK = 16 * 1024
     }
 }
