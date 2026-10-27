@@ -15,5 +15,12 @@
 - **Always run a full run before a release or a merge**: `./gradlew macosArm64Test cliTest e2eTest`
   (and `./gradlew :rtok:linkReleaseExecutableMacosArm64` for a release).
 
+## Testing
+- Packages/libraries contain only tests of the package itself. Tests that verify the app
+  (rtok-kotlin) through a package live in the app next to its other tests. Applies to the whole
+  Kotlin port, including snapshot tests.
+- Snapshot tests use `pyrlyn.snapshot:snapshot` (`../../packages/kotlin-snapshot`); see
+  docs/testing.md "Snapshot tests".
+
 ## Git
 - Commit locally in small green steps. Do not push `main` and never force-push; every change ends in a PR.
