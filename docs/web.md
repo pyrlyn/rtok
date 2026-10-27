@@ -14,7 +14,7 @@ Previously excluded from the port (port-plan.md); now in progress in small steps
    (calls, usage, sessions, projects, tasks, worktrees), config, agents, doctor, junk.
 5. Inbound actions: `set`, `expand`, `project`, `doctor`, `junk`, `graph`, `diff`, `export`, `import`, `calls`;
    live graph calls (`live.rs`), calls store/view.
-6. Frontend: first a Kotlin/JS module `:rtok-web-ui` (kotlinx.html, kotlin-css; removed in #REMOVE), now Compose
+6. Frontend: first a Kotlin/JS module `:rtok-web-ui` (kotlinx.html, kotlin-css; removed in #221), now Compose
    Multiplatform on wasmJs (`:rtok-web-compose`, "Compose UI" below), speaking the
    same `/ws` protocol and matching the Rust SPA's pages and features. Charts are drawn by our own small SVG
    helpers in Kotlin (no JS chart library); the graph view uses our own Canvas/SVG force layout. The built
@@ -116,7 +116,7 @@ The frontend is being rewritten in Compose Multiplatform, replacing the kotlinx.
     state, formatting) with its tests (run on macosArm64 in the gate). Targets js + wasmJs + macosArm64.
   - `:rtok-web-compose`: the Compose app (shell, routing over the History API, `/ws` link, pages). `webDist` syncs the
     production webpack distribution (`index.html`, `app.js`, two `.wasm` files) into `build/web-dist`.
-  - `:rtok-web-ui`: the former kotlinx.html UI, removed in #REMOVE once Compose reached parity.
+  - `:rtok-web-ui`: the former kotlinx.html UI, removed in #221 once Compose reached parity.
 - Pages done in Compose: Overview (#199); Calls, Sessions, Logs, Config, Hosts, Services, Plugins, Usage, Stats, Skills
   (#204); Tasks, Worktrees, the Hosts junk card, Doctor with the fix panel (#205); Graph base: alerts, projects with health rings, re-index/remove/unlink, status
   body (#207); Graph drill with breadcrumb, focus depth, node list, compare with change marks, JSON export/import,
