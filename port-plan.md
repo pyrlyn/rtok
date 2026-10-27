@@ -1554,12 +1554,16 @@ Next, in order:
 
 ## Remaining work (2026-10-27)
 
-### P0 — in flight (open PRs, not merged)
+### P0 — landed (merged to main 2026-10-27)
 
-- [ ] #232 `linux-link`: C libs cross-compiled with Kotlin/Native clang + sysroot; full link for linuxX64/linuxArm64; 2898 tests green on macOS.
-- [ ] #235 (on #232): Linux test run + `scripts/lima-test.sh`; fixes for macOS-only tests.
-- [ ] #236 (on #235): `rtok bench --suite p28`.
-- [ ] #234: shared user-level plugin cache (`~/.rtok/cache/plugins`, or `$RTOK_HOME/cache/plugins`); not yet wired into `PluginLink`.
+- [x] #232 `linux-link` (6a7a9ef): C libs cross-compiled with Kotlin/Native clang + sysroot; full link for linuxX64/linuxArm64.
+- [x] #235 (315b9a0): Linux test run + `scripts/lima-test.sh`; fixes for macOS-only tests.
+- [x] #234 (92aeaef): shared user-level plugin cache (`~/.rtok/cache/plugins`, or `$RTOK_HOME/cache/plugins`); not yet wired into `PluginLink`.
+- [x] #236 (150e682): `rtok bench --suite p28`.
+- [x] #237 (371e311): bench overlay tests.
+- [x] #239 (a97a0e4): `completions_shells` e2e.
+- [x] #240 (b9fb4c1): `completions_picker_pty`; `rtok completions` with no argument on a terminal opens the shell picker.
+- [x] #241 (588a882): demon hook-resident socket test.
 
 ### P1 — Linux (~1–2 days)
 
@@ -1570,12 +1574,12 @@ Next, in order:
 - [ ] P2: e2e `junk clear --yes` behaves differently on Linux.
 - [ ] P2: ktoml silently drops arrays of inline tables whose strings contain `{`, `}` or escaped quotes (affects user configs; worked around only in the p28 fixture).
 - [ ] Flaky `TuiProjectsTest.removeShowsThePlan...` on Linux.
+- [ ] P3: flaky `DemonE2eSpec` (the supervisor can write its state after `stop`).
 - [ ] P3: attr destroyed after a failed `posix_spawnattr_init`; no EINTR retry; trash race; UTC `DeletionDate`; `/tmp` fallback; seed tie on equal mtimes.
 - [ ] Linux CI job (missing).
 
 ### P2 — rest of the port plan (weeks)
 
-- [ ] Next queue: overlay bench tests; `completions_shells` / `picker_pty`; hook-resident socket test.
 - [ ] hooks: resident server and `rtok hook` command; 29 tests waiting on worktree/otel/MCP.
 - [ ] read: 101 tests.
 - [ ] graph: ~275 tests, incl. `grep_symbol` via tree-sitter and CLI wiring.
