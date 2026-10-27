@@ -16,21 +16,25 @@ import kotlinx.html.ul
 import kotlinx.serialization.json.JsonObject
 
 private fun FlowContent.alerts(rows: List<JsonObject>) {
-    val all = rows.flatMap { it.objects("alerts") }
+    val all =
+        rows.flatMap { it.objects("alerts") }.map {
+            GraphAlert(it.str("root") ?: "", it.str("project") ?: "", it.str("kind") ?: "", it.str("detail") ?: "", it.num("since") ?: 0.0)
+        }
     if (all.isEmpty()) return
     panel("graph alerts", "${all.size} raised", cls = "warn") {
         ul("plain") {
             attributes["aria-label"] = "graph alerts"
-            all.forEach { a ->
+            groupAlerts(all).forEach { g ->
                 li {
-                    pill("warn", a.str("kind") ?: "")
-                    b { +" ${a.str("project")} " }
-                    span("muted") { +(a.str("detail") ?: "") }
+                    pill("warn", ALERT_WORDS[g.kind] ?: g.kind)
+                    span { +" ${describeGroup(g) { hms(it).take(HH_MM) }}" }
                 }
             }
         }
     }
 }
+
+private const val HH_MM = 5
 
 private fun FlowContent.action(
     app: App,
