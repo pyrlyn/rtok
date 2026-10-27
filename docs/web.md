@@ -47,3 +47,6 @@ Previously excluded from the port (port-plan.md); now in progress in small steps
 - Step 5, slice 3: `rtok.web.CallsStore` (calls_store.rs: running/feed, interrupt sweep, windowed totals,
   sparklines, scope and folded counters, feed filters), `CallsView` (calls_view.rs, the `calls` frame) and
   `coalesce`/`CallBatch` from live.rs. Pure logic; the poller, `Reader` and the `calls` subscription come next.
+- Step 5, slice 4: live calls on `/ws` (live.rs): `Reader` (cursor at the newest event, replay since the server
+  started, caller names from agents/sessions), `LiveCalls` (one poller while a socket listens, a `StateFlow` of
+  `calls` frames, published only on change) and `{"calls":{"subscribe":bool}}` handled by the socket loop.

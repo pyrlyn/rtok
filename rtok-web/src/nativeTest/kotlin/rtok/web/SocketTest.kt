@@ -4,16 +4,24 @@ package rtok.web
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlin.concurrent.AtomicInt
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 private const val CONCURRENT = 8
 private const val SLOW_US = 200_000u
 private const val FAST_TICK_MS = 50L
 private const val REQ = 7L
+private const val SLOW_TICK_MS = 60_000L
+private const val STEP_MS = 100L
+private const val SUBSCRIBE = """{"calls":{"subscribe":true}}"""
+private const val UNSUBSCRIBE = """{"calls":{"subscribe":false}}"""
 
 private class FakeSocket(
     val incoming: Channel<String?> = Channel(Channel.UNLIMITED),
@@ -75,5 +83,45 @@ class SocketTest {
         assertTrue("pong" in sock.sent)
         // Every inbound frame makes the next snapshot due.
         assertTrue(sock.sent.count { it == "S" } >= 2)
+    }
+
+    @Test
+    fun aCallsSubscriptionIsTheSocketsAndNotAnInboundRequest() {
+        assertEquals(true, callsSubscription("""{"calls":{"subscribe":true}}"""))
+        assertEquals(false, callsSubscription("""{"calls":{"subscribe":false},"req":1}"""))
+        assertNull(callsSubscription("""{"calls":{"subscribe":"yes"}}"""))
+        assertNull(callsSubscription("""{"calls":{}}"""))
+        assertNull(callsSubscription("""{"expand":"ab","calls":{"subscribe":true}}"""), "an earlier variant wins")
+        assertNull(callsSubscription("not json"))
+    }
+
+    @Test
+    fun aSubscribedSocketGetsTheTotalsSoFarThenEachChangeUntilItUnsubscribes() {
+        val app = WebApp(BoundAddr("127.0.0.1", 1), NoAssets, null)
+        val flow = MutableStateFlow("C0")
+        val subscribes = AtomicInt(0)
+        val feed =
+            CallsFeed {
+                subscribes.incrementAndGet()
+                flow.value to flow
+            }
+        val ep = WsEndpoint(app, Snapshots { "S" }, { "reply:$it" }, tickMs = SLOW_TICK_MS, calls = feed)
+        val sock = FakeSocket()
+        runBlocking {
+            launch {
+                sock.incoming.send(SUBSCRIBE)
+                delay(STEP_MS)
+                flow.value = "C1"
+                delay(STEP_MS)
+                sock.incoming.send(UNSUBSCRIBE)
+                delay(STEP_MS)
+                flow.value = "C2"
+                delay(STEP_MS)
+                sock.incoming.send(null)
+            }
+            ep.run(sock)
+        }
+        assertEquals(listOf("S", "C0", "C1"), sock.sent, "no reply and no snapshot for the subscription itself; nothing after leaving")
+        assertEquals(1, subscribes.value)
     }
 }
