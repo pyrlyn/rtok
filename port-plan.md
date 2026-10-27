@@ -936,3 +936,11 @@ Next, in order:
 - Tests: JunkTest 7, JunkItemsTest 6.
 - Stop point: next junk_clear.rs (`Planned`, plan/apply, `Row::from(&Planned)`), then the `agents junk list|report|clear`
   CLI; then `--project`, restart.rs, worktree, junk_worktrees + `agent_worktrees`, the rest of phase 10.
+
+## Session: agents — restart 1: the process check (restart.rs `Procs`, `host_running`)
+- `rtok.agents`: `Procs` (`appRunning`, `binRunning`), `RealProcs` (macOS `osascript` app check, `pgrep -x`),
+  `desktopAppName`, `runningDesktopApp`, `runningCliBin`, `hostRunning`. Quit/reopen and `with_restart` wait for the
+  full restart port.
+- Tests: RestartTest 2.
+- Stop point: next junk_clear.rs (`Planned`, plan/apply), the `agents junk list|report|clear` CLI; then `--project`,
+  the full restart.rs, worktree, junk_worktrees + `agent_worktrees`, the rest of phase 10.
