@@ -38,3 +38,5 @@ Previously excluded from the port (port-plan.md); now in progress in small steps
 - Step 4, slice 7: `agent_usage` (`agents usage` text and JSON rows, read off the tick, 120 s TTL).
   Still to come: `tasks`; then `skills`, `stats`, `services`, `worktrees`, `doctor` and `junk`,
   which wait for the `doctor`, `stats`, `demon`/`otel`, `worktree list` and `junk` ports.
+- Step 5, slice 1: `rtok.web.Answer` replies to `expand` and `set` (allowlisted `plugins.<id>.enabled`, config
+  reloaded for the next snapshot), tags replies with `req` (T623), and answers malformed requests with Rust's notices.
