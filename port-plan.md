@@ -1142,3 +1142,14 @@ Next, in order:
 - Tests: TasksTest 6 + ReadyTest 8 (TaskId's mod.rs tests were already covered in :rtok-store).
 - Stop point: next tasks part 2: disk.rs + plan_dir.rs (disk adapter), then run.rs/sync.rs/ops.rs and `rtok task`;
   github/gitlab/export adapters after.
+## Session: tasks part 2 — disk adapter (file and folder layouts)
+- `rtok.tasks`: `DiskAdapter.kt` (disk.rs adapter: plan + `done/`, skip broken files but keep their id, front-matter id
+  must match the name), `DiskFile.kt` (render/parse of the front matter on `:yaml-aot`, serde field order and skips),
+  `DiskName.kt` (`<id> - <slug>.md`, slug), `ClaimLockFile.kt` (`.claim.lock` flock polled 50×20 ms, never unlinked;
+  once-per-process skip warnings), `PlanDir.kt` (plan_dir.rs folder layout: three-line front-matter rewrite, `done.md`
+  reports, refuses blockers/conflicts/parallel).
+- Tests: DiskTest 9 + ClaimLockTest 3 + PlanDirTest 8; `PlanRules.kt` ports tests/common/plan_rules.rs as a test helper.
+- Deviations: skip warnings go to `taskWarningSink` (silent until the CLI wires it) instead of `log::warn`; the
+  killed-holder lock test uses a `perl` flock child instead of re-running the test binary; a status accepted by
+  `Status.parse` (host words) also parses from front matter.
+- Stop point: next run.rs/sync.rs/ops.rs and `rtok task`; github/gitlab/export adapters after.
