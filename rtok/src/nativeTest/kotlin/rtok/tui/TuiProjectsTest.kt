@@ -33,6 +33,9 @@ import kotlin.test.fail
 private const val COLS = 140
 private const val ROWS = 30
 
+/** A row break inside a box: the right border, a newline, the left border. */
+private val WRAP = Regex("│\n│")
+
 class TuiProjectsTest {
     private class Fixture(
         val dir: String,
@@ -82,6 +85,12 @@ class TuiProjectsTest {
     private fun state(cfg: Config) = Runtime.open(cfg, "t476-state").use { rt -> Projects.rows(rt).map { Triple(it.id, it.selected, it.links.map { l -> l.to }) } }
 
     private fun screen(a: TuiApp) = Buffer(COLS, ROWS).also { draw(it, a, { "00:00:00" }) }.lines().joinToString("\n")
+
+    /**
+     * [screen] with text that wrapped inside a box rejoined: a status line holding the temp root's path wraps at a
+     * different word on each host (a longer `/tmp/...-<pid>` on Linux split "untouched" over two rows).
+     */
+    private fun unwrapped(a: TuiApp) = screen(a).replace(WRAP, "")
 
     private fun press(
         f: Fixture,
@@ -182,13 +191,13 @@ class TuiProjectsTest {
             writeString("${f.roots[0]}/lib.rs", "pub fn one() {}\n")
             val before = state(f.cfg)
             press(f, "x")
-            val plan = screen(f.app)
+            val plan = unwrapped(f.app)
             assertTrue("would remove" in plan && "files untouched" in plan, plan)
             assertEquals(before, state(f.cfg), "nothing is removed before y")
             press(f, "n")
-            assertTrue("declined; nothing written" in screen(f.app))
+            assertTrue("declined; nothing written" in unwrapped(f.app))
             press(f, "xy")
-            assertTrue("removed" in screen(f.app), screen(f.app))
+            assertTrue("removed" in unwrapped(f.app), screen(f.app))
             assertEquals(listOf(2, 3), state(f.cfg).map { it.first })
             assertTrue(exists("${f.roots[0]}/lib.rs"), "no file is deleted")
         }
