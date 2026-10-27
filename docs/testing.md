@@ -59,3 +59,22 @@ Each group is its own Gradle task and can run alone:
 
 `./gradlew build` runs unit + CLI (`check` depends on `cliTest`); e2e and wasm stay explicit.
 Kotest on Native ignores Gradle's test filter, so a new CLI spec must call `tags(Cli)`.
+
+## Snapshot tests
+
+Snapshot assertions come from the kotlin-snapshot package (`pyrlyn.snapshot:snapshot`, an included
+build at `../../packages/kotlin-snapshot`, overridden by `KOTLIN_SNAPSHOT_DIR`), written after Rust's
+insta. It reads and writes insta's `.snap` format, so the Rust `.snap` files are reused as they are.
+
+- File snapshots: `assertSnapshot(name, actual)`, files in `rtok/src/commonTest/snapshots`
+  (`SNAPSHOT_DIR`), named `<prefix>__<name>.snap` like insta.
+- Inline snapshots: `assertInlineSnapshot(actual, """ ... """)` for Rust's `@"..."` snapshots.
+- A changed snapshot fails with a line diff and writes `<name>.snap.new` (ignored by git). Review
+  it and rename it, or rerun with `SNAPSHOT_UPDATE=always` to accept. With `CI` set nothing is
+  written.
+
+Ported so far: `tests/compress_snapshot.rs` (`CompressSnapshotTest`, the Rust `.snap` unchanged)
+and the inline snapshots of `removal_preview.rs`, `worktree/list.rs` and `plugins/checkpoint.rs`.
+`report/{html,markdown}.rs` and `worktree/clean.rs` follow when those are ported.
+
+Where tests live: Packages/libraries contain only tests of the package itself. Tests that verify the app (rtok-kotlin) through a package live in the app next to its other tests. Applies to the whole Kotlin port, including snapshot tests.

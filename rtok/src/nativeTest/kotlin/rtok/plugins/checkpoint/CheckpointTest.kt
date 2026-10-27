@@ -9,6 +9,7 @@ import rtok.plugin.sdk.*
 import rtok.store.*
 import rtok.support.*
 import rtok.sys.*
+import snapshot.assertInlineSnapshot
 import kotlin.test.*
 
 private fun rt(
@@ -139,18 +140,20 @@ class CheckpointTest {
 
     @Test fun changedFilesAreListedBeforeReadOnes() {
         val cp = extract(ACTIONS)
-        assertEquals(
-            """checkpoint
-- fix a, rewrite b
-path /r/src/b.rs (edited)
-path /r/src/old.rs (edited)
-path /r/src/new.rs (created)
-path /r/src/c.rs (deleted)
-path /r/src/gone.rs (deleted)
-path /r/src/a.rs (read 10-59)
-""",
+        assertInlineSnapshot(
             cp.render(),
+            """
+            checkpoint
+            - fix a, rewrite b
+            path /r/src/b.rs (edited)
+            path /r/src/old.rs (edited)
+            path /r/src/new.rs (created)
+            path /r/src/c.rs (deleted)
+            path /r/src/gone.rs (deleted)
+            path /r/src/a.rs (read 10-59)
+            """,
         )
+        assertEquals('\n', cp.render().last(), "ends with one newline")
         assertEquals(cp.render(), extract(ACTIONS).render(), "byte-stable")
     }
 

@@ -10,6 +10,9 @@ pluginManagement {
 // The WebAssembly interface and its Chasm adapter, shared with Octo: a checkout of kotlin-wasm
 // (github.com/pyrlyn/kotlin-wasm). KOTLIN_WASM_DIR overrides the path, as CI_DIFFUSER_DIR does above.
 includeBuild(System.getenv("KOTLIN_WASM_DIR") ?: "../../packages/kotlin-wasm")
+// insta-style snapshot assertions for tests (docs/testing.md "Snapshot tests"): a checkout of
+// kotlin-snapshot. KOTLIN_SNAPSHOT_DIR overrides the path.
+includeBuild(System.getenv("KOTLIN_SNAPSHOT_DIR") ?: "../../packages/kotlin-snapshot")
 // Remote build cache on Cloudflare R2 (docs/build-speed.md). Approved by Ivan 2026-10-26.
 // Repositories + R2 remote build cache (docs/build-speed.md), approved by Ivan 2026-10-26; logic in ci.diffuser.settings.
 plugins { id("com.github.burrunan.s3-build-cache") version "1.9.10"; id("ci.diffuser.settings") }

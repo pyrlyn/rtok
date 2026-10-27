@@ -5,6 +5,7 @@ import rtok.RemovalPreview
 import rtok.support.tmpDir
 import rtok.sys.createDirAll
 import rtok.sys.writeString
+import snapshot.assertInlineSnapshot
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -29,7 +30,15 @@ class RemoveTest {
 
     @Test fun aRemovalPrintsItsLineAndTheTotals() {
         val out = RemovalPreview.render(listOf(Triple("/w/a", KB2, THREE), Triple("/w/b", KB1, 1L)))
-        assertEquals("- /w/a  2.0 KB  3 files\n- /w/b  1.0 KB  1 file\n2 paths, 4 files, -3.0 KB\n", out)
+        assertInlineSnapshot(
+            out,
+            """
+            - /w/a  2.0 KB  3 files
+            - /w/b  1.0 KB  1 file
+            2 paths, 4 files, -3.0 KB
+            """,
+        )
+        assertEquals('\n', out.last())
         assertEquals("", RemovalPreview.render(emptyList()))
     }
 
