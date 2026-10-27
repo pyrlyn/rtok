@@ -42,12 +42,12 @@ object Snapshot {
                     "plugins" to Plugins.json(cfg, store),
                     "graph" to (GraphPage.text(cfg)?.let(::JsonPrimitive) ?: JsonNull),
                     "projects" to GraphPage.projectsJson(cfg),
+                    "hosts" to JsonPrimitive(HostsPage.text(cfg)),
                     "config" to (ConfigPage.text(cfg)?.let(::JsonPrimitive) ?: JsonNull),
                     // Not ported yet (docs/web.md step 4): rendered as "pending", never as a failure.
                     "doctor" to JsonNull,
                     "doctor_pending" to JsonPrimitive(true),
                     "stats" to JsonNull,
-                    "hosts" to JsonPrimitive("probing hosts…"),
                     "junk" to JsonNull,
                     "services" to JsonNull,
                     "worktrees" to JsonNull,

@@ -33,5 +33,7 @@ Previously excluded from the port (port-plan.md); now in progress in small steps
 - Step 4, slice 3: `plugins` (catalogue pages, memory/checkpoint live fields, config fields, grouped stats).
 - Step 4, slice 4: `graph` (status + capped dead list, `[project]` tags over a linked scope) and `projects`.
 - Step 4, slice 5: `config` (`config show --sources` rows, secrets redacted, never writes the user file).
-  Still to come: `hosts`, `worktrees`, `agent_usage`, `tasks`; then `skills`, `stats`, `services`,
-  `doctor` and `junk`, which wait for the `doctor`, `stats`, `demon`/`otel` and `junk` ports.
+- Step 4, slice 6: `hosts` (`agents list` blocks through a `Background` worker cache, 30 s TTL; the junk
+  section reads "measuring folders…" until the junk port lands).
+  Still to come: `agent_usage`, `tasks`; then `skills`, `stats`, `services`, `worktrees`, `doctor` and `junk`,
+  which wait for the `doctor`, `stats`, `demon`/`otel`, `worktree list` and `junk` ports.
