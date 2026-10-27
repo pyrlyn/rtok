@@ -39,7 +39,10 @@ class App(
     private val state = AppState()
     private val link = Link(::onState, ::onFrame)
 
+    private val palette = Palette({ state.snapshot }) { go(it) }
+
     fun start() {
+        palette.install()
         window.addEventListener("popstate", { render() })
         // Every in-app link (`/page`) routes client-side, panels' "page →" links included.
         root.addEventListener("click", { e ->
@@ -134,6 +137,11 @@ class App(
                                 LinkState.CLOSED -> "fail" to "closed"
                             }
                         span("pill $tone") { +label }
+                        button {
+                            attributes["aria-label"] = "Open the command palette"
+                            onClickFunction = { palette.open() }
+                            +"⌘K"
+                        }
                         button {
                             attributes["aria-label"] = "Toggle theme"
                             onClickFunction = { toggleTheme() }
