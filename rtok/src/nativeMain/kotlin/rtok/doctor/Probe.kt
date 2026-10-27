@@ -1,8 +1,9 @@
 // Port of src/doctor/probe.rs: the only door the doctor's config checks (T331) use to reach the machine — files, the
 // environment and `PATH`. Production passes the real implementations below; a test passes an in-memory one, so no
-// check ever needs a real agent folder. `Writer` (backup + atomic swap) lands with `doctor --fix`.
+// check ever needs a real agent folder. [Writer] is the only way `doctor --fix` changes a file.
 package rtok.doctor
 
+import rtok.agent.sdk.writeAtomic
 import rtok.agents.HostBins
 import rtok.agents.McpPaths
 import rtok.config.envVar
@@ -14,6 +15,7 @@ import rtok.sys.fileMode
 import rtok.sys.isDir
 import rtok.sys.readLink
 import rtok.sys.readToString
+import rtok.agent.sdk.backup as sdkBackup
 
 /** What a path is, following a symlink to its target. */
 sealed class PathKind {
@@ -112,4 +114,34 @@ object RealEnv : ProbeEnv {
 
 object RealWhich : Which {
     override fun find(program: String) = HostBins.findOnPath(program)
+}
+
+/**
+ * The only way the doctor changes a file: a copy to `.backup_configs/` first, then an atomic swap. Both are the helpers
+ * `agents install` already writes host configs with, so a doctor fix and an install leave the same undo trail.
+ */
+interface Writer {
+    /** Copy [path] into its `.backup_configs/` folder, keeping [keep] generations; null when an identical copy is there. */
+    fun backup(
+        path: String,
+        keep: Int,
+    ): String?
+
+    /** Replace [path] with [body] so a reader sees the old or the new file, never half of it. */
+    fun write(
+        path: String,
+        body: String,
+    )
+}
+
+object RealWriter : Writer {
+    override fun backup(
+        path: String,
+        keep: Int,
+    ) = sdkBackup(path, keep)
+
+    override fun write(
+        path: String,
+        body: String,
+    ) = writeAtomic(path, body.encodeToByteArray())
 }
