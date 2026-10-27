@@ -5,6 +5,8 @@ package rtok.worktree
 
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.toKString
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
 import rtok.agents.AgentLink
@@ -72,7 +74,7 @@ data class Adopted(
     val origin: String,
     val locked: Boolean,
     /** No agent was bound: the claim waits for the next agent in the worktree (T289.5). Omitted when false. */
-    val pending: Boolean = false,
+    @OptIn(ExperimentalSerializationApi::class) @EncodeDefault(EncodeDefault.Mode.NEVER) val pending: Boolean = false,
     /** The branch the worktree has checked out; the project's name when auto-added. Not serialized. */
     @Transient val branch: String? = null,
 )
