@@ -995,3 +995,12 @@ Next, in order:
   `--no-restart`/`noRestart` so a test never quits a real app. Windows `image_name`/`tasklist` not ported (macOS only).
 - Tests: RestartRunTest 13 (the with_restart and run_ok tests).
 - Stop point: next worktree (incl. `rtok worktree adopt`), junk_worktrees + `agent_worktrees`, the rest of phase 10.
+## Session: worktree 1 — git.rs and the mod.rs core
+- `rtok.worktree.Git` (all of git.rs: list, dirty/ignored, default base, squash-aware `isMerged` with the
+  patch-equivalence fallback, own commits, lock/unlock/`unlockEnded`, move/remove/prune, branches, fetch,
+  `pendingPaths`, commit/push, `addLocked`; `GitError` carries git's message). `WorktreeRecord.owner/heldAgainst/
+  claimableBy`, `Owner` (v1/v2 lock reasons), `State`, `Facts`, `Entry`, `Worktrees.classify/deepest/checkoutOf/
+  lockedBy/parMap/inventory/inventoryWith`, `DISABLED`. parMap runs on Dispatchers.Default (Rust: scoped threads).
+- Tests: WorktreesTest 9 (mod.rs 6 incl. the rstest tables as loops, git.rs 2, locked_by 1).
+- Stop point: next worktree list.rs, ops.rs, remove.rs, gc.rs, claim/adopt, the `rtok worktree` CLI; then
+  junk_worktrees + `agent_worktrees`, the rest of phase 10.
