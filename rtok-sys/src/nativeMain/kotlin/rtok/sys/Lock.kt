@@ -8,7 +8,7 @@ import platform.posix.*
 fun tryLockExclusive(path: String): Int? {
     val fd = open(path, O_CREAT or O_WRONLY, 0x1a4) // 0644
     if (fd < 0) throw IoException(IoException.Kind.Other, "cannot open $path")
-    if (flock(fd, LOCK_EX or LOCK_NB) != 0) {
+    if (fileLock(fd, LOCK_EX or LOCK_NB) != 0) {
         close(fd)
         return null
     }
@@ -47,7 +47,7 @@ fun lockHeld(path: String): Boolean {
     if (fd < 0) fd = open(path, O_RDONLY)
     if (fd < 0) throw IoException(ioKind(errno), "open $path: errno $errno")
     try {
-        if (flock(fd, LOCK_EX or LOCK_NB) == 0) return false
+        if (fileLock(fd, LOCK_EX or LOCK_NB) == 0) return false
         if (errno == EWOULDBLOCK) return true
         throw IoException(ioKind(errno), "flock $path: errno $errno")
     } finally {
@@ -63,7 +63,7 @@ fun lockExclusive(path: String): Int {
     path.substringBeforeLast('/', "").takeIf { it.isNotEmpty() }?.let(::createDirAll)
     val fd = open(path, O_CREAT or O_WRONLY, 0x1a4) // 0644
     if (fd < 0) throw IoException(ioKind(errno), "cannot open $path: errno $errno")
-    while (flock(fd, LOCK_EX) != 0) {
+    while (fileLock(fd, LOCK_EX) != 0) {
         if (errno == EINTR) continue
         val e = errno
         close(fd)

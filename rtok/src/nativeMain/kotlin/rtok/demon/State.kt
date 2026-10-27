@@ -10,7 +10,6 @@ import platform.posix.O_CLOEXEC
 import platform.posix.O_CREAT
 import platform.posix.O_WRONLY
 import platform.posix.close
-import platform.posix.flock
 import platform.posix.open
 import rtok.agent.sdk.writeAtomic
 import rtok.sys.exists
@@ -63,7 +62,7 @@ class Store(
         val path = file(service, "lock")
         val fd = open(path, O_CREAT or O_WRONLY or O_CLOEXEC, 0x1a4)
         if (fd < 0) throw DemonException("cannot open $path")
-        if (flock(fd, LOCK_EX or LOCK_NB) != 0) {
+        if (rtok.sys.fileLock(fd, LOCK_EX or LOCK_NB) != 0) {
             close(fd)
             return null
         }

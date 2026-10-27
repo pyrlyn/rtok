@@ -145,7 +145,7 @@ internal fun rotateIfOver(
 ) {
     val fd = openRotateLock(log.path)
     try {
-        if (flock(fd, LOCK_EX or LOCK_NB) != 0) throw LogIoException("rotation lock busy")
+        if (fileLock(fd, LOCK_EX or LOCK_NB) != 0) throw LogIoException("rotation lock busy")
         if (over(log, incoming)) rotate(log.path, log.files)
     } finally {
         close(fd)
