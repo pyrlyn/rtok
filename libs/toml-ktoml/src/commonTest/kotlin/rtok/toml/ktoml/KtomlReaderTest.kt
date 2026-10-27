@@ -56,6 +56,23 @@ class KtomlReaderTest {
         assertEquals(2, r["g"]!!.jsonArray.size)
     }
 
+    @Test fun dottedArrayOfTablesNestsUnderPlainTables() {
+        val r = p("[agents.junk]\nkeep = 1\n[[agents.junk.extra]]\nhost = \"a\"\n[[agents.junk.extra]]\nhost = \"b\"\n")
+        val junk = r["agents"]!!.jsonObject["junk"]!!.jsonObject
+        assertEquals("1", junk["keep"]!!.jsonPrimitive.content)
+        assertEquals(listOf("a", "b"), junk["extra"]!!.jsonArray.map { it.jsonObject["host"]!!.jsonPrimitive.content })
+        val bare = p("[[agents.junk.extra]]\nhost = \"c\"\n")
+        assertEquals(
+            "c",
+            bare["agents"]!!
+                .jsonObject["junk"]!!
+                .jsonObject["extra"]!!
+                .jsonArray[0]
+                .jsonObject["host"]!!
+                .jsonPrimitive.content,
+        )
+    }
+
     @Test fun datetimeAsString() {
         val r = p("d = 1979-05-27T07:32:00Z\n")
         assertTrue(r["d"]!!.jsonPrimitive.content.startsWith("1979-05-27"))

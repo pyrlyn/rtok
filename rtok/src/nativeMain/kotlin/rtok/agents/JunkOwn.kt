@@ -2,6 +2,9 @@
 // `core.retain_calls_days` (`scan`, `run`, `to_table`), and removal_preview.rs `render`.
 package rtok.agents
 
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import rtok.Col
 import rtok.config.Config
 import rtok.config.HOSTS
@@ -101,6 +104,22 @@ object JunkOwn {
         rows.forEach { (path, bytes, files) -> p.remove(path, bytes, files) }
         return p.render(rtok.sys.PreviewMode.Stat)
     }
+
+    /** The `--json` shape of T182's run: serde's field order of `Outcome`. */
+    fun json(outcomes: List<JunkOutcome>): JsonArray =
+        JsonArray(
+            outcomes.map {
+                buildJsonObject {
+                    put("kind", it.kind)
+                    put("path", it.path)
+                    put("bytes", it.bytes)
+                    put("files", it.files)
+                    put("action", it.action)
+                    put("note", it.note)
+                    put("failed", it.failed)
+                }
+            },
+        )
 
     fun toTable(
         outcomes: List<JunkOutcome>,

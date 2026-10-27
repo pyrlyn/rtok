@@ -956,3 +956,15 @@ Next, in order:
 - Tests: JunkClearTest 5, JunkClearApplyTest 4.
 - Stop point: next the `agents junk list|report|clear` CLI with the remaining junk.rs tests; then `--project`, the full
   restart.rs, worktree, junk_worktrees + `agent_worktrees`, the rest of phase 10.
+
+## Session: agents — junk 8: `rtok agents junk list|clear` (cli/agents.rs JunkCmd, bytes.rs, tests/agents_junk.rs)
+- `rtok.cli`: `JUNK` (`list` with `--json/--bytes/--all/--session-days` and the breakdown flags `--items/--sort/
+  --min-size`; `clear` with `--yes/--dry-run/--stat/--json/--agent/--kind/--include/--older-than/--session-days/
+  --trash`), clap-style usage errors (exit 2). T182's run without a filter, `JunkClear.run` with one or `--trash`.
+- `rtok.Bytes.parse` (bytes.rs), `Cleared.json`/`Planned.json`, `JunkOwn.json`; `:rtok` uses `:humantime`.
+- Fix: the ktoml adapter read `[[a.b.c]]` as arrays at `a` and `b` too (`[[agents.junk.extra]]` failed to load).
+- Tests: BytesTest 1, KtomlReaderTest +1, AgentsJunkE2eSpec 10 (tests/agents_junk.rs without the every-host folder
+  test, Linux `--trash`, stale worktrees and doctor).
+- Stop point: next the remaining junk.rs unit tests (archive retention, host rows, VS Code CachedData, shared folders,
+  `--all`, scan limit, unreadable folder, caches, shared tagged cache, temp/build/staging, sessions/index); then
+  `--project`, the full restart.rs, worktree, junk_worktrees + `agent_worktrees`, the rest of phase 10.

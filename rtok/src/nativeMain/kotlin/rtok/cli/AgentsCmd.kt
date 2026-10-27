@@ -1,6 +1,6 @@
 // Port of src/cli/agents.rs and cli/agents_host.rs (host side): `rtok agents install|uninstall|remove|update|list|info`.
 // Not ported yet: `--project`, the
-// desktop restart behind `--no-restart` (accepted, nothing to skip yet), and the junk commands.
+// desktop restart behind `--no-restart` (accepted, nothing to skip yet). The junk commands are in AgentsJunkCmd.kt.
 package rtok.cli
 
 import kotlinx.cinterop.toKString
@@ -345,6 +345,7 @@ val AGENTS =
                 INFO,
                 SESSIONS,
                 USAGE,
+                JUNK,
                 WHOAMI,
                 SHOW,
                 STATUS,
