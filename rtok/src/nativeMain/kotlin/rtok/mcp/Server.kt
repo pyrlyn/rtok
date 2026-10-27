@@ -159,7 +159,9 @@ class Server(
         /** The tools every server lists, ahead of the plugins' own. */
         private val BUILTIN =
             listOf(Listed("archive", Tools.EXPAND), Listed("mcp", Tools.PING), Listed("mcp", AgentTools.WHOAMI)) +
-                AgentTools.DEFS.map { Listed("mcp", it) }
+                AgentTools.DEFS.map { Listed("mcp", it) } +
+                // T441.6: the project's tasks, same calls as `rtok task …`.
+                TaskTools.DEFS.map { Listed("mcp", it) }
 
         /** Opens one session per process: `read_cache` rows are keyed by session and never expire. */
         fun open(
