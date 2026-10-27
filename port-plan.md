@@ -1351,3 +1351,12 @@ Next, in order:
   AgentToolsTest: the listing order now with the worktree tools, worktree_add wrong-repo test (T924).
 - Deviations: clean has no progress bar for several caches (no batch bar in rtok-sys yet).
 - Stop point: next hooks dispatcher tests.
+
+## Session: proxy chunk 4 — tools rewrite
+- `rtok.proxy.ToolsRewriter` (tools_rewrite.rs `rewrite`: T59.5 description truncation, allow/deny, Delta with the
+  original `tools[]` when changed; returns the new body since Kotlin JSON is immutable), `SchemaCompact` (T686
+  first-sentence descriptions, restating `examples`, zero `default`s; keyword-only walk), `Sentences` (split,
+  `truncateAtSentence`, token prefix).
+- Fixture: tests/fixtures/mcp_catalog_github.json copied to rtok/src/commonTest/fixtures.
+- Tests: ToolsRewriteTest 7, ToolsSchemaCompactTest 5 (all 12 Rust tests).
+- Stop point: next proxy chunk 5 (batch_results.rs), then semantic_cache.rs.
