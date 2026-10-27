@@ -1300,3 +1300,14 @@ Next, in order:
 - Stop point: next model, report, completions, bench, demon, proxy batch tests, macOS/Linux split.
 - Session (web/dashboard worker): web Graph scene nodes are clickable (click or Enter): the same `open` as the drill
   node list (a file toggles, a symbol is focused, in its own project when foreign); `data-node` delegation on the SVG.
+
+## Session: proxy chunk 1 — route, gate, noise, chat ToolResults
+- `rtok.proxy.Route` (route.rs: lane model routing, closed without a named bench), `Gate` (gate.rs: per-lane
+  in-flight cap on a coroutines `Semaphore`, queue counter released on cancel; `Slot.release()` stands in for
+  dropping the permit), `Noise` (noise.rs: terminal noise out of tool results and user text, fail-open, same bytes
+  when clean), `OpenAiChatWire` (openai_chat.rs ToolResults + live blobs).
+- Tests: RouteTest 5, GateTest 3, NoiseTest 4 (all of route.rs, gate.rs, noise.rs).
+- Proxy chunk plan: 2 = wire.rs rest (Usage, Wire trait, SSE usage) + Anthropic/Chat/Responses/Gemini usage and
+  prepare_request; 3 = lane.rs, live.rs, flex.rs; 4 = tools_rewrite.rs, batch_results.rs; 5 = semantic_cache.rs;
+  6 = mod.rs server (Ktor) + cli.rs + otel ticker/retention wiring; 7 = tests/batch_cli.rs (3).
+- Stop point: next proxy chunk 2.
