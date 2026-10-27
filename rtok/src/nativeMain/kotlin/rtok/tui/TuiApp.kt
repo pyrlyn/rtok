@@ -62,6 +62,9 @@ class TuiApp(
     /** The Graph tab's export form and saved-export view (T329.41). */
     val exporter = TuiExport()
 
+    /** The Graph tab's live calls pane (T480). */
+    val live = TuiLiveCalls(actions?.cfg?.core?.dbPath, actions?.cfg?.plugins?.graph ?: rtok.config.Graph())
+
     /** The Graph tab's one-project view (T561). */
     val drill = TuiDrill()
 
@@ -108,6 +111,9 @@ class TuiApp(
             is JsonObject -> (v["text"] as? kotlinx.serialization.json.JsonPrimitive)?.content?.lines()?.size ?: v.size
             else -> 0
         }
+
+    /** app.rs `refresh`'s per-frame part: the live calls pane reads while the Graph tab is up. */
+    fun tick(at: Long = rtok.web.clockMs()) = live.poll(page == "graph", at)
 
     /** Moves to tab [i], wrapping. */
     fun select(i: Int) {
@@ -157,20 +163,30 @@ class TuiApp(
      * re-read so the table shows what the registry now holds. Null when the key is not the registry's.
      */
     private fun graph(k: Key): Effect? {
-        val a = actions ?: return null
+        // Without writes (the tests of navigation) only the live calls pane has keys.
+        val a = actions ?: return if (live.key(k)) Effect.NONE else null
         val rows = projectEntries(snapshot)
         val target = rows.getOrNull(projects.cursor(rows))?.let { it.id to it.name }
+        val typing = compare.typing || exporter.typing
         // Typing goes to the field first; `?` and `r` are the shell's otherwise, then the panel, then the registry.
-        // One panel is open at a time, so a key goes to the export form or to compare, never both.
         return when {
-            compare.typing && compare.key(k, target, a) -> Effect.NONE
-            exporter.typing && exporter.key(k, target, a) -> Effect.NONE
-            k == Key.Char("?") || k == Key.Char("r") -> null
-            !compare.isOpen && exporter.key(k, target, a) -> Effect.NONE
-            !exporter.isOpen && compare.key(k, target, a) -> Effect.NONE
+            !typing && (k == Key.Char("?") || k == Key.Char("r")) -> null
+            panelKey(k, target, a) -> Effect.NONE
             else -> registry(k, a, rows)
         }
     }
+
+    /** One panel is open at a time, so a key goes to the export form or to compare, never both. */
+    private fun panelKey(
+        k: Key,
+        target: Pair<Int, String>?,
+        a: TuiActions,
+    ): Boolean =
+        when {
+            compare.typing -> compare.key(k, target, a)
+            exporter.typing -> exporter.key(k, target, a)
+            else -> (!compare.isOpen && exporter.key(k, target, a)) || (!exporter.isOpen && compare.key(k, target, a))
+        }
 
     private fun registry(
         k: Key,
@@ -179,7 +195,7 @@ class TuiApp(
     ): Effect? =
         when (val r = projects.key(k, rows)) {
             ProjectKey.Ignored -> {
-                null
+                if (live.key(k)) Effect.NONE else null
             }
 
             ProjectKey.Handled -> {
