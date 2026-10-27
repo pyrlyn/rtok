@@ -43,6 +43,7 @@ object Snapshot {
                     "graph" to (GraphPage.text(cfg)?.let(::JsonPrimitive) ?: JsonNull),
                     "projects" to GraphPage.projectsJson(cfg),
                     "hosts" to JsonPrimitive(HostsPage.text(cfg)),
+                    "agent_usage" to UsagePage.get(cfg).toJson(),
                     "config" to (ConfigPage.text(cfg)?.let(::JsonPrimitive) ?: JsonNull),
                     // Not ported yet (docs/web.md step 4): rendered as "pending", never as a failure.
                     "doctor" to JsonNull,
