@@ -1409,3 +1409,14 @@ Next, in order:
   (fake loopback upstreams: matched mocks, a held upstream, a scripted 429 upstream). `ProxyCliSpec`: `--dry-run`
   prints the effective settings with flags applied; a bad `--port` fails.
 - Stop point: next tests/proxy.rs (35) and proxy_bench.rs (2), then model, report, completions, bench, demon, split.
+
+## Session: proxy integration suites part 2 (tests/proxy.rs + proxy_bench.rs)
+- Ported tests/proxy.rs (35) and proxy_bench.rs (2) as ProxyWireTest (10), ProxyGeminiTest (2), ProxyCompressTest (4),
+  ProxyLiveBlobTest (2), ProxyPlainTest (4), ProxyCacheTest (4), ProxyToolsRewriteTest (3), ProxyBenchTest (2),
+  ProxyHealthLoadTest (1). Fixtures copied to `commonTest/fixtures/proxy`.
+- Deviations: the six `MockUpstream` self-checks are one fixture round-trip test; the plain-forward cases check
+  `Live.alerts(cfg)` instead of the web `Model` snapshot (alerts + `live_passthrough` Calls rows), which lands with the
+  model port; T323's truncating upstream is a raw posix socket (`TruncatingUpstream`), since the Ktor server always
+  frames the body it is given; the T205 `/health` polls reuse one client (a fresh client per poll churned sockets
+  until connects were refused, unlike reqwest's pooled client).
+- Stop point: model, report, completions, bench, demon, macOS/Linux split.
