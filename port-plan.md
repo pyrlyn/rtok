@@ -1216,3 +1216,11 @@ Next, in order:
   `SubagentParent`, brief split).
 - Tests: JsonlTest 7, ImageCostTest 2, DictionaryTest 5, SubagentsTest 2.
 - Next: stats.rs (Report, fold, table, store attaches, cost), `rtok stats`, baseline.rs, cache.rs, then the snapshot.
+## Session: stats part 2 — measure/stats.rs
+- `rtok.measure.stats`: `Report` and its rows (`Report.kt`, JSON in Rust field order with serde's skips, `SortedMap` for
+  `BTreeMap`), `collect`/`foldSession` (`Collect.kt`), the folds (`Folds.kt`, `ReadFolds.kt`), `toTable`
+  (`Table.kt`), the store attaches, `laneOfKind`, `codexRow` (codex.rs `collect`) and `--price` (`Attach.kt`).
+- `SerdeJson.kt`: serde_json pretty/compact output with ryu floats, and `fixed` for `{:.N}`.
+- Tests: all 35 stats.rs tests except the `parse_since` trio (already ported with `rtok.config.parseSince`):
+  StatsCollectTest 10, StatsFoldTest 15, StatsStoreTest 7.
+- Next: `rtok stats` CLI + baseline.rs + cache.rs, then the snapshot `stats`/`skills`, pages and TUI tabs.
