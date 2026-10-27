@@ -24,6 +24,7 @@ class ProgressRunner(
     private var stdinPath: String? = null
     private var timeoutMs: Long? = null
     private var quiet = false
+    private var dir: String? = null
     private val extraEnv = mutableMapOf<String, String>()
 
     /** The child's stdin is this file (Rust `.stdin(Stdio::from(file))`). */
@@ -31,6 +32,9 @@ class ProgressRunner(
 
     /** Kill the child and fail once it runs longer than [ms] (Rust `.timeout`). */
     fun timeout(ms: Long) = apply { timeoutMs = ms }
+
+    /** The child starts in [path] (Rust `.cwd`). */
+    fun cwd(path: String) = apply { dir = path }
 
     /** No spinner (Rust `ProgressRunner::quiet`). */
     fun quiet() = apply { quiet = true }
@@ -51,6 +55,7 @@ class ProgressRunner(
             posix_spawn_file_actions_init(actions.ptr)
             posix_spawn_file_actions_adddup2(actions.ptr, outPipe[1], 1)
             posix_spawn_file_actions_adddup2(actions.ptr, errPipe[1], 2)
+            dir?.let { rtok_spawn_addchdir(actions.ptr, it) }
             stdinPath?.let { posix_spawn_file_actions_addopen(actions.ptr, 0, it, O_RDONLY, 0u) }
             for (fd in listOf(outPipe[0], outPipe[1], errPipe[0], errPipe[1])) posix_spawn_file_actions_addclose(actions.ptr, fd)
             val argv = allocArrayOf((listOf(program) + args).map { it.cstr.ptr } + listOf(null))

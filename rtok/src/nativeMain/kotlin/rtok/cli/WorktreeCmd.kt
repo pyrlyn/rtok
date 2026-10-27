@@ -1,13 +1,16 @@
-// Port of src/cli/worktree.rs (subset): `rtok worktree add|whoami|list|claim|adopt|remove|gc`. finish, clean and
-// migrate land with their modules.
+// Port of src/cli/worktree.rs (subset): `rtok worktree add|claim|adopt|remove|finish|list|whoami|gc|clean|migrate`.
 package rtok.cli
 
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.serializer
 import rtok.store.parseIdleFrom
+import rtok.worktree.Clean
+import rtok.worktree.FinishOptions
 import rtok.worktree.Gc
 import rtok.worktree.GcPolicy
+import rtok.worktree.Migrate
 import rtok.worktree.Ops
+import rtok.worktree.Policy
 import rtok.worktree.WorktreeList
 import rtok.worktree.Worktrees
 
@@ -140,6 +143,29 @@ private val REMOVE =
             },
     )
 
+private val FINISH =
+    CommandSpec(
+        "finish",
+        "Hand your task worktree to review: commit what is left, push, open or reuse the PR, ask for squash auto-merge, " +
+            "then unlock. Refuses the main checkout, another agent's lock and credential files; never closes the task",
+        options =
+            listOf(
+                OptSpec.Value("message", "Commit message for uncommitted work; defaults to `<task>: <branch slug>`", "MESSAGE", short = 'm'),
+                OptSpec.Value("repo", "`owner/name` for gh, when the `origin` URL does not name the repository", "REPO"),
+                OptSpec.Flag("no-auto-merge", "Open the PR without auto-merge"),
+                AGENT_OPT,
+                OWNER_OPT,
+                OptSpec.Flag("json", "JSON instead of the text lines"),
+            ),
+        args = listOf(ArgSpec("path", "The worktree, or a directory inside it; defaults to the current directory", required = false)),
+        action =
+            gated { inv, cfg ->
+                val opts = FinishOptions(inv.value("message"), inv.value("repo"), inv.flag("no-auto-merge"))
+                val done = Ops.finish(cfg, inv.arg("path") ?: rtok.sys.cwd(), inv.value("agent"), inv.value("owner"), opts)
+                if (inv.flag("json")) inv.printJson(done) else inv.io.out(done.toText())
+            },
+    )
+
 private val LIST =
     CommandSpec(
         "list",
@@ -207,9 +233,53 @@ private val GC =
             },
     )
 
+private val CLEAN =
+    CommandSpec(
+        "clean",
+        "Delete idle tagged build caches (`CACHEDIR.TAG`) and keep the worktrees; dry run without `--yes`",
+        options =
+            listOf(
+                OptSpec.Value("idle", "Keep caches modified within this window (`30m`, `24h`, `7d`)", "IDLE"),
+                OptSpec.Flag("yes", "Apply; without it this is a dry run that changes nothing"),
+                OptSpec.Flag("dry-run", "Say the dry run out loud: print what would go and change nothing (the default)"),
+                OptSpec.Flag("stat", "The same preview as the dry run: a removal's line already is its stat"),
+                OptSpec.Flag("json", "JSON instead of the table"),
+            ),
+        args = listOf(ArgSpec("paths", "Only these worktrees; the one this command runs from is cleaned only when named", required = false, variadic = true)),
+        action =
+            gated { inv, _ ->
+                inv.conflict("dry-run", "yes")
+                val yes = inv.flag("yes")
+                val now = rtok.log.now()
+                val policy = Policy(idle(inv, "idle", IDLE_DEFAULT), now * NANOS_PER_SECOND)
+                val outcomes = Clean.run(rtok.sys.cwd(), inv.args("paths"), policy, yes)
+                if (inv.flag("json")) inv.printJson(outcomes) else inv.io.out(Clean.toTable(outcomes, yes, now))
+                if (outcomes.any { it.failed }) throw CliFailure("some caches could not be deleted")
+            },
+    )
+
+private val MIGRATE =
+    CommandSpec(
+        "migrate",
+        "Move this repository's worktrees into `[worktree] root`; dry run without `--yes`",
+        options =
+            listOf(
+                OptSpec.Flag("yes", "Apply; without it this is a dry run that changes nothing"),
+                OptSpec.Value("owner", "Also move old locks without an agent whose owner is this", "OWNER"),
+                OptSpec.Flag("json", "JSON instead of the table"),
+            ),
+        action =
+            gated { inv, cfg ->
+                val yes = inv.flag("yes")
+                val outcomes = Ops.migrate(cfg, rtok.sys.cwd(), inv.value("owner"), yes)
+                if (inv.flag("json")) inv.printJson(outcomes) else inv.io.out(Migrate.toTable(outcomes, yes))
+                if (outcomes.any { it.failed }) throw CliFailure("some worktrees could not be moved")
+            },
+    )
+
 val WORKTREE =
     CommandSpec(
         "worktree",
         "Git worktrees of this repository: owner, state and disk cost",
-        subcommands = listOf(ADD, CLAIM, ADOPT, REMOVE, LIST, WHOAMI, GC),
+        subcommands = listOf(ADD, CLAIM, ADOPT, REMOVE, FINISH, LIST, WHOAMI, GC, CLEAN, MIGRATE),
     )

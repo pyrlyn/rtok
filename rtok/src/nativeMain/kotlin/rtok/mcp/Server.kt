@@ -159,6 +159,8 @@ class Server(
         /** The tools every server lists, ahead of the plugins' own. */
         private val BUILTIN =
             listOf(Listed("archive", Tools.EXPAND), Listed("mcp", Tools.PING), Listed("mcp", AgentTools.WHOAMI)) +
+                // T285: the worktree tools act for the linked agent; unlike `whoami`, `[mcp] tools` can narrow them.
+                WorktreeTools.DEFS.map { Listed("mcp", it) } +
                 AgentTools.DEFS.map { Listed("mcp", it) } +
                 // T441.6: the project's tasks, same calls as `rtok task …`.
                 TaskTools.DEFS.map { Listed("mcp", it) }
