@@ -2,7 +2,7 @@
 // Snapshot fields that are plain CLI text on the wire. A line a parser does not understand is kept (`other`).
 package rtok.web.ui
 
-internal fun lines(t: String) = t.split("\n")
+fun lines(t: String) = t.split("\n")
 
 /** One host variant block of `rtok agents list` (text.ts `HostBlock`). */
 data class HostBlock(

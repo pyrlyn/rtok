@@ -3,6 +3,8 @@
 buildscript { configurations.classpath { resolutionStrategy.force("org.jetbrains:annotations:23.0.0") } }
 plugins {
     kotlin("multiplatform") version "2.4.21" apply false; kotlin("plugin.serialization") version "2.4.21" apply false
+    // Compose Multiplatform for the web UI (:rtok-web-compose, wasmJs only), approved by Ivan 2026-10-27.
+    kotlin("plugin.compose") version "2.4.21" apply false; id("org.jetbrains.compose") version "1.12.2" apply false
     // API docs: `./gradlew dokkaGenerate` only; never wired into build/test (docs/api-docs.md).
     id("org.jetbrains.dokka") version "2.2.0" apply false
     // Tests: Kotest specs next to kotlin.test (docs/testing.md); KSP must come before Kotest.

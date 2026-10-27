@@ -11,6 +11,7 @@ configure<KotlinMultiplatformExtension> {
     }
     sourceSets.jsMain {
         dependencies {
+            implementation(project(":rtok-web-model"))
             implementation("org.jetbrains.kotlinx:kotlinx-html:0.12.0")
             implementation("org.jetbrains.kotlin-wrappers:kotlin-css:2026.10.5")
         }

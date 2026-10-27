@@ -151,9 +151,10 @@ private fun FlowContent.action(
 private fun FlowContent.junkActions(s: JunkState) {
     s.error?.let { p("pill fail") { +it } }
     val plan = s.plan
+    val result = s.result
     when {
-        s.phase == JunkPhase.DONE && s.result != null -> {
-            junkDone(s.result)
+        s.phase == JunkPhase.DONE && result != null -> {
+            junkDone(result)
         }
 
         plan == null -> {
