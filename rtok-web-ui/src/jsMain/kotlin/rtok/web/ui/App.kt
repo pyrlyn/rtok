@@ -41,6 +41,11 @@ class App(
 
     fun start() {
         window.addEventListener("popstate", { render() })
+        // Every in-app link (`/page`) routes client-side, panels' "page →" links included.
+        root.addEventListener("click", { e ->
+            val href = (e.target as? org.w3c.dom.Element)?.closest("a[href^='/']")?.getAttribute("href")
+            if (href != null) navigate(e, href)
+        })
         link.start()
         render()
     }
@@ -95,7 +100,6 @@ class App(
                         PAGES.forEach { p ->
                             a("/${p.id}") {
                                 if (p == page) attributes["aria-current"] = "page"
-                                onClickFunction = { e -> navigate(e, "/${p.id}") }
                                 +p.id
                             }
                         }
@@ -192,6 +196,7 @@ fun toggleTheme() {
 
 fun main() {
     installStyles()
+    Pages.register("overview", OverviewPage)
     val root = document.getElementById("root") as? HTMLElement ?: error("#root element not found")
     App(root).start()
 }
