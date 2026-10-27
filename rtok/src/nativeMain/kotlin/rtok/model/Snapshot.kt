@@ -39,6 +39,7 @@ object Snapshot {
                     "ref_ids" to JsonObject(refIds.entries.associate { (k, v) -> k.toString() to JsonPrimitive(v) }),
                     "logs" to JsonArray(logTail(cfg).map(::JsonPrimitive)),
                     "usage" to Overview.build(cfg, store).toJson(),
+                    "plugins" to Plugins.json(cfg, store),
                     // Not ported yet (docs/web.md step 4): rendered as "pending", never as a failure.
                     "doctor" to JsonNull,
                     "doctor_pending" to JsonPrimitive(true),

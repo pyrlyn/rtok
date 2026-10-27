@@ -30,5 +30,6 @@ Previously excluded from the port (port-plan.md); now in progress in small steps
 - Step 4, slice 1: `rtok.model.Snapshot` sends `calls`, `ref_ids`, `sessions` and `logs`; the other pages go out
   as their "not yet" values (`doctor_pending: true`, `hosts: "probing hosts…"`, nulls) until their slices land.
 - Step 4, slice 2: `usage` (Overview: totals, CTT, turns, plain-proxy alerts, 14-day savings trend).
-  Still to come: `plugins`, `skills`, `stats`, `graph`/`projects`, `hosts`/`junk`, `config`,
+- Step 4, slice 3: `plugins` (catalogue pages, memory/checkpoint live fields, config fields, grouped stats).
+  Still to come: `skills`, `stats`, `graph`/`projects`, `hosts`/`junk`, `config`,
   `services`, `worktrees`, `agent_usage`, `tasks`, `doctor`.
