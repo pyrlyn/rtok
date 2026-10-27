@@ -1445,3 +1445,11 @@ Next, in order:
 - Tests: ai.rs (11, with the full-archive-id case), pdf.rs (6 cases folded into 6 tests), and the two
   tests/report_pdf.rs checks run on fixture documents (the CLI part joins with `rtok report`).
 - Stop point: tests/report.rs, report_ai.rs and the `rtok report` command.
+
+## Session: `rtok report` command
+- `cli/ReportCmd.kt`: `--format md|html|pdf` (checked like clap's value enum, exit 2), `--out`, `--since`, `--ai`,
+  merged into `[report]` only when typed (T587); `emit` prints the body or writes `--out` and prints its path.
+  No progress spinner (Rust wraps the build in `ProgressRunner::wait`; cosmetic stderr only).
+- `ReportCliSpec` (10): report_ai.rs (4), the CLI half of report_pdf.rs (2), report.rs empty store, `--out`, T587,
+  plus a bad `--format`. HOME is the temp home and the base-URL variables are unset, so doctor probes nothing real.
+- Stop point: the remaining tests/report.rs checks (traceable numbers, html numbers, advice stores, T207, lanes, T581).
