@@ -944,3 +944,15 @@ Next, in order:
 - Tests: RestartTest 2.
 - Stop point: next junk_clear.rs (`Planned`, plan/apply), the `agents junk list|report|clear` CLI; then `--project`,
   the full restart.rs, worktree, junk_worktrees + `agent_worktrees`, the rest of phase 10.
+
+## Session: agents — junk 7: clear with filters (junk_clear.rs)
+- `rtok.agents`: `JunkFilter` (`isT182`, class gate), `Planned` (`row` = `Row::from(&Planned)`), `Cleared`, `JunkClear`
+  (`KINDS`, `agentArg`, `retentionDays`, `plan`, `apply`, `running` = live session or `hostRunning`, `run`/`runIn`,
+  `summed`, `toText`), `JunkClearCheck` (`protected`, `lockfileUnder`, `holdsLockfile`, `recheck`, `remove` keeping a
+  cache's top folder and tag). `rtok.sys`: `removeTree` (`remove_dir_all` with errors), `moveToTrash` (NSFileManager,
+  the `trash` crate's macOS method).
+- `stale-worktrees` items are refused at apply ("worktree removal is not ported yet") until the worktree port brings
+  junk_worktrees' `Remover`.
+- Tests: JunkClearTest 5, JunkClearApplyTest 4.
+- Stop point: next the `agents junk list|report|clear` CLI with the remaining junk.rs tests; then `--project`, the full
+  restart.rs, worktree, junk_worktrees + `agent_worktrees`, the rest of phase 10.
