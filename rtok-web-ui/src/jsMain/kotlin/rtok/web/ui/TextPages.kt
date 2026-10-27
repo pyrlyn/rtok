@@ -148,3 +148,51 @@ val HostsPage =
             }
         }
     }
+
+private fun FlowContent.service(s: ServiceRow) {
+    panel(s.name, "service") {
+        if (s.running) pill("ok", "running") else pill("muted", "stopped")
+        kv(
+            listOf(
+                "pid" to { +(s.pid ?: "none") },
+                "uptime" to { +humanSecs(s.uptimeSecs) },
+                "log" to { +(s.log ?: "Unknown") },
+            ),
+        )
+        p("muted small") {
+            +"CLI-only: "
+            code { +serviceCommand(s) }
+        }
+    }
+}
+
+private fun FlowContent.otel(
+    o: OtelView,
+    lastFlush: String?,
+) {
+    kv(listOf("endpoint" to { +(o.endpoint ?: "not set") }))
+    div("grid kpis") {
+        kpi("calls", fmt(o.callsMark?.toDouble()), "${fmt(o.callsPending?.toDouble())} pending")
+        kpi("logs", fmt(o.logsMark?.toDouble()), "${fmt(o.logsPending?.toDouble())} pending")
+        kpi("sessions", fmt(o.sessionsMark?.toDouble()), "watermark")
+    }
+    lastFlush?.let { p("muted small") { +it } }
+}
+
+/** The Services page (Services.tsx): read-only supervisor state and the OpenTelemetry exporter. */
+val ServicesPage =
+    PageView { out, snap, app ->
+        out.textPage(app, snap, "services", "rtok demon status", "supervisor state in ~/.rtok/demon") { text ->
+            val view = parseServices(text)
+            if (view.services.isEmpty()) {
+                panel("services") { p("muted") { +"No services reported" } }
+            } else {
+                p("muted small") { +"${view.services.count { it.running }} of ${view.services.size} running" }
+                div("grid cards") { view.services.forEach { service(it) } }
+            }
+            panel("OpenTelemetry export", "rtok otel status") {
+                view.otel?.let { otel(it, view.lastFlush) } ?: p("muted") { +"otel status unavailable" }
+            }
+            otherLines(view.other)
+        }
+    }
