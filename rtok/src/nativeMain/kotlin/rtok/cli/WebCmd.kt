@@ -13,7 +13,7 @@ import rtok.web.BoundAddr
 import rtok.web.DIST_ENV
 import rtok.web.LiveCalls
 import rtok.web.LiveConfig
-import rtok.web.NoAssets
+import rtok.web.EmbeddedAssets
 import rtok.web.RemoteBindRefused
 import rtok.web.Snapshots
 import rtok.web.WebApp
@@ -45,7 +45,7 @@ internal fun serveWeb(
         .onFailure { if (it is RemoteBindRefused) throw CliFailure(it.message ?: "refusing to bind") else throw it }
     // S2: a fresh token per start; written before the startup line so a client waiting on it finds the file.
     val token = WebToken.issue(cfg.home)
-    val (assets, notice) = resolveAssets(env(DIST_ENV), NoAssets)
+    val (assets, notice) = resolveAssets(env(DIST_ENV), EmbeddedAssets)
     val bound = BoundAddr(cfg.web.host, cfg.web.port.toInt())
     val app = WebApp(bound, assets, token)
     val live = LiveConfig(cfg)
