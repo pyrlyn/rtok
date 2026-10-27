@@ -1074,3 +1074,10 @@ Next, in order:
 - Tests: HooksTest 43 (hooks.rs 44 unix + Windows-rule tests; the source-scanning `only_the_probe_module_touches_the_machine`
   guard is not ported: it reads the crate's own files).
 - Stop point: next doctor checklist.rs, fix.rs, mcp_dupes.rs, mcp_fix.rs, web.rs, then doctor.rs + `rtok doctor`.
+## Session: doctor — duplicate MCP entries (doctor/mcp_dupes.rs)
+- `rtok.doctor.McpDupes` (`Scope` keep/wins order, surfaces over every host plus Claude's project `.mcp.json`, local
+  `projects.<cwd>` and enabled plugins' `.mcp.json`, Gemini's extension manifest; normalized launch with `PATH` +
+  symlinks, `npx/bunx/pnpx/uvx` package and version, URL normal form; shadowed names, copies, version conflicts and
+  rtok's own entries), `Loc` + `locations` for `--fix`. BTreeMap groups are walked in key order as in Rust.
+- Tests: McpDupesTest 19 (mcp_dupes.rs 18 + URL normal form).
+- Stop point: next doctor mcp_fix.rs, checklist.rs, fix.rs, web.rs, then doctor.rs + `rtok doctor`.
