@@ -175,6 +175,8 @@ object AgentsRun {
         val present: (Config, Agent, Variant) -> Boolean = { c, a, v -> Locate.present(c, a.id, v) },
         val spawns: () -> Boolean = ::rtokSpawns,
         val block: (Agent, Variant, Config, Outcome) -> String = { a, v, c, o -> Blocks.block(a, v, c, o) },
+        /** Desktop app quit/reopen around the write (restart.rs `Procs`). */
+        val procs: Procs = RealProcs,
     )
 }
 

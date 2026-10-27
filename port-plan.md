@@ -988,6 +988,13 @@ Next, in order:
 - Stop point: next the full restart.rs, worktree (incl. `rtok worktree adopt`), junk_worktrees + `agent_worktrees`,
   the rest of phase 10.
 
+## Session: agents — the full restart.rs (T141, T434, T629)
+- `Procs.quit`/`open` (`RealProcs`: `osascript … to quit`, `open -a`), `runOk` + `ProcError`, `RestartFlow.run` /
+  `withRestart` (plan every host first, quit, wait up to 30 s, write, always reopen, warnings to stderr and the log).
+  `AgentsRun.Env.procs`; `agents install|uninstall|update` honour `--no-restart`. CLI specs and CommandTest pass
+  `--no-restart`/`noRestart` so a test never quits a real app. Windows `image_name`/`tasklist` not ported (macOS only).
+- Tests: RestartRunTest 13 (the with_restart and run_ok tests).
+- Stop point: next worktree (incl. `rtok worktree adopt`), junk_worktrees + `agent_worktrees`, the rest of phase 10.
 ## Session: worktree 1 — git.rs and the mod.rs core
 - `rtok.worktree.Git` (all of git.rs: list, dirty/ignored, default base, squash-aware `isMerged` with the
   patch-equivalence fallback, own commits, lock/unlock/`unlockEnded`, move/remove/prune, branches, fetch,

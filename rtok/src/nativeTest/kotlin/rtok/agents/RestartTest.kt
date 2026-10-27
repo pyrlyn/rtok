@@ -16,6 +16,13 @@ class RestartTest {
         override fun appRunning(name: String) = name in running
 
         override fun binRunning(bin: String) = bin in running
+
+        override fun quit(name: String) = error("quit $name")
+
+        override fun open(
+            name: String,
+            path: String,
+        ) = error("open $name")
     }
 
     private val expectedNames =
