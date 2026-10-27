@@ -1,5 +1,5 @@
 // Port of src/plugins/graph/mod.rs `GraphPlugin`: manifest, dashboard page, the Edit/Write stale
-// mark and the MCP tool descriptors. The session-start repo map is not ported yet.
+// mark, the session-start repo map and the MCP tool descriptors.
 package rtok.plugins.graph
 
 import kotlinx.serialization.json.Json
@@ -11,6 +11,7 @@ import rtok.plugin.sdk.DashboardPage
 import rtok.plugin.sdk.Manifest
 import rtok.plugin.sdk.Plugin
 import rtok.plugin.sdk.PostToolUse
+import rtok.plugin.sdk.SessionStart
 import rtok.plugin.sdk.Surface
 import rtok.plugin.sdk.ToolDef
 
@@ -28,6 +29,11 @@ object GraphPlugin : Plugin {
         if (path != null) runCatching { cx.markSymbolsStale(Index.canon(path)) }
         return null
     }
+
+    override fun sessionStart(
+        ev: SessionStart,
+        cx: Ctx,
+    ) = RepoMap.inject(ev, cx)
 
     override fun mcpTools() = TOOLS
 
