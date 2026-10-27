@@ -1,14 +1,16 @@
 // Port of src/worktree/ops.rs: the store-backed `rtok worktree` operations. The CLI parses flags and prints; the
-// store open lives here. `migrate` comes with its module.
+// store open lives here.
 package rtok.worktree
 
 import rtok.config.Config
 import rtok.store.Store
 import rtok.store.endedAgentIds
 import rtok.store.liveAgents
+import rtok.store.openWorktreeClaims
 import rtok.store.pendingWorktrees
 import rtok.sys.canon
 
+@Suppress("TooManyFunctions")
 object Ops {
     /** `opened`: the store, or null when it cannot be opened (every operation works without one). */
     private fun <T> withStore(
@@ -115,6 +117,26 @@ object Ops {
         val rows = if (sized) WorktreeList.rowsSized(cwd) else WorktreeList.rows(cwd)
         withStore(cfg) { WorktreeList.attributeWithStore(rows, it, cfg.agents.idle) }
         return rows
+    }
+
+    /** `rtok worktree migrate`: the caller's agent and `--owner` are "me"; every other claim, parked or live cwd holds. */
+    fun migrate(
+        cfg: Config,
+        cwd: String,
+        owner: String?,
+        yes: Boolean,
+    ): List<MigrateOutcome> {
+        val pending = pendingPaths(cfg)
+        return withStore(cfg) { store ->
+            val agent = Claim.caller(store, null)
+            val live =
+                store
+                    ?.let { s -> runCatching { s.liveAgents(cfg.agents.idle) }.getOrNull() }
+                    .orEmpty()
+                    .mapNotNull { a -> a.cwd?.let { a.id to it } }
+            val claims = store?.let { s -> runCatching { s.openWorktreeClaims() }.getOrNull() }.orEmpty()
+            Migrate.run(cwd, cfg.worktree.root, MigrateMe(agent?.id, owner), MigrateHeld(claims, pending, live), store, yes)
+        }
     }
 
     /** Live agent ids for `worktree gc`; no store means no live agents (T285). */

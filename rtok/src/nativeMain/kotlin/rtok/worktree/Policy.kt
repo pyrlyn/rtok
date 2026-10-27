@@ -1,5 +1,5 @@
 // Port of the pure half of src/worktree/clean.rs (`Policy`, `kept_because`, `AGE_UNKNOWN`): whether a tagged cache
-// may go. The deleting `run` comes with `rtok worktree clean`.
+// may go. The deleting `run` is in Clean.kt.
 package rtok.worktree
 
 import kotlin.time.Duration
