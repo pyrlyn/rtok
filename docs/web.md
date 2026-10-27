@@ -14,7 +14,7 @@ Previously excluded from the port (port-plan.md); now in progress in small steps
    (calls, usage, sessions, projects, tasks, worktrees), config, agents, doctor, junk.
 5. Inbound actions: `set`, `expand`, `project`, `doctor`, `junk`, `graph`, `diff`, `export`, `import`, `calls`;
    live graph calls (`live.rs`), calls store/view.
-6. Frontend: a Kotlin/JS module `:rtok-web-ui` (kotlinx.html for the DOM, kotlin-css for styles), speaking the
+6. (in progress, #128 #130 #132) Frontend: a Kotlin/JS module `:rtok-web-ui` (kotlinx.html for the DOM, kotlin-css for styles), speaking the
    same `/ws` protocol and matching the Rust SPA's pages and features. Charts are drawn by our own small SVG
    helpers in Kotlin (no JS chart library); the graph view uses our own Canvas/SVG force layout. The built
    bundle is embedded in the binary as an `Assets` source; `RTOK_WEB_DIST` still overrides it for development.
@@ -50,3 +50,12 @@ Previously excluded from the port (port-plan.md); now in progress in small steps
 - Step 5, slice 4: live calls on `/ws` (live.rs): `Reader` (cursor at the newest event, replay since the server
   started, caller names from agents/sessions), `LiveCalls` (one poller while a socket listens, a `StateFlow` of
   `calls` frames, published only on change) and `{"calls":{"subscribe":bool}}` handled by the socket loop.
+- Step 6, part 1 (#128): `:rtok-web-ui` scaffold. No npm bundler: the JS production executable is one
+  whole-program file; `webDist` writes index.html, theme-init.js and `assets/app-<hash>.js`, and `:rtok-web`
+  embeds that directory (`embedDir` in buildSrc) as `EmbeddedAssets` with content-hash ETags. Shell, `/ws` link
+  (token, backoff, Offline screen), theme toggle. A page not ported yet shows its snapshot field as JSON.
+- Step 6, part 2 (#130): Overview (format.ts, model.ts `overview`) and our own SVG charts.
+- Step 6, part 3 (#132): Calls, Sessions and Logs with filters kept in the URL query.
+- Step 6, next: Plugins, Doctor (plan/fix), Config, Hosts, Usage, Stats, Skills, Services, Worktrees, Tasks,
+  Junk, then Graph (2D force layout, drill, compare, export/import) and the live calls feed; the command palette
+  and shortcuts last. Pure logic goes to commonMain so the native gate tests it.
