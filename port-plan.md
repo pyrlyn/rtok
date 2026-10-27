@@ -976,3 +976,14 @@ Next, in order:
   hard-link case of `disk_usage` is rtok-sys DiskUsageTest. Every junk*.rs test is now ported except what needs the
   worktree module (junk_worktrees.rs, `stale-worktrees`).
 - Stop point: next `--project`, the full restart.rs, worktree, junk_worktrees + `agent_worktrees`, the rest of phase 10.
+
+## Session: agents — `--project` (post_create.rs, T289.3)
+- `rtok.mcp.config.JsoncItems` + `JsoncScan` (jsonc.rs `Seg`, `locate`, `remove_at`, `is_empty_at`, `push_item`,
+  `pull_items` and the span scanners): add or drop one list element of a JSONC file, every other byte kept.
+- `rtok.agents.PostCreate` (+ `ProjectFile`, `PostCreateKilo`): Cursor `.cursor/worktrees.json` `setup-worktree*`
+  lists, Devin/Windsurf `hooks.post_setup_worktree` in the file the host reads, Kilo's marked block after the shebang;
+  no backup folder. `AgentsCommand.installProject` + `--project` on `agents install|setup|uninstall|remove`.
+- Tests: JsoncItemsTest 4 (the jsonc.rs push/pull tests), PostCreateTest 11 (tests/agents_post_create.rs, run
+  in-process instead of through the binary).
+- Stop point: next the full restart.rs, worktree (incl. `rtok worktree adopt`), junk_worktrees + `agent_worktrees`,
+  the rest of phase 10.

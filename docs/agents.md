@@ -47,6 +47,8 @@ Port of `src/agents/mod.rs` (install engine), `src/agents/command.rs` and `src/c
 
 ## Limitations
 - Output is Rust's non-terminal form: marks, no colour or operation icons, no progress bar.
-- Not ported yet: `--project`, asking for a missing host's
+- `install|uninstall <hosts> --project` (cursor, kilo, windsurf, devin) adds or removes the `rtok worktree adopt`
+  entry in the project's post-create file (PostCreate.kt); `rtok worktree adopt` itself comes with the worktree port.
+- Not ported yet: asking for a missing host's
   path on a terminal, the desktop app restart (`--no-restart` is accepted and has nothing to skip), the hook-client
   link, and the junk subcommands.
