@@ -1162,3 +1162,14 @@ Next, in order:
 - Deviations: `Project` is `TaskProject`; the github/gitlab arms of `open` fail with "not ported yet" until those
   adapters land, so run.rs's GitLab origin test waits for them.
 - Stop point: next sync.rs, ops.rs and the `rtok task` command; then github/gitlab/export adapters.
+## Session: tasks part 4 — sync.rs, ops.rs, `rtok task`
+- `rtok.tasks`: `TaskSync.kt` (sync.rs: counters raised per parent in BTreeMap order, above-counter ids, duplicates,
+  unlabelled strays, report JSON and text), `TaskOps.kt` (ops.rs store-backed operations).
+- `rtok.cli.TaskCmd` (cli/task.rs): create/list/show/status/next/ready/claim/release/dep/priority/conflict/parallel/
+  sync/init, registered between worktree and batch.
+- Tests: TaskSyncTest 4; `:rtok-e2e` TaskE2eSpec 5 (tests/task_cli.rs CLI halves; agents registered straight in the
+  sandbox store, so `:rtok-e2e` test now depends on `:rtok-store` and `:db-room`).
+- Deviations: `rtok task export` and the MCP halves of task_cli.rs wait for the export adapters and task MCP tools;
+  sync.rs's GitHub read-only test waits for the github adapter.
+- Stop point: next github/gitlab adapters (remote.rs, github.rs, github_project.rs, gitlab.rs), then export
+  (export.rs, export/github.rs, export/linear.rs) and `rtok task export`; task MCP tools.
