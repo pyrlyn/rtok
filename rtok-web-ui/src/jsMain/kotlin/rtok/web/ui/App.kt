@@ -214,6 +214,7 @@ fun toggleTheme() {
 fun main() {
     installStyles()
     Pages.register("overview", OverviewPage)
+    Pages.register("plugins", PluginsPage)
     Pages.register("calls", CallsPage)
     Pages.register("sessions", SessionsPage)
     Pages.register("logs", LogsPage)
