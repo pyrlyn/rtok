@@ -1209,3 +1209,10 @@ Next, in order:
 - The web/dashboard worker owns `measure/stats.rs` (and what `rtok stats` needs: `cli/stats.rs`, `measure/baseline.rs`,
   `measure/cache.rs`, `measure/skills_listing.rs`), the snapshot's `stats`/`skills` (model/mod.rs `stats_skills`,
   `skills_from`, `stats_page_text`), the Stats and Skills pages and tui tabs. The main-port worker skips these.
+## Session: stats part 1 — measure deps (jsonl stats fields, image.rs, dictionary.rs, subagents.rs)
+- `Jsonl.kt`: assistant texts, thinking blocks, image blocks, `firstUserText`, `subagentStartContext`; byte sizes are
+  UTF-8 lengths (`Sizes.kt` `utf8Len`, `estTokens`, `pct`, `toolPath`, `samePath`).
+- `ImageCost.kt` (image.rs), `Dictionary.kt` (dictionary.rs), `Subagents.kt` (full subagents.rs: `SubagentScan`,
+  `SubagentParent`, brief split).
+- Tests: JsonlTest 7, ImageCostTest 2, DictionaryTest 5, SubagentsTest 2.
+- Next: stats.rs (Report, fold, table, store attaches, cost), `rtok stats`, baseline.rs, cache.rs, then the snapshot.

@@ -1,7 +1,7 @@
 // Port of src/measure/jsonl.rs (usage, tool and injection side): Claude Code transcript lines, one `Usage` per turn (a
 // repeated `message.id` is another streamed block of the same turn), the tool_use / tool_result blocks, the skill
-// bodies hooks inject (`isMeta` + `sourceToolUseID`) and the compaction boundaries. The image, thinking and text
-// fields `rtok stats` reads join this parser when stats is ported.
+// bodies hooks inject (`isMeta` + `sourceToolUseID`), the compaction boundaries, and what `rtok stats` reads besides:
+// assistant texts, thinking blocks, image blocks, the first user text and the `SubagentStart` hook context.
 package rtok.measure
 
 import kotlinx.serialization.json.JsonArray
@@ -43,10 +43,34 @@ data class Injected(
     val turn: Int,
 )
 
+/** T125: one thinking (or redacted thinking) block: its text/data byte length. */
+data class ThinkingBlock(
+    val bytes: Long,
+    val turn: Int,
+)
+
+/** T137: an `image` block inside a tool_result ([toolUseId] set) or a user message (empty). */
+data class ImageBlock(
+    val toolUseId: String,
+    val bytes: Long,
+    val tokens: Long,
+    val sized: Boolean,
+    val turn: Int,
+)
+
 class Parsed {
     val toolUses = ArrayList<ToolUse>()
     val toolResults = ArrayList<ToolResult>()
     val injected = ArrayList<Injected>()
+    val assistantTexts = ArrayList<String>()
+    val thinking = ArrayList<ThinkingBlock>()
+    val images = ArrayList<ImageBlock>()
+
+    /** T131: the first `user` turn's flattened content, whole. */
+    var firstUserText: String? = null
+
+    /** T131: every `SubagentStart` hook's `additionalContext`, joined by newlines. */
+    var subagentStartContext = ""
 
     /** The turn count at every `compact_boundary`. */
     val compactions = ArrayList<Int>()
@@ -79,24 +103,83 @@ class Parsed {
         }
         val turn = (turns - 1).coerceAtLeast(0)
         if (v.field("subtype").str() == "compact_boundary") compactions += turns
+        if (ty == "user" && turn == 0 && firstUserText == null) firstUserText = flatten(msg.field("content"))
+        val att = v.field("attachment")
+        if (ty == "attachment" && att.field("type").str() == "hook_additional_context" && att.field("hookEvent").str() == "SubagentStart") {
+            if (subagentStartContext.isNotEmpty()) subagentStartContext += "\n"
+            subagentStartContext += flatten(att.field("content"))
+        }
         val source = v.field("sourceToolUseID").str()
         if (ty == "user" && v.field("isMeta").bool() == true && !source.isNullOrEmpty()) {
-            injected += Injected(source, flatten(msg.field("content")).encodeToByteArray().size.toLong(), turn)
+            injected += Injected(source, utf8Len(flatten(msg.field("content"))), turn)
         }
         (usageOf(msg) ?: usageOf(v))?.takeIf { isTurn }?.let { u ->
             usages += u.copy(turn = turn, ts = lineTs(v), model = msg.field("model").str())
         }
-        (msg.field("content") as? JsonArray)?.forEach { block(it, turn) }
+        when (val content = msg.field("content")) {
+            is JsonArray -> {
+                content.forEach { block(it, ty, turn, repeat) }
+            }
+
+            is JsonPrimitive -> {
+                if (ty == "assistant" && content.isString && content.content.isNotEmpty()) assistantTexts += content.content
+            }
+
+            else -> {}
+        }
     }
 
+    @Suppress("CyclomaticComplexMethod")
     private fun block(
         b: JsonElement,
+        ty: String,
         turn: Int,
+        repeat: Boolean,
     ) {
         when (b.field("type").str()) {
-            "tool_use" -> toolUses += ToolUse(b.field("id").str().orEmpty(), b.field("name").str().orEmpty(), b.field("input") ?: JsonNull, turn)
-            "tool_result" -> toolResults += ToolResult(b.field("tool_use_id").str().orEmpty(), flatten(b.field("content")), turn)
+            "tool_use" -> {
+                toolUses += ToolUse(b.field("id").str().orEmpty(), b.field("name").str().orEmpty(), b.field("input") ?: JsonNull, turn)
+            }
+
+            "tool_result" -> {
+                val id = b.field("tool_use_id").str().orEmpty()
+                if (!repeat) (b.field("content") as? JsonArray)?.forEach { image(it, id, turn) }
+                toolResults += ToolResult(id, flatten(b.field("content")), turn)
+            }
+
+            "text" -> {
+                if (ty == "assistant") {
+                    b
+                        .field("text")
+                        .str()
+                        ?.takeIf { it.isNotEmpty() }
+                        ?.let { assistantTexts += it }
+                }
+            }
+
+            "image" -> {
+                if (ty == "user" && !repeat) image(b, "", turn)
+            }
+
+            "thinking", "redacted_thinking" -> {
+                if (ty == "assistant" && !repeat) {
+                    val data = (b.field("thinking") ?: b.field("data")).str().orEmpty()
+                    thinking += ThinkingBlock(utf8Len(data), turn)
+                }
+            }
         }
+    }
+
+    /** `push_image`: records [x] when it is an `image` block; base64 sources get bytes and pixel size. */
+    private fun image(
+        x: JsonElement,
+        toolUseId: String,
+        turn: Int,
+    ) {
+        if (x.field("type").str() != "image") return
+        val data = x.pointer("/source/data").str().orEmpty()
+        val dims = ImageCost.dims(data)
+        images += ImageBlock(toolUseId, ImageCost.decodedLen(data), dims?.let { (w, h) -> ImageCost.tokens(w, h) } ?: 0, dims != null, turn)
     }
 
     /** `flatten_content`: a string, the strings and `text` fields of an array joined by newlines, else the JSON. */
