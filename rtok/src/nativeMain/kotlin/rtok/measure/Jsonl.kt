@@ -1,9 +1,12 @@
-// Port of the usage side of src/measure/jsonl.rs: Claude Code transcript lines, one `Usage` per turn (a repeated
-// `message.id` is another streamed block of the same turn). The tool, image and injection fields `rtok stats`
-// reads join this parser when stats is ported.
+// Port of src/measure/jsonl.rs (usage, tool and injection side): Claude Code transcript lines, one `Usage` per turn (a
+// repeated `message.id` is another streamed block of the same turn), the tool_use / tool_result blocks, the skill
+// bodies hooks inject (`isMeta` + `sourceToolUseID`) and the compaction boundaries. The image, thinking and text
+// fields `rtok stats` reads join this parser when stats is ported.
 package rtok.measure
 
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.longOrNull
@@ -20,7 +23,34 @@ data class Usage(
     val model: String?,
 )
 
+data class ToolUse(
+    val id: String,
+    val name: String,
+    val input: JsonElement,
+    val turn: Int,
+)
+
+data class ToolResult(
+    val toolUseId: String,
+    val content: String,
+    val turn: Int,
+)
+
+/** A body a hook injected for a tool call (a `Skill` load): its byte length. */
+data class Injected(
+    val toolUseId: String,
+    val bytes: Long,
+    val turn: Int,
+)
+
 class Parsed {
+    val toolUses = ArrayList<ToolUse>()
+    val toolResults = ArrayList<ToolResult>()
+    val injected = ArrayList<Injected>()
+
+    /** The turn count at every `compact_boundary`. */
+    val compactions = ArrayList<Int>()
+
     var lines = 0L
     var malformed = 0L
     var duplicates = 0L
@@ -36,6 +66,7 @@ class Parsed {
         parseJson(line)?.let(::ingest) ?: malformed++
     }
 
+    @Suppress("CyclomaticComplexMethod")
     private fun ingest(v: JsonElement) {
         val ty = v.field("type").str() ?: ""
         val msg = v.field("message") ?: v
@@ -47,9 +78,35 @@ class Parsed {
             duplicates++
         }
         val turn = (turns - 1).coerceAtLeast(0)
-        val u = (usageOf(msg) ?: usageOf(v))?.takeIf { isTurn } ?: return
-        usages += u.copy(turn = turn, ts = lineTs(v), model = msg.field("model").str())
+        if (v.field("subtype").str() == "compact_boundary") compactions += turns
+        val source = v.field("sourceToolUseID").str()
+        if (ty == "user" && v.field("isMeta").bool() == true && !source.isNullOrEmpty()) {
+            injected += Injected(source, flatten(msg.field("content")).encodeToByteArray().size.toLong(), turn)
+        }
+        (usageOf(msg) ?: usageOf(v))?.takeIf { isTurn }?.let { u ->
+            usages += u.copy(turn = turn, ts = lineTs(v), model = msg.field("model").str())
+        }
+        (msg.field("content") as? JsonArray)?.forEach { block(it, turn) }
     }
+
+    private fun block(
+        b: JsonElement,
+        turn: Int,
+    ) {
+        when (b.field("type").str()) {
+            "tool_use" -> toolUses += ToolUse(b.field("id").str().orEmpty(), b.field("name").str().orEmpty(), b.field("input") ?: JsonNull, turn)
+            "tool_result" -> toolResults += ToolResult(b.field("tool_use_id").str().orEmpty(), flatten(b.field("content")), turn)
+        }
+    }
+
+    /** `flatten_content`: a string, the strings and `text` fields of an array joined by newlines, else the JSON. */
+    private fun flatten(v: JsonElement?): String =
+        when (v) {
+            null, JsonNull -> ""
+            is JsonPrimitive -> if (v.isString) v.content else v.toString()
+            is JsonArray -> v.mapNotNull { x -> (x as? JsonPrimitive)?.takeIf { it.isString }?.content ?: x.field("text").str() }.joinToString("\n")
+            else -> v.toString()
+        }
 
     private fun usageOf(v: JsonElement): Usage? {
         val u = v.field("usage") as? JsonObject ?: return null

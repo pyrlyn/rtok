@@ -102,11 +102,12 @@ internal object Page {
             mcpToolSearch = toolSearch,
             bashMaxOutputLength = envVar("BASH_MAX_OUTPUT_LENGTH"),
             autoCompactWindow = (settings as? JsonObject)?.get("autoCompactWindow")?.toString(),
-            // Port gap: the transcript cache (measure/transcript_cache.rs) is not ported yet, so read-share and the
-            // skill usage counts stay "no data" (the fail-open value).
-            readShare = null,
+            readShare = Usage.readShare(cfg),
             instructions = if (cfg.doctor.instructions) InstructionAudit.run(cfg, settings, claude, runCatching { cwd() }.getOrNull()) else null,
-            skills = SkillsAuditProbe.audit(envUserHome() ?: cfg.home, runCatching { cwd() }.getOrDefault("."), null, null),
+            skills =
+                Usage.skillUsage(cfg).let { u ->
+                    SkillsAuditProbe.audit(envUserHome() ?: cfg.home, runCatching { cwd() }.getOrDefault("."), u?.first, u?.second)
+                },
             overlaps = overlaps,
             configNotes = cfg.loadedFrom?.let(Validate::pinnedNotes).orEmpty(),
             toolsRewriteAdvice =
