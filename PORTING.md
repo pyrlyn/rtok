@@ -64,6 +64,11 @@ Plan and per-phase checklist: [port-plan.md](port-plan.md).
 | src/plugins/toon, src/proxy/anthropic.rs (ToolResults only) | `rtok/plugins/toon/Toon.kt`, `rtok/proxy/Anthropic.kt`, `Wire.kt` | ✅ (expand row pending) | 10 (+rstest folded) → 12 + 2 |
 | src/plugins/archive (mod, pi), src/cli/archive.rs | `rtok/plugins/archive/Archive.kt`, `Pi.kt`, `cli/ArchiveCmd.kt` | ✅ (4 wire/gate tests pending) | 24 → 20 + 5 CLI + 3 e2e |
 | src/plugin.rs (Runtime host), src/log.rs record | `rtok/plugin/Runtime.kt`, `rtok/Log.kt` | ✅ | 6 → 8 |
+| src/log.rs `tail`/`tail_with`/`screen`/`numbered`, `Follow`, `Tspin`, `watch`; src/cli/logs.rs | `rtok/Log.kt`, `Follow.kt` (`Follow`, `logsWatch`), `Tspin.kt`, `cli/LogsCmd.kt`; rtok-sys `FileHandle.kt` (`same_file::Handle`), `PipedChild` `inheritStdout`/`drainInput` | ✅ (level colours wait for `ui::style`; a poll with several lines puts the newest on top, where Rust's TTY window put the oldest) | log.rs 13 → LogFollowTest 10 (watch_loop 2 in SessionsTableTest), tests/logs.rs → LogsCliSpec 4 + LogsE2eSpec 3, FileHandleTest 1, PipedTest +1 |
+| src/info.rs, src/cli/info.rs | `rtok/Info.kt`, `cli/InfoCmd.kt` | ✅ (no spinner) | 3 → InfoTest 3, LogsCliSpec 1 |
+| src/measure/discover.rs, src/cli/discover.rs | `rtok/measure/Discover.kt`, `model/StatsPage.discover`, `cli/DiscoverCmd.kt` | ✅ | 7 → DiscoverTest 7, GuardCliSpec 1, GuardCheckE2eSpec 1 |
+| src/cli/guard.rs | `cli/GuardCmd.kt` | ✅ | tests/guard_check.rs 4 → GuardCheckE2eSpec 3, GuardCliSpec 2 |
+| src/cli/mod.rs `Setup` (hidden), agents_host.rs `setup` | `cli/AgentsCmd.kt` `SETUP`, `cli/Spec.kt` `deprecated` (shared with `dashboard`) | ✅ (listed in help: the CLI model has no hidden commands) | GuardCliSpec 1 |
 | toml crate (dependency) | `libs/toml` interface + `libs/toml-ktoml` (ktoml adapter) | ✅ | 0 → 12 |
 | diesel/libsqlite3-sys (dependency) | `libs/db` interface + `libs/db-room` (androidx.sqlite bundled) | ✅ | 0 → 5 |
 | crates/rtok-sys | `:rtok-sys` | ⬜ (module currently hosts `rtok.sys.Fs`, the fs-kit replacement) | |

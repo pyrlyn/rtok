@@ -19,7 +19,8 @@ Port of `src/plugins/guard` (`mod.rs`, `sed.rs`, `skill.rs`). Code: `rtok/src/na
   reason carries its heading map (`rtok.plugins.read.markdownDigest`) and the expand pointer. Skills whose
   frontmatter names `allowed-tools`, `model`, `context` or `agent` always load whole. A repeat load before a
   compaction gets a one-line note; `PreCompact` / `SessionStart(compact)` forget the loads.
-- `check(tool, rawInput, host)` is the body of `rtok guard check` (JSON `{"allow":…,"reason":…}`).
+- `check(tool, rawInput, host)` is the body of `rtok guard check --tool T --json INPUT [--session S] [--host H]`
+  (`cli/GuardCmd.kt`; prints JSON `{"allow":…,"reason":…}`).
 
 ## Enable / disable
 On by default. `[plugins.guard] enabled = false` turns it off; `window_turns` (8), `deny_grep_glob` (false),
@@ -27,7 +28,7 @@ On by default. `[plugins.guard] enabled = false` turns it off; `window_turns` (8
 
 ## Test
 `./gradlew :rtok:macosArm64Test` — `GuardTest` (35 ported + 1 new `check` test), `SkillTest` (10), plus the
-`types.rs` Copilot `view` → guard key assertion in `TypesTest`.
+`types.rs` Copilot `view` → guard key assertion in `TypesTest`. `GuardCheckE2eSpec` (`./gradlew e2eTest`) is tests/guard_check.rs against the binary: allow, repeat deny with a guard measurement, `find -delete`, `sed -i`; `GuardCliSpec` (`./gradlew cliTest`) keeps the in-process cases (bad JSON, usage errors).
 
 ## Limitations
 - `grep_symbol` (T369, answering symbol-shaped Grep from the graph) is not ported: it needs the graph plugin
