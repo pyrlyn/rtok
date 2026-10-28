@@ -7,6 +7,8 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import rtok.config.Config
 import rtok.config.parseSinceFrom
+import rtok.measure.Discover
+import rtok.measure.Discovery
 import rtok.measure.stats.CacheHealth
 import rtok.measure.stats.Replay
 import rtok.measure.stats.Report
@@ -19,8 +21,10 @@ import rtok.measure.stats.attachCodex
 import rtok.measure.stats.attachCosts
 import rtok.measure.stats.attachLanes
 import rtok.measure.stats.collect
+import rtok.plugins.cmd.Settings
 import rtok.store.Store
 import rtok.store.archiveDecisionCounts
+import rtok.store.hookInputsSince
 import rtok.store.listMeasurements
 import rtok.store.unixNow
 
@@ -79,4 +83,18 @@ object StatsPage {
 
     /** `cache_health`: the store is required. */
     fun cacheHealth(cfg: Config): List<SessionHealth> = CacheHealth.report(Store.open(cfg.core.dbPath))
+
+    /** At most this many of the newest `PostToolUse` rows are read, so a long history costs a bounded scan. */
+    private const val DISCOVER_SCAN_ROWS = 50_000L
+
+    /** `discover` (T688): shell commands with no rule or formatter; the store is required, like [plugin]. */
+    fun discover(
+        cfg: Config,
+        since: Long,
+        limit: Int,
+    ): Discovery {
+        val floor = (unixNow() - since).coerceAtLeast(0)
+        val bodies = Store.open(cfg.core.dbPath).use { it.hookInputsSince("PostToolUse", floor, DISCOVER_SCAN_ROWS) }
+        return Discover.rank(bodies, Settings.fromConfig(cfg), limit)
+    }
 }

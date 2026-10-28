@@ -161,6 +161,9 @@ fun runAction(
 /** The shared `--since` option of stats, report and discover. */
 fun sinceOpt(help: String = "Window: <n>, <n>d (days) or <n>h (hours)") = OptSpec.Value("since", help, "SINCE")
 
+/** A `--name <NAME>` unsigned number, or null when absent; a bad value is clap's usage error (exit 2). */
+internal fun Invocation.number(name: String): Long? = value(name)?.let { raw -> raw.toUIntOrNull()?.toLong() ?: throw CliFailure("invalid value '$raw' for '--$name <${name.uppercase()}>': invalid digit found in string", ExitCode.USAGE) }
+
 /** clap `conflicts_with`: both given is a usage error (exit 2); `path` is the positional `[PATH]`. */
 internal fun Invocation.conflict(
     a: String,
@@ -170,3 +173,18 @@ internal fun Invocation.conflict(
 }
 
 private fun Invocation.has(name: String) = flag(name) || value(name) != null || arg(name) != null || values(name).isNotEmpty()
+
+/**
+ * A deprecated spelling (`rtok dashboard`, `rtok setup`): the warning goes out before [load] so a broken config still
+ * says where to go, then lands in rtok's log under [name]. Returns the loaded config.
+ */
+internal fun Invocation.deprecated(
+    name: String,
+    msg: String,
+    load: () -> rtok.config.Config,
+): rtok.config.Config {
+    io.eprintln(if (io.tty) "\u001b[33mwarning: $msg\u001b[0m" else "warning: $msg")
+    val cfg = load()
+    rtok.appendLog(cfg, "warn", "cli", name, msg)
+    return cfg
+}

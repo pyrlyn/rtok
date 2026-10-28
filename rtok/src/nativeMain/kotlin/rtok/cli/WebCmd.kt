@@ -75,9 +75,6 @@ val DASHBOARD =
         "Deprecated: use `rtok web`",
         options = WEB_OPTIONS,
     ) { inv ->
-        val msg = "`rtok dashboard` is deprecated; use `rtok web`"
-        inv.io.eprintln("\u001b[33mwarning: $msg\u001b[0m".let { if (inv.io.tty) it else "warning: $msg" })
-        val cfg = webConfig(inv)
-        appendLog(cfg, "warn", "cli", "dashboard", msg)
+        val cfg = inv.deprecated("dashboard", "`rtok dashboard` is deprecated; use `rtok web`") { webConfig(inv) }
         serveWeb(cfg, inv.io)
     }
