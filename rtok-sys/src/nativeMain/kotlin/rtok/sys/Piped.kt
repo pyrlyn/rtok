@@ -91,6 +91,23 @@ class PipedChild private constructor(
         if (closeWhenDrained && queue.isEmpty()) closeInput()
     }
 
+    /** Blocks until every queued stdin byte is written; false once stdin is closed (the child stopped reading). */
+    fun drainInput(): Boolean =
+        memScoped {
+            val fd = alloc<pollfd>()
+            while (inFd >= 0 && queue.isNotEmpty()) {
+                fd.fd = inFd
+                fd.events = POLLOUT.toShort()
+                fd.revents = 0
+                val r = poll(fd.ptr, 1u, -1)
+                if (r < 0 && errno != EINTR) closeInput()
+                if (r <= 0) continue
+                if (fd.revents.toInt() and (POLLERR or POLLHUP) != 0) closeInput() else flush()
+            }
+            if (closeWhenDrained) closeInput()
+            inFd >= 0 || closeWhenDrained
+        }
+
     private fun closeInput() {
         if (inFd >= 0) close(inFd)
         inFd = -1
@@ -191,7 +208,8 @@ class PipedChild private constructor(
 
         /**
          * Starts [program] (looked up on PATH when it has no slash) in [cwd] with [extraEnv] on top of ours and
-         * stderr to [stderrPath] (or /dev/null). Throws [IoException] when it cannot be started.
+         * stderr to [stderrPath] (or /dev/null). [inheritStdout] leaves stdout on ours, so only stdin is piped (a
+         * viewer such as `tspin --print`). Throws [IoException] when it cannot be started.
          */
         fun spawn(
             program: String,
@@ -200,29 +218,38 @@ class PipedChild private constructor(
             extraEnv: Map<String, String> = emptyMap(),
             stderrPath: String? = null,
             inheritStderr: Boolean = false,
+            inheritStdout: Boolean = false,
         ): PipedChild =
             memScoped {
                 // A peer that exits must fail the write, not kill rtok (Rust ignores SIGPIPE at startup).
                 signal(SIGPIPE, SIG_IGN)
                 val inPipe = allocArray<IntVar>(2)
                 val outPipe = allocArray<IntVar>(2)
-                check(pipe(inPipe) == 0 && pipe(outPipe) == 0) { "pipe: errno $errno" }
-                val actions = SpawnActions().dup2(inPipe[0], 0).dup2(outPipe[1], 1)
+                check(pipe(inPipe) == 0) { "pipe: errno $errno" }
+                if (inheritStdout) {
+                    outPipe[0] = -1
+                    outPipe[1] = -1
+                } else {
+                    check(pipe(outPipe) == 0) { "pipe: errno $errno" }
+                }
+                val ends = listOf(inPipe[0], inPipe[1], outPipe[0], outPipe[1]).filter { it >= 0 }
+                val actions = SpawnActions().dup2(inPipe[0], 0)
+                if (!inheritStdout) actions.dup2(outPipe[1], 1)
                 if (!inheritStderr) actions.open(2, stderrPath ?: "/dev/null", O_WRONLY or O_CREAT or O_TRUNC, MODE_644)
-                for (fd in listOf(inPipe[0], inPipe[1], outPipe[0], outPipe[1])) actions.close(fd)
+                for (fd in ends) actions.close(fd)
                 cwd?.let { actions.chdir(it) }
                 val spawned = runCatching { actions.spawn(program, args, mergedEnv(extraEnv), search = '/' !in program) }
                 close(inPipe[0])
-                close(outPipe[1])
+                if (outPipe[1] >= 0) close(outPipe[1])
                 spawned.exceptionOrNull()?.let {
                     close(inPipe[1])
-                    close(outPipe[0])
+                    if (outPipe[0] >= 0) close(outPipe[0])
                     throw it
                 }
                 val pid = spawned.getOrThrow()
                 fcntl(inPipe[1], F_SETFL, fcntl(inPipe[1], F_GETFL) or O_NONBLOCK)
                 fcntl(inPipe[1], F_SETFD, FD_CLOEXEC)
-                fcntl(outPipe[0], F_SETFD, FD_CLOEXEC)
+                if (outPipe[0] >= 0) fcntl(outPipe[0], F_SETFD, FD_CLOEXEC)
                 PipedChild(pid, inPipe[1], outPipe[0])
             }
     }

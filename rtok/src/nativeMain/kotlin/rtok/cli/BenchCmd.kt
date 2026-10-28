@@ -28,8 +28,6 @@ internal fun benchFlags(
     return if (bench.isEmpty()) null else buildJsonObject { put("bench", bench) }
 }
 
-private fun Invocation.number(name: String): Long? = value(name)?.let { raw -> raw.toUIntOrNull()?.toLong() ?: throw CliFailure("invalid value '$raw' for '--$name <${name.uppercase()}>': invalid digit found in string", ExitCode.USAGE) }
-
 val BENCH: CommandSpec =
     CommandSpec(
         "bench",

@@ -1583,9 +1583,20 @@ Next, in order:
 - [ ] hooks: resident server and `rtok hook` command; 29 tests waiting on worktree/otel/MCP.
 - [ ] read: 101 tests.
 - [ ] graph: ~275 tests, incl. `grep_symbol` via tree-sitter and CLI wiring.
-- [ ] CLI tests per subcommand: stats, info, expand, filter, run, config, plugins, logs, report, completions, man.
+- [ ] CLI tests per subcommand: stats, expand, filter, run, config, plugins, report, completions, man (info and logs done).
 - [ ] Skill sync for all hosts.
 - [ ] `rtok doctor`.
 - [ ] Worktree removal in junk.
 - [ ] continue + goose (YAML library decision needed).
 - [ ] Windows `mingwX64` target (absent).
+
+## Session: missing top-level commands — guard check, discover, info, logs, setup
+
+The Rust `Cmd` variants the Kotlin `RTOK` spec lacked, now registered in `cli/Mod.kt`:
+
+- `rtok guard check` (`cli/GuardCmd.kt`): the `plugins.guard` verdict for pi / OpenCode; tests/guard_check.rs → GuardCheckE2eSpec (recorded calls need the binary), GuardCliSpec (in-process errors).
+- `rtok discover` (`measure/Discover.kt`, `StatsPage.discover`, `cli/DiscoverCmd.kt`): uncovered shell families from stored `PostToolUse` rows; discover.rs 7 → DiscoverTest 7.
+- `rtok info` (`Info.kt`, `cli/InfoCmd.kt`): version, paths, disk use, log errors, proxy probe, otel, store counts; info.rs 3 → InfoTest 3. No spinner.
+- `rtok logs [export|watch] [--lines] [--json]` (`Log.kt` `logTailWith`/`logNumbered`/`logScreen`, `Follow.kt`, `Tspin.kt`, `cli/LogsCmd.kt`): `Follow` keeps the file it reads open (rtok-sys `FileHandle`, the `same_file::Handle` subset) so a rotation is told by identity; tailspin runs through `PipedChild.spawn(inheritStdout = true)` + `drainInput`. log.rs follow/tail tests → LogFollowTest 10; tests/logs.rs watch, tspin and orphan cases → LogsE2eSpec 3. Plain output only: level colours wait for `ui::style`. One deliberate difference: when one poll returns several lines, the TTY window puts the newest on top (Rust inserts them oldest-on-top, against its own "newest goes to the top" comment).
+- `rtok setup <host>` (`AgentsCmd.kt` `SETUP`): the deprecated spelling of `agents install`, plus `--remove`; warning and log line through `Invocation.deprecated`, now shared with `rtok dashboard`. The CLI model has no hidden commands, so it shows in help.
+- `Invocation.number` moved from BenchCmd.kt to Spec.kt for `--lines` / `--limit`.

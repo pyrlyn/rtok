@@ -10,7 +10,7 @@ Toolchain: `mise install` (JDK, Kotlin, Gradle, Rust, cmake, tree-sitter CLI; se
 Build & test (macOS arm64): `./gradlew macosArm64Test` · binary: `./gradlew :rtok:linkReleaseExecutableMacosArm64`
 → `rtok/build/bin/macosArm64/releaseExecutable/rtok.kexe`. Other targets: `-Prtok.allTargets=true`.
 
-Docs: [build speed](docs/build-speed.md) · [token estimator](docs/tokens.md) · [modes](docs/modes.md) · [log](docs/log.md) · [project root](docs/config-root.md) · [hook protocol](docs/hook-protocol.md) · [toolchain](docs/toolchain.md).
+Docs: [build speed](docs/build-speed.md) · [token estimator](docs/tokens.md) · [modes](docs/modes.md) · [log, `rtok logs`, `rtok info`](docs/log.md) · [project root](docs/config-root.md) · [hook protocol](docs/hook-protocol.md) · [toolchain](docs/toolchain.md).
 
 - [Configuration](docs/config.md)
 - [Hooks](docs/hooks.md)
@@ -22,6 +22,7 @@ Docs: [build speed](docs/build-speed.md) · [token estimator](docs/tokens.md) ·
 - [compress plugin](docs/compress.md)
 - [checkpoint and inject plugins](docs/checkpoint-inject.md)
 - [guard plugin](docs/guard.md)
+- [`rtok discover`](docs/discover.md)
 - [cmd plugin](docs/cmd.md)
 - [WASM plugins](docs/wasm-plugins.md)
 - [docs plugin](docs/docs-plugin.md)

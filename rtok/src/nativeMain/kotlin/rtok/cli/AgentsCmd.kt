@@ -186,7 +186,7 @@ private val LIST =
         inv.io.out(if (inv.flag("json")) AgentsJson.list(cfg) + "\n" else AgentsList.list(cfg))
     }
 
-private val INFO =
+private val HOST_INFO =
     CommandSpec("info", "The `list` blocks of the named host(s)", options = listOf(JSON), args = listOf(HOST_ARG)) { inv ->
         val cfg = inv.loadConfig()
         val hosts = refusals { AgentsCommand.parseHosts(inv.requireArg("host")) }
@@ -366,7 +366,7 @@ val AGENTS =
                 UPDATE,
                 OUTDATED,
                 LIST,
-                INFO,
+                HOST_INFO,
                 SESSIONS,
                 USAGE,
                 JUNK,
@@ -377,3 +377,19 @@ val AGENTS =
                 INBOX,
             ),
     )
+
+/**
+ * Top-level `rtok setup <host>`: the deprecated spelling of `rtok agents install <host>` — install's flags plus its own
+ * `--remove`, a warning and a log line, then the same install or uninstall run (one definition behind both, as in Rust).
+ */
+val SETUP: CommandSpec =
+    run {
+        val install = hostWriter("setup", "Deprecated spelling of `rtok agents install <host>`; still runs, still prints where to go", remove = false)
+        val uninstall = hostWriter("setup", install.help, remove = true)
+        val removeFlag = OptSpec.Flag("remove", "Remove rtok from the host; prefer `rtok agents uninstall <host>`")
+        CommandSpec(install.name, install.help, options = install.options + removeFlag, args = install.args) { inv ->
+            val host = inv.requireArg("host")
+            inv.deprecated("setup", "`rtok setup $host` is deprecated; use `rtok agents install $host`") { Config.loadLenient(inv.configFile, null) }
+            (if (inv.flag("remove")) uninstall else install).action(inv)
+        }
+    }

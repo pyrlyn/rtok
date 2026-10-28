@@ -122,13 +122,14 @@ fun readBytes(path: String): ByteArray {
                 s.st_mode.toInt() and S_IFMT
             }
         if (st == S_IFDIR) throw IoException(IoException.Kind.Other, "$path is a directory")
-        return okioLikeRead(f)
+        return readAllFrom(f)
     } finally {
         fclose(f)
     }
 }
 
-private fun okioLikeRead(f: CPointer<FILE>): ByteArray {
+/** Everything from [f]'s position to its end. */
+internal fun readAllFrom(f: CPointer<FILE>): ByteArray {
     val chunks = ArrayList<ByteArray>()
     memScoped {
         val buf = allocArray<ByteVar>(65536)

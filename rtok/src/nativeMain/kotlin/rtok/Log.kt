@@ -41,8 +41,11 @@ fun recordLog(
     }
 }
 
-/** log.rs `whole_lines`: the piece after the last `\n` is not a line yet. */
-private fun wholeLines(bytes: ByteArray): List<String> = bytes.decodeToString().split('\n').dropLast(1)
+/** log.rs `whole_lines`: the piece after the last `\n` is not a line yet (the sink's write can land in two parts). */
+internal fun wholeLines(bytes: ByteArray): List<String> = bytes.decodeToString().split('\n').dropLast(1)
+
+/** The configured `[log] lines`, as a count. */
+internal fun Config.logLines(): Int = log.lines.coerceAtMost(Int.MAX_VALUE.toULong()).toInt()
 
 /**
  * log.rs `tail`: the last [n] lines (default `[log] lines`) across the log, then `.1`, `.2`, … newest first.
@@ -52,16 +55,25 @@ fun logTail(
     cfg: Config,
     n: Int? = null,
 ): List<String> {
-    val want =
-        n ?: cfg.log.lines
-            .coerceAtMost(Int.MAX_VALUE.toULong())
-            .toInt()
     val path = cfg.fileLog().path
-    val out = wholeLines(runCatching { rtok.sys.readBytes(path) }.getOrDefault(ByteArray(0))).asReversed().take(want).toMutableList()
+    return logTailWith(wholeLines(runCatching { rtok.sys.readBytes(path) }.getOrDefault(ByteArray(0))), path, n ?: cfg.logLines())
+}
+
+/**
+ * log.rs `tail_with`: [logTail]'s walk over [live], the live file's lines read by the caller. `logs watch` reads the
+ * live file once for both its first screen and its follow state, so a line written as the watch starts shows once.
+ */
+internal fun logTailWith(
+    live: List<String>,
+    path: String,
+    n: Int,
+): List<String> {
+    val out = live.asReversed().take(n).toMutableList()
     var i = 1
-    while (out.size < want) {
+    while (out.size < n) {
+        // Rotation is contiguous: nothing sits behind a gap.
         val text = runCatching { rtok.sys.readToString(rtok.log.rotatedPath(path, i)) }.getOrNull() ?: break
-        out += rustLines(text).asReversed().take(want - out.size)
+        out += rustLines(text).asReversed().take(n - out.size)
         i++
     }
     return out
@@ -69,3 +81,12 @@ fun logTail(
 
 /** Rust `str::lines`: no trailing empty line, `\r\n` endings trimmed. */
 private fun rustLines(text: String): List<String> = if (text.isEmpty()) emptyList() else text.removeSuffix("\n").split('\n').map { it.removeSuffix("\r") }
+
+/** log.rs `numbered`: the tail numbered `1` newest and nothing else, what a viewer such as tailspin gets as-is. */
+fun logNumbered(lines: List<String>): List<String> = lines.mapIndexed { i, line -> "${i + 1} $line" }
+
+/**
+ * log.rs `screen`: the `rtok logs` rows. Rust also colours the level here (`log_line`, owo-colors on a terminal);
+ * TTY styling (ui::style) is not ported yet, so the rows are [logNumbered]'s, as Rust prints them off a terminal.
+ */
+fun logScreen(lines: List<String>): List<String> = logNumbered(lines)

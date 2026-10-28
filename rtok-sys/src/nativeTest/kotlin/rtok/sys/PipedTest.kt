@@ -5,6 +5,8 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
 
+private const val OVER_A_PIPE = 200_000
+
 class PipedTest {
     private fun soon(ms: Long) = TimeSource.Monotonic.markNow() + ms.milliseconds
 
@@ -14,6 +16,17 @@ class PipedTest {
         assertEquals("hi\n", c.read(soon(2000))?.decodeToString())
         c.kill()
         assertNotNull(c.tryWait())
+    }
+
+    @Test fun drainInputWritesMoreThanThePipeHolds() {
+        val c = PipedChild.spawn("wc", listOf("-c"))
+        assertTrue(c.send(ByteArray(OVER_A_PIPE)))
+        assertTrue(c.drainInput())
+        assertEquals(0, c.pending)
+        c.finishInput()
+        c.drainInput()
+        assertEquals("$OVER_A_PIPE", c.read(soon(2000))?.decodeToString()?.trim())
+        assertEquals(0, c.waitExit())
     }
 
     @Test fun aSilentPeerTimesOut() {
