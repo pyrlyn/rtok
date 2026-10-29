@@ -1,7 +1,7 @@
 # PORTING status — rtok (Rust) → rtok-kotlin
 
 Status legend: ✅ ported + tests green · 🟡 partial · ⬜ not started · ❌ excluded / not portable.
-Plan and per-phase checklist: [port-plan.md](port-plan.md).
+Plan, decisions and history: [port-plan.md](port-plan.md). Open work: [roadmap.md](roadmap.md) and `plan/`.
 
 | Rust source | Kotlin location | Status | Tests (Rust → Kotlin) |
 |---|---|---|---|
@@ -71,43 +71,39 @@ Plan and per-phase checklist: [port-plan.md](port-plan.md).
 | src/cli/mod.rs `Setup` (hidden), agents_host.rs `setup` | `cli/AgentsCmd.kt` `SETUP`, `cli/Spec.kt` `deprecated` (shared with `dashboard`) | ✅ (listed in help: the CLI model has no hidden commands) | GuardCliSpec 1 |
 | toml crate (dependency) | `libs/toml` interface + `libs/toml-ktoml` (ktoml adapter) | ✅ | 0 → 12 |
 | diesel/libsqlite3-sys (dependency) | `libs/db` interface + `libs/db-room` (androidx.sqlite bundled) | ✅ | 0 → 5 |
-| crates/rtok-sys | `:rtok-sys` | ⬜ (module currently hosts `rtok.sys.Fs`, the fs-kit replacement) | |
+| crates/rtok-sys (proc, change_preview) | `:rtok-sys` `Proc.kt`, `Piped.kt`, `StreamedChild.kt`, `ChangePreview.kt` and the OS helpers (`Fs.kt` fs-kit replacement, `FileHandle.kt`, `Flock.kt`, `Walk.kt`, `Parallel.kt`, …) | ✅ (unix; Windows pending) | per file, see the rows above |
 | fs-kit (external crate) path helpers | `rtok-sys/nativeMain/Fs.kt` | 🟡 normalize/canon/ancestors/starts_with | via root tests |
-| crates/rtok-mcp | `:rtok-mcp` | ⬜ | |
+| crates/rtok-mcp (host MCP config writer) | `:rtok-mcp` `rtok.mcp.config` (`Config.kt`, `Jsonc.kt`, `JsoncEdit.kt`, `McpSurfaces`, `EntryShape`, …) | ✅ (the MCP server itself is `src/mcp` below) | used by the `rtok.agents` rows above |
 | src/plugins/wasm.rs (WASM plugin host) | `libs/wasm` interface, `libs/wasm-chasm` (Chasm 2.3.0 adapter, fuel), `rtok-wasm` `WasmPlugin.kt`, `rtok/plugins/WasmPlugins.kt` (registry wiring); docs/wasm-plugins.md | ✅ | 3 → 5 + 1 registry + 3 adapter |
 | crates/rtok-wasm-demo-guest | – (built `.wasm` kept as test fixture) | ❌ wasm guest, not ported | |
-| crates/rtok-webui | – | ⏳ in progress, see docs/web.md | |
+| crates/rtok-webui | `rtok-web`, `rtok-web-model`, `rtok-web-ui`, `rtok-web-compose` | ⏳ in progress, see docs/web.md | |
 | src/tokens.rs | `rtok/…/rtok/Tokens.kt` | ✅ | 4 → 4 |
 | src/modes/ladder.rs | `rtok/…/rtok/modes/Ladder.kt` | ✅ | 3 → 3 |
 | src/modes/compress.rs | `rtok/…/rtok/modes/Compress.kt` | ✅ | 16 → 16 |
-| src/cli (32 files, 30 subcommands) | `rtok/…/rtok/cli` | 🟡 root command only (Clikt) | |
+| src/cli (32 files, 30 subcommands) | `rtok/…/rtok/cli` | 🟡 Clikt behind `CliktAdapter`; every top-level command has a `cli/<Name>Cmd.kt` (agents, archive, batch, bench, completions, config, demon, discover, docs, doctor, expand, graph, guard, hook, info, logs, man, mcp, memory, otel, plugins, proxy, report, stats, task, tui, web, worktree); depth per command is in the rows above and in port-plan.md | CliSpec, AgentsCliSpec, ArchiveCliSpec, GuardCliSpec, LogsCliSpec, OtelCliSpec |
 | src/plugins/read (mod, roots, search, cache, hook, outline, density) | `rtok/plugins/read/` `Read.kt` (ReadPlugin, readWith, resolve, cap), `Roots.kt`, `Search.kt`, `Cache.kt`, `Hook.kt`, `Outline.kt`, `Languages.kt`, `Density.kt` over `libs/treesitter` + `libs/treesitter-native` (34 grammars); `rtok/HostPaths.kt` (normalize_following, is_secret, same_spelling, is_linked_worktree) | ✅ (MCP dispatch → `rtok mcp`) | 101 → 98 + 5 walk in rtok-sys (+7 adapter) |
 | src/expand.rs, src/cli/expand.rs | `rtok/Expand.kt`, `cli/ExpandCmd.kt` | ✅ | 27 → 27 |
 | src/plugins/graph/walk.rs | `rtok/plugins/graph/Walk.kt` (`Matcher`) | ✅ (rest of graph ⬜) | 5 → 5 |
 | src/plugins/graph/index.rs (+ worker pool) | `rtok/plugins/graph/Index.kt`, rtok-sys `Parallel.kt` | 🟡 rank refresh via `FileRanks` (rank.rs ⬜) | 15 → 14 (+2 pool); rank 3 + crate fixture pending |
 | src/plugins/graph/resolve.rs, tally.rs | `rtok/plugins/graph/Resolve.kt`, `Tally.kt` | ✅ | 1 → 1, 4 → 4 |
 | src/worktree/git.rs `list`, mod.rs `parse_porcelain` | `rtok/worktree/Git.kt` | 🟡 rest of worktree pending | via RootsTest |
-| src/plugins (compress, json_tree, toon, read, cmd, inject, guard, memory, measure, docs, archive, checkpoint, graph, proxy, wasm) | `rtok.plugins` | ⬜ | |
-| src/proxy | `rtok.proxy` (Ktor) | ⬜ | |
-| src/mcp | `rtok.mcp` | ⬜ | |
-| src/hooks | `rtok.hooks` | ⬜ | |
-| src/agents (40+ hosts), src/doctor | `rtok.agents`, `rtok.doctor` | ⬜ doctor: probe/hooks/dupes ✅ | hooks.rs 45 → HooksTest 43 |
-| src/tasks mod/meta/adapter/ready | `rtok/tasks` Tasks.kt, Meta.kt, Adapter.kt, Ready.kt | 🟡 | 11 → 14 |
-| src/otel (otlp, map, metrics, export), src/cli/otel.rs | `rtok/otel/`, `cli/OtelCmd.kt`; rtok-sys `lockExclusive` | 🟡 all but `spawn_ticker` (proxy/mcp periodic flush) | export.rs 9 + tests/otel.rs 12 → ExportTest 20, OtelCliSpec 2 |
-| src/worktree, tasks (rest), measure, model, report, bench, completions, project, store | matching packages | ⬜ | |
-| src/tui | – | ❌ excluded (TUI) | |
-| src/web, agents/junk_web.rs, `rtok web/tui/dashboard` | rtok-web (token.rs, remote bind) | ⏳ in progress, see docs/web.md | |
-| tests/*.rs (138 integration files) | `:rtok` commonTest | ⬜ | 0 / ~138 files |
-
-Totals: 1098 unit + 26 CLI + 15 e2e unit (`macosArm64Test`, all modules) + 26 CLI (`cliTest`) + 14 e2e (`e2eTest`) tests passing on macosArm64 (see port-plan.md for the per-phase table).
-
-| Rust | Kotlin | Status | Tests |
-|---|---|---|---|
+| src/plugins (compress, json_tree, toon, read, cmd, inject, guard, memory, measure, docs, archive, checkpoint, graph, proxy, wasm) | `rtok.plugins` | ✅ per-plugin rows above; graph 🟡 | |
+| src/proxy | `rtok/proxy/` (Ktor) | 🟡 wire views, cache key and audit, batch results; see port-plan.md | |
+| src/mcp | `rtok/mcp/` (`Server.kt`, `Protocol.kt`, `Tools.kt`, `Wrap.kt`, …) | 🟡 server and tool sets; see port-plan.md | |
 | src/names.rs | `rtok/commonMain/Names.kt` | ✅ | (covered by types tests) |
 | src/hooks/types.rs | `rtok/commonMain/hooks/Types.kt` | ✅ | 18 → 18 (guard cache_key assertion deferred to Phase 5) |
 | src/hooks/deadline.rs | `rtok/nativeMain/hooks/Deadline.kt` (Worker watchdog) | ✅ | 3 → 3 |
 | src/hooks/resident.rs | `rtok/nativeMain/hooks/Resident.kt` (poll loop, no tokio) | ✅ | 1 → 2 |
 | src/hooks/push.rs, mod.rs, src/cli/hook.rs, src/render.rs message frame | `rtok/hooks/Dispatch.kt`, `HostOutputs.kt`, `Push.kt`, `RenderMessages.kt`, `cli/HookCmd.kt`; rtok-sys `processAncestors`, `currentExe`, `spawnDetached`, `readFdBounded` | 🟡 dispatcher, all host shapers, push, resident wiring; worktree/otel/MCP steps via `HookLinks` no-ops | 55 → 26 |
+| src/agents (40+ hosts), src/doctor | `rtok.agents`, `rtok.doctor` | ⬜ doctor: probe/hooks/dupes ✅ | hooks.rs 45 → HooksTest 43 |
+| src/tasks mod/meta/adapter/ready | `rtok/tasks` Tasks.kt, Meta.kt, Adapter.kt, Ready.kt | 🟡 | 11 → 14 |
+| src/otel (otlp, map, metrics, export), src/cli/otel.rs | `rtok/otel/`, `cli/OtelCmd.kt`; rtok-sys `lockExclusive` | 🟡 all but `spawn_ticker` (proxy/mcp periodic flush) | export.rs 9 + tests/otel.rs 12 → ExportTest 20, OtelCliSpec 2 |
+| src/worktree, tasks (rest), measure, model, report, bench, completions, project, store | matching packages and `cli/*Cmd.kt` | 🟡 see the rows above and port-plan.md | |
+| src/tui | `libs/tui`, `cli/TuiCmd.kt` | 🟡 | |
+| src/web, agents/junk_web.rs, `rtok web/tui/dashboard` | rtok-web (token.rs, remote bind) | ⏳ in progress, see docs/web.md | |
+| tests/*.rs (138 integration files) | `:rtok` commonTest | ⬜ | 0 / ~138 files |
+
+Totals: 1098 unit + 26 CLI + 15 e2e unit (`macosArm64Test`, all modules) + 26 CLI (`cliTest`) + 14 e2e (`e2eTest`) tests passing on macosArm64 (see port-plan.md for the per-phase table).
 
 ## Test groups
 unit `./gradlew macosArm64Test`, CLI `./gradlew cliTest`, e2e `./gradlew e2eTest`, wasm `./gradlew wasmTest` (docs/testing.md).
