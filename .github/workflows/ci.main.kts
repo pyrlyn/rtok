@@ -97,6 +97,6 @@ workflow(
         "linux",
         UbuntuLatest,
         "./gradlew -Prtok.allTargets=true linuxX64Test cliTest e2eTest --console=plain",
-        prepare = "KOTLIN_VERSION=\$(mise current kotlin) ./gradlew -p scripts/ci/konan-bootstrap linkDebugExecutableLinuxX64 --console=plain",
+        prepare = "KOTLIN_VERSION=\$(mise current kotlin) ./gradlew -p scripts/ci/konan-bootstrap linkDebugExecutableLinuxX64 linkDebugExecutableLinuxArm64 --console=plain",
     )
 }
