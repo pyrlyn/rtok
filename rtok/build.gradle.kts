@@ -17,7 +17,7 @@ configure<KotlinMultiplatformExtension> {
         implementation(project(":rtok-plugin-sdk"))
         implementation(project(":rtok-config"))
         implementation(project(":rtok-sys"))
-        implementation(project(":semver"))
+        implementation("pyrlyn.kit:semver")
         implementation(project(":humantime"))
         implementation(project(":globset"))
         implementation(project(":json-strict"))
