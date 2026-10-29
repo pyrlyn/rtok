@@ -44,12 +44,12 @@ fun JobBuilder<*>.setUp() {
     // Installs every tool in mise.toml (JDK, Kotlin, CMake, Ninja, ...), so CI and developers build with the same versions.
     uses(action = MiseAction_Untyped())
     uses(action = ActionsSetupGradle())
-    // The Kotlin/Native toolchain (~/.konan) is not a Gradle cache; its version follows the Kotlin pin in mise.toml.
+    // The Kotlin/Native toolchain (~/.konan) is not a Gradle cache; its version follows the Kotlin pin in mise.toml, its targets the bootstrap project.
     uses(
         action =
             Cache(
                 path = listOf("~/.konan"),
-                key = "konan-\${{ runner.os }}-\${{ hashFiles('mise.toml') }}",
+                key = "konan-\${{ runner.os }}-\${{ hashFiles('mise.toml', 'scripts/ci/konan-bootstrap/**') }}",
                 restoreKeys = listOf("konan-\${{ runner.os }}-"),
             ),
     )

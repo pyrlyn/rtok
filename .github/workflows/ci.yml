@@ -54,7 +54,7 @@ jobs:
       uses: 'actions/cache@v6.1.0'
       with:
         path: '~/.konan'
-        key: 'konan-${{ runner.os }}-${{ hashFiles(''mise.toml'') }}'
+        key: 'konan-${{ runner.os }}-${{ hashFiles(''mise.toml'', ''scripts/ci/konan-bootstrap/**'') }}'
         restore-keys: 'konan-${{ runner.os }}-'
     - id: 'step-5'
       run: './gradlew macosArm64Test cliTest e2eTest --console=plain'
@@ -86,7 +86,7 @@ jobs:
       uses: 'actions/cache@v6.1.0'
       with:
         path: '~/.konan'
-        key: 'konan-${{ runner.os }}-${{ hashFiles(''mise.toml'') }}'
+        key: 'konan-${{ runner.os }}-${{ hashFiles(''mise.toml'', ''scripts/ci/konan-bootstrap/**'') }}'
         restore-keys: 'konan-${{ runner.os }}-'
     - id: 'step-5'
       name: 'Prepare the Kotlin/Native toolchain'
