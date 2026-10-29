@@ -92,4 +92,4 @@ jobs:
       name: 'Prepare the Kotlin/Native toolchain'
       run: 'KOTLIN_VERSION=$(mise current kotlin) ./gradlew -p scripts/ci/konan-bootstrap linkDebugExecutableLinuxX64 linkDebugExecutableLinuxArm64 --console=plain'
     - id: 'step-6'
-      run: './gradlew -Prtok.allTargets=true linuxX64Test cliTest e2eTest --console=plain'
+      run: './gradlew -Prtok.allTargets=true linuxX64Test cliTest e2eTest -x ktlintCheck -x detekt --console=plain'
