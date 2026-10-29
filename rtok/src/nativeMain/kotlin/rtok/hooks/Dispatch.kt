@@ -3,12 +3,12 @@
 // any error prints `{}` (D1).
 package rtok.hooks
 
+import db.isLocked
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import rtok.config.Config
 import rtok.config.envVar
-import rtok.db.isLocked
 import rtok.plugin.Runtime
 import rtok.plugin.fitBudget
 import rtok.plugin.sdk.Class

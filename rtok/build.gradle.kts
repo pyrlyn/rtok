@@ -26,7 +26,7 @@ configure<KotlinMultiplatformExtension> {
         implementation(project(":rtok-agent-sdk"))
         implementation(project(":rtok-mcp"))
         implementation(project(":rtok-store"))
-        implementation(project(":db-room"))
+        implementation("pyrlyn.kit:db-room")
         implementation(project(":rtok-log"))
         implementation(project(":http"))
         implementation(project(":http-ktor"))
