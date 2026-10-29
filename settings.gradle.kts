@@ -1,23 +1,36 @@
 rootProject.name = "rtok-kotlin"
 pluginManagement {
     repositories { gradlePluginPortal(); mavenCentral(); google() }
-    // Shared build settings (docs/build-speed.md "Shared settings: ci-diffuser"): a sibling checkout of
-    // the ci-diffuser repo. CI_DIFFUSER_DIR overrides the path (e.g. for worktrees outside apps/).
-    val ciDiffuser = System.getenv("CI_DIFFUSER_DIR") ?: "../ci-diffuser"
-    includeBuild(ciDiffuser)
-    includeBuild("$ciDiffuser/settings-plugin")
+    // Shared builds live in the workspace's packages/. Every ancestor is searched, so the build works
+    // from the main checkout and from a worktree nested deeper (e.g. .rtok/worktrees/); an env variable
+    // points elsewhere. Defined here because pluginManagement cannot see the rest of the script.
+    fun sharedBuild(name: String, env: String): String =
+        System.getenv(env)?.let { settingsDir.resolve(it).path }
+            ?: generateSequence(settingsDir.parentFile) { it.parentFile }
+                .map { it.resolve("packages/$name") }
+                .firstOrNull { it.isDirectory }
+                ?.path
+            ?: error("packages/$name not found above $settingsDir; set $env")
+
+    // Shared build settings (ktlint, detekt, repositories, build cache).
+    val sharedSettings = sharedBuild("shared-settings", "SHARED_SETTINGS_DIR")
+    includeBuild(sharedSettings)
+    includeBuild("$sharedSettings/settings-plugin")
+    extra["kotlinWasmDir"] = sharedBuild("kotlin-wasm", "KOTLIN_WASM_DIR")
+    extra["kotlinSnapshotDir"] = sharedBuild("kotlin-snapshot", "KOTLIN_SNAPSHOT_DIR")
+    extra["kotlinWebglDir"] = sharedBuild("kotlin-webgl", "KOTLIN_WEBGL_DIR")
 }
 // The WebAssembly interface and its Chasm adapter, shared with Octo: a checkout of kotlin-wasm
-// (github.com/pyrlyn/kotlin-wasm). KOTLIN_WASM_DIR overrides the path, as CI_DIFFUSER_DIR does above.
-includeBuild(System.getenv("KOTLIN_WASM_DIR") ?: "../../packages/kotlin-wasm")
+// (github.com/pyrlyn/kotlin-wasm).
+includeBuild(extra["kotlinWasmDir"] as String)
 // insta-style snapshot assertions for tests (docs/testing.md "Snapshot tests"): a checkout of
-// kotlin-snapshot. KOTLIN_SNAPSHOT_DIR overrides the path.
-includeBuild(System.getenv("KOTLIN_SNAPSHOT_DIR") ?: "../../packages/kotlin-snapshot")
+// kotlin-snapshot.
+includeBuild(extra["kotlinSnapshotDir"] as String)
 // WebGL2 wrapper, Compose host and the generic graph cloud for :rtok-web-compose.
-includeBuild(System.getenv("KOTLIN_WEBGL_DIR") ?: "../../packages/kotlin-webgl")
+includeBuild(extra["kotlinWebglDir"] as String)
 // Remote build cache on Cloudflare R2 (docs/build-speed.md). Approved by Ivan 2026-10-26.
-// Repositories + R2 remote build cache (docs/build-speed.md), approved by Ivan 2026-10-26; logic in ci.diffuser.settings.
-plugins { id("com.github.burrunan.s3-build-cache") version "1.9.10"; id("ci.diffuser.settings") }
+// Repositories + R2 remote build cache (docs/build-speed.md), approved by Ivan 2026-10-26; logic in shared.settings.
+plugins { id("com.github.burrunan.s3-build-cache") version "1.9.10"; id("shared.settings") }
 include(":humantime", ":treesitter", ":treesitter-native", ":toml", ":toml-ktoml", ":db", ":db-room", ":rtok-plugin-sdk", ":rtok-config", ":rtok-log", ":rtok-hook", ":rtok-store", ":rtok-sys", ":rtok-mcp", ":rtok-agent-sdk", ":rtok", ":rtok-wasm", ":rtok-e2e", ":http", ":http-ktor", ":http-server", ":http-server-ktor", ":zstd", ":zstd-native", ":semver", ":globset", ":toml-aot", ":yaml-aot", ":json-strict", ":tui", ":rtok-web", ":rtok-web-model", ":rtok-web-ui", ":rtok-web-compose")
 listOf("humantime", "treesitter", "treesitter-native", "toml", "toml-ktoml", "db", "db-room", "http", "http-ktor", "http-server", "http-server-ktor", "zstd", "zstd-native", "semver", "globset", "toml-aot", "yaml-aot", "json-strict", "tui").forEach { project(":$it").projectDir = file("libs/$it") }
 

@@ -13,9 +13,9 @@ plugins {
     // Dev-only coverage (`mise run coverage`, docs/toolchain.md): active only with -Prtok.coverage=true.
     id("org.jetbrains.kotlinx.kover") version "0.9.11" apply false
     // Shared Kotlin/Native dev/release settings: targets, release cache rules, -Prtok.releaseSize, -Prtok.release.fast.
-    id("ci.diffuser.native")
+    id("shared.settings.native")
     // Shared project config: KMP/serialization/Dokka/Kotest per subproject, Dokka aggregation, opt-in Kover (-Prtok.coverage=true).
-    id("ci.diffuser.kmp")
+    id("shared.settings.kmp")
 }
 
 extensions.configure<org.jetbrains.dokka.gradle.DokkaExtension> { moduleName.set("rtok-kotlin") }

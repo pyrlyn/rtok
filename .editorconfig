@@ -1,4 +1,4 @@
-# ktlint (ci.diffuser.ktlint from ../ci-diffuser): `./gradlew ktlintCheck` / `./gradlew ktlintFormat`.
+# ktlint (shared.settings.ktlint from packages/shared-settings): `./gradlew ktlintCheck` / `./gradlew ktlintFormat`.
 root = true
 
 [*.{kt,kts}]
