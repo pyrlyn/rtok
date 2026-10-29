@@ -1,7 +1,7 @@
 package rtok.toml.ktoml
 
 import kotlinx.serialization.json.*
-import rtok.toml.TomlException
+import toml.TomlException
 import kotlin.test.*
 
 class KtomlReaderTest {

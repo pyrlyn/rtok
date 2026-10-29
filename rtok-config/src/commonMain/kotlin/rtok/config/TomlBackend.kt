@@ -2,9 +2,9 @@
 // which exposes only the backend-neutral `rtok.toml` API.
 package rtok.config
 
-import rtok.toml.TomlDocument
-import rtok.toml.TomlReader
-import rtok.toml.TomlValues
+import toml.TomlDocument
+import toml.TomlReader
+import toml.TomlValues
 import rtok.toml.ktoml.KtomlReader
 
 typealias TomlException = rtok.toml.TomlException
