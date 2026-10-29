@@ -1549,7 +1549,7 @@ Next, in order:
   through a lazy `linuxMain` match, because `findByName` ran before the hierarchy existed. No new artifact.
 - `-Prtok.allTargets=true compileKotlinLinuxX64 compileKotlinLinuxArm64` passes for all modules.
 - Next: linking for Linux. ld.lld reports the rtok_* and tree-sitter C symbols as undefined, because the
-  `ci.diffuser.cstatic` plugin (external ci-diffuser) builds the static C libraries for the host target only.
+  `shared.settings.cstatic` plugin (external shared-settings) builds the static C libraries for the host target only.
   Running and testing on Linux also needs a Linux host or CI.
 
 ## Remaining work (2026-10-27)

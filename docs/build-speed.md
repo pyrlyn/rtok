@@ -59,7 +59,7 @@ size quota, so a pruning job also deletes the oldest entries first until the buc
 
 ## Release binary size
 
-Configured via `diffuser.releaseSize=all` in `gradle.properties` (logic in ci-diffuser `NativeConventionPlugin`), release executables only (debug/test binaries untouched).
+Configured via `diffuser.releaseSize=all` in `gradle.properties` (logic in shared-settings `NativeConventionPlugin`), release executables only (debug/test binaries untouched).
 K/N release already links in LTO mode (all modules optimized together), so no extra LTO flag.
 
 Current main (bedb35b, macOS arm64; tree-sitter grammars, zstd, ktor-server and Room now reach the binary):
