@@ -1,4 +1,4 @@
-# Toolchain for rtok-kotlin, installed with `mise install` (see docs/toolchain.md).
+# Toolchain for rtok-kotlin, installed with `mise install` (see toolchain.md).
 # Kotlin libraries and klibs stay in Gradle (Maven Central); the build system is Gradle.
 # Keep `gradle` in step with gradle/wrapper/gradle-wrapper.properties.
 [tools]
@@ -24,12 +24,12 @@ run = "python3 scripts/smart.py test --affected"
 description = "Assemble changed modules and their dependents only"
 run = "python3 scripts/smart.py build --affected"
 
-# Dev-only coverage (scripts/coverage.py, docs/toolchain.md). Never used by product or release builds.
+# Dev-only coverage (scripts/coverage.py, toolchain.md). Never used by product or release builds.
 [tasks.coverage]
 description = "Line coverage: Kover (JVM build of common-only modules) + llvm-cov for the vendored tree-sitter C"
 run = "python3 scripts/coverage.py --c"
 
-# Release link of the rtok binary (docs/toolchain.md). `release` = shipped build, full optimization, no cache.
+# Release link of the rtok binary (toolchain.md). `release` = shipped build, full optimization, no cache.
 [tasks.release]
 description = "Release binary, full whole-program optimization (default, for shipping)"
 run = "./gradlew :rtok:linkReleaseExecutableMacosArm64"
