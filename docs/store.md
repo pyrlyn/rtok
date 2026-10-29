@@ -26,8 +26,8 @@ file is converted to incremental auto-vacuum once.
 One file per Rust module, as extension functions on `Store` (`Agents.kt`, `Messages.kt`,
 `Symbols.kt`, `Embed.kt`, …); `SqlExt.kt` holds the shared SQL helpers (`inList`, `chunkedIn`).
 
-The SQLite binding is an adapter: the store talks only to `rtok.db.Db` / `Row` (module
-`libs/db`), and `libs/db-room` implements them over androidx.sqlite. The application installs the
+The SQLite binding is an adapter: the store talks only to `db.Db` / `Row` (`pyrlyn.kit:db` from
+kotlin-kit), and `pyrlyn.kit:db-room` implements them over androidx.sqlite. The application installs the
 driver once (`Db.installIfAbsent(RoomDbDriver)` in `main`); store tests install the same one from
 `Support.kt`. androidx.sqlite prepares one statement at a time, so the adapter splits scripts
 (migrations) itself, keeping trigger bodies, quotes and comments whole.
