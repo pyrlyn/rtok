@@ -26,7 +26,13 @@ import kotlin.time.TimeSource
 
 private const val FAST = "[demon]\nservices = [\"mcp\"]\nbackoff_ms = 50\nmax_backoff_ms = 100\npoll_ms = 50\n"
 
-private fun Sandbox.demon(extra: String = ""): Sandbox = apply { writeString("$home/config.toml", FAST + extra) }
+/** The mcp service crashes at once, so the tests that need it up lift the `[mcp]` restart cap out of reach. */
+private const val LOOP = "[mcp]\nrestart_attempts = 1000000\nrestart_interval_ms = 50\n"
+
+private fun Sandbox.demon(
+    extra: String = "",
+    mcp: String = LOOP,
+): Sandbox = apply { writeString("$home/config.toml", FAST + mcp + extra) }
 
 private fun Sandbox.ok(vararg args: String): String = rtok(*args).also { check(it.code == 0) { "rtok ${args.toList()}: ${it.err}" } }.out
 
@@ -86,6 +92,20 @@ class DemonE2eSpec :
                 exists("${s.home}/demon/mcp.stop") shouldBe true
                 usleep(300_000u)
                 s.state() shouldBe null
+            }
+        }
+        test("the mcp service gives up after [mcp] restart_attempts crashes in a row") {
+            Sandbox("demon-give-up").use { s ->
+                s.demon(mcp = "[mcp]\nrestart_attempts = 2\nrestart_interval_ms = 50\n")
+                try {
+                    val sup = Regex("supervisor (\\d+)").find(s.ok("demon", "start", "mcp"))!!.groupValues[1].toInt()
+                    until("the supervisor gives up") { !processAlive(sup) }
+                    s.state() shouldBe null
+                    s.ok("demon", "status", "mcp") shouldNotContain "running"
+                    readToString("${s.home}/demon/mcp.log") shouldContain "giving up after 2 restarts"
+                } finally {
+                    s.rtok("demon", "kill")
+                }
             }
         }
         test("status asks the kernel rather than believing the state file") {

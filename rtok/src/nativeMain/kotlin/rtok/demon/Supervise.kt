@@ -2,6 +2,7 @@ package rtok.demon
 
 import rtok.fileLog
 import rtok.log.append
+import rtok.mcp.Restarts
 import rtok.sys.StreamedChild
 import rtok.sys.createDirAll
 import rtok.sys.currentExe
@@ -23,6 +24,8 @@ fun Lifecycle.supervise(service: Service) {
         val d = cfg.demon
         var st = State(service.id, rtok.sys.pid(), 0, nowSecs(), 0)
         var backoff = d.backoffMs.toLong()
+        // The mcp service follows `[mcp]` restarts: a fixed interval and a cap; the others back off forever.
+        val restarts = if (service == Service.MCP) Restarts.of(cfg.mcp) else null
         val sink = { err: Boolean, line: String -> append(log, if (err) "warn" else "info", "demon", service.id, line) }
         while (!exists(stop)) {
             val child = StreamedChild.spawn(exe, argv(service.args))
@@ -38,8 +41,19 @@ fun Lifecycle.supervise(service: Service) {
                 child.pump(d.pollMs.toInt(), sink)
             }
             val healthy = started.elapsedNow().inWholeMilliseconds >= d.healthyMs.toLong()
-            val (wait, next) = nextBackoff(backoff, healthy, d.backoffMs.toLong(), d.maxBackoffMs.toLong())
-            backoff = next
+            val wait =
+                if (restarts != null) {
+                    if (healthy) restarts.started()
+                    if (!restarts.crashed()) {
+                        sink(true, "exited with code ${child.tryWait()}; giving up after ${restarts.attempts} restarts")
+                        break
+                    }
+                    restarts.intervalMs
+                } else {
+                    val (now, next) = nextBackoff(backoff, healthy, d.backoffMs.toLong(), d.maxBackoffMs.toLong())
+                    backoff = next
+                    now
+                }
             st = st.copy(restarts = st.restarts + 1)
             store.write(st)
             OsProcs.pause(wait)
