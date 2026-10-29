@@ -21,7 +21,7 @@ configure<KotlinMultiplatformExtension> {
         implementation(project(":humantime"))
         implementation(project(":globset"))
         implementation(project(":json-strict"))
-        implementation(project(":toml-aot"))
+        implementation("pyrlyn.kit:toml-aot")
         implementation(project(":yaml-aot"))
         implementation(project(":rtok-agent-sdk"))
         implementation(project(":rtok-mcp"))
