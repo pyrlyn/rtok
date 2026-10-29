@@ -21,7 +21,7 @@ pluginManagement {
     extra["kotlinWebglDir"] = sharedBuild("kotlin-webgl", "KOTLIN_WEBGL_DIR")
 }
 // The WebAssembly interface and its Chasm adapter, shared with Octo: a checkout of kotlin-wasm
-// (github.com/pyrlyn/kotlin-wasm).
+// (github.com/pyrlyn/packages, kotlin-wasm/).
 includeBuild(extra["kotlinWasmDir"] as String)
 // insta-style snapshot assertions for tests (docs/testing.md "Snapshot tests"): a checkout of
 // kotlin-snapshot.
