@@ -92,13 +92,14 @@ workflow(
     // On a Linux x64 host cliTest and e2eTest pick linuxX64; allTargets adds the linux targets to the build.
     // Lint stays off here: the test tasks depend on ktlintCheck and detekt of every source set, macOS ones included, and
     // those pull in the macOS C compile (xcrun), which a Linux host cannot run. The macOS job lints.
+    // --continue reports every failing Linux test group at once instead of stopping at the first.
     // buildSrc CrossCc needs Kotlin/Native's clang and sysroot in ~/.konan while the build is still configuring, and
     // only linking a Kotlin/Native target downloads them, so a throwaway project does that first (a no-op once cached).
     jobFor(
         this,
         "linux",
         UbuntuLatest,
-        "./gradlew -Prtok.allTargets=true linuxX64Test cliTest e2eTest -x ktlintCheck -x detekt --console=plain",
+        "./gradlew -Prtok.allTargets=true linuxX64Test cliTest e2eTest -x ktlintCheck -x detekt --continue --console=plain",
         prepare = "KOTLIN_VERSION=\$(mise current kotlin) ./gradlew -p scripts/ci/konan-bootstrap linkDebugExecutableLinuxX64 linkDebugExecutableLinuxArm64 --console=plain",
     )
 }
