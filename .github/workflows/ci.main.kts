@@ -60,6 +60,7 @@ fun jobFor(
     id: String,
     runner: RunnerType,
     command: String,
+    prepare: String? = null,
 ) = workflowBuilder.job(
     id = id,
     runsOn = runner,
@@ -68,6 +69,7 @@ fun jobFor(
     timeoutMinutes = 120,
 ) {
     setUp()
+    if (prepare != null) run(name = "Prepare the Kotlin/Native toolchain", command = prepare)
     run(command = command)
 }
 
@@ -88,5 +90,13 @@ workflow(
     // macos-15 is Apple Silicon; Intel macOS is not supported.
     jobFor(this, "macos", Macos15, "./gradlew macosArm64Test cliTest e2eTest --console=plain")
     // On a Linux x64 host cliTest and e2eTest pick linuxX64; allTargets adds the linux targets to the build.
-    jobFor(this, "linux", UbuntuLatest, "./gradlew -Prtok.allTargets=true linuxX64Test cliTest e2eTest --console=plain")
+    // buildSrc CrossCc needs Kotlin/Native's clang and sysroot in ~/.konan while the build is still configuring, and
+    // only linking a Kotlin/Native target downloads them, so a throwaway project does that first (a no-op once cached).
+    jobFor(
+        this,
+        "linux",
+        UbuntuLatest,
+        "./gradlew -Prtok.allTargets=true linuxX64Test cliTest e2eTest --console=plain",
+        prepare = "KOTLIN_VERSION=\$(mise current kotlin) ./gradlew -p scripts/ci/konan-bootstrap linkDebugExecutableLinuxX64 --console=plain",
+    )
 }

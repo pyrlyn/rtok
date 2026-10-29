@@ -89,4 +89,7 @@ jobs:
         key: 'konan-${{ runner.os }}-${{ hashFiles(''mise.toml'') }}'
         restore-keys: 'konan-${{ runner.os }}-'
     - id: 'step-5'
+      name: 'Prepare the Kotlin/Native toolchain'
+      run: 'KOTLIN_VERSION=$(mise current kotlin) ./gradlew -p scripts/ci/konan-bootstrap linkDebugExecutableLinuxX64 --console=plain'
+    - id: 'step-6'
       run: './gradlew -Prtok.allTargets=true linuxX64Test cliTest e2eTest --console=plain'
