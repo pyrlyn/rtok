@@ -3,8 +3,8 @@ package rtok.mcp
 import rtok.config.Mcp as McpConfig
 
 /**
- * `[mcp] restart_attempts` / `restart_interval_ms`, shared by `rtok mcp -- <server>` and the demon's mcp service.
- * Only crashes in a row count: a server that came up again earns a fresh set of attempts, so a rare crash
+ * `[mcp] restart_attempts` / `restart_interval_ms` for `rtok mcp -- <server>`. The demon's mcp service keeps the
+ * unbounded `[demon]` backoff. Only crashes in a row count: a server that came up again earns a fresh set of attempts, so a rare crash
  * never uses the limit up.
  */
 class Restarts(

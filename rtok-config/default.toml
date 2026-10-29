@@ -82,7 +82,7 @@
 # http_tools              = ["read", "search", "tree"]  # HTTP allow-list, used instead of `tools`; `expand` always stays listed; tools that act as the calling agent (`whoami`, `agent_send`, `worktree_add`, …) never are
 # token                   = ""          # bearer token for --http; prefer RTOK_MCP_TOKEN; empty = --http refuses to start
 # public_url              = ""          # tunnel URL (https://…); its host and origin are the only foreign ones accepted
-# restart_attempts        = 6           # crashes in a row `rtok mcp -- <server>` and `rtok demon` restart the server after; a successful start resets the count; 0 = never restart
+# restart_attempts        = 6           # crashes in a row `rtok mcp -- <server>` restarts the server after; a successful start resets the count; 0 = never restart
 # restart_interval_ms     = 5000        # wait before each restart
 
 [proxy]                               # rtok proxy
