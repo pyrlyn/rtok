@@ -10,7 +10,7 @@
 - Imports moved from `rtok.toml` / `rtok.db` / `rtok.db.room` to `toml` / `db` / `db.room`.
 - Docs: `docs/toolchain.md` package row, `docs/c-code.md` SQLite row, `docs/store.md`, `docs/toml.md`.
 
-PR: PR_LINK
+PR: https://github.com/pyrlyn/rtok/pull/255
 
 ## Kept in `libs/` until kotlin-kit has their fixes
 
