@@ -22,7 +22,7 @@ configure<KotlinMultiplatformExtension> {
         implementation(project(":globset"))
         implementation(project(":json-strict"))
         implementation("pyrlyn.kit:toml-aot")
-        implementation(project(":yaml-aot"))
+        implementation("pyrlyn.kit:yaml-aot")
         implementation(project(":rtok-agent-sdk"))
         implementation(project(":rtok-mcp"))
         implementation(project(":rtok-store"))
