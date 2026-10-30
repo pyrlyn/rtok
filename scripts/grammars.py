@@ -7,7 +7,7 @@
 The pin file is libs/treesitter-native/grammars.json (checked in). Sources are not committed: they are
 fetched as GitHub tarballs at the pinned commit and only src/ and queries/ are kept.
 """
-import io, json, os, subprocess, sys, tarfile, urllib.request
+import io, json, os, shutil, subprocess, sys, tarfile, urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MOD = os.path.join(ROOT, "libs", "treesitter-native")
@@ -35,6 +35,12 @@ KEEP = ("src/", "queries/", "common/", "lib/src/", "lib/include/")
 def fetch():
     pins = json.load(open(PINS))
     os.makedirs(VENDOR, exist_ok=True)
+    # grammars() walks the vendor tree, so a repo dropped from the pins must leave it too.
+    pinned = {e["repo"].split("/")[1] for e in pins["repos"]}
+    for d in os.listdir(VENDOR):
+        if os.path.isdir(os.path.join(VENDOR, d)) and d not in pinned:
+            shutil.rmtree(os.path.join(VENDOR, d))
+            print("removed", d)
     for e in pins["repos"]:
         dest = os.path.join(VENDOR, e["repo"].split("/")[1])
         stamp = os.path.join(dest, ".commit")
