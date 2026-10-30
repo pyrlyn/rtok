@@ -16,8 +16,7 @@ internal fun embeddedBytes(
     chunks: List<String>,
     zstd: Boolean,
     decoder: ZstdDecoder = NativeZstd(MAX_DECODED),
-): ByteArray =
-    chunks.joinToString("").let { if (zstd) decoder.decodeAll(Base64.decode(it)) else it.encodeToByteArray() }
+): ByteArray = chunks.joinToString("").let { if (zstd) decoder.decodeAll(Base64.decode(it)) else it.encodeToByteArray() }
 
 /** The embedded Compose UI; each file's bytes are decoded once, on first request. */
 object EmbeddedAssets : Assets {

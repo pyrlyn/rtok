@@ -2,8 +2,10 @@
 
 Measured 2026-10-30 on Apple Silicon (macosArm64), Kotlin/Native 2.4.21, Gradle 9.8.2, Xcode ld 27037.1, tree
 `2d970f5` (main after #251). The shipped release link, `./gradlew :rtok:linkReleaseExecutableMacosArm64`
-(`mise run release`), is **108,768,408 bytes**. The budget that guards it (111,000,000 bytes, +2.1%) is in `scripts/size_check.py`
-(`mise run size-check`).
+(`mise run release`), was **108,768,408 bytes** when this was measured and is **77,245,112 bytes** after the two changes
+in "Applied" below. The budget that guards it (79,000,000 bytes, +2.3%) is in `scripts/size_check.py`
+(`mise run size-check`). Sections "Where the bytes are" to "What each release flag buys" describe the 108,768,408-byte
+binary, the state before the changes.
 
 ## Where the bytes are
 
@@ -113,20 +115,39 @@ taken before grammars, ktor and the web UI were linked and its absolute sizes (8
 History for the shipped link: 17.9 MB (no grammars) → 9.9 MB with the flags (#8) → 87.6 MB (grammars, zstd, ktor,
 Room) → 108.8 MB now (mostly the embedded web UI wasm, plus later additions).
 
-## Cheap wins and proposals
+## Applied
 
-Nothing was applied in this task. The flags are already on, and none of the remaining options is a flag; each
-changes the build or the behaviour, so each stays a proposal for the creator.
+| Step | Binary | Δ | How it was measured |
+|---|---|---|---|
+| before | 108,768,408 | | `mise run release` |
+| wasm modules as zstd -19 + base64 instead of raw base64 (`buildSrc` `EmbedDir.kt`, `rtok-web` `EmbeddedAssets.kt`) | 97,671,000 | −11,097,408 (−10.2%) | linked; `__DATA_CONST,__const` 20.0 → 9.0 MB |
+| drop the `agda` and `verilog` grammars (`grammars.json`, `Languages.kt`) | 77,245,112 | −20,425,888 (−20.9%) | linked; map predicted 20.3 MB |
+| total | 77,245,112 | −31,523,296 (−29.0%) | |
+
+The wasm change predicted −12.6 MB (the modules compressed, without the base64 text around them); the real saving is
+1.5 MB smaller because the compressed frame is still stored as base64 (3.6 MB → 4.8 MB, ×4/3). The text constant is
+latin1 in the release binary (one byte per character). Behaviour: the browser receives the same wasm bytes (decoded
+once on first request, 64 MiB cap, tests in `EmbeddedAssetsTest`); `read mode=stripped` for `.v`, `.sv` and `.agda`
+falls back to `full`, like any language without a grammar. Compile-time dependency added: `com.github.luben:zstd-jni`
+1.5.7-25 in `buildSrc` (latest on Maven Central 2026-10-30, release 2026-10-28), used only to compress.
+
+`scripts/grammars.py fetch` now also removes `build/vendor` directories that are no longer pinned, since the grammar
+list is whatever the vendor tree contains.
+
+Tests after both changes: `./gradlew macosArm64Test cliTest e2eTest` green, run without `:rtok-e2e:detekt` (which fails on
+a magic number in `GuardCheckE2eSpec.kt`, a file this task does not touch) and without `RTOK_AGENT_ID` set (an agent
+session id in the environment fails `AgentsCliSpec`).
+
+## Remaining proposals
 
 | # | Proposal | Effect | Behaviour | Measured how |
 |---|---|---|---|---|
-| 1 | Embed the two wasm modules as raw bytes compressed with zstd (already linked: 69 KB) instead of base64 text | 16.2 MB → 3.6 MB: **−12.6 MB (−11.6%)**; without compression, raw bytes alone: −4.3 MB | none for users; touches `embedDir`, `EmbeddedAssets`, serving path | compressed the modules decoded from the binary (table above); not linked |
-| 2 | Drop `verilog` (a parse-only grammar) | **−18.1 MB (−16.7%)** | `.v`/`.sv` files lose stripped-mode parsing | linker map attribution; not linked |
-| 3 | Drop `verilog`, ocaml ×3, scala, haskell, julia, agda (parse-only) | −43.5 MB | same, for those suffixes | linker map attribution |
-| 4 | Move all 20 parse-only grammars out of the binary (load on demand as plugins) | up to −49.9 MB (−46%) | needs a loading design | linker map attribution |
-| 5 | Ship the release compressed | download 14.2 MB (zstd -19) or 18.6 MB (gzip -9) | none | `zstd -19`, `gzip -9` of the shipped file |
+| 1 | Also drop the other large parse-only grammars: ocaml ×3, scala, haskell, julia | −23.3 MB | those suffixes lose stripped mode | linker map attribution; not linked |
+| 2 | Move all remaining parse-only grammars out of the binary (load on demand as plugins) | up to −29.6 MB | needs a loading design | linker map attribution |
+| 3 | Store the wasm frame as raw bytes (a C array) instead of base64 text | about −1.2 MB | none | arithmetic: 4.8 MB → 3.6 MB |
+| 4 | Ship the release compressed | download about 10-14 MB (zstd) | none | the 108 MB binary compressed to 14.2 MB (zstd -19), 18.6 MB (gzip -9); not re-measured on the new binary |
 
-Order by value per effort: 1, then 2. Proposal 1 alone brings the binary to about 96 MB; 1+2 to about 78 MB; the Rust binary's 46 MB is reached only with 1 and 4 together (about 46 MB).
+Proposal 2 alone would bring the binary to about 47.7 MB, next to the Rust binary's 46 MB.
 
 ## Commands
 

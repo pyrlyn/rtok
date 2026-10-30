@@ -12,7 +12,7 @@ import os, subprocess, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # Budgets of the shipped release link (all releaseSize flags on), in bytes. Set from a measured size plus a margin.
-BUDGETS = {"macosArm64": 111_000_000}  # 108,768,408 measured 2026-10-30, plus 2.1%
+BUDGETS = {"macosArm64": 79_000_000}  # 77,245,112 measured 2026-10-30, plus 2.3%
 
 def option(a, name, default=None):
     return a[a.index(name) + 1] if name in a else default
