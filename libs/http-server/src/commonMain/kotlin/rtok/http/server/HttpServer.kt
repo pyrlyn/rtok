@@ -54,7 +54,8 @@ class BindException(
 interface HttpServer {
     /**
      * Binds [host]:[port] (0 picks a free port), reports the bound `host:port` to [onBound], then serves
-     * ([websockets] by exact path) until [stop] returns true (checked between requests and on a short tick) or the process ends.
+     * ([websockets] by exact path) until [stop] returns true (checked between requests and on a short tick), SIGINT or
+     * SIGTERM arrives, or the process ends.
      * Requests with a body over [maxBody] bytes get 413 without reaching [handler].
      */
     fun serveBlocking(
