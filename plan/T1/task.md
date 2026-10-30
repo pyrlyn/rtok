@@ -2,7 +2,7 @@
 status: in progress
 priority: P0
 complexity: 3
-readiness: 10%
+readiness: 90%
 agent: Claude Code / claude-sonnet-5-5
 ---
 
