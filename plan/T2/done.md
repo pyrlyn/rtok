@@ -49,7 +49,6 @@ change to review with the creator.
 
 ## Follow-ups
 
-- CI (T1) must check out kotlin-kit next to kotlin-snapshot; both live in `pyrlyn/packages`.
 - One commit is named `fixup! T2: take toml from kotlin-kit` (a missed qualified `rtok.toml.TomlException`); history
   rewriting was not allowed in the session, so it stays for the squash merge.
 
