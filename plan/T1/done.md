@@ -17,15 +17,18 @@ PR: https://github.com/pyrlyn/rtok/pull/253
 - `ktlintFormat` of `rtok-sys` and `http-ktor` `linuxMain` sources (formatting only; no Mac build lints them).
 - `rtok-e2e/.../LogsE2eSpec.kt`: `chmod` mode via `.convert()`; `mode_t` is `UInt` on Linux, so the e2e suite did not compile there.
 
-## Result of the last run (head 5f4fe06, run 40976362101)
+## Result of the last run (head 6bd9ef5, run 41233361413)
 
 - `Check YAML consistency`: pass.
-- `macos`: **pass** (28m, cold caches).
-- `linux`: **fail** (13m).
-  - Passed: the `linuxX64Test` unit tests of every module except `:rtok` (no failing test).
-  - Failed: `:rtok:linkDebugExecutableLinuxX64` and `:rtok:linkDebugTestLinuxX64` with `ld.lld: duplicate symbol: kfun:com.github.ajalt.clikt.core#selfAndAncestors...` (defined in both `libclikt:clikt-cache.a` and the `clikt-mordant` part, clikt 5.1.0).
-  - Not run because of that: the `:rtok` unit tests, `cliTest` and `e2eTest`. So none of the Linux bugs in `port-plan.md` "P1 — Linux" show up yet; they need the binary to link first.
-  - The duplicate-symbol link error is not in `port-plan.md`; it is not fixed here.
+- `macos`: **pass** (22m, cold caches).
+- `linux`: **fail** (12m), one test:
+  - Passed: the `linuxX64Test` unit tests of every module including `:rtok`, `:rtok:cliTest` (13 specs, 78 tests) and 62 of 63 e2e tests.
+  - Failed: `rtok.e2e.WebE2eSpec` "rtok web --port 0 serves /health, gates /auth on the token and serves the embedded Compose UI" (`:rtok-e2e:e2eTest`). The assertion compares against exit=0 but the captured output is the ktor line `[INFO] (io.ktor.server.Application): Application started in 0.0 seconds.`, so `rtok web` behaves differently on Linux. This is not in `port-plan.md` "P1 — Linux" and is not fixed here.
+  - None of the P1 Linux bugs from `port-plan.md` shows up as a failing test in this run.
+
+## Linux link error (found on the way, fixed)
+
+`:rtok:linkDebugExecutableLinuxX64` and `linkDebugTestLinuxX64` failed with `ld.lld: duplicate symbol ...clikt.core#selfAndAncestors` (the K/N static caches of clikt and clikt-mordant both define it). `kotlin.native.cacheKind.linuxX64=none` (commit 721c916) is ignored by Kotlin 2.4.21, which removed it in 2.3.20; `rtok/build.gradle.kts` now calls `disableNativeCache(...)` on the linuxX64 binaries instead and the property is gone.
 
 ## Open question for the creator
 
