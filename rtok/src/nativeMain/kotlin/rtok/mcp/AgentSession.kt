@@ -26,6 +26,8 @@ class AgentSession(
     private val cx: Runtime,
     private val hooks: HookSupport = rtok.agents.HostHookSupport,
     private val env: (String) -> String? = { rtok.config.envVar(it) },
+    /** `rtok mcp --call`: the process runs in its caller's directory and serves nobody else. */
+    private val oneShot: Boolean = false,
 ) {
     /** Unix seconds this process started: a cwd candidate must have been seen since. */
     private val started = rtok.log.now()
@@ -73,6 +75,23 @@ class AgentSession(
         return dir
     }
 
+    /** Whether this server cannot tell which session a call is from, so its cwd may be another session's. */
+    fun unsure(): Boolean = !oneShot && link().let { it is Link.Ambiguous || it == Link.Outside }
+
+    /**
+     * The directory a `worktree_*` or `task_*` call acts in: `repo` (relative to the server's cwd), else the server's
+     * cwd. When [unsure] that cwd answers for nobody, so the call has to name its agent or `repo`.
+     */
+    fun projectDir(args: JsonObject): String {
+        val cwd = rtok.sys.cwd()
+        val repo = Protocol.str(args, "repo")?.takeIf { it.isNotEmpty() }
+        return when {
+            repo != null -> rtok.sys.join(cwd, repo)
+            unsure() -> agentFor(args).first.cwd ?: fail("your agent has no recorded directory; pass `repo` with your repository's path")
+            else -> cwd
+        }
+    }
+
     /** The agent this session is linked to, or the reason it is not. */
     fun agent(): Pair<AgentDetail, Rule> {
         val host = cx.config.hook.host
@@ -83,14 +102,14 @@ class AgentSession(
                 }
 
                 is Link.Ambiguous -> {
-                    fail("ambiguous: agents ${l.ids.joinToString(", ") { it.take(SHORT) }} share this cwd; pass `agent` with the id of yours (whoami)")
+                    fail("ambiguous: agents ${l.ids.joinToString(", ") { it.take(SHORT) }} match this server; pass `agent` with the id of yours (whoami)$OR_REPO")
                 }
 
                 Link.Outside -> {
                     fail(
-                        "not linked to an agent session: this rtok mcp process is under no live $host session and in none's cwd, so one app " +
-                            "likely shares it across sessions (Claude desktop's claude_desktop_config.json entry); use `rtok agents` and " +
-                            "`rtok worktree` from the agent's shell, or pass `agent` (your id, see agents_list)",
+                        "not linked to an agent session: this rtok mcp process is under no live $host session, so one app likely shares " +
+                            "it across sessions (Claude desktop's claude_desktop_config.json entry) and it cannot tell which one is calling; " +
+                            "use `rtok agents` and `rtok worktree` from the agent's shell, or pass `agent` (your id, see agents_list)$OR_REPO",
                     )
                 }
 
@@ -144,5 +163,6 @@ class AgentSession(
     private companion object {
         const val CALLER_TTL = 5L
         const val SHORT = 8
+        const val OR_REPO = "; to only read a project's worktrees or tasks, pass `repo` with its path"
     }
 }

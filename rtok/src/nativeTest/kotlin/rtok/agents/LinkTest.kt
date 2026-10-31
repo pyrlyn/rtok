@@ -15,6 +15,10 @@ import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
+private const val STATOR_PID = 6923
+private const val RTOK_PID = 13733
+private const val APP_PID = 6174
+
 class LinkTest {
     private fun store(): Store {
         rtok.support.installDb()
@@ -216,6 +220,14 @@ class LinkTest {
             seen(store, caller("claude", store, "/mail"), "old-client", 0)
             assertEquals(Link.Outside, resolve(store, caller("claude", store, "/cox", ancestors = listOf(11381, 11149))))
             assertEquals(Link.None, resolve(store, caller("claude", store, "/cox")))
+        }
+
+    @Test fun aSharedServerInALiveSessionsCwdIsOutsideNotThatSession() =
+        store().use { store ->
+            val host = caller("claude", store, "/stator").hostId
+            hooked(store, host, "stator", "/stator", listOf(STATOR_PID))
+            hooked(store, host, "rtok", "/rtok", listOf(RTOK_PID))
+            assertEquals(Link.Outside, resolve(store, caller("claude", store, "/stator", ancestors = listOf(APP_PID))))
         }
 
     @Test fun withoutAChainedLiveRowNothingIsOutside() =

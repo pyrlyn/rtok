@@ -77,7 +77,7 @@ object AgentLink {
         val live = store.liveAgents(who.idle).filter { it.hostId == who.hostId && it.parentKey.isEmpty() && it.lastSeen >= who.since }
         val chained = who.ancestors.isNotEmpty() && live.any { it.ancestors.isNotEmpty() }
         return byAncestor(live, who)
-            ?: byCwd(live, who.cwd)
+            ?: byCwd(live, who)
             ?: if (hooks.hookless(who.host)) {
                 Link.Linked(store.registerAgent(who.hostId, who.ownSession, null, who.cwd, "mcp"), Rule.Own)
             } else if (chained) {
@@ -112,13 +112,19 @@ object AgentLink {
         return pick(live.filter { depth(it) == best }.map { it.id }, Rule.Ancestor)
     }
 
+    /**
+     * Past [byAncestor] no live chain overlaps ours, which proves such an agent is not our caller: the cwd of a server
+     * an app shares is whichever client's root came first, and matching it would answer for that client (or a row
+     * without a chain, or a caller without one, can only be judged by its cwd).
+     */
     private fun byCwd(
         live: List<AgentRow>,
-        cwd: String?,
+        who: Caller,
     ): Link? {
-        cwd ?: return null
+        val cwd = who.cwd ?: return null
         val here = rtok.sys.canonicalize(cwd) ?: cwd
-        val ids = live.filter { a -> a.cwd?.let { (rtok.sys.canonicalize(it) ?: it) == here } == true }.map { it.id }
+        val open = live.filter { who.ancestors.isEmpty() || it.ancestors.isEmpty() }
+        val ids = open.filter { a -> a.cwd?.let { (rtok.sys.canonicalize(it) ?: it) == here } == true }.map { it.id }
         return if (ids.isEmpty()) null else pick(ids, Rule.Cwd)
     }
 

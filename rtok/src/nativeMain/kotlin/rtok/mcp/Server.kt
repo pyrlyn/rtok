@@ -169,11 +169,12 @@ class Server(
         fun open(
             cfg: Config,
             session: String,
+            oneShot: Boolean = false,
         ): Server {
             val cx = Runtime.open(cfg, session)
             rtok.plugins.read.Roots
                 .enable()
-            return Server(cx, listedFor(cfg))
+            return Server(cx, listedFor(cfg), AgentSession(cx, oneShot = oneShot))
         }
 
         /** Built-ins, then every enabled built-in plugin's tools (first name wins), then the `[mcp] tools` and worktree filters. */

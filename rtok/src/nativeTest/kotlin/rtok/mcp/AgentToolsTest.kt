@@ -8,6 +8,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import rtok.plugin.Runtime
 import rtok.store.registerAgent
+import rtok.store.setAgentAncestors
 import rtok.support.diskConfig
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -18,6 +19,10 @@ import kotlin.test.assertTrue
 
 private const val GIT_CAP = 65_536L
 
+/** Above any real pid. */
+private const val FOREIGN_PID = 10_000_000
+
+@Suppress("TooManyFunctions")
 class AgentToolsTest {
     private fun server(name: String): Server {
         val (base, _) = diskConfig(name)
@@ -76,6 +81,85 @@ class AgentToolsTest {
             assertTrue(bad && why.startsWith("agent zzzz:"), why)
         }
 
+    /** A session whose hooks recorded a process tree the test process is not part of, as for one app's shared server. */
+    private fun hooked(
+        s: Server,
+        session: String,
+        cwd: String,
+    ): String {
+        val id = s.cx.store.registerAgent(s.cx.hostId!!, session, null, cwd, null)
+        s.cx.store.setAgentAncestors(id, listOf(FOREIGN_PID))
+        return id
+    }
+
+    private fun rows(json: String) = Json.parseToJsonElement(json).jsonArray.map { it.toString() }
+
+    private fun field(
+        json: String,
+        key: String,
+    ) = Json
+        .parseToJsonElement(json)
+        .jsonObject[key]!!
+        .jsonPrimitive.content
+
+    private fun gitRepo(tag: String): String {
+        val dir = rtok.support.tmpDir(tag)
+        val (g, _) =
+            rtok.sys
+                .ProgressRunner("", "git", listOf("-C", dir, "init", "-q"))
+                .quiet()
+                .runCapped(GIT_CAP)
+        assertEquals(0, g.exitCode)
+        return dir
+    }
+
+    @Test fun twoSessionsInDifferentFoldersSharingOneServerGetNoAnswerForEachOther() =
+        server("shared").use { s ->
+            hooked(s, "sess-theirs", rtok.sys.cwd())
+            val repo = gitRepo("mcp-shared-mine")
+            val mine = hooked(s, "sess-mine", repo)
+
+            val (lost, why) = call(s, "whoami")
+            assertTrue(lost && "cannot tell which one is calling" in why, why)
+            for (tool in listOf("worktree_list", "task_list", "task_ready")) {
+                val (err, text) = call(s, tool)
+                assertTrue(err && "pass `repo`" in text, "$tool: $text")
+            }
+            assertTrue(call(s, "worktree_add", """{"task":"T1"}""").first)
+            assertTrue(call(s, "agent_inbox").first)
+
+            val (tree, rooted) = call(s, "tree", """{"path":"."}""")
+            assertFalse(tree, rooted)
+            assertTrue("this server is shared" in rooted, rooted)
+
+            val (named, me) = call(s, "whoami", """{"agent":"$mine"}""")
+            assertFalse(named, me)
+            assertEquals(mine to "arg", field(me, "id") to field(me, "rule"))
+
+            val (listErr, listed) = call(s, "worktree_list", """{"repo":"$repo"}""")
+            assertFalse(listErr, listed)
+            assertEquals(listOf(rtok.sys.canonicalize(repo)), rows(listed).map { rtok.sys.canonicalize(field(it, "path")) })
+            assertEquals(false to "[]", call(s, "task_list", """{"repo":"$repo"}"""))
+            val (made, task) = call(s, "task_create", """{"title":"Mine","repo":"$repo"}""")
+            assertFalse(made, task)
+            assertEquals(listOf(field(task, "id")), rows(call(s, "task_list", """{"repo":"$repo"}""").second).map { field(it, "id") })
+
+            // Naming the agent acts in its repository; git then has nothing to branch from.
+            val (_, added) = call(s, "worktree_add", """{"task":"T1","agent":"$mine"}""")
+            assertFalse("not yours" in added || "cannot tell" in added, added)
+        }
+
+    @Test fun aOneShotCallActsInItsOwnDirectoryBesideLiveSessions() {
+        val (base, _) = diskConfig("one-shot")
+        val cfg = base.copy(hook = base.hook.copy(host = "claude"))
+        val cx = Runtime.open(cfg, "mcp-one-shot")
+        Server(cx, Server.listedFor(cfg), AgentSession(cx, env = { null }, oneShot = true)).use { s ->
+            hooked(s, "sess-a", "/elsewhere")
+            assertEquals(rtok.sys.cwd(), s.agents.projectDir(JsonObject(emptyMap())))
+            assertFalse(s.agents.unsure())
+        }
+    }
+
     @Test fun sendInboxStatusAndListRoundTrip() =
         server("agent-msgs").use { s ->
             val me = register(s, "sess-a")
@@ -125,14 +209,7 @@ class AgentToolsTest {
     @Test fun worktreeAddRefusesARepositoryThatIsNotTheCallers() =
         server("worktree-wrong-repo").use { s ->
             // The caller works in `theirs`; the server runs in this test's own checkout.
-            val theirs = "${rtok.support.tmpDir("mcp-wt-theirs")}/theirs"
-            rtok.sys.createDirAll(theirs)
-            val (g, _) =
-                rtok.sys
-                    .ProgressRunner("", "git", listOf("-C", theirs, "init", "-q"))
-                    .quiet()
-                    .runCapped(GIT_CAP)
-            assertEquals(0, g.exitCode)
+            val theirs = gitRepo("mcp-wt-theirs")
             val id = s.cx.store.registerAgent(s.cx.hostId!!, "sess-a", null, theirs, null)
             val (err, text) = call(s, "worktree_add", """{"task":"T1","agent":"$id"}""")
             assertTrue(err && "not yours" in text && "pass `repo`" in text, text)
