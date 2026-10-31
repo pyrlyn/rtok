@@ -1,0 +1,282 @@
+name: release
+
+# Prerelease of rtok, started by hand (workflow_dispatch). Structure follows pyrlyn/ci's
+# reusable release.yml (checks -> verify -> build -> release -> notify-failure), adapted to the
+# Kotlin/Gradle build. Stages:
+#
+#   checks  -> compute the next prerelease version from Version.kt, the `bump` input and the
+#              existing tags (X.Y.Z-alpha.N), write Version.kt and CHANGELOG.md, hand them on
+#   verify  -> full test suite on macOS arm64 and Linux x64 (same commands as CI, #253)
+#   build   -> release binaries per target, archives + sha256
+#   release -> only if everything above is green, and only after a reviewer approves the
+#              `release` environment: commits the bump on a release/<tag> branch, pushes
+#              the tag and creates a DRAFT prerelease with the archives, opens a PR for the bump
+#
+# A red verify or build stops the run before the `release` job; nothing is tagged or published.
+# `dry-run: true` (default) stops after build.
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Part of the version to bump for the next prerelease cycle.
+        type: choice
+        options: [major, minor, patch]
+        default: minor
+      pre-id:
+        description: Prerelease identifier (X.Y.Z-<pre-id>.N).
+        type: string
+        default: alpha
+      dry-run:
+        description: Run checks, verify and build only; never tag or create a release.
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  SHARED_SETTINGS_DIR: ${{ github.workspace }}/packages/shared-settings
+  KOTLIN_WASM_DIR: ${{ github.workspace }}/packages/kotlin-wasm
+  KOTLIN_SNAPSHOT_DIR: ${{ github.workspace }}/packages/kotlin-snapshot
+  KOTLIN_WEBGL_DIR: ${{ github.workspace }}/packages/kotlin-webgl
+  KOTLIN_KIT_DIR: ${{ github.workspace }}/packages/kotlin-kit
+  VERSION_FILE: rtok/src/commonMain/kotlin/rtok/Version.kt
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Ref
+        run: |
+          [ "$GITHUB_REF" = "refs/heads/main" ] || { echo "::error title=release::run from main, not $GITHUB_REF"; exit 1; }
+      - name: Next version
+        id: version
+        env:
+          BUMP: ${{ inputs.bump }}
+          PRE: ${{ inputs.pre-id }}
+        run: |
+          set -euo pipefail
+          [[ "$PRE" =~ ^[a-z]+$ ]] || { echo "::error::invalid pre-id '$PRE'"; exit 1; }
+          current="$(sed -nE 's/^const val VERSION = "([^"]+)"$/\1/p' "$VERSION_FILE")"
+          [[ "$current" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(-.*)?$ ]] || { echo "::error::cannot parse VERSION '$current'"; exit 1; }
+          ma="${BASH_REMATCH[1]}"; mi="${BASH_REMATCH[2]}"; pa="${BASH_REMATCH[3]}"
+          # If Version.kt's own prerelease is already tagged, its cycle is open: keep the core and
+          # count up N. Otherwise start a new cycle with the bump.
+          if [ -n "${BASH_REMATCH[4]}" ] && git rev-parse -q --verify "refs/tags/v$current" >/dev/null; then
+            core="$ma.$mi.$pa"
+          else
+            case "$BUMP" in
+              major) core="$((ma + 1)).0.0" ;;
+              minor) core="$ma.$((mi + 1)).0" ;;
+              patch) [ -n "${BASH_REMATCH[4]}" ] && core="$ma.$mi.$pa" || core="$ma.$mi.$((pa + 1))" ;;
+            esac
+          fi
+          n="$(git tag -l "v$core-$PRE.*" | sed -nE "s/^v$core-$PRE\.([0-9]+)$/\1/p" | sort -n | tail -n1)"
+          version="$core-$PRE.$(( ${n:-0} + 1 ))"
+          if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
+            echo "::error::tag v$version already exists"; exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+          echo "### $current -> $version (bump: $BUMP)" >> "$GITHUB_STEP_SUMMARY"
+      - name: Version.kt and CHANGELOG.md
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          sed -i -E "s/^const val VERSION = \"[^\"]+\"$/const val VERSION = \"$VERSION\"/" "$VERSION_FILE"
+          last="$(git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null || true)"
+          range="${last:+$last..}HEAD"
+          {
+            echo "# Changelog"
+            echo
+            echo "## $VERSION - $(date -u +%Y-%m-%d)"
+            echo
+            echo "Changes since ${last:-the first commit}."
+            echo
+            git log --no-merges --format='- %s (%h)' "$range"
+            echo
+            [ -f CHANGELOG.md ] && sed '1{/^# Changelog$/d}' CHANGELOG.md
+          } > "$RUNNER_TEMP/CHANGELOG.md"
+          mv "$RUNNER_TEMP/CHANGELOG.md" CHANGELOG.md
+          mkdir -p "$RUNNER_TEMP/bump/$(dirname "$VERSION_FILE")"
+          cp CHANGELOG.md "$RUNNER_TEMP/bump/"
+          cp "$VERSION_FILE" "$RUNNER_TEMP/bump/$VERSION_FILE"
+          git diff --stat
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: bump
+          path: ${{ runner.temp }}/bump
+          if-no-files-found: error
+
+  verify:
+    needs: checks
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          # macos-15 is Apple Silicon.
+          - os: macos-15
+            command: ./gradlew macosArm64Test cliTest e2eTest --console=plain
+          - os: ubuntu-latest
+            prepare: KOTLIN_VERSION=$(mise current kotlin) ./gradlew -p scripts/ci/konan-bootstrap linkDebugExecutableLinuxX64 linkDebugExecutableLinuxArm64 --console=plain
+            command: ./gradlew -Prtok.allTargets=true linuxX64Test cliTest e2eTest -x ktlintCheck -x detekt --continue --console=plain
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - &checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - &packages
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: pyrlyn/packages
+          ref: '0.0.1'
+          path: packages
+          persist-credentials: false
+      - &bump
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: bump
+          path: .
+      - &mise
+        uses: jdx/mise-action@6be3c7ed4c21d4f76b208d351d95aac273ebb76d # v5.2.4
+      - &gradle
+        uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        with:
+          cache-read-only: true
+      - &konan
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.konan
+          key: konan-${{ runner.os }}-${{ hashFiles('mise.toml', 'scripts/ci/konan-bootstrap/**') }}
+          restore-keys: konan-${{ runner.os }}-
+      - name: Prepare the Kotlin/Native toolchain
+        if: matrix.prepare
+        run: ${{ matrix.prepare }}
+      - name: Test
+        run: ${{ matrix.command }}
+
+  build:
+    name: build ${{ matrix.target }}
+    needs: [checks, verify]
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - os: macos-15
+            target: macosArm64
+            task: :rtok:linkReleaseExecutableMacosArm64
+            gradle-flags: ''
+          - os: ubuntu-latest
+            target: linuxX64
+            task: :rtok:linkReleaseExecutableLinuxX64
+            gradle-flags: -Prtok.allTargets=true -x ktlintCheck -x detekt
+            prepare: KOTLIN_VERSION=$(mise current kotlin) ./gradlew -p scripts/ci/konan-bootstrap linkDebugExecutableLinuxX64 linkDebugExecutableLinuxArm64 --console=plain
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    env:
+      TARGET: ${{ matrix.target }}
+      TAG: ${{ needs.checks.outputs.tag }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - *checkout
+      - *packages
+      - *bump
+      - *mise
+      - *gradle
+      - *konan
+      - name: Prepare the Kotlin/Native toolchain
+        if: matrix.prepare
+        run: ${{ matrix.prepare }}
+      - name: Build
+        run: ./gradlew ${{ matrix.gradle-flags }} ${{ matrix.task }} --console=plain
+      - name: Smoke test
+        run: |
+          set -euo pipefail
+          bin="rtok/build/bin/$TARGET/releaseExecutable/rtok.kexe"
+          out="$("$bin" --version)"
+          echo "$out"
+          grep -qF "${TAG#v}" <<<"$out" || { echo "::error::$bin --version does not report ${TAG#v}"; exit 1; }
+      - name: Package
+        run: |
+          set -euo pipefail
+          name="rtok-$TAG-$TARGET"
+          stage="$RUNNER_TEMP/stage/$name"; mkdir -p "$stage" "$RUNNER_TEMP/dist"
+          cp "rtok/build/bin/$TARGET/releaseExecutable/rtok.kexe" "$stage/rtok"
+          cp README.md CHANGELOG.md "$stage/"
+          tar -C "$RUNNER_TEMP/stage" -czf "$RUNNER_TEMP/dist/$name.tar.gz" "$name"
+          cd "$RUNNER_TEMP/dist"
+          if command -v sha256sum >/dev/null; then sha256sum "$name.tar.gz" > "$name.tar.gz.sha256"
+          else shasum -a 256 "$name.tar.gz" > "$name.tar.gz.sha256"; fi
+          cat "$name.tar.gz.sha256"
+          echo "DIST_DIR=$RUNNER_TEMP/dist" >> "$GITHUB_ENV"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-${{ matrix.target }}
+          path: ${{ env.DIST_DIR }}
+          if-no-files-found: error
+
+  release:
+    needs: [checks, verify, build]
+    # Runs only when every verify and build job is green, and waits for the reviewer on the
+    # `release` environment before it pushes anything.
+    if: ${{ !inputs.dry-run && needs.verify.result == 'success' && needs.build.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: release
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      TAG: ${{ needs.checks.outputs.tag }}
+      VERSION: ${{ needs.checks.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - *bump
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
+      - name: Commit, tag, draft prerelease, bump PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          branch="release/$TAG"
+          git switch -c "$branch"
+          git add CHANGELOG.md "$VERSION_FILE"
+          git commit -m "release: $VERSION"
+          git tag -a "$TAG" -m "rtok $VERSION"
+          git push origin "$branch" "refs/tags/$TAG"
+          (cd dist && cat ./*.sha256 > SHA256SUMS)
+          awk -v v="$VERSION" '$0 ~ "^## "v" " {on=1; next} /^## / && on {exit} on' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
+          gh release create "$TAG" --draft --prerelease --latest=false --verify-tag \
+            --title "rtok $VERSION" --notes-file "$RUNNER_TEMP/notes.md" \
+            dist/*.tar.gz dist/SHA256SUMS
+          gh pr create --base main --head "$branch" --title "release: $VERSION" \
+            --body "Version.kt and CHANGELOG.md for the draft prerelease $TAG."
+          echo "Draft prerelease $TAG created; publish it by hand after review." >> "$GITHUB_STEP_SUMMARY"

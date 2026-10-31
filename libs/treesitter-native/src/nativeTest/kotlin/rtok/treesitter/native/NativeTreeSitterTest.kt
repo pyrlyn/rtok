@@ -7,7 +7,7 @@ class NativeTreeSitterTest {
     private val ts = NativeTreeSitter
 
     @Test fun everyGrammarParsesEmptyInput() {
-        assertTrue(ts.grammars.size >= 34, "grammars: ${ts.grammars.map { it.name }}")
+        assertTrue(ts.grammars.size >= 32, "grammars: ${ts.grammars.map { it.name }}")
         for (g in ts.grammars) assertNotNull(g.parse(ByteArray(0)), g.name).close()
     }
 

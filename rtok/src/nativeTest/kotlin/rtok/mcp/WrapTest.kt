@@ -115,6 +115,17 @@ class WrapTest {
         assertNull(p.take("""{"id":9,"result":{}}""".encodeToByteArray()))
     }
 
+    @Test fun drainReturnsEveryUnansweredRequestOnce() {
+        val p = Wrap.Pending()
+        p.note(obj("""{"id":1,"method":"initialize"}"""))
+        p.note(obj("""{"id":"2","method":"tools/call","params":{"name":"grep"}}"""))
+        p.note(obj("""{"method":"notifications/initialized"}"""))
+        assertNull(p.take("""{"id":1,"result":{}}""".encodeToByteArray()))
+        assertEquals(listOf("\"2\""), p.drain().map { it.toString() })
+        assertEquals(emptyList(), p.drain())
+        assertNull(p.take("""{"id":"2","result":{}}""".encodeToByteArray()))
+    }
+
     @Test fun shortenResultRecordsArchiveMcpAboveThreshold() {
         withRuntime("wrap-mcp") { cx ->
             val settings = Settings.fromConfig(cx.config)

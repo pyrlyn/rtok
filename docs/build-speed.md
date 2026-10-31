@@ -7,6 +7,7 @@ All switches live in `gradle.properties`; override per run with `-P<name>=<value
 | `org.gradle.configuration-cache=true` | skips configuration on repeat runs | `--no-configuration-cache` |
 | `org.gradle.caching=true` | reuses task outputs | `--no-build-cache` |
 | `org.gradle.parallel=true` | modules build in parallel | `--no-parallel` |
+| `org.gradle.vfs.watch=false` | Gradle rescans inputs on every build instead of trusting FSEvents; see "File system watching" | `--watch-fs` |
 | `org.gradle.jvmargs` / `kotlin.daemon.jvmargs` | 4 GB heap for Gradle and Kotlin daemons | edit the value |
 | `kotlin.native.cacheKind=static` | precompiled stdlib/dep caches for debug links | set `none` |
 | `kotlin.incremental.native=true` | incremental Kotlin/Native compilation | set `false` |
@@ -24,6 +25,42 @@ Kotlin 2.2.21), `org.gradle.caching=true`, `org.gradle.configuration-cache=true`
 Measured on the Mac (one-line edit in `rtok/plugins/inject/Inject.kt`, then `:rtok:linkDebugTestMacosArm64`):
 8 s before the test-group split, 8 s after. Full `./gradlew build` (warm daemon/cache): 66 s; `e2eTest` 7 s;
 `:rtok:macosArm64Test` 7 s; `cliTest` 2 s (shares the already-linked test binary).
+
+## File system watching (off, 2026-10-30)
+
+`org.gradle.vfs.watch=false`, because with watching on a build can silently test old code. A Gradle daemon keeps a
+snapshot of the inputs between builds and only drops entries when FSEvents reports a change. When `fseventsd` falls
+behind (it ran at 100% CPU with a lag of 2 to 220 s on the loaded Mac where this was found), a build that starts before
+the edit's event arrives sees an unchanged snapshot: every task is `UP-TO-DATE` or `FROM-CACHE`, the build is
+successful, and `test.kexe` holds the old code. Runs stay wrong until the event arrives.
+
+Gradle's guard does not cover this. Its watch probe proves a directory once, when watching starts, and is never
+checked again ([`DefaultFileWatcherProbeRegistry`](https://github.com/gradle/gradle/blob/v9.8.2/platforms/core-execution/file-watching/src/main/java/org/gradle/internal/watch/registry/impl/DefaultFileWatcherProbeRegistry.java), 9.8.2).
+A directory whose probe is late is not watched, which is safe, so the failure needs a lag that grows after the probe passed.
+
+`kotlin.incremental.native` is not the cause and stays on. In the failing run the Kotlin/Native compiler never ran:
+the entry for the edited file in `kotlin-native-ic-cache` kept its old time. `--no-watch-fs` alone gave the right
+binary, with incremental compilation on. Switching `-Prtok.wasm` and editing `nativeMain` with `nativeTest` did not
+produce a stale binary either.
+
+**Reproduce.** Needs the Mac under enough file activity that `fseventsd` lags.
+
+1. Run `./gradlew :rtok:linkDebugTestMacosArm64 --console=plain --info --watch-fs` in a loop until the output has no
+   `Invalidating hierarchy because watch probe hasn't been triggered` (took 1 to 42 runs at load 30).
+2. Churn files outside the repo to keep `fseventsd` behind: 6 processes creating and deleting small files for 25 s.
+3. Four seconds in, change a string in `rtok/src/nativeTest/kotlin/rtok/plugins/graph/WatchTest.kt` and run the same
+   command at once. All tasks are `UP-TO-DATE`, the build succeeds, and the binary lacks the new string (K/N stores
+   strings as UTF-16, so search for the UTF-16 bytes).
+4. Add `--no-watch-fs`: the tasks run and the binary is right.
+
+**Cost** (`:rtok:linkDebugTestMacosArm64`, warm daemon, the same Mac at load 25-35, so small differences are noise):
+
+| | watching on | watching off |
+|---|---|---|
+| no-op build, median of 5 | 1.6 s | 2.0 s |
+| one-line test edit | 25 s (2 runs) | 28 s (3 runs) |
+
+Five edits in a row with `fseventsd` under the same load, watching off, all produced the right binary.
 
 ## Remote build cache (Cloudflare R2)
 

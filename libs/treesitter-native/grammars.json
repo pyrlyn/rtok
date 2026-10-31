@@ -8,11 +8,6 @@
       "commit": "10eb5ac119eec9cb4267a8e035066473983f5f3a"
     },
     {
-      "repo": "tree-sitter/tree-sitter-agda",
-      "ref": "v1.3.3",
-      "commit": "47802091de0cb8ac2533d67ac37e65692c5902c4"
-    },
-    {
       "repo": "tree-sitter/tree-sitter-bash",
       "ref": "v0.25.1",
       "commit": "a06c2e4415e9bc0346c6b86d401879ffb44058f7"
@@ -136,11 +131,6 @@
       "repo": "tree-sitter/tree-sitter-typescript",
       "ref": "v0.23.2",
       "commit": "f975a621f4e7f532fe322e13c4f79495e0a7b2e7"
-    },
-    {
-      "repo": "tree-sitter/tree-sitter-verilog",
-      "ref": "v1.0.3",
-      "commit": "521b535e41a5acd2c6539a922d4649bbe8275110"
     },
     {
       "repo": "tree-sitter-grammars/tree-sitter-kotlin",

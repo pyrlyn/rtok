@@ -1,10 +1,13 @@
 # rtok → Kotlin/Native port plan
 
+This file keeps decisions and history. Open work lives in [roadmap.md](roadmap.md) (approved, not yet
+planned) and `plan/` (one folder per task); unchecked items were moved there.
+
 Source: `apps/rtok` (Rust, ~200k lines incl. tests; `src/` 166k, crates 31k). Target: this repo.
 Goal: behavior- and structure-preserving port; CLI flags, output formats, config (TOML) and
 on-disk formats (SQLite ledger `rtok.db`, payload files) stay interchangeable with Rust rtok.
-**Excluded:** TUI (`src/tui`, ratatui/crossterm UI, `rtok tui`) and web UI (`src/web`,
-`crates/rtok-webui`, `rtok web`, `rtok dashboard`, `agents/junk_web.rs`).
+**Originally excluded, now in the port:** TUI (`src/tui`, `rtok tui`; `libs/tui`) and web UI (`src/web`,
+`crates/rtok-webui`, `rtok web`, `rtok dashboard`, `agents/junk_web.rs`; `rtok-web*` modules, in progress, docs/web.md).
 
 ## Standing rules (Ivan)
 - Prefer popular, actively maintained libraries; own code only when none fits, and then as a separate module under `libs/`, not inside port code.
@@ -59,9 +62,7 @@ jiff/humantime→kotlinx-datetime; shlex→own; wasmi→not portable (see risks)
 - [x] rtok-log append/format/rotation (same line format, rotation files, flock lock) + tests
 ### Phase 3 — rtok-hook protocol + `rtok hook`
 - [x] crates/rtok-hook wire protocol, fingerprint, home expansion, unix-socket client (ported early: rtok-config depends on it) + 6 tests
-- [ ] src/hooks (resident server, deadline, push, types) and `rtok hook` command
-- [ ] Tests: port matching Rust unit + integration tests to kotlin.test; phase done only when they pass on the Mac (`./gradlew macosArm64Test`)
-- [ ] Docs: `docs/<feature>.md` (how it works, enable, disable, test, limitations) + README section
+- [x] src/hooks (resident server, deadline, push, types) and `rtok hook` command (29 dispatch tests still pending, see [roadmap.md](roadmap.md))
 - [x] host hook JSON in/out types + adapters for 9 hosts (`hooks/Types.kt`, `Names.kt`) — 18/18 types.rs tests
 - [x] deadline.rs (3/3 tests), resident.rs server + `bind_private` (1/1 + 1 new socket round-trip test), process `environ()` + `flock` lock in rtok-sys (2 new)
 - [x] push.rs — agent message push + render frame (5 tests)
@@ -116,35 +117,22 @@ jiff/humantime→kotlinx-datetime; shlex→own; wasmi→not portable (see risks)
 - [x] checkpoint (1932) — 27
 - [x] inject (523) — 8
 - [x] guard (2844) — 45 of 53 (+1 check, +1 types.rs view key); grep_symbol 8 pending (graph/tree-sitter); docs/guard.md; read::outline markdown digest ported (no tree-sitter needed); cmd `sh_quote`/`wrap_quote` in `plugins/cmd/Run.kt`
-- [ ] read (4334) — 101
+- [x] read (4334) — 101 Rust tests → 98 + 5 walk in rtok-sys (PORTING.md)
 - [x] cmd (10098) — 207 Kotlin tests: rules 51, formatters 25, run 29, hook 25, compact 18, grep 10, logfmt 8, gh 7, loops 7, python 7, bounded 7, diffs 6, mise 4, filter 3; rtok-sys ProgressRunner +5; catfile (4) + cat re-read delta (1) blocked on tree-sitter / read cache (docs/cmd.md)
 - [x] memory (5419) — 126 of 127 (scrub 2, admit 6, files 8, pack 7, observe 6, handoff 11, sync 15, export 3, import 6, extract 11, mod 51); `rtok memory` CLI (all but `status`); docs/memory.md
   - pending: handoff `pointers_carry_enclosing_symbol_ranges_when_indexed` (needs graph index, Phase 10); `memory status` (model::memory_status); `sync --stat` (change_preview Preview); MCP dispatch (rtok-mcp)
-- [ ] graph (20084) — 275; walk 5, index 16 (12 Rust + batch + rows + rank-document 2; Rust-crate fixture pending), rank 10, cochange 5
+- graph (20084) — 275 Rust tests; walk 5, index 16 (12 Rust + batch + rows + rank-document 2; Rust-crate fixture pending), rank 10, cochange 5; open part in [roadmap.md](roadmap.md)
 - [x] wasm host (478) — 3 → 5 (+1 registry, +3 Chasm adapter); Chasm 2.3.0 behind libs/wasm, fuel 100M/call; docs/wasm-plugins.md
-- [ ] Tests: port matching Rust unit + integration tests to kotlin.test; phase done only when they pass on the Mac (`./gradlew macosArm64Test`)
-- [ ] Docs: `docs/<feature>.md` (how it works, enable, disable, test, limitations) + README section
+- Phase-exit rule (every phase): port the matching Rust unit and integration tests to kotlin.test, green on the Mac (`./gradlew macosArm64Test`), and write `docs/<feature>.md` plus a README line. Open phase work: [roadmap.md](roadmap.md).
 ### Phase 6 — CLI surface (src/cli: stats, info, expand, filter, run, config, logs, report, completions, man)
 - [x] CLI layer: own `CommandSpec`/`Invocation`/`CliIo`, exit codes 0/1/2, Clikt behind `CliktAdapter`; `plugins` (table), `config init/path/validate/set`
 - [x] CLI testing: Kotest `CliSpec` (17, our layer: parsing incl. `--since`, errors/exit codes/messages, log/root/config) + `./gradlew e2eTest` (11, built rtok.kexe, real git main/worktree/submodule)
-- [ ] CLI testing per subcommand (Kotest spec + e2e case each): stats (`--since` vs real repo), info, expand, filter, run, config show/get, plugins --json, logs, report, completions, man
-- [ ] Tests: port matching Rust unit + integration tests to kotlin.test; phase done only when they pass on the Mac (`./gradlew macosArm64Test`)
-- [ ] Docs: `docs/<feature>.md` (how it works, enable, disable, test, limitations) + README section
+- Per-subcommand CLI tests (Kotest spec + e2e case each) still open for stats, expand, filter, run, config show/get, plugins --json, report, completions, man; info and logs are done. → [roadmap.md](roadmap.md)
 ### Phase 7 — proxy (Anthropic/OpenAI chat+responses/Gemini wire, route, gate, semantic cache) via Ktor
-- [ ] Tests: port matching Rust unit + integration tests to kotlin.test; phase done only when they pass on the Mac (`./gradlew macosArm64Test`)
-- [ ] Docs: `docs/<feature>.md` (how it works, enable, disable, test, limitations) + README section
 ### Phase 8 — MCP server (rtok-mcp, src/mcp) stdio + HTTP
-- [ ] Tests: port matching Rust unit + integration tests to kotlin.test; phase done only when they pass on the Mac (`./gradlew macosArm64Test`)
-- [ ] Docs: `docs/<feature>.md` (how it works, enable, disable, test, limitations) + README section
 ### Phase 9 — agents install/uninstall/doctor for all hosts (src/agents, src/doctor)
-- [ ] Tests: port matching Rust unit + integration tests to kotlin.test; phase done only when they pass on the Mac (`./gradlew macosArm64Test`)
-- [ ] Docs: `docs/<feature>.md` (how it works, enable, disable, test, limitations) + README section
 ### Phase 10 — graph (tree-sitter cinterop), otel export, worktree/task/batch/demon/bench
-- [ ] Tests: port matching Rust unit + integration tests to kotlin.test; phase done only when they pass on the Mac (`./gradlew macosArm64Test`)
-- [ ] Docs: `docs/<feature>.md` (how it works, enable, disable, test, limitations) + README section
 ### Phase 11 — docs (how it works, enable/disable, test, limitations) and size/test report
-- [ ] Tests: port matching Rust unit + integration tests to kotlin.test; phase done only when they pass on the Mac (`./gradlew macosArm64Test`)
-- [ ] Docs: `docs/<feature>.md` (how it works, enable, disable, test, limitations) + README section
 
 ## Build timings (Mac, macosArm64 debug)
 | Scenario | Time |
@@ -210,7 +198,7 @@ Next, in order:
 Done: tree-sitter interface + native adapter with 34 grammars (PR #3), `mise run coverage` (PR #4),
 read `outline.rs` (10 tests) and `density.rs` (4), rtok-sys gitignore walk (5), review fixes (this PR).
 Decision: Dropbox affectedmoduledetector rejected (archived, breaks the configuration cache, Android task
-names only); `scripts/smart.py` stays (docs/toolchain.md).
+names only); `scripts/smart.py` stays (toolchain.md).
 Release binary: unchanged so far (17.9 MB) — no CLI/MCP path calls the read plugin yet, so K/N and ld
 strip the grammars; measure again once `read`/`graph` are wired (all grammars = 70 MB of objects).
 Read plugin finished (PR feat/read-rest): `Read.kt`, `Roots.kt`, `Search.kt`, `Cache.kt`, `Hook.kt`,
@@ -1567,28 +1555,19 @@ Next, in order:
 
 ### P1 — Linux (~1–2 days)
 
-- [ ] P1: proxy stores a truncated body in the cache on Linux.
-- [ ] P1: per-lane timeout is not applied on Linux.
-- [ ] P2: `rtok_clone_or_copy` loses file times on Linux.
-- [ ] P2: trash fails across filesystems (EXDEV).
-- [ ] P2: e2e `junk clear --yes` behaves differently on Linux.
-- [ ] P2: ktoml silently drops arrays of inline tables whose strings contain `{`, `}` or escaped quotes (affects user configs; worked around only in the p28 fixture).
-- [ ] Flaky `TuiProjectsTest.removeShowsThePlan...` on Linux.
-- [ ] P3: flaky `DemonE2eSpec` (the supervisor can write its state after `stop`).
-- [ ] P3: attr destroyed after a failed `posix_spawnattr_init`; no EINTR retry; trash race; UTC `DeletionDate`; `/tmp` fallback; seed tie on equal mtimes.
-- [ ] Linux CI job (missing).
+- [x] #242 (b0112b2): P1: proxy stores a truncated body in the cache on Linux (a short body is now an error).
+- [x] #247 (0964433): P1: per-lane timeout is not applied on Linux.
+- [x] #243 (bc485cc): P2: `rtok_clone_or_copy` loses file times on Linux.
+- [x] #244 (d16e9a1): P2: trash fails across filesystems (EXDEV).
+- [x] #245 (304fd35): P2: e2e `junk clear --yes` behaves differently on Linux.
+- [x] #246 (3af855e): P2: ktoml silently drops arrays of inline tables whose strings contain `{`, `}` or escaped quotes.
+- [x] #248 (c76f0a3): Flaky `TuiProjectsTest.removeShowsThePlan...` on Linux.
+- [x] #249 (9d23eb4): P3: flaky `DemonE2eSpec` (the supervisor can write its state after `stop`).
+- Still open: the P3 Linux hardening → [roadmap.md](roadmap.md); the Linux CI job is its own task in `plan/`.
 
 ### P2 — rest of the port plan (weeks)
 
-- [ ] hooks: resident server and `rtok hook` command; 29 tests waiting on worktree/otel/MCP.
-- [ ] read: 101 tests.
-- [ ] graph: ~275 tests, incl. `grep_symbol` via tree-sitter and CLI wiring.
-- [ ] CLI tests per subcommand: stats, expand, filter, run, config, plugins, report, completions, man (info and logs done).
-- [ ] Skill sync for all hosts.
-- [ ] `rtok doctor`.
-- [ ] Worktree removal in junk.
-- [ ] continue + goose (YAML library decision needed).
-- [ ] Windows `mingwX64` target (absent).
+Open items moved to [roadmap.md](roadmap.md). The `rtok info` and `rtok logs` CLI tests are done (see the session below).
 
 ## Session: missing top-level commands — guard check, discover, info, logs, setup
 
