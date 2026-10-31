@@ -20,9 +20,11 @@ pluginManagement {
     extra["kotlinSnapshotDir"] = sharedBuild("kotlin-snapshot", "KOTLIN_SNAPSHOT_DIR")
     extra["kotlinWebglDir"] = sharedBuild("kotlin-webgl", "KOTLIN_WEBGL_DIR")
 }
+// WASM plugins are opt-in (docs/wasm-plugins.md): without -Prtok.wasm=true neither the host nor the engine is built.
+val wasmPlugins = providers.gradleProperty("rtok.wasm").orNull == "true"
 // The WebAssembly interface and its Chasm adapter, shared with Octo: a checkout of kotlin-wasm
 // (github.com/pyrlyn/packages, kotlin-wasm/).
-includeBuild(extra["kotlinWasmDir"] as String)
+if (wasmPlugins) includeBuild(extra["kotlinWasmDir"] as String)
 // insta-style snapshot assertions for tests (docs/testing.md "Snapshot tests"): a checkout of
 // kotlin-snapshot.
 includeBuild(extra["kotlinSnapshotDir"] as String)
@@ -31,6 +33,7 @@ includeBuild(extra["kotlinWebglDir"] as String)
 // Remote build cache on Cloudflare R2 (docs/build-speed.md). Approved by Ivan 2026-10-26.
 // Repositories + R2 remote build cache (docs/build-speed.md), approved by Ivan 2026-10-26; logic in shared.settings.
 plugins { id("com.github.burrunan.s3-build-cache") version "1.9.10"; id("shared.settings") }
-include(":humantime", ":treesitter", ":treesitter-native", ":toml", ":toml-ktoml", ":db", ":db-room", ":rtok-plugin-sdk", ":rtok-config", ":rtok-log", ":rtok-hook", ":rtok-store", ":rtok-sys", ":rtok-mcp", ":rtok-agent-sdk", ":rtok", ":rtok-wasm", ":rtok-e2e", ":http", ":http-ktor", ":http-server", ":http-server-ktor", ":zstd", ":zstd-native", ":semver", ":globset", ":toml-aot", ":yaml-aot", ":json-strict", ":tui", ":rtok-web", ":rtok-web-model", ":rtok-web-ui", ":rtok-web-compose")
+include(":humantime", ":treesitter", ":treesitter-native", ":toml", ":toml-ktoml", ":db", ":db-room", ":rtok-plugin-sdk", ":rtok-config", ":rtok-log", ":rtok-hook", ":rtok-store", ":rtok-sys", ":rtok-mcp", ":rtok-agent-sdk", ":rtok", ":rtok-e2e", ":http", ":http-ktor", ":http-server", ":http-server-ktor", ":zstd", ":zstd-native", ":semver", ":globset", ":toml-aot", ":yaml-aot", ":json-strict", ":tui", ":rtok-web", ":rtok-web-model", ":rtok-web-ui", ":rtok-web-compose")
+if (wasmPlugins) include(":rtok-wasm")
 listOf("humantime", "treesitter", "treesitter-native", "toml", "toml-ktoml", "db", "db-room", "http", "http-ktor", "http-server", "http-server-ktor", "zstd", "zstd-native", "semver", "globset", "toml-aot", "yaml-aot", "json-strict", "tui").forEach { project(":$it").projectDir = file("libs/$it") }
 

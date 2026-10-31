@@ -2,6 +2,9 @@ import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
 import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
 // rules/default.toml is copied verbatim from the Rust repo's rules/default.toml (the built-in cmd rules).
 val defaultRules = embedText("genDefaultRules", "rules/default.toml", "rtok.plugins.cmd", "DEFAULT_RULES", "DefaultRules")
+// -Prtok.wasm=true (docs/wasm-plugins.md): Kotlin has no conditional compilation, so the flag picks a source dir.
+val wasmPlugins = providers.gradleProperty("rtok.wasm").orNull == "true"
+val wasmDir = if (wasmPlugins) "wasmPlugins" else "noWasmPlugins"
 configure<KotlinMultiplatformExtension> {
     targets.withType<KotlinNativeTarget>().configureEach {
         binaries.executable {
@@ -14,6 +17,8 @@ configure<KotlinMultiplatformExtension> {
         .get()
         .kotlin
         .srcDir(defaultRules)
+    sourceSets.nativeMain { kotlin.srcDir("src/$wasmDir/kotlin") }
+    sourceSets.nativeTest { kotlin.srcDir("src/${wasmDir}Test/kotlin") }
     sourceSets.commonMain.dependencies {
         implementation(project(":rtok-plugin-sdk"))
         implementation(project(":rtok-config"))
@@ -34,8 +39,10 @@ configure<KotlinMultiplatformExtension> {
         implementation(project(":http-server-ktor"))
         implementation(project(":rtok-web"))
         implementation(project(":tui"))
-        implementation(project(":rtok-wasm"))
-        implementation("pyrlyn.wasm:wasm-chasm")
+        if (wasmPlugins) {
+            implementation(project(":rtok-wasm"))
+            implementation("pyrlyn.wasm:wasm-chasm")
+        }
         implementation(project(":treesitter-native"))
         implementation(project(":zstd-native"))
         implementation("com.github.ajalt.clikt:clikt:5.1.0")
