@@ -2,7 +2,7 @@
 // (OpenCode and Kilo). Not rtok's store: one connection, opened from the caller's `mode=ro` URI.
 package rtok.store
 
-import rtok.db.*
+import db.*
 
 /** `(session_id, time_created_ms, data)` with `time_created >= sinceMs`, oldest first. */
 fun readHostMessages(

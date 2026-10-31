@@ -1,5 +1,9 @@
+@file:OptIn(org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeCacheApi::class)
+
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
+import org.jetbrains.kotlin.gradle.plugin.mpp.DisableCacheInKotlinVersion
 import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
+import org.jetbrains.kotlin.konan.target.KonanTarget
 // rules/default.toml is copied verbatim from the Rust repo's rules/default.toml (the built-in cmd rules).
 val defaultRules = embedText("genDefaultRules", "rules/default.toml", "rtok.plugins.cmd", "DEFAULT_RULES", "DefaultRules")
 // -Prtok.wasm=true (docs/wasm-plugins.md): Kotlin has no conditional compilation, so the flag picks a source dir.
@@ -12,6 +16,16 @@ configure<KotlinMultiplatformExtension> {
             baseName = "rtok"
             (findProperty("rtok.linkMap") as String?)?.let { linkerOpts("-Wl,-map,$it") }
         }
+        // The static caches of clikt and clikt-mordant both define Context.selfAndAncestors, so ld.lld fails with a
+        // duplicate symbol. Kotlin 2.3.20 removed the kotlin.native.cacheKind.<target> property; this is its DSL.
+        if (konanTarget == KonanTarget.LINUX_X64) {
+            binaries.configureEach {
+                disableNativeCache(
+                    DisableCacheInKotlinVersion.`2_4_21`,
+                    "clikt and clikt-mordant caches both define Context.selfAndAncestors (duplicate symbol at link)",
+                )
+            }
+        }
     }
     sourceSets.commonMain
         .get()
@@ -23,16 +37,16 @@ configure<KotlinMultiplatformExtension> {
         implementation(project(":rtok-plugin-sdk"))
         implementation(project(":rtok-config"))
         implementation(project(":rtok-sys"))
-        implementation(project(":semver"))
+        implementation("pyrlyn.kit:semver")
         implementation(project(":humantime"))
         implementation(project(":globset"))
         implementation(project(":json-strict"))
-        implementation(project(":toml-aot"))
-        implementation(project(":yaml-aot"))
+        implementation("pyrlyn.kit:toml-aot")
+        implementation("pyrlyn.kit:yaml-aot")
         implementation(project(":rtok-agent-sdk"))
         implementation(project(":rtok-mcp"))
         implementation(project(":rtok-store"))
-        implementation(project(":db-room"))
+        implementation("pyrlyn.kit:db-room")
         implementation(project(":rtok-log"))
         implementation(project(":http"))
         implementation(project(":http-ktor"))

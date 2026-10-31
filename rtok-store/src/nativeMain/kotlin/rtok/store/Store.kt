@@ -4,9 +4,9 @@
 
 package rtok.store
 
+import db.*
 import kotlinx.cinterop.*
 import platform.posix.*
-import rtok.db.*
 import rtok.sys.*
 import kotlin.math.exp
 import kotlin.math.max

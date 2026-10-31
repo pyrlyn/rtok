@@ -1,0 +1,95 @@
+# DO NOT EDIT: generated from ci.main.kts; edit that file and run it to regenerate.
+
+# This file was generated using Kotlin DSL (.github/workflows/ci.main.kts).
+# If you want to modify the workflow, please change the Kotlin file and regenerate this YAML file.
+# Generated with https://github.com/typesafegithub/github-workflows-kt
+
+name: 'CI'
+on:
+  push:
+    branches:
+    - 'main'
+  pull_request: {}
+permissions:
+  contents: 'read'
+jobs:
+  check_yaml_consistency:
+    name: 'Check YAML consistency'
+    runs-on: 'ubuntu-latest'
+    steps:
+    - id: 'step-0'
+      name: 'Check out'
+      uses: 'actions/checkout@v7.0.1'
+    - id: 'step-1'
+      name: 'Execute script'
+      run: 'rm ''.github/workflows/ci.yml'' && ''.github/workflows/ci.main.kts'''
+    - id: 'step-2'
+      name: 'Consistency check'
+      run: 'git diff --exit-code ''.github/workflows/ci.yml'''
+  macos:
+    runs-on: 'macos-15'
+    needs:
+    - 'check_yaml_consistency'
+    env:
+      SHARED_SETTINGS_DIR: '${{ github.workspace }}/packages/shared-settings'
+      KOTLIN_WASM_DIR: '${{ github.workspace }}/packages/kotlin-wasm'
+      KOTLIN_SNAPSHOT_DIR: '${{ github.workspace }}/packages/kotlin-snapshot'
+      KOTLIN_WEBGL_DIR: '${{ github.workspace }}/packages/kotlin-webgl'
+      KOTLIN_KIT_DIR: '${{ github.workspace }}/packages/kotlin-kit'
+    timeout-minutes: 120
+    steps:
+    - id: 'step-0'
+      uses: 'actions/checkout@v7.0.1'
+    - id: 'step-1'
+      uses: 'actions/checkout@v7.0.1'
+      with:
+        repository: 'pyrlyn/packages'
+        ref: '0.0.1'
+        path: 'packages'
+    - id: 'step-2'
+      uses: 'jdx/mise-action@v5.2.4'
+    - id: 'step-3'
+      uses: 'gradle/actions/setup-gradle@v6.4.1'
+    - id: 'step-4'
+      uses: 'actions/cache@v6.1.0'
+      with:
+        path: '~/.konan'
+        key: 'konan-${{ runner.os }}-${{ hashFiles(''mise.toml'', ''scripts/ci/konan-bootstrap/**'') }}'
+        restore-keys: 'konan-${{ runner.os }}-'
+    - id: 'step-5'
+      run: './gradlew macosArm64Test cliTest e2eTest --console=plain'
+  linux:
+    runs-on: 'ubuntu-latest'
+    needs:
+    - 'check_yaml_consistency'
+    env:
+      SHARED_SETTINGS_DIR: '${{ github.workspace }}/packages/shared-settings'
+      KOTLIN_WASM_DIR: '${{ github.workspace }}/packages/kotlin-wasm'
+      KOTLIN_SNAPSHOT_DIR: '${{ github.workspace }}/packages/kotlin-snapshot'
+      KOTLIN_WEBGL_DIR: '${{ github.workspace }}/packages/kotlin-webgl'
+      KOTLIN_KIT_DIR: '${{ github.workspace }}/packages/kotlin-kit'
+    timeout-minutes: 120
+    steps:
+    - id: 'step-0'
+      uses: 'actions/checkout@v7.0.1'
+    - id: 'step-1'
+      uses: 'actions/checkout@v7.0.1'
+      with:
+        repository: 'pyrlyn/packages'
+        ref: '0.0.1'
+        path: 'packages'
+    - id: 'step-2'
+      uses: 'jdx/mise-action@v5.2.4'
+    - id: 'step-3'
+      uses: 'gradle/actions/setup-gradle@v6.4.1'
+    - id: 'step-4'
+      uses: 'actions/cache@v6.1.0'
+      with:
+        path: '~/.konan'
+        key: 'konan-${{ runner.os }}-${{ hashFiles(''mise.toml'', ''scripts/ci/konan-bootstrap/**'') }}'
+        restore-keys: 'konan-${{ runner.os }}-'
+    - id: 'step-5'
+      name: 'Prepare the Kotlin/Native toolchain'
+      run: 'KOTLIN_VERSION=$(mise current kotlin) ./gradlew -p scripts/ci/konan-bootstrap linkDebugExecutableLinuxX64 linkDebugExecutableLinuxArm64 --console=plain'
+    - id: 'step-6'
+      run: './gradlew -Prtok.allTargets=true linuxX64Test cliTest e2eTest -x ktlintCheck -x detekt --continue --console=plain'

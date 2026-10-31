@@ -37,7 +37,7 @@ configure<KotlinMultiplatformExtension> {
     sourceSets.commonMain {
         kotlin.srcDir(genMigrations.map { genDir.get() })
         dependencies {
-            api(project(":db"))
+            api("pyrlyn.kit:db")
             api(project(":rtok-plugin-sdk"))
             api(project(":rtok-sys"))
             implementation(project(":humantime"))
@@ -47,7 +47,7 @@ configure<KotlinMultiplatformExtension> {
 // schema.rs + schema_snapshot.txt copied from the Rust crate: the drift test checks the Kotlin-migrated
 // database against the same golden files, so both builds keep one on-disk schema.
 // Tests run on the same adapter the app installs; store code itself sees only rtok.db.
-configure<KotlinMultiplatformExtension> { sourceSets.commonTest.dependencies { implementation(project(":db-room")) } }
+configure<KotlinMultiplatformExtension> { sourceSets.commonTest.dependencies { implementation("pyrlyn.kit:db-room") } }
 val storeFixtures =
     layout.projectDirectory
         .dir("src/nativeTest/fixtures")
