@@ -20,6 +20,7 @@ import io.ktor.server.response.respondBytesWriter
 import io.ktor.server.routing.routing
 import io.ktor.server.websocket.WebSockets
 import io.ktor.server.websocket.webSocket
+import io.ktor.utils.io.discard
 import io.ktor.utils.io.readRemaining
 import io.ktor.utils.io.writeFully
 import io.ktor.websocket.Frame
@@ -50,6 +51,9 @@ import kotlin.concurrent.AtomicInt
 
 object KtorHttpServer : HttpServer, StreamingHttpServer {
     private const val STOP_TICK_MS = 200L
+
+    /** Largest refused body still read off the socket before the 413 (see [drainRefused]). */
+    private const val DRAIN_LIMIT = 1L shl 20
     private const val PAYLOAD_TOO_LARGE = 413
 
     override fun serveBlocking(
@@ -140,13 +144,28 @@ object KtorHttpServer : HttpServer, StreamingHttpServer {
         }
     }
 
+    /**
+     * Reads and drops a refused body of at most [DRAIN_LIMIT] bytes. Closing a socket with unread input makes
+     * Linux send a reset, so the client sees a broken connection instead of the 413.
+     */
+    private suspend fun drainRefused(
+        call: ApplicationCall,
+        declared: Long,
+    ) {
+        if (declared <= DRAIN_LIMIT) call.receiveChannel().discard(declared)
+    }
+
     /** The request with its body, or null when the body is over [maxBody]. */
     private suspend fun receive(
         call: ApplicationCall,
         maxBody: Long,
     ): ServerRequest? {
         val declared = call.request.headers[HttpHeaders.ContentLength]?.toLongOrNull()
-        val body = if (declared != null && declared > maxBody) null else call.receiveChannel().readRemaining(maxBody + 1).readByteArray()
+        if (declared != null && declared > maxBody) {
+            drainRefused(call, declared)
+            return null
+        }
+        val body = call.receiveChannel().readRemaining(maxBody + 1).readByteArray()
         return body?.takeIf { it.size <= maxBody }?.let { request(call, it) }
     }
 
@@ -179,7 +198,10 @@ object KtorHttpServer : HttpServer, StreamingHttpServer {
         maxBody: Long,
     ): ServerResponse {
         val declared = call.request.headers[HttpHeaders.ContentLength]?.toLongOrNull()
-        if (declared != null && declared > maxBody) return ServerResponse(PAYLOAD_TOO_LARGE)
+        if (declared != null && declared > maxBody) {
+            drainRefused(call, declared)
+            return ServerResponse(PAYLOAD_TOO_LARGE)
+        }
         val body = call.receiveChannel().readRemaining(maxBody + 1).readByteArray()
         if (body.size > maxBody) return ServerResponse(PAYLOAD_TOO_LARGE)
         return handler.handle(request(call, body))
