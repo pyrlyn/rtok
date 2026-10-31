@@ -1,9 +1,9 @@
 package rtok.store
 
+import db.*
 import kotlinx.cinterop.toKString
 import platform.posix.getenv
 import platform.posix.link
-import rtok.db.*
 import rtok.sys.*
 import kotlin.test.*
 import kotlin.time.TimeSource

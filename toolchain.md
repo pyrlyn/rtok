@@ -4,6 +4,10 @@ Every tool rtok-kotlin needs that [mise](https://mise.jdx.dev) can provide is pi
 `mise.toml`. Kotlin libraries and klibs (Ktor, ktoml, Room KMP, Chasm, Kotest, ...) stay in Gradle and
 come from Maven Central. The build system is Gradle.
 
+| Package | Where | Source | Why here |
+|---|---|---|---|
+| `pyrlyn.kit:semver`, `toml`, `toml-aot`, `yaml-aot`, `db`, `db-room` | local (included build, `KOTLIN_KIT_DIR` or `packages/kotlin-kit` above the checkout) | https://github.com/pyrlyn/packages (`kotlin-kit/`) | Version ordering, TOML and YAML reading and editing, the SQLite store driver, shared with ketch and backend |
+
 ## Enable
 ```sh
 mise install          # installs the pinned JDK, Kotlin, Gradle, Rust, cmake, ninja, tree-sitter CLI

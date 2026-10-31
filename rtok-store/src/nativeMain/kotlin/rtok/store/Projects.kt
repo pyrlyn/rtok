@@ -2,9 +2,9 @@
 // canonical root so the symbol index never mixes repos.
 package rtok.store
 
+import db.*
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import rtok.db.*
 import rtok.sys.canonicalize
 import rtok.sys.homeDir
 import rtok.sys.isDir

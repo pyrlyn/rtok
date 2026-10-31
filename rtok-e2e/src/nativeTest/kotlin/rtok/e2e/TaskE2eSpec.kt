@@ -5,6 +5,8 @@
 
 package rtok.e2e
 
+import db.Db
+import db.room.RoomDbDriver
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -14,7 +16,6 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
-import rtok.db.Db
 import rtok.store.Store
 import rtok.store.hostId
 import rtok.store.registerAgent
@@ -59,7 +60,7 @@ private class TaskBox(
 
     /** Two agents registered in the sandbox store (after `init` created it). */
     fun agents(vararg sessions: String): List<String> {
-        Db.installIfAbsent(rtok.db.room.RoomDbDriver)
+        Db.installIfAbsent(RoomDbDriver)
         return Store.open(db()).use { s -> sessions.map { s.registerAgent(s.hostId("claude")!!, it, null, null, null) } }
     }
 
