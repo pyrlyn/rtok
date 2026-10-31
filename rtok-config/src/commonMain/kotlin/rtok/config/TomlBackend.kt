@@ -1,13 +1,13 @@
 // The single place that picks the TOML backend. Everything else in rtok-config uses `Toml`,
-// which exposes only the backend-neutral `rtok.toml` API.
+// which exposes only the backend-neutral `toml` API (kotlin-kit).
 package rtok.config
 
-import rtok.toml.TomlDocument
-import rtok.toml.TomlReader
-import rtok.toml.TomlValues
 import rtok.toml.ktoml.KtomlReader
+import toml.TomlDocument
+import toml.TomlReader
+import toml.TomlValues
 
-typealias TomlException = rtok.toml.TomlException
+typealias TomlException = toml.TomlException
 typealias TomlDoc = TomlDocument
 
 object Toml {

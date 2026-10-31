@@ -7,6 +7,7 @@ import kotlinx.serialization.builtins.*
 import kotlinx.serialization.descriptors.*
 import kotlinx.serialization.encoding.*
 import kotlinx.serialization.json.*
+import toml.TomlValues
 
 internal object KtomlWriter {
     private val toml = Toml()
@@ -53,7 +54,7 @@ internal object KtomlWriter {
                 when {
                     v.isString -> c.encodeStringElement(d, i, v.content)
                     v.booleanOrNull != null -> c.encodeBooleanElement(d, i, v.boolean)
-                    rtok.toml.TomlValues.isInteger(v) -> c.encodeLongElement(d, i, v.long)
+                    TomlValues.isInteger(v) -> c.encodeLongElement(d, i, v.long)
                     else -> c.encodeDoubleElement(d, i, v.double)
                 }
             }
@@ -96,7 +97,7 @@ internal object KtomlWriter {
                     when {
                         v.isString -> String.serializer().descriptor
                         v.booleanOrNull != null -> Boolean.serializer().descriptor
-                        rtok.toml.TomlValues.isInteger(v) -> Long.serializer().descriptor
+                        TomlValues.isInteger(v) -> Long.serializer().descriptor
                         else -> Double.serializer().descriptor
                     }
                 }

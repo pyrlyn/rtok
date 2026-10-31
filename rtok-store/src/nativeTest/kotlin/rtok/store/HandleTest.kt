@@ -1,6 +1,6 @@
 package rtok.store
 
-import rtok.db.*
+import db.*
 import rtok.sys.*
 import kotlin.test.*
 

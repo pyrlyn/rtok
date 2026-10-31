@@ -4,10 +4,10 @@
 
 package rtok.store
 
+import db.*
 import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import rtok.db.*
 
 /** The cap on a cleaned body, in bytes of UTF-8. */
 const val MAX_BODY = 4096
