@@ -7,6 +7,7 @@ configure<KotlinMultiplatformExtension> {
         binaries.executable {
             entryPoint = "rtok.main"
             baseName = "rtok"
+            (findProperty("rtok.linkMap") as String?)?.let { linkerOpts("-Wl,-map,$it") }
         }
     }
     sourceSets.commonMain

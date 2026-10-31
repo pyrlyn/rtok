@@ -2,7 +2,7 @@ import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
 
 // `rtok web` / `rtok dashboard` server core (port of src/web). Engine-neutral: HTTP goes through :http-server.
 // The Compose UI (:rtok-web-compose, wasmJs) built and embedded as `EMBEDDED_UI` (docs/web.md "Compose UI"); the
-// .wasm modules go in as base64, source maps stay out.
+// .wasm modules go in as base64 of a zstd frame (decoded by :zstd-native), source maps stay out.
 val embeddedUi =
     embedDir(
         "embedWebUi",
@@ -15,7 +15,10 @@ val embeddedUi =
     )
 
 configure<KotlinMultiplatformExtension> {
-    sourceSets.nativeMain { kotlin.srcDir(embeddedUi) }
+    sourceSets.nativeMain {
+        kotlin.srcDir(embeddedUi)
+        dependencies { implementation(project(":zstd-native")) }
+    }
     sourceSets.commonMain {
         dependencies {
             api(project(":rtok-sys"))
