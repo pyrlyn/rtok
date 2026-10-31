@@ -24,12 +24,17 @@ import io.ktor.utils.io.readRemaining
 import io.ktor.utils.io.writeFully
 import io.ktor.websocket.Frame
 import io.ktor.websocket.readText
+import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.staticCFunction
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.io.readByteArray
+import platform.posix.SIGINT
+import platform.posix.SIGTERM
+import platform.posix.signal
 import rtok.http.server.BindException
 import rtok.http.server.BodySink
 import rtok.http.server.HttpServer
@@ -41,6 +46,7 @@ import rtok.http.server.StreamingHttpServer
 import rtok.http.server.StreamingResponse
 import rtok.http.server.WsHandler
 import rtok.http.server.WsSocket
+import kotlin.concurrent.AtomicInt
 
 object KtorHttpServer : HttpServer, StreamingHttpServer {
     private const val STOP_TICK_MS = 200L
@@ -112,8 +118,9 @@ object KtorHttpServer : HttpServer, StreamingHttpServer {
         stop: () -> Boolean,
         onBound: (String) -> Unit,
     ) {
-        // Ktor's own SIGINT/SIGTERM hook stops the server behind our back; without this the wait below would
-        // never end and the process would outlive its listener.
+        // Ktor's own SIGINT/SIGTERM hook calls server.stop() inside the signal handler. On Linux the signal lands
+        // on this thread, which is parked in the loop below and is needed for the shutdown, so the process hangs.
+        // Replace it with a handler that only raises a flag; the loop sees it and stops the server normally.
         val running = Job()
         server.monitor.subscribe(ApplicationStopped) { running.complete() }
         try {
@@ -121,11 +128,12 @@ object KtorHttpServer : HttpServer, StreamingHttpServer {
         } catch (e: Exception) {
             throw BindException("bind $host:$port: ${e.message}", e)
         }
+        installStopSignals()
         try {
             runBlocking {
                 val bound = server.engine.resolvedConnectors().first()
                 onBound("${bound.host}:${bound.port}")
-                while (running.isActive && !stop()) delay(STOP_TICK_MS)
+                while (running.isActive && !stop() && stopSignal.value == 0) delay(STOP_TICK_MS)
             }
         } finally {
             if (running.isActive) server.stop(0, 0)
@@ -216,4 +224,15 @@ private class KtorWsSocket(
             if (frame is Frame.Text) return frame.readText()
         }
     }
+}
+
+/** Set by SIGINT/SIGTERM; only an atomic store happens inside the handler. */
+private val stopSignal = AtomicInt(0)
+
+@OptIn(ExperimentalForeignApi::class)
+private fun installStopSignals() {
+    stopSignal.value = 0
+    val handler = staticCFunction<Int, Unit> { stopSignal.value = 1 }
+    signal(SIGINT, handler)
+    signal(SIGTERM, handler)
 }
