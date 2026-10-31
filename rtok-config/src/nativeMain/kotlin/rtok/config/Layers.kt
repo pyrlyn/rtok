@@ -403,8 +403,8 @@ object Layers {
         home: String,
         configFile: String?,
         flags: JsonObject?,
+        cwd: String? = runCatching { cwd() }.getOrNull(),
     ): Config {
-        val cwd = runCatching { cwd() }.getOrNull()
         val dotenv = RtokEnv.fromDotenv(home, cwd)
         val warnings = ArrayList(dotenv.warnings)
         val fig = assemble(home, configFile, flags, RtokEnv.fromProcess(), cwd, dotenv, warnings)

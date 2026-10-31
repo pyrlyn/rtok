@@ -83,7 +83,13 @@ class GraphCall private constructor(
             return (named + byId + tokens).takeIf { it > 0 }?.toUInt()
         }
 
-        private fun project(args: JsonObject): String? = Outline.str(args["project"]).ifEmpty { null } ?: runCatching { rtok.projectName(rtok.sys.cwd()) }.getOrNull()
+        private fun project(args: JsonObject): String? =
+            Outline.str(args["project"]).ifEmpty { null } ?: runCatching {
+                rtok.projectName(
+                    rtok.plugins.read.Roots
+                        .graphCwd(),
+                )
+            }.getOrNull()
 
         /** The `(lsp)` / `(tags)` / `(tags; lsp: …)` header `lsp_or_tags` puts on an `auto` answer. */
         fun backend(text: String): String? {

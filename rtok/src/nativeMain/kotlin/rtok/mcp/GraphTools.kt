@@ -20,7 +20,9 @@ object GraphTools {
         name: String,
         args: JsonObject,
     ): String {
-        val cwd = rtok.sys.cwd()
+        val cwd =
+            rtok.plugins.read.Roots
+                .graphCwd()
         if (cx.config.plugins.graph.autoAddProjects) runCatching { cx.store.autoAddProject(cwd, Origin.Mcp, null) }
         val project = Protocol.str(args, "project")
         val call = GraphCall.start(cx, name, args)

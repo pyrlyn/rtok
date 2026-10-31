@@ -37,7 +37,7 @@ object TaskTools {
         name: String,
         description: String,
         schema: String,
-    ) = ToolDef(name, description, StrictJson.parse(schema).jsonObject)
+    ) = ToolDef(name, description, WorktreeTools.withRepo(StrictJson.parse(schema).jsonObject))
 
     val DEFS =
         listOf(
@@ -134,14 +134,16 @@ object TaskTools {
             else -> emptyList()
         }
 
-    /** The answer of the task tool [name]. The config is read for the cwd now: `roots/list` can move it after start. */
+    /** The answer of the task tool [name]. The config is read for the project now: `roots/list` can move the cwd after start. */
     fun call(
         cx: Runtime,
+        session: AgentSession,
         name: String,
         args: JsonObject,
     ): String {
-        val cfg = Config.loadWith(null, null)
-        val project = TaskProject.open(cfg.tasks, rtok.sys.cwd())
+        val dir = session.projectDir(args)
+        val cfg = Config.loadWith(null, null, dir)
+        val project = TaskProject.open(cfg.tasks, dir)
         val store = cx.store
         val out: JsonElement =
             when (name) {
