@@ -22,12 +22,16 @@ import rtok.store.resolveAgent
 import rtok.store.shortAgentId
 import rtok.sys.Mutex
 
+private fun Runtime.isLiveMain(d: AgentDetail) = store.hostId(d.host) == hostId && d.endedAt == null && d.parentId == null
+
 class AgentSession(
     private val cx: Runtime,
     private val hooks: HookSupport = rtok.agents.HostHookSupport,
     private val env: (String) -> String? = { rtok.config.envVar(it) },
     /** `rtok mcp --call`: the process runs in its caller's directory and serves nobody else. */
     private val oneShot: Boolean = false,
+    /** The agent one call came from, as its PreToolUse hook said ([forCall]); null for the process's own session. */
+    private val hookAgent: String? = null,
 ) {
     /** Unix seconds this process started: a cwd candidate must have been seen since. */
     private val started = rtok.log.now()
@@ -35,8 +39,27 @@ class AgentSession(
     private var agent: Pair<String, Rule>? = null
     private var caller: Pair<Long, String?>? = null
 
+    /** Whether this session is one call's, named by its hook. */
+    val byHook get() = hookAgent != null
+
+    /** Whether a call may name its agent: only Claude's hook writes [AgentTools.CALLER], and a stable link needs no help. */
+    fun takesCaller(): Boolean = cx.config.hook.host == "claude" && !oneShot && (link() as? Link.Linked)?.rule?.isStable != true
+
+    /**
+     * This session for one call. A server an app shares has no other way to know its caller: Claude desktop's proxy
+     * forwards only a call's name and arguments, without `_meta`, and its `roots/list` is every session's folders. So
+     * the PreToolUse hook writes the agent into [AgentTools.CALLER]. An id that is no live session stays unnamed, so the
+     * call gets [unsure]'s answers rather than a stranger's directory.
+     */
+    fun forCall(args: JsonObject): AgentSession {
+        val id = Protocol.str(args, AgentTools.CALLER)?.takeIf { it.isNotEmpty() && takesCaller() } ?: return this
+        val d = runCatching { cx.store.agentDetail(id) }.getOrNull()
+        return if (d != null && cx.isLiveMain(d)) AgentSession(cx, hooks, env, oneShot, d.id) else this
+    }
+
     /** The cached stable link, else one attempt at the link rules; a store error reads as not linked. */
     fun link(): Link {
+        hookAgent?.let { return Link.Linked(it, Rule.Hook) }
         val cached = lock.hold { agent }
         val hostId = cx.hostId?.takeIf { cx.config.agents.enabled }
         return when {
@@ -80,15 +103,16 @@ class AgentSession(
 
     /**
      * The directory a `worktree_*` or `task_*` call acts in: `repo` (relative to the server's cwd), else the server's
-     * cwd. When [unsure] that cwd answers for nobody, so the call has to name its agent or `repo`.
+     * cwd, or the agent's directory for both when the call came [byHook]. When [unsure] the server's cwd answers for
+     * nobody, so the call has to name its agent or `repo`.
      */
     fun projectDir(args: JsonObject): String {
-        val cwd = rtok.sys.cwd()
+        val cwd = if (byHook) callerDir() else rtok.sys.cwd()
         val repo = Protocol.str(args, "repo")?.takeIf { it.isNotEmpty() }
         return when {
-            repo != null -> rtok.sys.join(cwd, repo)
-            unsure() -> agentFor(args).first.cwd ?: fail("your agent has no recorded directory; pass `repo` with your repository's path")
-            else -> cwd
+            repo != null -> rtok.sys.join(cwd ?: rtok.sys.cwd(), repo)
+            unsure() -> agentFor(args).first.cwd ?: fail(NO_DIR)
+            else -> cwd ?: fail(NO_DIR)
         }
     }
 
@@ -135,8 +159,7 @@ class AgentSession(
         val mine = link()
         if (mine is Link.Linked && mine.rule.isStable && mine.id != id) fail("this session is agent ${shortAgentId(mine.id)}; `agent` $want is another session's")
         val d = cx.store.agentDetail(id) ?: fail("agent $want: unknown")
-        val sameHost = cx.store.hostId(d.host) == cx.hostId
-        if (!sameHost || d.endedAt != null || d.parentId != null) fail("agent $want is not a live session of ${cx.config.hook.host}")
+        if (!cx.isLiveMain(d)) fail("agent $want is not a live session of ${cx.config.hook.host}")
         return d to Rule.Arg
     }
 
@@ -163,6 +186,7 @@ class AgentSession(
     private companion object {
         const val CALLER_TTL = 5L
         const val SHORT = 8
+        const val NO_DIR = "your agent has no recorded directory; pass `repo` with your repository's path"
         const val OR_REPO = "; to only read a project's worktrees or tasks, pass `repo` with its path"
     }
 }

@@ -18,6 +18,7 @@ enum class Rule(
     Cwd("cwd"),
     Arg("arg"),
     Own("own"),
+    Hook("hook"),
     ;
 
     val isStable get() = this != Cwd && this != Ancestor
