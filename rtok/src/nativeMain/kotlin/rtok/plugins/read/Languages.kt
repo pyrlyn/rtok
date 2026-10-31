@@ -46,8 +46,6 @@ object Languages {
             put("css", "css")
             put("html", "html", "htm")
             put("json", "json")
-            put("verilog", "v", "sv")
-            put("agda", "agda")
             put("fluent", "ftl")
             put("ql", "ql")
             put("ql_dbscheme", "dbscheme")

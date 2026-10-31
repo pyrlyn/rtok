@@ -176,5 +176,43 @@ class CliE2eSpec :
                     }
                 }
             }
+            test("a server that crashes under a connected client is restarted and handed the client's handshake") {
+                // Dies on its first `tools/call` (the marker file remembers it), logs every method it is sent.
+                val crashing =
+                    "import json,os,sys\n" +
+                        "mark,log=sys.argv[1],sys.argv[2]\n" +
+                        "for l in sys.stdin:\n" +
+                        "    m=json.loads(l)\n" +
+                        "    open(log,'a').write(m['method']+'\\n')\n" +
+                        "    if 'id' not in m: continue\n" +
+                        "    if m['method']=='tools/call' and not os.path.exists(mark):\n" +
+                        "        open(mark,'w').close(); sys.exit(1)\n" +
+                        "    print(json.dumps({'jsonrpc':'2.0','id':m['id'],'result':{}}),flush=True)\n"
+                Sandbox("mcp-wrap-restart").use { s ->
+                    writeString("${s.root}/srv.py", crashing)
+                    writeString("${s.home}/config.toml", "[mcp]\nrestart_interval_ms = 50\n")
+                    val before =
+                        listOf(
+                            """{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}""",
+                            """{"jsonrpc":"2.0","method":"notifications/initialized"}""",
+                            """{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"x"}}""",
+                        ).joinToString(" ") { q(it) }
+                    val after = q("""{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"x"}}""")
+                    val log = "${s.root}/methods.log"
+                    val wrap = listOf(RTOK, "mcp", "--", "python3", "${s.root}/srv.py", "${s.root}/mark", log).joinToString(" ") { q(it) }
+                    s.shell("{ printf '%s\\n' $before; sleep 1; printf '%s\\n' $after; } | $wrap").also {
+                        it.code shouldBe 0
+                        it.out.lines().filter(String::isNotEmpty) shouldBe
+                            listOf(
+                                """{"jsonrpc": "2.0", "id": 1, "result": {}}""",
+                                """{"jsonrpc":"2.0","id":2,"error":{"code":-32603,"message":"MCP server python3 exited with code 1"}}""",
+                                """{"jsonrpc": "2.0", "id": 3, "result": {}}""",
+                            )
+                        it.err shouldContain "python3 exited with code 1; restarting in 50 ms (1/6)"
+                    }
+                    readToString(log).lines().filter(String::isNotEmpty) shouldBe
+                        listOf("initialize", "notifications/initialized", "tools/call", "initialize", "notifications/initialized", "tools/call")
+                }
+            }
         }
     })
