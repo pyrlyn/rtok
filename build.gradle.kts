@@ -10,7 +10,7 @@ plugins {
     // Tests: Kotest specs next to kotlin.test (docs/testing.md); KSP must come before Kotest.
     id("com.google.devtools.ksp") version "2.3.12" apply false
     id("io.kotest") version "6.2.6" apply false
-    // Dev-only coverage (`mise run coverage`, docs/toolchain.md): active only with -Prtok.coverage=true.
+    // Dev-only coverage (`mise run coverage`, toolchain.md): active only with -Prtok.coverage=true.
     id("org.jetbrains.kotlinx.kover") version "0.9.11" apply false
     // Shared Kotlin/Native dev/release settings: targets, release cache rules, -Prtok.releaseSize, -Prtok.release.fast.
     id("shared.settings.native")

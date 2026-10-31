@@ -3,14 +3,14 @@
 Kotlin Multiplatform / Kotlin/Native port of [rtok](../rtok) (token-reduction CLI for AI coding agents).
 **Work in progress** — see [PORTING.md](PORTING.md) for what is ported and [port-plan.md](port-plan.md) for the plan.
 
-Excluded by design: the TUI (`rtok tui`) and web UI (`rtok web`, `rtok dashboard`).
+The TUI (`rtok tui`, `libs/tui`) is ported. The web UI (`rtok web`, `rtok dashboard`; `rtok-web*` modules) is in progress, see [docs/web.md](docs/web.md).
 
-Toolchain: `mise install` (JDK, Kotlin, Gradle, Rust, cmake, tree-sitter CLI; see [docs/toolchain.md](docs/toolchain.md)).
+Toolchain: `mise install` (JDK, Kotlin, Gradle, Rust, cmake, tree-sitter CLI; see [toolchain.md](toolchain.md)).
 
 Build & test (macOS arm64): `./gradlew macosArm64Test` · binary: `./gradlew :rtok:linkReleaseExecutableMacosArm64`
 → `rtok/build/bin/macosArm64/releaseExecutable/rtok.kexe`. Other targets: `-Prtok.allTargets=true`.
 
-Docs: [build speed](docs/build-speed.md) · [token estimator](docs/tokens.md) · [modes](docs/modes.md) · [log, `rtok logs`, `rtok info`](docs/log.md) · [project root](docs/config-root.md) · [hook protocol](docs/hook-protocol.md) · [toolchain](docs/toolchain.md).
+Docs: [build speed](docs/build-speed.md) · [token estimator](docs/tokens.md) · [modes](docs/modes.md) · [log, `rtok logs`, `rtok info`](docs/log.md) · [project root](docs/config-root.md) · [hook protocol](docs/hook-protocol.md) · [toolchain](toolchain.md).
 
 - [Configuration](docs/config.md)
 - [Hooks](docs/hooks.md)
