@@ -32,7 +32,7 @@ PR: https://github.com/pyrlyn/rtok/pull/253
 
 ## Open question for the creator
 
-Is the `linux` job required, or allowed to fail until the link error and the P1 Linux bugs are fixed? Required status checks are a branch-protection setting, not part of the workflow, so nothing was changed. Until decided, the job stays visible as failing.
+Is the `linux` job required, or allowed to fail until the `rtok web` e2e failure and the P1 Linux bugs are fixed? Required status checks are a branch-protection setting, not part of the workflow, so nothing was changed. Until decided, the job stays visible as failing.
 
 ## How it was checked
 
