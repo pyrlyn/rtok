@@ -54,10 +54,8 @@ change to review with the creator.
 
 ## Checked
 
-`./gradlew --continue macosArm64Test cliTest e2eTest` on macOS arm64: every test passed (`:rtok` 2365, `:rtok-store`
-195, `:rtok-config` 91, `:toml-ktoml` 16, e2e 13 specs / 78 tests). Two tasks failed, neither from this change:
-
-- `:rtok-sys:macosArm64Test`: `FsWatchTest.aWriteBelowTheRootIsDelivered` (FSEvents timing while other builds loaded
-  the Mac); `:rtok-sys` depends on none of the switched modules, and a rerun passed.
-- `:rtok-e2e:detekt`: `MagicNumber` at `GuardCheckE2eSpec.kt:61`, a file this branch does not touch (from #250, on
-  `main`); T5 (detekt baselines) covers it.
+`./gradlew --continue macosArm64Test cliTest e2eTest` on macOS arm64, after merging `main`: every test passed (`:rtok`
+2369, `:rtok-store` 195, `:rtok-config` 91, `:rtok-sys` 44, `:toml-ktoml` 16, e2e 78). One task failed, not from this
+change: `:rtok-e2e:detekt`, `MagicNumber` at `GuardCheckE2eSpec.kt:61`, a file this branch does not touch (from #250,
+on `main`). An earlier run also hit a `FsWatchTest.aWriteBelowTheRootIsDelivered` flake in `:rtok-sys`, which depends on
+none of the switched modules; it passed on rerun and in the run after the merge.
