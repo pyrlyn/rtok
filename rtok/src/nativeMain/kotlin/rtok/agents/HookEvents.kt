@@ -47,7 +47,9 @@ object HookEvents {
      * CodeBuddy takes Claude's rows minus SubagentStart (T560.2); Qwen documents Claude's names (research.md §32.2).
      */
     val ALL: List<HookEvent> =
-        claudeShaped("claude", installer = false, subagent = true) +
+        // Names the session in the arguments of rtok's own tools: a server Claude desktop shares sees nothing else of it.
+        listOf(m("claude", "PreToolUse", "PreToolUse", "mcp__rtok__.*", installer = false)) +
+            claudeShaped("claude", installer = false, subagent = true) +
             claudeShaped("codebuddy", installer = true, subagent = false) +
             listOf("PreToolUse", "PostToolUse", "TaskStart", "UserPromptSubmit", "SessionEnd").map { r("cline", it) } +
             listOf(

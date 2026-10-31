@@ -42,6 +42,8 @@ object Tools {
 
     private val GRAPH = setOf("symbol", "callers", "impact", "outline", "explore", "graph_diff", "graph_export")
 
+    fun isGraph(name: String) = name in GRAPH
+
     /** [invoke] as `(text, ok)`: a throw's bare message is the error text. */
     fun invokeText(
         cx: Runtime,

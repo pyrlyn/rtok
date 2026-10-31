@@ -23,9 +23,13 @@ object Paths {
             AgentTools.handles(name) -> runCatching { AgentTools.call(cx, agents, name, args) }.fold({ it to true }) { (it.message ?: it.toString()) to false }
             WorktreeTools.handles(name) -> runCatching { WorktreeTools.call(cx, agents, name, args) }.fold({ it to true }) { (it.message ?: it.toString()) to false }
             TaskTools.handles(name) -> runCatching { TaskTools.call(cx, agents, name, args) }.fold({ it to true }) { (it.message ?: it.toString()) to false }
+            agents.byHook && Tools.isGraph(name) && !isRooted(name) -> enter(agents).use { Tools.invokeText(cx, name, args) }
             !isRooted(name) -> Tools.invokeText(cx, name, args)
             else -> rooted(cx, agents, name, args)
         }
+
+    /** Only a call the hook named moves the graph off the server's cwd: an agent's cwd can sit below its project's root. */
+    private fun enter(agents: AgentSession) = agents.callerDir()?.let { ReadRoots.enterCaller(rtok.sys.cwd(), it, graph = agents.byHook) }
 
     private fun rooted(
         cx: rtok.plugin.Runtime,
@@ -33,11 +37,11 @@ object Paths {
         name: String,
         args: JsonObject,
     ): Pair<String, Boolean> {
-        val guard = agents.callerDir()?.let { ReadRoots.enterCaller(rtok.sys.cwd(), it) }
+        val guard = enter(agents)
         try {
             val anchored = anchorOutline(name, args)
             val (text, ok) = Tools.invokeText(cx, name, anchored)
-            return annotate(name, anchored, text, ok, guard != null, guard == null && agents.unsure()) to ok
+            return annotate(name, anchored, text, ok, guard != null, guard == null && (agents.byHook || agents.unsure())) to ok
         } finally {
             guard?.close()
         }

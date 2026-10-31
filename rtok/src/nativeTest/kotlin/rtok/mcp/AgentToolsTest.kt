@@ -7,6 +7,10 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import rtok.plugin.Runtime
+import rtok.store.callIoRequest
+import rtok.store.endAgent
+import rtok.store.projectByRoot
+import rtok.store.recentCalls
 import rtok.store.registerAgent
 import rtok.store.setAgentAncestors
 import rtok.support.diskConfig
@@ -14,6 +18,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -148,6 +153,124 @@ class AgentToolsTest {
             val (_, added) = call(s, "worktree_add", """{"task":"T1","agent":"$mine"}""")
             assertFalse("not yours" in added || "cannot tell" in added, added)
         }
+
+    private fun stamped(
+        caller: String,
+        args: String = "",
+    ) = """{${if (args.isEmpty()) "" else "$args,"}"${AgentTools.CALLER}":"$caller"}"""
+
+    @Test fun concurrentSessionsOnOneServerGetTheirOwnAgentAndRepository() =
+        server("hook-shared").use { s ->
+            val here = rtok.sys.cwd()
+            hooked(s, "sess-server-cwd", here)
+            val repos = listOf(gitRepo("mcp-hook-a"), gitRepo("mcp-hook-b"))
+            val ids = repos.mapIndexed { i, repo -> hooked(s, "sess-$i", repo) }
+            repos.forEachIndexed { i, repo -> rtok.sys.writeString(rtok.sys.join(repo, "only.kt"), "// session $i\n") }
+            try {
+                rtok.plugins.read.Roots
+                    .setClientRoots(repos)
+                for ((i, id) in ids.withIndex()) {
+                    val (bad, read) = call(s, "read", stamped(id, """"path":"only.kt""""))
+                    assertFalse(bad, read)
+                    assertTrue("session $i" in read && "this server is shared" !in read, read)
+                }
+                repeat(2) {
+                    for ((i, id) in ids.withIndex()) {
+                        val (err, me) = call(s, "whoami", stamped(id))
+                        assertFalse(err, me)
+                        assertEquals(id to "hook", field(me, "id") to field(me, "rule"))
+
+                        val (noTree, tree) = call(s, "tree", stamped(id, """"path":".""""))
+                        assertFalse(noTree, tree)
+                        assertTrue("only.kt" in tree, tree)
+
+                        val (noList, listed) = call(s, "worktree_list", stamped(id))
+                        assertFalse(noList, listed)
+                        assertEquals(listOf(rtok.sys.canonicalize(repos[i])), rows(listed).map { rtok.sys.canonicalize(field(it, "path")) })
+
+                        assertEquals(false to "[]", call(s, "task_list", stamped(id)))
+                    }
+                }
+                val (made, task) = call(s, "task_create", stamped(ids[0], """"title":"Theirs""""))
+                assertFalse(made, task)
+                assertEquals(1, rows(call(s, "task_list", stamped(ids[0])).second).size)
+                assertEquals(false to "[]", call(s, "task_list", stamped(ids[1])))
+            } finally {
+                rtok.plugins.read.Roots
+                    .reset()
+            }
+        }
+
+    @Test fun aHookNamedCallScopesTheGraphToItsAgent() =
+        server("hook-graph").use { s ->
+            val repo = gitRepo("mcp-hook-graph")
+            val id = hooked(s, "sess-a", repo)
+            hooked(s, "sess-b", rtok.sys.cwd())
+            rtok.plugins.read.Roots
+                .setClientRoots(listOf(repo))
+            try {
+                val (err, text) = call(s, "symbol", stamped(id, """"name":"nothing""""))
+                assertFalse("no project" in text, "$err: $text")
+                assertNotNull(s.cx.store.projectByRoot(rtok.sys.canonicalize(repo)!!), "the call indexes its agent's repository")
+                assertNull(s.cx.store.projectByRoot(rtok.sys.cwd()), "not the server's")
+            } finally {
+                rtok.plugins.read.Roots
+                    .reset()
+            }
+        }
+
+    @Test fun aStableLinkIsNotOverriddenByACallerArgument() {
+        val (base, _) = diskConfig("hook-stable")
+        val cfg = base.copy(hook = base.hook.copy(host = "claude"))
+        val cx = Runtime.open(cfg, "mcp-hook-stable")
+        val agents = AgentSession(cx, env = { if (it == "CLAUDE_CODE_SESSION_ID") "sess-mine" else null })
+        Server(cx, Server.listedFor(cfg), agents).use { s ->
+            val mine = hooked(s, "sess-mine", rtok.sys.cwd())
+            val theirs = hooked(s, "sess-theirs", "/elsewhere")
+            val (err, me) = call(s, "whoami", stamped(theirs))
+            assertFalse(err, me)
+            assertEquals(mine to "env", field(me, "id") to field(me, "rule"))
+            assertFalse(AgentTools.CALLER in toolListing(s), "a server that knows its session spends no tokens on the argument")
+        }
+    }
+
+    @Test fun aCallerThatIsNoLiveSessionLeavesTheCallUnnamed() =
+        server("hook-stale").use { s ->
+            hooked(s, "sess-a", rtok.sys.cwd())
+            val ended = hooked(s, "sess-ended", "/elsewhere")
+            s.cx.store.endAgent(ended, rtok.log.now())
+            val child = s.cx.store.registerAgent(s.cx.hostId!!, "sess-a", "sub-1", "/elsewhere", null)
+            for (id in listOf("no-such-agent", ended, child, "")) {
+                val (lost, why) = call(s, "whoami", stamped(id))
+                assertTrue(lost && "cannot tell which one is calling" in why, "$id: $why")
+            }
+        }
+
+    @Test fun onlyAServerThatCannotTellItsSessionListsTheCallerArgument() =
+        server("hook-list").use { s ->
+            hooked(s, "sess-a", "/elsewhere")
+            assertEquals(s.listed.size, toolListing(s).split(AgentTools.CALLER).size - 1, "every tool can be the first a session calls")
+            val stateless = s.handleLine("""{"jsonrpc":"2.0","id":3,"method":"tools/list"}""", stateless = true)!!
+            assertFalse(AgentTools.CALLER in stateless, stateless)
+        }
+
+    @Test fun theCallerArgumentReachesNoTool() =
+        server("hook-strip").use { s ->
+            val id = hooked(s, "sess-a", rtok.sys.cwd())
+            call(s, "ping", stamped(id, """"sentinel":"x""""))
+            val logged =
+                s.cx.store
+                    .callIoRequest(
+                        s.cx.store
+                            .recentCalls(1)
+                            .single()
+                            .id,
+                    )!!
+                    .decodeToString()
+            assertTrue("sentinel" in logged && AgentTools.CALLER !in logged, logged)
+        }
+
+    private fun toolListing(s: Server) = s.handleLine("""{"jsonrpc":"2.0","id":3,"method":"tools/list"}""")!!
 
     @Test fun aOneShotCallActsInItsOwnDirectoryBesideLiveSessions() {
         val (base, _) = diskConfig("one-shot")

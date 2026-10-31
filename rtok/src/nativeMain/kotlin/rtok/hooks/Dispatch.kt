@@ -9,6 +9,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import rtok.config.Config
 import rtok.config.envVar
 import rtok.db.isLocked
+import rtok.mcp.AgentTools
 import rtok.plugin.Runtime
 import rtok.plugin.fitBudget
 import rtok.plugin.sdk.Class
@@ -26,6 +27,7 @@ import rtok.store.insertHookCallIo
 import rtok.store.kvGet
 import rtok.store.kvSet
 import rtok.store.latestTaskClaim
+import rtok.store.mainAgent
 import rtok.store.registerAgent
 import rtok.store.setAgentAncestors
 import rtok.store.setCallMs
@@ -40,6 +42,8 @@ val HOOK_LOCK_WAIT = LockWait(busyMs = 5, attempts = 1, migrateMs = 5)
 const val AGENT_ANCESTORS = 3
 
 internal const val DEFERRED_ENV = "RTOK_HOOK_DEFERRED"
+
+private const val RTOK_TOOL_PREFIX = "mcp__rtok__"
 
 /**
  * Hook work that belongs to modules ported in later phases (worktree, otel export, MCP result
@@ -340,7 +344,7 @@ fun dispatch(
     val out =
         when (event) {
             "PreToolUse" -> {
-                preTool(input, cx, registry)
+                preTool(input, cx, registry, agent)
             }
 
             "PostToolUse" -> {
@@ -438,6 +442,7 @@ private fun preTool(
     input: HookInput,
     cx: Runtime,
     registry: Registry,
+    agent: String?,
 ): HookOutput {
     val ev = input.preTool() ?: return HookOutput()
     var rewrite: PreToolDecision.Rewrite? = null
@@ -454,7 +459,20 @@ private fun preTool(
             null -> {}
         }
     }
-    return rewrite?.let { HookOutput(hookSpecificOutput = HookSpecificOutput("PreToolUse", updatedInput = it.input, permissionDecisionReason = it.reason)) } ?: HookOutput()
+    return rewrite?.let { HookOutput(hookSpecificOutput = HookSpecificOutput("PreToolUse", updatedInput = it.input, permissionDecisionReason = it.reason)) }
+        ?: withCaller(input, cx, agent)?.let { HookOutput(hookSpecificOutput = HookSpecificOutput("PreToolUse", updatedInput = it)) }
+        ?: HookOutput()
+}
+
+/** A call to rtok's own MCP tool with this session's main agent in [AgentTools.CALLER], over anything the model wrote there. */
+private fun withCaller(
+    input: HookInput,
+    cx: Runtime,
+    agent: String?,
+): JsonObject? {
+    val args = (input.toolInput as? JsonObject)?.takeIf { agent != null && cx.config.hook.host == "claude" && input.toolName?.startsWith(RTOK_TOOL_PREFIX) == true } ?: return null
+    val main = cx.hostId?.let { hostId -> runCatching { cx.store.mainAgent(hostId, cx.session) }.getOrNull() }
+    return main?.let { JsonObject(args + (AgentTools.CALLER to JsonPrimitive(it))) }
 }
 
 private fun postTool(
