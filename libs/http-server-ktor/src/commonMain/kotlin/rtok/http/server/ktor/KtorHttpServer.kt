@@ -32,7 +32,6 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.io.readByteArray
-import kotlin.concurrent.AtomicInt
 import platform.posix.SIGINT
 import platform.posix.SIGTERM
 import platform.posix.signal
@@ -47,6 +46,7 @@ import rtok.http.server.StreamingHttpServer
 import rtok.http.server.StreamingResponse
 import rtok.http.server.WsHandler
 import rtok.http.server.WsSocket
+import kotlin.concurrent.AtomicInt
 
 object KtorHttpServer : HttpServer, StreamingHttpServer {
     private const val STOP_TICK_MS = 200L
