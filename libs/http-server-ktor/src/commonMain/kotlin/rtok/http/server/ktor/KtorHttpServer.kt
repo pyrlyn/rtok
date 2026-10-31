@@ -6,6 +6,7 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.ApplicationCallPipeline
+import io.ktor.server.application.ApplicationStopped
 import io.ktor.server.application.install
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.embeddedServer
@@ -23,6 +24,7 @@ import io.ktor.utils.io.readRemaining
 import io.ktor.utils.io.writeFully
 import io.ktor.websocket.Frame
 import io.ktor.websocket.readText
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
@@ -81,20 +83,7 @@ object KtorHttpServer : HttpServer, StreamingHttpServer {
                     }
                 }
             }
-        try {
-            server.start(wait = false)
-        } catch (e: Exception) {
-            throw BindException("bind $host:$port: ${e.message}", e)
-        }
-        try {
-            runBlocking {
-                val bound = server.engine.resolvedConnectors().first()
-                onBound("${bound.host}:${bound.port}")
-                while (!stop()) delay(STOP_TICK_MS)
-            }
-        } finally {
-            server.stop(0, 0)
-        }
+        run(server, host, port, stop, onBound)
     }
 
     override fun serveStreaming(
@@ -123,6 +112,10 @@ object KtorHttpServer : HttpServer, StreamingHttpServer {
         stop: () -> Boolean,
         onBound: (String) -> Unit,
     ) {
+        // Ktor's own SIGINT/SIGTERM hook stops the server behind our back; without this the wait below would
+        // never end and the process would outlive its listener.
+        val running = Job()
+        server.monitor.subscribe(ApplicationStopped) { running.complete() }
         try {
             server.start(wait = false)
         } catch (e: Exception) {
@@ -132,10 +125,10 @@ object KtorHttpServer : HttpServer, StreamingHttpServer {
             runBlocking {
                 val bound = server.engine.resolvedConnectors().first()
                 onBound("${bound.host}:${bound.port}")
-                while (!stop()) delay(STOP_TICK_MS)
+                while (running.isActive && !stop()) delay(STOP_TICK_MS)
             }
         } finally {
-            server.stop(0, 0)
+            if (running.isActive) server.stop(0, 0)
         }
     }
 

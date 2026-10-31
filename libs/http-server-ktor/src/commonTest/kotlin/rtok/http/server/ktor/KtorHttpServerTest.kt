@@ -17,11 +17,13 @@ import rtok.http.server.WsHandler
 import rtok.http.server.WsSocket
 import kotlin.concurrent.AtomicInt
 import kotlin.concurrent.AtomicReference
+import kotlin.native.concurrent.FutureState
 import kotlin.native.concurrent.ObsoleteWorkersApi
 import kotlin.native.concurrent.TransferMode
 import kotlin.native.concurrent.Worker
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 @OptIn(ObsoleteWorkersApi::class)
 class KtorHttpServerTest {
@@ -52,6 +54,26 @@ class KtorHttpServerTest {
         stop.value = 1
         done.result
         worker.requestTermination().result
+    }
+
+    // Ktor's hook stops the server without telling `stop`: `rtok web` used to outlive its listener this way.
+    @Test fun sigtermEndsTheWait() {
+        val bound = AtomicReference<String?>(null)
+        val stop = AtomicInt(0)
+        val worker = Worker.start(name = "sigterm-server-test")
+        val done =
+            worker.execute(TransferMode.SAFE, { bound to stop }) { (b, s) ->
+                KtorHttpServer.serveBlocking("127.0.0.1", 0, { ServerResponse(200) }, stop = { s.value != 0 }, onBound = { b.value = it })
+            }
+        while (bound.value == null) platform.posix.usleep(10_000u)
+        platform.posix.raise(platform.posix.SIGTERM)
+        repeat(500) { if (done.state == FutureState.SCHEDULED) platform.posix.usleep(10_000u) }
+        val ended = done.state == FutureState.COMPUTED
+        // A regression has to fail the test, not hang it.
+        stop.value = 1
+        done.result
+        worker.requestTermination().result
+        assertTrue(ended, "serveBlocking still waits after SIGTERM")
     }
 
     @Test fun websocketRoutesAreAdmittedThenEcho() {
