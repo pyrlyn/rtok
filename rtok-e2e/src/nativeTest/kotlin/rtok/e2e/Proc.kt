@@ -74,6 +74,9 @@ class Sandbox(
         env: Map<String, String?> = emptyMap(),
     ) = sh(listOf(RTOK) + args, cwd, this.env + env, stdin)
 
+    /** A `sh -c` [script] in the sandbox's environment, for a pipeline that feeds rtok over time. */
+    fun shell(script: String) = sh(listOf("sh", "-c", script), root, env)
+
     fun git(
         cwd: String,
         vararg args: String,

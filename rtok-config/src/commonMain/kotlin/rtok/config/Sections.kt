@@ -179,6 +179,8 @@ val JUNK_EXTRA_KINDS = listOf("cache", "temp", "logs", "crash-dumps")
     val httpTools: List<String> = listOf("read", "search", "tree"),
     val token: String = "",
     val publicUrl: String = "",
+    val restartAttempts: UInt = 6u,
+    val restartIntervalMs: ULong = 5000u,
 )
 
 @Serializable data class ToolsRewrite(
