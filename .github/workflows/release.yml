@@ -278,5 +278,6 @@ jobs:
             --title "rtok $VERSION" --notes-file "$RUNNER_TEMP/notes.md" \
             dist/*.tar.gz dist/SHA256SUMS
           gh pr create --base main --head "$branch" --title "release: $VERSION" \
-            --body "Version.kt and CHANGELOG.md for the draft prerelease $TAG."
+            --body "Version.kt and CHANGELOG.md for the draft prerelease $TAG." \
+            || echo "::warning title=release::Actions may not open PRs here; open one by hand: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/compare/main...$branch"
           echo "Draft prerelease $TAG created; publish it by hand after review." >> "$GITHUB_STEP_SUMMARY"
