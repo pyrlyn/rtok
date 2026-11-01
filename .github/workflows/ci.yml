@@ -26,6 +26,20 @@ jobs:
     - id: 'step-2'
       name: 'Consistency check'
       run: 'git diff --exit-code ''.github/workflows/ci.yml'''
+  check_release_yaml_consistency:
+    name: 'Check release YAML consistency'
+    runs-on: 'ubuntu-latest'
+    needs:
+    - 'check_yaml_consistency'
+    steps:
+    - id: 'step-0'
+      uses: 'actions/checkout@v7.0.1'
+    - id: 'step-1'
+      name: 'Regenerate release.yml'
+      run: 'rm ''.github/workflows/release.yml'' && ''.github/workflows/release.main.kts'''
+    - id: 'step-2'
+      name: 'Consistency check'
+      run: 'git diff --exit-code ''.github/workflows/release.yml'''
   macos:
     runs-on: 'macos-15'
     needs:

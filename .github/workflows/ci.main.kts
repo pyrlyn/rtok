@@ -87,6 +87,12 @@ workflow(
             checkoutActionVersion = CheckoutActionVersionSource.InferFromClasspath(),
         ),
 ) {
+    // release.yml is generated from release.main.kts; it only runs by hand, so its own consistency check lives here.
+    job(id = "check_release_yaml_consistency", name = "Check release YAML consistency", runsOn = UbuntuLatest) {
+        uses(action = Checkout())
+        run(name = "Regenerate release.yml", command = "rm '.github/workflows/release.yml' && '.github/workflows/release.main.kts'")
+        run(name = "Consistency check", command = "git diff --exit-code '.github/workflows/release.yml'")
+    }
     // macos-15 is Apple Silicon; Intel macOS is not supported.
     jobFor(this, "macos", Macos15, "./gradlew macosArm64Test cliTest e2eTest --console=plain")
     // On a Linux x64 host cliTest and e2eTest pick linuxX64; allTargets adds the linux targets to the build.
