@@ -46,4 +46,19 @@ class GlobTest {
         assertTrue(GlobSet.EMPTY.isEmpty)
         assertFalse(GlobSet.EMPTY.isMatch("a"))
     }
+
+    @Test fun setMatchesIndividualGlobsForByteAndOptionSemantics() {
+        val globs =
+            listOf(
+                Glob.new("src/*.kt", GlobOptions(literalSeparator = true)),
+                Glob.new("CAF??", GlobOptions(caseInsensitive = true)),
+                Glob.new("**/{a,b}.txt"),
+                Glob.new("emoji/😀"),
+                Glob.new(""),
+            )
+        val set = GlobSet(globs)
+        for (path in listOf("src/a.kt", "src/sub/a.kt", "café", "CAFÉ", "a.txt", "x/b.txt", "emoji/😀", "", "x\ny")) {
+            assertEquals(globs.any { it.isMatch(path) }, set.isMatch(path), path)
+        }
+    }
 }
