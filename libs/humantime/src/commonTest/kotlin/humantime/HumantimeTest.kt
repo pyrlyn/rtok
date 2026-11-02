@@ -5,6 +5,7 @@ import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.nanoseconds
 import kotlin.time.Duration.Companion.seconds
 
 class HumantimeTest {
@@ -21,6 +22,22 @@ class HumantimeTest {
     @Test fun groupsAddUp() {
         assertEquals(90.minutes, parseHumanDuration("1h 30m"))
         assertEquals(90.minutes, parseHumanDuration("1h30min"))
+    }
+
+    @Test fun largeSubsecondUnitsDoNotWrap() {
+        assertEquals(9_223_372_036_855L.milliseconds, parseHumanDuration("9223372036855ms"))
+        assertEquals(9_223_372_036.seconds + 854_775_807.nanoseconds, parseHumanDuration("9223372036854775807ns"))
+        assertEquals(18_000_000_000L.seconds, parseHumanDuration("9000000000000000000ns 9000000000000000000ns"))
+    }
+
+    @Test fun subsecondGroupsCarryIntoSeconds() {
+        assertEquals(2.seconds, parseHumanDuration("999ms 1000us 1000000000ns"))
+        assertEquals(2.seconds + 1.nanoseconds, parseHumanDuration("1999999999ns 2ns"))
+    }
+
+    @Test fun durationArithmeticOverflowIsRejected() {
+        assertFailsWith<DurationParseException> { parseHumanDuration("9223372036854775807s 1000ms") }
+        assertFailsWith<DurationParseException> { parseHumanDuration("9223372036854775807m") }
     }
 
     @Test fun errorsMatchHumantime() {

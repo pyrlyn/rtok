@@ -10,6 +10,8 @@ class DurationParseException(
     message: String,
 ) : IllegalArgumentException(message)
 
+private const val NANOS_PER_SECOND = 1_000_000_000L
+
 private fun unitNanos(unit: String): Pair<Long, Long>? =
     when (unit) { // (seconds, nanos) per 1 unit
         "nanos", "nsec", "ns" -> 0L to 1L
@@ -55,7 +57,14 @@ fun parseHumanDuration(text: String): Duration {
         val (us, un) =
             unitNanos(unit) ?: throw DurationParseException("unknown time unit \"$unit\", supported units: ns, us, ms, sec, min, hours, days, weeks, months, years (and few variations)")
         secs = Checked.addExact(secs, Checked.multiplyExact(n, us))
-        nanos += n * un
+        if (un != 0L) {
+            // Split before multiplying: valid millisecond/microsecond values can overflow nanoseconds.
+            val unitsPerSecond = NANOS_PER_SECOND / un
+            secs = Checked.addExact(secs, n / unitsPerSecond)
+            nanos += (n % unitsPerSecond) * un
+            secs = Checked.addExact(secs, nanos / NANOS_PER_SECOND)
+            nanos %= NANOS_PER_SECOND
+        }
         if (i < s.length && s[i] == '+') i++
     }
     return secs.seconds + nanos.nanoseconds
