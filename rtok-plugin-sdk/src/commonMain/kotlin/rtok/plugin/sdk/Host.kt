@@ -6,14 +6,17 @@ import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.json.*
 import rtok.json.StrictJson
 
+/** The kind of text passed to [Host.estimate]. */
 enum class Class { Code, Prose, Json, Cjk }
 
+/** A note matched by a notes search. */
 data class NoteHit(
     val id: Int,
     val title: String,
     val snippet: String,
 )
 
+/** An observation for the host to store for a session; [dedup] keys duplicates. */
 class NewObservation(
     val sessionId: String,
     val project: String?,
@@ -24,6 +27,7 @@ class NewObservation(
     val files: List<String>,
 )
 
+/** An observation matched by a search. */
 data class ObsHit(
     val id: Int,
     val title: String,
@@ -31,17 +35,20 @@ data class ObsHit(
     val snippet: String,
 )
 
+/** An archived body: its id, the [pointer] left in its place, and whether it was expanded. */
 data class ArchiveDecision(
     val archiveId: String,
     val pointer: String,
     val expanded: Boolean,
 )
 
+/** An archive matched by a search, with its turn count. */
 data class ArchiveHit(
     val id: String,
     val turns: ULong,
 )
 
+/** What a plugin may ask the host for: the session, token estimates, measurements and plugin state. Errors are exceptions; callers fail open. */
 interface Host {
     fun session(): String
 
@@ -104,6 +111,7 @@ interface Host {
     ) {}
 }
 
+/** Host storage for archived bodies. */
 interface Archive {
     fun putArchive(body: ByteArray): String
 
@@ -139,6 +147,7 @@ interface Archive {
     fun sessionLiveArchives(session: String): List<Triple<String, String, Long>> = emptyList()
 }
 
+/** Host storage for notes and observations. */
 interface Notes {
     fun upsertNote(
         project: String?,
@@ -215,6 +224,7 @@ interface Notes {
     fun observationNarrative(id: Int): String? = null
 }
 
+/** Host record of files already read, by path and SHA-256. */
 interface ReadCache {
     fun putReadCache(
         path: String,
@@ -233,6 +243,7 @@ interface ReadCache {
     fun sharedSession(): Boolean = false
 }
 
+/** Read access to the host's record of recent hook inputs. */
 interface Ledger {
     fun recentHookInputs(limit: Long): List<String>
 
@@ -267,6 +278,7 @@ data class SymbolRow(
     val doc: String = "",
 )
 
+/** Byte range and hashes of one symbol in a file. */
 data class SymbolSpan(
     val startByte: ULong,
     val endByte: ULong,
@@ -282,6 +294,7 @@ data class SymbolFile(
     val rows: List<SymbolRow>,
 )
 
+/** Host storage for the symbol index, per project root. */
 interface Symbols {
     fun symbolCount(root: String): Long
 

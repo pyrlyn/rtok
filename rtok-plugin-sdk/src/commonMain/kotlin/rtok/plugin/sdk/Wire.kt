@@ -8,6 +8,7 @@ import kotlinx.serialization.json.*
 /** A location in a JSON tree: String = object key, Int = array index. */
 typealias JsonPath = List<Any>
 
+/** The element at [path], or null when any step is missing. */
 fun JsonElement.at(path: JsonPath): JsonElement? =
     path.fold(this as JsonElement?) { e, k ->
         when (k) {
@@ -17,6 +18,7 @@ fun JsonElement.at(path: JsonPath): JsonElement? =
         }
     }
 
+/** A copy of this tree with [value] at [path]; a path that does not exist leaves it unchanged. */
 fun JsonElement.with(
     path: JsonPath,
     value: JsonElement,
@@ -31,6 +33,7 @@ fun JsonElement.with(
     }
 }
 
+/** A location in [WireRequest.body] from turn [turn]; setting [content] writes the request body. */
 open class BodyRef(
     protected val req: WireRequest,
     val path: JsonPath,
@@ -43,6 +46,7 @@ open class BodyRef(
         }
 }
 
+/** A tool result in a provider request, by tool-call [id]. */
 class ToolResultRef(
     req: WireRequest,
     path: JsonPath,
@@ -50,12 +54,14 @@ class ToolResultRef(
     val id: String,
 ) : BodyRef(req, path, turn)
 
+/** A blob in a provider request. */
 class BlobRef(
     req: WireRequest,
     path: JsonPath,
     turn: Int,
 ) : BodyRef(req, path, turn)
 
+/** A skill in a provider request. */
 class SkillRef(
     req: WireRequest,
     path: JsonPath,
@@ -75,6 +81,7 @@ interface ToolResults {
     fun skillRefs(req: WireRequest): List<SkillRef> = emptyList()
 }
 
+/** A provider request body, read through its wire format's [ToolResults] adapter. */
 class WireRequest(
     private val wire: ToolResults,
     var body: JsonElement,

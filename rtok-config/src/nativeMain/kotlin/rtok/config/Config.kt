@@ -24,14 +24,17 @@ val ConfigJson =
         allowSpecialFloatingPointValues = true
     }
 
+/** Something noticed while loading config, to log once. */
 data class LoadNote(
     val event: String,
     val message: String,
     val log: String,
 )
 
+/** The environment variable [k], or null. */
 fun envVar(k: String): String? = getenv(k)?.toKString()
 
+/** The whole rtok configuration, one section per area; see docs/config.md. */
 @Serializable
 data class Config(
     val core: Core = Core(),
@@ -341,6 +344,7 @@ fun writeFile(
     }
 }
 
+/** Decodes a merged JSON config tree into [Config]. */
 fun decodeConfig(root: JsonObject): Config =
     try {
         rawDecode(root)
@@ -415,6 +419,7 @@ internal fun applyLegacyFold(cfg: Config): Config {
     return cfg.keep(c)
 }
 
+/** The user's home from `HOME` or `USERPROFILE`. */
 fun envUserHome(): String? = userHomeFrom(envVar("HOME"), envVar("USERPROFILE"))
 
 fun homeDirAbsolute(
@@ -432,6 +437,7 @@ fun homeDirAbsolute(
 
 // ---- JSON tree helpers shared by layers and validate ----
 
+/** The value at a dotted key such as `plugins.inject.modes_dir`, or null. */
 fun leaf(
     root: JsonObject,
     dotted: String,
@@ -441,6 +447,7 @@ fun leaf(
     return cur
 }
 
+/** [root] with [f] applied to the value at a dotted key; unchanged when the key is missing. */
 fun updateLeaf(
     root: JsonObject,
     dotted: String,
@@ -459,6 +466,7 @@ fun updateLeaf(
     return go(root, 0)
 }
 
+/** [root] with [value] set at a dotted key, creating objects on the way. */
 fun insertDotted(
     root: JsonObject,
     dotted: String,
