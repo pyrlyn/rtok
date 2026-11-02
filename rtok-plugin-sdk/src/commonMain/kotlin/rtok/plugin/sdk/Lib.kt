@@ -71,30 +71,36 @@ data class ToolDef(
     val inputSchema: JsonElement,
 )
 
+/** A hook event before a tool runs. */
 data class PreToolUse(
     val toolName: String,
     val toolInput: JsonElement,
 )
 
+/** A hook event after a tool ran, with its response. */
 data class PostToolUse(
     val toolName: String,
     val toolInput: JsonElement,
     val toolResponse: JsonElement,
 )
 
+/** A hook event when a session starts. */
 data class SessionStart(
     val source: String,
 )
 
+/** A hook event when the user submits a prompt. */
 data class PromptSubmit(
     val prompt: String,
 )
 
+/** A hook event before the host compacts its conversation. */
 data class PreCompact(
     val trigger: String,
     val transcriptPath: String,
 )
 
+/** A hook event when a subagent starts. */
 data class SubagentStart(
     val agentType: String,
     val taskDescription: String,

@@ -3,8 +3,12 @@
 // Byte-compatible with Rust rtok: a Kotlin client can talk to a Rust resident and vice versa.
 package rtok.hook
 
+/** Largest hook protocol frame accepted, in bytes. */
 const val MAX_FRAME: Int = 64 shl 20
+
+/** Default hook deadline; see [deadline]. */
 const val DEADLINE_MS: Long = 3000
+
 const val CHILD_GRACE_MS: Long = 500
 const val HOOK_MAX_INPUT_BYTES: Int = 8 shl 20
 val HOST_VARS = listOf("GROK_HOOK_EVENT", "DEVIN_PROJECT_DIR")
@@ -13,6 +17,7 @@ private val CONFIG_VARS = listOf("HOME", "USERPROFILE", "OTEL_EXPORTER_OTLP_ENDP
 /** `RTOK_HOOK_DEADLINE_MS` or 3000 ms. */
 fun deadline(v: (String) -> String?): Long = v("RTOK_HOOK_DEADLINE_MS")?.trim()?.toULongOrNull()?.toLong() ?: DEADLINE_MS
 
+/** One hook call: event, host, working directory and the hook's stdin. */
 class Request(
     val version: String,
     val fingerprint: ULong,
@@ -86,6 +91,7 @@ private class Reader(
     }
 }
 
+/** Frames a hook reply: the stdout to print, or null to pass through. */
 fun encodeResponse(stdout: ByteArray?): ByteArray = frame(byteArrayOf(if (stdout == null) 1 else 0) + (stdout ?: ByteArray(0)))
 
 /** Some(stdout) / Some(null)=pass through / null=malformed. */
@@ -97,10 +103,12 @@ fun decodeResponse(body: ByteArray): Result<ByteArray?>? =
         else -> null
     }
 
+/** A frame that is malformed or too large. */
 class FrameException(
     msg: String,
 ) : Exception(msg)
 
+/** The body length from a frame header; throws [FrameException] above [MAX_FRAME]. */
 fun frameLen(header: ByteArray): Int {
     val len = readLe32(header, 0).toLong()
     if (len > MAX_FRAME) throw FrameException("frame too large")
@@ -140,11 +148,13 @@ private fun cmpBytes(
 
 fun isAbsolute(p: String) = p.startsWith("/")
 
+/** rtok's home from `RTOK_HOME`, else `~/.rtok`; null unless the result is absolute. */
 fun home(v: (String) -> String?): String? {
     val user = userHomeFrom(v("HOME"), v("USERPROFILE"))
     return homeDirFrom(v("RTOK_HOME"), user).takeIf { isAbsolute(it) }
 }
 
+/** `HOME`, else `USERPROFILE`, ignoring empty values. */
 fun userHomeFrom(
     home: String?,
     userprofile: String?,
@@ -160,6 +170,7 @@ private fun pjoin(
     else -> "$a/$b"
 }
 
+/** [rtokHome] with `~` expanded when set, else `.rtok` under [userHome]. */
 fun homeDirFrom(
     rtokHome: String?,
     userHome: String?,
@@ -211,4 +222,5 @@ internal fun readLe32(
     at: Int,
 ): UInt = (0 until 4).fold(0u) { a, i -> a or ((b[at + i].toUInt() and 0xffu) shl (8 * i)) }
 
+/** 64-bit FNV-1a hash of [bytes]. */
 fun fnv(bytes: ByteArray): ULong = bytes.fold(0xcbf29ce484222325uL) { h, b -> (h xor (b.toULong() and 0xffu)) * 0x100000001b3uL }

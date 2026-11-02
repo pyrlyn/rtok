@@ -1,32 +1,27 @@
 # rtok-kotlin
 
-Kotlin Multiplatform / Kotlin/Native port of [rtok](../rtok) (token-reduction CLI for AI coding agents).
-**Work in progress** — see [PORTING.md](PORTING.md) for what is ported and [port-plan.md](port-plan.md) for the plan.
+Kotlin Multiplatform / Kotlin/Native port of [rtok](../rtok), the
+token-reduction CLI for AI coding agents.
 
-The TUI (`rtok tui`, `libs/tui`) is ported. The web UI (`rtok web`, `rtok dashboard`; `rtok-web*` modules) is in progress, see [docs/web.md](docs/web.md).
+**Work in progress**: see [PORTING.md](PORTING.md) for what is ported and [port-plan.md](port-plan.md)
+for the plan. The TUI (`rtok tui`) is ported; the web UI (`rtok web`, `rtok dashboard`) is in
+progress, see [docs/web.md](docs/web.md).
 
-Toolchain: `mise install` (JDK, Kotlin, Gradle, Rust, cmake, tree-sitter CLI; see [toolchain.md](toolchain.md)).
+## Quick start
 
-Build & test (macOS arm64): `./gradlew macosArm64Test` · binary: `./gradlew :rtok:linkReleaseExecutableMacosArm64`
-→ `rtok/build/bin/macosArm64/releaseExecutable/rtok.kexe`. Other targets: `-Prtok.allTargets=true`.
+```bash
+mise install                                        # JDK, Kotlin, Gradle, Rust, cmake, tree-sitter CLI
+./gradlew macosArm64Test                            # build and test (macOS arm64)
+./gradlew :rtok:linkReleaseExecutableMacosArm64     # -> rtok/build/bin/macosArm64/releaseExecutable/rtok.kexe
+```
 
-Docs: [build speed](docs/build-speed.md) · [token estimator](docs/tokens.md) · [modes](docs/modes.md) · [log, `rtok logs`, `rtok info`](docs/log.md) · [project root](docs/config-root.md) · [hook protocol](docs/hook-protocol.md) · [toolchain](toolchain.md).
+Other targets: `-Prtok.allTargets=true`. Toolchain details: [toolchain.md](toolchain.md).
 
-- [Configuration](docs/config.md)
-- [Hooks](docs/hooks.md)
-- [Host install (`rtok agents`)](docs/agents.md)
-- [Store](docs/store.md)
-- [Plugin runtime](docs/plugin-runtime.md)
-- [archive plugin](docs/archive.md)
-- [toon plugin](docs/toon.md)
-- [compress plugin](docs/compress.md)
-- [checkpoint and inject plugins](docs/checkpoint-inject.md)
-- [guard plugin](docs/guard.md)
-- [`rtok discover`](docs/discover.md)
-- [cmd plugin](docs/cmd.md)
-- [WASM plugins](docs/wasm-plugins.md)
-- [docs plugin](docs/docs-plugin.md)
-- [json_tree plugin](docs/json-tree.md)
-- [API docs (Dokka)](docs/api-docs.md)
-- [Testing (kotlin.test, Kotest, e2e)](docs/testing.md)
-- [Native C dependencies](docs/c-code.md)
+## Documentation
+
+All pages, grouped, are listed in [docs/README.md](docs/README.md). The main ones:
+
+- [Configuration](docs/config.md) and [project root](docs/config-root.md)
+- [Hooks](docs/hooks.md) and [host install (`rtok agents`)](docs/agents.md)
+- [Plugin runtime](docs/plugin-runtime.md) and [WASM plugins](docs/wasm-plugins.md)
+- [Testing](docs/testing.md) and [build speed](docs/build-speed.md)
