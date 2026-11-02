@@ -1,0 +1,19 @@
+deleteLinks:
+DELETE FROM note_files WHERE note_id = ?;
+
+insertLink:
+INSERT OR IGNORE INTO note_files (note_id, path) VALUES (?, ?);
+
+selectForFiles:
+SELECT notes.id, notes.title, substr(notes.body, 1, 120) AS snippet
+FROM note_files
+INNER JOIN notes ON notes.id = note_files.note_id
+WHERE note_files.path IN :paths
+    AND notes.retired IS NULL
+    AND (:project IS NULL OR notes.project = :project OR notes.project IS NULL)
+GROUP BY notes.id
+ORDER BY count(*) DESC, notes.id DESC
+LIMIT :rowLimit;
+
+readCacheKeys:
+SELECT path FROM read_cache WHERE session = ? ORDER BY path ASC LIMIT ?;

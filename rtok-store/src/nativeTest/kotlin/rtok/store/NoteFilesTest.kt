@@ -64,10 +64,37 @@ class NoteFilesTest {
         assertEquals(listOf(both), s.notesForFiles(null, listOf("a", "a", "b"), 1u).map { it.id })
     }
 
+    @Test fun generatedQueriesBindLiteralPathsAndProjectsAndPreserveUnicodeSnippets() {
+        val project = "project' OR 1=1 --"
+        val path = "src/quote'); DELETE FROM notes; --.kt"
+        val snippetLength = 120
+        val body = "😀".repeat(snippetLength + 1)
+        val mine = s.upsertNote(project, "note", "mine", body).first
+        val other = note("other", "other")
+        s.setNoteFiles(mine, listOf(path))
+        s.setNoteFiles(other, listOf(path))
+        val hit = s.notesForFiles(project, listOf(path), 1u).single()
+        assertEquals(mine, hit.id)
+        assertEquals("😀".repeat(snippetLength), hit.snippet)
+        assertTrue(s.notesForFiles(project, listOf("unlinked' OR 1=1 --"), 1u).isEmpty())
+        s.setNoteFiles(mine, emptyList())
+        assertTrue(s.notesForFiles(project, listOf(path), 1u).isEmpty())
+        assertEquals(listOf(other), ids("other", path))
+    }
+
     @Test fun readCacheKeysAreScopedToTheSession() {
         s.putReadCache("s1", "src/a.rs\tfull\t", "h", null)
         s.putReadCache("s2", "src/b.rs\tfull\t", "h", null)
         assertEquals(listOf("src/a.rs\tfull\t"), s.readCacheKeys("s1"))
+    }
+
+    @Test fun readCacheKeysStaySortedAndCappedWithBoundSessions() {
+        val session = "session' OR 1=1 --"
+        val cap = 512
+        val paths = (0..cap).map { "src/$it.kt" }
+        for (path in paths.reversed()) s.putReadCache(session, path, "h", null)
+        s.putReadCache("other", "a", "h", null)
+        assertEquals(paths.sorted().take(cap), s.readCacheKeys(session))
     }
 
     @Test fun hostMessagesAreReadReadOnlyOldestFirstFromTheSince() {

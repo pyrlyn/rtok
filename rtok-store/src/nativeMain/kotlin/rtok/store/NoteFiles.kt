@@ -1,18 +1,21 @@
 // Port of crates/rtok-store/src/note_files.rs (T374): the files a note is about.
 package rtok.store
 
+import db.sqldelight.KitSqlDriver
 import rtok.plugin.sdk.NoteHit
+import rtok.store.queries.NoteFilesQueries
 
-private const val MAX_READ_KEYS = 512
+private const val MAX_READ_KEYS = 512L
 
 /** Replace the files `noteId` is linked to with `paths` (root-relative). */
 fun Store.setNoteFiles(
     noteId: Int,
     paths: List<String>,
 ) = conn { db ->
+    val queries = NoteFilesQueries(KitSqlDriver(db))
     db.transaction {
-        db.execute("DELETE FROM note_files WHERE note_id = ?", noteId)
-        for (p in paths) db.execute("INSERT OR IGNORE INTO note_files (note_id, path) VALUES (?, ?)", noteId, p)
+        queries.deleteLinks(noteId.toLong())
+        for (p in paths) queries.insertLink(noteId.toLong(), p)
     }
 }
 
@@ -24,22 +27,14 @@ fun Store.notesForFiles(
 ): List<NoteHit> {
     if (paths.isEmpty()) return emptyList()
     return conn { db ->
-        var sql =
-            "SELECT notes.id, notes.title, substr(notes.body, 1, 120) FROM note_files INNER JOIN notes ON notes.id = note_files.note_id " +
-                "WHERE note_files.path IN (${inList(paths.size)}) AND notes.retired IS NULL"
-        val args = ArrayList<Any?>(paths)
-        if (project != null) {
-            sql += " AND (notes.project = ? OR notes.project IS NULL)"
-            args += project
-        }
-        sql += " GROUP BY notes.id ORDER BY count(*) DESC, notes.id DESC LIMIT ?"
-        args += maxOf(limit, 1u).toLong()
-        db.query(sql, *args.toTypedArray()) { NoteHit(it.int(0), it.string(1), it.string(2)) }
+        NoteFilesQueries(KitSqlDriver(db))
+            .selectForFiles(paths, project, maxOf(limit, 1u).toLong()) { id, title, snippet -> NoteHit(id.toInt(), title, snippet) }
+            .executeAsList()
     }
 }
 
 /** Raw read-cache keys of `session`, path order (capped). */
 fun Store.readCacheKeys(session: String): List<String> =
-    conn {
-        it.query("SELECT path FROM read_cache WHERE session = ? ORDER BY path ASC LIMIT ?", session, MAX_READ_KEYS) { r -> r.string(0) }
+    conn { db ->
+        NoteFilesQueries(KitSqlDriver(db)).readCacheKeys(session, MAX_READ_KEYS).executeAsList()
     }
