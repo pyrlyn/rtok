@@ -32,6 +32,15 @@ driver once (`Db.installIfAbsent(RoomDbDriver)` in `main`); store tests install 
 `Support.kt`. androidx.sqlite prepares one statement at a time, so the adapter splits scripts
 (migrations) itself, keeping trigger bodies, quotes and comments whole.
 
+`NoteFiles.kt` uses SQLDelight 2.4.1 generated queries from
+`rtok-store/src/commonMain/sqldelight/rtok/store/queries/NoteFiles.sq` through
+`pyrlyn.kit:db-sqldelight`'s `KitSqlDriver` over the current `Db`. Parameters, including path lists,
+are bound by the generated API; ranking and limits remain in SQLite. Link replacement keeps the
+store's existing transaction. The adapter borrows that connection and is not closed separately.
+`Schema.sq` describes only the tables these queries need for compilation; migrations still own
+the runtime schema, and production never calls `NoteFilesDatabase.Schema.create` or `migrate`.
+`NoteFilesSchemaTest` compares the declared columns with the migrated store to detect drift.
+
 Room's entities/DAOs and its KSP code generation are not used: Room owns the schema it creates
 (its own DDL plus a `room_master_table`), which cannot stay byte-identical to the Rust schema the
 drift test checks. Migrations stay the Rust raw SQL, run through androidx.sqlite.
