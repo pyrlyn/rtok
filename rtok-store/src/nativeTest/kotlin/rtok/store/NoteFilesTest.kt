@@ -48,6 +48,22 @@ class NoteFilesTest {
         assertEquals(listOf(mine, loose, other), ids(null, "src/main.rs").sorted())
     }
 
+    @Test fun unsignedLimitsDoNotWrapAndZeroStillReturnsOne() {
+        val older = note("older")
+        val newer = note("newer")
+        for (id in listOf(older, newer)) s.setNoteFiles(id, listOf("a"))
+        assertEquals(listOf(newer, older), s.notesForFiles(null, listOf("a"), UInt.MAX_VALUE).map { it.id })
+        assertEquals(listOf(newer), s.notesForFiles(null, listOf("a"), 0u).map { it.id })
+    }
+
+    @Test fun limitAppliesAfterRankingAndDuplicatePathsCountOnce() {
+        val both = note("both")
+        val newest = note("newest")
+        s.setNoteFiles(both, listOf("a", "b"))
+        s.setNoteFiles(newest, listOf("a"))
+        assertEquals(listOf(both), s.notesForFiles(null, listOf("a", "a", "b"), 1u).map { it.id })
+    }
+
     @Test fun readCacheKeysAreScopedToTheSession() {
         s.putReadCache("s1", "src/a.rs\tfull\t", "h", null)
         s.putReadCache("s2", "src/b.rs\tfull\t", "h", null)
