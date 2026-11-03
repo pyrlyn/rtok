@@ -98,6 +98,7 @@ Plan, decisions and history: [port-plan.md](port-plan.md). Open work: [roadmap.m
 | src/agents (40+ hosts), src/doctor | `rtok.agents`, `rtok.doctor` | ⬜ doctor: probe/hooks/dupes ✅ | hooks.rs 45 → HooksTest 43 |
 | src/tasks mod/meta/adapter/ready | `rtok/tasks` Tasks.kt, Meta.kt, Adapter.kt, Ready.kt | 🟡 | 11 → 14 |
 | src/otel (otlp, map, metrics, export), src/cli/otel.rs | `rtok/otel/`, `cli/OtelCmd.kt`; rtok-sys `lockExclusive` | 🟡 all but `spawn_ticker` (proxy/mcp periodic flush) | export.rs 9 + tests/otel.rs 12 → ExportTest 20, OtelCliSpec 2 |
+| — (port-only: self-tracing, R3) | `rtok/trace/Trace.kt`; spans in `Main.kt`, `cli/clikt/CliktAdapter.kt`, `hooks/Dispatch.kt`, `mcp/Server.kt`, `proxy/ProxyHandler.kt`; [docs/tracing.md](docs/tracing.md) | ✅ | TraceTest 9 |
 | src/worktree, tasks (rest), measure, model, report, bench, completions, project, store | matching packages and `cli/*Cmd.kt` | 🟡 see the rows above and port-plan.md | |
 | src/tui | `libs/tui`, `cli/TuiCmd.kt` | 🟡 | |
 | src/web, agents/junk_web.rs, `rtok web/tui/dashboard` | rtok-web (token.rs, remote bind) | ⏳ in progress, see docs/web.md | |
