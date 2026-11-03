@@ -145,6 +145,20 @@ class TraceTest {
     }
 
     @Test
+    fun anUnpushedSpanIsNeverAParent() {
+        val http = FakeHttp().on("POST", "/v1/traces") { ok("{}") }
+        val t = tracer(http)
+        val detached = t.start("proxy POST /v1/messages", Kind.Server, emptyList(), null, push = false)
+        val other = t.start("hook", Kind.Internal, emptyList())
+        t.end(other)
+        t.end(detached)
+        t.flush()
+        val (h, p) = spans(http)
+        assertNull(h.str("parentSpanId"))
+        assertNotEquals(p.str("traceId"), h.str("traceId"))
+    }
+
+    @Test
     fun spanIsTransparentWhenOff() {
         assertEquals(42, Trace.span("x") { 42 })
         assertFailsWith<IllegalStateException> { Trace.span("x") { error("still thrown") } }

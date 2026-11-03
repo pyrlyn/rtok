@@ -2,7 +2,7 @@
 // to a collector, for debugging the port in Jaeger or Grafana. Separate from `rtok otel`, which exports the agents'
 // ledgers: nothing here touches the store, stdout or the log format. Off unless `RTOK_TRACE` is set; a collector that
 // is down costs one short timeout and one log line, never the command.
-@file:OptIn(kotlin.time.ExperimentalTime::class, kotlinx.cinterop.ExperimentalForeignApi::class)
+@file:OptIn(kotlin.time.ExperimentalTime::class, kotlinx.cinterop.ExperimentalForeignApi::class, kotlin.uuid.ExperimentalUuidApi::class)
 @file:Suppress("TooGenericExceptionCaught", "TooManyFunctions")
 
 package rtok.trace
@@ -34,7 +34,7 @@ import kotlin.native.concurrent.ObsoleteWorkersApi
 import kotlin.native.concurrent.ThreadLocal
 import kotlin.native.concurrent.TransferMode
 import kotlin.native.concurrent.Worker
-import kotlin.random.Random
+import kotlin.uuid.Uuid
 
 private const val DEFAULT_URL = "http://localhost:4318"
 private const val TRACES_PATH = "/v1/traces"
@@ -123,6 +123,7 @@ class OpenSpan internal constructor(
     internal val attrs = attrs.toMutableList()
     internal val events = mutableListOf<Event>()
     internal var status: Status = Status.Unset
+    internal val closed = AtomicInt(0)
 
     val traceParent get() = TraceParent(traceId, spanId)
 }
@@ -140,7 +141,6 @@ class Tracer(
     private val buffer = AtomicReference<List<Span>>(emptyList())
     private val dropped = AtomicInt(0)
     private val warned = AtomicInt(0)
-    private val rng = Random(clock() xor (platform.posix.getpid().toLong() shl 32))
 
     private val resource =
         Resource(listOf(s("service.name", settings.serviceName), s("service.version", VERSION), i("process.pid", platform.posix.getpid().toLong())))
@@ -158,10 +158,21 @@ class Tracer(
         kind: Kind,
         attrs: List<Attr>,
         parent: TraceParent? = current(),
+        push: Boolean = true,
     ): OpenSpan {
         val span = OpenSpan(parent?.traceId ?: id(TRACE_HEX), id(SPAN_HEX), parent?.spanId, name, kind, clock(), attrs)
-        Stack.spans += Frame(this, span)
+        if (push) Stack.spans += Frame(this, span)
         return span
+    }
+
+    /** Error status plus an `exception` event; the message only, never a stack trace. */
+    fun fail(
+        span: OpenSpan,
+        error: Throwable,
+    ) {
+        val msg = (error.message ?: error::class.simpleName ?: "error").take(MAX_TEXT)
+        span.status = Status.Error(msg)
+        span.events += Event("exception", clock(), listOf(s("exception.type", error::class.qualifiedName ?: "Throwable"), s("exception.message", msg)))
     }
 
     fun end(
@@ -169,11 +180,7 @@ class Tracer(
         error: Throwable? = null,
     ) {
         Stack.spans.removeAll { it.span === span }
-        if (error != null) {
-            val msg = (error.message ?: error::class.simpleName ?: "error").take(MAX_TEXT)
-            span.status = Status.Error(msg)
-            span.events += Event("exception", clock(), listOf(s("exception.type", error::class.qualifiedName ?: "Throwable"), s("exception.message", msg)))
-        }
+        if (error != null) fail(span, error)
         val done = Span(span.traceId, span.spanId, span.parent, span.name, span.kind, span.startNs, clock(), span.attrs.toList(), span.events.toList(), span.status)
         while (true) {
             val cur = buffer.value
@@ -207,12 +214,8 @@ class Tracer(
         if (problem != null && warned.compareAndSet(0, 1)) warn("self-trace export to ${settings.url} failed: $problem")
     }
 
-    private fun id(hexLen: Int): String {
-        while (true) {
-            val v = rng.nextBytes(hexLen / 2).joinToString("") { (it.toInt() and 0xff).toString(16).padStart(2, '0') }
-            if (v.any { it != '0' }) return v
-        }
-    }
+    // Uuid.random is the platform's secure random: safe from the proxy's many threads, never all zeros (version bits).
+    private fun id(hexLen: Int): String = Uuid.random().toHexString().take(hexLen)
 }
 
 private class Frame(
@@ -239,15 +242,19 @@ object Trace {
 
     val enabled get() = tracer != null
 
-    /** Runs [block] inside a span named [name]; an exception marks the span and propagates. */
+    /**
+     * Runs [block] inside a span named [name]; an exception marks the span and propagates. [newTrace] starts a trace of
+     * its own: one per request in long-lived processes, whose root span is only posted when they exit.
+     */
     inline fun <T> span(
         name: String,
         attrs: List<Attr> = emptyList(),
         kind: Kind = Kind.Internal,
+        newTrace: Boolean = false,
         block: () -> T,
     ): T {
         val t = tracer ?: return block()
-        val open = t.start(name, kind, attrs)
+        val open = t.start(name, kind, attrs, if (newTrace) null else t.current())
         val result =
             try {
                 block()
@@ -259,14 +266,46 @@ object Trace {
         return result
     }
 
-    /** Adds [attrs] to the innermost running span on this thread, and renames it when [name] is given. */
+    /**
+     * Adds [attrs] to the innermost running span on this thread, renames it when [name] is given, and sets error status
+     * with [error] for a failure that is an answer, not an exception (a tool that answered `isError`).
+     */
     fun annotate(
         attrs: List<Attr>,
         name: String? = null,
+        error: String? = null,
     ) {
         val frame = Stack.spans.lastOrNull() ?: return
         frame.span.attrs += attrs
         if (name != null) frame.span.name = name
+        if (error != null) frame.span.status = Status.Error(error)
+    }
+
+    /** Marks the innermost running span on this thread as failed, for code that turns an exception into an exit code. */
+    fun fail(error: Throwable) {
+        val frame = Stack.spans.lastOrNull() ?: return
+        frame.tracer.fail(frame.span, error)
+    }
+
+    /**
+     * The root of a new trace not tied to this thread's stack, for a request that hops threads (the proxy's
+     * coroutines); end it with [close]. Null when tracing is off.
+     */
+    fun open(
+        name: String,
+        attrs: List<Attr> = emptyList(),
+        kind: Kind = Kind.Internal,
+    ): OpenSpan? = tracer?.start(name, kind, attrs, null, push = false)
+
+    /** Ends a span from [open] once; later calls are ignored so every exit path may call it. */
+    fun close(
+        span: OpenSpan?,
+        attrs: List<Attr> = emptyList(),
+        error: Throwable? = null,
+    ) {
+        if (span == null || !span.closed.compareAndSet(0, 1)) return
+        span.attrs += attrs
+        tracer?.end(span, error)
     }
 
     /** `TRACEPARENT` for a child process, so its spans join this trace; null when tracing is off. */

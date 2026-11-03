@@ -16,8 +16,12 @@ import kotlinx.serialization.json.JsonPrimitive
 import rtok.http.server.ServerRequest
 import rtok.http.server.StreamingHandler
 import rtok.http.server.StreamingResponse
+import rtok.otel.Kind
+import rtok.otel.i
+import rtok.otel.s
 import rtok.store.SerdeJson
 import rtok.store.setCallMs
+import rtok.trace.Trace
 import kotlin.time.TimeSource
 
 class ProxyHandler(
@@ -96,6 +100,13 @@ private class ProxyCall(
         }
     }
 
+    // Requests run concurrently and hop threads, so the span is not on a thread's stack; whichever path answers last
+    // closes it: here for an answer of rtok's own, in [Call] once a forwarded stream is done.
+    private val span = Trace.open("proxy $method $path", listOf(s("http.request.method", method), s("url.path", path), s("rtok.lane", lane.laneName)), Kind.Server)
+    private var handedOff = false
+
+    private fun statusAttr(code: Int) = listOf(i("http.response.status_code", code.toLong()))
+
     private fun ms() = start.elapsedNow().inWholeMicroseconds / MICROS_PER_MS
 
     private suspend fun offWorker(block: suspend () -> Unit) {
@@ -103,6 +114,12 @@ private class ProxyCall(
     }
 
     suspend fun run(): StreamingResponse {
+        val resp = runCatching { respond() }.onFailure { Trace.close(span, error = it) }.getOrThrow()
+        if (!handedOff) Trace.close(span, statusAttr(resp.status))
+        return resp
+    }
+
+    private suspend fun respond(): StreamingResponse {
         val hops = ProxyHttp.hopsOf(headers)
         headers = headers.filterNot { it.first.equals(ProxyHttp.HOP_HEADER, ignoreCase = true) }
         loop(hops)?.let { return it }
@@ -112,7 +129,6 @@ private class ProxyCall(
         val full = gate != null && slot == null
         val msg = "$method $path: ${lane.laneName} lane at max_in_flight with a full queue, answered 429"
         if (full) offWorker { state.log("?", null, "warn", msg) }
-        var handedOff = false
         return if (full) {
             ProxyHttp.queueFull(msg)
         } else {
@@ -230,16 +246,22 @@ private class ProxyCall(
                         }
                     if (sent.retries > 0u) offWorker { state.log(shaped.recorded?.session ?: "?", shaped.recorded?.callId, "warn", "flex 429 on $method $path: ${sent.retries} retry(ies)") }
                     val tee = sent.tee
+                    val upstream = listOfNotNull(s("rtok.upstream", target.substringBefore('?')), wire?.let { s("rtok.provider", it.provider) })
                     if (tee == null) {
                         val msg = scrub(sent.error?.message ?: "request failed")
                         offWorker { failed(sent.body, msg) }
                         head.complete(Head.Failed(msg))
+                        Trace.close(span, upstream + statusAttr(ProxyHttp.BAD_GATEWAY), IllegalStateException(msg))
                     } else {
                         offWorker { done(sent.body, status, contentType, tee) }
+                        Trace.close(span, upstream + statusAttr(status))
                     }
                 }
             // Whatever ends the call, the handler is never left waiting for a status line.
-            job.invokeOnCompletion { head.complete(Head.Failed(it?.message ?: "upstream call ended")) }
+            job.invokeOnCompletion {
+                head.complete(Head.Failed(it?.message ?: "upstream call ended"))
+                Trace.close(span, error = it)
+            }
             return when (val h = head.await()) {
                 is Head.Failed -> {
                     ProxyHttp.error(ProxyHttp.BAD_GATEWAY, "rtok proxy: upstream error: ${h.message}")
