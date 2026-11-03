@@ -10,6 +10,8 @@ import kotlinx.serialization.json.JsonPrimitive
 import rtok.config.Config
 import rtok.config.envVar
 import rtok.mcp.AgentTools
+import rtok.otel.i
+import rtok.otel.s
 import rtok.plugin.Runtime
 import rtok.plugin.fitBudget
 import rtok.plugin.sdk.Class
@@ -33,6 +35,7 @@ import rtok.store.setAgentAncestors
 import rtok.store.setCallMs
 import rtok.sys.eprint
 import rtok.sys.rustLines
+import rtok.trace.Trace
 import kotlin.time.TimeSource
 
 /** T178: one 5 ms lock wait, migrations included, then fail open — half the 10 ms hook budget. */
@@ -67,6 +70,12 @@ fun run(
     event: String,
     readStdin: (limit: Long) -> ByteArray,
     cfg: Config,
+): ByteArray = Trace.span("hook $event", listOf(s("rtok.hook.event", event), s("rtok.hook.host", cfg.hook.host))) { runTraced(event, readStdin, cfg) }
+
+private fun runTraced(
+    event: String,
+    readStdin: (limit: Long) -> ByteArray,
+    cfg: Config,
 ): ByteArray {
     val max = cfg.core.hookMaxInputBytes.toLong()
     if (!cfg.hook.failOpen) {
@@ -92,6 +101,7 @@ fun run(
     } catch (e: HookError) {
         EMPTY_OUT
     } catch (e: Throwable) {
+        Trace.fail(e)
         failOpen("panicked: ${e.message ?: e::class.simpleName}; failing open")
     }
 }
@@ -299,7 +309,7 @@ private inline fun <T> guarded(
     block: () -> T,
 ): T? =
     try {
-        block()
+        Trace.span("plugin $plugin", listOf(s("rtok.plugin.id", plugin), s("rtok.hook.event", event))) { block() }
     } catch (e: Exception) {
         cx.log("error", "plugin", plugin, "$event panicked: ${e.message ?: e::class.simpleName}")
         null
@@ -434,6 +444,7 @@ internal fun deferSessionEnd(
         buildMap {
             put(DEFERRED_ENV, "1")
             if (cfg.home.isNotEmpty()) put("RTOK_HOME", cfg.home)
+            Trace.childEnv()?.let { (k, v) -> put(k, v) }
         }
     rtok.sys.spawnDetached(exe, listOf("hook", "SessionEnd"), extra, stdin)
 }
@@ -594,5 +605,7 @@ internal fun capBudget(
 fun residentRun(req: rtok.hook.Request): ByteArray {
     // This process's env came from whichever call started it; the payload names the session.
     val cfg = Config.loadLenient(null, rtok.config.Layers.hookHostFlag(req.host.ifEmpty { null })).withoutSessionEnv().also { it.hookClientPid = req.pid }
-    return run(req.event, { limit -> if (req.stdin.size > limit) req.stdin.copyOf(limit.toInt()) else req.stdin }, cfg)
+    return Trace.span("hook serve", listOfNotNull(req.pid?.let { i("rtok.hook.client_pid", it.toLong()) }), newTrace = true) {
+        run(req.event, { limit -> if (req.stdin.size > limit) req.stdin.copyOf(limit.toInt()) else req.stdin }, cfg)
+    }
 }

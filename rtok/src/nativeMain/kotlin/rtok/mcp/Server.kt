@@ -13,9 +13,13 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import rtok.config.Config
 import rtok.json.StrictJson
+import rtok.otel.Kind
+import rtok.otel.b
+import rtok.otel.s
 import rtok.plugin.Runtime
 import rtok.plugin.sdk.ToolDef
 import rtok.plugins.Registry
+import rtok.trace.Trace
 import kotlin.concurrent.AtomicInt
 
 /** A listed tool and the plugin its calls are recorded under. */
@@ -130,7 +134,11 @@ class Server(
         name: String,
         rawArgs: JsonElement?,
     ): JsonObject {
-        val (text, ok) = run(name, rawArgs)
+        // One trace per call: the server's own root span is posted only when it exits.
+        val (text, ok) =
+            Trace.span("mcp tool $name", listOf(s("rtok.mcp.tool", name)), Kind.Server, newTrace = true) {
+                run(name, rawArgs).also { Trace.annotate(listOf(b("rtok.mcp.ok", it.second)), error = if (it.second) null else "tool failed") }
+            }
         if (!ok) cx.log("error", "mcp", name, "tool failed: $text")
         return Protocol.callResult(text, ok)
     }

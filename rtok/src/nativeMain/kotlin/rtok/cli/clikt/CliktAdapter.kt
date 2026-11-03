@@ -12,6 +12,7 @@ import com.github.ajalt.clikt.parameters.options.optionalValue
 import com.github.ajalt.clikt.parameters.options.versionOption
 import rtok.VERSION
 import rtok.cli.*
+import rtok.trace.Trace
 
 /** Collected while Clikt walks the command chain; the last command run is the one chosen. */
 private class Parsed {
@@ -20,6 +21,9 @@ private class Parsed {
     val args = HashMap<String, String>()
     val lists = HashMap<String, List<String>>()
     var action: ((Invocation) -> Unit)? = null
+
+    /** Command names from the root down (`rtok`, `hook`, `pre-tool-use`), no argument values: the trace span name. */
+    val path = ArrayList<String>()
 }
 
 private class SpecCommand(
@@ -56,6 +60,7 @@ private class SpecCommand(
     private val rest = spec.args.filter { it.variadic }.map { a -> a to argument(a.name, help = a.help).multiple(required = a.required).also { registerArgument(it) } }
 
     override fun run() {
+        parsed.path += spec.name
         for ((o, opt) in opts) {
             when (val v = opt.value) {
                 true -> {
@@ -100,6 +105,7 @@ object CliktParser : CliParser {
         try {
             cmd.parse(args)
         } catch (e: CliktError) {
+            Trace.annotate(emptyList(), name = parsed.path.joinToString(" ").ifEmpty { spec.name })
             val text = cmd.getFormattedHelp(e) ?: ""
             return when {
                 e is PrintHelpMessage || e is PrintMessage || e is PrintCompletionMessage -> {
@@ -117,6 +123,7 @@ object CliktParser : CliParser {
                 }
             }
         }
+        Trace.annotate(emptyList(), name = parsed.path.joinToString(" "))
         val action = parsed.action ?: return ExitCode.OK
         return runAction(io) { action(Invocation(parsed.flags, parsed.values, parsed.args, io, parsed.lists)) }
     }
