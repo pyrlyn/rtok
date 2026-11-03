@@ -38,6 +38,10 @@ Every file is ported except `catfile.rs` (see Limitations).
 ## Test
 `./gradlew --no-daemon :rtok:macosArm64Test --tests 'rtok.plugins.cmd.*'`. The golden tests read
 `rtok/src/commonTest/fixtures/cmd_golden/*.in|.out`, a copy of Rust `tests/cmd_golden`.
+`TokenSavingsTest` runs the same fixtures through `emitFilteredTo`, so the trailer and the fallbacks count:
+at least 70% saved overall (73% measured over 102 fixtures), no fixture larger than its raw output, each
+ledger row equal to what was printed, every pointer backed by the archive. `TokenSavingsE2eSpec` checks
+the real binary up to `report --ai`.
 
 ## Limitations
 - `catfile.rs` is not ported: it needs tree-sitter outline tags (tree-sitter is not an approved dependency)

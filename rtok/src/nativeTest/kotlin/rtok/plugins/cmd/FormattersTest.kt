@@ -1,51 +1,20 @@
 package rtok.plugins.cmd
 
 import rtok.config.Estimator
-import rtok.config.envVar
 import rtok.estimate
 import rtok.plugin.sdk.Class
-import rtok.sys.listDir
 import rtok.sys.readToString
 import rtok.sys.rustLines
 import kotlin.test.*
 
 /** Port of the formatters.rs tests, driven by the shared `cmd_golden` fixtures. */
 class FormattersTest {
-    private data class Golden(
-        val argv: List<String>,
-        val exit: Int,
-        val minSaving: Int?,
-        val output: String,
-    )
-
-    private val dir = "${envVar("RTOK_FIXTURES")}/cmd_golden"
+    private val dir = goldenDir()
     private val settings = Settings.builtin()
 
-    /** `argv: 'a && b'` (single-quoted) is one argv element, the shape the hook sends. */
-    private fun parseIn(s: String): Golden {
-        var argv = emptyList<String>()
-        var exit = 0
-        var min: Int? = null
-        var rest = s
-        for (line in s.rustLines()) {
-            line.removePrefixOrNull("argv: ")?.let { a ->
-                argv = if (a.length >= 2 && a.startsWith('\'') && a.endsWith('\'')) listOf(a.substring(1, a.length - 1)) else words(a)
-            }
-            line.removePrefixOrNull("exit: ")?.let { exit = it.toIntOrNull() ?: 0 }
-            line.removePrefixOrNull("min_saving: ")?.let { min = it.trim().toIntOrNull() }
-            if (line == "---") {
-                rest = s.substringAfter("---\n", "")
-                break
-            }
-        }
-        return Golden(argv, exit, min, rest)
-    }
+    private fun words(s: String) = goldenWords(s)
 
-    private fun words(s: String) = s.split(' ', '\t', '\n', '\r').filter { it.isNotEmpty() }
-
-    private fun ins() = listDir(dir).filter { it.endsWith(".in") }.sorted()
-
-    private fun golden(name: String) = parseIn(readToString("$dir/$name"))
+    private fun ins() = goldenInputs()
 
     private fun compress(
         argv: List<String>,
