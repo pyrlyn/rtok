@@ -157,9 +157,11 @@ class ProxyCacheTest {
         TruncatingUpstream(proxyFixture("anthropic_messages_body.json"), 40).use { up ->
             cacheServer("trunc", up.url).use { p ->
                 val first = runCatching { postJson("${p.url}$MESSAGES", t51Request()) }.getOrNull()
-                assertTrue(first == null || first.body.size < proxyFixture("anthropic_messages_body.json").size, "the client sees the cut")
+                // Darwin may drop the connection before the status line is read; the proxy then answers a 502 whose
+                // error body can outgrow the fixture, so a size check alone is not the cut.
+                assertTrue(first == null || first.status != 200 || first.body.size < proxyFixture("anthropic_messages_body.json").size, "the client sees the cut")
+                // The cache is filled before the usage row lands, so the row is the point past which a hit would show.
                 p.usage(T51_SESSION)
-                platform.posix.usleep(100_000u)
                 runCatching { postJson("${p.url}$MESSAGES", t51Request()) }
                 assertEquals(2, up.hits.value, "the second request must reach upstream, not the cache")
             }
