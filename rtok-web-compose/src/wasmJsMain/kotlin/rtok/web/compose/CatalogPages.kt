@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,13 +52,7 @@ private fun Switch(
 ) {
     val id = p.str("id") ?: return
     val on = p.flag("enabled")
-    val pal = LocalPalette.current
-    Box(
-        Modifier
-            .background(if (on) pal.ok.copy(alpha = 0.2f) else pal.border, RoundedCornerShape(99.dp))
-            .clickable { app.send(pluginToggle(id, !on)) }
-            .padding(horizontal = 8.dp, vertical = 2.dp),
-    ) { Txt(if (on) "on" else "off", color = if (on) pal.ok else pal.muted, size = 12) }
+    Switch(on, if (on) "on" else "off") { app.send(pluginToggle(id, !on)) }
 }
 
 private fun text(e: JsonElement?): String = (e as? JsonPrimitive)?.content ?: e?.toString() ?: ""
@@ -226,7 +219,7 @@ private fun Periods(
 private fun UsageKpis(r: JsonObject) {
     val t = r.obj("totals") ?: JsonObject(emptyMap())
     val unpriced = r.num("unpriced_models") ?: 0.0
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+    KpiRow {
         Kpi(
             "tokens",
             compact(t.num("tokens")),

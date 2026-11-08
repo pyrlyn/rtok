@@ -49,7 +49,7 @@ private fun StatsKpis(v: StatsView) {
     val u = v.usage
     val t = costTotals(v)
     Muted("${fmt(n(a["lines"]))} transcript lines · ${a["malformed"] ?: "?"} malformed · ${a["no_checkpoint"] ?: "?"} sessions without checkpoint")
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+    KpiRow {
         Kpi("sessions", fmt(n(a["sessions"])), "${a["compact"] ?: "?"} compact · ${a["checkpoint"] ?: "?"} checkpoint")
         Kpi("cache hit", u["hit"] ?: "-", "read ${compact(n(u["cache_read"]))}")
         Kpi("input", compact(n(u["input"])), "cache create ${compact(n(u["cache_create"]))}")

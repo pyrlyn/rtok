@@ -5,15 +5,12 @@
 
 package rtok.web.compose
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -55,15 +52,15 @@ fun Toggles(
 ) {
     val p = LocalPalette.current
     val cur = app.param(name, options.first())
-    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+    // Segmented/Track: a sunken track with the chosen option raised as a glass segment.
+    Row(Modifier.well(p).padding(3.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
         options.forEach { o ->
             val on = o == cur
             Box(
-                Modifier
-                    .background(if (on) p.accent.copy(alpha = 0.18f) else p.surface, RoundedCornerShape(6.dp))
+                (if (on) Modifier.glass(p, CODE) else Modifier)
                     .clickable { app.setParam(name, o, options.first()) }
-                    .padding(horizontal = 8.dp, vertical = 3.dp),
-            ) { Txt(o, color = if (on) p.accent else p.muted, size = 12) }
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
+            ) { Txt(o, color = if (on) p.fg else p.muted, size = 12, bold = on) }
         }
     }
 }
@@ -80,9 +77,9 @@ fun SearchBox(
     BasicTextField(
         v,
         { app.setParam(name, it, "") },
-        Modifier.width(220.dp).border(1.dp, p.border, RoundedCornerShape(6.dp)).padding(6.dp),
+        Modifier.width(240.dp).well(p).padding(horizontal = 12.dp, vertical = 8.dp),
         singleLine = true,
-        textStyle = TextStyle(color = p.fg, fontSize = 13.sp),
+        textStyle = TextStyle(color = p.fg, fontSize = 13.sp, fontFamily = LocalFonts.current),
         cursorBrush = SolidColor(p.accent),
         decorationBox = { inner ->
             Box {

@@ -43,12 +43,12 @@ val OverviewPage =
             ShareBar(if (o.estBefore > 0) o.estAfter / o.estBefore else 0.0)
         }
         val turns = (o.usage["turns"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.content?.toDoubleOrNull() }.orEmpty().takeLast(TURNS)
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        KpiRow {
             Kpi("input tok", compact(o.u("input")), "ctx ${compact(o.ctx)} incl. cache") { Sparkline(turns, "ctx tokens per turn") }
             Kpi("output tok", compact(o.u("output")), "cache create ${compact(o.u("cache_create"))}")
             Kpi("cache hit", pct(o.cacheHit), "read ${compact(o.u("cache_read"))} of ctx")
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        KpiRow {
             Kpi("calls", fmt(o.calls.size.toDouble()), "${o.failed} failed · p95 ${o.p95?.let { "${fixed(it, 0)} ms" } ?: "-"}") {
                 StackedBars(o.buckets.map { listOf(it.total.toDouble()) }, listOf(p.accent), "calls per bucket", Modifier.fillMaxWidth().then(Modifier))
             }

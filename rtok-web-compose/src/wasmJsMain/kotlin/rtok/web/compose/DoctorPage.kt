@@ -123,7 +123,7 @@ val DoctorPage =
     PageView { snap, app ->
         val d = snap.obj("doctor")
         val checks = doctorChecks(d, snap.flag("doctor_pending"))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        KpiRow {
             doctorSummary(checks).forEach { (s, n) -> Kpi(s.second, n.toString(), s.first) }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -321,10 +321,10 @@ private fun FixActions(
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         if (s.phase == FixPhase.CONFIRMING || busy) {
             Txt("Write $n ${if (n == 1) "entry" else "entries"}?")
-            Action(if (busy) "Writing..." else "Confirm", !busy) { c.confirm() }
+            Action(if (busy) "Writing..." else "Confirm", !busy, ButtonKind.PRIMARY) { c.confirm() }
             Action("Cancel", !busy) { c.dispatch(FixEvent.Cancel) }
         } else {
-            Action(if (s.phase == FixPhase.LOADING) "Planning..." else "Fix selected ($n)", n > 0 && s.phase == FixPhase.READY) { c.dispatch(FixEvent.Ask) }
+            Action(if (s.phase == FixPhase.LOADING) "Planning..." else "Fix selected ($n)", n > 0 && s.phase == FixPhase.READY, ButtonKind.PRIMARY) { c.dispatch(FixEvent.Ask) }
         }
     }
 }
