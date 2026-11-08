@@ -36,7 +36,9 @@ data class GraphView(
     val other: List<String>,
 )
 
-private val PROJECT = Regex("""^\[([^\]]+)] (.*)$""")
+// The closing `\]` must stay escaped: Kotlin/JS compiles patterns with the `u` flag, where a bare `]`
+// is a syntax error that throws on first use and takes the whole graph page down.
+private val PROJECT = Regex("""^\[([^\]]+)\] (.*)$""")
 private val DEAD = Regex("""^(\S+):(\d+) (\S+) (.+)$""")
 private val NOTE = Regex("""^ (…|dead scan failed)""")
 
