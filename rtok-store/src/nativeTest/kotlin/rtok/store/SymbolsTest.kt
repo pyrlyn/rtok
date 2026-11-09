@@ -140,4 +140,12 @@ class SymbolsTest {
         assertEquals(emptyList(), s.symbolPending("/r", dir))
         removeDirAll(dir)
     }
+
+    @Test fun replaceOneClearsStaleForATaglessFile() {
+        s.replaceSymbols("/r", "a.py", "s1", 1L to 1L, emptyList())
+        s.markSymbolsStaleIn("/r", "a.py")
+        assertEquals(listOf("a.py"), s.symbolStalePaths("/r"))
+        s.replaceSymbols("/r", "a.py", "s2", 2L to 2L, emptyList())
+        assertEquals(emptyList(), s.symbolStalePaths("/r"))
+    }
 }

@@ -116,6 +116,7 @@ private fun replaceOne(
     deleteFile(db, root, path)
     if (rows.isEmpty()) {
         db.execute("INSERT INTO symbols (root, path, name, kind, line, is_def, file_sha, mtime, size) VALUES (?, ?, '', '', 0, 0, ?, ?, ?)", root, path, sha, stat.first, stat.second)
+        clearStale(db, root, path)
         return 0
     }
     insertChunked(
