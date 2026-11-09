@@ -69,14 +69,15 @@ internal fun boardDirOf(
     return "$base/$name"
 }
 
-private val LEGACY_COLUMNS = listOf("todo", "in-progress", "closed")
+// `done/` is left out: the legacy files layout archives finished tasks there too.
+private val BOARD_ONLY_COLUMNS = listOf("todo", "in-progress", "closed")
 
 private fun namesIn(dir: String) = runCatching { readDir(dir) }.getOrDefault(emptyList())
 
 /** What `auto` makes of [dir]: a board for a new, empty or column-shaped directory, else the old layout it holds. */
 internal fun detectLayout(dir: String): String =
     when {
-        namesIn(dir).any { it in LEGACY_COLUMNS && isDir("$dir/$it") } -> "board"
+        namesIn(dir).any { it in BOARD_ONLY_COLUMNS && isDir("$dir/$it") } -> "board"
         namesIn(dir).any { fileId("$dir/$it") != null } || namesIn("$dir/done").any { fileId("$dir/done/$it") != null } -> "files"
         PlanDirAdapter.holdsFolders(dir) -> "plan"
         else -> "board"
