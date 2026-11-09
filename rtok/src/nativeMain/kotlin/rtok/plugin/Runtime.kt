@@ -9,13 +9,10 @@ import rtok.config.MemoryEmbed
 import rtok.config.leaf
 import rtok.plugin.sdk.*
 import rtok.store.*
-import rtok.sys.createDirAll
-import rtok.sys.pid
+import rtok.sys.createTempDir
 import rtok.sys.removeDirAll
 import rtok.sys.scalarList
-import rtok.sys.tempDir
 import kotlin.concurrent.AtomicReference
-import kotlin.time.TimeSource
 
 /** The longest prefix of [text] that estimates to at most [budget] tokens (one estimate, then a short trim). */
 fun fitBudget(
@@ -108,8 +105,6 @@ class Runtime private constructor(
 
     companion object {
         private const val OTHER_HOST = 6
-        private val clock = TimeSource.Monotonic.markNow()
-        private var seq = 0
 
         fun open(
             config: Config,
@@ -119,8 +114,8 @@ class Runtime private constructor(
 
         /** Default config with every path under a fresh temp dir + an in-memory store (tests, examples). */
         fun inMemory(session: String): Runtime {
-            val dir = "${tempDir()}/rtok-mem-${pid()}-${clock.elapsedNow().inWholeNanoseconds}-${seq++}"
-            createDirAll(dir)
+            // mkdtemp: unique without a counter, and private, so another user cannot plant files the paths point at.
+            val dir = createTempDir("rtok-mem-")
             val base = Config().rebasePaths(dir)
             val cfg = base.copy(log = base.log.copy(path = "$dir/rtok.log"))
             return Runtime(cfg, Store.openInMemory(), session).also { it.scratch = dir }

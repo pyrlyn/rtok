@@ -201,7 +201,7 @@ class PipedChild private constructor(
         private const val CODE_SHIFT = 8
         private const val BYTE = 0xff
         private const val READ_CHUNK = 64 * 1024
-        private const val MODE_644 = 0x1a4
+        private const val MODE_600 = 0x180
 
         /** WIFEXITED/WEXITSTATUS spelled out (the macros are not exported): the code, or -signal. */
         private fun decodeStatus(s: Int): Int = if (s and SIGNAL_MASK == 0) (s shr CODE_SHIFT) and BYTE else -(s and SIGNAL_MASK)
@@ -235,7 +235,8 @@ class PipedChild private constructor(
                 val ends = listOf(inPipe[0], inPipe[1], outPipe[0], outPipe[1]).filter { it >= 0 }
                 val actions = SpawnActions().dup2(inPipe[0], 0)
                 if (!inheritStdout) actions.dup2(outPipe[1], 1)
-                if (!inheritStderr) actions.open(2, stderrPath ?: "/dev/null", O_WRONLY or O_CREAT or O_TRUNC, MODE_644)
+                // A planted symlink must not redirect the truncate; the log can quote source, so it stays private.
+                if (!inheritStderr) actions.open(2, stderrPath ?: "/dev/null", O_WRONLY or O_CREAT or O_TRUNC or O_NOFOLLOW, MODE_600)
                 for (fd in ends) actions.close(fd)
                 cwd?.let { actions.chdir(it) }
                 val spawned = runCatching { actions.spawn(program, args, mergedEnv(extraEnv), search = '/' !in program) }

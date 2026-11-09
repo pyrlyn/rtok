@@ -214,6 +214,36 @@ fun removeDirAll(path: String) {
 
 fun tempDir(): String = (getenv("TMPDIR")?.toKString() ?: "/tmp").trimEnd('/')
 
+/**
+ * A new private directory under [tempDir] named `<prefix>XXXXXX` (mkdtemp(3): a random name, mode 0700). Files
+ * made inside it cannot be pre-created or swapped for a symlink by another user. @throws IoException
+ */
+fun createTempDir(prefix: String): String =
+    memScoped {
+        val template = "${tempDir()}/${prefix}XXXXXX"
+        mkdtemp(template.cstr.getPointer(this))?.toKString() ?: run {
+            val err = errno
+            throw IoException(ioKind(err), "mkdtemp $template: errno $err")
+        }
+    }
+
+/** Runs [block] on the path of a new file [name] holding [bytes] inside a fresh [createTempDir]; both go afterwards. */
+fun <T> withTempFile(
+    prefix: String,
+    name: String,
+    bytes: ByteArray,
+    block: (String) -> T,
+): T {
+    val dir = createTempDir(prefix)
+    try {
+        val path = join(dir, name)
+        writeBytes(path, bytes)
+        return block(path)
+    } finally {
+        runCatching { removeDirAll(dir) }
+    }
+}
+
 fun pid(): Int = getpid()
 
 /** Entry names of a directory (no `.`/`..`), unsorted like `std::fs::read_dir`; every failure reads as NotFound. */

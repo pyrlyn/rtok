@@ -313,10 +313,9 @@ object GraphDiffs {
         f: (String, ByteArray) -> Unit,
     ) {
         if (entries.isEmpty()) return
-        val req = "${rtok.sys.tempDir()}/rtok-diff-${rtok.sys.pid()}-${entries.hashCode()}.txt"
-        rtok.sys.writeString(req, entries.joinToString("") { it.second + "\n" })
+        val requests = entries.joinToString("") { it.second + "\n" }.encodeToByteArray()
         val out =
-            try {
+            rtok.sys.withTempFile("rtok-diff-", "requests.txt", requests) { req ->
                 val (c, dropped) =
                     rtok.sys
                         .ProgressRunner("", "git", listOf("-C", root, "cat-file", "--batch"))
@@ -325,8 +324,6 @@ object GraphDiffs {
                         .runCapped(1L shl 31)
                 if (c.exitCode != 0 || dropped > 0) throw IllegalStateException("git failed: cat-file --batch")
                 c.stdout
-            } finally {
-                runCatching { rtok.sys.removeFile(req) }
             }
         var at = 0
         for ((path, _) in entries) {
