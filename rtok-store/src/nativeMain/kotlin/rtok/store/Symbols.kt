@@ -370,6 +370,8 @@ fun Store.symbolFts(
         val bm25: Double,
     )
     val cap = 200
+
+    @Suppress("MagicNumber")
     fun fetch(m: String): List<Hit> =
         conn {
             it.query(
