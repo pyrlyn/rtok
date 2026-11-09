@@ -117,7 +117,7 @@ class TaskE2eSpec :
                 val columns = json["columns"]!!.jsonArray.map { it.jsonObject }
                 columns.map { it["status"] } shouldBe listOf("todo", "in-progress", "done", "closed").map(::JsonPrimitive)
                 columns[2]["tasks"]!!.jsonArray[0].jsonObject["report"] shouldBe JsonPrimitive("Shipped.")
-                readToString(b.file("tasks/.gitignore")) shouldBe ".lock\n.sync/\n"
+                readToString(b.file("tasks/.gitignore")) shouldBe ".lock\n.state/\n.sync/\n"
 
                 val legacy = TaskBox("migrate")
                 legacy.use { l ->

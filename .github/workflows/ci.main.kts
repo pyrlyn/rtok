@@ -40,7 +40,7 @@ val sharedBuilds =
 fun JobBuilder<*>.setUp() {
     uses(action = Checkout())
     // Pinned release tag; bump when rtok-kotlin needs newer shared builds.
-    uses(action = Checkout(repository = "pyrlyn/packages", ref = "0.0.1", path = "packages"))
+    uses(action = Checkout(repository = "pyrlyn/packages", ref = "0.0.2", path = "packages"))
     // Installs every tool in mise.toml (JDK, Kotlin, CMake, Ninja, ...), so CI and developers build with the same versions.
     uses(action = MiseAction_Untyped())
     uses(action = ActionsSetupGradle())

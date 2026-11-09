@@ -20,6 +20,7 @@ pluginManagement {
     extra["kotlinSnapshotDir"] = sharedBuild("kotlin-snapshot", "KOTLIN_SNAPSHOT_DIR")
     extra["kotlinWebglDir"] = sharedBuild("kotlin-webgl", "KOTLIN_WEBGL_DIR")
     extra["kotlinKitDir"] = sharedBuild("kotlin-kit", "KOTLIN_KIT_DIR")
+    extra["kotlinTaskboardDir"] = sharedBuild("kotlin-taskboard", "KOTLIN_TASKBOARD_DIR")
 }
 // WASM plugins are opt-in (docs/wasm-plugins.md): without -Prtok.wasm=true neither the host nor the engine is built.
 val wasmPlugins = providers.gradleProperty("rtok.wasm").orNull == "true"
@@ -34,6 +35,9 @@ includeBuild(extra["kotlinWebglDir"] as String)
 // TOML, YAML, semver and SQLite modules shared with ketch and backend: a checkout of kotlin-kit
 // (github.com/pyrlyn/packages, kotlin-kit/).
 includeBuild(extra["kotlinKitDir"] as String)
+// The task board engine behind `rtok task` (docs/design/task-board.md): a checkout of kotlin-taskboard
+// (github.com/pyrlyn/packages, kotlin-taskboard/).
+includeBuild(extra["kotlinTaskboardDir"] as String)
 // Remote build cache on Cloudflare R2 (docs/build-speed.md). Approved by Ivan 2026-10-26.
 // Repositories + R2 remote build cache (docs/build-speed.md), approved by Ivan 2026-10-26; logic in shared.settings.
 plugins { id("com.github.burrunan.s3-build-cache") version "1.9.10"; id("shared.settings") }

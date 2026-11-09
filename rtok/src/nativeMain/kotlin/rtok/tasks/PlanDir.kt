@@ -161,8 +161,6 @@ class PlanDirAdapter(
         }
     }
 
-    override fun claimGuard(): ClaimLock = lockClaim(dir)
-
     override fun save(task: Task): Task {
         val old = read(task.id) ?: bail("disk tasks: no task ${task.id} in $dir")
         if (!old.status.isActive || !task.status.isActive) bail("disk tasks: ${task.id} is finished; its done.md is the record")

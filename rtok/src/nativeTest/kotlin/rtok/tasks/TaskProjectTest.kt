@@ -33,6 +33,9 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
+import kotlin.time.Clock
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 
 private fun id(s: String) = TaskId.parse(s)
 
@@ -48,7 +51,19 @@ private fun checkout(name: String): String {
     return dir
 }
 
-private fun project(path: String) = TaskProject("proj", path, "R", DiskAdapter(path))
+/** A project whose clock runs [ahead] of the real one, so a claim made with the real clock has lost its lease. */
+private fun project(
+    path: String,
+    ahead: Duration = Duration.ZERO,
+) = TaskProject("proj", path, "R", DiskAdapter(path), clock = Later(ahead))
+
+private class Later(
+    val ahead: Duration,
+) : Clock {
+    override fun now() = Clock.System.now() + ahead
+}
+
+private val LAPSED = (STALE_SECS + 60).seconds
 
 private fun store(): Store {
     installDb()
@@ -80,7 +95,8 @@ class TaskProjectTest {
         assertEquals("A", p.prefix)
         assertEquals("github.com/me/airtalk", p.key)
         // A task that came in with a pull: the counter never saw it.
-        p.adapter.create(new("Pulled"), id("A7"))
+        createDirAll("$dir/tasks/todo")
+        writeString("$dir/tasks/todo/A7-pulled.md", "---\nid: A7\ntitle: Pulled\ncreated: 2026-11-09T10:54:00Z\nupdated: 2026-11-09T10:54:00Z\n---\n")
         assertEquals("A8", p.create(store, new("First")).id.toString())
         val sub = p.create(store, new("Leaf", "A7"))
         assertEquals("A7.1", sub.id.toString())
@@ -147,10 +163,12 @@ class TaskProjectTest {
         val before = readBytes(file)
         assertFalse(project(path).claim(store, id("R1"), holder).changed)
         assertContentEquals(before, readBytes(file), "a re-claim does not rewrite the file")
-        store.setAgentLastSeen(holder, now - STALE_SECS - 5)
         val other = if (holder == a) b else a
-        val taken = project(path).claim(store, id("R1"), other)
-        assertTrue(taken.changed, "a stale claim can be taken")
+        assertFailsWith<ClaimConflict> { project(path, LAPSED).claim(store, id("R1"), other) }
+        store.setAgentLastSeen(holder, now - STALE_SECS - 5)
+        assertFailsWith<ClaimConflict>("a live lease outlasts its agent") { project(path).claim(store, id("R1"), other) }
+        val taken = project(path, LAPSED).claim(store, id("R1"), other)
+        assertTrue(taken.changed, "a lapsed lease of a stale agent can be taken")
         assertEquals(other, taken.task.assignee)
         removeDirAll(path)
     }
@@ -221,8 +239,9 @@ class TaskProjectTest {
         val p = project(path)
         for ((tid, title) in listOf("R1" to "Parent", "R1.1" to "Child", "R2" to "Other")) p.adapter.create(new(title), id(tid))
         assertTrue(p.claim(store, id("R1"), "not-registered").changed)
-        assertTrue(p.claim(store, id("R1"), live).changed, "no agents row is stale")
-        p.release(store, id("R1"), live, false)
+        assertFailsWith<ClaimConflict> { p.claim(store, id("R1"), live) }
+        assertTrue(project(path, LAPSED).claim(store, id("R1"), live).changed, "no agents row is stale")
+        project(path, LAPSED).release(store, id("R1"), live, false)
         val child = fileOf(path, "R1.1")
         val before = readBytes(child)
         val err = assertFailsWith<TaskException> { p.block(id("R1.1"), id("R1")) }
@@ -234,7 +253,7 @@ class TaskProjectTest {
         val again = readBytes(fileOf(path, "R2 "))
         p.block(id("R2"), id("R1"))
         assertContentEquals(again, readBytes(fileOf(path, "R2 ")), "a duplicate edge is not rewritten")
-        val blocked = assertFailsWith<ClaimConflict> { p.claim(store, id("R2"), live) }
+        val blocked = assertFailsWith<TaskException> { p.claim(store, id("R2"), live) }
         assertTrue("R2 is blocked by R1" in blocked.message!!, blocked.message)
         assertTrue(p.ready(store).all { it.task.id != id("R2") })
         assertNotEquals(id("R2"), p.claim(store, null, live).task.id)

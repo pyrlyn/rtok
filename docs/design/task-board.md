@@ -96,8 +96,8 @@ old key accepted).
 - `auto`: `board` when a column folder exists or the directory is empty or missing; `plan`
   when `<dir>/<ID>/task.md` exists (the workspace `plan/` convention, unchanged); `files`
   when flat `<ID> - <slug>.md` task files exist. Decided once per command.
-- `files` is the legacy flat layout: unchanged code path, plus one stderr warning per command
-  that suggests `rtok task migrate`.
+- `files` is the legacy flat layout: its old reader and writer, now under the engine (see
+  below), plus one stderr warning per command that suggests `rtok task migrate`.
 - `rtok task migrate [--dry-run] [--json]` turns a `files` directory into a board (each task
   to its column, done and closed split by status, front matter rewritten, `.claim.lock`
   renamed) and rewrites old config keys in the checkout's `.rtok.toml`. It is idempotent and
@@ -181,7 +181,9 @@ file systems are not supported, because flock is not reliable there.
   (`took_over_from` in the result) and `board` marks it `stale`; a host-supplied `liveness`
   check keeps a lease whose holder is still running (rtok answers it from its agent registry),
   so a long session does not lose its task. `release` and moves by someone other than the
-  holder need `force`. rtok's `task_claims` table is replaced by the leases.
+  holder need `force`. The leases decide who holds a task; rtok's `task_claims` table only
+  mirrors each agent's latest claim for the prompt hook, which names the current task without
+  opening the board on every prompt.
 - **Journal and watch.** Every change appends `{seq, at, actor, op, id, rev, fields:{name:
   [old, new]}}` to `.state/journal.jsonl` (the last 10 000 entries are kept).
   `changes(since)` returns the entries after `since`, or `reset` when `since` is older than

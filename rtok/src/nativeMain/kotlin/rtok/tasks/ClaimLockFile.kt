@@ -26,19 +26,16 @@ internal fun warnOnce(message: String) {
 /** Holds the exclusive `flock` on `<dir>/.claim.lock`; the file is never unlinked. */
 internal class DiskGuard(
     private val fd: Int,
-) : ClaimLock {
+) : AutoCloseable {
     override fun close() {
         platform.posix.close(fd)
     }
 }
 
-/** An exclusive flock on the stable `<dir>/[name]` (`.claim.lock` for the old layouts, `.lock` for the board), polled for a bounded time. */
-internal fun lockClaim(
-    dir: String,
-    name: String = ".claim.lock",
-): DiskGuard {
+/** An exclusive flock on the stable `<dir>/.claim.lock` of the old layouts, polled for a bounded time. */
+internal fun lockClaim(dir: String): DiskGuard {
     createDirAll(dir)
-    val path = "$dir/$name"
+    val path = "$dir/.claim.lock"
     repeat(LOCK_TRIES) {
         tryLockExclusive(path)?.let { return DiskGuard(it) }
         platform.posix.usleep(LOCK_WAIT_US)

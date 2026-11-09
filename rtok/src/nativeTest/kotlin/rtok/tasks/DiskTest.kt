@@ -60,29 +60,25 @@ class DiskTest {
         val disk = DiskAdapter(dir)
         disk.create(new("Parent"), id("R1"))
         disk.create(new("Child"), id("R1.1"))
-        val err = assertFailsWith<TaskException> { setStatus(disk, id("R1"), Status.Done, false) }
-        assertTrue("R1.1" in err.message!!)
-        setStatus(disk, id("R1.1"), Status.Closed, false)
-        setStatus(disk, id("R1"), Status.Done, false)
+        disk.writeStatus(id("R1.1"), Status.Closed)
+        disk.writeStatus(id("R1"), Status.Done)
         assertTrue(isFile("$dir/done/R1 - parent.md"))
         assertTrue(!exists("$dir/R1 - parent.md"))
         assertTrue(disk.list(Filter()).isEmpty())
         assertEquals(2, disk.list(Filter(all = true)).size)
         assertEquals(id("R1.1"), disk.list(Filter(statuses = listOf(Status.Closed)))[0].id)
-        setStatus(disk, id("R1"), Status.InProgress, false)
+        disk.writeStatus(id("R1"), Status.InProgress)
         assertTrue(isFile("$dir/R1 - parent.md"))
         assertEquals(id("R1.1"), disk.maxId("r"))
         assertNull(disk.maxId("Q"))
         removeDirAll(dir)
     }
 
-    @Test fun aForcedParentClosesOverOpenSubtasks() {
-        val dir = tmp("force")
+    @Test fun aMissingTaskHasNoStatusToWrite() {
+        val dir = tmp("missing")
         val disk = DiskAdapter(dir)
         disk.create(new("Parent"), id("R1"))
-        disk.create(new("Child"), id("R1.1"))
-        setStatus(disk, id("R1"), Status.Done, true)
-        assertFailsWith<TaskException> { setStatus(disk, id("R7"), Status.Done, false) }
+        assertFailsWith<TaskException> { disk.writeStatus(id("R7"), Status.Done) }
         removeDirAll(dir)
     }
 
@@ -183,7 +179,7 @@ class DiskTest {
         assertNull(got.assignee)
         assertTrue(got.blockedBy.isEmpty())
         assertEquals("Body", got.description)
-        setStatus(disk, id("R4"), Status.Done, false)
+        disk.writeStatus(id("R4"), Status.Done)
         assertTrue(isFile("$dir/done/R4 - old.md"))
         removeDirAll(dir)
     }

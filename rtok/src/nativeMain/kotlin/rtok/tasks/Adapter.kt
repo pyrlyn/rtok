@@ -4,9 +4,6 @@ package rtok.tasks
 import kotlinx.serialization.Serializable
 import rtok.store.TaskId
 
-/** Held across a claim, release or save so two disk writers cannot interleave. */
-fun interface ClaimLock : AutoCloseable
-
 /** What `list` returns. The default is the plan: every active task, top level and subtasks. */
 data class Filter(
     val statuses: List<Status> = emptyList(),
@@ -75,25 +72,8 @@ interface TaskAdapter {
 
     fun unlabelled(): List<Stray> = emptyList()
 
-    fun claimGuard(): ClaimLock = ClaimLock {}
-
     fun save(task: Task): Task = bail("$name tasks: saving a claim is not supported")
 
     /** Whether `save` keeps `conflicts_with` and `parallel`. */
     fun storesMarkers() = false
-}
-
-/** Set a task's status. A parent with active subtasks cannot finish unless [force]. */
-fun setStatus(
-    adapter: TaskAdapter,
-    id: TaskId,
-    status: Status,
-    force: Boolean,
-    report: String? = null,
-): Task {
-    if (!status.isActive && !force) {
-        val open = adapter.list(Filter(parent = id))
-        if (open.isNotEmpty()) bail("$id has open subtasks: ${open.joinToString(", ") { it.id.toString() }}; finish them first or pass --force")
-    }
-    return adapter.writeStatus(id, status, report)
 }
