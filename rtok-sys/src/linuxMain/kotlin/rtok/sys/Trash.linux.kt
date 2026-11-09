@@ -21,7 +21,12 @@ actual fun moveToTrash(path: String) {
     var name = base
     var n = 1
     while (exists("$trash/files/$name") || exists("$trash/info/$name.trashinfo")) name = "$base.${n++}"
-    val now = kotlin.time.Clock.System.now().toString().substringBefore('.').removeSuffix("Z")
+    val now =
+        kotlin.time.Clock.System
+            .now()
+            .toString()
+            .substringBefore('.')
+            .removeSuffix("Z")
     writeString("$trash/info/$name.trashinfo", "[Trash Info]\nPath=${percentEncode(abs)}\nDeletionDate=$now\n")
     if (rename(abs, "$trash/files/$name") != 0) {
         val e = errno

@@ -1,7 +1,7 @@
 // Port of crates/rtok-store/src/task_claims.rs and task_counters.rs.
 package rtok.store
 
-import rtok.db.*
+import db.*
 
 data class TaskClaim(
     val project: String,

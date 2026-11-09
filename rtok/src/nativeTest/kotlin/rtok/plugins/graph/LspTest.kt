@@ -7,6 +7,7 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
 import rtok.sys.PipedChild
 import rtok.sys.createDirAll
+import rtok.sys.createTempDir
 import rtok.sys.exists
 import rtok.sys.join
 import rtok.sys.pid
@@ -77,12 +78,12 @@ class LspTest {
 
     @Test fun shutdownReapsTheCachedServerAndItsStderrFile() {
         val child = PipedChild.spawn("cat", emptyList())
-        val err = join(tempDir(), "rtok-lsp-test-${child.pid}.stderr")
-        writeString(err, "")
-        LspSession.install("test", LspSession(child, "", err))
+        val dir = createTempDir("rtok-lsp-test-")
+        writeString(join(dir, LspSession.STDERR), "")
+        LspSession.install("test", LspSession(child, "", dir))
         LspSession.shutdown()
         assertNotNull(child.tryWait(), "server ${child.pid} still running")
-        assertFalse(exists(err))
+        assertFalse(exists(dir))
     }
 
     @Test fun aSilentPeerTimesOutInsteadOfBlockingOnThePipe() = expectTimeout(peer("sleep 3", ""))

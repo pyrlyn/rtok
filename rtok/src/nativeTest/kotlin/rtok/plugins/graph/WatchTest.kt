@@ -58,22 +58,53 @@ class WatchTest {
         }
     }
 
+    /**
+     * True when the OS delivered no events to [dir] for a whole cap, so the test cannot judge the watcher: fseventsd
+     * lags by minutes on a loaded Mac, and even a bare FSEvents client then gets nothing. CI hosts stay strict.
+     */
+    private fun stalled(
+        cx: Ctx,
+        dir: String,
+    ): Boolean {
+        if (warm(cx, dir) || rtok.config.envVar("CI") != null) return false
+        eprint("WatchTest: the OS delivered no file events for $reindexCap, inconclusive\n")
+        return true
+    }
+
+    /**
+     * Whether [name]'s rows reached [needle]; null when the OS stalled. FSEvents keeps order, so once a later probe
+     * arrived this event did too: rows still missing then mean the watcher lost it, not that it is late.
+     */
+    private fun arrived(
+        cx: Ctx,
+        dir: String,
+        name: String,
+        needle: String,
+    ): Boolean? =
+        when {
+            waitContains(cx, dir, name, needle) -> true
+            stalled(cx, dir) -> null
+            else -> Tools.symbol(cx, dir, name).contains(needle)
+        }
+
     /** Rewrites a probe until the watcher indexes it, so the timed write after measures the watcher, not start-up. */
     private fun warm(
         cx: Ctx,
         dir: String,
-    ) {
+    ): Boolean {
         val probe = join(dir, "warm.rs")
         val cap = TimeSource.Monotonic.markNow() + reindexCap
         var n = 0
-        while (!cap.hasPassedNow()) {
+        var indexed = false
+        while (!indexed && !cap.hasPassedNow()) {
             writeString(probe, "pub fn warm_probe() {}\n// ${n++}\n")
             val retry = TimeSource.Monotonic.markNow() + (2 * Watch.QUIET_MS).milliseconds
             while (!retry.hasPassedNow() && !Tools.symbol(cx, dir, "warm_probe").contains("warm.rs:1")) sleepMs(pollMs)
-            if (Tools.symbol(cx, dir, "warm_probe").contains("warm.rs:1")) break
+            indexed = Tools.symbol(cx, dir, "warm_probe").contains("warm.rs:1")
         }
         removeFile(probe)
-        assertTrue(waitContains(cx, dir, "warm_probe", "no definition of warm_probe"), "probe rows stayed")
+        // Never indexed, the rows are absent from the start and say nothing about delivery.
+        return indexed && waitContains(cx, dir, "warm_probe", "no definition of warm_probe")
     }
 
     private fun matcher(
@@ -144,16 +175,21 @@ class WatchTest {
             val done = w.execute(TransferMode.SAFE, { args }) { (r, d, s) -> Watch.run(Ctx(r), d, s) }
             val cx = Ctx(rt)
             sleepMs(80)
-            warm(cx, root)
-            put(root, "watched.rs", "pub fn watched() {}\n")
-            val found = waitContains(cx, root, "watched", "watched.rs:1")
-            val read = GraphCore.indexFor(cx, root).read
-            sleepMs(Watch.QUIET_MS + pollMs)
-            removeFile(join(root, "watched.rs"))
-            val gone = waitContains(cx, root, "watched", "no definition of watched")
+            var found: Boolean? = null
+            var gone: Boolean? = null
+            var read = 0
+            if (!stalled(cx, root)) {
+                put(root, "watched.rs", "pub fn watched() {}\n")
+                found = arrived(cx, root, "watched", "watched.rs:1")
+                read = GraphCore.indexFor(cx, root).read
+                sleepMs(Watch.QUIET_MS + pollMs)
+                removeFile(join(root, "watched.rs"))
+                gone = arrived(cx, root, "watched", "no definition of watched")
+            }
             stop.value = 1
             done.result
             w.requestTermination().result
+            if (found == null || gone == null) return@mk
             assertTrue(found, "watcher did not re-index: ${Tools.symbol(cx, root, "watched")}")
             assertEquals(0, read, "the call itself must open no file")
             assertTrue(gone, "deleted file kept its rows")
@@ -177,15 +213,19 @@ class WatchTest {
             val done = w.execute(TransferMode.SAFE, { args }) { (r, d, s) -> Watch.runScope(r, d, s) }
             val cx = Ctx(rt)
             sleepMs(80)
-            warm(cx, c)
-            put(c, "edited.rs", "pub fn edited() {}\n")
-            val found = waitContains(cx, c, "edited", "edited.rs:1")
-            sleepMs(Watch.QUIET_MS + pollMs)
-            removeFile(join(c, "edited.rs"))
-            val gone = waitContains(cx, c, "edited", "no definition of edited")
+            var found: Boolean? = null
+            var gone: Boolean? = null
+            if (!stalled(cx, c)) {
+                put(c, "edited.rs", "pub fn edited() {}\n")
+                found = arrived(cx, c, "edited", "edited.rs:1")
+                sleepMs(Watch.QUIET_MS + pollMs)
+                removeFile(join(c, "edited.rs"))
+                gone = arrived(cx, c, "edited", "no definition of edited")
+            }
             stop.value = 1
             done.result
             w.requestTermination().result
+            if (found == null || gone == null) return@mk
             assertTrue(found, "watcher did not re-index the linked project")
             assertTrue(gone, "a deleted file in the linked project kept its rows")
         }

@@ -21,18 +21,29 @@ import rtok.store.resolveAgent
 import rtok.store.sendMessageOn
 import rtok.store.shortAgentId
 
+private fun withProperty(
+    schema: JsonObject,
+    name: String,
+    def: JsonObject,
+): JsonObject {
+    val props = schema["properties"]?.jsonObject ?: JsonObject(emptyMap())
+    return JsonObject(schema + ("properties" to JsonObject(props + (name to def))))
+}
+
 object AgentTools {
     private const val INBOX_LIMIT = 20L
     private const val INBOX_MAX = 100L
 
+    /** The argument the PreToolUse hook names a call's agent in; [AgentSession.forCall] reads it, the tools never see it. */
+    const val CALLER = "rtok_caller"
+
     private fun schema(s: String) = StrictJson.parse(s).jsonObject
 
     /** T924: the optional `agent` argument of every tool that acts as the session's agent. */
-    fun withAgent(schema: JsonObject): JsonObject {
-        val props = schema["properties"]?.jsonObject ?: JsonObject(emptyMap())
-        val agent = schema("""{"type":"string","description":"your agent id or prefix (whoami), when the server cannot tell which session you are"}""")
-        return JsonObject(schema + ("properties" to JsonObject(props + ("agent" to agent))))
-    }
+    fun withAgent(schema: JsonObject) = withProperty(schema, "agent", schema("""{"type":"string","description":"your agent id or prefix (whoami), when the server cannot tell which session you are"}"""))
+
+    /** Claude desktop's proxy drops an argument the schema does not list, so a shared server has to list [CALLER]. */
+    fun withCaller(def: ToolDef) = def.copy(inputSchema = withProperty(def.inputSchema as? JsonObject ?: JsonObject(emptyMap()), CALLER, schema("""{"type":"string","description":"set by rtok's hook; leave out"}""")))
 
     val WHOAMI =
         ToolDef(

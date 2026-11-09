@@ -22,10 +22,14 @@ object Paths {
         when {
             AgentTools.handles(name) -> runCatching { AgentTools.call(cx, agents, name, args) }.fold({ it to true }) { (it.message ?: it.toString()) to false }
             WorktreeTools.handles(name) -> runCatching { WorktreeTools.call(cx, agents, name, args) }.fold({ it to true }) { (it.message ?: it.toString()) to false }
-            TaskTools.handles(name) -> runCatching { TaskTools.call(cx, name, args) }.fold({ it to true }) { (it.message ?: it.toString()) to false }
+            TaskTools.handles(name) -> runCatching { TaskTools.call(cx, agents, name, args) }.fold({ it to true }) { (it.message ?: it.toString()) to false }
+            agents.byHook && Tools.isGraph(name) && !isRooted(name) -> enter(agents).use { Tools.invokeText(cx, name, args) }
             !isRooted(name) -> Tools.invokeText(cx, name, args)
             else -> rooted(cx, agents, name, args)
         }
+
+    /** Only a call the hook named moves the graph off the server's cwd: an agent's cwd can sit below its project's root. */
+    private fun enter(agents: AgentSession) = agents.callerDir()?.let { ReadRoots.enterCaller(rtok.sys.cwd(), it, graph = agents.byHook) }
 
     private fun rooted(
         cx: rtok.plugin.Runtime,
@@ -33,11 +37,11 @@ object Paths {
         name: String,
         args: JsonObject,
     ): Pair<String, Boolean> {
-        val guard = agents.callerDir()?.let { ReadRoots.enterCaller(rtok.sys.cwd(), it) }
+        val guard = enter(agents)
         try {
             val anchored = anchorOutline(name, args)
             val (text, ok) = Tools.invokeText(cx, name, anchored)
-            return annotate(name, anchored, text, ok, guard != null) to ok
+            return annotate(name, anchored, text, ok, guard != null, guard == null && (agents.byHook || agents.unsure())) to ok
         } finally {
             guard?.close()
         }
@@ -60,24 +64,26 @@ object Paths {
     }
 
     /**
-     * [text] plus the root it resolved against: always on a failure or an empty search, and on a success only
-     * when the caller's root is unknown and the server's repository has other worktrees.
+     * [text] plus the root it resolved against: always on a failure or an empty search, and on a success only when the
+     * caller's root is unknown and the server's repository has other worktrees or the server is [shared] by sessions.
      */
+    @Suppress("LongParameterList")
     fun annotate(
         name: String,
         args: JsonObject,
         text: String,
         ok: Boolean,
         callerKnown: Boolean,
+        shared: Boolean = false,
     ): String {
         val root = if (isRooted(name) && isRelative(args)) runCatching { ReadRoots.cwd() }.getOrNull() else null
         val empty = name == "search" && ok && text.isBlank()
-        val note = "relative paths resolved against $root"
+        val note = "relative paths resolved against $root" + if (shared) ", which may be another session's: this server is shared, pass absolute paths" else ""
         return when {
             root == null -> text
             empty -> "no matches ($note)"
             !ok -> "$text ($note)"
-            callerKnown || !ReadRoots.hasOtherWorktrees(root) -> text
+            callerKnown || !(shared || ReadRoots.hasOtherWorktrees(root)) -> text
             else -> "$text\n[$note]"
         }
     }

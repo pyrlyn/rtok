@@ -1,9 +1,9 @@
 // Row types from crates/rtok-store/src/lib.rs. Field names follow the Rust structs (camelCase).
 package rtok.store
 
+import db.*
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import rtok.db.*
 
 data class SessionSeen(
     val id: String,

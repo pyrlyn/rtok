@@ -1,6 +1,6 @@
 package rtok.store
 
-import rtok.db.*
+import db.*
 import kotlin.test.*
 
 /** The store reaches SQLite only through `Db.driver`; a wrapping driver sees every connection the store opens. */

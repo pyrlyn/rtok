@@ -4,9 +4,9 @@
 // caps the rows references may add. Both limits are reported, never silent.
 package rtok.plugins.graph
 
+import db.isLocked
 import rtok.appendLog
 import rtok.config.Graph
-import rtok.db.isLocked
 import rtok.plugin.Runtime
 import rtok.plugin.sdk.Ctx
 import rtok.project.Refs

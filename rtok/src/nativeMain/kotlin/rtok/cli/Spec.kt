@@ -151,9 +151,11 @@ fun runAction(
     } catch (e: CliExit) {
         e.code
     } catch (e: CliFailure) {
+        rtok.trace.Trace.fail(e)
         io.eprintln("Error: ${e.message}")
         e.code
     } catch (e: Exception) {
+        rtok.trace.Trace.fail(e)
         io.eprintln("Error: ${e.message ?: e::class.simpleName}")
         ExitCode.FAILURE
     }

@@ -1,6 +1,19 @@
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
 import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
 
+plugins { id("app.cash.sqldelight") version "2.4.1" }
+
+sqldelight {
+    // Keep using the application's bundled SQLite through KitSqlDriver.
+    linkSqlite.set(false)
+    databases {
+        create("NoteFilesDatabase") {
+            packageName.set("rtok.store.queries")
+            dialect("app.cash.sqldelight:sqlite-3-38-dialect:2.4.1")
+        }
+    }
+}
+
 // migrations/<version>/up.sql are copied verbatim from crates/rtok-store/migrations and embedded
 // (like diesel's embed_migrations!), one constant per migration, sorted by version.
 val genDir = layout.buildDirectory.dir("generated/migrations")
@@ -37,7 +50,8 @@ configure<KotlinMultiplatformExtension> {
     sourceSets.commonMain {
         kotlin.srcDir(genMigrations.map { genDir.get() })
         dependencies {
-            api(project(":db"))
+            api("pyrlyn.kit:db")
+            implementation("pyrlyn.kit:db-sqldelight")
             api(project(":rtok-plugin-sdk"))
             api(project(":rtok-sys"))
             implementation(project(":humantime"))
@@ -47,7 +61,7 @@ configure<KotlinMultiplatformExtension> {
 // schema.rs + schema_snapshot.txt copied from the Rust crate: the drift test checks the Kotlin-migrated
 // database against the same golden files, so both builds keep one on-disk schema.
 // Tests run on the same adapter the app installs; store code itself sees only rtok.db.
-configure<KotlinMultiplatformExtension> { sourceSets.commonTest.dependencies { implementation(project(":db-room")) } }
+configure<KotlinMultiplatformExtension> { sourceSets.commonTest.dependencies { implementation("pyrlyn.kit:db-room") } }
 val storeFixtures =
     layout.projectDirectory
         .dir("src/nativeTest/fixtures")

@@ -1,8 +1,0 @@
-<?xml version='1.0' encoding='UTF-8'?>
-<SmellBaseline>
-  <ManuallySuppressedIssues/>
-  <CurrentIssues>
-    <ID>TooGenericExceptionCaught:Db.kt:Db$e: Throwable</ID>
-    <ID>TooManyFunctions:Db.kt:Row</ID>
-  </CurrentIssues>
-</SmellBaseline>

@@ -16,11 +16,13 @@ the tree-sitter C runtime, every grammar and a generated table (`rtok_ts_table.c
 - Grammars below ABI 13 are regenerated with the tree-sitter CLI from `mise.toml` (today: fluent, ABI 8).
 - `buildGrammars` runs CMake + Ninja (both from `mise.toml`); the static library is a cinterop input.
 
-## Grammars (34 parsers from 31 repos)
+## Grammars (32 parsers from 29 repos)
 Runtime: tree-sitter v0.27.1. Official org (`github.com/tree-sitter`, every grammar repo; `tree-sitter-graph`
-is a tool, not a grammar): agda, bash, c, c-sharp, cpp, css, embedded-template, fluent, go, haskell, html,
+is a tool, not a grammar): bash, c, c-sharp, cpp, css, embedded-template, fluent, go, haskell, html,
 java, javascript, jsdoc, json, julia, ocaml (ocaml, ocaml_interface, ocaml_type), php (php, php_only),
-python, ql, ql-dbscheme, regex, ruby, rust, scala, typescript (typescript, tsx), verilog.
+python, ql, ql-dbscheme, regex, ruby, rust, scala, typescript (typescript, tsx).
+agda and verilog were dropped (T6, docs/binary-size.md): 20.2 MB of the binary for two languages that only
+`read mode=stripped` parsed; those suffixes now fall back to `full`. The sizes below predate that.
 Third party: tree-sitter-grammars/tree-sitter-kotlin v1.1.0, UserNobody14/tree-sitter-dart (master),
 alex-pinkus/tree-sitter-swift (`with-generated-files`, 0.7.x).
 

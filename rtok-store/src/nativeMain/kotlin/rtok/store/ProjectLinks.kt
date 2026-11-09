@@ -2,9 +2,9 @@
 // the graph scope they define (the selected project plus everything reachable).
 package rtok.store
 
+import db.*
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import rtok.db.*
 
 /** Chains longer than this stop; the visited set already makes cycles safe. */
 private const val MAX_LINK_DEPTH = 64

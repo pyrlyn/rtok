@@ -8,7 +8,7 @@ configure<KotlinMultiplatformExtension> {
         dependencies {
             api(project(":rtok-sys"))
             api(project(":rtok-hook"))
-            api(project(":toml"))
+            api("pyrlyn.kit:toml")
             implementation(project(":toml-ktoml"))
         }
     }

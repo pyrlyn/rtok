@@ -7,13 +7,16 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import rtok.config.Config
 import rtok.config.envVar
+import rtok.mcp.AgentTools
 import rtok.plugin.Runtime
 import rtok.plugin.sdk.Class
 import rtok.store.inbox
 import rtok.store.kvSet
 import rtok.store.logsAfter
+import rtok.store.mainAgent
 import rtok.store.measurementCount
 import rtok.store.registerAgent
 import rtok.store.sendMessage
@@ -300,6 +303,50 @@ class DispatchTest {
             noteSlow(cx, "PostToolUse", 50.0)
             assertEquals(5, cx.store.logsAfter(0, 50).size)
         }
+
+    private fun preTool(
+        tool: String,
+        session: String,
+        input: String = """{"path":"a.kt"}""",
+        more: String = "",
+    ): Pair<String, ByteArray> {
+        rtok.support.installDb()
+        val stdin = """{"hook_event_name":"PreToolUse","session_id":"$session","tool_name":"$tool","tool_input":$input$more}""".encodeToByteArray()
+        val cx = Runtime.inMemory(session)
+        return cx.use {
+            cx.store.registerAgent(cx.hostId!!, session, null, null, null)
+            val out = dispatch(stdin, HookInput.parse(stdin.decodeToString()), cx)
+            cx.store.mainAgent(cx.hostId!!, session).orEmpty() to out
+        }
+    }
+
+    private fun updated(b: ByteArray) =
+        HookOutput
+            .parse(b.decodeToString())
+            .hookSpecificOutput
+            ?.updatedInput
+            ?.jsonObject
+
+    @Test fun aCallToAnRtokToolNamesItsSessionsMainAgent() {
+        val (main, out) = preTool("mcp__rtok__read", "caller-main")
+        val args = updated(out)!!
+        assertEquals(main, args[AgentTools.CALLER]?.jsonPrimitive?.content)
+        assertEquals("a.kt", args["path"]?.jsonPrimitive?.content)
+    }
+
+    @Test fun aModelCannotNameAnotherSessionByWritingTheCallerItself() {
+        val (main, out) = preTool("mcp__rtok__read", "caller-forged", """{"${AgentTools.CALLER}":"someone-else"}""")
+        assertEquals(main, updated(out)!![AgentTools.CALLER]?.jsonPrimitive?.content)
+    }
+
+    @Test fun aSubagentsCallNamesItsMainAgent() {
+        val (main, out) = preTool("mcp__rtok__whoami", "caller-sub", "{}", ""","agent_id":"sub-1","agent_type":"Explore"""")
+        assertEquals(main, updated(out)!![AgentTools.CALLER]?.jsonPrimitive?.content)
+    }
+
+    @Test fun anotherServersToolKeepsItsArguments() {
+        assertNull(updated(preTool("mcp__other__read", "caller-other").second))
+    }
 
     @Test fun agentActivityIsToolPlusShortMainArgument() {
         val input = HookInput.parse("""{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"${"x".repeat(100)}","description":"d"}}""")

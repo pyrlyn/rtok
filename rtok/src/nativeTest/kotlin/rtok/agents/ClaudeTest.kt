@@ -48,10 +48,10 @@ class ClaudeTest {
     private val noCli = Claude({ _, a, _ -> calls.add(a).let { null } }, { false })
     private val cli = Claude({ _, a, _ -> calls.add(a).let { null } }, { true })
 
-    @Test fun dryRunOnAnEmptyFileIsTenAdditionsWithoutWorktreeRows() {
+    @Test fun dryRunOnAnEmptyFileIsElevenAdditionsWithoutWorktreeRows() {
         val s = scratch("dry", dry = true)
         val report = Claude.run(s.cfg, false)
-        assertTrue("10 additions" in report, report)
+        assertTrue("11 additions" in report, report)
         assertTrue("+ SubagentStart " in report && "+ SessionEnd " in report, report)
         assertFalse("Worktree" in report, report)
         assertFalse(exists(s.settings))
@@ -62,7 +62,7 @@ class ClaudeTest {
     @Test fun applyTwiceThenRemoveKeepsForeignHooks() {
         val s = scratch("apply")
         writeString(s.settings, """{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"echo other"}]}]}}""")
-        assertTrue("10 additions" in Claude.run(s.cfg, false))
+        assertTrue("11 additions" in Claude.run(s.cfg, false))
         assertEquals(NO_CHANGES, Claude.run(s.cfg, false))
         assertTrue("removed" in Claude.run(s.cfg, true))
         val raw = readToString(s.settings)

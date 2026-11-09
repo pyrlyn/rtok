@@ -6,9 +6,9 @@ import com.akuleshov7.ktoml.parsers.TomlParser
 import com.akuleshov7.ktoml.tree.nodes.*
 import com.akuleshov7.ktoml.tree.nodes.pairs.values.*
 import kotlinx.serialization.json.*
-import rtok.toml.TomlDocument
-import rtok.toml.TomlException
-import rtok.toml.TomlReader
+import toml.TomlDocument
+import toml.TomlException
+import toml.TomlReader
 
 object KtomlReader : TomlReader {
     private val parser = TomlParser(TomlInputConfig(ignoreUnknownNames = true))

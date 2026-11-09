@@ -3,7 +3,7 @@
 // bridge from the pre-T163.4 `schema_migrations` (`NNNN.sql`).
 package rtok.store
 
-import rtok.db.*
+import db.*
 
 internal object Migrations {
     private const val CREATE =

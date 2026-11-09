@@ -6,6 +6,7 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
 
 private const val OVER_A_PIPE = 200_000
+private const val OWNER_ONLY = 0x180 // 0o600
 
 class PipedTest {
     private fun soon(ms: Long) = TimeSource.Monotonic.markNow() + ms.milliseconds
@@ -67,5 +68,38 @@ class PipedTest {
         assertEquals(0, c.read(soon(2000))?.size)
         c.kill()
         assertEquals(0, c.tryWait())
+    }
+
+    @Test fun aLinkAtTheStderrPathIsNotFollowed() {
+        val dir = createTempDir("rtok-piped-test-")
+        try {
+            val victim = join(dir, "victim")
+            writeString(victim, "keep")
+            val err = join(dir, "stderr")
+            symlink(victim, err)
+            // Refusing to start is fine too; what matters is that the link's target is untouched.
+            runCatching {
+                val c = PipedChild.spawn("sh", listOf("-c", "echo leak >&2"), stderrPath = err)
+                c.waitExit()
+                c.kill()
+            }
+            assertEquals("keep", readToString(victim))
+        } finally {
+            removeDirAll(dir)
+        }
+    }
+
+    @Test fun theStderrLogIsOwnerOnly() {
+        val dir = createTempDir("rtok-piped-test-")
+        try {
+            val log = join(dir, "stderr")
+            val c = PipedChild.spawn("sh", listOf("-c", "echo hi >&2"), stderrPath = log)
+            c.waitExit()
+            c.kill()
+            assertEquals("hi\n", readToString(log))
+            assertEquals(OWNER_ONLY, fileMode(log))
+        } finally {
+            removeDirAll(dir)
+        }
     }
 }

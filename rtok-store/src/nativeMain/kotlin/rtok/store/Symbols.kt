@@ -2,11 +2,11 @@
 // call is scoped to a canonical root, so repos sharing one store never answer for each other.
 package rtok.store
 
+import db.*
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import rtok.db.*
 import rtok.plugin.sdk.SymbolFile
 import rtok.plugin.sdk.SymbolRow
 import rtok.plugin.sdk.SymbolSpan

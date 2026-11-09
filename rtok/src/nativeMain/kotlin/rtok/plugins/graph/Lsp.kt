@@ -20,6 +20,7 @@ import rtok.sys.ancestors
 import rtok.sys.canonicalize
 import rtok.sys.components
 import rtok.sys.createDirAll
+import rtok.sys.createTempDir
 import rtok.sys.fileLen
 import rtok.sys.isFile
 import rtok.sys.join
@@ -27,7 +28,7 @@ import rtok.sys.parent
 import rtok.sys.pathStartsWith
 import rtok.sys.pid
 import rtok.sys.readToString
-import rtok.sys.tempDir
+import rtok.sys.removeDirAll
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.TimeSource
 
@@ -137,15 +138,18 @@ object Lsp : LspBackend {
         val server = pick(root)
         if (!onPath(server.bin)) error("lsp: ${server.bin} not on PATH")
         val path = resolveBin(server.bin)
-        val errPath = join(tempDir(), "rtok-lsp-${pid()}.stderr")
+        // A fresh private directory: a fixed name in the shared temp dir can be planted or clash between servers.
+        var errDir = ""
         val child =
             try {
-                PipedChild.spawn(path, server.args, cwd = root, extraEnv = stateEnv(root), stderrPath = errPath)
+                errDir = createTempDir("rtok-lsp-")
+                PipedChild.spawn(path, server.args, cwd = root, extraEnv = stateEnv(root), stderrPath = join(errDir, LspSession.STDERR))
             } catch (e: IoException) {
+                if (errDir.isNotEmpty()) runCatching { removeDirAll(errDir) }
                 error("spawn $path (${server.bin}): ${e.message}")
             }
         val canon = canonicalize(root) ?: root
-        val s = LspSession(child, canon, errPath)
+        val s = LspSession(child, canon, errDir)
         val uri = LspWire.fileUri(canon)
         val init =
             try {

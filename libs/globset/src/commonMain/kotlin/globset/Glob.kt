@@ -10,7 +10,9 @@ class Glob private constructor(
     val options: GlobOptions,
     private val nfa: Nfa,
 ) {
-    fun isMatch(path: String): Boolean = nfa.matches(path.encodeToByteArray())
+    fun isMatch(path: String): Boolean = matchesBytes(path.encodeToByteArray())
+
+    internal fun matchesBytes(path: ByteArray): Boolean = nfa.matches(path)
 
     override fun toString(): String = glob
 
@@ -33,7 +35,11 @@ class GlobSet(
 ) {
     val isEmpty: Boolean get() = globs.isEmpty()
 
-    fun isMatch(path: String): Boolean = globs.any { it.isMatch(path) }
+    fun isMatch(path: String): Boolean {
+        if (isEmpty) return false
+        val bytes = path.encodeToByteArray()
+        return globs.any { it.matchesBytes(bytes) }
+    }
 
     companion object {
         val EMPTY = GlobSet(emptyList())

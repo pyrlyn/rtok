@@ -1,7 +1,7 @@
 // Port of the store test helper `hold_write_lock` (HeldWrite::Immediate): another connection holds the write lock.
 package rtok.support
 
-import rtok.db.Db
+import db.Db
 import kotlin.native.concurrent.Future
 import kotlin.native.concurrent.TransferMode
 import kotlin.native.concurrent.Worker

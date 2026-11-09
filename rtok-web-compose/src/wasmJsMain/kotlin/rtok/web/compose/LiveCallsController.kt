@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -114,13 +113,7 @@ private fun Pick(
     val p = LocalPalette.current
     FlowRow(verticalArrangement = Arrangement.Center, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
         (listOf("") + distinct(feed, key)).forEach { v ->
-            val on = v == current
-            Box(
-                Modifier
-                    .background(if (on) p.accent.copy(alpha = 0.18f) else p.surface, RoundedCornerShape(6.dp))
-                    .clickable { set(v) }
-                    .padding(horizontal = 6.dp, vertical = 2.dp),
-            ) { Txt(v.ifEmpty { "all ${key}s" }, color = if (on) p.accent else p.muted, size = 12) }
+            ToggleChip(v.ifEmpty { "all ${key}s" }, v == current) { set(v) }
         }
     }
 }

@@ -40,7 +40,7 @@ data class Stray(
 
 /** A task storage backend: plain files on disk, GitHub Issues or GitLab Issues. */
 interface TaskAdapter {
-    /** `disk`, `github` or `gitlab`, for error messages. */
+    /** `board`, `files`, `plan`, `github` or `gitlab`, for error messages. */
     val name: String
 
     fun create(
@@ -52,11 +52,18 @@ interface TaskAdapter {
 
     fun get(id: TaskId): Task?
 
-    /** Callers go through [setStatus], which guards parents. */
+    /**
+     * Callers go through [setStatus], which guards parents. [report] is only stored by an adapter whose
+     * [movesWithReport] is true, in the same write as the move.
+     */
     fun writeStatus(
         id: TaskId,
         status: Status,
+        report: String? = null,
     ): Task
+
+    /** Whether [writeStatus] stores its `report` itself. */
+    fun movesWithReport() = false
 
     /** The highest id with [prefix], done ones included. */
     fun maxId(prefix: String): TaskId?
@@ -82,10 +89,11 @@ fun setStatus(
     id: TaskId,
     status: Status,
     force: Boolean,
+    report: String? = null,
 ): Task {
     if (!status.isActive && !force) {
         val open = adapter.list(Filter(parent = id))
         if (open.isNotEmpty()) bail("$id has open subtasks: ${open.joinToString(", ") { it.id.toString() }}; finish them first or pass --force")
     }
-    return adapter.writeStatus(id, status)
+    return adapter.writeStatus(id, status, report)
 }

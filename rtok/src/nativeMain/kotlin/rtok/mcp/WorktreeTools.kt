@@ -89,7 +89,7 @@ object WorktreeTools {
     val ADOPT =
         ToolDef(
             "worktree_adopt",
-            "Bind a worktree your host made (not worktree_add) to this session's agent: the one holding path (default: the server's cwd). " +
+            "Bind a worktree your host made (not worktree_add) to this session's agent: the one holding path (default: this session's directory). " +
                 "Returns {path, task, origin, locked}. task names it when the branch cannot (a detached HEAD). Never takes another agent's.",
             AgentTools.withAgent(
                 schema("""{"type":"object","properties":{"path":{"type":"string","description":"the worktree or a directory inside it"},"task":{"type":"string"}}}"""),
@@ -108,23 +108,17 @@ object WorktreeTools {
         args: JsonObject,
     ): String =
         when (name) {
-            "worktree_add" -> add(cx, session.agentFor(args).first, args)
-            "worktree_remove" -> remove(cx, session.agentFor(args).first, args)
+            "worktree_add" -> add(cx, session.agentFor(args).first, session.projectDir(args), args)
+            "worktree_remove" -> remove(cx, session.agentFor(args).first, session.projectDir(args), args)
             "worktree_finish" -> finish(cx, session.agent().first, args)
-            "worktree_adopt" -> adopt(cx, session.agentFor(args).first, args)
-            else -> list(cx, args)
+            "worktree_adopt" -> adopt(cx, session.agentFor(args).first, session.projectDir(args), args)
+            else -> list(cx, session.projectDir(args))
         }
 
     private fun arg(
         args: JsonObject,
         key: String,
     ): String? = Protocol.str(args, key)?.takeIf { it.isNotEmpty() }
-
-    /** The directory a call acts in: `repo` (relative to the server's cwd), else the cwd itself. */
-    private fun baseDir(args: JsonObject): String {
-        val cwd = rtok.sys.cwd()
-        return arg(args, "repo")?.let { join(cwd, it) } ?: cwd
-    }
 
     /**
      * A shared server runs in one checkout while its callers work in others, so a worktree made "here" can land in a
@@ -145,10 +139,10 @@ object WorktreeTools {
     fun add(
         cx: Runtime,
         agent: AgentDetail,
+        cwd: String,
         args: JsonObject,
     ): String {
         val task = arg(args, "task") ?: error("`task` is required, e.g. T12")
-        val cwd = baseDir(args)
         ensureCallersRepo(cwd, agent)
         val plan = AddClaim.add(cx.store, cwd, cx.config.worktree, task to arg(args, "slug"), agent to null, cx.config.plugins.graph.autoAddProjects)
         TaskList.writeFor(cwd, plan.path, plan.task)
@@ -164,9 +158,9 @@ object WorktreeTools {
     fun adopt(
         cx: Runtime,
         agent: AgentDetail,
+        cwd: String,
         args: JsonObject,
     ): String {
-        val cwd = rtok.sys.cwd()
         val path = arg(args, "path")?.let { join(cwd, it) } ?: cwd
         val done = Claim.bind(cx.store, path, agent, null, arg(args, "task"), true, cx.config.plugins.graph.autoAddProjects)
         return JSON.encodeToString(rtok.worktree.Adopted.serializer(), done)
@@ -175,11 +169,12 @@ object WorktreeTools {
     fun remove(
         cx: Runtime,
         agent: AgentDetail,
+        cwd: String,
         args: JsonObject,
     ): String {
         val target = arg(args, "path") ?: arg(args, "task") ?: error("`path` or `task` is required")
         val keep = Protocol.bool(args, "keep_branch") ?: false
-        val done = WorktreeRemove.forAgent(cx.store, baseDir(args), target, agent, null, keep)
+        val done = WorktreeRemove.forAgent(cx.store, cwd, target, agent, null, keep)
         return JSON.encodeToString(rtok.worktree.Removed.serializer(), done)
     }
 
@@ -196,13 +191,13 @@ object WorktreeTools {
 
     fun list(
         cx: Runtime,
-        args: JsonObject,
+        cwd: String,
     ): String {
         // A server launched in `$HOME` has no repository of its own; list the worktrees of the client root that lies in
         // one. Without a usable root the error names what to do, never git's `fatal: not a git repository`.
         val dir =
             rtok.projectDir(
-                baseDir(args),
+                cwd,
                 rtok.plugins.read.Roots
                     .clientRoots(),
             )

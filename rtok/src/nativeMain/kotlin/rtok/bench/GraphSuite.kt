@@ -133,16 +133,26 @@ internal object GraphSuite {
             } else {
                 "Use only Read and Grep. Do not use MCP. $prompt"
             }
-        val args = mutableListOf("-p", prefixed, "--output-format", "json")
-        if (arm == "mcp") {
-            val mcp = "${rtok.sys.tempDir()}/rtok-bench-mcp-${rtok.sys.pid()}.json"
-            runCatching { rtok.sys.writeString(mcp, """{"mcpServers":{"rtok":{"command":"rtok","args":["mcp"]}}}""") }
-            args += listOf("--mcp-config", mcp)
-        } else {
-            args += listOf("--allowedTools", "Read,Grep,Glob")
+        val run = { flags: List<String> ->
+            val cmd = ProgressRunner("running claude -p…", "claude", listOf("-p", prefixed, "--output-format", "json") + flags).quiet().cwd(repo)
+            runBounded(cmd, maxOf(1, cfg.bench.timeoutS.toLong()) * MS)?.let { graphResult(parseJson(it), cfg, start) }
         }
-        val cmd = ProgressRunner("running claude -p…", "claude", args).quiet().cwd(repo)
-        return runBounded(cmd, maxOf(1, cfg.bench.timeoutS.toLong()) * MS)?.let { graphResult(parseJson(it), cfg, start) } ?: GraphRun()
+        val result =
+            if (arm == "mcp") {
+                // The config lives in a fresh private directory, removed afterwards: a fixed shared temp path can be planted.
+                runCatching { rtok.sys.createTempDir("rtok-bench-mcp-") }.getOrNull()?.let { scratch ->
+                    try {
+                        val mcp = rtok.sys.join(scratch, "mcp.json")
+                        runCatching { rtok.sys.writeString(mcp, """{"mcpServers":{"rtok":{"command":"rtok","args":["mcp"]}}}""") }
+                        run(listOf("--mcp-config", mcp))
+                    } finally {
+                        runCatching { rtok.sys.removeDirAll(scratch) }
+                    }
+                }
+            } else {
+                run(listOf("--allowedTools", "Read,Grep,Glob"))
+            }
+        return result ?: GraphRun()
     }
 
     private fun graphResult(

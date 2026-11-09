@@ -26,6 +26,11 @@ class PathsTest {
         assertEquals("1:x", Paths.annotate("read", obj("""{"path":"a.rs"}"""), "1:x", true, true))
     }
 
+    @Test fun aSharedServerSaysItsRootOnEverySuccess() {
+        val text = Paths.annotate("read", obj("""{"path":"a.rs"}"""), "1:x", true, false, shared = true)
+        assertEquals("1:x\n[relative paths resolved against ${root()}, which may be another session's: this server is shared, pass absolute paths]", text)
+    }
+
     @Test fun absolutePathsAndOtherToolsAreLeftAlone() {
         assertEquals("err", Paths.annotate("read", obj("""{"path":"/tmp/x"}"""), "err", false, false))
         assertEquals("err", Paths.annotate("expand", obj("""{"id":"a"}"""), "err", false, false))

@@ -9,7 +9,7 @@ class HookEventsTest {
     @Test fun rowCountsPerHostMatchTheRustTable() {
         val want =
             mapOf(
-                "claude" to 10,
+                "claude" to 11,
                 "codebuddy" to 9,
                 "cline" to 5,
                 "commandcode" to 4,

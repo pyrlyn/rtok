@@ -26,6 +26,8 @@ messages (T288), caps PostToolUse context at `[plugins.inject] budget_tokens` (r
 `dropped:post_tool:` marker), and writes the host's stdout shape (copilot, cursor, gemini, codewhale, cline,
 codebuddy, codex; Claude as is). Host-specific objects are written with sorted keys, like serde_json.
 Slow events warn once per `[hook] slow_warn_s`. A SessionEnd that hits a locked store is re-run detached.
+Under Claude, a PreToolUse on one of rtok's own MCP tools (matcher `mcp__rtok__.*`) adds `rtok_caller` to the
+tool's input, over anything already there, so a server shared by sessions knows its caller (`docs/agents.md`).
 `--serve` runs the resident and answers each request through the same dispatcher.
 
 ## Test

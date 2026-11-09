@@ -33,6 +33,18 @@ Port of `src/agents/mod.rs` (install engine), `src/agents/command.rs` and `src/c
   `rtok agents send <id-prefix> <text|->` or `send --all-live <text|->` (`--task ID`), `rtok agents inbox [<id>]
   [--unread] [--task ID] [--json]`. The caller is `RTOK_AGENT_ID`, else the host session's main agent; the user at a
   terminal sends as `user`. Messages print framed with the fixed note; the host session id stays in `--json` only.
+- MCP `whoami` links by the host's session env var, then the process tree, then the cwd. A server under no live
+  session is one an app shares: the `--desktop` entry in `claude_desktop_config.json` runs one process that Claude's
+  Code tab routes all its sessions to, and its cwd is whichever client's root came first. The app forwards only a
+  call's name and arguments (no `_meta`) and its `roots/list` is the union of all sessions' folders, so the arguments
+  are the one per-session channel: Claude's PreToolUse hook on `mcp__rtok__.*` writes the session's main agent into
+  `rtok_caller`, and such a server lists that argument on every tool. A call that carries a live agent's id gets
+  that agent (`whoami` says rule `hook`), its directory for `worktree_*`, `task_*` and relative paths, and for the
+  graph tools; the argument reaches no tool and no record. A server with a stable link ignores it and does not list
+  it, so per-session servers pay nothing. Without the hook, or with an id that is no live session, the server cannot
+  tell its callers apart: `whoami` and the agent tools fail, `worktree_*` and `task_*` need `repo` or `agent`, and a
+  relative path in `read`, `search`, `tree` or `outline` answers with a note naming the root. `rtok mcp --call`
+  needs neither `repo` nor the note: it runs in its caller's directory.
 - `rtok agents usage [--source logs|rtok|both] [--host IDS] [--since DATE|DUR] [--until DATE] [--daily|--monthly]
   [--by agent|model] [--tz ZONE] [--unpriced] [--json]` (`[agents.usage]`): tokens and estimated cost per agent and
   month (or day). `logs` reads the agents' own session files (Claude Code, Codex, OpenCode, Kilo, Copilot CLI, Gemini

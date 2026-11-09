@@ -59,6 +59,9 @@ class Sandbox(
             "RTOK_HOME" to home,
             "HOME" to user,
             "RTOK_CONFIG" to null,
+            // A developer's own self-tracing would post every e2e process to their collector.
+            "RTOK_TRACE" to null,
+            "TRACEPARENT" to null,
             "NO_COLOR" to "1",
             "GIT_CONFIG_GLOBAL" to "/dev/null",
             "GIT_AUTHOR_NAME" to "e2e",

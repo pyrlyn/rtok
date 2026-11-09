@@ -74,7 +74,7 @@ class GitlabTest {
         assertEquals("Task 9", task.title, "read back from the issue title")
         assertEquals("Why.", task.description)
         assertEquals(tid("A2"), task.parent)
-        assertEquals(Status.Open, task.status)
+        assertEquals(Status.Todo, task.status)
         assertEquals(1_791_367_200, task.createdAt)
         val x = task.external!!
         assertEquals("gitlab" to 9L, x.adapter to x.number)
@@ -143,7 +143,7 @@ class GitlabTest {
         }
         assertEquals(Status.InProgress, setStatus(gl, tid("A1"), Status.InProgress, false).status)
         assertEquals(Status.Done, setStatus(gl, tid("A1"), Status.Done, false).status)
-        assertEquals(Status.Open, setStatus(gl, tid("A2"), Status.Open, false).status)
+        assertEquals(Status.Todo, setStatus(gl, tid("A2"), Status.Todo, false).status)
         // A2 still reads as closed here (the fake does not change), so won't-do only moves the label.
         assertEquals(Status.Closed, setStatus(gl, tid("A2"), Status.Closed, false).status)
         assertEquals(

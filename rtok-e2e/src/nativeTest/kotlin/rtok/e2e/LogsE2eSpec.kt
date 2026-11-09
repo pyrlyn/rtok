@@ -8,6 +8,7 @@ package rtok.e2e
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldNotContain
+import kotlinx.cinterop.convert
 import kotlinx.cinterop.toKString
 import rtok.sys.*
 import kotlin.time.Duration.Companion.milliseconds
@@ -54,7 +55,7 @@ class LogsE2eSpec :
                 seed(s)
                 val bin = "${s.root}/bin".also(::createDirAll)
                 writeString("$bin/tspin", "#!/bin/sh\n[ \"$1\" = --print ] || exit 2\nsed 's/^/TSPIN /'\n")
-                check(platform.posix.chmod("$bin/tspin", "755".toUInt(8).toUShort()) == 0)
+                check(platform.posix.chmod("$bin/tspin", "755".toUInt(8).convert()) == 0)
                 val path = "$bin:${platform.posix.getenv("PATH")?.toKString().orEmpty()}"
 
                 fun logs(mode: String) = s.rtok("logs", "--lines", "2", env = mapOf("PATH" to path, "RTOK_LOG_TSPIN" to mode))

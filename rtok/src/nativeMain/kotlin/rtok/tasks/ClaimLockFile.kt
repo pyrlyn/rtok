@@ -17,9 +17,10 @@ private val warnedLock = rtok.sys.Mutex()
 var taskWarningSink: (String) -> Unit = {}
 
 /** Warn that a task file was left out of a read, once per process per message. */
-internal fun warnSkipped(error: Exception) {
-    val message = error.message.orEmpty()
-    if (warnedLock.hold { warned.add(message) }) taskWarningSink("skipping a task that does not parse: $message")
+internal fun warnSkipped(error: Exception) = warnOnce("skipping a task that does not parse: ${error.message.orEmpty()}")
+
+internal fun warnOnce(message: String) {
+    if (warnedLock.hold { warned.add(message) }) taskWarningSink(message)
 }
 
 /** Holds the exclusive `flock` on `<dir>/.claim.lock`; the file is never unlinked. */
@@ -31,10 +32,13 @@ internal class DiskGuard(
     }
 }
 
-/** An exclusive flock on the stable `<dir>/.claim.lock`, polled for a bounded time. */
-internal fun lockClaim(dir: String): DiskGuard {
+/** An exclusive flock on the stable `<dir>/[name]` (`.claim.lock` for the old layouts, `.lock` for the board), polled for a bounded time. */
+internal fun lockClaim(
+    dir: String,
+    name: String = ".claim.lock",
+): DiskGuard {
     createDirAll(dir)
-    val path = "$dir/.claim.lock"
+    val path = "$dir/$name"
     repeat(LOCK_TRIES) {
         tryLockExclusive(path)?.let { return DiskGuard(it) }
         platform.posix.usleep(LOCK_WAIT_US)

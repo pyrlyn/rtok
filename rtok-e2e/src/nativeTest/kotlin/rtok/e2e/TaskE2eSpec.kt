@@ -5,16 +5,18 @@
 
 package rtok.e2e
 
+import db.Db
+import db.room.RoomDbDriver
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
-import rtok.db.Db
 import rtok.store.Store
 import rtok.store.hostId
 import rtok.store.registerAgent
@@ -59,7 +61,7 @@ private class TaskBox(
 
     /** Two agents registered in the sandbox store (after `init` created it). */
     fun agents(vararg sessions: String): List<String> {
-        Db.installIfAbsent(rtok.db.room.RoomDbDriver)
+        Db.installIfAbsent(RoomDbDriver)
         return Store.open(db()).use { s -> sessions.map { s.registerAgent(s.hostId("claude")!!, it, null, null, null) } }
     }
 
@@ -75,8 +77,8 @@ class TaskE2eSpec :
                 b.ok("create", "Parent", "-d", "Why it exists.") shouldBe "TD1\n"
                 b.ok("create", "Child", "--parent", "td1") shouldBe "TD1.1\n"
                 b.ok("create", "Other") shouldBe "TD2\n"
-                isFile(b.file("tasks/TD1 - parent.md")) shouldBe true
-                b.ok("list") shouldBe "TD1      open         Parent\n  TD1.1  open         Child\nTD2      open         Other\n"
+                isFile(b.file("tasks/todo/TD1-parent.md")) shouldBe true
+                b.ok("list") shouldBe "TD1      todo         Parent\n  TD1.1  todo         Child\nTD2      todo         Other\n"
                 b.ok("next") shouldBe "TD1.1  Child\n"
                 b.ok("show", "TD1") shouldContain "subtasks: TD1.1\n\nWhy it exists.\n"
                 val refused = b.task("status", "TD1", "done")
@@ -86,18 +88,62 @@ class TaskE2eSpec :
                 b.ok("status", "TD1", "in_progress") shouldBe "TD1: in-progress\n"
                 b.ok("status", "TD1", "done") shouldBe "TD1: done\n"
                 b.ok("status", "TD1") shouldBe "TD1: done\n"
-                isFile(b.file("tasks/done/TD1 - parent.md")) shouldBe true
-                b.ok("list") shouldBe "TD2  open         Other\n"
+                isFile(b.file("tasks/done/TD1-parent.md")) shouldBe true
+                b.ok("list") shouldBe "TD2  todo         Other\n"
                 Json.parseToJsonElement(b.ok("list", "--all", "--json")).jsonArray.size shouldBe 3
                 val done = Json.parseToJsonElement(b.ok("list", "--status", "done", "--json")).jsonArray
                 done[0].jsonObject["id"] shouldBe JsonPrimitive("TD1")
                 done[1].jsonObject["parent"] shouldBe JsonPrimitive("TD1")
                 // The counter lives in the store, not in the files: a task removed by hand keeps its id.
-                removeFile(b.file("tasks/TD2 - other.md"))
+                removeFile(b.file("tasks/todo/TD2-other.md"))
                 b.ok("create", "Third") shouldBe "TD3\n"
                 val shown = Json.parseToJsonElement(b.ok("show", "TD3", "--json")).jsonObject
-                shown["status"] shouldBe JsonPrimitive("open")
+                shown["status"] shouldBe JsonPrimitive("todo")
                 shown["subtasks"] shouldBe JsonArray(emptyList())
+            }
+        }
+
+        test("board shows the four columns and migrate turns legacy files into a board") {
+            TaskBox("board").use { b ->
+                b.ok("init", "--prefix", "B")
+                for (title in listOf("First", "Second", "Third")) b.ok("create", title)
+                b.ok("status", "B2", "in-progress")
+                b.ok("status", "B3", "done", "--report", "Shipped.")
+                b.ok("board") shouldBe "todo (1)\n  B1  First\n\nin-progress (1)\n  B2  Second\n\ndone (1)\n  B3  Third\n\nclosed (0)\n"
+                val json = Json.parseToJsonElement(b.ok("board", "--json")).jsonObject
+                json["kind"] shouldBe JsonPrimitive("board")
+                json["board"]!!.jsonObject["layout"] shouldBe JsonPrimitive("board")
+                json["remote"] shouldBe JsonNull
+                val columns = json["columns"]!!.jsonArray.map { it.jsonObject }
+                columns.map { it["status"] } shouldBe listOf("todo", "in-progress", "done", "closed").map(::JsonPrimitive)
+                columns[2]["tasks"]!!.jsonArray[0].jsonObject["report"] shouldBe JsonPrimitive("Shipped.")
+                readToString(b.file("tasks/.gitignore")) shouldBe ".lock\n.sync/\n"
+
+                val legacy = TaskBox("migrate")
+                legacy.use { l ->
+                    writeString(l.file(".rtok.toml"), "[tasks]\nprefix = \"L\"\n\n[tasks.disk]\nlayout = \"files\"\n")
+                    createDirAll(l.file("tasks/done"))
+                    writeString(l.file("tasks/L1 - old.md"), "---\nid: L1\ntitle: Old\nstatus: open\ncreated_at: 1000\nupdated_at: 2000\n---\n\nBody\n")
+                    writeString(l.file("tasks/done/L2 - fin.md"), "---\nid: L2\ntitle: Fin\nstatus: closed\ncreated_at: 1000\nupdated_at: 2000\n---\n")
+                    val before = l.task("list")
+                    before.code shouldBe 0
+                    before.err shouldContain "rtok task migrate"
+                    val dry = l.ok("migrate", "--dry-run")
+                    dry shouldContain "L1: tasks/L1 - old.md -> tasks/todo/L1-old.md\n"
+                    dry shouldContain "L2: tasks/done/L2 - fin.md -> tasks/closed/L2-fin.md\n"
+                    isFile(l.file("tasks/L1 - old.md")) shouldBe true
+                    val dryJson = Json.parseToJsonElement(l.ok("migrate", "--dry-run", "--json")).jsonObject
+                    dryJson["dry_run"] shouldBe JsonPrimitive(true)
+                    dryJson["moved"]!!.jsonArray.size shouldBe 2
+                    l.ok("migrate") shouldContain "moved 2 tasks"
+                    isFile(l.file("tasks/todo/L1-old.md")) shouldBe true
+                    isFile(l.file("tasks/closed/L2-fin.md")) shouldBe true
+                    readToString(l.file(".rtok.toml")) shouldNotContain "tasks.disk"
+                    l.ok("migrate") shouldBe "nothing to migrate\n"
+                    val after = l.task("list")
+                    after.err shouldBe ""
+                    after.out shouldContain "L1"
+                }
             }
         }
 
@@ -143,11 +189,11 @@ class TaskE2eSpec :
                 val home = b.db().substringBeforeLast('/')
                 removeDirAll(home)
                 createDirAll(home)
-                b.ok("sync") shouldBe "disk: next id S3\nraised top level: 0 -> 2\nraised subtasks of S1: 0 -> 1\nabove the counter: S1, S2, S1.1\n"
+                b.ok("sync") shouldBe "board: next id S3\nraised top level: 0 -> 2\nraised subtasks of S1: 0 -> 1\nabove the counter: S1, S2, S1.1\n"
                 val json = Json.parseToJsonElement(b.ok("sync", "--json")).jsonObject
                 json["counter"] shouldBe JsonPrimitive(2)
                 json["raised"] shouldBe JsonArray(emptyList())
-                b.ok("sync") shouldBe "disk: next id S3, counters in step\n"
+                b.ok("sync") shouldBe "board: next id S3, counters in step\n"
                 b.ok("create", "Three") shouldBe "S3\n"
             }
         }
@@ -164,7 +210,7 @@ class TaskE2eSpec :
                 b.task("dep", "C2", "C1", agent = agent).out shouldBe "C2: blocked by C1\n"
                 b.ok("ready") shouldNotContain "C2"
                 b.task("claim", "C1", agent = other).err shouldContain "claimed by"
-                b.task("release", "C1", agent = agent).out shouldBe "C1: open\n"
+                b.task("release", "C1", agent = agent).out shouldBe "C1: todo\n"
                 b.ok("ready") shouldContain "C1"
             }
         }
@@ -182,7 +228,7 @@ class TaskE2eSpec :
                 list shouldContain "Third  [parallel]"
                 b.ok("show", "K2") shouldContain "conflicts with: K1\n"
                 b.ok("show", "K3") shouldContain "parallel: yes\n"
-                readToString(b.file("tasks/" + listDir(b.file("tasks")).first { it.startsWith("K2 ") })) shouldContain "conflicts_with:"
+                readToString(b.file("tasks/todo/" + listDir(b.file("tasks/todo")).first { it.startsWith("K2-") })) shouldContain "conflicts_with:"
                 b.ok("ready") shouldBe "K1  First\nK2  Second\nK3  Third  [parallel]\n"
                 b.task("claim", "K1", agent = agent).code shouldBe 0
                 b.ok("ready") shouldBe "K2  Second  (conflicts with K1 in progress)\nK3  Third  [parallel]\n"

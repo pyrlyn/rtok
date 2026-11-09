@@ -1,10 +1,11 @@
 package rtok.support
 
-import rtok.db.Db
+import db.Db
+import db.room.RoomDbDriver
 import rtok.sys.*
 
 /** The app's SQLite adapter, as `main` installs it; every helper that opens a store calls this first. */
-fun installDb() = Db.installIfAbsent(rtok.db.room.RoomDbDriver)
+fun installDb() = Db.installIfAbsent(RoomDbDriver)
 
 private var nextTmp = 0
 

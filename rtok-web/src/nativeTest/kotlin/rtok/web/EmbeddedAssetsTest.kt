@@ -2,29 +2,35 @@
 
 package rtok.web
 
+import rtok.zstd.ZstdException
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class EmbeddedAssetsTest {
     @Test
     fun textChunksJoinAsUtf8() {
-        assertContentEquals("héllo wörld".encodeToByteArray(), embeddedBytes(listOf("héllo ", "wörld"), base64 = false))
+        assertContentEquals("héllo wörld".encodeToByteArray(), embeddedBytes(listOf("héllo ", "wörld"), zstd = false))
     }
 
     @Test
-    fun base64ChunksDecodeToTheOriginalBytesAcrossChunkBoundaries() {
-        // "AGFzbQEAAAA=" is the 8-byte wasm header \0asm\1\0\0\0, split mid-quantum.
-        val bytes = embeddedBytes(listOf("AGFz", "bQE", "AAAA="), base64 = true)
+    fun zstdChunksDecodeToTheOriginalBytesAcrossChunkBoundaries() {
+        // `zstd -19` of the 8-byte wasm header \0asm\1\0\0\0, base64, split mid-quantum.
+        val bytes = embeddedBytes(listOf("KLUv", "/SQIQQAAAGFz", "bQEAAAC6NJ1A"), zstd = true)
         assertContentEquals(byteArrayOf(0, 0x61, 0x73, 0x6d, 1, 0, 0, 0), bytes)
     }
 
     @Test
+    fun aCorruptFrameIsRefusedNotServed() {
+        assertFailsWith<ZstdException> { embeddedBytes(listOf("KLUv/SQIQQAAAGFzbQEAAAC6NJ1B"), zstd = true) }
+    }
+
+    @Test
     fun emptyFilesStayEmpty() {
-        assertEquals(0, embeddedBytes(listOf(""), base64 = true).size)
-        assertEquals(0, embeddedBytes(listOf(""), base64 = false).size)
+        assertEquals(0, embeddedBytes(listOf(""), zstd = false).size)
     }
 
     @Test

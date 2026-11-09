@@ -13,10 +13,10 @@ class TasksTest {
         """{"adapter":"disk","hidden":3,"tasks":[
         {"id":"A1","title":"Ship the board","status":"in-progress","parent":null,"priority":2,"assignee":"agent-1",
          "blocked_by":[],"conflicts_with":[],"parallel":false,"external":null,"updated_at":1},
-        {"id":"A1.1","title":"Columns","status":"open","parent":"A1","priority":0,"assignee":null,
+        {"id":"A1.1","title":"Columns","status":"todo","parent":"A1","priority":0,"assignee":null,
          "blocked_by":["A2"],"conflicts_with":["A3"],"parallel":true,
          "external":{"adapter":"github","number":7,"url":"https://github.com/me/x/issues/7"},"updated_at":2},
-        {"id":"A2","title":"Old","status":"open","parent":null,"priority":3,"assignee":null,
+        {"id":"A2","title":"Old","status":"todo","parent":null,"priority":3,"assignee":null,
          "blocked_by":[],"conflicts_with":[],"parallel":false,
          "external":{"adapter":"github","number":8,"url":"javascript:alert(1)"},"updated_at":3}]}"""
 
@@ -42,8 +42,8 @@ class TasksTest {
     }
 
     @Test fun cardsInFiltersByColumnAndQueryMostUrgentFirst() {
-        assertEquals(listOf("A1.1", "A2"), cardsIn(board.tasks, "open", "").map { it.id })
-        assertEquals(listOf("A1.1"), cardsIn(board.tasks, "open", " a1 ").map { it.id }, "the parent matches")
+        assertEquals(listOf("A1.1", "A2"), cardsIn(board.tasks, "todo", "").map { it.id })
+        assertEquals(listOf("A1.1"), cardsIn(board.tasks, "todo", " a1 ").map { it.id }, "the parent matches")
         assertEquals(listOf("A1"), cardsIn(board.tasks, "in-progress", "AGENT").map { it.id })
         assertTrue(cardsIn(board.tasks, "done", "").isEmpty())
     }

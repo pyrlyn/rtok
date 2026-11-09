@@ -8,5 +8,6 @@ import androidx.compose.ui.window.ComposeViewport
 fun main() {
     val state = AppState()
     state.start()
+    Fonts.load()
     ComposeViewport { App(state) }
 }

@@ -359,7 +359,7 @@ object Export {
     fun spawnChild(cx: Runtime) {
         if (endpoint(cx.config) == null || queuedLockHeld(cx.config)) return
         val exe = rtok.sys.currentExe() ?: return
-        val env = if (cx.config.home.isNotEmpty()) mapOf("RTOK_HOME" to cx.config.home) else emptyMap()
+        val env = (if (cx.config.home.isNotEmpty()) mapOf("RTOK_HOME" to cx.config.home) else emptyMap()) + listOfNotNull(rtok.trace.Trace.childEnv())
         rtok.sys.spawnDetached(exe, listOf("otel", "flush", "--coalesce"), env, ByteArray(0))
     }
 }

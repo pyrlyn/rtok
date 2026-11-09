@@ -1,7 +1,7 @@
 // Port of crates/rtok-store/src/models.rs: the row structs Diesel loads with `as_select()`.
 package rtok.store
 
-import rtok.db.*
+import db.*
 
 data class Host(
     val id: Int,

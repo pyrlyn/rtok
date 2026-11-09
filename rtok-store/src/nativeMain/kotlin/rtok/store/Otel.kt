@@ -1,7 +1,7 @@
 // Port of crates/rtok-store/src/otel.rs: export marks and the rows the OTel exporter reads.
 package rtok.store
 
-import rtok.db.*
+import db.*
 
 const val SEMANTIC_CACHE_HIT_KIND = "semantic_cache_hit"
 

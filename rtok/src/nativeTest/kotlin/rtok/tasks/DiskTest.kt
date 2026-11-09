@@ -45,7 +45,7 @@ class DiskTest {
         val got = disk.get(id("r1"))!!
         assertEquals("Ship the: allocator!", got.title)
         assertEquals(task.description, got.description)
-        assertEquals(Status.Open, got.status)
+        assertEquals(Status.Todo, got.status)
         assertEquals(id("R2"), disk.get(id("R2.1"))!!.parent)
         assertNull(disk.get(id("R9")))
         assertEquals(listOf("R1", "R2", "R2.1"), disk.list(Filter()).map { it.id.toString() })
@@ -125,7 +125,7 @@ class DiskTest {
         assertEquals("", disk.get(id("R2"))!!.description)
         assertEquals(id("R2"), disk.maxId("r"))
         disk.writeStatus(id("R2"), Status.InProgress)
-        disk.writeStatus(id("R2"), Status.Open)
+        disk.writeStatus(id("R2"), Status.Todo)
         val errs =
             listOf(
                 runCatching { disk.get(id("R1")) },

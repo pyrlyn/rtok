@@ -23,6 +23,12 @@ for w in ${'$'}(curl -s "http://${'$'}addr/app.js" | grep -o '[0-9a-f]\{20\}\.wa
   echo "wasm=${'$'}(curl -s -o "${'$'}LOG.wasm" -w '%{http_code} %{content_type}' "http://${'$'}addr/${'$'}w") magic=${'$'}(head -c 4 "${'$'}LOG.wasm" | od -An -tx1 | tr -d ' ')"
 done
 kill ${'$'}pid
+# A bare `wait` would hang on a server that ignores the signal; this turns the leak into a failed exit code.
+(sleep 10; kill -9 ${'$'}pid 2>/dev/null) &
+guard=${'$'}!
+wait ${'$'}pid
+echo "exit=${'$'}?"
+kill ${'$'}guard
 cat "${'$'}LOG"
 """
 
@@ -44,6 +50,7 @@ class WebE2eSpec :
                 p.out shouldContain "wasm=200 application/wasm magic=0061736d"
                 p.out shouldNotContain "wasm=404"
                 p.out shouldContain "ws=401"
+                p.out shouldContain "exit=0"
                 p.out shouldContain "rtok web: /ws needs the token in "
                 p.out shouldNotContain "built without the SPA"
             }

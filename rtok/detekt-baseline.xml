@@ -922,7 +922,7 @@
     <ID>ReturnCount:Diff.kt:Side$fun body: String?</ID>
     <ID>ReturnCount:Diffs.kt:Diffs$internal fun parse: Parsed?</ID>
     <ID>ReturnCount:Diffs.kt:Diffs$private fun counts: Pair&lt;Int, Int>?</ID>
-    <ID>ReturnCount:Dispatch.kt:fun run: ByteArray</ID>
+    <ID>ReturnCount:Dispatch.kt:private fun runTraced: ByteArray</ID>
     <ID>ReturnCount:Dispatch.kt:internal fun capBudget: String</ID>
     <ID>ReturnCount:Dispatch.kt:internal fun claimInjection: Injection?</ID>
     <ID>ReturnCount:Dispatch.kt:internal fun mcpResult: JsonElement?</ID>

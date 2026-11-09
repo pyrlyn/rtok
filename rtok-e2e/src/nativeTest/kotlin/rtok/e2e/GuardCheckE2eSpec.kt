@@ -6,6 +6,8 @@ import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 
+private const val LONG_OUTPUT = 400
+
 class GuardCheckE2eSpec :
     FunSpec({
         // No `cwd`, like the pi and OpenCode plugins: `guard check` has none either, and the Bash key carries the cwd.
@@ -58,7 +60,7 @@ class GuardCheckE2eSpec :
         }
         test("discover ranks a recorded family no rule covers") {
             Sandbox("discover").use { s ->
-                s.post("""{"command":"terraform plan"}""", "x".repeat(400))
+                s.post("""{"command":"terraform plan"}""", "x".repeat(LONG_OUTPUT))
                 s.post("""{"command":"git status"}""", "y")
                 val out = s.rtok("discover").out
                 out shouldContain "bash calls 2  covered 1  unreadable rows 0\n"

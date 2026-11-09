@@ -10,7 +10,7 @@ configure<KotlinMultiplatformExtension> {
         implementation(project(":rtok-hook"))
         // The task specs register agents straight in the sandbox store, as tests/task_cli.rs does.
         implementation(project(":rtok-store"))
-        implementation(project(":db-room"))
+        implementation("pyrlyn.kit:db-room")
     }
 }
 

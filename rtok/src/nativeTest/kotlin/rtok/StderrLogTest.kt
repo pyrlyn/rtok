@@ -27,7 +27,7 @@ class StderrLogTest {
         assertEquals("[2026-10-27T07:35:19Z WARN  rtok::tasks] hi", StderrLog.line(Level.Warn, "rtok::tasks", "hi", 1_793_086_519))
     }
 
-    @Test fun taskWarningsReachStderrOnlyWhenEnabled() {
+    @Test fun taskWarningsReachStderrUnlessRustLogSilencesThem() {
         val err = StringBuilder()
         val io =
             object : CliIo {
@@ -37,7 +37,7 @@ class StderrLogTest {
                     err.append(text)
                 }
             }
-        taskWarning(io, "skipped", null)
+        taskWarning(io, "skipped", "rtok=error")
         assertEquals("", err.toString())
         taskWarning(io, "skipped", "rtok=warn")
         assertTrue(err.endsWith(" WARN  rtok::tasks] skipped\n"), err.toString())

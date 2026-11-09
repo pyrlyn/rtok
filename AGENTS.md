@@ -25,5 +25,8 @@
 ## Native C
 - Keep [docs/c-code.md](docs/c-code.md) current: update it whenever own C code or a C library is added or removed.
 
+## Higher-level rules
+- If an `AGENTS.md` or `CLAUDE.md` exists higher in the tree, follow it too; on conflict, ask the creator.
+
 ## Git
 - Commit locally in small green steps. Do not push `main` and never force-push; every change ends in a PR.

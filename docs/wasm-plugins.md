@@ -14,9 +14,16 @@ and join the plugin registry like built-in ones (MCP, proxy and CLI surfaces; ne
   packed `(ptr, len)` i64 values, low half pointer. Same ABI as Rust, so the same `.wasm` files work.
 - Every call (instantiation included) is metered: `FUEL` = 100 000 000 units per call. An endless guest
   traps instead of hanging `rtok mcp`. Chasm counts fuel per instruction-ish step like wasmi.
-- `rtok/plugins/WasmPlugins.kt` wires it into `Registry.fromPlugins`.
+- `rtok/src/wasmPlugins/kotlin/rtok/plugins/WasmPlugins.kt` wires it into `Registry.fromPlugins`.
+
+## Build flag
+WASM plugins are opt-in at build time: `-Prtok.wasm=true` (default `false` in `gradle.properties`) includes
+`:rtok-wasm` and the kotlin-wasm build and links Chasm into `:rtok`. Kotlin has no conditional compilation, so the
+flag picks a source dir: `src/wasmPlugins` or the stub `src/noWasmPlugins`. Without the flag
+`[plugins.wasm] enabled = true` warns on stderr and in the log (`warn wasm load ...`) and loads nothing.
 
 ## Enable / disable
+In a build with the flag:
 ```toml
 [plugins.wasm]
 enabled = true            # default false
@@ -26,7 +33,7 @@ Each plugin can then be switched with `[plugins] <id> = false` like any other. A
 load is reported on stderr and in the log (`error wasm load ...`) and skipped.
 
 ## Test
-`./gradlew wasmTest` (`:rtok-wasm`, 5 tests) and the adapter's own tests in kotlin-wasm (`./gradlew check` there). The fixture
+`./gradlew wasmTest -Prtok.wasm=true` (`:rtok-wasm`, 5 tests) and the adapter's own tests in kotlin-wasm (`./gradlew check` there). The fixture
 `rtok-wasm/src/nativeTest/fixtures/wasm-demo.wasm` is the Rust crate `rtok-wasm-demo-guest`. Rebuild:
 ```sh
 cd ../rtok && CARGO_TARGET_DIR=/tmp/wasm-demo cargo build --locked -p rtok-wasm-demo-guest \

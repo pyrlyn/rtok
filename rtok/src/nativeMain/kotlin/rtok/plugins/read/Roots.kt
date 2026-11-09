@@ -61,6 +61,7 @@ object Roots {
 
     @ThreadLocal private object Caller {
         var dir: String? = null
+        var graph = false
     }
 
     /** The caller's root for this call, when [enterCaller] set one. */
@@ -69,12 +70,17 @@ object Roots {
     /** The base of relative paths: the caller's root for this call, else the process cwd. */
     fun cwd(): String = Caller.dir ?: rtok.sys.cwd()
 
+    /** The directory a graph call scopes to: the process cwd, unless [enterCaller] moved the graph as well. */
+    fun graphCwd(): String = Caller.dir?.takeIf { Caller.graph } ?: rtok.sys.cwd()
+
     /** Restores the previous caller root on [close]. */
     class CallerGuard internal constructor(
         private val prev: String?,
+        private val prevGraph: Boolean,
     ) : AutoCloseable {
         override fun close() {
             Caller.dir = prev
+            Caller.graph = prevGraph
         }
     }
 
@@ -82,17 +88,20 @@ object Roots {
      * T923: makes [dir] the base of relative paths until the guard closes, if the guard would accept it from a
      * server in [serverCwd]: inside it, a worktree of its repository or a client root. Anything else (a missing
      * directory, `/`, `$HOME`, an unrelated project) is ignored, since the root comes from an untrusted agent row.
+     * [graph] makes it [graphCwd] too.
      */
     fun enterCaller(
         serverCwd: String,
         dir: String,
+        graph: Boolean = false,
     ): CallerGuard? {
         val d = canonicalize(dir)?.takeIf(::isDir) ?: return null
         val known = (listOf(serverCwd) + client.value).flatMap { listOf(it) + worktrees(it) }
         val home = homeDir()
         if (known.map { canonicalize(it) ?: it }.filter { !isUnwalkableRoot(it, home) }.none { pathStartsWith(d, it) }) return null
-        val guard = CallerGuard(Caller.dir)
+        val guard = CallerGuard(Caller.dir, Caller.graph)
         Caller.dir = d
+        Caller.graph = graph
         return guard
     }
 

@@ -49,6 +49,9 @@ val HOSTS =
     )
 val TASK_ADAPTERS = listOf("disk", "github", "gitlab")
 val TASK_LAYOUTS = listOf("auto", "files", "folders")
+
+/** `[tasks] layout`; `[tasks.disk] layout` keeps the old words in [TASK_LAYOUTS]. */
+val TASK_BOARD_LAYOUTS = listOf("auto", "board", "files", "plan")
 val CATALOGUE =
     listOf(
         "measure" to true,
@@ -575,6 +578,9 @@ fun defaultStatsPrices(): Map<String, ModelPrice> {
 @Serializable data class Tasks(
     val adapter: String = "disk",
     val prefix: String = "",
+    val dir: String = "tasks",
+    val layout: String = "auto",
+    val shared: Boolean = true,
     val disk: TasksDisk = TasksDisk(),
     val github: TasksGithub = TasksGithub(),
     val gitlab: TasksGitlab = TasksGitlab(),

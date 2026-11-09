@@ -35,11 +35,11 @@ class TasksTest {
             assertEquals(s, Status.parse(s.str))
             assertEquals("\"$s\"", Json.encodeToString(Status.serializer(), s))
         }
-        for ((w, want) in listOf("pending" to Status.Open, "in_progress" to Status.InProgress, "In-Progress" to Status.InProgress, "completed" to Status.Done, "not_planned" to Status.Closed)) {
+        for ((w, want) in listOf("pending" to Status.Todo, "in_progress" to Status.InProgress, "In-Progress" to Status.InProgress, "completed" to Status.Done, "not_planned" to Status.Closed)) {
             assertEquals(want, Status.parse(w), w)
         }
         assertFailsWith<TaskException> { Status.parse("blocked") }
-        assertTrue(Status.Open.isActive && Status.InProgress.isActive)
+        assertTrue(Status.Todo.isActive && Status.InProgress.isActive)
         assertFalse(Status.Done.isActive || Status.Closed.isActive)
     }
 
@@ -109,7 +109,7 @@ class ReadyTest {
         assertEquals(id("R1"), ready[0].task.id)
         assertFalse(ready[0].stale)
         assertEquals(id("R1"), Ready.activeBlocker(tasks[1], tasks))
-        tasks[2] = tasks[2].copy(status = Status.Open)
+        tasks[2] = tasks[2].copy(status = Status.Todo)
         assertTrue(Ready.select(tasks) { it == "live" }.any { it.task.id == id("R3") && it.stale })
     }
 
@@ -164,6 +164,7 @@ class ReadyTest {
                 override fun writeStatus(
                     id: TaskId,
                     status: Status,
+                    report: String?,
                 ) = store.getValue(id).copy(status = status).also { store[id] = it }
 
                 override fun maxId(prefix: String) = store.keys.maxOrNull()

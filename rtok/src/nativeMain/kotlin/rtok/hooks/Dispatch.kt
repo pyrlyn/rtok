@@ -3,12 +3,15 @@
 // any error prints `{}` (D1).
 package rtok.hooks
 
+import db.isLocked
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import rtok.config.Config
 import rtok.config.envVar
-import rtok.db.isLocked
+import rtok.mcp.AgentTools
+import rtok.otel.i
+import rtok.otel.s
 import rtok.plugin.Runtime
 import rtok.plugin.fitBudget
 import rtok.plugin.sdk.Class
@@ -26,11 +29,13 @@ import rtok.store.insertHookCallIo
 import rtok.store.kvGet
 import rtok.store.kvSet
 import rtok.store.latestTaskClaim
+import rtok.store.mainAgent
 import rtok.store.registerAgent
 import rtok.store.setAgentAncestors
 import rtok.store.setCallMs
 import rtok.sys.eprint
 import rtok.sys.rustLines
+import rtok.trace.Trace
 import kotlin.time.TimeSource
 
 /** T178: one 5 ms lock wait, migrations included, then fail open — half the 10 ms hook budget. */
@@ -40,6 +45,8 @@ val HOOK_LOCK_WAIT = LockWait(busyMs = 5, attempts = 1, migrateMs = 5)
 const val AGENT_ANCESTORS = 3
 
 internal const val DEFERRED_ENV = "RTOK_HOOK_DEFERRED"
+
+private const val RTOK_TOOL_PREFIX = "mcp__rtok__"
 
 /**
  * Hook work that belongs to modules ported in later phases (worktree, otel export, MCP result
@@ -60,6 +67,12 @@ object HookLinks {
  * (debugging only) errors are thrown instead of answering `{}`.
  */
 fun run(
+    event: String,
+    readStdin: (limit: Long) -> ByteArray,
+    cfg: Config,
+): ByteArray = Trace.span("hook $event", listOf(s("rtok.hook.event", event), s("rtok.hook.host", cfg.hook.host))) { runTraced(event, readStdin, cfg) }
+
+private fun runTraced(
     event: String,
     readStdin: (limit: Long) -> ByteArray,
     cfg: Config,
@@ -88,6 +101,7 @@ fun run(
     } catch (e: HookError) {
         EMPTY_OUT
     } catch (e: Throwable) {
+        Trace.fail(e)
         failOpen("panicked: ${e.message ?: e::class.simpleName}; failing open")
     }
 }
@@ -295,7 +309,7 @@ private inline fun <T> guarded(
     block: () -> T,
 ): T? =
     try {
-        block()
+        Trace.span("plugin $plugin", listOf(s("rtok.plugin.id", plugin), s("rtok.hook.event", event))) { block() }
     } catch (e: Exception) {
         cx.log("error", "plugin", plugin, "$event panicked: ${e.message ?: e::class.simpleName}")
         null
@@ -340,7 +354,7 @@ fun dispatch(
     val out =
         when (event) {
             "PreToolUse" -> {
-                preTool(input, cx, registry)
+                preTool(input, cx, registry, agent)
             }
 
             "PostToolUse" -> {
@@ -430,6 +444,7 @@ internal fun deferSessionEnd(
         buildMap {
             put(DEFERRED_ENV, "1")
             if (cfg.home.isNotEmpty()) put("RTOK_HOME", cfg.home)
+            Trace.childEnv()?.let { (k, v) -> put(k, v) }
         }
     rtok.sys.spawnDetached(exe, listOf("hook", "SessionEnd"), extra, stdin)
 }
@@ -438,6 +453,7 @@ private fun preTool(
     input: HookInput,
     cx: Runtime,
     registry: Registry,
+    agent: String?,
 ): HookOutput {
     val ev = input.preTool() ?: return HookOutput()
     var rewrite: PreToolDecision.Rewrite? = null
@@ -454,7 +470,20 @@ private fun preTool(
             null -> {}
         }
     }
-    return rewrite?.let { HookOutput(hookSpecificOutput = HookSpecificOutput("PreToolUse", updatedInput = it.input, permissionDecisionReason = it.reason)) } ?: HookOutput()
+    return rewrite?.let { HookOutput(hookSpecificOutput = HookSpecificOutput("PreToolUse", updatedInput = it.input, permissionDecisionReason = it.reason)) }
+        ?: withCaller(input, cx, agent)?.let { HookOutput(hookSpecificOutput = HookSpecificOutput("PreToolUse", updatedInput = it)) }
+        ?: HookOutput()
+}
+
+/** A call to rtok's own MCP tool with this session's main agent in [AgentTools.CALLER], over anything the model wrote there. */
+private fun withCaller(
+    input: HookInput,
+    cx: Runtime,
+    agent: String?,
+): JsonObject? {
+    val args = (input.toolInput as? JsonObject)?.takeIf { agent != null && cx.config.hook.host == "claude" && input.toolName?.startsWith(RTOK_TOOL_PREFIX) == true } ?: return null
+    val main = cx.hostId?.let { hostId -> runCatching { cx.store.mainAgent(hostId, cx.session) }.getOrNull() }
+    return main?.let { JsonObject(args + (AgentTools.CALLER to JsonPrimitive(it))) }
 }
 
 private fun postTool(
@@ -576,5 +605,7 @@ internal fun capBudget(
 fun residentRun(req: rtok.hook.Request): ByteArray {
     // This process's env came from whichever call started it; the payload names the session.
     val cfg = Config.loadLenient(null, rtok.config.Layers.hookHostFlag(req.host.ifEmpty { null })).withoutSessionEnv().also { it.hookClientPid = req.pid }
-    return run(req.event, { limit -> if (req.stdin.size > limit) req.stdin.copyOf(limit.toInt()) else req.stdin }, cfg)
+    return Trace.span("hook serve", listOfNotNull(req.pid?.let { i("rtok.hook.client_pid", it.toLong()) }), newTrace = true) {
+        run(req.event, { limit -> if (req.stdin.size > limit) req.stdin.copyOf(limit.toInt()) else req.stdin }, cfg)
+    }
 }

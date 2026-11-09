@@ -16,7 +16,7 @@ internal class Nfa private constructor(
         for (b in bytes) {
             val v = b.toInt() and BYTE
             val moved = HashSet<Int>()
-            for (s in current) if (preds[s]?.invoke(v) == true) moved.addAll(next[s].toList())
+            for (s in current) if (preds[s]?.invoke(v) == true) for (target in next[s]) moved.add(target)
             if (moved.isEmpty()) return false
             current = closure(moved)
         }

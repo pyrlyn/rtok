@@ -276,10 +276,11 @@ data class Config(
         fun loadWith(
             configFile: String?,
             flags: JsonObject?,
+            dir: String? = runCatching { cwd() }.getOrNull(),
         ): Config {
             val home = homeDir()
             ensureUserFile(home, configFile)
-            return Layers.load(home, configFile, flags)
+            return Layers.load(home, configFile, flags, dir)
         }
 
         fun loadLenient(

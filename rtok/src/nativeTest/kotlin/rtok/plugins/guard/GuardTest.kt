@@ -161,6 +161,22 @@ class GuardTest {
         for (r in listOf("ls", "cat file", "grep foo bar", "grep 'a>b' file")) assertTrue(readOnly(r), r)
     }
 
+    @Test fun processSubstitutionAndRgPreAreNotReadOnly() {
+        for (w in listOf("cat <(sed -i s/a/b/ f)", "diff <(ls) <(touch x)", "rg --pre cat foo", "rg --pre=cat foo", "rg foo | rg --pre sh bar", "rg --hostname-bin=./x --hyperlink-format=default foo")) {
+            assertFalse(readOnly(w), w)
+            assertNull(k(w))
+        }
+        for (r in listOf("rg foo", "rg --pre-glob '*.gz' foo", "rg -n 'pre' src")) assertTrue(readOnly(r), r)
+    }
+
+    @Test fun treeWritingAFileIsNotReadOnly() {
+        for (w in listOf("tree -o out.txt", "tree -ao out.txt src", "tree -R -H . -L 1")) {
+            assertFalse(readOnly(w), w)
+            assertNull(k(w))
+        }
+        for (r in listOf("tree", "tree -L 2 src", "tree --noreport -P '*.o'")) assertTrue(readOnly(r), r)
+    }
+
     @Test fun relativeCdRepeatIsNotDenied() =
         shell("g-relcd") { sh ->
             sh.at("/s/a")

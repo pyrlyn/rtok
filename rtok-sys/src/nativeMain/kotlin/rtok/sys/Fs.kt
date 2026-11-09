@@ -5,6 +5,10 @@ package rtok.sys
 
 import kotlinx.cinterop.*
 import platform.posix.*
+import rtok.sys.spawn.rtok_cwd_fd
+import rtok.sys.spawn.rtok_open_dir_at
+import rtok.sys.spawn.rtok_type_at
+import rtok.sys.spawn.rtok_unlink_at
 
 /** Path components; a leading "/" is kept as its own component like Rust `Component::RootDir`. */
 fun components(path: String): List<String> {
@@ -198,21 +202,137 @@ fun setCwd(p: String) {
     if (chdir(p) != 0) throw IoException(IoException.Kind.Other, "$p: errno $errno")
 }
 
+/**
+ * `fs::create_dir_all`: [dir] and its missing parents (mode 0755 before the umask). An existing directory, or a
+ * link to one, is fine. @throws IoException when a component cannot be made or is not a directory
+ */
 fun createDirAll(dir: String) {
-    var cur = ""
-    for (c in components(dir)) {
-        cur = if (c == "/") "/" else join(cur, c)
-        mkdir(cur, 0x1ed.convert())
+    if (dir.isEmpty() || isDir(dir) || mkdir(dir, DIR_MODE.convert()) == 0) return
+    var err = errno
+    if (err == ENOENT) {
+        parent(dir)?.let(::createDirAll)
+        err = if (mkdir(dir, DIR_MODE.convert()) == 0) 0 else errno
     }
+    // Another process may have made it in between; EEXIST alone would also accept a file in the way.
+    if (err != 0 && !isDir(dir)) throw IoException(ioKind(err), "create dir $dir: errno $err")
 }
+
+private const val DIR_MODE = 0x1ed // 0o755
 
 fun exists(path: String) = access(path, F_OK) == 0
 
+/**
+ * `rm -rf` without a shell: [path] and everything under it. A symlink is removed, never followed, so its target
+ * survives; nothing at [path] is not an error, and an entry that vanishes meanwhile is skipped.
+ * @throws IoException when an entry cannot be removed, or for `/`, `.` and `..`, which `rm` refuses too
+ */
 fun removeDirAll(path: String) {
-    if (exists(path)) system("rm -rf '" + path.replace("'", "'\\''") + "'")
+    if (path.isEmpty()) return
+    // A trailing slash would make the stat follow a symlink root into its target.
+    val root = path.trimEnd('/')
+    if (root.isEmpty() || root.substringAfterLast('/') in DOT_DIRS) throw IoException(IoException.Kind.InvalidInput, "refusing to remove $path")
+    removeAt(rtok_cwd_fd(), root, root)
 }
 
-fun tempDir(): String = (getenv("TMPDIR")?.toKString() ?: "/tmp").trimEnd('/')
+private val DOT_DIRS = setOf(".", "..")
+
+/**
+ * Removes [name] in the directory open at [dirFd]; [shown] names it in errors. Directories are entered through
+ * descriptors opened with `O_NOFOLLOW`: one swapped for a symlink mid-walk is unlinked, not followed out of the
+ * tree (the race behind CVE-2022-21658 in Rust's `remove_dir_all`).
+ */
+private fun removeAt(
+    dirFd: Int,
+    name: String,
+    shown: String,
+) {
+    val type = rtok_type_at(dirFd, name)
+    if (type < 0) return failUnlessGone("stat", shown, errno)
+    var asDir = 0
+    if (type == S_IFDIR) {
+        val fd = rtok_open_dir_at(dirFd, name)
+        if (fd >= 0) {
+            removeContents(fd, shown)
+            asDir = 1
+        } else {
+            val err = errno
+            // ELOOP or ENOTDIR: replaced by a link or a file since the stat, so it goes as one below.
+            if (err != ELOOP && err != ENOTDIR) return failUnlessGone("open dir", shown, err)
+        }
+    }
+    if (rtok_unlink_at(dirFd, name, asDir) != 0) failUnlessGone("remove", shown, errno)
+}
+
+/** Throws for [err] unless it says the entry is gone already, as a concurrent removal leaves it. */
+private fun failUnlessGone(
+    op: String,
+    path: String,
+    err: Int,
+) {
+    if (err != ENOENT) throw IoException(ioKind(err), "$op $path: errno $err")
+}
+
+/** Removes every entry of the directory open at [fd], then closes it. */
+private fun removeContents(
+    fd: Int,
+    shown: String,
+) {
+    val dir =
+        fdopendir(fd) ?: run {
+            val err = errno
+            close(fd)
+            throw IoException(ioKind(err), "read dir $shown: errno $err")
+        }
+    try {
+        // Names first: entries unlinked while readdir runs may be skipped or repeated.
+        val names = ArrayList<String>()
+        while (true) {
+            val e = readdir(dir) ?: break
+            val n = e.pointed.d_name.toKString()
+            if (n != "." && n != "..") names += n
+        }
+        for (n in names) removeAt(fd, n, "$shown/$n")
+    } finally {
+        closedir(dir)
+    }
+}
+
+/** `$TMPDIR` without trailing slashes; `/tmp` when it is unset, empty, the root or not a directory. */
+fun tempDir(): String =
+    getenv("TMPDIR")
+        ?.toKString()
+        ?.trimEnd('/')
+        ?.takeIf { it.isNotEmpty() && isDir(it) } ?: "/tmp"
+
+/**
+ * A new private directory under [tempDir] named `<prefix>XXXXXX` (mkdtemp(3): a random name, mode 0700). Files
+ * made inside it cannot be pre-created or swapped for a symlink by another user. @throws IoException
+ */
+fun createTempDir(prefix: String): String =
+    memScoped {
+        val template = "${tempDir()}/${prefix}XXXXXX"
+        mkdtemp(template.cstr.getPointer(this))?.toKString() ?: run {
+            val err = errno
+            throw IoException(ioKind(err), "mkdtemp $template: errno $err")
+        }
+    }
+
+/** Runs [block] on the path of a new file [name] holding [bytes] inside a fresh [createTempDir]; both go afterwards. */
+fun <T> withTempFile(
+    prefix: String,
+    name: String,
+    bytes: ByteArray,
+    block: (String) -> T,
+): T {
+    val dir = createTempDir(prefix)
+    try {
+        val path = join(dir, name)
+        writeBytes(path, bytes)
+        return block(path)
+    } finally {
+        runCatching { removeDirAll(dir) }
+    }
+}
 
 fun pid(): Int = getpid()
 

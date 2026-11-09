@@ -13,9 +13,13 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import rtok.config.Config
 import rtok.json.StrictJson
+import rtok.otel.Kind
+import rtok.otel.b
+import rtok.otel.s
 import rtok.plugin.Runtime
 import rtok.plugin.sdk.ToolDef
 import rtok.plugins.Registry
+import rtok.trace.Trace
 import kotlin.concurrent.AtomicInt
 
 /** A listed tool and the plugin its calls are recorded under. */
@@ -67,7 +71,7 @@ class Server(
             when (method) {
                 "initialize" -> if (stateless) Protocol.serverInfo(Protocol.negotiateProtocolVersion(params["protocolVersion"]), rtok.VERSION) else initialize(params)
                 "ping" -> JsonObject(emptyMap())
-                "tools/list" -> buildJsonObject { put("tools", JsonArray(listed.map { Protocol.toTool(it.def) })) }
+                "tools/list" -> buildJsonObject { put("tools", JsonArray(listedDefs(stateless).map(Protocol::toTool))) }
                 "tools/call" -> callTool(Protocol.str(params, "name").orEmpty(), params["arguments"])
                 else -> return methodNotFound(id, method)
             }
@@ -77,6 +81,8 @@ class Server(
             put("result", result)
         }
     }
+
+    private fun listedDefs(stateless: Boolean) = listed.map { it.def }.let { defs -> if (!stateless && agents.takesCaller()) defs.map(AgentTools::withCaller) else defs }
 
     private fun initialize(params: JsonObject): JsonObject {
         val roots = (params["capabilities"] as? JsonObject)?.get("roots")
@@ -128,7 +134,11 @@ class Server(
         name: String,
         rawArgs: JsonElement?,
     ): JsonObject {
-        val (text, ok) = run(name, rawArgs)
+        // One trace per call: the server's own root span is posted only when it exits.
+        val (text, ok) =
+            Trace.span("mcp tool $name", listOf(s("rtok.mcp.tool", name)), Kind.Server, newTrace = true) {
+                run(name, rawArgs).also { Trace.annotate(listOf(b("rtok.mcp.ok", it.second)), error = if (it.second) null else "tool failed") }
+            }
         if (!ok) cx.log("error", "mcp", name, "tool failed: $text")
         return Protocol.callResult(text, ok)
     }
@@ -139,13 +149,15 @@ class Server(
         rawArgs: JsonElement?,
     ): Pair<String, Boolean> {
         val found = listed.firstOrNull { it.def.name == name }
-        val args = Protocol.prepareArgs(name, rawArgs)
+        val prepared = Protocol.prepareArgs(name, rawArgs)
+        val session = agents.forCall(prepared)
+        val args = JsonObject(prepared - AgentTools.CALLER)
         val missing = found?.let { Protocol.missingRequired(it.def.inputSchema, args) }
         val answer =
             when {
                 found == null -> Protocol.unknownTool(name).message.orEmpty() to false
                 missing != null -> "invalid params: $missing" to false
-                else -> Paths.invoke(cx, agents, name, args)
+                else -> Paths.invoke(cx, session, name, args)
             }
         runCatching { Record.call(cx, found?.plugin ?: "archive", name, args, answer.first) }
         return answer
@@ -169,11 +181,12 @@ class Server(
         fun open(
             cfg: Config,
             session: String,
+            oneShot: Boolean = false,
         ): Server {
             val cx = Runtime.open(cfg, session)
             rtok.plugins.read.Roots
                 .enable()
-            return Server(cx, listedFor(cfg))
+            return Server(cx, listedFor(cfg), AgentSession(cx, oneShot = oneShot))
         }
 
         /** Built-ins, then every enabled built-in plugin's tools (first name wins), then the `[mcp] tools` and worktree filters. */

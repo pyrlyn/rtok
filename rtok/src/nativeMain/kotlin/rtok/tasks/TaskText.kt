@@ -102,5 +102,6 @@ fun taskDetails(shown: Shown): String {
         if (shown.subtasks.isNotEmpty()) append("subtasks: ${ids(shown.subtasks)}\n")
         t.external?.let { append("link: ${it.url}\n") }
         if (t.description.isNotEmpty()) append("\n${t.description}\n")
+        t.report?.let { append("\nReport:\n$it\n") }
     }
 }

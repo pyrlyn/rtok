@@ -69,7 +69,7 @@ object Mcp {
         args: JsonElement?,
     ): String =
         try {
-            Server.open(cfg, session()).use { server ->
+            Server.open(cfg, session(), oneShot = true).use { server ->
                 if (!server.allows(name)) throw Protocol.unknownTool(name)
                 val (text, ok) = server.run(name, args)
                 if (!ok) throw ToolException(text)

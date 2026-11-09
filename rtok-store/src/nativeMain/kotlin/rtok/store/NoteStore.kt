@@ -1,7 +1,7 @@
 // Port of crates/rtok-store/src/note_store.rs (kv lives in Kv.kt).
 package rtok.store
 
-import rtok.db.*
+import db.*
 import rtok.plugin.sdk.NoteHit
 
 private const val NOT_SESSION = "kind NOT LIKE 'checkpoint:%' AND kind NOT LIKE 'session:%'"
