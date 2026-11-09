@@ -13,8 +13,10 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import rtok.config.Config
 import rtok.config.Layers
+import rtok.store.Store
 import rtok.store.TaskId
 import rtok.support.diskConfig
+import rtok.support.installDb
 import rtok.support.tmpDir
 import rtok.sys.createDirAll
 import rtok.sys.exists
@@ -25,6 +27,11 @@ import rtok.tasks.NewTask
 import rtok.tasks.Status
 import rtok.tasks.Task
 import rtok.tasks.TaskProject
+import rtok.tasks.block
+import rtok.tasks.claim
+import rtok.tasks.conflict
+import rtok.tasks.setParallel
+import rtok.tasks.setPriority
 import rtok.tasks.taskTable
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -53,15 +60,20 @@ class TasksPageTest {
     @Test fun theBoardListsAFixtureProjectTheWayTaskListDoes() {
         val cfg = diskConfig("tasks-page-home").first
         val dir = checkout("tasks-page-board")
-        val disk = TaskProject.open(cfg.tasks, dir).adapter
-        listOf("A1" to null, "A1.1" to "A1", "A2" to null, "A3" to null).forEach { (n, p) ->
-            disk.create(NewTask("title $n", "a long body", p?.let(::id)), id(n))
-        }
-
-        fun get(n: String) = disk.get(id(n))!!
-        disk.save(get("A1").copy(status = Status.InProgress, assignee = "agent-1"))
-        disk.save(get("A1.1").copy(blockedBy = listOf(id("A2")), conflictsWith = listOf(id("A3")), parallel = true, priority = 0))
-        disk.save(get("A2").copy(status = Status.Done))
+        installDb()
+        val store = Store.openInMemory()
+        val project = TaskProject.open(cfg.tasks, dir)
+        val disk = project.adapter
+        // Claimed before its subtask exists: a parent with an open subtask is not claimable.
+        project.create(store, NewTask("title A1", "a long body"))
+        project.claim(store, id("A1"), "agent-1")
+        project.create(store, NewTask("title A1.1", "a long body", id("A1")))
+        for (n in listOf("A2", "A3")) project.create(store, NewTask("title $n", "a long body"))
+        project.block(id("A1.1"), id("A2"))
+        project.conflict(id("A1.1"), id("A3"), false)
+        project.setParallel(id("A1.1"), true)
+        project.setPriority(id("A1.1"), 0)
+        project.status(store, id("A2"), Status.Done, false, null, actor = null)
 
         val page = TasksPage.read(cfg, dir, true)
         assertEquals("ready", page.state, page.text)

@@ -108,8 +108,6 @@ class DiskAdapter(
             place(old, task.copy(status = status, updatedAt = nowSecs()))
         }
 
-    override fun claimGuard(): ClaimLock = lockClaim(dir)
-
     override fun storesMarkers() = true
 
     override fun save(task: Task): Task {

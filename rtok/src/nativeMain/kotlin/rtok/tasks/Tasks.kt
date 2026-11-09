@@ -176,7 +176,7 @@ data class ClaimOutcome(
     fun toJson() = flattened(task, mapOf("changed" to JsonPrimitive(changed)))
 }
 
-/** Why `claim` refused a task. Callers that try the next ready task match on this. */
+/** A claim refused because another live agent holds the task. The board's other refusals are plain [TaskException]s. */
 sealed class ClaimConflict(
     message: String,
 ) : Exception(message) {
@@ -184,14 +184,4 @@ sealed class ClaimConflict(
         val id: TaskId,
         val assignee: String,
     ) : ClaimConflict("$id is claimed by $assignee")
-
-    class NotClaimable(
-        val id: TaskId,
-        val status: Status,
-    ) : ClaimConflict("$id is $status and cannot be claimed")
-
-    class Blocked(
-        val id: TaskId,
-        val by: TaskId,
-    ) : ClaimConflict("$id is blocked by $by")
 }

@@ -141,11 +141,11 @@ class GitlabTest {
             val wont = (c.json() as JsonObject)["add_labels"] == JsonPrimitive(GITLAB_WONT_DO)
             ok(if (wont) glIssue(2, "A2", "closed", listOf(GITLAB_WONT_DO)).toString() else glIssue(2, "A2", "opened").toString())
         }
-        assertEquals(Status.InProgress, setStatus(gl, tid("A1"), Status.InProgress, false).status)
-        assertEquals(Status.Done, setStatus(gl, tid("A1"), Status.Done, false).status)
-        assertEquals(Status.Todo, setStatus(gl, tid("A2"), Status.Todo, false).status)
+        assertEquals(Status.InProgress, gl.writeStatus(tid("A1"), Status.InProgress).status)
+        assertEquals(Status.Done, gl.writeStatus(tid("A1"), Status.Done).status)
+        assertEquals(Status.Todo, gl.writeStatus(tid("A2"), Status.Todo).status)
         // A2 still reads as closed here (the fake does not change), so won't-do only moves the label.
-        assertEquals(Status.Closed, setStatus(gl, tid("A2"), Status.Closed, false).status)
+        assertEquals(Status.Closed, gl.writeStatus(tid("A2"), Status.Closed).status)
         assertEquals(
             listOf(
                 json("""{"add_labels":"$GITLAB_IN_PROGRESS","remove_labels":"status::done,status::wont-do"}"""),
@@ -236,6 +236,8 @@ class GitlabTest {
                 ok(glIssue(n, task, "opened", listOf("bug", add)).toString())
             }
         }
+        // The engine checks the whole board, so every operation lists the project's issues once.
+        fake.glLabel("rtok", "all", arr(glIssue(1, "A1", "opened", listOf("bug")), glIssue(2, "A2", "opened", listOf("bug"))))
         val project = TaskProject("gitlab.com/me/app", tmpDir("gl-conflict"), "A", gitlab(fake))
         assertEquals(listOf(tid("A2")), project.conflict(tid("A1"), tid("A2"), false).conflictsWith)
         assertEquals(json("""{"add_labels":"rtok:conflicts:A2"}"""), fake.bodies("PUT", "$GL_ISSUES/1").single())

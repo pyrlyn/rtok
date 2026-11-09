@@ -159,10 +159,10 @@ class GithubTest {
                 ok(issue(2, "A2", "open", "reopened").toString())
             }
         }
-        assertEquals(Status.InProgress, setStatus(gh, tid("A1"), Status.InProgress, false).status)
-        assertEquals(Status.Done, setStatus(gh, tid("A1"), Status.Done, false).status)
-        assertEquals(Status.Todo, setStatus(gh, tid("A2"), Status.Todo, false).status)
-        assertEquals(Status.Closed, setStatus(gh, tid("A2"), Status.Closed, false).status)
+        assertEquals(Status.InProgress, gh.writeStatus(tid("A1"), Status.InProgress).status)
+        assertEquals(Status.Done, gh.writeStatus(tid("A1"), Status.Done).status)
+        assertEquals(Status.Todo, gh.writeStatus(tid("A2"), Status.Todo).status)
+        assertEquals(Status.Closed, gh.writeStatus(tid("A2"), Status.Closed).status)
         val one = fake.bodies("PATCH", "$ISSUES/1")
         assertEquals(json("""{"labels":["rtok","rtok:A1","bug","$IN_PROGRESS_LABEL"],"state":"open"}"""), one[0])
         assertTrue(includes(one[1], """{"state":"closed","state_reason":"completed"}"""))
@@ -239,6 +239,8 @@ class GithubTest {
                 ok(issue(n, task, "open", labels = names).toString())
             }
         }
+        // The engine checks the whole board, so every operation lists the project's issues once.
+        fake.byLabel("rtok", "all", arr(issue(1, "A1", "open", extra = listOf("bug")), issue(2, "A2", "open", extra = listOf("bug"))))
         val project = TaskProject("github.com/me/app", tmpDir("gh-conflict"), "A", github(fake))
         val task = project.conflict(tid("A1"), tid("A2"), false)
         assertEquals(json("""{"labels":["rtok","rtok:A1","bug","rtok:conflicts:A2"],"state":"open"}"""), fake.bodies("PATCH", "$ISSUES/1").single())

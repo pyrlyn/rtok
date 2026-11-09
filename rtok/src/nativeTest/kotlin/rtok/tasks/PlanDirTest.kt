@@ -62,9 +62,9 @@ class PlanDirTest {
         assertTrue(text.startsWith("---\nstatus: in progress\npriority: P2\ncomplexity: 3\nreadiness: 0%\nagent: Claude Code / opus\n---\n"), text)
         assertTrue("# T1. Ship it\n" in text, text)
 
-        setStatus(disk, id("T1.1"), Status.Closed, false)
+        disk.writeStatus(id("T1.1"), Status.Closed)
         disk.writeReport(id("T1.1"), "not needed")
-        setStatus(disk, id("T1"), Status.Done, false)
+        disk.writeStatus(id("T1"), Status.Done)
         disk.writeReport(id("T1"), "Shipped in a PR.")
         assertEquals("Dropped: not needed\n", readToString("$dir/T1.1/done.md"))
         assertEquals("Shipped in a PR.\n", readToString("$dir/T1/done.md"))
@@ -122,7 +122,7 @@ class PlanDirTest {
         val dir = tmp("reopen")
         val disk = PlanDirAdapter(dir)
         disk.create(new("A", ""), id("T1"))
-        setStatus(disk, id("T1"), Status.Done, false)
+        disk.writeStatus(id("T1"), Status.Done)
         val err = assertFailsWith<TaskException> { disk.writeStatus(id("T1"), Status.Todo) }
         assertTrue("done.md" in err.message!!, err.message)
         assertFailsWith<TaskException> { disk.writeReport(id("T9"), "x") }

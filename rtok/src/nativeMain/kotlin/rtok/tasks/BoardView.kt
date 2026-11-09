@@ -64,12 +64,13 @@ private fun cardMarkers(t: Task) =
 
 /** Every task in its column. Works for any layout: the files and plan layouts map onto the same four columns. */
 fun TaskProject.board(all: Boolean): BoardView {
-    val tasks = adapter.list(Filter(all = true))
+    val read = tasks.snapshot()
+    val tasks = read.tasks().map { it.value.rtok() }.sortedBy { it.id }
     val columns =
-        BOARD_COLUMNS.map { status ->
+        Status.entries.map { status ->
             val inColumn = tasks.filter { it.status == status }
             val shown = if (status.isActive || all) inColumn else inColumn.sortedByDescending { it.updatedAt }.take(RECENT)
             BoardColumn(status, inColumn.size, shown)
         }
-    return BoardView(boardDir, layout, columns, (adapter as? BoardAdapter)?.warnings.orEmpty())
+    return BoardView(boardDir, layout, columns, read.warnings())
 }

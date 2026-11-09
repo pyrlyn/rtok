@@ -43,6 +43,8 @@ configure<KotlinMultiplatformExtension> {
         implementation(project(":json-strict"))
         implementation("pyrlyn.kit:toml-aot")
         implementation("pyrlyn.kit:yaml-aot")
+        implementation("pyrlyn.taskboard:core")
+        implementation("pyrlyn.taskboard:files")
         implementation(project(":rtok-agent-sdk"))
         implementation(project(":rtok-mcp"))
         implementation(project(":rtok-store"))

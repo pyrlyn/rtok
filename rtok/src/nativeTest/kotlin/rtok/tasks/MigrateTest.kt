@@ -2,6 +2,7 @@
 
 package rtok.tasks
 
+import pyrlyn.taskboard.files.FileStore
 import rtok.config.Tasks
 import rtok.config.TasksDisk
 import rtok.store.TaskId
@@ -30,7 +31,7 @@ private fun legacy(dir: String) {
     disk.save(disk.get(id("R2"))!!.copy(status = Status.InProgress, assignee = "agent-1"))
     disk.writeStatus(id("R3"), Status.Done, null)
     disk.writeStatus(id("R4"), Status.Closed, null)
-    disk.claimGuard().close()
+    lockClaim(dir).close()
 }
 
 class MigrateTest {
@@ -60,8 +61,8 @@ class MigrateTest {
         for (f in listOf("todo/R1-todo-one.md", "in-progress/R2-doing-two.md", "done/R3-done-three.md", "closed/R4-closed-four.md")) assertTrue(isFile("$root/tasks/$f"), f)
         assertTrue(!isFile("$root/tasks/R1 - todo-one.md") && !isFile("$root/tasks/done/R3 - done-three.md"))
         assertTrue(!exists("$root/tasks/.claim.lock"))
-        assertEquals(".lock\n.sync/\n", readToString("$root/tasks/.gitignore"))
-        val after = BoardAdapter("$root/tasks").list(Filter(all = true))
+        assertEquals(".lock\n.state/\n.sync/\n", readToString("$root/tasks/.gitignore"))
+        val after = StoreReadAdapter(FileStore("$root/tasks")).list(Filter(all = true))
         assertEquals(before, after, "timestamps, assignee and statuses carry over")
         assertEquals("board", detectLayout("$root/tasks"))
         assertEquals("nothing to migrate\n", migrateTasks(Tasks(), root, dryRun = false).text())

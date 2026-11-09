@@ -27,7 +27,7 @@ import io.github.typesafegithub.workflows.yaml.Preamble
 
 // Shared builds from github.com/pyrlyn/packages, checked out by setUp; absolute, since the
 // included kotlin-wasm build reads the same variables relative to its own directory.
-// KOTLIN_KIT_DIR is read once settings.gradle.kts includes packages/kotlin-kit.
+// KOTLIN_KIT_DIR and KOTLIN_TASKBOARD_DIR are read once settings.gradle.kts includes their builds.
 val sharedBuilds =
     mapOf(
         "SHARED_SETTINGS_DIR" to "\${{ github.workspace }}/packages/shared-settings",
@@ -35,12 +35,13 @@ val sharedBuilds =
         "KOTLIN_SNAPSHOT_DIR" to "\${{ github.workspace }}/packages/kotlin-snapshot",
         "KOTLIN_WEBGL_DIR" to "\${{ github.workspace }}/packages/kotlin-webgl",
         "KOTLIN_KIT_DIR" to "\${{ github.workspace }}/packages/kotlin-kit",
+        "KOTLIN_TASKBOARD_DIR" to "\${{ github.workspace }}/packages/kotlin-taskboard",
     )
 
 fun JobBuilder<*>.setUp() {
     uses(action = Checkout())
     // Pinned release tag; bump when rtok-kotlin needs newer shared builds.
-    uses(action = Checkout(repository = "pyrlyn/packages", ref = "0.0.1", path = "packages"))
+    uses(action = Checkout(repository = "pyrlyn/packages", ref = "0.0.2", path = "packages"))
     // Installs every tool in mise.toml (JDK, Kotlin, CMake, Ninja, ...), so CI and developers build with the same versions.
     uses(action = MiseAction_Untyped())
     uses(action = ActionsSetupGradle())

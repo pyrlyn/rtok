@@ -4,6 +4,9 @@ package rtok.tasks
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import pyrlyn.taskboard.BoardOptions
+import pyrlyn.taskboard.Commit
+import pyrlyn.taskboard.files.FileStore
 import rtok.config.ProjectRoot
 import rtok.config.Tasks
 import rtok.config.writeFile
@@ -59,23 +62,18 @@ private fun moveFiles(
     base: String,
     dryRun: Boolean,
 ): List<Moved> {
-    val board = BoardAdapter(dir)
     val entries = DiskAdapter(dir).entries()
 
     fun rel(path: String) = path.removePrefix("$base/")
     if (!dryRun && entries.isNotEmpty()) {
-        board.claimGuard().use {
-            board.ensureGitignore()
-            for ((old, task) in entries) {
-                board.import(task)
-                // The board's `done/` is the old archive's name, and the import may already have replaced the old file there.
-                if (exists(old)) removeFile(old)
-            }
-        }
+        // One commit moves every task, `updated` kept: a migration moves tasks, it does not edit them. The board reads
+        // the old names in `done/` (the old archive's name) and replaces them in the same commit.
+        onBoard { FileStore(dir).locked(BoardOptions().lockTimeout) { it.commit(Commit(put = entries.map { (_, task) -> task.lib() })) } }
+        for ((old, _) in entries) if (exists(old)) removeFile(old)
         val oldLock = "$dir/.claim.lock"
         if (exists(oldLock)) removeFile(oldLock)
     }
-    return entries.map { (old, task) -> Moved(task.id.toString(), rel(old), rel(board.pathOf(task))) }
+    return entries.map { (old, task) -> Moved(task.id.toString(), rel(old), rel("$dir/${task.status.str}/${task.id}-${unicodeSlug(task.title)}.md")) }
 }
 
 /** Rewrite `[tasks.disk] dir/layout` as `[tasks]` keys and drop `layout = "files"`, keeping every other line. */
