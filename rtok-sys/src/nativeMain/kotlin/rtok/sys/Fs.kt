@@ -5,6 +5,10 @@ package rtok.sys
 
 import kotlinx.cinterop.*
 import platform.posix.*
+import rtok.sys.spawn.rtok_cwd_fd
+import rtok.sys.spawn.rtok_open_dir_at
+import rtok.sys.spawn.rtok_type_at
+import rtok.sys.spawn.rtok_unlink_at
 
 /** Path components; a leading "/" is kept as its own component like Rust `Component::RootDir`. */
 fun components(path: String): List<String> {
@@ -208,8 +212,80 @@ fun createDirAll(dir: String) {
 
 fun exists(path: String) = access(path, F_OK) == 0
 
+/**
+ * `rm -rf` without a shell: [path] and everything under it. A symlink is removed, never followed, so its target
+ * survives; nothing at [path] is not an error, and an entry that vanishes meanwhile is skipped.
+ * @throws IoException when an entry cannot be removed, or for `/`, `.` and `..`, which `rm` refuses too
+ */
 fun removeDirAll(path: String) {
-    if (exists(path)) system("rm -rf '" + path.replace("'", "'\\''") + "'")
+    if (path.isEmpty()) return
+    // A trailing slash would make the stat follow a symlink root into its target.
+    val root = path.trimEnd('/')
+    if (root.isEmpty() || root.substringAfterLast('/') in DOT_DIRS) throw IoException(IoException.Kind.InvalidInput, "refusing to remove $path")
+    removeAt(rtok_cwd_fd(), root, root)
+}
+
+private val DOT_DIRS = setOf(".", "..")
+
+/**
+ * Removes [name] in the directory open at [dirFd]; [shown] names it in errors. Directories are entered through
+ * descriptors opened with `O_NOFOLLOW`: one swapped for a symlink mid-walk is unlinked, not followed out of the
+ * tree (the race behind CVE-2022-21658 in Rust's `remove_dir_all`).
+ */
+private fun removeAt(
+    dirFd: Int,
+    name: String,
+    shown: String,
+) {
+    val type = rtok_type_at(dirFd, name)
+    if (type < 0) return failUnlessGone("stat", shown, errno)
+    var asDir = 0
+    if (type == S_IFDIR) {
+        val fd = rtok_open_dir_at(dirFd, name)
+        if (fd >= 0) {
+            removeContents(fd, shown)
+            asDir = 1
+        } else {
+            val err = errno
+            // ELOOP or ENOTDIR: replaced by a link or a file since the stat, so it goes as one below.
+            if (err != ELOOP && err != ENOTDIR) return failUnlessGone("open dir", shown, err)
+        }
+    }
+    if (rtok_unlink_at(dirFd, name, asDir) != 0) failUnlessGone("remove", shown, errno)
+}
+
+/** Throws for [err] unless it says the entry is gone already, as a concurrent removal leaves it. */
+private fun failUnlessGone(
+    op: String,
+    path: String,
+    err: Int,
+) {
+    if (err != ENOENT) throw IoException(ioKind(err), "$op $path: errno $err")
+}
+
+/** Removes every entry of the directory open at [fd], then closes it. */
+private fun removeContents(
+    fd: Int,
+    shown: String,
+) {
+    val dir =
+        fdopendir(fd) ?: run {
+            val err = errno
+            close(fd)
+            throw IoException(ioKind(err), "read dir $shown: errno $err")
+        }
+    try {
+        // Names first: entries unlinked while readdir runs may be skipped or repeated.
+        val names = ArrayList<String>()
+        while (true) {
+            val e = readdir(dir) ?: break
+            val n = e.pointed.d_name.toKString()
+            if (n != "." && n != "..") names += n
+        }
+        for (n in names) removeAt(fd, n, "$shown/$n")
+    } finally {
+        closedir(dir)
+    }
 }
 
 fun tempDir(): String = (getenv("TMPDIR")?.toKString() ?: "/tmp").trimEnd('/')

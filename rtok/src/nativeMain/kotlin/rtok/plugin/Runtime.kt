@@ -124,7 +124,8 @@ class Runtime private constructor(
 
     override fun close() {
         runCatching { store.close() }
-        scratch?.let(::removeDirAll)
+        // Best effort: a leftover temp dir must not turn close() into a failure.
+        scratch?.let { runCatching { removeDirAll(it) } }
         scratch = null
     }
 

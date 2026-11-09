@@ -21,4 +21,15 @@ int rtok_spawn(int *pid, const char *prog, char *const argv[], char *const envp[
 long long rtok_free_bytes(const char *path);
 /* utimensat(AT_FDCWD, path) setting access and modification time to sec/nsec; 0, else -1 with errno set. */
 int rtok_set_times(const char *path, long long sec, long nsec);
+/* The *at calls rtok.sys.removeDirAll walks a tree with: Kotlin/Native's platform.posix has no openat on macOS and
+   neither fstatat, unlinkat nor the AT_* constants on Linux. */
+/* AT_FDCWD: the dirfd that resolves a name against the working directory. */
+int rtok_cwd_fd(void);
+/* openat(dirfd, name) as a directory, never through a symlink (O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC): the
+   descriptor, or -1 with errno set. */
+int rtok_open_dir_at(int dirfd, const char *name);
+/* The type bits (st_mode & S_IFMT) of name in dirfd, never following a symlink, or -1 with errno set. */
+int rtok_type_at(int dirfd, const char *name);
+/* unlinkat(dirfd, name), with AT_REMOVEDIR when `dir` is set: 0, or -1 with errno set. */
+int rtok_unlink_at(int dirfd, const char *name, int dir);
 #endif
