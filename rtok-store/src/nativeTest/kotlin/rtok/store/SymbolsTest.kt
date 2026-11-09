@@ -148,4 +148,13 @@ class SymbolsTest {
         s.replaceSymbols("/r", "a.py", "s2", 2L to 2L, emptyList())
         assertEquals(emptyList(), s.symbolStalePaths("/r"))
     }
+
+    @Test
+    @Suppress("MagicNumber")
+    fun symbolFtsKeepsNameHitsAboveTheCandidateCap() {
+        val rows = (0 until 250).map { i -> SymbolRow("A" + i.toString().padStart(3, '0'), "function", i + 1, true, i + 1, "", doc = "loads config") }
+        s.index("/r", "many.rs", *rows.toTypedArray())
+        s.index("/r", "late.rs", SymbolRow("Config", "struct", 1, true, 1, ""))
+        assertTrue(s.symbolFts("/r", "config", 10).any { it.b == "Config" })
+    }
 }
