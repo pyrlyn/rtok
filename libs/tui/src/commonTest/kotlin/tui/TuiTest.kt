@@ -17,6 +17,15 @@ class TuiTest {
         assertEquals("日…", truncate("日本語", 4))
     }
 
+    @Test fun wideEmojiAndPresentationRanges() {
+        assertEquals(2, width("🚀"))
+        assertEquals(2, width("✅"))
+        assertEquals(2, width("🫠"))
+        assertEquals(2, width("❌"))
+        assertEquals(2, width("⭐"))
+        assertEquals(2, width("⚡"))
+    }
+
     @Test fun sgr() {
         assertEquals("\u001b[0m", Style.Default.sgr())
         assertEquals("\u001b[0;1;31m", Style(fg = Color.Red, bold = true).sgr())
