@@ -8,6 +8,32 @@ internal const val PRIVATE_DIR = 0x1c0 // 0o700
 internal fun scratch() = createTempDir("rtok-fs-test-")
 
 class FsTest {
+    @Test fun createDirAllMakesMissingParentsAndAcceptsADirectoryOrALinkToOne() {
+        val root = scratch()
+        try {
+            val deep = join(root, "a/b/c")
+            createDirAll(deep)
+            assertTrue(isDir(deep))
+            createDirAll(deep)
+            symlink(deep, join(root, "link"))
+            createDirAll(join(root, "link"))
+        } finally {
+            removeDirAll(root)
+        }
+    }
+
+    @Test fun createDirAllFailsWhenAFileIsInTheWay() {
+        val root = scratch()
+        try {
+            val file = join(root, "file")
+            writeString(file, "x")
+            assertFailsWith<IoException> { createDirAll(file) }
+            assertFailsWith<IoException> { createDirAll(join(file, "sub")) }
+        } finally {
+            removeDirAll(root)
+        }
+    }
+
     @Test fun createTempDirMakesAFreshPrivateDirectoryEachTime() {
         val a = scratch()
         val b = scratch()

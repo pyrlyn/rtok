@@ -202,13 +202,22 @@ fun setCwd(p: String) {
     if (chdir(p) != 0) throw IoException(IoException.Kind.Other, "$p: errno $errno")
 }
 
+/**
+ * `fs::create_dir_all`: [dir] and its missing parents (mode 0755 before the umask). An existing directory, or a
+ * link to one, is fine. @throws IoException when a component cannot be made or is not a directory
+ */
 fun createDirAll(dir: String) {
-    var cur = ""
-    for (c in components(dir)) {
-        cur = if (c == "/") "/" else join(cur, c)
-        mkdir(cur, 0x1ed.convert())
+    if (dir.isEmpty() || isDir(dir) || mkdir(dir, DIR_MODE.convert()) == 0) return
+    var err = errno
+    if (err == ENOENT) {
+        parent(dir)?.let(::createDirAll)
+        err = if (mkdir(dir, DIR_MODE.convert()) == 0) 0 else errno
     }
+    // Another process may have made it in between; EEXIST alone would also accept a file in the way.
+    if (err != 0 && !isDir(dir)) throw IoException(ioKind(err), "create dir $dir: errno $err")
 }
+
+private const val DIR_MODE = 0x1ed // 0o755
 
 fun exists(path: String) = access(path, F_OK) == 0
 
