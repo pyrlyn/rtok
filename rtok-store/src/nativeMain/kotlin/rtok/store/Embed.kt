@@ -74,16 +74,18 @@ fun hashEmbed(
     return v
 }
 
-/** Rust `split(|c| !c.is_alphanumeric())`, by code point; a supplementary-plane character (emoji) separates. */
+/** Rust `split(|c| !c.is_alphanumeric())`, by code point: only a non-alphanumeric character (emoji) separates. */
+@Suppress("MagicNumber")
 private fun words(text: String): List<String> {
     val out = ArrayList<String>()
     val cur = StringBuilder()
     var i = 0
     while (i < text.length) {
         val pair = text[i].isHighSurrogate() && i + 1 < text.length && text[i + 1].isLowSurrogate()
-        val alnum = !pair && text[i].isLetterOrDigit()
-        if (alnum) {
+        val cp = if (pair) (text[i].code - 0xD800) * 0x400 + (text[i + 1].code - 0xDC00) + 0x10000 else text[i].code
+        if (isAlphanumericCodePoint(cp)) {
             cur.append(text[i])
+            if (pair) cur.append(text[i + 1])
         } else {
             out += cur.toString()
             cur.clear()

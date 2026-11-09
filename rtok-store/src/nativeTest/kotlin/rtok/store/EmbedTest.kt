@@ -42,6 +42,13 @@ class EmbedTest {
         assertTrue(cosine(a, hashEmbed("миграция схемы базы", 64u)) < 0.5f)
     }
 
+    @Test
+    @Suppress("MagicNumber")
+    fun nonLatinWordsSurviveTokenizing() {
+        assertTrue(hashEmbed("किताब", 8u).any { it != 0f }, "Devanagari vowel signs keep the word whole")
+        assertTrue(hashEmbed("𠀀𠀁", 8u).any { it != 0f }, "supplementary-plane letters keep the word whole")
+    }
+
     @Test fun hookAsyncTextIsCloserThanUnrelated() {
         val qv = hashEmbed(hooksQuery, 384u)
         val pv = hashEmbed(noteEmbedText(planted.first, planted.second), 384u)
