@@ -127,8 +127,20 @@ The frontend is being rewritten in Compose Multiplatform, replacing the kotlinx.
   summary disc, zoomed in (or focused) its nodes and edges. Drag pans, the wheel zooms about the cursor, a click on a
   cluster flies the camera in and opens its drill-down, a click on a node opens it, "← all projects" flies back.
   Cluster titles are not drawn in the scene yet (no text in WebGL); the projects list above names them.
-- Symbols the bundled font lacks (⌘, ●, arrows, ≈, −, ×, ✓, ✗, ☐, ☑, Σ, §) are drawn as inline SVG-path vectors
+- Symbols the bundled font lacks (⌘, ●, arrows, ≈, −, ×, ✓, ✗, ☐, ☑, Δ, Σ, §) are drawn as inline SVG-path vectors
   (`Glyphs.kt`); `Txt` swaps them in, so page code keeps plain strings.
+- Look: the Web Pyrlyn UI kit (Figma `QyTinZvmfi2gNVrBh5V7ru`; every screen and state of this UI is drawn on the
+  "Pyrlyn" page of `WksPpeUq2RSovioxThC0jF`). `Palette.kt` holds the kit's dark tokens and a light palette derived
+  from them (the kit has no light mode); `Theme.kt` the radii, glass panels (`glass`, `lit` adds the accent glow),
+  sunken wells and the accent fill; `Widgets.kt` panels, chips, KPI tiles, tables, meters, buttons, switches and
+  notices; `Nav.kt` the sidebar groups (Observe, Code, Setup) with each screen's title, subtitle and line icon.
+  Compose has no backdrop blur, so glass is a translucent fill with a top sheen and the backdrop's light pools
+  (`App.kt`) show through it instead.
+- Font: IBM Plex Mono Regular and SemiBold (SIL OFL 1.1, license next to them in `resources/fonts/plex-mono-OFL.txt`)
+  ship as plain dist files that `Fonts` (`Theme.kt`) fetches into `Font(identity, bytes)`; Compose resources would
+  need a `Res` class in commonMain, which the build-wide macosArm64 target cannot compile. The kit's Bold styles use
+  SemiBold.
+  Text falls back to the canvas default until the files load, or if they fail to.
 - Serving: `:rtok-web` embeds `:rtok-web-compose`'s `webDist` (source maps excluded). `embedDir` keeps text files as
   is and embeds binary ones (not UTF-8 or with NUL: the `.wasm` modules) as base64 chunks that `EmbeddedAssets`
   decodes once on first request. The CSP adds `'wasm-unsafe-eval'` so the browser may compile the modules. The debug

@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -149,20 +148,19 @@ fun PaletteOverlay(c: PaletteController) {
     Box(
         Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.45f))
+            .background(if (p.dark) Color(0xB3050810) else Color(0x400B1220))
             .clickable(remember { MutableInteractionSource() }, null) { c.close() },
         contentAlignment = Alignment.TopCenter,
     ) {
         Column(
             Modifier
                 .padding(top = 80.dp)
-                .width(520.dp)
-                .heightIn(max = 520.dp)
-                .background(p.surface, RoundedCornerShape(10.dp))
-                .border(1.dp, p.border, RoundedCornerShape(10.dp))
+                .width(560.dp)
+                .heightIn(max = 540.dp)
+                .glass(p, lit = true)
                 .clickable(remember { MutableInteractionSource() }, null) {}
-                .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) { if (c.help) Keys(c) else Jump(c) }
     }
 }
@@ -179,11 +177,11 @@ private fun Jump(c: PaletteController) {
         },
         Modifier
             .fillMaxWidth()
-            .border(1.dp, p.border, RoundedCornerShape(6.dp))
-            .padding(8.dp)
+            .well(p)
+            .padding(horizontal = 12.dp, vertical = 10.dp)
             .focusRequester(fr),
         singleLine = true,
-        textStyle = TextStyle(color = p.fg, fontSize = 14.sp),
+        textStyle = TextStyle(color = p.fg, fontSize = 14.sp, fontFamily = LocalFonts.current),
         cursorBrush = SolidColor(p.accent),
         decorationBox = { inner ->
             Box {
@@ -198,18 +196,18 @@ private fun Jump(c: PaletteController) {
     var i = 0
     Column(Modifier.verticalScroll(rememberScrollState())) {
         groups.forEach { (title, es) ->
-            Txt(title, color = p.muted, size = 11, bold = true)
+            Kicker(title, Modifier.padding(start = 10.dp, top = 10.dp, bottom = 4.dp))
             es.forEach { e ->
                 val mine = i++
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .background(if (mine == c.focus) p.accent.copy(alpha = 0.15f) else p.surface)
+                        .then(if (mine == c.focus) Modifier.background(p.accent.copy(alpha = 0.16f), FIELD).border(1.dp, p.accent.copy(alpha = 0.35f), FIELD) else Modifier)
                         .clickable { c.pick(e.href) }
-                        .padding(horizontal = 6.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    Txt(e.label)
+                    Txt(e.label, color = if (mine == c.focus) p.fg else p.label)
                     if (e.hint.isNotEmpty()) Muted(e.hint)
                 }
             }
@@ -219,8 +217,22 @@ private fun Jump(c: PaletteController) {
 
 @Composable
 private fun Keys(c: PaletteController) {
-    Txt("Keyboard shortcuts", bold = true)
-    Txt("⌘K / Ctrl+K  command palette")
-    PAGES.forEach { Txt("g ${GO[it.id]}  ${it.id}") }
-    Action("Close") { c.close() }
+    Txt("Keyboard shortcuts", size = 15, bold = true)
+    Key("⌘K / Ctrl+K", "command palette")
+    Key("?", "this list")
+    PAGES.forEach { Key("g ${GO[it.id]}", navFor(it.id)?.second?.title ?: it.id) }
+    Row { Action("Close") { c.close() } }
+}
+
+/** One shortcut: the keys in a sunken key cap, then what they do. */
+@Composable
+private fun Key(
+    keys: String,
+    what: String,
+) {
+    val p = LocalPalette.current
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Box(Modifier.width(120.dp)) { Box(Modifier.well(p, CODE).padding(horizontal = 8.dp, vertical = 2.dp)) { Txt(keys, size = 12, bold = true) } }
+        Txt(what, color = p.label)
+    }
 }

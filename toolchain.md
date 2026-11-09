@@ -6,6 +6,7 @@ come from Maven Central. The build system is Gradle.
 
 | Package | Where | Source | Why here |
 |---|---|---|---|
+| IBM Plex Mono 2.5.0 (Regular, SemiBold; SIL OFL 1.1) | local (`rtok-web-compose/src/wasmJsMain/resources/fonts`) | https://github.com/IBM/plex | The Web Pyrlyn UI kit's typeface |
 | `pyrlyn.kit:semver`, `toml`, `toml-aot`, `yaml-aot`, `db`, `db-room`, `db-sqldelight` | local (included build, `KOTLIN_KIT_DIR` or `packages/kotlin-kit` above the checkout) | https://github.com/pyrlyn/packages (`kotlin-kit/`) | Version ordering, TOML and YAML reading and editing, the SQLite store driver and SQLDelight adapter, shared with ketch and backend |
 | SQLDelight 2.4.1 | Gradle plugin, SQLite 3.38 dialect and runtime via `db-sqldelight` | https://github.com/sqldelight/sqldelight | Generates and checks typed note/file queries; uses the existing SQLite connection |
 

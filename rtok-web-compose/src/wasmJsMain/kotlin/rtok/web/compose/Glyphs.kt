@@ -1,5 +1,6 @@
 // Symbols the bundled UI font has no glyph for (they rendered as tofu boxes): drawn as small SVG-path vectors
 // inline with the text instead. `Txt` swaps them in automatically, so callers keep writing "⌘K" or "a → b".
+// The same vectors draw the sidebar and header icons (Icon).
 // Compose UI: @Composable functions are PascalCase and layout sizes are literal dp/sp values.
 @file:Suppress("FunctionNaming", "MagicNumber")
 
@@ -7,8 +8,10 @@ package rtok.web.compose
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
@@ -45,28 +48,42 @@ private val GLYPHS =
         '☐' to Glyph("M4.5 4.5h15v15h-15z"),
         '☑' to Glyph("M4.5 4.5h15v15h-15zM8 12l3 3 5-6"),
         'Σ' to Glyph("M17.5 5H6.5l6.5 7-6.5 7h11"),
+        'Δ' to Glyph("M12 4.5L4 19h16z"),
         '§' to Glyph("M15 6.5a3 3 0 0 0-6 .5c0 3 6 2.5 6 6 0 1.4-1.3 2.4-3 2.5M9 17.5a3 3 0 0 0 6-.5c0-3-6-2.5-6-6 0-1.4 1.3-2.4 3-2.5"),
     )
 
 /** Whether [s] holds a symbol drawn as a vector. */
 internal fun hasGlyph(s: String) = s.any { it in GLYPHS }
 
-private val VECTORS = HashMap<Char, ImageVector>()
+private val VECTORS = HashMap<String, ImageVector>()
 
-private fun vectorOf(c: Char): ImageVector =
-    VECTORS.getOrPut(c) {
-        val g = GLYPHS.getValue(c)
+private fun vectorOf(
+    path: String,
+    filled: Boolean,
+    stroke: Float,
+): ImageVector =
+    VECTORS.getOrPut("$filled $stroke $path") {
         ImageVector
-            .Builder("glyph-$c", 24.dp, 24.dp, 24f, 24f)
+            .Builder("glyph", 24.dp, 24.dp, 24f, 24f)
             .addPath(
-                pathData = addPathNodes(g.path),
-                fill = if (g.filled) SolidColor(Color.Black) else null,
-                stroke = if (g.filled) null else SolidColor(Color.Black),
-                strokeLineWidth = 2f,
+                pathData = addPathNodes(path),
+                fill = if (filled) SolidColor(Color.Black) else null,
+                stroke = if (filled) null else SolidColor(Color.Black),
+                strokeLineWidth = stroke,
                 strokeLineCap = StrokeCap.Round,
                 strokeLineJoin = StrokeJoin.Round,
             ).build()
     }
+
+private fun vectorOf(c: Char): ImageVector = GLYPHS.getValue(c).let { vectorOf(it.path, it.filled, 2f) }
+
+/** A line icon: SVG [path] data on a 24×24 view box, stroked 1.75 like the kit's Icon set, tinted [tint]. */
+@Composable
+fun Icon(
+    path: String,
+    tint: Color,
+    modifier: Modifier = Modifier.size(18.dp),
+) = Image(rememberVectorPainter(vectorOf(path, false, 1.75f)), null, modifier, colorFilter = ColorFilter.tint(tint))
 
 /** [s] with each vector symbol replaced by an inline placeholder, and the content that draws them in [color]. */
 internal fun withGlyphs(

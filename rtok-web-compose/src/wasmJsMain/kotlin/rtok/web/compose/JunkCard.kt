@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -105,22 +104,6 @@ class JunkController(
 
 private fun b(n: Double?) = bytes(n ?: 0.0)
 
-/** A text button; [enabled] false greys it out. */
-@Composable
-fun Action(
-    label: String,
-    enabled: Boolean = true,
-    onClick: () -> Unit,
-) {
-    val p = LocalPalette.current
-    Box(
-        Modifier
-            .background(p.accent.copy(alpha = if (enabled) 0.18f else 0.06f), RoundedCornerShape(6.dp))
-            .clickable(enabled) { onClick() }
-            .padding(horizontal = 10.dp, vertical = 4.dp),
-    ) { Txt(label, color = if (enabled) p.accent else p.muted) }
-}
-
 /** The junk card. */
 @Composable
 fun JunkCard(
@@ -169,7 +152,7 @@ private fun JunkActions(c: JunkController) {
         }
 
         plan == null -> {
-            Action(if (s.phase == JunkPhase.PLANNING) "Planning..." else "Clear safe junk", s.phase != JunkPhase.PLANNING) { c.plan() }
+            Action(if (s.phase == JunkPhase.PLANNING) "Planning..." else "Clear safe junk", s.phase != JunkPhase.PLANNING, ButtonKind.WARN) { c.plan() }
         }
 
         else -> {
@@ -179,10 +162,10 @@ private fun JunkActions(c: JunkController) {
                 if (s.phase == JunkPhase.CONFIRMING || s.phase == JunkPhase.APPLYING) {
                     val busy = s.phase == JunkPhase.APPLYING
                     Txt("Delete ${itemCount(n)} (${b(plan.num("planned_bytes"))})?")
-                    Action(if (busy) "Removing..." else "Confirm", !busy) { c.confirm() }
+                    Action(if (busy) "Removing..." else "Confirm", !busy, ButtonKind.DANGER) { c.confirm() }
                     Action("Cancel", !busy) { c.event(JunkEvent.Cancel) }
                 } else {
-                    Action("Clear ${itemCount(n)}", n > 0) { c.event(JunkEvent.Ask) }
+                    Action("Clear ${itemCount(n)}", n > 0, ButtonKind.DANGER) { c.event(JunkEvent.Ask) }
                     Action("Cancel") { c.event(JunkEvent.Cancel) }
                 }
             }

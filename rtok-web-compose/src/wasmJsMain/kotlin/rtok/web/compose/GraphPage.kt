@@ -120,7 +120,7 @@ private fun Current(
     Muted(p.str("root") ?: "")
     p.str("error")?.let { Txt(it, color = LocalPalette.current.fail) }
     p.obj("index")?.let { ix ->
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        KpiRow {
             Kpi("rows", fmt(ix.num("rows")), "")
             Kpi("files", fmt(ix.num("files")), "")
             Kpi("pending", fmt(ix.num("pending")), if ((ix.num("pending") ?: 0.0) > 0) "stale" else "fresh")
@@ -129,7 +129,7 @@ private fun Current(
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Action("re-index", !p.flag("missing")) { app.send(projectRequest("reindex", mapOf("project" to id))) }
         Action("plan removal") { app.send(projectRequest("remove", mapOf("project" to id, "confirmed" to false))) }
-        Action("remove from registry") { app.send(projectRequest("remove", mapOf("project" to id, "confirmed" to true))) }
+        Action("remove from registry", kind = ButtonKind.DANGER) { app.send(projectRequest("remove", mapOf("project" to id, "confirmed" to true))) }
     }
     RemovalPlan(app, id)
     ProjectLinks(app, p, id)
@@ -152,7 +152,7 @@ private fun Projects(
 @Composable
 private fun GraphBody(v: GraphView) {
     Muted("root ${v.root}")
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+    KpiRow {
         Kpi("rows", fmt(v.rows?.toDouble()), "tree-sitter-tags defs + refs")
         Kpi("files", fmt(v.files?.toDouble()), "")
         Kpi("pending", fmt(v.pending.size.toDouble()), if (v.pending.isEmpty()) "index is fresh" else "stale since last index")

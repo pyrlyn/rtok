@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -73,9 +72,9 @@ private fun Compare(
         BasicTextField(
             c.compareRef,
             { c.compareRef = it },
-            Modifier.width(160.dp).border(1.dp, p.border, RoundedCornerShape(6.dp)).padding(6.dp),
+            Modifier.width(180.dp).well(p).padding(horizontal = 10.dp, vertical = 6.dp),
             singleLine = true,
-            textStyle = TextStyle(color = p.fg, fontSize = 13.sp),
+            textStyle = TextStyle(color = p.fg, fontSize = 13.sp, fontFamily = LocalFonts.current),
             cursorBrush = SolidColor(p.accent),
         )
         Action("compare") { c.send(diffRequest(s.project, c.compareRef.split(' ').filter { it.isNotEmpty() })) }
@@ -109,7 +108,7 @@ private fun Export(
             Txt(name, bold = true)
             Muted(ex.str("schema") ?: "")
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        KpiRow {
             listOf("projects", "links", "nodes", "edges").forEach { k -> Kpi(k, fmt(ex.objects(k).size.toDouble()), "") }
         }
         ex.objects("projects").forEach { pr ->
