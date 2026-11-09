@@ -187,13 +187,30 @@ fun Store.copySymbolRows(
             val have = db.query("SELECT DISTINCT path FROM symbols WHERE root = ?", to) { it.string(0) }.toHashSet()
             val rows =
                 db
-                    .query("SELECT path, name, kind, line, is_def, file_sha, mtime, size, end_line, scope FROM symbols WHERE root = ?", from) {
-                        listOf<Any?>(to, it.string(0), it.string(1), it.string(2), it.int(3), it.int(4), it.string(5), it.long(6), it.long(7), it.int(8), it.string(9))
+                    .query("SELECT path, name, kind, line, is_def, file_sha, mtime, size, end_line, scope, start_byte, end_byte, content_hash, signature, doc FROM symbols WHERE root = ?", from) {
+                        listOf<Any?>(
+                            to,
+                            it.string(0),
+                            it.string(1),
+                            it.string(2),
+                            it.int(3),
+                            it.int(4),
+                            it.string(5),
+                            it.long(6),
+                            it.long(7),
+                            it.int(8),
+                            it.string(9),
+                            it.long(10),
+                            it.long(11),
+                            it.string(12),
+                            it.string(13),
+                            it.string(14),
+                        )
                     }.filter { r ->
                         val p = r[1] as String
                         p !in have && skipUnder.none { d -> p.startsWith(d) && p.removePrefix(d).startsWith('/') }
                     }
-            insertChunked(db, "symbols", "root, path, name, kind, line, is_def, file_sha, mtime, size, end_line, scope", rows)
+            insertChunked(db, "symbols", SYMBOL_INSERT_COLS, rows)
             if (db.stringOf("SELECT fingerprint FROM extractor WHERE root = ?", to) == null) {
                 db.stringOf("SELECT fingerprint FROM extractor WHERE root = ?", from)?.let { db.execute("INSERT INTO extractor (root, fingerprint) VALUES (?, ?)", to, it) }
             }

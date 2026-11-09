@@ -1,10 +1,12 @@
 package rtok.store
 
 import rtok.plugin.sdk.SymbolRow
+import rtok.plugin.sdk.SymbolSpan
 import rtok.sys.removeDirAll
 import kotlin.test.*
 
 /** Port of symbols_tests.rs. */
+@Suppress("TooManyFunctions")
 class SymbolsTest {
     private val s = Store.openInMemory()
 
@@ -112,5 +114,14 @@ class SymbolsTest {
         reader.close()
         writer.close()
         removeDirAll(dir)
+    }
+
+    @Test
+    @Suppress("MagicNumber")
+    fun copySymbolRowsKeepsSpansSignaturesAndDocs() {
+        s.replaceSymbols("/main", "a.rs", "sha", 1L to 1L, listOf(SymbolRow("parse", "function", 1, true, 90, "", startByte = 10, endByte = 90, contentHash = "h", signature = "fn parse()", doc = "reads input")))
+        assertEquals(1, s.copySymbolRows("/main", "/wt", emptyList()))
+        assertEquals(SymbolSpan(10u, 90u, "h", "sha"), s.symbolSpan("/wt", "a.rs", "parse", "function", 1))
+        assertTrue(s.symbolFts("/wt", "input", 10).any { it.b == "parse" })
     }
 }
