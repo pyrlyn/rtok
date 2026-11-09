@@ -2,7 +2,7 @@
 // pair of inclusive bounds per range. Built from rustc char::is_alphanumeric itself.
 package rtok.store
 
-@Suppress("MagicNumber")
+@Suppress("ktlint:standard:argument-list-wrapping", "MagicNumber")
 private val ALNUM_RANGES =
     intArrayOf(
         48, 57, 65, 90, 97, 122, 170, 170,
