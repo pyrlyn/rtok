@@ -14,8 +14,9 @@ import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import rtok.sys.PipedChild
 import rtok.sys.extension
+import rtok.sys.join
 import rtok.sys.readToString
-import rtok.sys.removeFile
+import rtok.sys.removeDirAll
 import kotlin.concurrent.AtomicLong
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.TimeSource
@@ -29,8 +30,11 @@ class OpenDoc(
 class LspSession internal constructor(
     internal val child: PipedChild,
     val root: String,
-    private val errPath: String,
+    /** The private directory holding the server's [STDERR] log, removed by [close]; empty when there is none. */
+    private val errDir: String,
 ) : AutoCloseable {
+    private val errPath = if (errDir.isEmpty()) "" else join(errDir, STDERR)
+
     /** Writes one frame to the server; false once its input is closed (test seam for a dead queue). */
     internal var sink: (ByteArray) -> Boolean = child::send
     private val parser = LspWire.Parser()
@@ -203,7 +207,7 @@ class LspSession internal constructor(
         opened.remove(uri)
     }
 
-    /** `exit`, kill, reap, and the stderr file removed (Rust `Drop`); never waits for a peer that stopped reading. */
+    /** `exit`, kill, reap, and the stderr log removed (Rust `Drop`); never waits for a peer that stopped reading. */
     override fun close() {
         runCatching {
             sink(
@@ -216,10 +220,13 @@ class LspSession internal constructor(
             )
         }
         child.kill()
-        if (errPath.isNotEmpty()) runCatching { removeFile(errPath) }
+        if (errDir.isNotEmpty()) runCatching { removeDirAll(errDir) }
     }
 
     companion object {
+        /** The server's stderr log inside its private directory. */
+        internal const val STDERR = "stderr"
+
         private val lock = rtok.sys.Mutex()
         private var cached: Pair<String, LspSession>? = null
 
@@ -232,7 +239,7 @@ class LspSession internal constructor(
                 val key = Index.canon(root)
                 val cur = cached
                 if (cur == null || cur.first != key || cur.second.child.tryWait() != null) {
-                    // Reap the old server first: both share one stderr path.
+                    // Reap the old server first, so two never run at once.
                     cur?.second?.close()
                     cached = null
                     cached = key to Lsp.spawn(root)
@@ -248,7 +255,7 @@ class LspSession internal constructor(
             s: LspSession,
         ) = lock.hold { cached = key to s }
 
-        /** Stops the cached language server and removes its stderr file (lsp.rs `shutdown`). */
+        /** Stops the cached language server and removes its stderr log (lsp.rs `shutdown`). */
         fun shutdown() =
             lock.hold {
                 cached?.second?.close()

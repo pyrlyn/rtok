@@ -92,7 +92,8 @@ object Resident {
     fun bindPrivate(ep: String): Int? {
         val parent = rtok.sys.parent(ep) ?: "."
         val dir = "$parent/.hs${pid()}"
-        removeDirAll(dir)
+        // A crashed run's leftover; if it cannot go, the mkdir below fails and the caller gets null as before.
+        runCatching { removeDirAll(dir) }
         if (mkdir(dir, 0x1c0u) != 0) return null // 0o700
         val tmp = "$dir/s"
         var fd = bindUnix(tmp)

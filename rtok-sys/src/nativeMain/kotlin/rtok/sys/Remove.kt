@@ -1,19 +1,13 @@
-// `fs::remove_dir_all` with its errors (the shelled `removeDirAll` ignores them), and the `trash` crate's delete
-// (per OS: Trash.macos.kt, Trash.linux.kt).
+// `fs::remove_dir_all` (the walk is `removeDirAll`'s, which also tolerates a missing root), and the `trash` crate's
+// delete (per OS: Trash.macos.kt, Trash.linux.kt).
 
 package rtok.sys
 
-import platform.posix.errno
-import platform.posix.rmdir
-
-/** Removes [path] and everything under it; a symlink inside is removed, never followed. @throws IoException */
+/** Removes [path] and everything under it; a symlink inside is removed, never followed. @throws IoException, also when [path] is missing */
 fun removeTree(path: String) {
-    if (symlinkMeta(path).kind == EntryKind.Dir) {
-        for (name in readDir(path)) removeTree(join(path, name))
-        if (rmdir(path) != 0) throw IoException(ioKind(errno), "rmdir $path: errno $errno")
-    } else {
-        removeFile(path)
-    }
+    // Rust's remove_dir_all fails on a missing root; removeDirAll does not.
+    symlinkMeta(path)
+    removeDirAll(path)
 }
 
 /** Moves [path] to the user's trash. @throws IoException */

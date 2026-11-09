@@ -40,10 +40,8 @@ class CommandExtractor(
         maxNotes: Int,
     ): List<Candidate> {
         // The transcript goes in as a file: a file cannot deadlock against a full stdout pipe.
-        val input = "${tempDir()}/rtok-extract-${pid()}-${kotlin.time.TimeSource.Monotonic.markNow().hashCode()}-${counter++}.txt"
-        writeString(input, transcript)
-        try {
-            val (out, _) =
+        val (out, _) =
+            withTempFile("rtok-extract-", "transcript.txt", transcript.encodeToByteArray()) { input ->
                 try {
                     ProgressRunner("", argv[0], argv.drop(1))
                         .quiet()
@@ -53,15 +51,9 @@ class CommandExtractor(
                 } catch (e: Exception) {
                     throw IllegalStateException("running the extractor `${argv[0]}`: ${e.message}", e)
                 }
-            check(out.exitCode == 0) { "the extractor `${argv[0]}` exited with ${out.exitCode?.let { "exit status: $it" } ?: "signal"}" }
-            return parseCandidates(out.stdout.decodeToString(), maxNotes)
-        } finally {
-            runCatching { removeFile(input) }
-        }
-    }
-
-    private companion object {
-        var counter = 0
+            }
+        check(out.exitCode == 0) { "the extractor `${argv[0]}` exited with ${out.exitCode?.let { "exit status: $it" } ?: "signal"}" }
+        return parseCandidates(out.stdout.decodeToString(), maxNotes)
     }
 }
 

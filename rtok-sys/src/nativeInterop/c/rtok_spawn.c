@@ -126,3 +126,12 @@ int rtok_set_times(const char *path, long long sec, long nsec) {
     for (int i = 0; i < 2; i++) { t[i].tv_sec = (time_t)sec; t[i].tv_nsec = nsec; }
     return utimensat(AT_FDCWD, path, t, 0);
 }
+int rtok_cwd_fd(void) { return AT_FDCWD; }
+int rtok_open_dir_at(int dirfd, const char *name) {
+    return openat(dirfd, name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+}
+int rtok_type_at(int dirfd, const char *name) {
+    struct stat st;
+    return fstatat(dirfd, name, &st, AT_SYMLINK_NOFOLLOW) == 0 ? (int)(st.st_mode & S_IFMT) : -1;
+}
+int rtok_unlink_at(int dirfd, const char *name, int dir) { return unlinkat(dirfd, name, dir ? AT_REMOVEDIR : 0); }

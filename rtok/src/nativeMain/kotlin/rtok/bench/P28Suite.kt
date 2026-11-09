@@ -16,11 +16,9 @@ import rtok.store.archiveSummaries
 import rtok.store.getArchive
 import rtok.store.usageByLaneModelTier
 import rtok.sys.ProgressRunner
-import rtok.sys.createDirAll
+import rtok.sys.createTempDir
 import rtok.sys.exists
-import rtok.sys.pid
 import rtok.sys.removeDirAll
-import rtok.sys.tempDir
 import rtok.sys.writeString
 
 internal data class P28Arm(
@@ -207,25 +205,27 @@ internal object P28Suite {
         arm: P28Arm,
         timeoutS: Long,
     ): Pair<Usage, String> {
-        val none = Usage() to ""
-        val dir = "${tempDir()}/rtok-p28-${pid()}-${arm.id}"
-        val ready =
-            exists(arm.settings) && live() &&
-                runCatching {
-                    removeDirAll(dir)
-                    createDirAll(dir)
-                    bodies.forEach { writeString("$dir/${it.id}.txt", it.text) }
-                }.isSuccess
-        if (!ready) return none
-        val cmd =
-            ProgressRunner(
-                "running claude -p…",
-                "claude",
-                listOf("-p", prompt, "--output-format", "json", "--settings", arm.settings, "--allowedTools", "Read,Bash(rtok expand:*)"),
-            ).quiet().cwd(dir)
-        val out = runBounded(cmd, maxOf(1, timeoutS) * MS)
-        runCatching { removeDirAll(dir) }
-        return out?.let { parseUsage(it) to parseJson(it).text("result") } ?: none
+        // A fresh private directory per run: a fixed name in the shared temp dir can be planted or raced.
+        val dir = if (exists(arm.settings) && live()) runCatching { createTempDir("rtok-p28-${arm.id}-") }.getOrNull() else null
+        val out =
+            dir?.let { d ->
+                try {
+                    if (runCatching { bodies.forEach { writeString("$d/${it.id}.txt", it.text) } }.isFailure) {
+                        null
+                    } else {
+                        val cmd =
+                            ProgressRunner(
+                                "running claude -p…",
+                                "claude",
+                                listOf("-p", prompt, "--output-format", "json", "--settings", arm.settings, "--allowedTools", "Read,Bash(rtok expand:*)"),
+                            ).quiet().cwd(d)
+                        runBounded(cmd, maxOf(1, timeoutS) * MS)
+                    }
+                } finally {
+                    runCatching { removeDirAll(d) }
+                }
+            }
+        return out?.let { parseUsage(it) to parseJson(it).text("result") } ?: (Usage() to "")
     }
 
     /** The arm proxy's store at `home/rtok.db`; all zeros when it does not exist yet (never created here). */

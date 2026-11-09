@@ -211,7 +211,8 @@ private fun words(s: String) = s.split(WS).filter { it.isNotEmpty() }
 
 /** T57.1: keyed only when every segment's stem is read-only and no writer marker is present. */
 internal fun readOnly(cmd: String): Boolean =
-    !cmd.contains("$(") && !cmd.contains('`') &&
+    // `<(…)` runs a command just as `$(…)` does; `>(…)` already reads as a redirect.
+    !cmd.contains("$(") && !cmd.contains('`') && !cmd.contains("<(") &&
         segments(afterCdPrefix(cmd)).map { it.trim() }.filter { it.isNotEmpty() }.all(::segmentReadOnly)
 
 /** Splits at every unquoted `|`, `;` and `&`. */
@@ -244,11 +245,23 @@ private fun segmentReadOnly(seg: String) = stemReadOnly(seg) && !writerMarker(se
 
 private val LISTING = setOf("-a", "-r", "-v", "-vv", "--all", "--remotes", "--verbose", "--list", "--show-current")
 
+private val RG_RUNS = setOf("--pre", "--hostname-bin")
+
 private fun stemReadOnly(seg: String): Boolean {
     val w = words(seg)
     return when (cmdStem(w.firstOrNull() ?: "")) {
-        "ls", "cat", "head", "tail", "grep", "rg", "find", "tree", "wc", "jq" -> {
+        "ls", "cat", "head", "tail", "grep", "find", "wc", "jq" -> {
             true
+        }
+
+        // `-o <file>` writes the listing to a file; `-R` reruns tree with `-o 00Tree.html` in every directory.
+        "tree" -> {
+            Shlex.split(seg)?.drop(1)?.none { it.length > 1 && it[0] == '-' && it[1] != '-' && ('o' in it || 'R' in it) } == true
+        }
+
+        // `--pre <cmd>` runs a program on every file searched, `--hostname-bin <cmd>` one for hyperlinks.
+        "rg" -> {
+            Shlex.split(seg)?.none { it.substringBefore('=') in RG_RUNS } == true
         }
 
         // T557: a script can write (`w`) or run (`e`) from inside its quotes.

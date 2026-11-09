@@ -97,7 +97,8 @@ class PluginCache(
                 removeDirAll(dir)
                 publish(tmp, dir)
             } finally {
-                removeDirAll(tmp)
+                // Cleanup must not mask the unpack error or fail a publish that already happened.
+                runCatching { removeDirAll(tmp) }
             }
         }
         return dir
