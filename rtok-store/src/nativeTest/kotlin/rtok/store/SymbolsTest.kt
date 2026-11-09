@@ -124,4 +124,20 @@ class SymbolsTest {
         assertEquals(SymbolSpan(10u, 90u, "h", "sha"), s.symbolSpan("/wt", "a.rs", "parse", "function", 1))
         assertTrue(s.symbolFts("/wt", "input", 10).any { it.b == "parse" })
     }
+
+    @Test fun deleteSymbolsMissingClearsStaleMarksOutsideKeep() {
+        s.replaceSymbols("/r", "a.rs", "s", 1L to 1L, listOf(symRow("f", 1, true)))
+        s.markSymbolsStaleIn("/r", "a.rs")
+        assertEquals(listOf("a.rs"), s.symbolStalePaths("/r"))
+        s.deleteSymbolsMissing("/r", setOf("b.rs"))
+        assertEquals(emptyList(), s.symbolStalePaths("/r"))
+    }
+
+    @Test fun symbolPendingSkipsStalePathsWhoseFileIsGone() {
+        val dir = tmpDir("t-pending-gone")
+        s.replaceSymbols("/r", "a.rs", "s", 1L to 1L, listOf(symRow("f", 1, true)))
+        s.markSymbolsStaleIn("/r", "a.rs")
+        assertEquals(emptyList(), s.symbolPending("/r", dir))
+        removeDirAll(dir)
+    }
 }

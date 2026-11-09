@@ -153,7 +153,7 @@ fun Store.symbolPending(
     root: String,
     rootPath: String,
 ): List<String> {
-    val pending = symbolStalePaths(root).toHashSet()
+    val pending = symbolStalePaths(root).filter { fileStat(join(rootPath, it)) != null }.toHashSet()
     for ((path, s) in symbolStats(root)) {
         val stat = fileStat(join(rootPath, path)) ?: (0L to 0L)
         if (stat != (s.second to s.third) && stat != (0L to 0L)) pending += path
@@ -259,6 +259,8 @@ fun Store.deleteSymbolsMissing(
     keep: Set<String>,
 ): Int =
     conn { db ->
+        val stale = db.query("SELECT path FROM symbol_stale WHERE root = ?", root) { it.string(0) }.filter { it !in keep }
+        stale.chunked(NAME_CHUNK).forEach { c -> db.execute("DELETE FROM symbol_stale WHERE root = ? AND path IN (${inList(c.size)})", root, *c.toTypedArray()) }
         if (keep.isEmpty()) return@conn db.execute("DELETE FROM symbols WHERE root = ?", root)
         val missing = db.query("SELECT DISTINCT path FROM symbols WHERE root = ?", root) { it.string(0) }.filter { it !in keep }
         missing.chunked(NAME_CHUNK).sumOf { c -> db.execute("DELETE FROM symbols WHERE root = ? AND path IN (${inList(c.size)})", root, *c.toTypedArray()) }
