@@ -436,5 +436,5 @@ Remote setup, sync, push, pull and migrate are not MCP tools: they are the user'
 | T8.7 | Skills in repo and packaged, `docs/tasks.md`, the package README, rtok README, PORTING, plan README decision | T8.2, T8.3, T8.9 |
 
 T8.8 changes another repository: the package lands by a PR in `pyrlyn/packages`, and rtok's
-CI, which pins that repository at a tag, needs a new tag and a bumped `ref` (a version bump,
-so it waits for the creator's OK).
+CI, which pins that repository at a tag, needs a new tag and a bumped `ref`; the creator
+approved both.
