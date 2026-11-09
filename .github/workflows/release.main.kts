@@ -113,6 +113,7 @@ workflow(
             "KOTLIN_SNAPSHOT_DIR" to "\${{ github.workspace }}/packages/kotlin-snapshot",
             "KOTLIN_WEBGL_DIR" to "\${{ github.workspace }}/packages/kotlin-webgl",
             "KOTLIN_KIT_DIR" to "\${{ github.workspace }}/packages/kotlin-kit",
+            "KOTLIN_TASKBOARD_DIR" to "\${{ github.workspace }}/packages/kotlin-taskboard",
             "VERSION_FILE" to "rtok/src/commonMain/kotlin/rtok/Version.kt",
         ),
     sourceFile = __FILE__,

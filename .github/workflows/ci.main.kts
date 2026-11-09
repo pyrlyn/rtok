@@ -27,7 +27,7 @@ import io.github.typesafegithub.workflows.yaml.Preamble
 
 // Shared builds from github.com/pyrlyn/packages, checked out by setUp; absolute, since the
 // included kotlin-wasm build reads the same variables relative to its own directory.
-// KOTLIN_KIT_DIR is read once settings.gradle.kts includes packages/kotlin-kit.
+// KOTLIN_KIT_DIR and KOTLIN_TASKBOARD_DIR are read once settings.gradle.kts includes their builds.
 val sharedBuilds =
     mapOf(
         "SHARED_SETTINGS_DIR" to "\${{ github.workspace }}/packages/shared-settings",
@@ -35,6 +35,7 @@ val sharedBuilds =
         "KOTLIN_SNAPSHOT_DIR" to "\${{ github.workspace }}/packages/kotlin-snapshot",
         "KOTLIN_WEBGL_DIR" to "\${{ github.workspace }}/packages/kotlin-webgl",
         "KOTLIN_KIT_DIR" to "\${{ github.workspace }}/packages/kotlin-kit",
+        "KOTLIN_TASKBOARD_DIR" to "\${{ github.workspace }}/packages/kotlin-taskboard",
     )
 
 fun JobBuilder<*>.setUp() {

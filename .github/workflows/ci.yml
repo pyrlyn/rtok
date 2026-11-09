@@ -50,6 +50,7 @@ jobs:
       KOTLIN_SNAPSHOT_DIR: '${{ github.workspace }}/packages/kotlin-snapshot'
       KOTLIN_WEBGL_DIR: '${{ github.workspace }}/packages/kotlin-webgl'
       KOTLIN_KIT_DIR: '${{ github.workspace }}/packages/kotlin-kit'
+      KOTLIN_TASKBOARD_DIR: '${{ github.workspace }}/packages/kotlin-taskboard'
     timeout-minutes: 120
     steps:
     - id: 'step-0'
@@ -82,6 +83,7 @@ jobs:
       KOTLIN_SNAPSHOT_DIR: '${{ github.workspace }}/packages/kotlin-snapshot'
       KOTLIN_WEBGL_DIR: '${{ github.workspace }}/packages/kotlin-webgl'
       KOTLIN_KIT_DIR: '${{ github.workspace }}/packages/kotlin-kit'
+      KOTLIN_TASKBOARD_DIR: '${{ github.workspace }}/packages/kotlin-taskboard'
     timeout-minutes: 120
     steps:
     - id: 'step-0'
