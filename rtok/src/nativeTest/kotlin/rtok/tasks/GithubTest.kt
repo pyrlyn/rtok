@@ -97,7 +97,7 @@ class GithubTest {
         assertEquals(json("""{"sub_issue_id":900}"""), fake.bodies("POST", "$ISSUES/5/sub_issues").single())
         assertEquals("Task 9", task.title, "read back from the issue title")
         assertEquals(tid("A2"), task.parent)
-        assertEquals(Status.Open, task.status)
+        assertEquals(Status.Todo, task.status)
         assertEquals(1_791_367_200, task.createdAt)
         val x = task.external!!
         assertEquals(9L to "I_kw9", x.number to x.nodeId)
@@ -161,7 +161,7 @@ class GithubTest {
         }
         assertEquals(Status.InProgress, setStatus(gh, tid("A1"), Status.InProgress, false).status)
         assertEquals(Status.Done, setStatus(gh, tid("A1"), Status.Done, false).status)
-        assertEquals(Status.Open, setStatus(gh, tid("A2"), Status.Open, false).status)
+        assertEquals(Status.Todo, setStatus(gh, tid("A2"), Status.Todo, false).status)
         assertEquals(Status.Closed, setStatus(gh, tid("A2"), Status.Closed, false).status)
         val one = fake.bodies("PATCH", "$ISSUES/1")
         assertEquals(json("""{"labels":["rtok","rtok:A1","bug","$IN_PROGRESS_LABEL"],"state":"open"}"""), one[0])

@@ -49,6 +49,7 @@ private class Fixed(
     override fun writeStatus(
         id: TaskId,
         status: Status,
+        report: String?,
     ): Task = error("sync never writes")
 
     override fun maxId(prefix: String): TaskId? = error("unused")
@@ -70,7 +71,7 @@ class TaskSyncTest {
         assertEquals(7u to "A8", r.counter to r.next.toString())
         assertEquals(listOf(id("A7"), id("A7.2")), r.aboveCounter)
         assertEquals(listOf(Raised(null, 3u, 7u), Raised(id("A7"), 0u, 2u)), r.raised)
-        assertEquals("disk: next id A8\nraised top level: 3 -> 7\nraised subtasks of A7: 0 -> 2\nabove the counter: A7, A7.2\n", syncText(r))
+        assertEquals("files: next id A8\nraised top level: 3 -> 7\nraised subtasks of A7: 0 -> 2\nabove the counter: A7, A7.2\n", syncText(r))
         assertEquals(id("A8"), store.allocateTaskId("p", "A", null))
         assertEquals(id("A7.3"), store.allocateTaskId("p", "A", id("A7")))
         val again = syncTasks(p, store)

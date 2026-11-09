@@ -9,13 +9,16 @@ import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonObject
 import rtok.config.ProjectRoot
 import rtok.config.Tasks
-import rtok.config.TasksDisk
+import rtok.config.contain
 import rtok.store.Store
 import rtok.store.TaskId
 import rtok.store.agentLastSeen
 import rtok.store.allocateTaskId
 import rtok.store.clearTaskClaim
 import rtok.store.seedTaskCounter
+import rtok.sys.IoException
+import rtok.sys.isDir
+import rtok.sys.readDir
 
 /** Creates tried when the id keeps turning out taken, before the last error is the answer. */
 private const val TAKEN_RETRIES = 3
@@ -28,20 +31,67 @@ data class Shown(
     fun toJson() = JsonObject(TASK_JSON.encodeToJsonElement(task).jsonObject + ("subtasks" to JsonArray(subtasks.map { JsonPrimitive(it.toString()) })))
 }
 
-/** The disk adapter for `[tasks.disk]`: `auto` follows what `dir` holds; an empty or new directory gets files. */
-fun diskAdapter(
-    cfg: TasksDisk,
-    root: String,
-): TaskAdapter {
-    val dir = "$root/${cfg.dir}"
-    val folders =
-        when (cfg.layout) {
-            "folders" -> true
-            "files" -> false
-            else -> PlanDirAdapter.holdsFolders(dir)
-        }
-    return if (folders) PlanDirAdapter(dir) else DiskAdapter(dir)
+private const val DEFAULT_DIR = "tasks"
+
+/** The legacy files layout's directory is named in `[tasks.disk]` too; the new key wins once it differs from its default. */
+internal fun Tasks.boardDirName() = if (dir != DEFAULT_DIR) dir else disk.dir
+
+/** `[tasks] layout`, else the old `[tasks.disk] layout` (`folders` is now `plan`). */
+internal fun Tasks.layoutName() =
+    if (layout != "auto") {
+        layout
+    } else if (disk.layout == "folders") {
+        "plan"
+    } else {
+        disk.layout
+    }
+
+/**
+ * The board directory: [Tasks.boardDirName] under the main checkout (`shared`, so every worktree sees one board) or under
+ * this checkout. A repository's `.rtok.toml` is untrusted, so the name may not climb out of the root.
+ */
+internal fun boardDirOf(
+    cfg: Tasks,
+    root: ProjectRoot,
+): String {
+    val name = cfg.boardDirName()
+    val absolute = name.startsWith("/") || name.startsWith("\\") || (name.length > 1 && name[1] == ':')
+    if (name.isBlank() || absolute || name.split('/', '\\').any { it == ".." }) {
+        bail("rtok task: [tasks] dir must be a relative path inside the repository, not ${rtok.plugin.sdk.debugStr(name)}")
+    }
+    val base = if (cfg.shared) root.main else root.checkout
+    try {
+        // Only the check matters: the path used stays as written, so a symlinked checkout keeps its own spelling.
+        contain(base, name)
+    } catch (e: IoException) {
+        bail("rtok task: [tasks] dir ${rtok.plugin.sdk.debugStr(name)} leaves the repository: ${e.message}")
+    }
+    return "$base/$name"
 }
+
+// `done/` is left out: the legacy files layout archives finished tasks there too.
+private val BOARD_ONLY_COLUMNS = listOf("todo", "in-progress", "closed")
+
+private fun namesIn(dir: String) = runCatching { readDir(dir) }.getOrDefault(emptyList())
+
+/** What `auto` makes of [dir]: a board for a new, empty or column-shaped directory, else the old layout it holds. */
+internal fun detectLayout(dir: String): String =
+    when {
+        namesIn(dir).any { it in BOARD_ONLY_COLUMNS && isDir("$dir/$it") } -> "board"
+        namesIn(dir).any { fileId("$dir/$it") != null } || namesIn("$dir/done").any { fileId("$dir/done/$it") != null } -> "files"
+        PlanDirAdapter.holdsFolders(dir) -> "plan"
+        else -> "board"
+    }
+
+private fun adapterFor(
+    layout: String,
+    dir: String,
+): TaskAdapter =
+    when (layout) {
+        "board" -> BoardAdapter(dir)
+        "files" -> DiskAdapter(dir)
+        else -> PlanDirAdapter(dir)
+    }
 
 /** The checkout, not main: `.rtok.toml` and the disk directory are checked-in files, so each worktree has its own. */
 internal fun checkoutOf(
@@ -56,6 +106,10 @@ class TaskProject(
     val root: String,
     val prefix: String,
     val adapter: TaskAdapter,
+    /** Where the tasks live: the board directory for the disk layouts, the checkout for a remote adapter. */
+    val boardDir: String = root,
+    /** `board`, `files` or `plan`, decided once per command; a remote adapter's name otherwise. */
+    val layout: String = adapter.name,
 ) {
     companion object {
         /** The project [cwd] belongs to, with the adapter `[tasks]` names. */
@@ -66,10 +120,15 @@ class TaskProject(
             val root = checkoutOf(cwd, "rtok task")
             val key = rtok.projectKey(cwd) ?: bail("rtok task: cannot tell which project this checkout is")
             val prefix = resolvePrefix(cfg.prefix, rtok.projectName(cwd))
+            var boardDir = root
+            var layout: String? = null
             val adapter =
                 when (cfg.adapter) {
                     "disk" -> {
-                        diskAdapter(cfg.disk, root)
+                        boardDir = boardDirOf(cfg, ProjectRoot.find(cwd) ?: bail("rtok task: not inside a git checkout"))
+                        val wanted = cfg.layoutName()
+                        layout = if (wanted == "auto") detectLayout(boardDir) else wanted
+                        adapterFor(layout, boardDir)
                     }
 
                     "github" -> {
@@ -90,7 +149,7 @@ class TaskProject(
                         bail("rtok task: unknown [tasks] adapter \"${cfg.adapter}\"")
                     }
                 }
-            return TaskProject(key, root, prefix, adapter)
+            return TaskProject(key, root, prefix, adapter, boardDir, layout ?: adapter.name)
         }
     }
 
@@ -136,16 +195,16 @@ class TaskProject(
     ): Task {
         if (report != null && (status == null || status.isActive)) bail("rtok task: a report goes with the status done or closed")
         if (status == null) return get(id)
-        val task = setStatus(adapter, id, status, force)
-        report?.let { adapter.writeReport(id, it) }
+        val task = setStatus(adapter, id, status, force, report.takeIf { adapter.movesWithReport() })
+        if (!adapter.movesWithReport()) report?.let { adapter.writeReport(id, it) }
         if (!status.isActive) store.clearTaskClaim(key, id.toString())
         return task
     }
 
     fun show(id: TaskId) = Shown(get(id), adapter.list(Filter(all = true, parent = id)).map { it.id })
 
-    /** Tasks that can be claimed, highest priority first, then by id. */
-    fun ready(store: Store): List<ReadyItem> = adapter.claimGuard().use { readyUnlocked(store) }
+    /** Tasks that can be claimed, highest priority first, then by id. A read: it takes no lock and creates nothing. */
+    fun ready(store: Store): List<ReadyItem> = readyUnlocked(store)
 
     internal fun readyUnlocked(store: Store): List<ReadyItem> = Ready.select(listAll()) { holderStale(store, it) }
 

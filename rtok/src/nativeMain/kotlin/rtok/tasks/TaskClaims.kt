@@ -53,8 +53,8 @@ fun TaskProject.release(
         if (!task.status.isActive) bail("$id is ${task.status} and cannot be released")
         val holder = task.assignee?.takeIf { it.isNotEmpty() }
         if (holder != null && holder != agent && !force) bail("$id is claimed by $holder; pass --force")
-        val changed = task.assignee != null || task.status != Status.Open
-        val open = task.copy(assignee = null, status = if (task.status == Status.InProgress) Status.Open else task.status)
+        val changed = task.assignee != null || task.status != Status.Todo
+        val open = task.copy(assignee = null, status = if (task.status == Status.InProgress) Status.Todo else task.status)
         val out = if (changed) adapter.save(open) else open
         store.clearTaskClaim(key, id.toString())
         out

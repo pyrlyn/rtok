@@ -11,10 +11,11 @@ import rtok.sys.readDir
 import rtok.sys.readToString
 import rtok.sys.removeFile
 
+@Suppress("TooManyFunctions")
 class DiskAdapter(
     private val dir: String,
 ) : TaskAdapter {
-    override val name = "disk"
+    override val name = "files"
 
     private val doneDir get() = "$dir/done"
 
@@ -94,9 +95,13 @@ class DiskAdapter(
 
     override fun get(id: TaskId) = find(id)?.second
 
+    /** Every task with the file it is in, the archive included: what `rtok task migrate` moves. */
+    internal fun entries(): List<Pair<String, Task>> = listOf(dir, doneDir).flatMap { scan(it).found }
+
     override fun writeStatus(
         id: TaskId,
         status: Status,
+        report: String?,
     ): Task =
         lockClaim(dir).use {
             val (old, task) = find(id) ?: bail("disk tasks: no task $id in $dir")

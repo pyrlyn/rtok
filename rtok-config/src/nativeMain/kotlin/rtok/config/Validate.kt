@@ -237,6 +237,10 @@ object Validate {
                     errors += "$at: $dotted must be one of ${TASK_ADAPTERS.joinToString(", ")}"
                 }
 
+                dotted == "tasks.layout" && s !in TASK_BOARD_LAYOUTS -> {
+                    errors += "$at: $dotted must be one of ${TASK_BOARD_LAYOUTS.joinToString(", ")}"
+                }
+
                 dotted == "tasks.disk.layout" && s !in TASK_LAYOUTS -> {
                     errors += "$at: $dotted must be one of ${TASK_LAYOUTS.joinToString(", ")}"
                 }

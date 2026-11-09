@@ -20,15 +20,15 @@ internal fun ExportReport.summary() = actions.map { "${it.kind} ${it.id}" }
 // Port of export.rs's tests.
 class ExportTest {
     @Test fun aMissingIssueIsCreatedAndAFinishedOneIsSkipped() {
-        val plan = exportDiff(listOf(localTask("R2.1", Status.Open), localTask("R1", Status.Open), localTask("R3", Status.Done)), emptyList(), true)
+        val plan = exportDiff(listOf(localTask("R2.1", Status.Todo), localTask("R1", Status.Todo), localTask("R3", Status.Done)), emptyList(), true)
         assertEquals(listOf("R1", "R2.1"), plan.actions.map { it.id.toString() }, "parents first")
         assertTrue(plan.actions.all { it.kind == ExportKind.Create })
         assertEquals(0 to 1, plan.unchanged to plan.skipped)
     }
 
     @Test fun driftNamesTheFieldsAndPicksTheKind() {
-        val open = localTask("R1", Status.Open).copy(description = "New\r\n")
-        val stale = localTask("R1", Status.Open)
+        val open = localTask("R1", Status.Todo).copy(description = "New\r\n")
+        val stale = localTask("R1", Status.Todo)
         val a = exportDiff(listOf(open), listOf(stale), true).actions
         assertEquals(ExportKind.Update to listOf("body"), a[0].kind to a[0].fields)
 
@@ -41,8 +41,8 @@ class ExportTest {
     }
 
     @Test fun aMatchingIssueIsUnchangedAndClaimsAreIgnoredWhenNotKept() {
-        val local = localTask("R1", Status.Open).copy(assignee = "agent", description = " Body\n")
-        val remote = localTask("R1", Status.Open)
+        val local = localTask("R1", Status.Todo).copy(assignee = "agent", description = " Body\n")
+        val remote = localTask("R1", Status.Todo)
         val plan = exportDiff(listOf(local), listOf(remote), false)
         assertTrue(plan.actions.isEmpty())
         assertEquals(1, plan.unchanged)
@@ -57,8 +57,8 @@ class ExportTest {
     }
 
     @Test fun markersCountAsClaims() {
-        val local = localTask("R1", Status.Open).copy(parallel = true, conflictsWith = listOf(tid("R2")))
-        assertEquals(listOf("conflicts", "parallel"), exportDiff(listOf(local), listOf(localTask("R1", Status.Open)), true).actions[0].fields)
+        val local = localTask("R1", Status.Todo).copy(parallel = true, conflictsWith = listOf(tid("R2")))
+        assertEquals(listOf("conflicts", "parallel"), exportDiff(listOf(local), listOf(localTask("R1", Status.Todo)), true).actions[0].fields)
     }
 
     @Test fun theReportReadsLikeAPlan() {

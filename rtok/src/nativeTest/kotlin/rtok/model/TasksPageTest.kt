@@ -66,7 +66,7 @@ class TasksPageTest {
         val page = TasksPage.read(cfg, dir, true)
         assertEquals("ready", page.state, page.text)
         val board = page.board!!
-        assertEquals("disk", board.s("adapter"))
+        assertEquals("board", board.s("adapter"))
         val cli = disk.list(Filter(all = true))
         val cards = board["tasks"]!!.jsonArray.map { it.jsonObject }
         assertEquals(cli.map { it.id.toString() }, cards.map { it.s("id") }, "the same tasks in the same order")
@@ -76,7 +76,7 @@ class TasksPageTest {
         assertEquals("in-progress", card("A1").s("status"))
         assertEquals("agent-1", card("A1").s("assignee"))
         assertEquals("done", card("A2").s("status"))
-        assertEquals("open", card("A3").s("status"))
+        assertEquals("todo", card("A3").s("status"))
         val c = card("A1.1")
         assertEquals("A1", c.s("parent"))
         assertEquals(listOf("A2"), c["blocked_by"]!!.jsonArray.map { it.jsonPrimitive.content })
@@ -113,7 +113,7 @@ class TasksPageTest {
     }
 
     @Test fun theCapKeepsTheNewestFinishedTasksAndEveryActiveOne() {
-        val tasks = (1..60).map { task("A$it", Status.Done, it.toLong()) } + task("A61", Status.Open, 0) + task("A62", Status.Closed, 1)
+        val tasks = (1..60).map { task("A$it", Status.Done, it.toLong()) } + task("A61", Status.Todo, 0) + task("A62", Status.Closed, 1)
         val page = TasksPage.ready("disk", tasks)
         val cards = page.board!!["tasks"]!!.jsonArray.map { it.jsonObject }
         val done = cards.filter { it.s("status") == "done" }.map { it.s("id") }
@@ -126,7 +126,7 @@ class TasksPageTest {
     }
 
     @Test fun onlyAnHttpIssueLinkReachesThePage() {
-        fun link(url: String) = TasksPage.card(task("A1", Status.Open, 0).copy(external = ExternalRef("github", 1, url)))["external"]
+        fun link(url: String) = TasksPage.card(task("A1", Status.Todo, 0).copy(external = ExternalRef("github", 1, url)))["external"]
         assertEquals("1", (link("https://github.com/me/airtalk/issues/1") as JsonObject).s("number"))
         assertEquals(JsonNull, link("javascript:alert(1)"))
         assertEquals(JsonNull, link("data:text/html,x"))

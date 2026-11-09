@@ -29,7 +29,7 @@ private const val SET =
 /** The option names a status may have, the template default first. `Closed` shares `Done` (no "won't do" column). */
 internal fun optionNames(status: Status): List<String> =
     when (status) {
-        Status.Open -> listOf("Todo", "To do")
+        Status.Todo -> listOf("Todo", "To do")
         Status.InProgress -> listOf("In Progress")
         Status.Done, Status.Closed -> listOf("Done")
     }

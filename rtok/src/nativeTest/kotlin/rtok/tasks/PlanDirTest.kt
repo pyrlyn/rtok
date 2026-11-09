@@ -47,7 +47,7 @@ class PlanDirTest {
         val dir = tmp("flow")
         val disk = PlanDirAdapter(dir)
         val made = disk.create(new("Ship it", "Why it exists.\n\nCheck: run it."), id("T1"))
-        assertEquals("Ship it" to Status.Open, made.title to made.status)
+        assertEquals("Ship it" to Status.Todo, made.title to made.status)
         assertEquals("Why it exists.\n\nCheck: run it.", made.description)
         disk.create(new("Sub", ""), id("T1.1"))
         assertEquals(emptyList(), planErrors(dir), "created")
@@ -123,7 +123,7 @@ class PlanDirTest {
         val disk = PlanDirAdapter(dir)
         disk.create(new("A", ""), id("T1"))
         setStatus(disk, id("T1"), Status.Done, false)
-        val err = assertFailsWith<TaskException> { disk.writeStatus(id("T1"), Status.Open) }
+        val err = assertFailsWith<TaskException> { disk.writeStatus(id("T1"), Status.Todo) }
         assertTrue("done.md" in err.message!!, err.message)
         assertFailsWith<TaskException> { disk.writeReport(id("T9"), "x") }
         disk.create(new("B", ""), id("T2"))

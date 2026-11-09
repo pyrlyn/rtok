@@ -57,7 +57,7 @@ class GithubProjectTest {
         listOf("o_todo", "o_doing", "o_done").forEach { fake.setTo(it) }
         fake.issueOneExists()
         val gh = github(fake, 4)
-        for (s in listOf(Status.InProgress, Status.Done, Status.Closed, Status.Open)) gh.writeStatus(tid("A1"), s)
+        for (s in listOf(Status.InProgress, Status.Done, Status.Closed, Status.Todo)) gh.writeStatus(tid("A1"), s)
         assertEquals(1, fake.gqlHits("repositoryOwner"), "cached after the first write")
         assertEquals(4, fake.gqlHits("addProjectV2ItemById"))
         assertEquals(listOf(1, 1, 2), listOf("o_todo", "o_doing", "o_done").map { fake.gqlHits("\"option\":\"$it\"") }, "Closed shares Done")

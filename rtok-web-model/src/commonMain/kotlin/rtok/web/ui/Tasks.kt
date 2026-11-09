@@ -5,13 +5,13 @@ package rtok.web.ui
 import kotlinx.serialization.json.JsonObject
 
 /** Tasks.tsx `COLUMNS`: the statuses of `rtok task`, left to right, with their titles. */
-val TASK_COLUMNS = listOf("open" to "open", "in-progress" to "in progress", "done" to "done", "closed" to "closed")
+val TASK_COLUMNS = listOf("todo" to "todo", "in-progress" to "in progress", "done" to "done", "closed" to "closed")
 
 /** `rtok task`'s default priority, which the CLI leaves out of its output too. */
 const val DEFAULT_TASK_PRIORITY = 2
 
 /** Tasks.tsx `STATUS_TONE`. */
-val TASK_STATUS_TONE = mapOf("open" to "muted", "in-progress" to "info", "done" to "ok", "closed" to "muted")
+val TASK_STATUS_TONE = mapOf("todo" to "muted", "in-progress" to "info", "done" to "ok", "closed" to "muted")
 
 fun taskStatusTitle(id: String) = TASK_COLUMNS.firstOrNull { it.first == id }?.second ?: id
 
@@ -46,7 +46,7 @@ fun taskCard(o: JsonObject) =
     TaskCard(
         id = o.str("id").orEmpty(),
         title = o.str("title").orEmpty(),
-        status = o.str("status") ?: "open",
+        status = o.str("status") ?: "todo",
         parent = o.str("parent"),
         priority = o.num("priority")?.toInt() ?: DEFAULT_TASK_PRIORITY,
         assignee = o.str("assignee"),

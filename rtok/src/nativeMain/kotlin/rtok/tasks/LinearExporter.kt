@@ -140,7 +140,7 @@ internal fun linearStatus(stateType: String) =
         "started" -> Status.InProgress
         "completed" -> Status.Done
         "canceled", "duplicate" -> Status.Closed
-        else -> Status.Open
+        else -> Status.Todo
     }
 
 /** [url] is [LINEAR_API] (a fake in tests); [apiKey] is a personal key, sent bare; [team] the team's short key. */
@@ -198,7 +198,7 @@ class LinearExporter(
         // Types in order of preference: a team with no `unstarted` state keeps new work in `backlog`.
         val wanted =
             when (status) {
-                Status.Open -> listOf("unstarted", "backlog")
+                Status.Todo -> listOf("unstarted", "backlog")
                 Status.InProgress -> listOf("started")
                 Status.Done -> listOf("completed")
                 Status.Closed -> listOf("canceled")

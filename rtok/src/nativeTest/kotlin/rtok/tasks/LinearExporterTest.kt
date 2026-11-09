@@ -81,7 +81,7 @@ class LinearExporterTest {
         fake.op("query Issues", issues())
         fake.op("mutation LabelCreate", data("""{"issueLabelCreate":{"success":true,"issueLabel":{"id":"l-r1","name":"rtok:R1"}}}"""))
         fake.op("mutation IssueCreate", written("issueCreate", 7))
-        val tasks = listOf(local("R1", "Ship", Status.Open))
+        val tasks = listOf(local("R1", "Ship", Status.Todo))
         val first = runExport(exporter(fake), tasks, false)
         assertEquals(listOf("Create R1"), first.summary())
         assertEquals("https://linear.app/acme/issue/ENG-7", first.actions[0].url)
@@ -114,10 +114,10 @@ class LinearExporterTest {
         fake.op("mutation IssueUpdate", written("issueUpdate", 1))
         val tasks =
             listOf(
-                local("R1", "New title", Status.Open),
+                local("R1", "New title", Status.Todo),
                 local("R2", "Two", Status.Done),
                 local("R3", "Three", Status.Closed),
-                local("R4", "Four", Status.Open),
+                local("R4", "Four", Status.Todo),
                 local("R9", "Old history", Status.Done),
             )
         val report = runExport(exporter(fake), tasks, false)
@@ -152,7 +152,7 @@ class LinearExporterTest {
     @Test fun dryRunListsTheWritesAndSendsNone() {
         val fake = FakeHttp()
         fake.op("query Issues", issues(issue(1, "R1", "Old", "unstarted")))
-        val report = runExport(exporter(fake), listOf(local("R1", "New", Status.Open), local("R2", "Fresh", Status.Open)), true)
+        val report = runExport(exporter(fake), listOf(local("R1", "New", Status.Todo), local("R2", "Fresh", Status.Todo)), true)
         assertTrue(report.dryRun)
         assertEquals(listOf("Update R1", "Create R2"), report.summary())
         assertEquals(listOf("title"), report.actions[0].fields)
@@ -177,7 +177,7 @@ class LinearExporterTest {
         val fake = FakeHttp()
         fake.op("query Issues", issues())
         fake.op("query Team", data("""{"teams":{"nodes":[{"id":"team-1","states":{"nodes":[{"id":"s-done","type":"completed","position":0.0}]}}]}}"""))
-        val text = assertFailsWith<TaskException> { runExport(exporter(fake), listOf(local("R1", "Go", Status.Open)), false) }.message!!
+        val text = assertFailsWith<TaskException> { runExport(exporter(fake), listOf(local("R1", "Go", Status.Todo)), false) }.message!!
         assertTrue("linear export: create R1 failed after 0 of 1 writes" in text && "no workflow state of type unstarted or backlog" in text, text)
     }
 }

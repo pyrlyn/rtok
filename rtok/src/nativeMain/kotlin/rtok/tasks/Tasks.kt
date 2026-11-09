@@ -54,26 +54,33 @@ fun resolvePrefix(
 enum class Status(
     val str: String,
 ) {
-    Open("open"),
+    Todo("todo"),
     InProgress("in-progress"),
     Done("done"),
     Closed("closed"),
     ;
 
     /** Still in the plan: listed by default and blocking a parent from closing. */
-    val isActive get() = this == Open || this == InProgress
+    val isActive get() = this == Todo || this == InProgress
 
     override fun toString() = str
 
     companion object {
         /** Also takes the checklist words Claude Code and Codex use (`pending`, `in_progress`, `completed`). */
         fun parse(s: String): Status =
-            when (val w = s.trim().lowercase().replace('_', '-')) {
-                "open", "todo", "pending" -> Open
-                "in-progress" -> InProgress
+            when (
+                val w =
+                    s
+                        .trim()
+                        .lowercase()
+                        .replace('_', '-')
+                        .replace(' ', '-')
+            ) {
+                "todo", "open", "pending" -> Todo
+                "in-progress", "doing" -> InProgress
                 "done", "completed" -> Done
-                "closed", "wontdo", "won't-do", "not-planned" -> Closed
-                else -> bail("unknown task status ${debugStr(w)}: use open, in-progress, done or closed")
+                "closed", "wontdo", "won't-do", "not-planned", "dropped" -> Closed
+                else -> bail("unknown task status ${debugStr(w)}: use todo, in-progress, done or closed")
             }
     }
 
@@ -125,6 +132,8 @@ data class Task(
     @SerialName("blocked_by") val blockedBy: List<TaskId> = emptyList(),
     @SerialName("conflicts_with") val conflictsWith: List<TaskId> = emptyList(),
     val parallel: Boolean = false,
+    /** The closing report. Only the board layout stores it; the others drop it. */
+    val report: String? = null,
 ) {
     companion object {
         /** An open task with default priority and nobody assigned. `parent` follows the id. */
@@ -133,7 +142,7 @@ data class Task(
             title: String,
             description: String,
             now: Long,
-        ) = Task(id = id, title = title, description = description, status = Status.Open, parent = id.parent(), createdAt = now, updatedAt = now)
+        ) = Task(id = id, title = title, description = description, status = Status.Todo, parent = id.parent(), createdAt = now, updatedAt = now)
     }
 }
 
