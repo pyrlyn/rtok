@@ -23,7 +23,7 @@ object Ready {
                 val isStale = holder != null && stale(holder)
                 val claimable =
                     when (task.status) {
-                        Status.Open -> holder == null || isStale
+                        Status.Todo -> holder == null || isStale
                         Status.InProgress -> isStale
                         Status.Done, Status.Closed -> false
                     }

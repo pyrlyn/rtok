@@ -89,7 +89,7 @@ class TaskProjectTest {
         val shown = p.show(id("A7"))
         assertEquals(listOf(sub.id), shown.subtasks)
         assertTrue("subtasks: A7.1" in taskDetails(shown))
-        assertEquals("A7      open         Pulled\n  A7.1  open         Leaf\nA8      open         First\n", taskTable(p.adapter.list(Filter())))
+        assertEquals("A7      todo         Pulled\n  A7.1  todo         Leaf\nA8      todo         First\n", taskTable(p.adapter.list(Filter())))
         removeDirAll(dir)
     }
 
@@ -173,6 +173,7 @@ class TaskProjectTest {
         override fun writeStatus(
             id: TaskId,
             status: Status,
+            report: String?,
         ) = inner.writeStatus(id, status)
 
         override fun maxId(prefix: String) = inner.maxId(prefix)

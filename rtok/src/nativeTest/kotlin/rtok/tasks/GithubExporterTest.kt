@@ -24,7 +24,7 @@ class GithubExporterTest {
 
     @Test fun aNewTaskBecomesAnIssueAndASecondRunSendsNothing() {
         val fake = FakeHttp()
-        val tasks = listOf(local("R1", 7, Status.Open))
+        val tasks = listOf(local("R1", 7, Status.Todo))
         listing(fake, "[]")
         fake.byLabel("rtok:R1", "all", "[]")
         fake.on("POST", ISSUES) { status(201, issue(7, "R1", "open").toString()) }
@@ -51,10 +51,10 @@ class GithubExporterTest {
         for (n in 1..4) fake.on("PATCH", "$ISSUES/$n") { ok(issue(n, "R$n", "open").toString()) }
         val tasks =
             listOf(
-                localTask("R1", Status.Open, "New title", "Why."),
+                localTask("R1", Status.Todo, "New title", "Why."),
                 local("R2", 2, Status.Done),
                 local("R3", 3, Status.Closed),
-                local("R4", 4, Status.Open),
+                local("R4", 4, Status.Todo),
                 local("R9", 9, Status.Done),
             )
         val report = runExport(exporter(fake), tasks, false)
@@ -72,7 +72,7 @@ class GithubExporterTest {
     @Test fun dryRunListsTheWritesAndSendsNone() {
         val fake = FakeHttp()
         listing(fake, arr(issue(1, "R1", "open")))
-        val report = runExport(exporter(fake), listOf(localTask("R1", Status.Open, "New", "Why."), local("R2", 2, Status.Open)), true)
+        val report = runExport(exporter(fake), listOf(localTask("R1", Status.Todo, "New", "Why."), local("R2", 2, Status.Todo)), true)
         assertTrue(report.dryRun)
         assertEquals(listOf("Update R1", "Create R2"), report.summary())
         assertEquals(listOf("title"), report.actions[0].fields)
@@ -101,7 +101,7 @@ class GithubExporterTest {
         listing(fake, "[]")
         fake.byLabel("rtok:R1", "all", "[]")
         fake.on("POST", ISSUES) { status(422, """{"message":"Validation Failed"}""") }
-        val e = assertFailsWith<TaskException> { runExport(exporter(fake), listOf(local("R1", 1, Status.Open)), false) }
+        val e = assertFailsWith<TaskException> { runExport(exporter(fake), listOf(local("R1", 1, Status.Todo)), false) }
         val text = e.message!!
         assertTrue("github export: create R1 failed after 0 of 1 writes" in text && ISSUES in text && "Validation Failed" in text, text)
         assertTrue("test-token" !in text, "no token in errors")

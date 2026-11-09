@@ -65,7 +65,7 @@ fun TaskProject.setParallel(
 }
 
 private fun TaskProject.needMarkers() {
-    if (!adapter.storesMarkers()) bail("${adapter.name} tasks cannot store conflict or parallel markers yet: use the disk adapter")
+    if (!adapter.storesMarkers()) bail("${adapter.name} tasks cannot store conflict or parallel markers yet: use the board layout")
 }
 
 /** `0` is highest, [PRIORITY_MAX] lowest. The same level is not rewritten. */

@@ -7,6 +7,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.encodeToJsonElement
 import rtok.StderrLog
+import rtok.config.Config
 import rtok.store.StoreException
 import rtok.store.TaskId
 import rtok.sys.IoException
@@ -14,6 +15,7 @@ import rtok.sys.readToString
 import rtok.tasks.ClaimConflict
 import rtok.tasks.EXPORT_BACKENDS
 import rtok.tasks.ExportReport
+import rtok.tasks.MigrateReport
 import rtok.tasks.NewTask
 import rtok.tasks.Status
 import rtok.tasks.SyncReport
@@ -24,8 +26,10 @@ import rtok.tasks.TaskException
 import rtok.tasks.TaskOps
 import rtok.tasks.TaskProject
 import rtok.tasks.block
+import rtok.tasks.board
 import rtok.tasks.conflict
 import rtok.tasks.initTasks
+import rtok.tasks.migrateTasks
 import rtok.tasks.readyText
 import rtok.tasks.renderExport
 import rtok.tasks.setParallel
@@ -72,7 +76,11 @@ private fun <T> taskCall(body: () -> T): T =
 
 private fun cwd() = rtok.sys.cwd()
 
-private fun Invocation.open() = TaskProject.open(loadConfig().tasks, cwd())
+/** The project's adapter. The legacy `files` layout earns one warning per command, here and not in the MCP path. */
+private fun Invocation.open(cfg: Config = loadConfig()): TaskProject =
+    TaskProject.open(cfg.tasks, cwd()).also {
+        if (it.layout == "files") io.eprintln("warning: ${it.boardDir} uses the legacy flat task files; run `rtok task migrate` to turn it into a board")
+    }
 
 private fun id(s: String) = TaskId.parse(s)
 
@@ -88,7 +96,8 @@ internal fun taskWarning(
     message: String,
     spec: String? = StderrLog.spec(),
 ) {
-    if (StderrLog.enabled(StderrLog.Level.Warn, TASK_LOG_TARGET, spec)) io.eprintln(StderrLog.line(StderrLog.Level.Warn, TASK_LOG_TARGET, message))
+    // Without RUST_LOG a skipped task is still worth a line: silence is what hid broken task files.
+    if (spec == null || StderrLog.enabled(StderrLog.Level.Warn, TASK_LOG_TARGET, spec)) io.eprintln(StderrLog.line(StderrLog.Level.Warn, TASK_LOG_TARGET, message))
 }
 
 private const val TASK_LOG_TARGET = "rtok::tasks"
@@ -107,7 +116,7 @@ private val INIT =
                 val path = initTasks(cwd(), inv.value("adapter"), inv.value("prefix"))
                 // Re-read: the file just changed what `[tasks]` says.
                 val cfg = inv.loadConfig()
-                val project = TaskProject.open(cfg.tasks, cwd())
+                val project = inv.open(cfg)
                 val last = TaskOps.seed(cfg, project)
                 inv.io.println("$path: adapter ${cfg.tasks.adapter}, next id ${project.prefix}${last + 1u}")
             },
@@ -139,7 +148,7 @@ private val CREATE =
                     }
                 val new = NewTask(inv.requireArg("title"), description, inv.value("parent")?.let(::id))
                 val cfg = inv.loadConfig()
-                val t = TaskOps.create(cfg, TaskProject.open(cfg.tasks, cwd()), new)
+                val t = TaskOps.create(cfg, inv.open(cfg), new)
                 if (inv.flag("json")) inv.task(t) else inv.io.println(t.id.toString())
             },
     )
@@ -147,10 +156,10 @@ private val CREATE =
 private val LIST =
     CommandSpec(
         "list",
-        "The plan: open and in-progress tasks, subtasks under their parent",
+        "The plan: todo and in-progress tasks, subtasks under their parent",
         options =
             listOf(
-                OptSpec.Value("status", "Only these statuses (comma-separated: open, in-progress, done, closed)", "STATUS", repeat = true),
+                OptSpec.Value("status", "Only these statuses (comma-separated: todo, in-progress, done, closed)", "STATUS", repeat = true),
                 OptSpec.Flag("all", "Done and closed tasks too"),
                 OptSpec.Value("parent", "Only the subtasks of this task", "ID"),
                 OptSpec.Flag("json", "JSON instead of the table"),
@@ -183,16 +192,16 @@ private val STATUS =
         options =
             listOf(
                 OptSpec.Flag("force", "Finish a parent even though subtasks are still open"),
-                OptSpec.Value("report", "Closing report of a task set to done or closed (`-` for stdin); the plan/ layout keeps it in done.md", "TEXT"),
+                OptSpec.Value("report", "Closing report of a task set to done or closed (`-` for stdin); the board and plan/ layouts keep it, the files layout cannot", "TEXT"),
                 JSON,
             ),
-        args = listOf(ArgSpec("id", "Task id, e.g. `R12` or `R2.1`"), ArgSpec("status", "open, in-progress, done or closed", required = false)),
+        args = listOf(ArgSpec("id", "Task id, e.g. `R12` or `R2.1`"), ArgSpec("status", "todo, in-progress, done or closed", required = false)),
         action =
             action { inv ->
                 val status = inv.arg("status")?.let(Status::parse)
                 val report = inv.value("report")?.let { if (it == "-") inv.io.readStdin().decodeToString() else it }
                 val cfg = inv.loadConfig()
-                val t = TaskOps.setStatus(cfg, TaskProject.open(cfg.tasks, cwd()), id(inv.requireArg("id")), status, inv.flag("force"), report)
+                val t = TaskOps.setStatus(cfg, inv.open(cfg), id(inv.requireArg("id")), status, inv.flag("force"), report)
                 if (inv.flag("json")) inv.task(t) else inv.io.println("${t.id}: ${t.status}")
             },
     )
@@ -205,7 +214,7 @@ private val NEXT =
         action =
             action { inv ->
                 val cfg = inv.loadConfig()
-                val next = TaskOps.next(cfg, TaskProject.open(cfg.tasks, cwd()))
+                val next = TaskOps.next(cfg, inv.open(cfg))
                 when {
                     inv.flag("json") -> inv.json(next?.let { TASK_JSON.encodeToJsonElement(it) } ?: JsonNull)
                     next != null -> inv.io.println("${next.id}  ${next.title}")
@@ -222,7 +231,7 @@ private val READY =
         action =
             action { inv ->
                 val cfg = inv.loadConfig()
-                val ready = TaskOps.ready(cfg, TaskProject.open(cfg.tasks, cwd()))
+                val ready = TaskOps.ready(cfg, inv.open(cfg))
                 if (inv.flag("json")) inv.json(JsonArray(ready.map { it.toJson() })) else inv.io.out(readyText(ready))
             },
     )
@@ -239,7 +248,7 @@ private val CLAIM =
         action =
             action { inv ->
                 val cfg = inv.loadConfig()
-                val o = TaskOps.claim(cfg, TaskProject.open(cfg.tasks, cwd()), inv.arg("id"), inv.value("agent"))
+                val o = TaskOps.claim(cfg, inv.open(cfg), inv.arg("id"), inv.value("agent"))
                 when {
                     inv.flag("json") -> inv.json(o.toJson())
                     o.changed -> inv.io.println("${o.task.id}  ${o.task.title}")
@@ -251,13 +260,13 @@ private val CLAIM =
 private val RELEASE =
     CommandSpec(
         "release",
-        "Clear the assignee and set the task open. Only the holder, unless --force.",
+        "Clear the assignee and set the task to todo. Only the holder, unless --force.",
         options = listOf(AGENT, OptSpec.Flag("force", "Release a task held by someone else"), JSON),
         args = listOf(ArgSpec("id", "Task id, e.g. `R12`")),
         action =
             action { inv ->
                 val cfg = inv.loadConfig()
-                val t = TaskOps.release(cfg, TaskProject.open(cfg.tasks, cwd()), inv.requireArg("id"), inv.value("agent"), inv.flag("force"))
+                val t = TaskOps.release(cfg, inv.open(cfg), inv.requireArg("id"), inv.value("agent"), inv.flag("force"))
                 if (inv.flag("json")) inv.task(t) else inv.io.println("${t.id}: ${t.status}")
             },
     )
@@ -337,7 +346,7 @@ private val SYNC =
         action =
             action { inv ->
                 val cfg = inv.loadConfig()
-                val r = TaskOps.sync(cfg, TaskProject.open(cfg.tasks, cwd()))
+                val r = TaskOps.sync(cfg, inv.open(cfg))
                 if (inv.flag("json")) inv.io.println(REPORT_PRETTY.encodeToString(SyncReport.serializer(), r)) else inv.io.out(syncText(r))
             },
     )
@@ -363,9 +372,33 @@ private val EXPORT =
             },
     )
 
+private val BOARD =
+    CommandSpec(
+        "board",
+        "The board: one section per column (todo, in-progress, done, closed); done and closed show the 10 newest",
+        options = listOf(OptSpec.Flag("all", "Every done and closed task"), OptSpec.Flag("json", "JSON instead of the text")),
+        action =
+            action { inv ->
+                val view = inv.open().board(inv.flag("all"))
+                if (inv.flag("json")) inv.json(view.toJson()) else inv.io.out(view.text())
+            },
+    )
+
+private val MIGRATE =
+    CommandSpec(
+        "migrate",
+        "Turn the legacy flat task files into a board and rewrite the old `[tasks.disk]` keys in `.rtok.toml`",
+        options = listOf(OptSpec.Flag("dry-run", "Print the moves and write nothing"), OptSpec.Flag("json", "JSON instead of the text")),
+        action =
+            action { inv ->
+                val r = migrateTasks(inv.loadConfig().tasks, cwd(), inv.flag("dry-run"))
+                if (inv.flag("json")) inv.io.println(REPORT_PRETTY.encodeToString(MigrateReport.serializer(), r)) else inv.io.out(r.text())
+            },
+    )
+
 val TASK_CMD =
     CommandSpec(
         "task",
         "This project's tasks: numbered by rtok, stored by the `[tasks]` adapter",
-        subcommands = listOf(CREATE, LIST, SHOW, STATUS, NEXT, READY, CLAIM, RELEASE, DEP, PRIORITY, CONFLICT, PARALLEL, SYNC, EXPORT, INIT),
+        subcommands = listOf(CREATE, LIST, SHOW, BOARD, STATUS, NEXT, READY, CLAIM, RELEASE, DEP, PRIORITY, CONFLICT, PARALLEL, SYNC, EXPORT, MIGRATE, INIT),
     )

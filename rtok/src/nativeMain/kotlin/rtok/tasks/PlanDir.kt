@@ -60,7 +60,7 @@ private fun storeHead(
 class PlanDirAdapter(
     private val dir: String,
 ) : TaskAdapter {
-    override val name = "disk"
+    override val name = "plan"
 
     companion object {
         /** Whether [dir] already holds the folder layout: some `<id>/task.md` in it. */
@@ -131,6 +131,7 @@ class PlanDirAdapter(
     override fun writeStatus(
         id: TaskId,
         status: Status,
+        report: String?,
     ): Task =
         lockClaim(dir).use {
             val task = read(id) ?: bail("disk tasks: no task $id in $dir")
@@ -139,7 +140,7 @@ class PlanDirAdapter(
                 bail("disk tasks: $id is ${task.status} and has a done.md; reopening it is the creator's call, remove ${folder(id)}/$DONE yourself")
             }
             if (status.isActive) {
-                storeHead("${folder(id)}/$TASK", task.copy(status = status, assignee = if (status == Status.Open) null else task.assignee))
+                storeHead("${folder(id)}/$TASK", task.copy(status = status, assignee = if (status == Status.Todo) null else task.assignee))
             } else {
                 val text = if (status == Status.Closed) "$DROPPED: closed with `rtok task status`.\n" else "Done: closed with `rtok task status`.\n"
                 writeAtomic("${folder(id)}/$DONE", text.encodeToByteArray())
@@ -207,7 +208,7 @@ private fun some(v: String?) = v?.let { "Some(\"$it\")" } ?: "None"
 private fun activeHead(head: String): Triple<Status, Int, String?> {
     val status =
         when (val s = value(head, "status")) {
-            "todo" -> Status.Open
+            "todo" -> Status.Todo
             "in progress" -> Status.InProgress
             else -> bail("status ${some(s)}, want todo or in progress")
         }
@@ -257,7 +258,7 @@ internal fun withHead(
 ): String {
     val status =
         when (task.status) {
-            Status.Open -> "todo"
+            Status.Todo -> "todo"
             Status.InProgress -> "in progress"
             else -> bail("only todo and in progress are front matter statuses")
         }

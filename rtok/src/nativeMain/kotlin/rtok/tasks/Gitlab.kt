@@ -47,7 +47,7 @@ internal data class GitlabIssue(
                 state == "closed" && has(GITLAB_WONT_DO) -> Status.Closed
                 state == "closed" -> Status.Done
                 has(GITLAB_IN_PROGRESS) -> Status.InProgress
-                else -> Status.Open
+                else -> Status.Todo
             }
         val meta = Meta.read(labels)
         return Task(
@@ -134,7 +134,7 @@ private fun isStatus(label: String) = STATUS_LABELS.any { it.equals(label, ignor
 
 private fun statusLabel(status: Status) =
     when (status) {
-        Status.Open -> null
+        Status.Todo -> null
         Status.InProgress -> GITLAB_IN_PROGRESS
         Status.Done -> GITLAB_DONE
         Status.Closed -> GITLAB_WONT_DO
@@ -230,6 +230,7 @@ class GitlabAdapter(
     override fun writeStatus(
         id: TaskId,
         status: Status,
+        report: String?,
     ): Task {
         val issue = need(id)
         val target = statusLabel(status)

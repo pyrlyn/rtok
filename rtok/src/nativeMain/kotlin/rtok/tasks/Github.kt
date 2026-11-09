@@ -65,7 +65,7 @@ internal data class GithubIssue(
                 state == "closed" && (stateReason == "not_planned" || stateReason == "duplicate") -> Status.Closed
                 state == "closed" -> Status.Done
                 IN_PROGRESS_LABEL in names -> Status.InProgress
-                else -> Status.Open
+                else -> Status.Todo
             }
         val meta = Meta.read(names)
         return Task(
@@ -225,7 +225,7 @@ class GithubAdapter(
                 taskWarningSink("github tasks: $id is not linked under ${parent.htmlUrl}: ${e.message}")
             }
         }
-        syncProject(id, issue, Status.Open)
+        syncProject(id, issue, Status.Todo)
         return issue.toTask() ?: bail("github tasks: the new issue has no task id")
     }
 
@@ -236,6 +236,7 @@ class GithubAdapter(
     override fun writeStatus(
         id: TaskId,
         status: Status,
+        report: String?,
     ): Task {
         val issue = need(id)
         val labels = issue.names.filter { it != IN_PROGRESS_LABEL } + listOfNotNull(IN_PROGRESS_LABEL.takeIf { status == Status.InProgress })

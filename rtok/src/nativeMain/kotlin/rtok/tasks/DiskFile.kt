@@ -1,4 +1,6 @@
 // Port of the file format of src/tasks/disk.rs: names, slugs, and the YAML front matter render and parse.
+@file:Suppress("TooManyFunctions")
+
 package rtok.tasks
 
 import rtok.store.TaskId
@@ -9,7 +11,7 @@ import yamlaot.YamlValue
 /** The line that closes a front matter, with its newlines. */
 internal const val FENCE = "\n---\n"
 
-private fun StringBuilder.yamlList(
+internal fun StringBuilder.yamlList(
     key: String,
     ids: List<TaskId>,
 ) {
@@ -38,7 +40,7 @@ internal fun renderDisk(task: Task): String {
     return if (body.isEmpty()) "---\n$yaml---\n" else "---\n$yaml---\n\n$body\n"
 }
 
-private fun YamlValue.text(key: String): String =
+internal fun YamlValue.text(key: String): String =
     when (this) {
         is YamlValue.Str -> value
         is YamlValue.Int -> value.toString()
@@ -47,54 +49,75 @@ private fun YamlValue.text(key: String): String =
         else -> bail("$key: want a string")
     }
 
-private fun YamlValue.Map.long(key: String): Long = (this[key] as? YamlValue.Int)?.value ?: bail("$key: want an integer")
+internal fun YamlValue.Map.long(key: String): Long = (this[key] as? YamlValue.Int)?.value ?: bail("$key: want an integer")
 
-private fun YamlValue.Map.ids(key: String): List<TaskId> =
+internal fun YamlValue.Map.ids(key: String): List<TaskId> =
     when (val v = this[key]) {
         null, YamlValue.Null -> emptyList()
         is YamlValue.Seq -> v.items.map { TaskId.parse(it.text(key)) }
         else -> bail("$key: want a list")
     }.distinct().sorted()
 
-private fun YamlValue.Map.optText(key: String): String? = this[key]?.takeIf { it != YamlValue.Null }?.text(key)
+internal fun YamlValue.Map.optText(key: String): String? = this[key]?.takeIf { it != YamlValue.Null }?.text(key)
 
-private fun YamlValue.Map.priority(): Int =
+internal fun YamlValue.Map.priority(): Int =
     when (val p = this["priority"]) {
         null -> DEFAULT_PRIORITY
         is YamlValue.Int -> p.value.toInt()
         else -> bail("priority: want an integer")
     }
 
-private fun YamlValue.Map.parallel(): Boolean =
+internal fun YamlValue.Map.parallel(): Boolean =
     when (val p = this["parallel"]) {
         null -> false
         is YamlValue.Bool -> p.value
         else -> bail("parallel: want a boolean")
     }
 
-internal fun parseDisk(raw: String): Task {
+/** `(front matter text, body)` of a task file; CRLF is read as LF. */
+internal fun splitFrontMatter(raw: String): Pair<String, String> {
     val text = raw.replace("\r\n", "\n")
     if (!text.startsWith("---\n")) bail("no front matter (the file must start with ---)")
     val rest = text.removePrefix("---\n")
     val at = rest.indexOf(FENCE)
-    val (yaml, body) =
-        when {
-            at >= 0 -> rest.substring(0, at) to rest.substring(at + FENCE.length)
-            rest.endsWith("\n---") -> rest.removeSuffix("\n---") to ""
-            else -> bail("front matter is not closed with ---")
-        }
-    val head = Yaml.parse(yaml) as? YamlValue.Map ?: bail("the front matter is not a mapping")
-    val id = TaskId.parse(head["id"]?.text("id") ?: bail("missing field `id`"))
-    return Task.open(id, head["title"]?.text("title") ?: bail("missing field `title`"), "", 0).copy(
+    return when {
+        at >= 0 -> rest.substring(0, at) to rest.substring(at + FENCE.length)
+        rest.endsWith("\n---") -> rest.removeSuffix("\n---") to ""
+        else -> bail("front matter is not closed with ---")
+    }
+}
+
+internal fun parseHead(yaml: String): YamlValue.Map = Yaml.parse(yaml) as? YamlValue.Map ?: bail("the front matter is not a mapping")
+
+/** The fields the files layout and the board share; the caller supplies what they spell differently. */
+internal fun YamlValue.Map.toTask(
+    body: String,
+    status: Status,
+    createdAt: Long,
+    updatedAt: Long,
+): Task {
+    val id = TaskId.parse(this["id"]?.text("id") ?: bail("missing field `id`"))
+    return Task.open(id, this["title"]?.text("title") ?: bail("missing field `title`"), "", 0).copy(
         description = body.trim(),
-        status = Status.parse(head["status"]?.text("status") ?: bail("missing field `status`")),
-        parent = head.optText("parent")?.let(TaskId::parse),
-        createdAt = head.long("created_at"),
-        updatedAt = head.long("updated_at"),
-        priority = head.priority(),
-        assignee = head.optText("assignee")?.takeIf { it.isNotEmpty() },
-        blockedBy = head.ids("blocked_by"),
-        conflictsWith = head.ids("conflicts_with"),
-        parallel = head.parallel(),
+        status = status,
+        parent = optText("parent")?.let(TaskId::parse),
+        createdAt = createdAt,
+        updatedAt = updatedAt,
+        priority = priority(),
+        assignee = optText("assignee")?.takeIf { it.isNotEmpty() },
+        blockedBy = ids("blocked_by"),
+        conflictsWith = ids("conflicts_with"),
+        parallel = parallel(),
+    )
+}
+
+internal fun parseDisk(raw: String): Task {
+    val (yaml, body) = splitFrontMatter(raw)
+    val head = parseHead(yaml)
+    return head.toTask(
+        body,
+        Status.parse(head["status"]?.text("status") ?: bail("missing field `status`")),
+        head.long("created_at"),
+        head.long("updated_at"),
     )
 }

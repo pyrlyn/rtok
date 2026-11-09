@@ -21,11 +21,21 @@ internal fun diskFileName(
     title: String,
 ) = "$id - ${slug(title)}.md"
 
+private fun Char.isAsciiAlnum() = this in 'a'..'z' || this in 'A'..'Z' || this in '0'..'9'
+
 /** Lower-case ASCII letters and digits joined by single dashes; `task` when nothing is left. */
-internal fun slug(title: String): String {
+internal fun slug(title: String) = slugOf(title, Char::isAsciiAlnum)
+
+/** The board's slug: every Unicode letter and digit is kept, so a Cyrillic title still names its file. */
+internal fun unicodeSlug(title: String) = slugOf(title, Char::isLetterOrDigit)
+
+private fun slugOf(
+    title: String,
+    keep: (Char) -> Boolean,
+): String {
     val out = StringBuilder()
     for (c in title) {
-        if (c in 'a'..'z' || c in 'A'..'Z' || c in '0'..'9') {
+        if (keep(c)) {
             out.append(c.lowercaseChar())
         } else if (out.isNotEmpty() && !out.endsWith('-')) {
             out.append('-')
