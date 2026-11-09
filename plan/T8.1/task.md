@@ -15,8 +15,9 @@ working and `rtok task migrate` converts it. Spec: "Board layout" and "Layouts a
 detection" in [docs/design/task-board.md](../../docs/design/task-board.md).
 
 Done means: a new project's first `rtok task create` makes a board; `rtok task board` shows
-the four columns (text and `--json`); `rtok task migrate` turns this repo's untracked `tasks/`
-(R1 to R4) into a board; the legacy `files` and `plan` layouts pass their existing tests.
+the four columns (text and `--json`); `rtok task migrate` turns a copy of this repo's
+untracked `tasks/` (R1 to R4) into a board (the real one stays: the installed Rust rtok still
+reads it); the legacy `files` and `plan` layouts pass their existing tests.
 
 Check: `./gradlew macosArm64Test cliTest e2eTest` green; `rtok task migrate --dry-run` on a
 copy of `tasks/` lists the four moves.

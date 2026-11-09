@@ -223,7 +223,8 @@ rtok task prime                                   a short agent guide built from
 removes the remote and keeps the board and `.sync/` (a later `set` resumes).
 
 Hidden aliases for one release; each prints `rtok task <old> is deprecated; use rtok task
-<new>` to stderr and keeps its old output:
+<new>` to stderr and keeps its old output shape (status words are the new ones, `todo` for `open`,
+everywhere):
 
 | Old | New |
 |---|---|
