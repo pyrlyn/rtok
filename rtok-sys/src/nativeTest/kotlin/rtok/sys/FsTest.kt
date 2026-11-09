@@ -1,5 +1,11 @@
+@file:OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
+
 package rtok.sys
 
+import kotlinx.cinterop.toKString
+import platform.posix.getenv
+import platform.posix.setenv
+import platform.posix.unsetenv
 import kotlin.test.*
 
 internal const val PRIVATE_DIR = 0x1c0 // 0o700
@@ -30,6 +36,24 @@ class FsTest {
             assertFailsWith<IoException> { createDirAll(file) }
             assertFailsWith<IoException> { createDirAll(join(file, "sub")) }
         } finally {
+            removeDirAll(root)
+        }
+    }
+
+    @Test fun tempDirFallsBackToTmpForAnEmptyRootOrMissingTmpdir() {
+        val saved = getenv("TMPDIR")?.toKString()
+        val root = scratch()
+        try {
+            val file = join(root, "file")
+            writeString(file, "")
+            for (bad in listOf("", "/", "//", join(root, "missing"), file)) {
+                setenv("TMPDIR", bad, 1)
+                assertEquals("/tmp", tempDir(), "TMPDIR=$bad")
+            }
+            setenv("TMPDIR", "$root//", 1)
+            assertEquals(root, tempDir())
+        } finally {
+            if (saved == null) unsetenv("TMPDIR") else setenv("TMPDIR", saved, 1)
             removeDirAll(root)
         }
     }

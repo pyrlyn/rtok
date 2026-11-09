@@ -297,7 +297,12 @@ private fun removeContents(
     }
 }
 
-fun tempDir(): String = (getenv("TMPDIR")?.toKString() ?: "/tmp").trimEnd('/')
+/** `$TMPDIR` without trailing slashes; `/tmp` when it is unset, empty, the root or not a directory. */
+fun tempDir(): String =
+    getenv("TMPDIR")
+        ?.toKString()
+        ?.trimEnd('/')
+        ?.takeIf { it.isNotEmpty() && isDir(it) } ?: "/tmp"
 
 /**
  * A new private directory under [tempDir] named `<prefix>XXXXXX` (mkdtemp(3): a random name, mode 0700). Files
