@@ -79,7 +79,10 @@ class ProgressRunner(
             // the child must not hold the caller until it exits too (Rust ProgressRunner, T638).
             var exit: Exit? = null
             var drainEnd: kotlin.time.TimeSource.Monotonic.ValueTimeMark? = null
-            while (exit == null || (sinks.any { it.open } && drainEnd?.hasPassedNow() != true)) {
+
+            fun draining() = sinks.any { it.open } && drainEnd?.hasPassedNow() != true
+
+            while ((exit == null && deadline != null) || draining()) {
                 if (exit == null) {
                     exit = reapNow(pid)
                     if (exit != null) {
@@ -125,7 +128,8 @@ class ProgressRunner(
                 close(it.fd)
             }
             spinner.finish()
-            Captured(sinks[0].bytes.toByteArray(), sinks[1].bytes.toByteArray(), exit?.code) to dropped
+            val code = if (exit == null) waitExit(pid) else exit.code
+            Captured(sinks[0].bytes.toByteArray(), sinks[1].bytes.toByteArray(), code) to dropped
         }
 
     /** A reaped exit: the code, or null for a signal. */
