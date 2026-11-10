@@ -79,7 +79,7 @@ class ProgressRunner(
             // the child must not hold the caller until it exits too (Rust ProgressRunner, T638).
             var exit: Exit? = null
             var drainEnd: kotlin.time.TimeSource.Monotonic.ValueTimeMark? = null
-            while (sinks.any { it.open } && drainEnd?.hasPassedNow() != true) {
+            while (exit == null || (sinks.any { it.open } && drainEnd?.hasPassedNow() != true)) {
                 if (exit == null) {
                     exit = reapNow(pid)
                     if (exit != null) {
@@ -93,14 +93,15 @@ class ProgressRunner(
                     fds[i].events = POLLIN.toShort()
                     fds[i].revents = 0
                 }
-                if (deadline != null && deadline.hasPassedNow()) {
+                if (exit == null && deadline != null && deadline.hasPassedNow()) {
                     kill(pid, SIGKILL)
                     sinks.filter { it.open }.forEach { close(it.fd) }
                     waitExit(pid)
                     spinner.finish()
                     throw IoException(IoException.Kind.Other, "$program: timed out after ${timeoutMs}ms")
                 }
-                if (poll(fds, 2u, Spinner.TICK_MS) == 0) {
+                val waitMs = if (exit != null && sinks.none { it.open }) 0 else Spinner.TICK_MS
+                if (poll(fds, 2u, waitMs) == 0) {
                     spinner.tick()
                     continue
                 }
@@ -124,7 +125,7 @@ class ProgressRunner(
                 close(it.fd)
             }
             spinner.finish()
-            Captured(sinks[0].bytes.toByteArray(), sinks[1].bytes.toByteArray(), exit?.code ?: waitExit(pid)) to dropped
+            Captured(sinks[0].bytes.toByteArray(), sinks[1].bytes.toByteArray(), exit?.code) to dropped
         }
 
     /** A reaped exit: the code, or null for a signal. */
