@@ -89,13 +89,14 @@ class WrapTest {
         assertNull(r.next(true))
     }
 
-    @Test fun pendingMatchesToolCallIdsOnly() {
+    @Test fun pendingNamesTheToolOfToolCallsOnly() {
         val p = Wrap.Pending()
         p.note(obj("""{"id":7,"method":"tools/call","params":{"name":"grep"}}"""))
         p.note(obj("""{"id":8,"method":"tools/list"}"""))
-        assertNull(p.take("""{"id":8,"result":{}}""".encodeToByteArray()))
+        val listed = assertNotNull(p.take("""{"id":8,"result":{}}""".encodeToByteArray()))
+        assertNull(listed.tool)
         assertNull(p.take("""{"id":"7","result":{}}""".encodeToByteArray()))
-        assertEquals("grep", p.take("""{"id":7,"result":{}}""".encodeToByteArray()))
+        assertEquals("grep", p.take("""{"id":7,"result":{}}""".encodeToByteArray())?.tool)
         assertNull(p.take("""{"id":7,"result":{}}""".encodeToByteArray()))
     }
 
@@ -109,9 +110,9 @@ class WrapTest {
         )) {
             assertNull(p.take(frame.encodeToByteArray()), frame)
         }
-        assertEquals("grep", p.take("""{"id":7,"result":{}}""".encodeToByteArray()))
+        assertEquals("grep", p.take("""{"id":7,"result":{}}""".encodeToByteArray())?.tool)
         p.note(obj("""{"id":9,"method":"tools/call","params":{"name":"find"}}"""))
-        assertEquals("find", p.take("""{"id":9,"error":{"code":-1,"message":"x"}}""".encodeToByteArray()))
+        assertEquals("find", p.take("""{"id":9,"error":{"code":-1,"message":"x"}}""".encodeToByteArray())?.tool)
         assertNull(p.take("""{"id":9,"result":{}}""".encodeToByteArray()))
     }
 
@@ -120,7 +121,7 @@ class WrapTest {
         p.note(obj("""{"id":1,"method":"initialize"}"""))
         p.note(obj("""{"id":"2","method":"tools/call","params":{"name":"grep"}}"""))
         p.note(obj("""{"method":"notifications/initialized"}"""))
-        assertNull(p.take("""{"id":1,"result":{}}""".encodeToByteArray()))
+        assertNull(p.take("""{"id":1,"result":{}}""".encodeToByteArray())?.tool)
         assertEquals(listOf("\"2\""), p.drain().map { it.toString() })
         assertEquals(emptyList(), p.drain())
         assertNull(p.take("""{"id":"2","result":{}}""".encodeToByteArray()))

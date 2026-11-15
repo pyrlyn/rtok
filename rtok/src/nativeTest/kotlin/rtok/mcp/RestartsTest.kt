@@ -19,7 +19,7 @@ class RestartsTest {
         val r = Restarts(2, 0)
         assertTrue(r.crashed())
         assertTrue(r.crashed())
-        r.started()
+        r.answered()
         assertTrue(r.crashed())
         assertTrue(r.crashed())
         assertFalse(r.crashed())

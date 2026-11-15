@@ -8,7 +8,10 @@ package rtok.mcp
 
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.addressOf
+import kotlinx.cinterop.alloc
 import kotlinx.cinterop.convert
+import kotlinx.cinterop.memScoped
+import kotlinx.cinterop.ptr
 import kotlinx.cinterop.usePinned
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -17,9 +20,11 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.jsonObject
+import platform.posix.POLLIN
 import platform.posix.getpid
+import platform.posix.poll
+import platform.posix.pollfd
 import rtok.config.Config
-import rtok.demon.OsProcs
 import rtok.json.StrictJson
 import rtok.plugin.Runtime
 import rtok.plugin.sdk.Class
@@ -32,6 +37,7 @@ import rtok.shortId
 import rtok.sys.PipedChild
 import rtok.sys.rustLines
 import rtok.sys.writeFd
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
 
@@ -82,12 +88,17 @@ object Wrap {
         private var stdinOpen = true
         private var stdoutOpen = true
         private var clientFraming = Framing.Line
+
+        /** The handshake a server was sent, for the next one. */
         private var initialize: Frame? = null
         private var initialized: Frame? = null
 
-        /** The id of a replayed `initialize`: its answer is ours, and client frames wait in [held] until it comes. */
-        private var replayId: String? = null
+        /** True from the server's death until its successor is ready: client frames wait in [held] meanwhile. */
+        private var holding = false
         private val held = ArrayDeque<Pair<Frame, JsonElement?>>()
+
+        /** The id of a replayed `initialize`: its answer is ours, not the client's. */
+        private var replayId: String? = null
 
         /** Runs until the client hangs up, our stdout goes away or the server dies past its restarts; its exit code. */
         fun pump(): Int {
@@ -100,6 +111,8 @@ object Wrap {
                 }
                 child.finishInput()
                 val code = child.waitExit()
+                // Frames the dead server never read keep its stdin open: writing them now fails, which closes it.
+                child.finishInput()
                 if (!stdinOpen || !stdoutOpen) return code
                 failPending("MCP server $server exited with code $code")
                 if (!stdoutOpen || !restart(code)) return code
@@ -115,15 +128,11 @@ object Wrap {
             generateSequence { up.next(eof) }.forEach { f ->
                 if (f.framing != Framing.Raw) clientFraming = f.framing
                 val msg = parse(f.body)
-                when (method(msg)) {
-                    "initialize" -> initialize = f
-                    "notifications/initialized" -> initialized = f
-                }
-                if (replayId != null) held.addLast(f to msg) else forward(f, msg)
+                if (holding) held.addLast(f to msg) else forward(f, msg)
             }
             if (eof) {
                 stdinOpen = false
-                if (replayId == null) child.finishInput()
+                if (!holding) child.finishInput()
             }
         }
 
@@ -132,6 +141,11 @@ object Wrap {
             f: Frame,
             msg: JsonElement?,
         ) {
+            // Noted here, not on arrival: a held frame is still on its way, and replaying it too would send it twice.
+            when (method(msg)) {
+                "initialize" -> initialize = f
+                "notifications/initialized" -> initialized = f
+            }
             msg?.let(pending::note)
             child.send(FrameReader.encode(f.framing, f.body))
         }
@@ -143,14 +157,16 @@ object Wrap {
             if (!eof) down.feed(bytes)
             val written =
                 generateSequence { down.next(eof) }.all { f ->
-                    if (replayId == null) {
-                        restarts.started()
-                    } else if (answers(f.body, replayId)) {
+                    if (replayId != null && answers(f.body, replayId)) {
                         endReplay()
                         return@all true
                     }
                     // Always drain the pending id, even with no store (D4: no leak for the connection's life).
-                    val tool = pending.take(f.body)
+                    val call = pending.take(f.body)
+                    // Only an answer the client asked for shows the server works: one that dies right after its
+                    // handshake, every time, must still run out of attempts.
+                    if (call != null) restarts.answered()
+                    val tool = call?.tool
                     val short = if (runtime != null && tool != null) shorten(runtime, settings, server, tool, f.body) else null
                     writeOut(FrameReader.encode(f.framing, short ?: f.body))
                 }
@@ -158,35 +174,71 @@ object Wrap {
             return written && !eof
         }
 
-        /** Starts the server again after it exited with [code]; false once [restarts] are used up. */
+        /**
+         * Starts the server again after it exited with [code]; false once [restarts] are used up or the client
+         * hung up during the wait.
+         */
         private fun restart(code: Int): Boolean {
-            while (restarts.crashed()) {
-                warn("$server exited with code $code; restarting in ${restarts.intervalMs} ms (${restarts.failures}/${restarts.attempts})")
-                OsProcs.pause(restarts.intervalMs)
-                child = runCatching(spawn).getOrNull() ?: continue
-                down = FrameReader()
-                replayId = null
-                replay()
-                return true
+            holding = true
+            replayId = null
+            var why = "exited with code $code"
+            var next: PipedChild? = null
+            while (next == null && stdinOpen && restarts.crashed()) {
+                warn("$server $why; restarting in ${restarts.intervalMs} ms (${restarts.failures}/${restarts.attempts})")
+                if (!awaitRestart()) break
+                next =
+                    runCatching(spawn).getOrElse {
+                        why = "did not start (${it.message})"
+                        null
+                    }
             }
-            warn("$server exited with code $code; giving up after ${restarts.attempts} restarts")
-            return false
+            if (next == null) {
+                // 0 attempts is the plain wrapper: the server's exit ends the connection, with nothing to report.
+                if (stdinOpen && restarts.attempts > 0) warn("$server $why; giving up after ${restarts.attempts} restarts")
+                return false
+            }
+            child = next
+            down = FrameReader()
+            replay()
+            return true
         }
 
-        /** Hands the new server the client's `initialize` under an id of ours; nothing to do before the client sent one. */
+        /**
+         * Waits out the restart interval reading the client, so its frames are held rather than left in a pipe
+         * that fills up, and its hang-up ends the wait at once; false once the client hung up.
+         */
+        private fun awaitRestart(): Boolean {
+            val until = TimeSource.Monotonic.markNow() + restarts.intervalMs.milliseconds
+            while (stdinOpen && until.hasNotPassedNow()) {
+                val left = (-until.elapsedNow()).inWholeMilliseconds.coerceIn(1, Int.MAX_VALUE.toLong()).toInt()
+                if (readable(0, left)) fromClient()
+            }
+            return stdinOpen
+        }
+
+        /**
+         * Hands the new server the `initialize` its predecessor got, under an id of ours; before the client sent
+         * one there is no session to restore, and its frames go straight on.
+         */
         private fun replay() {
-            val f = initialize ?: return
-            val o = parse(f.body) as? JsonObject ?: return
+            val f = initialize
+            val o = f?.let { parse(it.body) } as? JsonObject
+            if (f == null || o == null) return release()
             val id = JsonPrimitive("rtok-restart-${restarts.failures}")
             replayId = id.toString()
             child.send(FrameReader.encode(f.framing, JsonObject(o + ("id" to id)).toString().encodeToByteArray()))
         }
 
-        /** The new server is up: finish the handshake, then send what the client wrote meanwhile. */
+        /** The new server answered `initialize`: finish the handshake, then [release]. */
         private fun endReplay() {
             replayId = null
-            restarts.started()
             initialized?.let { child.send(FrameReader.encode(it.framing, it.body)) }
+            release()
+        }
+
+        /** Sends on what the client wrote while no server could take it. */
+        private fun release() {
+            holding = false
             while (held.isNotEmpty()) held.removeFirst().let { (f, msg) -> forward(f, msg) }
             if (!stdinOpen) child.finishInput()
         }
@@ -199,19 +251,6 @@ object Wrap {
                 if (!writeOut(FrameReader.encode(clientFraming, frame.toString().encodeToByteArray()))) stdoutOpen = false
             }
         }
-
-        /** True when [frame] is a response (not a server request) carrying [id], given as its JSON text. */
-        private fun answers(
-            frame: ByteArray,
-            id: String?,
-        ): Boolean {
-            val o = parse(frame) as? JsonObject ?: return false
-            return "method" !in o && o["id"]?.toString() == id
-        }
-
-        private fun warn(line: String) {
-            runCatching { writeFd(2, "rtok mcp: $line\n".encodeToByteArray()) }
-        }
     }
 
     private fun method(msg: JsonElement?): String? = ((msg as? JsonObject)?.get("method") as? JsonPrimitive)?.takeIf { it.isString }?.content
@@ -222,34 +261,35 @@ object Wrap {
             true
         }.getOrDefault(false)
 
-    private fun parse(frame: ByteArray): JsonElement? = runCatching { StrictJson.parse(frame.decodeToString()) }.getOrNull()
-
     /**
-     * Requests the client sent and the server has not answered, keyed by the id's JSON text (`1` ≠ `"1"`): the id
-     * itself and, for a `tools/call`, the tool.
+     * Requests the client sent and the server has not answered, keyed by the id's JSON text (`1` ≠ `"1"`).
      */
     class Pending {
-        private val calls = LinkedHashMap<String, Pair<JsonElement, String?>>()
+        /** One unanswered request: its [id] and, for a `tools/call`, the [tool]. */
+        class Call(
+            val id: JsonElement,
+            val tool: String?,
+        )
+
+        private val calls = LinkedHashMap<String, Call>()
 
         fun note(v: JsonElement) {
             val o = v as? JsonObject ?: return
             val method = method(o) ?: return
             val id = o["id"] ?: return
             val tool = if (method == "tools/call") ((o["params"] as? JsonObject)?.get("name") as? JsonPrimitive)?.takeIf { it.isString }?.content else null
-            calls[id.toString()] = id to tool
+            calls[id.toString()] = Call(id, tool)
         }
 
-        /** The tool name when [frame] answers a noted call; the id is forgotten once a response carries it. */
-        fun take(frame: ByteArray): String? {
-            val o = parse(frame) as? JsonObject ?: return null
+        /** The noted request [frame] answers; the id is forgotten once a response carries it. */
+        fun take(frame: ByteArray): Call? {
             // A server request or notification carries `method`; its id is the server's own namespace.
-            if ("method" in o) return null
-            val id = o["id"] ?: return null
-            return calls.remove(id.toString())?.second
+            val id = (parse(frame) as? JsonObject)?.takeUnless { "method" in it }?.get("id") ?: return null
+            return calls.remove(id.toString())
         }
 
         /** Every unanswered id, forgotten: the server that owed the answers is gone. */
-        fun drain(): List<JsonElement> = calls.values.map { it.first }.also { calls.clear() }
+        fun drain(): List<JsonElement> = calls.values.map { it.id }.also { calls.clear() }
     }
 
     private fun shorten(
@@ -361,4 +401,32 @@ object Wrap {
 
     /** JSON-RPC "Internal error". */
     private const val INTERNAL_ERROR = -32603
+}
+
+private fun parse(frame: ByteArray): JsonElement? = runCatching { StrictJson.parse(frame.decodeToString()) }.getOrNull()
+
+/** True when [frame] is a response (not a server request) carrying [id], given as its JSON text. */
+private fun answers(
+    frame: ByteArray,
+    id: String?,
+): Boolean {
+    val o = parse(frame) as? JsonObject ?: return false
+    return "method" !in o && o["id"]?.toString() == id
+}
+
+/** True once [fd] has bytes or hung up, false after [timeoutMs] with neither. */
+@OptIn(ExperimentalForeignApi::class)
+private fun readable(
+    fd: Int,
+    timeoutMs: Int,
+): Boolean =
+    memScoped {
+        val p = alloc<pollfd>()
+        p.fd = fd
+        p.events = POLLIN.toShort()
+        poll(p.ptr, 1u, timeoutMs) > 0
+    }
+
+private fun warn(line: String) {
+    runCatching { writeFd(2, "rtok mcp: $line\n".encodeToByteArray()) }
 }
