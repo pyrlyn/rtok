@@ -9,10 +9,16 @@ enum class Framing {
     Header,
 
     /**
-     * A malformed header block (unparseable `Content-Length`, a declared length over [MAX_FRAME], or a body
-     * shorter than the one declared): the exact bytes consumed so far, forwarded with no framing added.
+     * A malformed header block (unparseable `Content-Length`, or a declared length over [MAX_FRAME]): the exact
+     * bytes consumed so far, forwarded with no framing added.
      */
     Raw,
+
+    /**
+     * A header block the stream ended inside (cut mid-header, or a body shorter than the one declared): the bytes
+     * that arrived, with no framing added. Whoever reads them takes what follows for the rest of the frame.
+     */
+    Torn,
 }
 
 class Frame(
@@ -76,7 +82,7 @@ class FrameReader {
         while (true) {
             val nl = indexOf(NL, pos)
             // Stream closed mid-header: forward the real bytes that arrived rather than drop them.
-            if (nl < 0) return if (eof) raw(end) else null
+            if (nl < 0) return if (eof) raw(end, Framing.Torn) else null
             var trimmed = nl + 1
             while (trimmed > pos && isSpace(data[trimmed - 1])) trimmed--
             val lineStart = pos
@@ -92,16 +98,19 @@ class FrameReader {
         // No parseable `Content-Length`, or one over the hook frame cap: the header goes out raw and the
         // following bytes stay on the stream, so a bogus claim is never buffered or waited on.
         val claimed = len?.takeIf { it <= MAX_FRAME.toULong() }?.toInt() ?: return raw(headerEnd)
-        if (end - headerEnd < claimed) return if (eof) raw(end) else null
+        if (end - headerEnd < claimed) return if (eof) raw(end, Framing.Torn) else null
         val body = data.copyOfRange(headerEnd, headerEnd + claimed)
         start = headerEnd + claimed
         return Frame(Framing.Header, body)
     }
 
-    private fun raw(upTo: Int): Frame {
+    private fun raw(
+        upTo: Int,
+        framing: Framing = Framing.Raw,
+    ): Frame {
         val body = data.copyOfRange(start, upTo)
         start = upTo
-        return Frame(Framing.Raw, body)
+        return Frame(framing, body)
     }
 
     private fun indexOf(
@@ -130,7 +139,7 @@ class FrameReader {
             when (framing) {
                 Framing.Line -> body + NL
                 Framing.Header -> "Content-Length: ${body.size}\r\n\r\n".encodeToByteArray() + body
-                Framing.Raw -> body
+                Framing.Raw, Framing.Torn -> body
             }
     }
 }

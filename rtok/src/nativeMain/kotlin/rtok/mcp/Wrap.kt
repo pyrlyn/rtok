@@ -71,7 +71,7 @@ object Wrap {
     /**
      * One wrapped connection: client frames go to [child] verbatim, its answers come back maybe shortened. A server
      * that dies while the client is still connected is started again and handed the client's handshake, so the
-     * client keeps its session; only the requests the dead server owed fail.
+     * client keeps its session; only the requests the dead server owed fail, and the ones it asked are cancelled.
      */
     private class Pipe(
         private var child: PipedChild,
@@ -81,7 +81,12 @@ object Wrap {
         private val server: String,
         private val restarts: Restarts,
     ) {
+        /** What the client asked the server, and what the server asked the client. */
         private val pending = Pending()
+        private val asked = Pending()
+
+        /** Ids of requests a dead server asked and the client has not answered: nobody waits for those answers. */
+        private val orphans = HashSet<String>()
         private val up = FrameReader()
         private var down = FrameReader()
         private val buf = ByteArray(READ_CHUNK)
@@ -114,7 +119,7 @@ object Wrap {
                 // Frames the dead server never read keep its stdin open: writing them now fails, which closes it.
                 child.finishInput()
                 if (!stdinOpen || !stdoutOpen) return code
-                failPending("MCP server $server exited with code $code")
+                settle("MCP server $server exited with code $code")
                 if (!stdoutOpen || !restart(code)) return code
             }
         }
@@ -126,9 +131,15 @@ object Wrap {
             if (n > 0) up.feed(buf, n)
             val eof = n <= 0
             generateSequence { up.next(eof) }.forEach { f ->
-                if (f.framing != Framing.Raw) clientFraming = f.framing
+                if (f.framing == Framing.Line || f.framing == Framing.Header) clientFraming = f.framing
                 val msg = parse(f.body)
-                if (holding) held.addLast(f to msg) else forward(f, msg)
+                // An answer to a request only a dead server asked: its successor never asked, and may reuse the id.
+                val stale = asked.take(msg) == null && idText(msg, request = false)?.let(orphans::remove) == true
+                when {
+                    stale -> Unit
+                    holding -> held.addLast(f to msg)
+                    else -> forward(f, msg)
+                }
             }
             if (eof) {
                 stdinOpen = false
@@ -146,7 +157,7 @@ object Wrap {
                 "initialize" -> initialize = f
                 "notifications/initialized" -> initialized = f
             }
-            msg?.let(pending::note)
+            pending.note(msg)
             child.send(FrameReader.encode(f.framing, f.body))
         }
 
@@ -157,12 +168,19 @@ object Wrap {
             if (!eof) down.feed(bytes)
             val written =
                 generateSequence { down.next(eof) }.all { f ->
-                    if (replayId != null && answers(f.body, replayId)) {
+                    // A frame the server died inside is no use to a client that stays on, and that client would
+                    // read our next frames as the rest of its body.
+                    if (f.framing == Framing.Torn && stdinOpen) return@all true
+                    val msg = parse(f.body)
+                    if (replayId != null && idText(msg, request = false) == replayId) {
                         endReplay()
                         return@all true
                     }
+                    // This server's own request: the id is no longer a dead server's.
+                    idText(msg, request = true)?.let(orphans::remove)
+                    asked.note(msg)
                     // Always drain the pending id, even with no store (D4: no leak for the connection's life).
-                    val call = pending.take(f.body)
+                    val call = pending.take(msg)
                     // Only an answer the client asked for shows the server works: one that dies right after its
                     // handshake, every time, must still run out of attempts.
                     if (call != null) restarts.answered()
@@ -243,11 +261,20 @@ object Wrap {
             if (!stdinOpen) child.finishInput()
         }
 
-        /** Answers every request the dead server owed with an error, so the client is not left waiting. */
-        private fun failPending(message: String) {
-            for (id in pending.drain()) {
-                val error = JsonObject(mapOf("code" to JsonPrimitive(INTERNAL_ERROR), "message" to JsonPrimitive(message)))
-                val frame = JsonObject(mapOf("jsonrpc" to JsonPrimitive("2.0"), "id" to id, "error" to error))
+        /**
+         * Closes what the dead server left open with the client: an error for every request it owed an answer, so
+         * the client is not left waiting, and a cancellation for every request it asked, so the client stops
+         * working on an answer nobody reads.
+         */
+        private fun settle(message: String) {
+            val reason = JsonPrimitive(message)
+            val error = JsonObject(mapOf("code" to JsonPrimitive(INTERNAL_ERROR), "message" to reason))
+            val asks = asked.drain()
+            orphans += asks.map { it.toString() }
+            val frames =
+                pending.drain().map { rpc("id" to it, "error" to error) } +
+                    asks.map { rpc("method" to JsonPrimitive(CANCELLED), "params" to JsonObject(mapOf("requestId" to it, "reason" to reason))) }
+            for (frame in frames) {
                 if (!writeOut(FrameReader.encode(clientFraming, frame.toString().encodeToByteArray()))) stdoutOpen = false
             }
         }
@@ -262,7 +289,7 @@ object Wrap {
         }.getOrDefault(false)
 
     /**
-     * Requests the client sent and the server has not answered, keyed by the id's JSON text (`1` ≠ `"1"`).
+     * Requests one peer sent and the other has not answered, keyed by the id's JSON text (`1` ≠ `"1"`).
      */
     class Pending {
         /** One unanswered request: its [id] and, for a `tools/call`, the [tool]. */
@@ -273,22 +300,24 @@ object Wrap {
 
         private val calls = LinkedHashMap<String, Call>()
 
-        fun note(v: JsonElement) {
+        fun note(v: JsonElement?) {
             val o = v as? JsonObject ?: return
             val method = method(o) ?: return
+            val params = o["params"] as? JsonObject
+            if (method == CANCELLED) {
+                // The sender gave up on that request and the peer need not answer it: nothing is owed any more.
+                params?.get("requestId")?.let { calls.remove(it.toString()) }
+                return
+            }
             val id = o["id"] ?: return
-            val tool = if (method == "tools/call") ((o["params"] as? JsonObject)?.get("name") as? JsonPrimitive)?.takeIf { it.isString }?.content else null
+            val tool = if (method == "tools/call") (params?.get("name") as? JsonPrimitive)?.takeIf { it.isString }?.content else null
             calls[id.toString()] = Call(id, tool)
         }
 
-        /** The noted request [frame] answers; the id is forgotten once a response carries it. */
-        fun take(frame: ByteArray): Call? {
-            // A server request or notification carries `method`; its id is the server's own namespace.
-            val id = (parse(frame) as? JsonObject)?.takeUnless { "method" in it }?.get("id") ?: return null
-            return calls.remove(id.toString())
-        }
+        /** The noted request [msg] answers; the id is forgotten once a response carries it. */
+        fun take(msg: JsonElement?): Call? = idText(msg, request = false)?.let(calls::remove)
 
-        /** Every unanswered id, forgotten: the server that owed the answers is gone. */
+        /** Every unanswered id, forgotten: the peer that owed the answers is gone. */
         fun drain(): List<JsonElement> = calls.values.map { it.id }.also { calls.clear() }
     }
 
@@ -401,18 +430,21 @@ object Wrap {
 
     /** JSON-RPC "Internal error". */
     private const val INTERNAL_ERROR = -32603
+    private const val CANCELLED = "notifications/cancelled"
 }
 
 private fun parse(frame: ByteArray): JsonElement? = runCatching { StrictJson.parse(frame.decodeToString()) }.getOrNull()
 
-/** True when [frame] is a response (not a server request) carrying [id], given as its JSON text. */
-private fun answers(
-    frame: ByteArray,
-    id: String?,
-): Boolean {
-    val o = parse(frame) as? JsonObject ?: return false
-    return "method" !in o && o["id"]?.toString() == id
-}
+/**
+ * The JSON text of [msg]'s id when it is a request ([request]) or a response (not [request]). Both carry an id,
+ * each in its sender's own namespace; only a request carries `method`.
+ */
+private fun idText(
+    msg: JsonElement?,
+    request: Boolean,
+): String? = (msg as? JsonObject)?.takeIf { ("method" in it) == request }?.get("id")?.toString()
+
+private fun rpc(vararg fields: Pair<String, JsonElement>) = JsonObject(mapOf("jsonrpc" to JsonPrimitive("2.0"), *fields))
 
 /** True once [fd] has bytes or hung up, false after [timeoutMs] with neither. */
 @OptIn(ExperimentalForeignApi::class)

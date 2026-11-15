@@ -179,20 +179,24 @@ class CliE2eSpec :
                 }
             }
 
-            // Logs every method it is sent and exits 1 when the Python expression [on] holds for a message `m`;
-            // [silent] leaves the request it dies on unanswered.
+            // Logs every method it is sent (`response` for an answer) and exits 1 when the Python expression [on]
+            // holds for a message `m`; [silent] leaves the request it dies on unanswered, [last] is Python run
+            // right before it dies.
             fun crashing(
                 on: String,
                 silent: Boolean = false,
+                last: String = "pass",
             ) = "import json,os,sys\n" +
                 "mark,log=sys.argv[1],sys.argv[2]\n" +
                 "for l in sys.stdin:\n" +
                 "    m=json.loads(l)\n" +
-                "    open(log,'a').write(m['method']+'\\n')\n" +
+                "    open(log,'a').write(m.get('method','response')+'\\n')\n" +
+                "    if 'method' not in m: continue\n" +
                 "    die=$on\n" +
                 "    if 'id' in m and not (die and ${if (silent) "True" else "False"}):\n" +
                 "        print(json.dumps({'jsonrpc':'2.0','id':m['id'],'result':{}}),flush=True)\n" +
                 "    if die:\n" +
+                "        $last\n" +
                 "        open(mark,'w').close(); sys.exit(1)\n"
             val firstToolCall = "m['method']=='tools/call' and not os.path.exists(mark)"
             val initialize = """{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}"""
@@ -246,6 +250,29 @@ class CliE2eSpec :
                         it.out.lines().filter(String::isNotEmpty) shouldBe listOf(answer(1), answer(2))
                     }
                     s.methods() shouldBe listOf("initialize", "initialize", "notifications/initialized", "tools/call")
+                }
+            }
+            test("what a dead server asked is cancelled, its torn frame and the client's late answer go nowhere") {
+                Sandbox("mcp-wrap-orphan").use { s ->
+                    // Asks the client for its roots, starts a header-framed frame and dies inside it.
+                    val ask = """{"jsonrpc": "2.0", "id": 7, "method": "roots/list"}"""
+                    val last = "sys.stdout.write('$ask\\nContent-Length: 100\\r\\n\\r\\n{\"torn');sys.stdout.flush()"
+                    val wrap = s.wrap(crashing(firstToolCall, silent = true, last = last), "restart_interval_ms = 500")
+                    val late = """{"jsonrpc":"2.0","id":7,"result":{"roots":[]}}"""
+                    val feed = "${print(initialize, initialized, call(2))}; ${until(s.mark())}; sleep 0.2; ${print(late, call(3))}; sleep 1"
+                    s.shell("{ $feed; } | $wrap").also {
+                        it.code shouldBe 0
+                        val gone = "MCP server python3 exited with code 1"
+                        it.out.lines().filter(String::isNotEmpty) shouldBe
+                            listOf(
+                                answer(1),
+                                ask,
+                                """{"jsonrpc":"2.0","id":2,"error":{"code":-32603,"message":"$gone"}}""",
+                                """{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":7,"reason":"$gone"}}""",
+                                answer(3),
+                            )
+                    }
+                    s.methods() shouldBe listOf("initialize", "notifications/initialized", "tools/call", "initialize", "notifications/initialized", "tools/call")
                 }
             }
             test("a server that dies after every handshake runs out of restart attempts") {
