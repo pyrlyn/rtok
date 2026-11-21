@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.18.0-alpha.4 - 2026-11-21
+
+Changes since v0.18.0-alpha.3.
+
+- docs: KDoc for plugin SDK, hook and config APIs; group the docs index (#271) (8663fce)
+- T7: claim the whole-repo code review (#286) (505a228)
+- ci(release): changelog since the previous release tag, not git describe (#284) (489604e)
+- fix(mcp): bound crash loops and hold client frames while a wrapped server restarts (#287) (25eb0e7)
+
+
 ## 0.18.0-alpha.3 - 2026-11-10
 
 Changes since v0.18.0-alpha.2.
