@@ -73,6 +73,17 @@ class OpenCodeTest {
         removeDirAll(s.dir)
     }
 
+    @Test fun proxyRemoveLeavesAUrlTheUserSet() {
+        val s = scratch("proxy-foreign")
+        val path = s.cfg.setup.opencode.configPath
+        createDirAll(join(s.dir, "opencode"))
+        val body = "{\n  \"env\": {\n    \"OPENAI_BASE_URL\": \"https://openrouter.ai/api/v1\"\n  }\n}\n"
+        writeString(path, body)
+        assertEquals(NO_CHANGES, OpenCode.runProxy(s.cfg, true))
+        assertEquals(body, readToString(path))
+        removeDirAll(s.dir)
+    }
+
     @Test fun openCodeInstallsEverythingOnceAndRemoveKeepsForeign() {
         val s = scratch("all")
         val oc = OpenCode(s.plugins)

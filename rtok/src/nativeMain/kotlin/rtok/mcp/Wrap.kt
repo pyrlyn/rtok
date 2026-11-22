@@ -21,9 +21,13 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.jsonObject
 import platform.posix.POLLIN
+import platform.posix.SIGPIPE
+import platform.posix.SIGTERM
+import platform.posix.SIG_IGN
 import platform.posix.getpid
 import platform.posix.poll
 import platform.posix.pollfd
+import platform.posix.signal
 import rtok.config.Config
 import rtok.json.StrictJson
 import rtok.plugin.Runtime
@@ -41,6 +45,36 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
 
+/**
+ * The server's exit code once its stdout ended. One that stays up without it (closed fd 1, daemonized) is asked to
+ * stop, then killed, so the client gets its errors and the restart instead of a hang.
+ */
+@OptIn(ExperimentalForeignApi::class)
+private fun PipedChild.reap(): Int {
+    val asked =
+        awaitExit() ?: run {
+            platform.posix.kill(pid, SIGTERM)
+            awaitExit()
+        }
+    if (asked != null) return asked
+    kill()
+    return waitExit()
+}
+
+@OptIn(ExperimentalForeignApi::class)
+private fun PipedChild.awaitExit(): Int? {
+    val until = TimeSource.Monotonic.markNow() + EXIT_GRACE_MS.milliseconds
+    while (true) {
+        tryWait()?.let { return it }
+        if (until.hasPassedNow()) return null
+        platform.posix.usleep(EXIT_POLL_US)
+    }
+}
+
+/** How long a server whose stdout ended gets to exit, before the TERM and again before the KILL. */
+private const val EXIT_GRACE_MS = 2000
+private const val EXIT_POLL_US = 10_000u
+
 object Wrap {
     private val json = Json
 
@@ -50,6 +84,8 @@ object Wrap {
         argv: List<String>,
     ): Int {
         val bin = argv.firstOrNull() ?: throw IllegalArgumentException("rtok mcp: missing server command after `--`")
+        // Either peer may hang up first: that must fail the write toward it and end the pipe cleanly, not kill us.
+        ignoreSigpipe()
         // Our stderr stays the server's: its diagnostics are not part of the protocol stream.
         val spawn = { PipedChild.spawn(bin, argv.drop(1), inheritStderr = true) }
         val child = spawn()
@@ -67,6 +103,11 @@ object Wrap {
 
     @OptIn(ExperimentalForeignApi::class)
     private fun pid() = getpid()
+
+    @OptIn(ExperimentalForeignApi::class)
+    private fun ignoreSigpipe() {
+        signal(SIGPIPE, SIG_IGN)
+    }
 
     /**
      * One wrapped connection: client frames go to [child] verbatim, its answers come back maybe shortened. A server
@@ -115,7 +156,7 @@ object Wrap {
                     if (fromServer) open = fromServer()
                 }
                 child.finishInput()
-                val code = child.waitExit()
+                val code = child.reap()
                 // Frames the dead server never read keep its stdin open: writing them now fails, which closes it.
                 child.finishInput()
                 if (!stdinOpen || !stdoutOpen) return code

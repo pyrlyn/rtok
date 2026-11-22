@@ -233,4 +233,17 @@ class EditorsTest {
         assertEquals(Entry.Present, status(fs, s).entry)
         assertTrue("[mcp_servers.rtok]" in fs.read(s.configPath)!!)
     }
+
+    @Test fun tomlSubtablesOfTheEntryGoWithIt() {
+        val s = spec(Format.Toml, "mcp_servers", EntryShape.Command)
+        val before = "[mcp_servers.rtok]\ncommand = \"/old/rtok\"\n\n[mcp_servers.rtok.env]\nA = \"1\"\n\n[profiles.a]\nk = 1\n"
+        val fs = MemFs()
+        fs.write(s.configPath, before)
+        apply(s, Mode.Install, ctx, fs, ::isRtokBin)
+        val written = fs.read(s.configPath)!!
+        assertTrue("[mcp_servers.rtok.env]" !in written, written)
+        assertTrue("[profiles.a]\nk = 1\n" in written, written)
+        apply(s, Mode.Remove, ctx, fs, ::isRtokBin)
+        assertEquals("[profiles.a]\nk = 1\n", fs.read(s.configPath))
+    }
 }

@@ -85,7 +85,8 @@ object Outdated {
                 val host = Hosts.host(id) ?: return@flatMap emptyList()
                 val a = agent(id) ?: return@flatMap emptyList()
                 host.variants.filter { Hosts.wants(it.kind, sel.cli, sel.desktop, sel.all) }.mapNotNull { v ->
-                    val found = installedPlugin(a, host, v.kind, cfg, receipt) ?: return@mapNotNull null
+                    // One unreadable version file (a newer schema, a hand edit) skips its row, as in [pluginStatus].
+                    val found = runCatching { installedPlugin(a, host, v.kind, cfg, receipt) }.getOrNull() ?: return@mapNotNull null
                     installed++
                     row(id, v.kind, found, target)
                 }

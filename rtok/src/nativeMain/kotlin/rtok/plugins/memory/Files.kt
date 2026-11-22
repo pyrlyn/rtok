@@ -150,7 +150,11 @@ internal fun linkNote(
 ) {
     val r = rootOf(cx) ?: return
     val files = mentioned(r.root, r.canon, body).toMutableList()
-    for (p in lastPaths(cx, r.root)) relative(r.root, r.canon, p)?.let { if (it !in files) files += it }
+    // The checkpoint can list thousands of paths; each costs a file system lookup inside the hook.
+    for (p in lastPaths(cx, r.root)) {
+        if (files.size >= MAX_FILES) break
+        relative(r.root, r.canon, p)?.let { if (it !in files) files += it }
+    }
     runCatching { cx.setNoteFiles(id, files.take(MAX_FILES)) }
 }
 

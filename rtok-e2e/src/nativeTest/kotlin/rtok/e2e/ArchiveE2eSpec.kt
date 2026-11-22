@@ -39,12 +39,13 @@ class ArchiveE2eSpec :
                     listDir("${s.home}/archive").isNotEmpty() shouldBe true
                 }
             }
-            test("a bad --config path fails with a message") {
+            test("a bad --config path echoes the array and warns (the carrier fails open)") {
                 Sandbox("arch-badcfg").use { s ->
                     writeString("${s.root}/bad.toml", "[core\n")
                     s.rtok("archive", "rewrite", "--stdin", "--config", "${s.root}/bad.toml", stdin = "[]").also {
-                        it.code shouldBe 1
-                        it.err shouldStartWith "Error:"
+                        it.code shouldBe 0
+                        it.out shouldBe "[]"
+                        it.err shouldStartWith "rtok: archive rewrite skipped:"
                     }
                 }
             }

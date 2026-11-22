@@ -21,6 +21,18 @@ class FilterTest {
         removeDirAll(dir)
     }
 
+    @Test fun aFailedCommandKeepsTheTail() {
+        val (c, dir) = cmdConfig("filter-exit")
+        val raw = numbered(200)
+        val out = Filter.runWithStore(c, "read src/lib.rs", raw, exit = 2)
+        val tail =
+            c.plugins.cmd.failTailLines
+                .toInt()
+        assertTrue(out.startsWith("line ${200 - tail}\n") && "line 199" in out, out)
+        assertFalse("line 0\n" in out, out)
+        removeDirAll(dir)
+    }
+
     @Test fun grepFindLsEachRecordAFamilyRow() {
         val (c, dir) = cmdConfig("filter-families")
         val raw = numbered(80)

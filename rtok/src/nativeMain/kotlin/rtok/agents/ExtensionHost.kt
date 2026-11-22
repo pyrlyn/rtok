@@ -19,6 +19,8 @@ class ExtensionSpec(
     val homeVar: String,
     /** A string present in `settings.json` while rtok's hooks are there. */
     val hookMarker: String,
+    /** The [homeVar] value that makes the CLI use `dir`; the dir itself unless the variable names its parent. */
+    val homeValue: (String) -> String = { it },
     val hookEdit: (Config, String) -> HookEdit,
 ) {
     fun settingsPath(cfg: Config) = join(dir(cfg), "settings.json")
@@ -95,10 +97,12 @@ abstract class ExtensionHost(
     fun hostCli(
         cfg: Config,
         args: List<String>,
-    ): String? {
+    ): String? = HostCli.runCli(cfg, spec.host, args, cliEnv(cfg))
+
+    /** The home variable [hostCli] sets: none for the default dir. */
+    internal fun cliEnv(cfg: Config): Pair<String, String>? {
         val dir = spec.dir(cfg)
-        val env = (spec.homeVar to dir).takeIf { dir != join(McpPaths.home(), ".${spec.host}") }
-        return HostCli.runCli(cfg, spec.host, args, env)
+        return (spec.homeVar to spec.homeValue(dir)).takeIf { dir != join(McpPaths.home(), ".${spec.host}") }
     }
 
     companion object {

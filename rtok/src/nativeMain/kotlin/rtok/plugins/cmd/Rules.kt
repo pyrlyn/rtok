@@ -370,8 +370,11 @@ object Rules {
     internal fun normalizeLineKey(line: String): String {
         val out = StringBuilder(line.length)
         var i = 0
+        // End of the digit/dot run at `i`, kept while inside it: a long `1.1.1…` run is scanned once, not once per digit.
+        var runEnd = 0
         while (i < line.length) {
-            val tok = placeholderToken(line, i)
+            if (runEnd <= i) runEnd = numberRunEnd(line, i)
+            val tok = placeholderToken(line, i, runEnd)
             if (tok != null) {
                 out.append(tok.second)
                 i += tok.first
@@ -382,10 +385,21 @@ object Rules {
         return out.toString()
     }
 
-    /** (length, placeholder) of a token starting at [at] of [s]. */
+    /** Index just past the run of digits and dots that starts at [at] of [s]. */
+    private fun numberRunEnd(
+        s: String,
+        at: Int,
+    ): Int {
+        var j = at
+        while (j < s.length && (s[j].digit() || s[j] == '.')) j++
+        return j
+    }
+
+    /** (length, placeholder) of a token starting at [at] of [s]; [runEnd] is [numberRunEnd] of [at]. */
     internal fun placeholderToken(
         s: String,
         at: Int = 0,
+        runEnd: Int = numberRunEnd(s, at),
     ): Pair<Int, String>? {
         val n = s.length - at
 
@@ -412,7 +426,7 @@ object Rules {
         }
         uuidAt(s, at)?.let { return it to "<ID>" }
         longHexAt(s, at)?.let { return it to "<HEX>" }
-        if (n > 0 && c(0).digit()) durationAt(s, at)?.let { return it to "<DUR>" }
+        if (n > 0 && c(0).digit()) durationAt(s, at, runEnd)?.let { return it to "<DUR>" }
         return null
     }
 
@@ -450,13 +464,13 @@ object Rules {
     private fun durationAt(
         s: String,
         at: Int,
+        runEnd: Int,
     ): Int? {
         val n = s.length - at
         // `d:d:d` (`1:2:3`).
         if (n >= CLOCK_LEN && s[at].digit() && s[at + 1] == ':' && s[at + 2].digit() && s[at + 3] == ':' && s[at + 4].digit() && durationBoundary(s, at + CLOCK_LEN)) return CLOCK_LEN
-        var i = 0
-        while (at + i < s.length && (s[at + i].digit() || s[at + i] == '.')) i++
-        if (i == 0) return null
+        val i = runEnd - at
+        if (i <= 0) return null
         if (s.startsWith("ms", at + i) && durationBoundary(s, at + i + 2)) return i + 2
         if (s.startsWith("s", at + i) && durationBoundary(s, at + i + 1)) return i + 1
         return null

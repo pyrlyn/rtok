@@ -1,10 +1,12 @@
 package rtok.store
 
 import rtok.plugin.sdk.SymbolRow
+import rtok.plugin.sdk.SymbolSpan
 import rtok.sys.removeDirAll
 import kotlin.test.*
 
 /** Port of symbols_tests.rs. */
+@Suppress("TooManyFunctions")
 class SymbolsTest {
     private val s = Store.openInMemory()
 
@@ -112,5 +114,47 @@ class SymbolsTest {
         reader.close()
         writer.close()
         removeDirAll(dir)
+    }
+
+    @Test
+    @Suppress("MagicNumber")
+    fun copySymbolRowsKeepsSpansSignaturesAndDocs() {
+        s.replaceSymbols("/main", "a.rs", "sha", 1L to 1L, listOf(SymbolRow("parse", "function", 1, true, 90, "", startByte = 10, endByte = 90, contentHash = "h", signature = "fn parse()", doc = "reads input")))
+        assertEquals(1, s.copySymbolRows("/main", "/wt", emptyList()))
+        assertEquals(SymbolSpan(10u, 90u, "h", "sha"), s.symbolSpan("/wt", "a.rs", "parse", "function", 1))
+        assertTrue(s.symbolFts("/wt", "input", 10).any { it.b == "parse" })
+    }
+
+    @Test fun deleteSymbolsMissingClearsStaleMarksOutsideKeep() {
+        s.replaceSymbols("/r", "a.rs", "s", 1L to 1L, listOf(symRow("f", 1, true)))
+        s.markSymbolsStaleIn("/r", "a.rs")
+        assertEquals(listOf("a.rs"), s.symbolStalePaths("/r"))
+        s.deleteSymbolsMissing("/r", setOf("b.rs"))
+        assertEquals(emptyList(), s.symbolStalePaths("/r"))
+    }
+
+    @Test fun symbolPendingSkipsStalePathsWhoseFileIsGone() {
+        val dir = tmpDir("t-pending-gone")
+        s.replaceSymbols("/r", "a.rs", "s", 1L to 1L, listOf(symRow("f", 1, true)))
+        s.markSymbolsStaleIn("/r", "a.rs")
+        assertEquals(emptyList(), s.symbolPending("/r", dir))
+        removeDirAll(dir)
+    }
+
+    @Test fun replaceOneClearsStaleForATaglessFile() {
+        s.replaceSymbols("/r", "a.py", "s1", 1L to 1L, emptyList())
+        s.markSymbolsStaleIn("/r", "a.py")
+        assertEquals(listOf("a.py"), s.symbolStalePaths("/r"))
+        s.replaceSymbols("/r", "a.py", "s2", 2L to 2L, emptyList())
+        assertEquals(emptyList(), s.symbolStalePaths("/r"))
+    }
+
+    @Test
+    @Suppress("MagicNumber")
+    fun symbolFtsKeepsNameHitsAboveTheCandidateCap() {
+        val rows = (0 until 250).map { i -> SymbolRow("A" + i.toString().padStart(3, '0'), "function", i + 1, true, i + 1, "", doc = "loads config") }
+        s.index("/r", "many.rs", *rows.toTypedArray())
+        s.index("/r", "late.rs", SymbolRow("Config", "struct", 1, true, 1, ""))
+        assertTrue(s.symbolFts("/r", "config", 10).any { it.b == "Config" })
     }
 }

@@ -74,6 +74,14 @@ class SkillsTest {
         }
     }
 
+    @Test fun anUnsetOrRelativeHomeGivesNoHomeRoot() {
+        val cfg = Config()
+        for (home in listOf("", "rel/home")) {
+            for (host in listOf("claude", "cursor", "codex")) assertNull(Skills.root(host, cfg, home), "$host with home '$home'")
+        }
+        assertEquals("/h/.claude/skills", Skills.root("claude", cfg, "/h"))
+    }
+
     @Test fun installReinstallRemoveKeepsForeign() {
         val s = scratch("cycle")
         val foreign = join(s.root, "other/SKILL.md")

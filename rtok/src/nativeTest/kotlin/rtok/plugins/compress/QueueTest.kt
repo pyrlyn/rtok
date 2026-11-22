@@ -9,6 +9,7 @@ import rtok.plugin.Runtime
 import rtok.store.*
 import rtok.support.*
 import kotlin.concurrent.AtomicInt
+import kotlin.coroutines.cancellation.CancellationException
 import kotlin.native.concurrent.ObsoleteWorkersApi
 import kotlin.test.*
 
@@ -166,6 +167,13 @@ class CompressorTest {
             assertEquals(Outcome.Failed("summary cut off at max_output_tokens"), runBlocking { cut.run(r.store, AUTH, id) })
             val gone = assertNotNull(Compressor.create(r.config) { Scripted { throw HttpException(HttpException.Kind.ConnectTimeout, "connect timeout: x") } })
             assertEquals(Outcome.Failed("connect timeout: x"), runBlocking { gone.run(r.store, AUTH, id) })
+        }
+
+    @Test fun aCancelledCallCancelsInsteadOfFailing() =
+        withRuntime("llm-cancel", llmOn()) { r ->
+            val id = archived(r, "plain words only here\n".repeat(40))
+            val c = assertNotNull(Compressor.create(r.config) { Scripted { throw CancellationException("queue closed") } })
+            assertFailsWith<CancellationException> { runBlocking { c.run(r.store, AUTH, id) } }
         }
 
     @Test fun codeAndOversizedInputsAreSkippedWithoutACall() =

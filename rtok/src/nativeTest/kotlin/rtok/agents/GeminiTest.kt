@@ -47,6 +47,16 @@ class GeminiTest {
 
     private fun hooks(c: Config) = root(c)["hooks"]!!.jsonObject
 
+    @Test fun aMovedDirIsNamedByItsParentForTheCli() {
+        val c = Config()
+
+        fun at(dir: String) = c.copy(setup = c.setup.copy(gemini = c.setup.gemini.copy(dir = dir)))
+
+        assertEquals("GEMINI_CLI_HOME" to "/x/y", gemini.cliEnv(at("/x/y/.gemini")))
+        assertEquals("GEMINI_CLI_HOME" to "/x/y", gemini.cliEnv(at("/x/y/.gemini/")))
+        assertEquals("GEMINI_CLI_HOME" to "/x/other", gemini.cliEnv(at("/x/other")))
+    }
+
     @Test fun dryRunNamesSixEventsAndCreatesNothing() {
         val c = cfg("dry", dry = true)
         val out = gemini.run(c, false)

@@ -105,8 +105,8 @@ object Index {
         val rk = canon(root)
         val currentFp = extractorFingerprint(cfg.extensions)
         val fpStale = cx.extractorFingerprint(rk) != currentFp
-        if (fpStale && !dryRun) runCatching { cx.deleteSymbolsMissing(rk, emptySet()) }
-        // A stale root is indexed cold, dry run included: its stats and shas belong to the old extractor.
+        // A stale root is indexed cold, dry run included: its stats and shas belong to the old extractor. Its rows are
+        // not wiped up front: every walked file is replaced and the rest go at the end, so readers never see it empty.
         val stats = if (fpStale) emptyMap() else cx.symbolStats(rk)
         val report = IndexReport()
         var replaced = false
@@ -208,32 +208,68 @@ object Index {
             jobs += Job(abs, rel, stat, known?.first, matcher.extensions)
         }
         eachParsed(jobs) { job, parsed ->
-            when (parsed) {
-                Parsed.Unreadable, Parsed.NotText -> {}
-
-                Parsed.Unparsed -> {
-                    report.read++
-                }
-
-                Parsed.Same -> {
-                    report.read++
-                    report.skipped++
-                    if (!dryRun) cx.touchSymbols(rk, job.rel, job.stat.first, job.stat.second)
-                }
-
-                is Parsed.Rows -> {
-                    report.read++
-                    report.indexed++
-                    dropped = dropped or !dryRun
-                    report.inserted += if (dryRun) parsed.rows.size else cx.replaceSymbols(rk, job.rel, parsed.sha, job.stat, parsed.rows)
-                }
-            }
+            dropped = writeChanged(cx, rk, job, parsed, report, dryRun) or dropped
         }
         if (!dryRun) {
             cx.rebuildSymbolIdf(rk)
             if (report.inserted > 0 || dropped) runCatching { ranks.refresh(cx, rk) }
         }
         return report
+    }
+
+    /**
+     * Store one [runChanged] result; true when the root's rows changed. A file that turned unreadable, non-text or
+     * unparseable is stored with no rows, as a full run stores it, so its old symbols stop being served as current.
+     */
+    private fun writeChanged(
+        cx: Ctx,
+        rk: String,
+        job: Job,
+        parsed: Parsed,
+        report: IndexReport,
+        dryRun: Boolean,
+    ): Boolean {
+        var changed = false
+        when (parsed) {
+            // The unknown stat (0, 0) never matches the gate, so the file is read once it is readable again.
+            Parsed.Unreadable -> {
+                changed = clearRows(cx, rk, job.rel, 0L to 0L, dryRun)
+            }
+
+            Parsed.NotText -> {
+                changed = clearRows(cx, rk, job.rel, job.stat, dryRun)
+            }
+
+            Parsed.Unparsed -> {
+                report.read++
+                changed = clearRows(cx, rk, job.rel, job.stat, dryRun)
+            }
+
+            Parsed.Same -> {
+                report.read++
+                report.skipped++
+                if (!dryRun) cx.touchSymbols(rk, job.rel, job.stat.first, job.stat.second)
+            }
+
+            is Parsed.Rows -> {
+                report.read++
+                report.indexed++
+                report.inserted += if (dryRun) parsed.rows.size else cx.replaceSymbols(rk, job.rel, parsed.sha, job.stat, parsed.rows)
+                changed = !dryRun
+            }
+        }
+        return changed
+    }
+
+    private fun clearRows(
+        cx: Ctx,
+        rk: String,
+        rel: String,
+        stat: Pair<Long, Long>,
+        dryRun: Boolean,
+    ): Boolean {
+        if (!dryRun) cx.replaceSymbols(rk, rel, EMPTY_SHA, stat, emptyList())
+        return !dryRun
     }
 
     /** Index [root] only when it has no rows yet (first tool call in that repo). */
@@ -370,9 +406,16 @@ object Index {
     internal fun docAbove(
         src: String,
         line: Int,
+    ): String = docAbove(docLines(src), line)
+
+    private fun docLines(src: String): List<String> = src.lines().let { if (src.endsWith("\n")) it.dropLast(1) else it }
+
+    /** [docAbove] over lines split once per file, so a file with many definitions is not re-split for each one. */
+    private fun docAbove(
+        lines: List<String>,
+        line: Int,
     ): String {
         if (line <= 1) return ""
-        val lines = src.lines().let { if (src.endsWith("\n")) it.dropLast(1) else it }
         var i = (line - 1).coerceAtMost(lines.size)
         val rev = ArrayList<String>()
         while (i > 0) {
@@ -424,6 +467,7 @@ object Index {
         hits: List<TagHit>,
     ): List<SymbolRow> {
         val bytes = src.encodeToByteArray()
+        val lines by lazy { docLines(src) }
         val defs = hits.filter { it.isDef }.map { Triple(it.line, maxOf(it.endLine, it.line), it.name) }
         return hits.map { h ->
             val scope =
@@ -455,7 +499,7 @@ object Index {
                 endByte = h.endByte.toLong(),
                 contentHash = contentHash(bytes, h.startByte, h.endByte),
                 signature = if (h.isDef) h.lineText.trimEnd('\r', '\n') else "",
-                doc = if (h.isDef) docAbove(src, h.line) else "",
+                doc = if (h.isDef) docAbove(lines, h.line) else "",
             )
         }
     }
@@ -472,7 +516,7 @@ object Index {
         event: String,
     ): String {
         val raw = if (event.startsWith("/")) event else join(root, event)
-        return canonicalize(raw) ?: parent(event)?.let(::canonicalize)?.let { p -> fileName(event)?.let { join(p, it) } } ?: raw
+        return canonicalize(raw) ?: parent(raw)?.let(::canonicalize)?.let { p -> fileName(raw)?.let { join(p, it) } } ?: raw
     }
 
     @Serializable internal class IndexedHead(

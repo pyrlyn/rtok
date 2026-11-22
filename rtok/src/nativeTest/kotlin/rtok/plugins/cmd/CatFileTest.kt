@@ -45,7 +45,9 @@ class CatFileTest {
 
     @Test fun rereadKeyNamesTheFileAndRange() {
         val (path, key) = CatFile.rereadKey(argv("cat -n src/a.rs"))!!
-        assertTrue(path.endsWith("src/a.rs") && key.endsWith("\tcmd\t"), key)
+        assertTrue(path.endsWith("src/a.rs") && key.endsWith("\tcmd-n\t"), key)
+        assertNotEquals(key, CatFile.rereadKey(argv("cat src/a.rs"))!!.second, "`cat -n` prints another body")
+        assertTrue(CatFile.rereadKey(argv("cat src/a.rs"))!!.second.endsWith("\tcmd\t"))
         assertTrue(CatFile.rereadKey(argv("sed -n 5,20p src/a.rs"))!!.second.endsWith("\tcmd\t5,20p"))
         assertNull(CatFile.rereadKey(argv("sed -i s/a/b/ f")))
         assertNull(CatFile.rereadKey(argv("cat a b")))

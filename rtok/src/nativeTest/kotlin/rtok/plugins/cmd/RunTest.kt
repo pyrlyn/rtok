@@ -164,6 +164,14 @@ class RunTest {
         assertFalse(needsPointer(1u, 40u, "hello-trycmd\n".encodeToByteArray(), "hello-trycmd", false))
     }
 
+    @Test fun aHugeSingleLineIsComparedWithoutBoxingEveryByte() {
+        val big = ByteArray(8 shl 20) { 'a'.code.toByte() }
+        val text = big.decodeToString()
+        assertFalse(needsPointer(1u, 40u, big, "  $text\n\n", false), "only edges and blank lines differ")
+        assertTrue(needsPointer(1u, 40u, big, text.dropLast(1), false), "one byte dropped")
+        assertFalse(needsPointer(2u, 40u, "a \t b\n\n  c \u001b[1m\n".encodeToByteArray(), "a b\nc", false))
+    }
+
     @Test fun tinyBodyPassesThroughVerbatimWithNoNegativeSaving() {
         val (c, dir) = cmdConfig("tiny-passthrough")
         val line = "root         1  0.0  00:00:01 /sbin/init worker-7 extra-flag"

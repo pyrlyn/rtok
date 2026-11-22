@@ -68,7 +68,8 @@ private class Content(
         if (!cfg.content) return
         archive?.let { attrs += s("rtok.archive.id", it) }
         val bytes = (text ?: return).encodeToByteArray()
-        val cap = cfg.contentBytes.toInt()
+        // The config key is a u32; above Int.MAX_VALUE a plain conversion goes negative and every flush throws.
+        val cap = cfg.contentBytes.coerceAtMost(Int.MAX_VALUE.toUInt()).toInt()
         if (bytes.size <= cap) {
             attrs += s(key, text)
             return

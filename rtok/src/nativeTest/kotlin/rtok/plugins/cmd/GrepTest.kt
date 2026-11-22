@@ -63,5 +63,13 @@ class GrepTest {
 
     @Test fun neverLongerThanRaw() = assertNull(Grep.group(argv("grep -rn hit ."), "a.rs:1:hit\n"))
 
+    @Test fun oneFileOperandPrintsNoPathColumn() {
+        val raw = "url: a\nbase_url: b\nurl: c\n" + (1..20).joinToString("") { "url: v$it\n" }
+        val single = listOf("grep url config.yaml", "rg url config.yaml", "grep -e url config.yaml", "grep -i url config.yaml")
+        for (cmd in single) assertNull(Grep.group(argv(cmd), raw), cmd)
+        val named = "config.yaml:url: a\nconfig.yaml:url: c\nconfig.yaml:url: d\n"
+        assertEquals("config.yaml\nurl: a\nurl: c\nurl: d", Grep.group(argv("grep -H url config.yaml"), named))
+    }
+
     @Test fun gitGrepAndUnnumberedOutput() = assertEquals("src/a.rs\nlet hit = 1;\nlet hit = 2;", Grep.group(argv("git grep hit"), "src/a.rs:let hit = 1;\nsrc/a.rs:let hit = 2;\n"))
 }

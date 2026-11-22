@@ -117,24 +117,32 @@ class CommandCode(
             val hooks = root["hooks"] as? JsonObject ?: return root to NO_CHANGES
             val out = LinkedHashMap(hooks)
             val removed = mutableListOf<String>()
-            for ((event, _) in HookEvents.installed(HOST)) {
-                val defs = out[event] as? JsonArray ?: continue
-                var done = false
-                val kept =
-                    defs.map { def ->
-                        val entries = innerHooks(def)
-                        if (done || entries == null) return@map def
-                        val left = entries.filterNot(::isOurs)
-                        if (left.size == entries.size) return@map def
-                        done = true
-                        removed += "- $event"
-                        withInner(def, left)
-                    }
-                // Definitions left with no hooks go; foreign ones stay.
-                out[event] = JsonArray(kept.filter(::keepsHooks))
+            // Every definition of an event, not only the first: a hook added twice (by hand, an older build) goes too.
+            for (event in HookEvents.installed(HOST).map { it.first }.distinct()) {
+                val left = (out[event] as? JsonArray)?.let { stripEvent(event, it, removed) } ?: continue
+                // An event rtok alone filled goes with its definitions.
+                if (left.isEmpty()) out.remove(event) else out[event] = JsonArray(left)
             }
             val next = if (out.isEmpty()) JsonObject(root - "hooks") else JsonObject(root + ("hooks" to JsonObject(out)))
             return if (removed.isEmpty()) root to NO_CHANGES else next to removed.joinToString("\n")
+        }
+
+        /** [defs] without rtok's hooks, definitions left with none dropped (foreign ones stay); null when none was ours. */
+        private fun stripEvent(
+            event: String,
+            defs: JsonArray,
+            removed: MutableList<String>,
+        ): List<JsonElement>? {
+            val before = removed.size
+            val kept =
+                defs.map { def ->
+                    val entries = innerHooks(def) ?: return@map def
+                    val left = entries.filterNot(::isOurs)
+                    if (left.size == entries.size) return@map def
+                    removed += "- $event"
+                    withInner(def, left)
+                }
+            return if (removed.size == before) null else kept.filter(::keepsHooks)
         }
 
         /** `<rtok-bin> hook <Claude event> --host commandcode`, for any event the installer writes. */
@@ -142,7 +150,7 @@ class CommandCode(
             val cmd = str(entry, "command") ?: return false
             return HookEvents.installed(HOST).any { (_, claude) ->
                 val suffix = " hook $claude --host $HOST"
-                cmd.endsWith(suffix) && isRtokBin(HookLine.unquoteBin(cmd.removeSuffix(suffix)))
+                cmd.endsWith(suffix) && HookLine.isRtokWord(cmd.removeSuffix(suffix))
             }
         }
     }

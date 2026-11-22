@@ -50,15 +50,16 @@ object CatFile {
     fun rereadKey(argv: List<String>): Pair<String, String>? {
         val stem = cmdStem(argv.firstOrNull() ?: return null)
         val rest = argv.drop(1)
-        val (file, range) =
+        // `cat -n` numbers every line, so it is another body than `cat` and gets its own mode.
+        val (file, mode, range) =
             when {
-                stem == "cat" && rest.size == 1 && !rest[0].startsWith("-") -> rest[0] to null
-                stem == "cat" && rest.size == 2 && rest[0] == "-n" && !rest[1].startsWith("-") -> rest[1] to null
-                stem == "sed" && rest.size == 3 && rest[0] == "-n" && isPrintRange(rest[1]) && !rest[2].startsWith("-") -> rest[2] to rest[1]
+                stem == "cat" && rest.size == 1 && !rest[0].startsWith("-") -> Triple(rest[0], "cmd", null)
+                stem == "cat" && rest.size == 2 && rest[0] == "-n" && !rest[1].startsWith("-") -> Triple(rest[1], "cmd-n", null)
+                stem == "sed" && rest.size == 3 && rest[0] == "-n" && isPrintRange(rest[1]) && !rest[2].startsWith("-") -> Triple(rest[2], "cmd", rest[1])
                 else -> return null
             }
         val path = if (file.startsWith("/")) file else "${rtok.sys.cwd()}/$file"
-        return path to ReadCache.key(path, "cmd", range)
+        return path to ReadCache.key(path, mode, range)
     }
 
     /** `5,20p` / `5p`. */

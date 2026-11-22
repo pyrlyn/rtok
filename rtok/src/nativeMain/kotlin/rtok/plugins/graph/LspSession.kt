@@ -187,6 +187,8 @@ class LspSession internal constructor(
                 "dart" -> "dart"
                 else -> "plaintext"
             }
+        // Every request re-reads each open document, so a long session must not keep every file it ever touched open.
+        while (opened.size >= OPEN_CAP) close(opened.keys.first())
         notify(
             "textDocument/didOpen",
             buildJsonObject {
@@ -226,6 +228,9 @@ class LspSession internal constructor(
     companion object {
         /** The server's stderr log inside its private directory. */
         internal const val STDERR = "stderr"
+
+        /** Documents kept open at once; the oldest is closed first. */
+        internal const val OPEN_CAP = 64
 
         private val lock = rtok.sys.Mutex()
         private var cached: Pair<String, LspSession>? = null

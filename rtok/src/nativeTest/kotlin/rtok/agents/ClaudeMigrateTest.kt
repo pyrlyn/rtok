@@ -7,6 +7,13 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import rtok.config.Config
+import rtok.sys.createDirAll
+import rtok.sys.exists
+import rtok.sys.join
+import rtok.sys.readToString
+import rtok.sys.removeDirAll
+import rtok.sys.tempDir
+import rtok.sys.writeString
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -59,6 +66,24 @@ class ClaudeMigrateTest {
         ).forEach { assertEquals(it to false, url(it), it) }
         val (once, _) = ClaudeMigrate.retarget(env("http://127.0.0.1:8788"), proxy)
         assertNull(ClaudeMigrate.retarget(once, proxy).second)
+    }
+
+    @Test fun aFileWithNothingToMigrateIsNotRewrittenOrCreated() {
+        val dir = join(tempDir(), "rtok-migrate-${kotlin.random.Random.nextLong().toULong()}").also(::createDirAll)
+        val c = Config()
+        val settings = join(dir, "settings.json")
+        val cfg =
+            c.copy(
+                setup = c.setup.copy(yes = true, backup = false, claude = c.setup.claude.copy(settingsPath = settings)),
+                doctor = c.doctor.copy(claudeJson = join(dir, ".claude.json")),
+            )
+        ClaudeMigrate.run(cfg)
+        assertFalse(exists(settings))
+        val compact = "{\"hooks\":{\"Stop\":[{\"hooks\":[{\"type\":\"command\",\"command\":\"rtok hook Stop\"}]}]}}"
+        writeString(settings, compact)
+        ClaudeMigrate.run(cfg)
+        assertEquals(compact, readToString(settings))
+        removeDirAll(dir)
     }
 
     @Test fun replaceWithoutYesIsAnError() {

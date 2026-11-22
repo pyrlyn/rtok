@@ -50,7 +50,7 @@ class ProgressRunner(
         memScoped {
             val outPipe = allocArray<IntVar>(2)
             val errPipe = allocArray<IntVar>(2)
-            check(pipe(outPipe) == 0 && pipe(errPipe) == 0) { "pipe: errno $errno" }
+            openPipes(outPipe, errPipe)
             val actions = SpawnActions().dup2(outPipe[1], 1).dup2(errPipe[1], 2)
             dir?.let { actions.chdir(it) }
             stdinPath?.let { actions.open(0, it, O_RDONLY) }
@@ -187,6 +187,19 @@ internal class Bytes {
 
 private fun environPtr() = rtok_environ()
 
+/** Opens each pipe in turn; when one fails, the ones already open are closed first, so fd exhaustion does not feed itself. */
+internal fun openPipes(vararg pipes: CArrayPointer<IntVar>) {
+    for ((i, p) in pipes.withIndex()) {
+        if (pipe(p) == 0) continue
+        val e = errno
+        for (done in pipes.take(i)) {
+            close(done[0])
+            close(done[1])
+        }
+        error("pipe: errno $e")
+    }
+}
+
 /** Our environment as `KEY=value` entries with [extra] set on top (Rust `Command::env`). */
 internal fun mergedEnv(extra: Map<String, String>): List<String> =
     buildList {
@@ -279,7 +292,20 @@ fun spawnDetached(
                 .open(2, "/dev/null", O_WRONLY)
         val rc = if (runCatching { actions.spawn(program, args, mergedEnv(extraEnv), setsid = true, search = false) }.isSuccess) 0 else 1
         close(inPipe[0])
-        if (rc == 0) stdin.usePinned { if (stdin.isNotEmpty()) write(inPipe[1], it.addressOf(0), stdin.size.convert()) }
+        if (rc == 0 && stdin.isNotEmpty()) {
+            // A child that exits before it reads must fail the write (EPIPE), not kill the caller.
+            signal(SIGPIPE, SIG_IGN)
+            stdin.usePinned {
+                var off = 0
+                while (off < stdin.size) {
+                    val n = write(inPipe[1], it.addressOf(off), (stdin.size - off).convert()).toInt()
+                    when {
+                        n > 0 -> off += n
+                        n == 0 || errno != EINTR -> break
+                    }
+                }
+            }
+        }
         close(inPipe[1])
         rc == 0
     }

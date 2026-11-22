@@ -26,15 +26,17 @@ object Skills {
     fun root(
         host: String,
         cfg: Config,
+        userHome: String = McpPaths.home(),
     ): String? {
-        val home = McpPaths.home()
+        // An unset or relative HOME would put the copies, and their removal, in whatever directory rtok runs in.
+        val home = userHome.takeIf { it.startsWith("/") }
         val s = cfg.setup
         return when (host) {
-            "claude" -> join(home, ".claude/skills")
+            "claude" -> home?.let { join(it, ".claude/skills") }
 
-            "cursor" -> join(home, ".cursor/skills")
+            "cursor" -> home?.let { join(it, ".cursor/skills") }
 
-            "codex" -> join(home, ".codex/skills")
+            "codex" -> home?.let { join(it, ".codex/skills") }
 
             "opencode" -> beside(s.opencode.configPath)
 

@@ -63,7 +63,7 @@ object ClaudeHooks {
     private fun oursBy(
         cmd: String,
         suffix: String,
-    ): Boolean = if (cmd.endsWith(suffix)) isRtokBin(HookLine.unquoteBin(cmd.removeSuffix(suffix))) else cmd.contains("exec rtok${suffix.trimEnd()};")
+    ): Boolean = if (cmd.endsWith(suffix)) HookLine.isRtokWord(cmd.removeSuffix(suffix)) else cmd.contains("exec rtok${suffix.trimEnd()};")
 
     /** Claude's own spelling, which Codex, Qwen and ZCode share. */
     val CLAUDE = HookForm(::command, ::isOurs)

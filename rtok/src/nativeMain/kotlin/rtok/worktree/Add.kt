@@ -2,6 +2,8 @@
 // [Add.plan] decides everything from paths and strings; [Add.run] is one fetch and one `git worktree add`.
 package rtok.worktree
 
+import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.convert
 import rtok.config.ProjectRoot
 import rtok.config.contain
 import rtok.config.resolved
@@ -93,6 +95,16 @@ class Undo {
         }
         steps.clear()
     }
+}
+
+private const val RESERVED_DIR_MODE = 0x1ed // 0o755
+
+/** Creates [path] itself (not its parents); false when something already sits there. */
+@OptIn(ExperimentalForeignApi::class)
+private fun reserve(path: String): Boolean {
+    if (platform.posix.mkdir(path, RESERVED_DIR_MODE.convert()) == 0) return true
+    val err = platform.posix.errno
+    return if (err == platform.posix.EEXIST) false else fail("cannot create $path: errno $err")
 }
 
 private val IDENT = Regex("""[a-z0-9][a-z0-9._-]*""")
@@ -224,8 +236,9 @@ object Add {
         Git.fetch(main, base)
         if (pathStartsWith(resolved(plan.path), resolved(main))) ensureIgnored(main)
         parent(plan.path)?.let { r -> context({ "cannot create $r" }) { createDirAll(r) } }
-        // Another add of the same task may have made it since; the rollback must never remove what this call did not create.
-        if (exists(plan.path)) fail("${plan.path} already exists: one worktree per task")
+        // Another add of the same task may be running; the rollback must never remove what this call did not create.
+        // An exclusive mkdir lets exactly one of them on, and git fills the empty directory it leaves.
+        if (!reserve(plan.path)) fail("${plan.path} already exists: one worktree per task")
         val undo = Undo()
         // Recorded before the call: git may die with the branch made and the directory half filled.
         if (!Git.hasBranch(main, plan.branch)) undo.branch(main, plan.branch)

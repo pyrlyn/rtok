@@ -6,5 +6,6 @@
     <ID>ReturnCount:Backup.kt:fun pruneBackups</ID>
     <ID>ReturnCount:Backup.kt:internal fun backupAt: String?</ID>
     <ID>TooManyFunctions:Backup.kt:rtok.agent.sdk.Backup.kt</ID>
+    <ID>TooManyFunctions:PluginLinkTest.kt:PluginLinkTest</ID>
   </CurrentIssues>
 </SmellBaseline>

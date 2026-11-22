@@ -17,6 +17,8 @@ fun moveByCopy(
     to: String,
 ) {
     val meta = symlinkMeta(from)
+    // The failure path below removes [to]: it must be this call's partial copy, never something that was there before.
+    requireAbsent(to)
     try {
         when (meta.kind) {
             EntryKind.Dir -> {
@@ -40,3 +42,7 @@ fun moveByCopy(
 }
 
 private fun symlinkExists(p: String): Boolean = runCatching { symlinkMeta(p) }.isSuccess
+
+private fun requireAbsent(p: String) {
+    if (symlinkExists(p)) throw IoException(IoException.Kind.Other, "$p: already exists")
+}

@@ -118,8 +118,23 @@ class TuiApp(
     fun rows(): Int =
         when (page) {
             "sessions" -> sessionRows().size
+
             "skills" -> skillRows().size
+
+            // The page scrolls the report's text, which is far longer than the snapshot's handful of keys.
+            "doctor" -> doctorLines() ?: fieldRows()
+
             else -> fieldRows()
+        }
+
+    private fun doctorLines(): Int? =
+        actions?.let { a ->
+            rtok.model.DoctorPage
+                .read(a.cfg)
+                .first
+                ?.toText()
+                ?.lines()
+                ?.size
         }
 
     private fun fieldRows(): Int =

@@ -18,16 +18,14 @@ actual fun moveToTrash(path: String) {
     createDirAll("$trash/files")
     createDirAll("$trash/info")
     val base = abs.trimEnd('/').substringAfterLast('/')
-    var name = base
-    var n = 1
-    while (exists("$trash/files/$name") || exists("$trash/info/$name.trashinfo")) name = "$base.${n++}"
     val now =
         kotlin.time.Clock.System
             .now()
             .toString()
             .substringBefore('.')
             .removeSuffix("Z")
-    writeString("$trash/info/$name.trashinfo", "[Trash Info]\nPath=${percentEncode(abs)}\nDeletionDate=$now\n")
+    val info = "[Trash Info]\nPath=${percentEncode(abs)}\nDeletionDate=$now\n".encodeToByteArray()
+    val name = reserveName(trash, base, info)
     if (rename(abs, "$trash/files/$name") != 0) {
         val e = errno
         try {
@@ -37,6 +35,32 @@ actual fun moveToTrash(path: String) {
             removeFile("$trash/info/$name.trashinfo")
             throw x
         }
+    }
+}
+
+/**
+ * The spec's reservation: an exclusive create of the info file claims the name, so two processes trashing the same
+ * base name at once never pick one name (the rename would replace the first one's file).
+ */
+private fun reserveName(
+    trash: String,
+    base: String,
+    info: ByteArray,
+): String {
+    var name = base
+    var n = 1
+    while (true) {
+        val infoFile = "$trash/info/$name.trashinfo"
+        if (!exists("$trash/files/$name") && !exists(infoFile)) {
+            try {
+                createNewBytes(infoFile, info)
+                return name
+            } catch (e: IoException) {
+                // Lost the race for this name: try the next one. Any other failure is real.
+                if (!exists(infoFile)) throw e
+            }
+        }
+        name = "$base.${n++}"
     }
 }
 

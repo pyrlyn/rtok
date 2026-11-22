@@ -234,6 +234,29 @@ class HooksTest {
         }
     }
 
+    @Test fun aHookWhoseScriptIsNotCertainIsNeverCalledBroken() {
+        val m = Mock()
+        val hooks =
+            listOf(
+                "python3 -m mypkg.hook",
+                "node -r ts-node/register hook.ts",
+                "bash -lc \"echo hi\"",
+                "bun run dev",
+                "deno run https://example.com/x.ts",
+                "uv run pytest",
+                "uv run ruff check",
+                "uv run --with rich hook.py",
+            )
+        for (hook in hooks) assertTrue(verdicts(m, listOf(hook)).none { it.first == "broken-hook" }, hook)
+    }
+
+    @Test fun aValuelessInterpreterFlagStillLeadsToTheScript() {
+        val m = Mock()
+        m.script("/proj/ok.py", false)
+        assertTrue(verdicts(m, listOf("python3 -u /proj/ok.py")).isEmpty())
+        assertEquals("broken-hook", verdicts(m, listOf("python3 -u /proj/gone.py"))[0].first)
+    }
+
     @Test fun aProgramIsLookedUpOnPathAndABuiltinNeedsNoFile() {
         val m = Mock()
         m.path["jq"] = "/usr/bin/jq"

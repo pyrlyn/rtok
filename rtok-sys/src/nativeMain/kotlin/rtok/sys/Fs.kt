@@ -64,10 +64,11 @@ fun canonicalize(path: String): String? =
         realpath(path, buf)?.toKString()
     }
 
+/** @throws IoException when the working directory is gone (removed under the process) or its path is too long. */
 fun cwd(): String =
     memScoped {
         val b = allocArray<ByteVar>(PATH_MAX + 1)
-        getcwd(b, (PATH_MAX + 1).convert())!!.toKString()
+        getcwd(b, (PATH_MAX + 1).convert())?.toKString() ?: throw IoException(ioKind(errno), "getcwd: errno $errno")
     }
 
 /** Canonical when it exists, otherwise lexically normalized against the cwd (fs-kit `canon`). */
@@ -143,6 +144,8 @@ internal fun readAllFrom(f: CPointer<FILE>): ByteArray {
             chunks += buf.readBytes(n)
         }
     }
+    // A read error must not pass for a short file.
+    if (ferror(f) != 0) throw IoException(IoException.Kind.Other, "read failed: errno $errno")
     val total = chunks.sumOf { it.size }
     val out = ByteArray(total)
     var p = 0
@@ -164,11 +167,17 @@ fun writeBytes(
     b: ByteArray,
 ) {
     val f = fopen(path, "wb") ?: throw IoException(IoException.Kind.Other, "$path: errno $errno")
-    try {
-        if (b.isNotEmpty()) b.usePinned { fwrite(it.addressOf(0), 1u, b.size.convert(), f) }
-    } finally {
-        fclose(f)
-    }
+    // A full disk shows as a short fwrite or as a failed flush in fclose; either leaves a truncated file.
+    val wrote = b.isEmpty() || b.usePinned { fwrite(it.addressOf(0), 1u, b.size.convert(), f) }.toInt() == b.size
+    val err = errno
+    val closed = fclose(f) == 0
+    val failure =
+        when {
+            !wrote -> "short write, errno $err"
+            !closed -> "close failed, errno $errno"
+            else -> null
+        }
+    if (failure != null) throw IoException(IoException.Kind.Other, "$path: $failure")
 }
 
 /** `OpenOptions::new().write(true).create_new(true)` then `write_all`: fails when [path] exists. */
@@ -430,18 +439,19 @@ fun eprint(text: String) {
     platform.posix.fflush(platform.posix.stderr)
 }
 
-/** Everything readable from [fd] until EOF (stdin = 0). */
-fun readFd(fd: Int): ByteArray =
-    memScoped {
-        val out = ArrayList<Byte>()
-        val buf = allocArray<ByteVar>(65536)
-        while (true) {
-            val n = read(fd, buf, 65536.convert()).toInt()
-            if (n <= 0) break
-            for (i in 0 until n) out += buf[i]
+/** Everything readable from [fd] until EOF (stdin = 0); a read interrupted by a signal is retried, not taken for EOF. */
+fun readFd(fd: Int): ByteArray {
+    val out = Bytes()
+    val buf = ByteArray(65536)
+    while (true) {
+        val n = buf.usePinned { read(fd, it.addressOf(0), buf.size.convert()) }.toInt()
+        when {
+            n > 0 -> out.write(buf, n)
+            n == 0 || errno != EINTR -> break
         }
-        out.toByteArray()
     }
+    return out.toByteArray()
+}
 
 /** Writes all of [bytes] to [fd] (stdout = 1), flushing stdio first so ordering holds. */
 fun writeFd(
@@ -453,11 +463,32 @@ fun writeFd(
     bytes.usePinned { p ->
         while (off < bytes.size) {
             val n = write(fd, p.addressOf(off), (bytes.size - off).convert()).toInt()
-            if (n <= 0) break
-            off += n
+            when {
+                n > 0 -> off += n
+                n == 0 || !retryWrite(fd) -> break
+            }
         }
     }
 }
+
+/**
+ * Whether a failed write is worth another try: a signal interrupted it, or [fd] is non-blocking (a host can hand
+ * over such a stdout) and has room again. Anything else drops the rest.
+ */
+private fun retryWrite(fd: Int): Boolean = errno == EINTR || ((errno == EAGAIN || errno == EWOULDBLOCK) && waitWritable(fd))
+
+/** Blocks until [fd] takes more bytes; false when poll itself fails. */
+private fun waitWritable(fd: Int): Boolean =
+    memScoped {
+        val p = alloc<pollfd>()
+        p.fd = fd
+        p.events = POLLOUT.convert()
+        var r: Int
+        do {
+            r = poll(p.ptr, 1u, -1)
+        } while (r < 0 && errno == EINTR)
+        r >= 0
+    }
 
 /** At most [limit] bytes from the start of [path]; null when it cannot be opened or read (a directory, say). */
 fun readPrefix(
@@ -496,11 +527,16 @@ fun appendString(
     text: String,
 ) {
     val f = platform.posix.fopen(path, "a") ?: throw IoException(IoException.Kind.Other, "cannot open $path")
-    try {
-        platform.posix.fputs(text, f)
-    } finally {
-        platform.posix.fclose(f)
-    }
+    val wrote = platform.posix.fputs(text, f) >= 0
+    val err = errno
+    val closed = platform.posix.fclose(f) == 0
+    val failure =
+        when {
+            !wrote -> "append failed, errno $err"
+            !closed -> "close failed, errno $errno"
+            else -> null
+        }
+    if (failure != null) throw IoException(IoException.Kind.Other, "$path: $failure")
 }
 
 /** Reads at most [limit] bytes from file descriptor [fd] (Rust `Read::take(limit).read_to_end`). */

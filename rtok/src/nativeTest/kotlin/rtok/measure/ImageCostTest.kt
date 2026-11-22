@@ -45,6 +45,8 @@ class ImageCostTest {
         assertEquals(1920 to 1080, ImageCost.dims(png(1920, 1080)))
         assertEquals(800 to 600, ImageCost.dims(jpeg(800, 600)))
         assertNull(ImageCost.dims("R0lGODlh"))
+        assertNull(ImageCost.dims(png(0, 1080)))
+        assertNull(ImageCost.dims(png(1920, 0)))
         assertEquals(29L, ImageCost.decodedLen(png(1, 1)))
     }
 

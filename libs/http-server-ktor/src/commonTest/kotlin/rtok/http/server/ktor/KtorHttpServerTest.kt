@@ -186,4 +186,18 @@ class KtorStreamingTest {
             }
         }
     }
+
+    @Test fun aMalformedContentTypeStillStreamsTheBody() {
+        val handler =
+            rtok.http.server.StreamingHandler { _, _ ->
+                rtok.http.server.StreamingResponse(200, listOf("Content-Type" to "no-slash")) { it.write("body".encodeToByteArray()) }
+            }
+        serving(handler) { host ->
+            KtorHttp(HttpSettings()).use { client ->
+                val got = client.request("GET", HttpRequest("http://$host/x"))
+                assertEquals(200, got.status)
+                assertEquals("body", got.text())
+            }
+        }
+    }
 }

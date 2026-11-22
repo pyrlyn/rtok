@@ -24,6 +24,11 @@ class HumantimeTest {
         assertEquals(90.minutes, parseHumanDuration("1h30min"))
     }
 
+    @Test fun whitespaceBetweenNumberAndUnit() {
+        assertEquals(30.minutes, parseHumanDuration("30 min"))
+        assertEquals(2.hours + 5.minutes, parseHumanDuration("2 hours 5 min"))
+    }
+
     @Test fun largeSubsecondUnitsDoNotWrap() {
         assertEquals(9_223_372_036_855L.milliseconds, parseHumanDuration("9223372036855ms"))
         assertEquals(9_223_372_036.seconds + 854_775_807.nanoseconds, parseHumanDuration("9223372036854775807ns"))

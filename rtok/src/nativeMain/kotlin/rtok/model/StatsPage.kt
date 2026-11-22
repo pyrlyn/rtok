@@ -51,30 +51,30 @@ object StatsPage {
     fun plugin(
         cfg: Config,
         plugin: String,
-    ): JsonObject {
-        val store = Store.open(cfg.core.dbPath)
-        val rows = store.listMeasurements(plugin)
-        val hits = rows.count { it.kind == "expand" }
-        val list =
-            rows.map {
-                sorted(
-                    "kind" to rtok.measure.stats.json(it.kind),
-                    "before" to rtok.measure.stats.json(it.beforeBytes),
-                    "after" to rtok.measure.stats.json(it.afterBytes),
-                    "est_before" to rtok.measure.stats.json(it.estBefore),
-                    "est_after" to rtok.measure.stats.json(it.estAfter),
-                    "ref_id" to rtok.measure.stats.json(it.refId),
-                )
+    ): JsonObject =
+        Store.open(cfg.core.dbPath).use { store ->
+            val rows = store.listMeasurements(plugin)
+            val hits = rows.count { it.kind == "expand" }
+            val list =
+                rows.map {
+                    sorted(
+                        "kind" to rtok.measure.stats.json(it.kind),
+                        "before" to rtok.measure.stats.json(it.beforeBytes),
+                        "after" to rtok.measure.stats.json(it.afterBytes),
+                        "est_before" to rtok.measure.stats.json(it.estBefore),
+                        "est_after" to rtok.measure.stats.json(it.estAfter),
+                        "ref_id" to rtok.measure.stats.json(it.refId),
+                    )
+                }
+            val out = mutableListOf("plugin" to rtok.measure.stats.json(plugin), "archive_hits" to rtok.measure.stats.json(hits), "rows" to JsonArray(list))
+            if (plugin == "archive") {
+                val (decisions, expanded) = store.archiveDecisionCounts()
+                out += "decisions" to rtok.measure.stats.json(decisions)
+                out += "expanded" to rtok.measure.stats.json(expanded)
+                out += "expand_rate" to rtok.measure.stats.json(if (decisions > 0) expanded.toDouble() / decisions.toDouble() else 0.0)
             }
-        val out = mutableListOf("plugin" to rtok.measure.stats.json(plugin), "archive_hits" to rtok.measure.stats.json(hits), "rows" to JsonArray(list))
-        if (plugin == "archive") {
-            val (decisions, expanded) = store.archiveDecisionCounts()
-            out += "decisions" to rtok.measure.stats.json(decisions)
-            out += "expanded" to rtok.measure.stats.json(expanded)
-            out += "expand_rate" to rtok.measure.stats.json(if (decisions > 0) expanded.toDouble() / decisions.toDouble() else 0.0)
+            sorted(*out.toTypedArray())
         }
-        return sorted(*out.toTypedArray())
-    }
 
     fun pluginJson(
         cfg: Config,
@@ -82,7 +82,7 @@ object StatsPage {
     ) = SerdeJson.pretty(plugin(cfg, plugin))
 
     /** `cache_health`: the store is required. */
-    fun cacheHealth(cfg: Config): List<SessionHealth> = CacheHealth.report(Store.open(cfg.core.dbPath))
+    fun cacheHealth(cfg: Config): List<SessionHealth> = Store.open(cfg.core.dbPath).use(CacheHealth::report)
 
     /** At most this many of the newest `PostToolUse` rows are read, so a long history costs a bounded scan. */
     private const val DISCOVER_SCAN_ROWS = 50_000L

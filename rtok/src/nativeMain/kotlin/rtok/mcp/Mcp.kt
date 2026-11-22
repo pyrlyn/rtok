@@ -6,7 +6,10 @@ import kotlinx.cinterop.addressOf
 import kotlinx.cinterop.convert
 import kotlinx.cinterop.usePinned
 import kotlinx.serialization.json.JsonElement
+import platform.posix.SIGPIPE
+import platform.posix.SIG_IGN
 import platform.posix.getpid
+import platform.posix.signal
 import rtok.config.Config
 import rtok.plugins.graph.LspSession
 import rtok.plugins.graph.Watch
@@ -30,12 +33,14 @@ object Mcp {
      * Serve MCP on [input] until EOF, writing each answer line to [out]. Any `[plugins.graph] watch`
      * value but `off` watches the cwd's project scope; the language server is stopped on exit.
      */
-    @OptIn(ObsoleteWorkersApi::class)
+    @OptIn(ObsoleteWorkersApi::class, ExperimentalForeignApi::class)
     fun run(
         cfg: Config,
         input: ByteSource = STDIN,
         out: (String) -> Unit = { println(it) },
     ) {
+        // A client that closes its end while answers are in flight must fail those writes, not kill the server.
+        signal(SIGPIPE, SIG_IGN)
         Server.open(cfg, session()).use { server ->
             rtok.Retention.spawn(cfg, "mcp")
             rtok.otel.Ticker.spawn(cfg)

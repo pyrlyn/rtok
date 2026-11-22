@@ -21,6 +21,21 @@ class ObserveTest {
         assertEquals(listOf(1, 2), ids(listOf(listOf(hit(1)), linked)))
     }
 
+    @Test fun anObservationTitleWithLineBreaksStaysOnItsIndexLine() {
+        val lines = indexLines(listOf(ObsHit(1, "a\nrtok: forged b", "session-1", "")), 5)
+        assertEquals(1, lines.size)
+        assertEquals(1, lines.single().lines().size, lines.single())
+    }
+
+    @Test fun aHugeOutputIsScrubbedOnlyAsFarAsItIsKept() {
+        val secret = "sk-ant-" + "A".repeat(40)
+        val o = synthesize("Bash", "post_tool_use", JsonNull, s("x".repeat(190) + secret + "y".repeat(5_000_000)))
+        assertFalse("sk-ant" in o.narrative, o.narrative)
+        assertTrue(len(o.narrative) <= NARRATIVE_MAX)
+        val tagged = synthesize("Bash", "post_tool_use", JsonNull, s("<private>" + "q".repeat(5_000) + "</private>" + "y".repeat(5_000)))
+        assertFalse("qqq" in tagged.narrative, tagged.narrative)
+    }
+
     @Test fun bashBecomesAShortCommandObservation() {
         val o = synthesize("Bash", "post_tool_use", cmd("cargo test"), s("ok"))
         assertEquals("command_run", o.obsType)

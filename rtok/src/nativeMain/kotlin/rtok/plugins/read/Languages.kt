@@ -7,6 +7,7 @@ import rtok.treesitter.Grammar
 import rtok.treesitter.TagsConfiguration
 import rtok.treesitter.TreeSitter
 import rtok.treesitter.native.NativeTreeSitter
+import kotlin.concurrent.AtomicReference
 
 object Languages {
     /** The tree-sitter implementation used by rtok (one place to swap it). */
@@ -84,17 +85,29 @@ object Languages {
         }
     }
 
-    private val compiled = HashMap<String, Result<TagsConfiguration>>()
+    /**
+     * Copy-on-write: the graph watch and reindex workers and the MCP thread compile at the same time,
+     * and a plain map mutated from several threads can lose entries or corrupt itself.
+     */
+    private val compiled = AtomicReference<Map<String, Result<TagsConfiguration>>>(emptyMap())
 
     /** The tags configuration for [grammarName], compiled once per process (T35.1); a failure is kept too. */
     fun tags(grammarName: String): Result<TagsConfiguration>? {
         if (grammarName !in tagged) return null
-        return compiled.getOrPut(grammarName) {
-            runCatching {
-                val (tags, locals) = queries(grammarName) ?: error("no grammar $grammarName")
-                TagsConfiguration(treeSitter.grammar(grammarName)!!, tags, locals)
-            }.recoverCatching { throw IllegalStateException("tags query: ${it.message}") }
+        var known = compiled.value[grammarName]
+        if (known == null) {
+            // Compiled outside the swap; when two threads race, the first published result wins for both.
+            val made =
+                runCatching {
+                    val (tags, locals) = queries(grammarName) ?: error("no grammar $grammarName")
+                    TagsConfiguration(treeSitter.grammar(grammarName)!!, tags, locals)
+                }.recoverCatching { throw IllegalStateException("tags query: ${it.message}") }
+            while (known == null) {
+                val cur = compiled.value
+                known = cur[grammarName] ?: made.takeIf { compiled.compareAndSet(cur, cur + (grammarName to made)) }
+            }
         }
+        return known
     }
 }
 

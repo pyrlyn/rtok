@@ -243,17 +243,17 @@ object ExportView {
     ): Set<Int> {
         val seen = nodes.indices.filter { nodes[it].name == name }.toHashSet()
         if (seen.isEmpty()) throw IllegalArgumentException("no definition of $name in scope")
+        // Neighbours in edge order, built once: scanning every edge per dequeued node is O(V·E) on a large scope.
+        val adjacent = HashMap<Int, MutableList<Int>>()
+        for (e in edges) {
+            adjacent.getOrPut(e.from) { ArrayList() } += e.to
+            adjacent.getOrPut(e.to) { ArrayList() } += e.from
+        }
         val ring = ArrayDeque(seen.sorted().map { it to 0 })
         while (ring.isNotEmpty()) {
             val (n, d) = ring.removeFirst()
             if (d >= depth) break
-            for (e in edges) {
-                val other =
-                    when (n) {
-                        e.from -> e.to
-                        e.to -> e.from
-                        else -> continue
-                    }
+            for (other in adjacent[n].orEmpty()) {
                 if (seen.add(other)) ring.addLast(other to d + 1)
             }
         }

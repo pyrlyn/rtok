@@ -116,6 +116,7 @@ private fun replaceOne(
     deleteFile(db, root, path)
     if (rows.isEmpty()) {
         db.execute("INSERT INTO symbols (root, path, name, kind, line, is_def, file_sha, mtime, size) VALUES (?, ?, '', '', 0, 0, ?, ?, ?)", root, path, sha, stat.first, stat.second)
+        clearStale(db, root, path)
         return 0
     }
     insertChunked(
@@ -153,7 +154,7 @@ fun Store.symbolPending(
     root: String,
     rootPath: String,
 ): List<String> {
-    val pending = symbolStalePaths(root).toHashSet()
+    val pending = symbolStalePaths(root).filter { fileStat(join(rootPath, it)) != null }.toHashSet()
     for ((path, s) in symbolStats(root)) {
         val stat = fileStat(join(rootPath, path)) ?: (0L to 0L)
         if (stat != (s.second to s.third) && stat != (0L to 0L)) pending += path
@@ -187,13 +188,30 @@ fun Store.copySymbolRows(
             val have = db.query("SELECT DISTINCT path FROM symbols WHERE root = ?", to) { it.string(0) }.toHashSet()
             val rows =
                 db
-                    .query("SELECT path, name, kind, line, is_def, file_sha, mtime, size, end_line, scope FROM symbols WHERE root = ?", from) {
-                        listOf<Any?>(to, it.string(0), it.string(1), it.string(2), it.int(3), it.int(4), it.string(5), it.long(6), it.long(7), it.int(8), it.string(9))
+                    .query("SELECT path, name, kind, line, is_def, file_sha, mtime, size, end_line, scope, start_byte, end_byte, content_hash, signature, doc FROM symbols WHERE root = ?", from) {
+                        listOf<Any?>(
+                            to,
+                            it.string(0),
+                            it.string(1),
+                            it.string(2),
+                            it.int(3),
+                            it.int(4),
+                            it.string(5),
+                            it.long(6),
+                            it.long(7),
+                            it.int(8),
+                            it.string(9),
+                            it.long(10),
+                            it.long(11),
+                            it.string(12),
+                            it.string(13),
+                            it.string(14),
+                        )
                     }.filter { r ->
                         val p = r[1] as String
                         p !in have && skipUnder.none { d -> p.startsWith(d) && p.removePrefix(d).startsWith('/') }
                     }
-            insertChunked(db, "symbols", "root, path, name, kind, line, is_def, file_sha, mtime, size, end_line, scope", rows)
+            insertChunked(db, "symbols", SYMBOL_INSERT_COLS, rows)
             if (db.stringOf("SELECT fingerprint FROM extractor WHERE root = ?", to) == null) {
                 db.stringOf("SELECT fingerprint FROM extractor WHERE root = ?", from)?.let { db.execute("INSERT INTO extractor (root, fingerprint) VALUES (?, ?)", to, it) }
             }
@@ -242,6 +260,8 @@ fun Store.deleteSymbolsMissing(
     keep: Set<String>,
 ): Int =
     conn { db ->
+        val stale = db.query("SELECT path FROM symbol_stale WHERE root = ?", root) { it.string(0) }.filter { it !in keep }
+        stale.chunked(NAME_CHUNK).forEach { c -> db.execute("DELETE FROM symbol_stale WHERE root = ? AND path IN (${inList(c.size)})", root, *c.toTypedArray()) }
         if (keep.isEmpty()) return@conn db.execute("DELETE FROM symbols WHERE root = ?", root)
         val missing = db.query("SELECT DISTINCT path FROM symbols WHERE root = ?", root) { it.string(0) }.filter { it !in keep }
         missing.chunked(NAME_CHUNK).sumOf { c -> db.execute("DELETE FROM symbols WHERE root = ? AND path IN (${inList(c.size)})", root, *c.toTypedArray()) }
@@ -340,6 +360,7 @@ fun Store.symbolFts(
     if (match.isEmpty()) return emptyList()
 
     data class Hit(
+        val id: Long,
         val path: String,
         val name: String,
         val kind: String,
@@ -348,16 +369,22 @@ fun Store.symbolFts(
         val doc: String,
         val bm25: Double,
     )
-    val hits =
+    val cap = 200
+
+    @Suppress("MagicNumber")
+    fun fetch(m: String): List<Hit> =
         conn {
             it.query(
-                "SELECT s.path, s.name, s.kind, s.line, s.signature, s.doc, bm25(symbols_fts) FROM symbols_fts JOIN symbols s ON s.id = symbols_fts.rowid " +
+                "SELECT s.id, s.path, s.name, s.kind, s.line, s.signature, s.doc, bm25(symbols_fts) FROM symbols_fts JOIN symbols s ON s.id = symbols_fts.rowid " +
                     "WHERE symbols_fts MATCH ? AND s.root = ? AND s.is_def = 1 LIMIT ?",
-                match,
+                m,
                 root,
-                200,
-            ) { r -> Hit(r.string(0), r.string(1), r.string(2), r.int(3), r.string(4), r.string(5), r.double(6)) }
+                cap,
+            ) { r -> Hit(r.long(0), r.string(1), r.string(2), r.string(3), r.int(4), r.string(5), r.string(6), r.double(7)) }
         }
+    val nameHits = fetch(tokens.joinToString(" OR ") { "{name} : \"${it.replace("\"", "")}\"" })
+    val seen = nameHits.mapTo(HashSet()) { it.id }
+    val hits = nameHits + fetch(match).filter { it.id !in seen }.take(cap - nameHits.size)
     return hits
         .sortedWith(
             compareBy<Hit> { ftsTier(it.name, it.sig, tokens) }

@@ -77,6 +77,12 @@ internal class Entry(
     val tokens: UInt,
 )
 
+/**
+ * A stored title as one line. Titles come from models and imported files, so a line break would let one
+ * forge further lines of rtok's own hook context.
+ */
+internal fun oneLine(title: String) = title.map { if (it.isISOControl() || it == '\u2028' || it == '\u2029') ' ' else it }.joinToString("")
+
 /** Capped index text, dropping the newest-last entry; a lone overflowing entry has its title halved, then is dropped. */
 internal fun renderTitleIndex(
     cx: Ctx,
@@ -84,7 +90,7 @@ internal fun renderTitleIndex(
     cap: UInt,
 ): String {
     while (true) {
-        val text = (listOf(INDEX_GUIDE) + entries.map { "${it.id} ${it.title} (${it.tokens}t body)" }).joinToString("\n")
+        val text = (listOf(INDEX_GUIDE) + entries.map { "${it.id} ${oneLine(it.title)} (${it.tokens}t body)" }).joinToString("\n")
         if (cx.estimate(text, Class.Prose) <= cap) return text
         val first = entries.firstOrNull()
         when {

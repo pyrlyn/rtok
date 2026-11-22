@@ -29,6 +29,53 @@ import kotlin.native.concurrent.Worker
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.TimeSource
 
+/** A watcher thread of [Watch.runScope]; [state] is [LIVE] while [Watch.run] runs, then [ENDED] or [FAILED]. */
+private class Watcher(
+    val worker: Worker,
+    val state: AtomicInt,
+)
+
+private class WatchJob(
+    val rt: Runtime,
+    val root: String,
+    val stop: AtomicInt,
+    val state: AtomicInt,
+)
+
+private const val LIVE = 1
+private const val ENDED = 0
+private const val FAILED = -1
+
+private fun watchJob(j: WatchJob) {
+    var started = true
+    try {
+        started = Watch.run(Ctx(j.rt), j.root, j.stop)
+    } finally {
+        j.state.value = if (started) ENDED else FAILED
+    }
+}
+
+/**
+ * Drops the watchers that ended, so the next round starts them again. One whose OS watch never started is kept
+ * until its directory is gone, so an unwatchable root is not retried and reported every round.
+ */
+private fun reap(watched: MutableMap<String, Watcher>) {
+    val entries = watched.entries.iterator()
+    while (entries.hasNext()) {
+        val (root, w) = entries.next()
+        val over =
+            when (w.state.value) {
+                LIVE -> false
+                ENDED -> true
+                else -> !isDir(root)
+            }
+        if (over) {
+            w.worker.requestTermination().result
+            entries.remove()
+        }
+    }
+}
+
 object Watch {
     const val QUIET_MS = 250L
     const val PENDING_CAP = 1024
@@ -53,20 +100,25 @@ object Watch {
         runCatching { cx.log(level, "graph", "watch", msg) }
     }
 
-    /** Watches [root] until [stop] is set (non-zero) or the OS watch dies; [runs] counts index runs. */
+    /**
+     * Watches [root] until [stop] is set (non-zero) or the OS watch dies; [runs] counts index runs. False when the
+     * OS watch could not be started at all.
+     */
     fun run(
         cx: Ctx,
         root: String,
         stop: AtomicInt,
         runs: AtomicInt = AtomicInt(0),
-    ) {
+    ): Boolean {
         val w =
             try {
                 watchRecursive(root)
             } catch (e: IoException) {
-                return report(cx, "error", "watch $root: ${e.message}")
+                report(cx, "error", "watch $root: ${e.message}")
+                return false
             }
         w.use { pump(cx, root, stop, runs, it) }
+        return true
     }
 
     /** T329.5: one watcher per project of [start]'s scope; an unwatchable root is logged and skipped. */
@@ -76,27 +128,31 @@ object Watch {
         stop: AtomicInt,
     ) {
         val cx = Ctx(rt)
-        val watched = HashSet<String>()
-        val workers = ArrayList<Worker>()
+        val watched = HashMap<String, Watcher>()
+        val refusedRoots = HashSet<String>()
         while (stop.value == 0) {
+            // A watch that died (root deleted, OS watch closed) is started again below.
+            reap(watched)
             for (m in runCatching { Scope.resolve(rt.store, null, start) }.getOrDefault(emptyList())) {
                 // Re-offered every round while missing, so a directory that returns is picked up.
-                if (!isDir(m.root) || !watched.add(m.root)) continue
+                if (!isDir(m.root) || m.root in watched || m.root in refusedRoots) continue
                 // T263: never watch `/` or the home directory.
                 val refused = runCatching { walkRootOk(m.root) }.exceptionOrNull()
                 if (refused != null) {
+                    refusedRoots += m.root
                     report(cx, "warn", "watcher skipped for ${m.root}: ${refused.message}")
                     continue
                 }
+                val state = AtomicInt(LIVE)
                 val w = Worker.start(name = "graph-watch")
-                workers += w
-                val args = Triple(rt, m.root, stop)
-                w.execute(TransferMode.SAFE, { args }) { (r, root, s) -> run(Ctx(r), root, s) }
+                watched[m.root] = Watcher(w, state)
+                val job = WatchJob(rt, m.root, stop, state)
+                w.execute(TransferMode.SAFE, { job }) { j -> watchJob(j) }
             }
             val round = TimeSource.Monotonic.markNow()
             while (round.elapsedNow().inWholeMilliseconds < RESCOPE_MS && stop.value == 0) platform.posix.usleep((TICK_MS * 1000).toUInt())
         }
-        workers.forEach { it.requestTermination().result }
+        watched.values.forEach { it.worker.requestTermination().result }
     }
 
     /** The debounce loop, apart from the OS watcher so tests can feed it events. Ends on [stop] or a dead watch. */
@@ -143,7 +199,9 @@ object Watch {
         st: State,
     ) {
         if (st.last.elapsedNow() < QUIET_MS.milliseconds || (!st.rescan && st.pending.isEmpty())) return
-        if (st.rescan) runCatching { Index.run(cx, root, false) } else runCatching { Index.runChanged(cx, root, st.pending.toSet()) }
+        val outcome = if (st.rescan) runCatching { Index.run(cx, root, false) } else runCatching { Index.runChanged(cx, root, st.pending.toSet()) }
+        // The pending set is cleared below either way, so a failure is the only trace of the lost changes.
+        outcome.onFailure { report(cx, "warn", "index $root: ${it.message}") }
         runs.incrementAndGet()
         st.last = TimeSource.Monotonic.markNow()
         syncPending(cx, root, st.pending)

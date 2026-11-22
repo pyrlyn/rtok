@@ -4,9 +4,12 @@ package rtok.sys
 
 import platform.posix.*
 
-/** Opens (creating) `path` and takes a non-blocking exclusive flock; the fd while held, null when another process holds it. */
+/**
+ * Opens (creating) `path` and takes a non-blocking exclusive flock; the fd while held, null when another process holds it.
+ * Close-on-exec: a spawned child that inherited the fd would keep the lock held after the holder closed it.
+ */
 fun tryLockExclusive(path: String): Int? {
-    val fd = open(path, O_CREAT or O_WRONLY, 0x1a4) // 0644
+    val fd = open(path, O_CREAT or O_WRONLY or O_CLOEXEC, 0x1a4) // 0644
     if (fd < 0) throw IoException(IoException.Kind.Other, "cannot open $path")
     if (fileLock(fd, LOCK_EX or LOCK_NB) != 0) {
         close(fd)
@@ -43,8 +46,8 @@ class Mutex {
  * @throws IoException when the file cannot be opened or locked for another reason.
  */
 fun lockHeld(path: String): Boolean {
-    var fd = open(path, O_RDWR)
-    if (fd < 0) fd = open(path, O_RDONLY)
+    var fd = open(path, O_RDWR or O_CLOEXEC)
+    if (fd < 0) fd = open(path, O_RDONLY or O_CLOEXEC)
     if (fd < 0) throw IoException(ioKind(errno), "open $path: errno $errno")
     try {
         if (fileLock(fd, LOCK_EX or LOCK_NB) == 0) return false
@@ -61,7 +64,7 @@ fun processAlive(pid: Int): Boolean = pid > 0 && kill(pid, 0) == 0
 /** Opens (creating, with its parent) `path` and blocks until it holds an exclusive flock; close the fd to release. */
 fun lockExclusive(path: String): Int {
     path.substringBeforeLast('/', "").takeIf { it.isNotEmpty() }?.let(::createDirAll)
-    val fd = open(path, O_CREAT or O_WRONLY, 0x1a4) // 0644
+    val fd = open(path, O_CREAT or O_WRONLY or O_CLOEXEC, 0x1a4) // 0644
     if (fd < 0) throw IoException(ioKind(errno), "cannot open $path: errno $errno")
     while (fileLock(fd, LOCK_EX) != 0) {
         if (errno == EINTR) continue

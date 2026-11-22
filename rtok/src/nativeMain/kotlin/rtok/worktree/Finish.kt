@@ -151,10 +151,12 @@ object Finish {
         if (secrets.isNotEmpty()) {
             fail("$shown: refusing to commit credential files: ${secrets.joinToString(", ")}; ignore or remove them, or commit by hand")
         }
-        if (pending.isEmpty() && !Git.hasOwnCommits(main, base, branch)) fail("$shown: nothing to finish; $branch has no commits of its own")
+        // [pending] leaves deletions out, so it cannot say whether there is anything to commit.
+        val dirty = Git.isDirty(record.path)
+        if (!dirty && !Git.hasOwnCommits(main, base, branch)) fail("$shown: nothing to finish; $branch has no commits of its own")
 
         val committed =
-            if (pending.isEmpty()) {
+            if (!dirty) {
                 null
             } else {
                 (opts.message ?: messageFor(record.owner()?.task, branch)).also { Git.commitAll(record.path, it) }

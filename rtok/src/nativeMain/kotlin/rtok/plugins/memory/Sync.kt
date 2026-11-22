@@ -32,7 +32,7 @@ object Sync {
     internal fun legacyKvKey(path: String) = "memory.sync.sha:${components(path).lastOrNull() ?: ""}"
 
     /** A title as one line that cannot open or close the block. */
-    private fun singleLine(title: String) = title.map { if (it.isISOControl() || it == '\u2028' || it == '\u2029') ' ' else it }.joinToString("").replace("<!--", "&lt;!--")
+    private fun singleLine(title: String) = oneLine(title).replace("<!--", "&lt;!--")
 
     /** Pinned-first, then live notes by id desc, trimmed from the end to [budget] tokens. */
     fun render(

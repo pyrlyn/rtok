@@ -50,6 +50,7 @@ fun parseHumanDuration(text: String): Duration {
         while (i < s.length && s[i] in '0'..'9') i++
         if (i == numStart) throw DurationParseException("expected number at $numStart")
         val n = s.substring(numStart, i).toLongOrNull() ?: throw DurationParseException("number is too large")
+        while (i < s.length && s[i].isWhitespace()) i++
         val unitStart = i
         while (i < s.length && !s[i].isWhitespace() && s[i] !in '0'..'9' && s[i] != '+') i++
         val unit = s.substring(unitStart, i)

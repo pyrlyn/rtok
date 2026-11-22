@@ -1,9 +1,12 @@
 // Port of crates/rtok-agent-sdk/src/lib.rs `PluginLink` (offer/link/unlink cycle, `health`), `LinkHealth`,
 // `CopyFix`/`keep_bytes`, `in_versioned_store`, `tree_copies[_with]`, `install_plugin`, `copy_owned[_with]`,
 // `unlink_at`. Unix only: the install is a symlink, or an owned copy when the source sits in a versioned ketch store.
+@file:OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
+
 package rtok.agent.sdk
 
 import rtok.sys.EntryKind
+import rtok.sys.IoException
 import rtok.sys.components
 import rtok.sys.copyFile
 import rtok.sys.createDirAll
@@ -14,6 +17,7 @@ import rtok.sys.isFile
 import rtok.sys.join
 import rtok.sys.listDir
 import rtok.sys.parent
+import rtok.sys.pid
 import rtok.sys.readBytes
 import rtok.sys.readLink
 import rtok.sys.removeDirAll
@@ -92,33 +96,44 @@ data class PluginLink(
         fix: CopyFix = keepBytes,
     ): String =
         when {
-            apply.dryRun -> "offer $srcRel → ${destDesc()} $KETCH_INSTALL"
+            apply.dryRun -> dryRun(remove, fix)
 
-            remove -> unlink()
+            remove -> unlinkPlan().also { if (it.startsWith("- ")) unlinkAt(dest) }
 
-            !linked() -> install(apply, fix)
-
-            upToDate(fix) -> NO_CHANGES
+            linked() && upToDate(fix) -> NO_CHANGES
 
             // Never overwrite ground rtok did not put there, whatever the answer would be (T164).
-            !ours() -> declined()
+            linked() && !ours() -> declined()
 
-            // Ours but stale: an older ketch version, or a dangling link.
-            else -> unlinkAt(dest).let { install(apply, fix) }
+            // Asked before anything is removed, so a declined reinstall leaves an older working copy in place.
+            !accepted(apply, "install $srcRel into ${mainDesc()} for $host?") -> declined()
+
+            // Ours but stale (an older ketch version, a dangling link), or nothing there yet.
+            else -> unlinkAt(dest).let { place(fix) }
         }
 
-    private fun unlink(): String =
+    /**
+     * What [run] would report, decided the same way and touching nothing: a restart flow reads "would change" from
+     * this, so an installed, current plugin must say [NO_CHANGES].
+     */
+    private fun dryRun(
+        remove: Boolean,
+        fix: CopyFix,
+    ): String =
+        when {
+            remove -> unlinkPlan()
+            linked() && upToDate(fix) -> NO_CHANGES
+            else -> "offer $srcRel → ${destDesc()} $KETCH_INSTALL"
+        }
+
+    private fun unlinkPlan(): String =
         when {
             !linked() -> NO_CHANGES
             !ours() -> "leave $dest (not an rtok link; remove by hand)"
-            else -> unlinkAt(dest).let { "- plugin $dest" }
+            else -> "- plugin $dest"
         }
 
-    private fun install(
-        apply: Apply,
-        fix: CopyFix,
-    ): String {
-        if (!accepted(apply, "install $srcRel into ${mainDesc()} for $host?")) return declined()
+    private fun place(fix: CopyFix): String {
         parent(dest)?.let(::createDirAll)
         installPlugin(src, dest, fix)
         return "+ plugin $srcRel → $dest" + (label?.let { " $it" } ?: "")
@@ -138,18 +153,21 @@ data class PluginLink(
         when {
             entryKind(dest) == null -> LinkHealth.Absent
             !ours() -> LinkHealth.Foreign
-            entryKind(dest) == EntryKind.Symlink -> linkHealth(readLink(dest).orEmpty())
+            entryKind(dest) == EntryKind.Symlink -> linkHealth(dest, readLink(dest).orEmpty())
             upToDate(fix) -> LinkHealth.Current
             else -> LinkHealth.Stale("a copy that differs from $src")
         }
-
-    private fun linkHealth(target: String): LinkHealth =
-        when {
-            !exists(dest) -> LinkHealth.Dangling(target)
-            inVersionedStore(target) -> LinkHealth.Stale("links into $target, which an upgrade removes")
-            else -> LinkHealth.Current
-        }
 }
+
+private fun linkHealth(
+    dest: String,
+    target: String,
+): LinkHealth =
+    when {
+        !exists(dest) -> LinkHealth.Dangling(target)
+        inVersionedStore(target) -> LinkHealth.Stale("links into $target, which an upgrade removes")
+        else -> LinkHealth.Current
+    }
 
 /** [path] sits under a ketch version directory, `…/store/<package>/v<version>/…`, which an upgrade removes (T925). */
 fun inVersionedStore(path: String): Boolean =
@@ -207,7 +225,21 @@ private fun installPlugin(
     dest: String,
     fix: CopyFix,
 ) {
-    if (inVersionedStore(src)) copyOwned(src, dest, fix) else symlink(src, dest)
+    if (!inVersionedStore(src)) return symlink(src, dest)
+    // Staged beside [dest] and renamed in: a copy cut short (a full disk) never sits at [dest] without its
+    // marker, where every later run would take it for a foreign tree.
+    val tmp = join(parent(dest) ?: ".", ".${components(dest).lastOrNull().orEmpty()}.tmp-${pid()}")
+    unlinkAt(tmp)
+    try {
+        copyOwned(src, tmp, fix)
+    } catch (e: IoException) {
+        runCatching { unlinkAt(tmp) }
+        throw e
+    }
+    if (platform.posix.rename(tmp, dest) != 0) {
+        runCatching { unlinkAt(tmp) }
+        throw IoException(IoException.Kind.Other, "$dest: rename failed")
+    }
 }
 
 /** Copy [src] into [dest] (links followed) and leave [OWNED_MARKER] last; a single-file plugin is one plain copy. */

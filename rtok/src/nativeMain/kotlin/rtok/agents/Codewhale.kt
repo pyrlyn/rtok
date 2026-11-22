@@ -67,7 +67,7 @@ class Codewhale : Agent {
         /** Exactly `<rtok-bin> hook UserPromptSubmit --host codewhale`; only the tail is matched, so a full path counts. */
         fun isOurs(cmd: String): Boolean {
             val suffix = " hook $CLAUDE_EVENT --host $HOST"
-            return cmd.endsWith(suffix) && isRtokBin(HookLine.unquoteBin(cmd.removeSuffix(suffix)))
+            return cmd.endsWith(suffix) && HookLine.isRtokWord(cmd.removeSuffix(suffix))
         }
 
         private fun tableIsOurs(t: TomlTable) = t.str("event") == EVENT && t.str("command")?.let(::isOurs) == true

@@ -293,8 +293,10 @@ data class Config(
             try {
                 loadWith(configFile, flags)
             } catch (e: Exception) {
-                val home = homeDir()
-                Config().finish(home).also {
+                // The flags are the caller's own words (a hook's `--host`), not part of the broken file: dropping them
+                // with it would shape the output for the wrong host.
+                val base = runCatching { decodeConfig(deepMerge(Config().toJson(), flags ?: JsonObject(emptyMap()))) }.getOrElse { Config() }
+                base.finish(homeDir()).also {
                     it.notes += LoadNote("load", "config ignored (${e.message}); using defaults", "ignored (${e.message}); using defaults")
                     Layers.notify(it)
                 }

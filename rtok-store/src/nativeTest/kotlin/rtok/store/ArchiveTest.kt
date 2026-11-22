@@ -4,6 +4,7 @@ import db.*
 import kotlinx.cinterop.toKString
 import platform.posix.getenv
 import platform.posix.link
+import platform.posix.unlink
 import rtok.sys.*
 import kotlin.test.*
 import kotlin.time.TimeSource
@@ -136,6 +137,25 @@ class ArchiveTest {
         assertNull(s.archiveInSession("s", sha, "agent-b"), "context B never saw what context A archived")
         assertNull(s.archiveInSession("s", sha, null))
         assertEquals(sha, s.archiveInSession("s", sha, "agent-a")!!.first)
+        removeDirAll(dir)
+    }
+
+    @Test fun putArchiveForKeepsAReferencedFileOnAFailedInsert() {
+        val dir = tmpDir("t-unlink")
+        val s1 = Store.open("$dir/rtok.db")
+        val body = b("same-bytes")
+        val sha = s1.putArchive("a", body, dir)
+        unlink("$dir/$sha")
+        val s2 = Store.openWith("$dir/rtok.db", LockWait(0, 1, 0))
+        val raw = rawDb("$dir/rtok.db")
+        raw.exec("BEGIN IMMEDIATE")
+        assertFails { s2.putArchive("b", body, dir) }
+        raw.exec("ROLLBACK")
+        assertNotNull(s1.getArchive(sha, dir), "the failed writer must not drop the file s1's row points at")
+        assertContentEquals(body, s1.getArchive(sha, dir))
+        s1.close()
+        s2.close()
+        raw.close()
         removeDirAll(dir)
     }
 

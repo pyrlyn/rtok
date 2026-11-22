@@ -51,7 +51,10 @@ fun cloneTree(
                     copyLink(f, t)
                 }
 
-                else -> {
+                // A FIFO, socket or device has no bytes to clone, and opening a FIFO blocks until a writer comes.
+                EntryKind.Other -> {}
+
+                EntryKind.File -> {
                     when (rtok_clone_or_copy(f, t)) {
                         1 -> cloned++
                         0 -> copied++

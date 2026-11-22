@@ -41,10 +41,18 @@ object OsProcs : Procs {
     override fun bootTime(): Long? = bootSeconds()
 
     override fun pause(ms: Long) {
-        usleep((ms * MICROS).toUInt())
+        // usleep takes a 32-bit count of microseconds (and may refuse a second or more): a long backoff is slept in
+        // steps so it neither wraps to a near-zero sleep nor fails.
+        var left = ms
+        while (left > 0) {
+            val step = minOf(left, PAUSE_STEP_MS)
+            usleep((step * MICROS).toUInt())
+            left -= step
+        }
     }
 
     private const val MICROS = 1000L
+    private const val PAUSE_STEP_MS = 500L
 }
 
 /** `/proc/stat` `btime` on Linux, `sysctl -n kern.boottime` (`{ sec = N, usec = M } ...`) on macOS. */

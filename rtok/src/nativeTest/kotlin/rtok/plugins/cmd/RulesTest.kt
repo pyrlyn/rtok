@@ -103,6 +103,13 @@ class RulesTest {
         assertEquals(Rules.normalizeLineKey("wait 12ms"), Rules.normalizeLineKey("wait 3ms"))
     }
 
+    @Test fun aLongDottedNumberRunIsScannedOnce() {
+        val run = "1.".repeat(200_000)
+        assertEquals("v $run", Rules.normalizeLineKey("v $run"), "no unit, no placeholder")
+        assertEquals("v <DUR> x", Rules.normalizeLineKey("v ${run}5s x"))
+        assertEquals(Rules.normalizeLineKey("took 1.25s and 3ms"), Rules.normalizeLineKey("took 9.5s and 70ms"))
+    }
+
     @Test fun normalizeLineKeyKeepsDistinctErrorCodes() {
         assertNotEquals(Rules.normalizeLineKey("ERR-404 file missing"), Rules.normalizeLineKey("ERR-500 file missing"))
         assertEquals(Rules.normalizeLineKey("req id=abcd1234abcd1234 done"), Rules.normalizeLineKey("req id=feed9999aaaa1111 done"))

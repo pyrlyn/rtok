@@ -125,6 +125,20 @@ class InjectTest {
         }
     }
 
+    @Test fun aModeNameCannotReadAFileOutsideTheModesDir() {
+        val base = tmpDir("inject-escape")
+        createDirAll("$base/modes")
+        writeString("$base/secret.md", "SECRET_NOTES\n")
+        writeString("$base/modes/ok.md", "PLAIN_MODE\n")
+        for (bad in listOf("../secret", "$base/secret", "..\\secret", "")) {
+            withRuntime("inject-escape", modes("$base/modes", bad, "ok")) { r ->
+                val once = start(Ctx(r))
+                assertFalse("SECRET_NOTES" in once, bad)
+                assertTrue("PLAIN_MODE" in once, bad)
+            }
+        }
+    }
+
     @Test fun compactRestoreLeadsWithTheCheckpointAtPriorityNine() =
         withRuntime("inject-compact", modes(null, "terse")) { r ->
             val cx = Ctx(r)

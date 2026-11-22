@@ -106,8 +106,11 @@ fun docsQuery(
     runCatching { ingestLlms(rt) }
     val ver =
         when {
-            !version.isNullOrEmpty() && !(name == "llms" && version == "local") -> version
+            // Another workspace's `local:<path>` version would read its llms text out of the shared store.
             name == "llms" -> localVersion()
+
+            !version.isNullOrEmpty() -> version
+
             else -> readLock()?.let { resolveLock(it, name) }?.second ?: return notCached(name)
         }
     if (!runCatching { rt.store.docCrateCached(name, ver) }.getOrDefault(false)) return notCached(name)

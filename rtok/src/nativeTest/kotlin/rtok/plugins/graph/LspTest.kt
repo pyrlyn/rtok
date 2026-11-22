@@ -239,6 +239,24 @@ class LspTest {
         s.close()
     }
 
+    @Test fun theOldestDocumentIsClosedOnceTheOpenCapIsReached() {
+        val dir = docDir("cap")
+        val (s, log) = recording(dir)
+        val uris =
+            (0..LspSession.OPEN_CAP).map { i ->
+                val file = join(dir, "f$i.rs")
+                writeString(file, "fn f$i() {}\n")
+                LspWire.fileUri(file)
+            }
+        for (uri in uris) s.didOpen(uri)
+        assertEquals(LspSession.OPEN_CAP, s.opened.size)
+        assertFalse(uris[0] in s.opened, "the first document stayed open")
+        assertTrue(uris.last() in s.opened)
+        val got = received(log, uris.size + 1)
+        assertEquals("textDocument/didClose", got[LspSession.OPEN_CAP].first, "${got.map { it.first }}")
+        s.close()
+    }
+
     @Test fun refreshOpenResyncsDocumentsThisQueryDoesNotTouch() {
         val dir = docDir("refresh")
         val a = join(dir, "a.rs")

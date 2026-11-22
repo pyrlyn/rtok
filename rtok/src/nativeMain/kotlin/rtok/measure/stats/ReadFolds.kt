@@ -110,7 +110,7 @@ internal fun foldReadDeny(
         if (u.name != "Read" || !isReadDeny(text)) continue
         row.calls++
         row.tokens += estTokens(utf8Len(text))
-        val window = parsed.toolUses.drop(i + 1).take(DENY_FOLLOW_CALLS)
+        val window = parsed.toolUses.following(i)
         if (window.takeWhile { it.name != "Read" && mcpGroup(it.name) != "rtok" }.any { it.name == "ToolSearch" }) row.thenToolsearch++
         val path = toolPath(u.input) ?: continue
         val next = window.firstOrNull { n -> (n.name == "Read" || isRtokMcpRead(n.name)) && toolPath(n.input)?.let { samePath(it, path) } == true }
@@ -127,6 +127,9 @@ internal fun foldReadDeny(
         }
     }
 }
+
+/** The few calls after the one at [i], as a view: copying the tail for every hit made a long session quadratic. */
+private fun <T> List<T>.following(i: Int): List<T> = subList(minOf(i + 1, size), minOf(i + 1 + DENY_FOLLOW_CALLS, size))
 
 /** T369.1: Grep calls the guard answered from the index, and whether a same-name search or a read of a listed file followed. */
 internal fun foldGrepSymbol(
@@ -150,13 +153,7 @@ internal fun foldGrepSymbol(
                     ?.let(Tools::parseSymbolId)
                     ?.path
             }
-        if (parsed.toolUses
-                .drop(i + 1)
-                .take(DENY_FOLLOW_CALLS)
-                .any { sameNameFollowUp(it, name, files) }
-        ) {
-            row.followed++
-        }
+        if (parsed.toolUses.following(i).any { sameNameFollowUp(it, name, files) }) row.followed++
     }
 }
 

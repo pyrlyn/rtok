@@ -44,6 +44,21 @@ class AnswerTest {
         }
     }
 
+    @Test fun setReloadsTheFileItWroteWhenRtokConfigNamesAnother() {
+        val (l, dir) = live("set-env")
+        val alt = "$dir/alt.toml"
+        writeString(alt, "")
+        platform.posix.setenv("RTOK_CONFIG", alt, 1)
+        try {
+            assertNull(Answer(l).answer("""{"set":{"key":"plugins.guard.enabled","value":false}}"""))
+            assertTrue(Regex("""\[plugins\.guard][^\[]*enabled = false""").containsMatchIn(readBytes(alt).decodeToString()))
+            assertFalse(l.value.plugins.guard.enabled)
+        } finally {
+            platform.posix.unsetenv("RTOK_CONFIG")
+            removeDirAll(dir)
+        }
+    }
+
     @Test fun refusalsAndMalformedRequestsAreNotices() {
         val (l, dir) = live("refuse")
         try {

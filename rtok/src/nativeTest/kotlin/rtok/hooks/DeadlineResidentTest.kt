@@ -106,4 +106,32 @@ class ResidentTest {
         setCwd(prevCwd)
         removeDirAll(dir)
     }
+
+    @Test fun aStalledClientTimesOutInsteadOfHoldingTheResident() {
+        val dir = "${tempDir()}/rtok-hst-${pid()}"
+        removeDirAll(dir)
+        createDirAll(dir)
+        val ep = "$dir/hook.sock"
+        val lfd = assertNotNull(Resident.bindPrivate(ep))
+        val w = Worker.start()
+        val f =
+            w.execute(TransferMode.SAFE, { lfd }) { l ->
+                val c = accept(l, null, null)
+                try {
+                    Resident.answer(c, 42uL, readTimeoutMs = 200)
+                } finally {
+                    close(c)
+                }
+            }
+        // Connected, but never sends a request.
+        val c = assertNotNull(connect(ep))
+        val gaveUp = waitFor(5000) { f.state == FutureState.COMPUTED }
+        // Closed before waiting on the result, so a resident without the timeout ends the test instead of hanging it.
+        close(c)
+        assertFalse(f.result)
+        w.requestTermination().result
+        close(lfd)
+        removeDirAll(dir)
+        assertTrue(gaveUp, "answer must give up on a silent client")
+    }
 }

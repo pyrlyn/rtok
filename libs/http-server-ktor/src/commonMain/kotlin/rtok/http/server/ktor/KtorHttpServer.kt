@@ -34,7 +34,9 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.io.readByteArray
 import platform.posix.SIGINT
+import platform.posix.SIGPIPE
 import platform.posix.SIGTERM
+import platform.posix.SIG_IGN
 import platform.posix.signal
 import rtok.http.server.BindException
 import rtok.http.server.BodySink
@@ -48,6 +50,9 @@ import rtok.http.server.StreamingResponse
 import rtok.http.server.WsHandler
 import rtok.http.server.WsSocket
 import kotlin.concurrent.AtomicInt
+
+/** The sink of a response whose client is gone before the body started: every write fails. */
+private val ABANDONED = BodySink { throw IllegalStateException("response abandoned before its body") }
 
 object KtorHttpServer : HttpServer, StreamingHttpServer {
     private const val STOP_TICK_MS = 200L
@@ -176,21 +181,32 @@ object KtorHttpServer : HttpServer, StreamingHttpServer {
         var type: ContentType? = null
         for ((name, value) in res.headers) {
             if (name.equals(HttpHeaders.ContentType, ignoreCase = true)) {
-                type = ContentType.parse(value)
+                type = contentType(value)
             } else if (!name.equals(HttpHeaders.ContentLength, ignoreCase = true) && !name.equals(HttpHeaders.TransferEncoding, ignoreCase = true)) {
                 call.response.header(name, value)
             }
         }
-        call.respondBytesWriter(type, HttpStatusCode.fromValue(res.status)) {
-            val channel = this
-            res.body(
-                BodySink { bytes ->
-                    channel.writeFully(bytes)
-                    channel.flush()
-                },
-            )
+        var started = false
+        try {
+            call.respondBytesWriter(type, HttpStatusCode.fromValue(res.status)) {
+                started = true
+                val channel = this
+                res.body(
+                    BodySink { bytes ->
+                        channel.writeFully(bytes)
+                        channel.flush()
+                    },
+                )
+            }
+        } finally {
+            // A body that never ran still owns whatever feeds it (an upstream stream, a queue slot): it is run against
+            // a sink that refuses every write, so it sees the client gone and lets go instead of waiting forever.
+            if (!started) runCatching { res.body(ABANDONED) }
         }
     }
+
+    /** A header value from a handler or an upstream may be malformed: it is dropped rather than failing the call. */
+    private fun contentType(value: String): ContentType? = runCatching { ContentType.parse(value) }.getOrNull()
 
     private suspend fun answer(
         call: ApplicationCall,
@@ -226,7 +242,7 @@ object KtorHttpServer : HttpServer, StreamingHttpServer {
         var type: ContentType? = null
         for ((name, value) in res.headers) {
             if (name.equals(HttpHeaders.ContentType, ignoreCase = true)) {
-                type = ContentType.parse(value)
+                type = contentType(value)
             } else {
                 call.response.header(name, value)
             }
@@ -257,4 +273,6 @@ private fun installStopSignals() {
     val handler = staticCFunction<Int, Unit> { stopSignal.value = 1 }
     signal(SIGINT, handler)
     signal(SIGTERM, handler)
+    // A client that hangs up mid-response must fail that write, not end the server for every other client.
+    signal(SIGPIPE, SIG_IGN)
 }

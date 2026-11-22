@@ -184,8 +184,9 @@ private fun folderId(
         .getOrNull()
         ?.takeIf { it.toString() == name && isDir(path) }
 
-/** `(front matter, body)` of a task.md. */
-internal fun splitFront(text: String): Pair<String, String> {
+/** `(front matter, body)` of a task.md; CRLF is read as LF and a leading BOM is dropped, as editors write both. */
+internal fun splitFront(raw: String): Pair<String, String> {
+    val text = raw.removePrefix("\uFEFF").replace("\r\n", "\n")
     if (!text.startsWith("---\n")) bail("no front matter (the file must start with ---)")
     val rest = text.removePrefix("---\n")
     val end = rest.indexOf(FENCE)

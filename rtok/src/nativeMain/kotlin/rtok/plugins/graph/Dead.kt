@@ -43,6 +43,8 @@ object Dead {
         root: String,
     ): List<DeadRow> {
         val files = HashMap<String, List<String>>()
+        // One tree-sitter parse per file, not per candidate: a large crate has hundreds of candidates in one file.
+        val impls = HashMap<String, Pair<List<Pair<Int, Int>>, List<String>>>()
         val out = ArrayList<DeadRow>()
         for (c in cx.symbolDeadCandidates(Index.canon(root))) {
             if (c.kind == "macro" || c.name == "main" || isTestPath(c.path)) continue
@@ -52,7 +54,7 @@ object Dead {
             if (def.startsWith("pub ") || def.startsWith("pub(") || def == "pub") continue
             if (hasTestAttr(src.subList(0, minOf(at, src.size)))) continue
             if (c.path.endsWith(".rs")) {
-                val (ranges, types) = rustImpls(src.joinToString("\n"))
+                val (ranges, types) = impls.getOrPut(c.path) { rustImpls(src.joinToString("\n")) }
                 if (c.name in types) continue
                 if (c.kind == "method" && ranges.any { (s, e) -> c.line in s..e }) continue
             }
@@ -65,6 +67,7 @@ object Dead {
     fun hasTestAttr(above: List<String>): Boolean =
         above
             .asReversed()
+            .asSequence()
             .map { it.trimStart() }
             .takeWhile { it.startsWith("#[") || it.startsWith("//") }
             .any { t -> listOf("#[test", "#[cfg(test", "#[rstest", "#[case").any(t::startsWith) || t.split('(', ']').first().endsWith("::test") }

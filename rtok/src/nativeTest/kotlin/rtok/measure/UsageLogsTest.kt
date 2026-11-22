@@ -74,6 +74,17 @@ class UsageLogsTest {
         val r = rows[0]
         assertEquals(Triple("sess-1", "gpt-5", "codex"), Triple(r.session, r.model, r.host))
         assertEquals(Triple(CODEX_INPUT, CODEX_CACHED, CODEX_OUT), Triple(r.input, r.cacheRead, r.output))
+        // More cached than read is a malformed line; it must not turn the uncached leg negative.
+        val odd = listOf("""{"type":"session_meta","payload":{"id":"sess-2"}}""", count("2026-09-30T23:31:00Z", "30,40,7"))
+        writeString("$dir/rollout-b.jsonl", odd.joinToString("\n"))
+        assertEquals(
+            listOf(0L),
+            UsageLogs
+                .codexSlices(dir, 0)
+                .first
+                .filter { it.session == "sess-2" }
+                .map { it.input },
+        )
         removeDirAll(dir)
     }
 

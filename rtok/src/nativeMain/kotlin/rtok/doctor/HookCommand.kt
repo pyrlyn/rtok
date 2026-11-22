@@ -47,6 +47,9 @@ internal object HookCommand {
     private val CMD_BUILTINS = setOf("call", "copy", "del", "dir", "md", "mkdir", "move", "rd", "ren", "rem", "start", "title", "ver")
 
     private val INLINE_FLAGS = setOf("-c", "-e", "--eval", "-p", "--print")
+
+    /** Options the interpreters take without a value; any other option may take the next word as its value. */
+    private val BARE_FLAGS = setOf("-u", "-B", "-O", "-OO", "-q", "-s", "-x", "-l")
     private const val PLUGIN_ROOT = "CLAUDE_PLUGIN_ROOT"
     private const val NO_BASE = "relative path: this host's base directory is not known"
     private const val VOLUME_PARTS = 3 // `/`, `Volumes`, the volume
@@ -263,11 +266,7 @@ internal object HookCommand {
             val script = flag(setOf("-file", "-f"))?.let { args.getOrNull(it + 1) }
             return if (script != null) Target.Found(script, false) else unverified("an inline PowerShell command")
         }
-        if (base in INTERPRETERS) {
-            if (args.any { it in INLINE_FLAGS }) return unverified("an inline script, not a file")
-            val scriptArgs = if (base == "deno" || base == "bun") args.filter { it != "run" } else args
-            return firstArg(scriptArgs)?.let { Target.Found(it, false) } ?: unverified(NO_SCRIPT)
-        }
+        if (base in INTERPRETERS) return script(base, args)
 
         // Launchers that hand the rest of the line to another program.
         fun restAfter(word: String) = args.dropWhile { it != word }.drop(1)
@@ -280,8 +279,11 @@ internal object HookCommand {
             base == "uv" && first == "run" -> {
                 val rest = restAfter("run")
                 if (rest.isEmpty()) return unverified(NO_SCRIPT)
+                if (rest[0].startsWith('-')) return unverified("uv options before the command")
                 when (val t = target(rest, win)) {
-                    is Target.Found -> t.copy(direct = false)
+                    // A bare program comes from uv's environment, which is not on PATH and not in the project.
+                    is Target.Found -> if (t.direct && !fileLike(t.target)) unverified("a program uv resolves in its environment") else t.copy(direct = false)
+
                     is Target.Not -> t
                 }
             }
@@ -291,6 +293,31 @@ internal object HookCommand {
             }
         }
     }
+
+    /**
+     * The script an interpreter reads. Only a certain script is returned: `--fix` removes a hook whose script is
+     * missing, so an option that may take a value (`-m pkg`, `-r mod`), a flag cluster (`-lc`), a package script
+     * (`bun run dev`) or a URL leaves the hook unverified instead.
+     */
+    private fun script(
+        base: String,
+        args: List<String>,
+    ): Target {
+        val rest = if (base == "deno" || base == "bun") args.filter { it != "run" } else args
+        val options = rest.takeWhile { it.startsWith('-') }
+        val file = rest.getOrNull(options.size)
+        return when {
+            args.any { it in INLINE_FLAGS } -> unverified("an inline script, not a file")
+            options.any { it !in BARE_FLAGS } -> unverified("interpreter options before the script")
+            file == null -> unverified(NO_SCRIPT)
+            "://" in file -> unverified("a remote script")
+            rest.size != args.size && !fileLike(file) -> unverified("a package script, not a file")
+            else -> Target.Found(file, false)
+        }
+    }
+
+    /** A word that names a file rather than a program or a script name: it has a directory or an extension. */
+    private fun fileLike(t: String) = pathLike(t) || '.' in t
 
     /**
      * [command] as the shell would see it: words split, variables and `~` expanded, a `./` path made absolute where the

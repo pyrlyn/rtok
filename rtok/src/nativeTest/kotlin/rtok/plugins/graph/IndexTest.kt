@@ -163,6 +163,33 @@ class IndexTest {
             removeDirAll(dir)
         }
 
+    /** An event for a file that stopped being UTF-8 clears its old rows, as a full run does. */
+    @Test fun anEventForAFileThatTurnedBinaryDropsItsSymbols() =
+        withRuntime("event-binary") { rt ->
+            val dir = tmpDir("event-binary")
+            put(dir, "a.rs", "fn was_text() {}\n")
+            index(rt, dir)
+            assertTrue(rt.has(dir, "was_text"))
+            writeBytes("$dir/a.rs", "fn was_text() {}\n".encodeToByteArray() + byteArrayOf(0xFF.toByte()))
+            Index.runChanged(Ctx(rt), dir, setOf("$dir/a.rs"), Graph())
+            assertFalse(rt.has(dir, "was_text"))
+            assertEquals(Index.EMPTY_SHA, rt.store.symbolStat(k(dir), "a.rs")?.first)
+            removeDirAll(dir)
+        }
+
+    /** A relative event path for a vanished file resolves against the root, not the process directory. */
+    @Test fun aRelativeEventForADeletedFileDropsItsRows() =
+        withRuntime("event-relative") { rt ->
+            val dir = tmpDir("event-relative")
+            put(dir, "src/a.rs", "fn relative_gone() {}\n")
+            index(rt, dir)
+            assertTrue(rt.has(dir, "relative_gone"))
+            removeFile("$dir/src/a.rs")
+            Index.runChanged(Ctx(rt), dir, setOf("src/a.rs"), Graph())
+            assertFalse(rt.has(dir, "relative_gone"))
+            removeDirAll(dir)
+        }
+
     /** T543: a dry run over a stale fingerprint predicts the cold reindex and writes nothing. */
     @Test fun aStaleFingerprintDryRunPredictsTheColdReindex() =
         withRuntime("t543-dry") { rt ->

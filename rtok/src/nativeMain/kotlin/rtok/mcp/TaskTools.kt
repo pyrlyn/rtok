@@ -143,50 +143,51 @@ object TaskTools {
     ): String {
         val dir = session.projectDir(args)
         val cfg = Config.loadWith(null, null, dir)
-        val project = TaskProject.open(cfg.tasks, dir)
         val store = cx.store
-        val out: JsonElement =
-            when (name) {
-                "task_create" -> {
-                    val title = need(args, "title")
-                    project.create(store, NewTask(title, arg(args, "description").orEmpty(), arg(args, "parent")?.let(TaskId::parse))).json()
-                }
+        return TaskProject.open(cfg.tasks, dir).use { project ->
+            val out: JsonElement =
+                when (name) {
+                    "task_create" -> {
+                        val title = need(args, "title")
+                        project.create(store, NewTask(title, arg(args, "description").orEmpty(), arg(args, "parent")?.let(TaskId::parse))).json()
+                    }
 
-                "task_list" -> {
-                    JsonArray(project.adapter.list(taskFilter(statuses(args["status"]), flag(args, "all"), arg(args, "parent"))).map { it.json() })
-                }
+                    "task_list" -> {
+                        JsonArray(project.adapter.list(taskFilter(statuses(args["status"]), flag(args, "all"), arg(args, "parent"))).map { it.json() })
+                    }
 
-                "task_get" -> {
-                    project.show(id(args)).toJson()
-                }
+                    "task_get" -> {
+                        project.show(id(args)).toJson()
+                    }
 
-                "task_status" -> {
-                    project.status(store, id(args), arg(args, "status")?.let(Status::parse), flag(args, "force"), arg(args, "report")).json()
-                }
+                    "task_status" -> {
+                        project.status(store, id(args), arg(args, "status")?.let(Status::parse), flag(args, "force"), arg(args, "report")).json()
+                    }
 
-                "task_next" -> {
-                    project.next(store)?.json() ?: JsonNull
-                }
+                    "task_next" -> {
+                        project.next(store)?.json() ?: JsonNull
+                    }
 
-                "task_ready" -> {
-                    JsonArray(project.ready(store).map { it.toJson() })
-                }
+                    "task_ready" -> {
+                        JsonArray(project.ready(store).map { it.toJson() })
+                    }
 
-                "task_claim" -> {
-                    val agent = requireAgent(store, arg(args, "agent"))
-                    project.claim(store, arg(args, "id")?.let(TaskId::parse), agent).toJson()
-                }
+                    "task_claim" -> {
+                        val agent = requireAgent(store, arg(args, "agent"))
+                        project.claim(store, arg(args, "id")?.let(TaskId::parse), agent).toJson()
+                    }
 
-                "task_release" -> {
-                    val agent = requireAgent(store, arg(args, "agent"))
-                    project.release(store, id(args), agent, flag(args, "force")).json()
-                }
+                    "task_release" -> {
+                        val agent = requireAgent(store, arg(args, "agent"))
+                        project.release(store, id(args), agent, flag(args, "force")).json()
+                    }
 
-                else -> {
-                    edit(project, name, args)
+                    else -> {
+                        edit(project, name, args)
+                    }
                 }
-            }
-        return out.toString()
+            out.toString()
+        }
     }
 
     /** The plan edits that need no store: blockers, conflicts, the parallel mark and priority. */

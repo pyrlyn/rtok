@@ -5,6 +5,7 @@ import rtok.config.Estimator
 import rtok.config.Memory
 import rtok.config.Setup
 import rtok.plugin.fitBudget
+import rtok.plugin.isPlainName
 import rtok.plugin.sdk.*
 import rtok.plugins.checkpoint.offer
 import rtok.plugins.checkpoint.offerSession
@@ -70,7 +71,12 @@ private fun modesText(cx: Ctx): String? {
     val rate = cx.config("estimator", Estimator.serializer(), Estimator()).prose.coerceAtLeast(0.1f)
     return buildString {
         for (name in names) {
-            val body = readMode("${cfg.modesDir.trimEnd('/')}/$name.md", builtin(name), cfg.budgetTokens, rate) ?: continue
+            // Mode names may come from a cloned repository's config; one must not name a file outside `modes_dir`.
+            val body =
+                when {
+                    isPlainName(name) -> readMode("${cfg.modesDir.trimEnd('/')}/$name.md", builtin(name), cfg.budgetTokens, rate)
+                    else -> builtin(name)
+                } ?: continue
             val fit = fitBudget(cx, body, Class.Prose, cfg.budgetTokens)
             append(fit)
             if (!fit.endsWith('\n')) append('\n')

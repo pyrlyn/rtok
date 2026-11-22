@@ -32,6 +32,7 @@ object ReadCache {
         if (!cfg.delta && !forceDelta) return null
         val before = prev.utf8OrNull() ?: return null
         val after = body.utf8OrNull() ?: return null
+        if (lineCount(before) * lineCount(after) > MAX_DIFF_CELLS) return null
         val diff = ChangePreview.unifiedDiff(path, before, after)
         if (diff.isEmpty() || body.isEmpty()) return null
         if (diff.encodeToByteArray().size.toFloat() / body.size >= cfg.deltaMaxRatio) return null
@@ -55,6 +56,14 @@ object ReadCache {
         }
         return msg
     }
+
+    /**
+     * The diff builds a dense lines-before x lines-after table; past this many cells it would take more
+     * memory than the read is worth (two 40k-line logs need gigabytes), so the re-read is shown in full.
+     */
+    private const val MAX_DIFF_CELLS = 4_000_000L
+
+    private fun lineCount(s: String) = s.count { it == '\n' } + 1L
 
     private fun ByteArray.utf8OrNull() = runCatching { decodeToString(throwOnInvalidSequence = true) }.getOrNull()
 

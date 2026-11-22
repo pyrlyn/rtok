@@ -7,6 +7,7 @@ import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldStartWith
+import kotlinx.cinterop.toKString
 import rtok.VERSION
 import rtok.sys.*
 
@@ -45,6 +46,8 @@ fun cli(
     return Ran(code, io.out.toString(), io.err.toString())
 }
 
+private const val AGENT_ID_VAR = "RTOK_AGENT_ID"
+
 /** Runs [body] with `RTOK_HOME` pointing at a fresh directory (unset again after). */
 fun <T> withHome(
     tag: String,
@@ -54,10 +57,14 @@ fun <T> withHome(
     removeDirAll(home)
     createDirAll(home)
     platform.posix.setenv("RTOK_HOME", home, 1)
+    // The suite may run inside an agent session, whose id would name an agent the fresh home never saw.
+    val agent = platform.posix.getenv(AGENT_ID_VAR)?.toKString()
+    platform.posix.unsetenv(AGENT_ID_VAR)
     try {
         return body(home)
     } finally {
         platform.posix.unsetenv("RTOK_HOME")
+        agent?.let { platform.posix.setenv(AGENT_ID_VAR, it, 1) }
         removeDirAll(home)
     }
 }

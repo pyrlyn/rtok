@@ -19,11 +19,23 @@ object Filter {
         return compressOnly(settings, cmd, input)
     }
 
-    /** Filter, archive the input when the output points at it, and record one `cmd` row. */
+    /**
+     * Filter, archive the input when the output points at it, and record one `cmd` row. [exit] is the
+     * code the command had: a failure keeps the output's tail. A throw in the hand-written formatters
+     * passes the input through, the way `rtok run` does.
+     */
     fun runWithStore(
         cfg: Config,
         cmd: String,
         input: String,
+        exit: Int = 0,
+    ): String = runCatching { filterWithStore(cfg, cmd, input, exit) }.getOrDefault(input)
+
+    private fun filterWithStore(
+        cfg: Config,
+        cmd: String,
+        input: String,
+        exit: Int,
     ): String {
         val settings = Settings.fromConfig(cfg)
         val argv = words(cmd)
@@ -31,7 +43,7 @@ object Filter {
         cx.use {
             val bytes = input.encodeToByteArray()
             val id = hexSha256(bytes)
-            val (filtered, kind) = Formatters.compress(settings, argv, input, 0, shortId(id))
+            val (filtered, kind) = Formatters.compress(settings, argv, input, exit, shortId(id))
             val lines = if (input.isEmpty()) 0u else input.rustLines().size.toUInt()
             val named = namesTheId(filtered, shortId(id))
             val c = cfg.plugins.cmd
@@ -71,5 +83,5 @@ object Filter {
         settings: Settings,
         cmd: String,
         input: String,
-    ) = Formatters.compress(settings, words(cmd), input, 0, "").text
+    ) = runCatching { Formatters.compress(settings, words(cmd), input, 0, "").text }.getOrDefault(input)
 }

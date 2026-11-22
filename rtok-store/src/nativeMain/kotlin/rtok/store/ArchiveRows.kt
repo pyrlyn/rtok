@@ -142,15 +142,7 @@ internal fun Store.writeCallIo(
                 )
             }
         } catch (e: Throwable) {
-            for (p in created) {
-                val referenced =
-                    try {
-                        (db.longOf("SELECT count(*) FROM archive WHERE id = ?", p.substringAfterLast('/')) ?: 0) > 0
-                    } catch (_: Throwable) {
-                        true
-                    }
-                if (!referenced) unlink(p)
-            }
+            for (p in created) unlinkUnlessReferenced(db, p, p.substringAfterLast('/'))
             throw e
         }
     }
@@ -190,10 +182,25 @@ fun Store.putArchiveFor(
     try {
         conn { insertArchiveRow(it, sha, session, body.size.toLong(), path, agentId) }
     } catch (e: Throwable) {
-        if (created) unlink(path)
+        if (created) conn { unlinkUnlessReferenced(it, path, sha) }
         throw e
     }
     return sha
+}
+
+/** Unlink `path` unless a committed archive row still references `sha`; a failed insert may lose to another writer. */
+private fun unlinkUnlessReferenced(
+    db: Db,
+    path: String,
+    sha: String,
+) {
+    val referenced =
+        try {
+            (db.longOf("SELECT count(*) FROM archive WHERE id = ?", sha) ?: 0) > 0
+        } catch (_: Throwable) {
+            true
+        }
+    if (!referenced) unlink(path)
 }
 
 /** `(id, turns since archived)` when `sha` was archived in `session` for `agentId` (null = main context). */

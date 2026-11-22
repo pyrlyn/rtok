@@ -63,13 +63,12 @@ fun appendWasm(
     for (name in names) {
         if (!name.endsWith(".wasm")) continue
         val path = "$dir/$name"
-        try {
-            val p = WasmPlugin.load(path, runtime, env)
-            val m = p.manifest()
-            out += p to isOn(m.id, m.defaultOn)
-        } catch (e: WasmException) {
-            onError("$path: ${e.message}")
-        }
+        // Any failure, not only a WasmException from the engine, skips this file: a broken extension is never fatal.
+        runCatching { WasmPlugin.load(path, runtime, env) }
+            .onSuccess { p ->
+                val m = p.manifest()
+                out += p to isOn(m.id, m.defaultOn)
+            }.onFailure { onError("$path: ${it.message}") }
     }
     return out
 }
@@ -118,7 +117,9 @@ class WasmPlugin private constructor(
         cx: Ctx,
     ): String {
         instance.setFuel(fuel)
-        val packed = (instance.call("rtok_on_mcp_tool", List(6) { WasmValue.I32(0) }).single() as WasmValue.I64).v
+        val packed =
+            (instance.call("rtok_on_mcp_tool", List(6) { WasmValue.I32(0) }).singleOrNull() as? WasmValue.I64)?.v
+                ?: throw WasmException("rtok_on_mcp_tool: bad result")
         val staged = state.staged.toList()
         state.staged.clear()
         staged.forEach(cx::record)
@@ -152,7 +153,7 @@ class WasmPlugin private constructor(
             // A `start` function runs guest code too, so instantiation is metered like every call.
             val instance = runtime.instantiate(bytes, hostFunctions(state, env), fuel)
             instance.setFuel(fuel)
-            val packed = (instance.call("rtok_manifest").single() as? WasmValue.I64)?.v ?: throw WasmException("rtok_manifest: bad result")
+            val packed = (instance.call("rtok_manifest").singleOrNull() as? WasmValue.I64)?.v ?: throw WasmException("rtok_manifest: bad result")
             val parsed =
                 runCatching { json.decodeFromString<WasmManifest>(readPacked(instance.memory, packed).decodeToString()) }
                     .getOrElse { throw WasmException(it.message ?: "bad manifest", it) }
@@ -204,14 +205,23 @@ private fun hostFunctions(
         listOf(WasmValue.I32(0))
     },
     HostFunction("env", "rtok_log", listOf(I32, I32, I32, I32), emptyList()) { mem, a ->
-        val level = memRead(mem, a[0], a[1]).decodeToString()
-        val msg = memRead(mem, a[2], a[3]).decodeToString()
-        val name = state.pluginId.ifEmpty { "guest" }
+        val level = logSafe(memRead(mem, a[0], a[1]).decodeToString())
+        val msg = logSafe(memRead(mem, a[2], a[3]).decodeToString())
+        val name = logSafe(state.pluginId.ifEmpty { "guest" })
         appendSplit(env.log, errorPath(env.log.path), level, "wasm", name, msg)
         env.stderr("wasm $name $level: $msg\n")
         emptyList()
     },
 )
+
+/** Longest guest log field kept; a guest may log up to its fuel limit on every call. */
+internal const val LOG_FIELD_MAX = 2000
+
+/**
+ * Guest text as one inert line: control characters are dropped, so escape sequences (cursor moves,
+ * OSC 52 clipboard writes) and forged log lines never reach the user's terminal or the log file.
+ */
+internal fun logSafe(s: String) = s.filterNot { it.isISOControl() }.take(LOG_FIELD_MAX)
 
 internal fun jsonMeasurement(
     v: JsonObject,

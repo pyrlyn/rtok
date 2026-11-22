@@ -56,6 +56,31 @@ class WrapTest {
         assertNull(r.next(true))
     }
 
+    @Test fun bufferStaysSizedByLiveBytesOverALongSession() {
+        val body = ByteArray(200 * 1024) { 'a'.code.toByte() }
+        val frame = FrameReader.encode(Framing.Line, body)
+        val r = FrameReader()
+        repeat(1000) {
+            r.feed(frame)
+            assertNotNull(r.next(false))
+        }
+        assertTrue(r.capacity <= 1024 * 1024, "capacity ${r.capacity}")
+    }
+
+    @Test fun aLineFedInPiecesIsSplitOnlyAtItsNewline() {
+        val body = ByteArray(300 * 1024) { 'a'.code.toByte() }
+        val stream = FrameReader.encode(Framing.Line, body) + FrameReader.encode(Framing.Line, ping)
+        val r = FrameReader()
+        val got = mutableListOf<Frame>()
+        stream.asList().chunked(7 * 1024).forEach { piece ->
+            r.feed(piece.toByteArray())
+            generateSequence { r.next(false) }.forEach(got::add)
+        }
+        assertEquals(2, got.size)
+        assertContentEquals(body, got[0].body)
+        assertContentEquals(ping, got[1].body)
+    }
+
     @Test fun oversizedContentLengthIsRawAndDoesNotSwallowTheNextFrame() {
         for (len in listOf((MAX_FRAME.toULong() + 1u).toString(), ULong.MAX_VALUE.toString(), "340282366920938463463374607431768211455")) {
             val head = "Content-Length: $len\r\n\r\n".encodeToByteArray()

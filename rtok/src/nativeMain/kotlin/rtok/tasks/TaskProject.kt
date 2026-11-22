@@ -23,9 +23,9 @@ import rtok.config.contain
 import rtok.store.Store
 import rtok.store.TaskId
 import rtok.store.agentLastSeen
+import rtok.store.allocateTaskId
 import rtok.store.clearTaskClaim
 import rtok.store.seedTaskCounter
-import rtok.store.taskCounter
 import rtok.sys.IoException
 import rtok.sys.isDir
 import rtok.sys.readDir
@@ -119,6 +119,7 @@ internal fun checkoutOf(
     what: String,
 ): String = ProjectRoot.find(cwd)?.checkout ?: bail("$what: not inside a git checkout")
 
+@Suppress("TooManyFunctions")
 class TaskProject(
     /** The counter key, `projectKey`. */
     val key: String,
@@ -135,7 +136,12 @@ class TaskProject(
     internal val tasks: TaskStore = AdapterStore(adapter, stateDirOf(root, adapter.name, boardDir)),
     /** What leases and timestamps are measured by; a test turns it forward to let a lease lapse. */
     internal val clock: Clock = Clock.System,
-) {
+) : AutoCloseable {
+    /** A remote adapter owns an HTTP client (and its engine); the disk ones hold nothing. */
+    override fun close() {
+        (adapter as? AutoCloseable)?.close()
+    }
+
     companion object {
         /** The board directory's layout: its own folder for a board, the old adapter under the engine otherwise. */
         private fun openDisk(
@@ -206,8 +212,20 @@ class TaskProject(
     ): Task {
         val parent = new.parent
         if (parent != null && adapter.get(parent) == null) bail("rtok task: no parent task $parent")
-        // rtok's own counter remembers ids of deleted tasks and those an older rtok handed out; the board starts past it.
-        raiseIds(null, store.taskCounter(key, null).toLong())
+        // rtok's own counter remembers ids of deleted tasks and those an older rtok handed out, and it is the one
+        // counter every checkout of [key] shares: taking the number from it atomically keeps two boards that lock
+        // separately (`shared = false`, two clones) from both handing out the same id. The board starts just below it.
+        if (parent != null) store.seedTaskCounter(key, null, parent.path[0])
+        // A counter that trails this board would send two such boards to the board's own next number.
+        store.seedTaskCounter(key, parent, boardLast(parent).coerceIn(0L, UInt.MAX_VALUE.toLong()).toUInt())
+        raiseIds(
+            parent,
+            store
+                .allocateTaskId(key, prefix, parent)
+                .path
+                .last()
+                .toLong() - 1,
+        )
         repeat(TAKEN_RETRIES) { attempt ->
             try {
                 val made =
@@ -240,19 +258,21 @@ class TaskProject(
         atLeast: Long,
     ) {
         val name = parent?.toString().orEmpty()
-
-        fun last(text: String?) = text?.let { runCatching { Json.parseToJsonElement(it).jsonObject }.getOrNull() }.orEmpty()
-
-        if (atLeast <= 0 || ((last(tasks.snapshot().state(StateNames.IDS))[name] as? JsonPrimitive)?.longOrNull ?: 0L) >= atLeast) return
+        if (atLeast <= 0 || boardLast(parent) >= atLeast) return
         onBoard {
             tasks.locked(LOCK_TIMEOUT) { s ->
-                val ids = last(s.state(StateNames.IDS))
+                val ids = idsBlob(s.state(StateNames.IDS))
                 if (((ids[name] as? JsonPrimitive)?.longOrNull ?: 0L) < atLeast) {
                     s.commit(Commit(state = mapOf(StateNames.IDS to JsonObject(ids + (name to JsonPrimitive(atLeast))).toString())))
                 }
             }
         }
     }
+
+    private fun idsBlob(text: String?) = text?.let { runCatching { Json.parseToJsonElement(it).jsonObject }.getOrNull() }.orEmpty()
+
+    /** The board's last number under [parent] (null: top level), 0 when it handed none out. */
+    private fun boardLast(parent: TaskId?): Long = (idsBlob(tasks.snapshot().state(StateNames.IDS))[parent?.toString().orEmpty()] as? JsonPrimitive)?.longOrNull ?: 0L
 
     /** Raise the counter for [parent] (null: top level) to the highest number in use, every prefix counted. */
     fun seed(
@@ -287,7 +307,8 @@ class TaskProject(
                     .task.value
                     .rtok()
             }
-        if (!status.isActive) store.clearTaskClaim(key, id.toString())
+        // Back to todo releases the task as surely as done does, so the prompt hook must stop naming it.
+        if (status != Status.InProgress) store.clearTaskClaim(key, id.toString())
         return task
     }
 

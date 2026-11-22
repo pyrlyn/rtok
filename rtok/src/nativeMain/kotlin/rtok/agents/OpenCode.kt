@@ -102,11 +102,11 @@ class OpenCode(
 
         fun mcpSpec(cfg: Config) = OpenCodeFamily.mcpSpec(HOST, cfg.setup.opencode.configPath)
 
-        /** Set or drop `env.OPENAI_BASE_URL`; the report names how to revert. */
+        /** Set or drop `env.OPENAI_BASE_URL`; the report names how to revert. Remove leaves a URL the user set. */
         fun runProxy(
             cfg: Config,
             remove: Boolean,
-        ): String = ProxyEnv.run(cfg, cfg.setup.opencode.configPath, ENV_KEY, ProxyUrl.openai(cfg), remove)
+        ): String = ProxyEnv.run(cfg, cfg.setup.opencode.configPath, ENV_KEY, ProxyUrl.openai(cfg), remove, onlyOurs = true)
     }
 }
 

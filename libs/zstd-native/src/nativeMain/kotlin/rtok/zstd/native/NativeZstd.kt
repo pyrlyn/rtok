@@ -18,7 +18,7 @@ class NativeZstd(
             val len = alloc<ULongVar>()
             val err = alloc<CPointerVar<ByteVar>>()
             val src = if (data.isEmpty()) ByteArray(1) else data
-            val rc = src.usePinned { rtok_zstd_decode_all(it.addressOf(0), data.size.convert(), capBytes.convert(), out.ptr, len.ptr.reinterpret(), err.ptr.reinterpret()) }
+            val rc = src.usePinned { rtok_zstd_decode_all(it.addressOf(0), data.size.convert(), minOf(capBytes, MAX_ARRAY).convert(), out.ptr, len.ptr.reinterpret(), err.ptr.reinterpret()) }
             if (rc != 0) throw ZstdException(err.value?.toKString() ?: "zstd: decode failed")
             val p = out.value ?: return ByteArray(0)
             try {
@@ -31,5 +31,8 @@ class NativeZstd(
     companion object {
         /** Larger than any docs.rs rustdoc JSON; a cap keeps a hostile frame from taking all memory. */
         const val DEFAULT_CAP = 2L shl 30
+
+        /** The result is one ByteArray: a frame that decodes to 2 GiB or more is refused by the decoder, not by an Int overflow here. */
+        private const val MAX_ARRAY = Int.MAX_VALUE - 8L
     }
 }

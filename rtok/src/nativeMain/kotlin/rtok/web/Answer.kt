@@ -16,6 +16,7 @@ import rtok.agents.Junk
 import rtok.agents.JunkReport
 import rtok.agents.JunkWeb
 import rtok.config.Config
+import rtok.config.Layers
 import rtok.config.Validate
 import rtok.doctor.DoctorWeb
 import rtok.doctor.FixPlan
@@ -119,7 +120,8 @@ class Answer(
     ): String? =
         runCatching { Validate.set(c.home, key, value.toString(), false) }.fold(
             {
-                runCatching { Config.loadFrom(c.home) }.getOrNull()?.let(cfg::replace)
+                // Reload the file the write went to: with RTOK_CONFIG set that is not the home's config.toml.
+                runCatching { Layers.load(c.home, Config.userPath(c.home, null), null) }.getOrNull()?.let(cfg::replace)
                 null
             },
             { message("config set $key: ${it.message ?: it}") },

@@ -5,6 +5,8 @@ import rtok.config.Config
 import rtok.config.Layers
 import rtok.plugin.Runtime
 
+private const val ALLOW = """{"allow":true}"""
+
 val GUARD =
     CommandSpec(
         "guard",
@@ -24,10 +26,13 @@ val GUARD =
                 ) { inv ->
                     val tool = inv.value("tool") ?: throw CliFailure("the following required arguments were not provided: --tool <TOOL>", ExitCode.USAGE)
                     val json = inv.value("json") ?: throw CliFailure("the following required arguments were not provided: --json <INPUT>", ExitCode.USAGE)
-                    val cfg = Config.loadWith(inv.configFile, Layers.hookHostFlag(inv.value("host")))
-                    Runtime.open(cfg, inv.value("session") ?: "guard-check").use { cx ->
-                        inv.io.println(rtok.plugins.guard.check(tool, json, cx))
-                    }
+                    val cfg = Config.loadLenient(inv.configFile, Layers.hookHostFlag(inv.value("host")))
+                    // The caller blocks the tool on anything but an allow, so a store that cannot open must allow too.
+                    val verdict =
+                        runCatching {
+                            Runtime.open(cfg, inv.value("session") ?: "guard-check").use { cx -> rtok.plugins.guard.check(tool, json, cx) }
+                        }.getOrElse { ALLOW }
+                    inv.io.println(verdict)
                 },
             ),
     )

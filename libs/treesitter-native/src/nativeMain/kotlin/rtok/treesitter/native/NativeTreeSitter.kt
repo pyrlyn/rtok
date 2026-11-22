@@ -173,29 +173,32 @@ private class NativeQuery(
             out
         }
 
-    override fun rawMatches(node: Node): Sequence<QueryMatch> =
-        sequence {
-            val n = node as NativeNode
-            val cursor = ts_query_cursor_new() ?: return@sequence
+    override fun rawMatches(node: Node): Sequence<QueryMatch> {
+        // Collected eagerly: a lazy sequence the caller stops early (first, take, a throw) never reaches its
+        // finally blocks, so the native cursor and match would leak.
+        val n = node as NativeNode
+        val cursor = ts_query_cursor_new() ?: return emptySequence()
+        val out = ArrayList<QueryMatch>()
+        try {
+            ts_query_cursor_exec(cursor, ptr, n.raw)
+            val match = nativeHeap.alloc<TSQueryMatch>()
             try {
-                ts_query_cursor_exec(cursor, ptr, n.raw)
-                val match = nativeHeap.alloc<TSQueryMatch>()
-                try {
-                    while (ts_query_cursor_next_match(cursor, match.ptr)) {
-                        val caps =
-                            (0 until match.capture_count.toInt()).map { i ->
-                                val c = match.captures!![i]
-                                Capture(c.index.toInt(), captureNames[c.index.toInt()], NativeNode(c.node.readValue(), n.tree))
-                            }
-                        yield(QueryMatch(match.pattern_index.toInt(), caps))
-                    }
-                } finally {
-                    nativeHeap.free(match)
+                while (ts_query_cursor_next_match(cursor, match.ptr)) {
+                    val caps =
+                        (0 until match.capture_count.toInt()).map { i ->
+                            val c = match.captures!![i]
+                            Capture(c.index.toInt(), captureNames[c.index.toInt()], NativeNode(c.node.readValue(), n.tree))
+                        }
+                    out += QueryMatch(match.pattern_index.toInt(), caps)
                 }
             } finally {
-                ts_query_cursor_delete(cursor)
+                nativeHeap.free(match)
             }
+        } finally {
+            ts_query_cursor_delete(cursor)
         }
+        return out.asSequence()
+    }
 
     override fun close() = ts_query_delete(ptr)
 }

@@ -97,22 +97,34 @@ object WorktreeList {
         val known = listed.map(::canon).toSet()
         val parents = listed.drop(1).mapNotNull { p -> parent(p)?.let(::canon) }.toMutableSet()
         listed.firstOrNull()?.let { parents += canon(join(it, ".claude/worktrees")) }
+        val commons = listed.firstOrNull()?.let(::commonDirs).orEmpty()
         return parents
             .sorted()
             .flatMap { p -> runCatching { readDir(p) }.getOrDefault(emptyList()).map { join(p, it) } }
             .map(::canon)
-            .filter { it !in known && isOrphan(it) }
+            .filter { it !in known && isOrphan(it, commons) }
+    }
+
+    /** Where [main]'s repository keeps `worktrees/`: its `.git` (or the directory a `gitdir:` file names), or [main] when bare. */
+    private fun commonDirs(main: String): Set<String> {
+        val admin = if (exists(join(main, ".git"))) Worktrees.checkoutOf(main)?.second else null
+        return setOfNotNull(canon(main), admin?.let(::canon))
     }
 
     @Suppress("ReturnCount")
-    private fun isOrphan(dir: String): Boolean {
+    private fun isOrphan(
+        dir: String,
+        commons: Set<String>,
+    ): Boolean {
         // A `.git` directory (a repository of its own) fails to read as a file.
         val dotGit = runCatching { readToString(join(dir, ".git")) }.getOrNull() ?: return false
         val rel = dotGit.trim().takeIf { it.startsWith("gitdir: ") }?.removePrefix("gitdir: ") ?: return false
         // A relative `gitdir:` (`worktree.useRelativePaths`) resolves against the worktree.
         val admin = join(dir, rel)
         val parts = components(admin)
-        return parts.size >= 2 && parts[parts.size - 2] == "worktrees" && !exists(admin)
+        if (parts.size < 2 || parts[parts.size - 2] != "worktrees") return false
+        // A sibling directory may be another repository's dead worktree, whose caches are not this repository's to clean.
+        return parent(admin)?.let(::parent)?.let(::canon) in commons && !exists(admin)
     }
 
     /**

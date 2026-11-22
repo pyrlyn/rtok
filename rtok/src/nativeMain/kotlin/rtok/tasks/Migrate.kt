@@ -16,6 +16,7 @@ import rtok.sys.readToString
 import rtok.sys.removeFile
 import tomlaot.TomlDoc
 import tomlaot.TomlValue
+import kotlin.time.Duration
 
 @Serializable
 data class Moved(
@@ -53,27 +54,44 @@ fun migrateTasks(
     val layout = if (wanted == "auto") detectLayout(dir) else wanted
     if (layout == "plan") bail("rtok task migrate: $dir is the workspace plan/ convention and stays as it is")
     val base = if (cfg.shared) root.main else root.checkout
-    val moved = if (layout == "files") moveFiles(dir, base, dryRun) else emptyList()
+    val moved = if (layout == "files") moveFiles(dir, base, stateDirOf(root.main, layout, dir), dryRun) else emptyList()
     return MigrateReport(dryRun, moved, migrateConfig("${root.checkout}/.rtok.toml", dryRun))
 }
 
+/** [stateDir] is where the `files` layout's engine keeps its lock: every write on that layout goes through it. */
 private fun moveFiles(
     dir: String,
     base: String,
+    stateDir: String,
     dryRun: Boolean,
 ): List<Moved> {
-    val entries = DiskAdapter(dir).entries()
-
     fun rel(path: String) = path.removePrefix("$base/")
-    if (!dryRun && entries.isNotEmpty()) {
-        // One commit moves every task, `updated` kept: a migration moves tasks, it does not edit them. The board reads
-        // the old names in `done/` (the old archive's name) and replaces them in the same commit.
-        onBoard { FileStore(dir).locked(BoardOptions().lockTimeout) { it.commit(Commit(put = entries.map { (_, task) -> task.lib() })) } }
-        for ((old, _) in entries) if (exists(old)) removeFile(old)
-        val oldLock = "$dir/.claim.lock"
-        if (exists(oldLock)) removeFile(oldLock)
-    }
+
+    val entries =
+        if (dryRun) {
+            DiskAdapter(dir).entries()
+        } else {
+            // Read, commit and delete under the layout's own lock: a process still on the files layout would otherwise
+            // write a task between the read and the delete, and the stale copy or the delete would lose it.
+            val timeout = BoardOptions().lockTimeout
+            onBoard { AdapterStore(DiskAdapter(dir), stateDir).locked(timeout) { _ -> moveLocked(dir, timeout) } }
+        }
     return entries.map { (old, task) -> Moved(task.id.toString(), rel(old), rel("$dir/${task.status.str}/${task.id}-${unicodeSlug(task.title)}.md")) }
+}
+
+private fun moveLocked(
+    dir: String,
+    timeout: Duration,
+): List<Pair<String, Task>> {
+    val entries = DiskAdapter(dir).entries()
+    if (entries.isEmpty()) return entries
+    // One commit moves every task, `updated` kept: a migration moves tasks, it does not edit them. The board reads
+    // the old names in `done/` (the old archive's name) and replaces them in the same commit.
+    FileStore(dir).locked(timeout) { it.commit(Commit(put = entries.map { (_, task) -> task.lib() })) }
+    for ((old, _) in entries) if (exists(old)) removeFile(old)
+    val oldLock = "$dir/.claim.lock"
+    if (exists(oldLock)) removeFile(oldLock)
+    return entries
 }
 
 /** Rewrite `[tasks.disk] dir/layout` as `[tasks]` keys and drop `layout = "files"`, keeping every other line. */

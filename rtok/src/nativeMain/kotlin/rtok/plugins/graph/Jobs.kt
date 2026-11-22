@@ -54,6 +54,8 @@ object Jobs {
             // A crash must not leave the row `indexing` for good.
             finish(root, runCatching { work(config, id) })
         }
+        // Queued behind the job, so the worker exits once it is done instead of idling for the rest of the process.
+        worker.requestTermination(processScheduledJobs = true)
         return "indexing ${p.root}\n"
     }
 

@@ -161,6 +161,40 @@ class GuardTest {
         for (r in listOf("ls", "cat file", "grep foo bar", "grep 'a>b' file")) assertTrue(readOnly(r), r)
     }
 
+    @Test fun anEscapedQuoteHidesNoSeparatorOrRedirect() {
+        for (w in listOf("cat a \\\"; rm -rf build", "cat a \\'; echo x>notes.md", "cat \"a\\\"\" ; rm x", "cat a \\\" | tee out")) {
+            assertFalse(readOnly(w), w)
+            assertNull(k(w), w)
+        }
+        for (r in listOf("cat a\\ b", "grep \"a\\\"b\" f", "grep 'a\\' f")) assertTrue(readOnly(r), r)
+    }
+
+    @Test fun aWriteBehindAnEscapedQuoteClearsTheReadCache() =
+        withRuntime("g-escq") { r ->
+            r.cwd = "/proj"
+            val f = obj("file_path" to "/proj/notes.md")
+            done(r, "Read", f)
+            assertTrue(readAt(r, f))
+            done(r, "Bash", cmd("cat a \\'; echo x>notes.md"))
+            assertFalse(readAt(r, f), "the command wrote notes.md")
+        }
+
+    @Test fun multiFileAndPatchEditorsClearTheReadCache() {
+        for ((tool, input) in listOf(
+            "MultiEdit" to obj("file_path" to "/proj/f.rs"),
+            "NotebookEdit" to obj("notebook_path" to "/proj/f.rs"),
+            "apply_patch" to obj("input" to "*** Begin Patch\n*** Update File: f.rs\n*** End Patch"),
+        )) {
+            withRuntime("g-medit") { r ->
+                val f = obj("file_path" to "/proj/f.rs")
+                done(r, "Read", f)
+                assertTrue(readAt(r, f), tool)
+                done(r, tool, input)
+                assertFalse(readAt(r, f), tool)
+            }
+        }
+    }
+
     @Test fun processSubstitutionAndRgPreAreNotReadOnly() {
         for (w in listOf("cat <(sed -i s/a/b/ f)", "diff <(ls) <(touch x)", "rg --pre cat foo", "rg --pre=cat foo", "rg foo | rg --pre sh bar", "rg --hostname-bin=./x --hyperlink-format=default foo")) {
             assertFalse(readOnly(w), w)
