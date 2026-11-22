@@ -11,6 +11,12 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
+/** A body line, or the header of a subtable (`[child…]`, `[[child…]]`). */
+private fun inSection(
+    line: String,
+    child: String,
+) = !line.startsWith("[") || line.startsWith(child) || line.startsWith("[$child")
+
 internal object TomlEdit {
     /** [text] with `[keyPath.name]` set to [entry], or removed when [entry] is `null`. */
     fun set(
@@ -41,20 +47,28 @@ internal object TomlEdit {
         return join(lines)
     }
 
-    /** Replace (or drop) the `[header]` section at [start], up to the next header and its blank separator. */
+    /**
+     * Replace (or drop) the `[header]` section at [start] with its own subtables (`[header.env]`), up to the next
+     * other header and its blank separator.
+     */
     private fun replaceSection(
         lines: MutableList<String>,
         start: Int,
         header: String,
         entry: JsonObject?,
     ) {
+        // A subtable left behind would be a server without `command` after a remove, and a second `env` after a write.
+        val child = header.dropLast(1) + "."
         var end = start + 1
-        while (end < lines.size && !stripped(lines[end]).startsWith("[")) end++
+        while (end < lines.size && inSection(stripped(lines[end]), child)) end++
         while (end > start + 1 && lines[end - 1].isBlank()) end--
         repeat(end - start) { lines.removeAt(start) }
         if (entry != null) {
             lines.addAll(start, listOf(header) + bodyLines(entry))
-        } else if (start > 0 && lines[start - 1].isBlank() && lines.getOrNull(start)?.isBlank() != false) {
+        } else if (start == 0) {
+            // The section led the file: its separator would be left as a leading blank line.
+            while (lines.firstOrNull()?.isBlank() == true) lines.removeAt(0)
+        } else if (lines[start - 1].isBlank() && lines.getOrNull(start)?.isBlank() != false) {
             lines.removeAt(start - 1)
         }
     }
