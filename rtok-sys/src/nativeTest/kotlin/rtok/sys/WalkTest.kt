@@ -1,8 +1,11 @@
+@file:OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
+
 package rtok.sys
 
+import kotlinx.cinterop.convert
 import kotlin.test.*
 
-private const val MODE_755: UShort = 0x1edu
+private const val MODE_755 = 0x1ed
 
 class WalkTest {
     private fun tree(): String {
@@ -60,7 +63,8 @@ class WalkTest {
         try {
             assertEquals(listOf("", "locked", "ok.txt"), walk(root).map { it.path.removePrefix(root).trimStart('/') }.toList())
         } finally {
-            platform.posix.chmod("$root/locked", MODE_755) // so the cleanup can enter it
+            // `mode_t` is 16 bits on Darwin and 32 on Linux: `convert` picks the width of the target.
+            platform.posix.chmod("$root/locked", MODE_755.convert()) // so the cleanup can enter it
             removeDirAll(root)
         }
     }
