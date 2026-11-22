@@ -75,7 +75,7 @@ fun run(cfg: Config) {
             draw(b, app, ::localHms)
             term.draw(b)
             val effects = term.poll(FRAME_MS).map(app::key)
-            if (Effect.QUIT in effects) break
+            if (Effect.QUIT in effects || term.ended) break
             if (Effect.REFRESH in effects) next = 0
         }
     }

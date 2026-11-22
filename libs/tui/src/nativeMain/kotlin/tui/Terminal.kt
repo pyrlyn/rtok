@@ -13,8 +13,11 @@ import kotlinx.cinterop.nativeHeap
 import kotlinx.cinterop.ptr
 import kotlinx.cinterop.readBytes
 import kotlinx.cinterop.refTo
+import kotlinx.cinterop.staticCFunction
 import platform.posix.BRKINT
+import platform.posix.EAGAIN
 import platform.posix.ECHO
+import platform.posix.EINTR
 import platform.posix.ICANON
 import platform.posix.ICRNL
 import platform.posix.IEXTEN
@@ -23,27 +26,37 @@ import platform.posix.ISIG
 import platform.posix.ISTRIP
 import platform.posix.IXON
 import platform.posix.OPOST
+import platform.posix.POLLERR
+import platform.posix.POLLHUP
 import platform.posix.POLLIN
+import platform.posix.SIGHUP
+import platform.posix.SIGTERM
 import platform.posix.STDIN_FILENO
 import platform.posix.STDOUT_FILENO
 import platform.posix.TCSAFLUSH
 import platform.posix.TIOCGWINSZ
+import platform.posix.errno
 import platform.posix.fflush
 import platform.posix.ioctl
 import platform.posix.isatty
 import platform.posix.poll
 import platform.posix.pollfd
 import platform.posix.read
+import platform.posix.signal
 import platform.posix.stdout
 import platform.posix.tcgetattr
 import platform.posix.tcsetattr
 import platform.posix.termios
 import platform.posix.winsize
 import platform.posix.write
+import kotlin.concurrent.AtomicInt
 
 private const val READ_MAX = 64
 private const val FALLBACK_W = 80
 private const val FALLBACK_H = 24
+
+/** Set by SIGTERM/SIGHUP; only an atomic store happens inside the handler. */
+private val stopped = AtomicInt(0)
 
 /** Both stdin and stdout are terminals (`rtok tui` refuses otherwise). */
 fun isInteractive(): Boolean = isatty(STDIN_FILENO) == 1 && isatty(STDOUT_FILENO) == 1
@@ -53,6 +66,13 @@ class Terminal : AutoCloseable {
     private val saved = nativeHeap.alloc<termios>()
     private var raw = false
     private var last: Buffer? = null
+    private var eof = false
+
+    /**
+     * The process was asked to stop or the terminal went away. The caller leaves its loop on it, so [close] still
+     * restores the screen: the default action of those signals would end the process in raw mode.
+     */
+    val ended: Boolean get() = eof || stopped.value != 0
 
     /** Enters raw mode, the alternate screen and hides the cursor. */
     fun open() {
@@ -66,6 +86,10 @@ class Terminal : AutoCloseable {
             tcsetattr(STDIN_FILENO, TCSAFLUSH, t.ptr)
         }
         raw = true
+        stopped.value = 0
+        val stop = staticCFunction<Int, Unit> { stopped.value = 1 }
+        signal(SIGTERM, stop)
+        signal(SIGHUP, stop)
         out("\u001b[?1049h\u001b[?25l\u001b[2J")
     }
 
@@ -82,8 +106,8 @@ class Terminal : AutoCloseable {
 
     /** Draws [b], sending only the cells that changed since the last frame. */
     fun draw(b: Buffer) {
-        out(b.diff(last))
-        last = b
+        // A frame cut short is not what the screen shows: the next one repaints everything.
+        last = if (out(b.diff(last))) b else null
     }
 
     /** Forgets the last frame, so the next [draw] repaints everything. */
@@ -100,18 +124,29 @@ class Terminal : AutoCloseable {
             if (poll(fd.ptr, 1.convert(), timeoutMs) <= 0) return@memScoped emptyList()
             val buf = allocArray<ByteVar>(READ_MAX)
             val n = read(STDIN_FILENO, buf, READ_MAX.convert()).toInt()
+            // A hung-up terminal answers every poll at once with nothing to read: without this the loop would spin.
+            val gone = n == 0 || (n < 0 && (fd.revents.toInt() and (POLLHUP or POLLERR)) != 0)
+            if (gone) eof = true
             if (n <= 0) emptyList() else decodeKeys(buf.readBytes(n))
         }
 
-    private fun out(s: String) {
+    /** False when not every byte reached the terminal. */
+    private fun out(s: String): Boolean {
         val bytes = s.encodeToByteArray()
         var off = 0
         while (off < bytes.size) {
             val n = write(STDOUT_FILENO, bytes.refTo(off), (bytes.size - off).convert()).toInt()
-            if (n <= 0) break
-            off += n
+            when {
+                n > 0 -> off += n
+
+                // A signal (a resize) or a slow terminal: the rest of the frame still goes out.
+                n < 0 && (errno == EINTR || errno == EAGAIN) -> Unit
+
+                else -> break
+            }
         }
         fflush(stdout)
+        return off == bytes.size
     }
 
     /** Restores the screen, the cursor and the saved termios; safe to call twice. */
