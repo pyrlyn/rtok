@@ -28,6 +28,24 @@ private const val SEEN_B = 200L
 private const val SEEN_MAIN = 300L
 
 class WorktreeListTest {
+    @Test fun anOrphanOfAnotherRepositoryIsNotThisOnes() {
+        val dir = rtok.sys.canonicalize(tmpDir("wt-orphans"))!!
+
+        fun linked(
+            name: String,
+            repo: String,
+        ) {
+            createDirAll("$dir/$name")
+            writeString("$dir/$name/.git", "gitdir: $dir/$repo/.git/worktrees/$name\n")
+        }
+
+        for (repo in listOf("a", "b")) createDirAll("$dir/$repo/.git/worktrees")
+        createDirAll("$dir/a/.git/worktrees/a-wt")
+        for ((name, repo) in listOf("a-wt" to "a", "a-dead" to "a", "b-dead" to "b")) linked(name, repo)
+        assertEquals(listOf("$dir/a-dead"), WorktreeList.orphans(listOf("$dir/a", "$dir/a-wt")))
+        removeDirAll(dir)
+    }
+
     @Test fun usageSourcesSkipsTaggedCaches() {
         val dir = tmpDir("wt-t936-sources")
         createDirAll("$dir/src")
