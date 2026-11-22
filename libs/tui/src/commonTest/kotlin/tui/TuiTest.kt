@@ -10,6 +10,8 @@ class TuiTest {
         assertEquals(4, width("日本"))
         assertEquals(2, width("😀"))
         assertEquals(1, width("e\u0301"))
+        // C1 controls print nothing, like the C0 ones; a counted one would shift every later cell.
+        assertEquals(2, width("a\u0085\u009Bb"))
         assertEquals("hel…", truncate("hello", 4))
         assertEquals("hello", truncate("hello", 5))
         assertEquals("ab  ", fit("ab", 4))

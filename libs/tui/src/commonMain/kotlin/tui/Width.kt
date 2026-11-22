@@ -3,6 +3,9 @@ package tui
 
 private const val SPACE = 0x20
 private const val DEL = 0x7F
+
+/** The last C1 control: U+009B is a one-character CSI, which an 8-bit terminal obeys. */
+private const val C1_END = 0x9F
 private const val SUPP = 0x10000
 private const val HIGH = 0xD800
 private const val LOW = 0xDC00
@@ -72,7 +75,7 @@ private val ZERO = listOf(0x0300..0x036F, 0x200B..0x200F, 0x20D0..0x20FF, 0xFE00
 /** Columns one code point takes: 0, 1 or 2. */
 fun cpWidth(cp: Int): Int =
     when {
-        cp < SPACE || cp == DEL -> 0
+        cp < SPACE || cp in DEL..C1_END -> 0
         ZERO.any { cp in it } -> 0
         WIDE.any { cp in it } -> 2
         else -> 1
