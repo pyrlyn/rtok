@@ -48,12 +48,7 @@ class Request(
                 stdin,
             )
         pid?.let { fields += le32(it) }
-        val body = ArrayList<Byte>()
-        for (f in fields) {
-            le32(f.size.toUInt()).forEach { body += it }
-            f.forEach { body += it }
-        }
-        return frame(body.toByteArray())
+        return frame(concat(fields.flatMap { listOf(le32(it.size.toUInt()), it) }))
     }
 
     companion object {
@@ -125,14 +120,8 @@ fun fingerprint(vars: Iterable<Pair<String, String>>): ULong {
             .filter { (k, _) -> k.startsWith("RTOK_") || k in CONFIG_VARS || k in HOST_VARS }
             .map { (k, v) -> k.encodeToByteArray() to v.encodeToByteArray() }
             .sortedWith { a, b -> cmpBytes(a.first, b.first).let { if (it != 0) it else cmpBytes(a.second, b.second) } }
-    val bytes = ArrayList<Byte>()
-    for ((k, v) in kept) {
-        k.forEach { bytes += it }
-        bytes += 0
-        v.forEach { bytes += it }
-        bytes += 0
-    }
-    return fnv(bytes.toByteArray())
+    val nul = ByteArray(1)
+    return fnv(concat(kept.flatMap { (k, v) -> listOf(k, nul, v, nul) }))
 }
 
 private fun cmpBytes(
@@ -212,6 +201,17 @@ private fun joinTildeRest(
 fun endpoint(home: String): String? = pjoin(home, "hook.sock").takeIf { it.encodeToByteArray().size < 100 }
 
 private fun frame(body: ByteArray) = le32(body.size.toUInt()) + body
+
+/** [parts] end to end. A hook's stdin can be megabytes, and a list of boxed bytes cost sixteen times that on every call. */
+private fun concat(parts: List<ByteArray>): ByteArray {
+    val out = ByteArray(parts.sumOf { it.size })
+    var at = 0
+    for (p in parts) {
+        p.copyInto(out, at)
+        at += p.size
+    }
+    return out
+}
 
 internal fun le32(v: UInt) = ByteArray(4) { (v shr (8 * it)).toByte() }
 
