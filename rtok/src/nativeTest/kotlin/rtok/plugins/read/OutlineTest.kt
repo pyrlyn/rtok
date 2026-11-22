@@ -1,5 +1,8 @@
 package rtok.plugins.read
 
+import kotlin.native.concurrent.ObsoleteWorkersApi
+import kotlin.native.concurrent.TransferMode
+import kotlin.native.concurrent.Worker
 import kotlin.test.*
 
 class OutlineTest {
@@ -41,6 +44,18 @@ class OutlineTest {
         val a = Languages.tags("rust")!!.getOrThrow()
         assertSame(a, Languages.tags("rust")!!.getOrThrow(), "a second .rs file recompiled the query")
         assertNotSame(a, Languages.tags("typescript")!!.getOrThrow(), "two languages share one configuration")
+    }
+
+    @OptIn(ObsoleteWorkersApi::class)
+    @Test
+    fun concurrentCompilesAgreeOnOneConfiguration() {
+        val grammars = listOf("rust", "typescript", "python", "go", "java", "kotlin", "ruby", "php")
+        val workers = List(4) { Worker.start(name = "languages-$it") }
+        val futures = workers.map { w -> w.execute(TransferMode.SAFE, { grammars }) { gs -> gs.map { Languages.tags(it)?.isSuccess == true } } }
+        val results = futures.map { it.result }
+        workers.forEach { it.requestTermination().result }
+        assertTrue(results.all { r -> r.all { it } }, results.toString())
+        for (g in grammars) assertSame(Languages.tags(g)!!.getOrThrow(), Languages.tags(g)!!.getOrThrow(), g)
     }
 
     @Test fun unknownLanguageFallsBack() {
