@@ -277,18 +277,17 @@ object Git {
                 .stdout
                 .decodeToString()
                 .split('\u0000')
-                .filter { it.length > 3 }
+                .filter { it.isNotEmpty() }
         val paths = mutableListOf<String>()
         val it = fields.iterator()
         while (it.hasNext()) {
             val field = it.next()
-            val xy = field.substring(0, XY)
-            if (xy[0] == 'R' || xy[0] == 'C') {
-                if (it.hasNext()) {
-                    it.next()
-                }
-            }
-            if ('D' !in xy.substring(0, 2)) paths += field.substring(XY)
+            // A rename's source is a bare path with no `XY ` prefix, possibly shorter than one: it must be consumed
+            // here before any length check, or the next record is taken as the source and escapes the secret filter.
+            if (field.length <= XY) continue
+            val xy = field.substring(0, 2)
+            if (('R' in xy || 'C' in xy) && it.hasNext()) it.next()
+            if ('D' !in xy) paths += field.substring(XY)
         }
         return paths
     }
