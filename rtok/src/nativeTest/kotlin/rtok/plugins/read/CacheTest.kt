@@ -162,6 +162,18 @@ class CacheTest {
         }
     }
 
+    @Test fun aChangedReReadTooLargeToDiffIsShownInFull(): Unit =
+        vfsRt("delta-huge").use { r ->
+            val v = Vfs()
+
+            fun big(changed: Int?) = (0 until 3000).joinToString("") { if (it == changed) "chg$it\n" else "line$it\n" }
+            v.write("ws/a.txt", big(null))
+            readWith(r.ctx(), v, "ws", "a.txt", "full", null)
+            v.write("ws/a.txt", big(1500))
+            val again = readWith(r.ctx(), v, "ws", "a.txt", "diff", null)
+            assertTrue(again.startsWith("1:line0") && "previous " !in again, again.take(200))
+        }
+
     @Test fun modeDiffReadsTheFullCache(): Unit =
         vfsRt("mode-diff").use { r ->
             val v = Vfs()
