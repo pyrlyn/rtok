@@ -2,6 +2,7 @@ package rtok.http.ktor
 
 import io.ktor.client.engine.mock.*
 import io.ktor.http.*
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.*
@@ -162,4 +163,14 @@ class KtorHttpTest {
                 assertEquals("{}", body.decodeToString())
             }
         }
+
+    /** Ktor leaves a caller-supplied engine open; one close must take it down, and a second close must not fail. */
+    @Test fun closingTakesTheEngineDownWithIt() {
+        val e = MockEngine { respondOk() }
+        assertTrue(e.coroutineContext[Job]!!.isActive)
+        val c = KtorHttp(HttpSettings(), e)
+        c.close()
+        c.close()
+        assertFalse(e.coroutineContext[Job]!!.isActive)
+    }
 }

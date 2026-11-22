@@ -42,7 +42,8 @@ internal expect val engineEnforcesSocketTimeout: Boolean
 
 class KtorHttp(
     settings: HttpSettings,
-    engine: HttpClientEngine = platformEngine(),
+    /** A caller-supplied engine is taken over and closed by [close]: Ktor's `manageEngine=false` never closes it. */
+    private val engine: HttpClientEngine = platformEngine(),
     /** Bound each wait for a streamed response (headers, then every chunk) by the socket timeout here. */
     idleWatchdog: Boolean = !engineEnforcesSocketTimeout,
 ) : StreamingHttpClient {
@@ -222,9 +223,14 @@ class KtorHttp(
             throw HttpException(HttpException.Kind.Io, "${req.url}: ${e.message}", e)
         }
 
+    private var closed = false
+
     override fun close() {
+        if (closed) return
+        closed = true
         if (rawInit) raw.close()
         client.close()
+        engine.close()
     }
 
     companion object {
