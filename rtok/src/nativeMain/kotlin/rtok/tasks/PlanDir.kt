@@ -3,7 +3,6 @@
 // task.md's front matter; what the layout has no key for (blockers, conflicts, parallel) is refused, not dropped.
 package rtok.tasks
 
-import rtok.agent.sdk.writeAtomic
 import rtok.store.TaskId
 import rtok.sys.IoException
 import rtok.sys.createDirAll
@@ -14,6 +13,7 @@ import rtok.sys.isFile
 import rtok.sys.readDir
 import rtok.sys.readToString
 import rtok.sys.rustLines
+import rtok.sys.writeAtomic
 
 private const val TASK = "task.md"
 private const val DONE = "done.md"

@@ -8,10 +8,10 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
-import rtok.agent.sdk.writeAtomic
 import rtok.sys.exists
 import rtok.sys.fileStat
 import rtok.sys.readToString
+import rtok.sys.writeAtomic
 import kotlin.concurrent.AtomicReference
 
 /** One transcript's totals, valid while [size] and [mtimeNs] match the file. */

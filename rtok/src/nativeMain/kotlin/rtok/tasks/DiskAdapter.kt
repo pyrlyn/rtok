@@ -3,13 +3,13 @@
 // rename.
 package rtok.tasks
 
-import rtok.agent.sdk.writeAtomic
 import rtok.store.TaskId
 import rtok.sys.IoException
 import rtok.sys.createDirAll
 import rtok.sys.readDir
 import rtok.sys.readToString
 import rtok.sys.removeFile
+import rtok.sys.writeAtomic
 
 @Suppress("TooManyFunctions")
 class DiskAdapter(

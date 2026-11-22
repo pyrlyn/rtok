@@ -17,7 +17,6 @@ import pyrlyn.taskboard.Session
 import pyrlyn.taskboard.StateNames
 import pyrlyn.taskboard.Store
 import pyrlyn.taskboard.Versioned
-import rtok.agent.sdk.writeAtomic
 import rtok.sys.IoException
 import rtok.sys.appendString
 import rtok.sys.createDirAll
@@ -25,6 +24,7 @@ import rtok.sys.exists
 import rtok.sys.readToString
 import rtok.sys.removeFile
 import rtok.sys.tryLockExclusive
+import rtok.sys.writeAtomic
 import kotlin.time.Duration
 import kotlin.time.TimeSource
 import pyrlyn.taskboard.Task as LibTask

@@ -1,5 +1,5 @@
 // Port of crates/rtok-agent-sdk/src/lib.rs (backup + write subset): undo copies of host files in
-// `.backup_configs/<name>.bak-<ts>[-<n>]` and the atomic write every host-file change goes through.
+// `.backup_configs/<name>.bak-<ts>[-<n>]` and the write every host-file change goes through.
 @file:OptIn(kotlinx.cinterop.ExperimentalForeignApi::class, kotlin.time.ExperimentalTime::class)
 
 package rtok.agent.sdk
@@ -10,7 +10,6 @@ import platform.posix.S_IFREG
 import platform.posix.lstat
 import platform.posix.stat
 import rtok.sys.*
-import kotlin.random.Random
 import kotlin.time.Clock
 
 /** How a host-file change is applied. */
@@ -167,27 +166,3 @@ fun write(
     parent(path)?.let { runCatching { createDirAll(it) } }
     writeAtomic(path, body.encodeToByteArray())
 }
-
-/** Write to a sibling temp file, then rename over [path] (fs-kit `write::atomic`). */
-fun writeAtomic(
-    path: String,
-    bytes: ByteArray,
-) {
-    // Renaming over a dotfiles symlink would replace the link itself, so the write lands on its target instead.
-    val dest = if (entryKind(path) == EntryKind.Symlink) canonicalize(path) ?: path else path
-    // The random part keeps two threads of one process off the same temp file.
-    val tmp = "${parent(dest) ?: "."}/.${fileName(dest)}.tmp-${pid()}-${Random.nextLong().toULong().toString(TMP_RADIX)}"
-    try {
-        writeBytes(tmp, bytes)
-    } catch (e: IoException) {
-        runCatching { removeFile(tmp) }
-        throw e
-    }
-    fileMode(dest)?.let { platform.posix.chmod(tmp, it.convertMode()) }
-    if (platform.posix.rename(tmp, dest) != 0) {
-        runCatching { removeFile(tmp) }
-        throw IoException(IoException.Kind.Other, "$dest: rename failed")
-    }
-}
-
-private const val TMP_RADIX = 16

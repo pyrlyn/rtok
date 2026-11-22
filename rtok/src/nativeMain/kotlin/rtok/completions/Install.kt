@@ -111,7 +111,7 @@ object Install {
         }
         places.rcLine(shell, script)?.let { (rc, line) ->
             Rc.without(read(rc), line)?.let {
-                rtok.agent.sdk.writeAtomic(rc, it.encodeToByteArray())
+                rtok.sys.writeAtomic(rc, it.encodeToByteArray())
                 lines += "updated $rc"
             }
         }
