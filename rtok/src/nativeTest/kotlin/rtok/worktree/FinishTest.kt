@@ -140,6 +140,30 @@ class FinishTest {
         assertEquals(calls, gh.log.size, "refusals call no gh")
     }
 
+    @Test fun aDeletionAloneIsWorkToFinish() {
+        installDb()
+        val (dir, work) = repo("wt-finish-del")
+        val store = Store.openInMemory()
+        val me = store.agentDetail(store.registerAgent(store.hostId("claude")!!, "sess-me", null, null, null))!!
+        val path = canonicalize(AddClaim.add(store, work, Worktree(seed = false), "t4" to "del", me to null, false).path)!!
+        removeFile("$path/a.txt")
+        assertTrue(Git.pendingPaths(path).isEmpty())
+
+        val done = Finish.forAgent(store, path, me, null, FinishOptions(), FakeGh())
+        assertEquals("t4: del", done.committed)
+        assertEquals("", git("$dir/origin.git", "ls-tree", "--name-only", "t4-del"))
+    }
+
+    @Test fun aShortRenameSourceDoesNotHideTheNextRecordFromTheSecretCheck() {
+        val (_, work) = repo("wt-pending-rename")
+        writeString("$work/abc", "x\n")
+        git(work, "add", "-A")
+        git(work, "commit", "-q", "-m", "abc")
+        git(work, "mv", "abc", "renamed.txt")
+        writeString("$work/.env", "TOKEN=x")
+        assertEquals(listOf("renamed.txt", ".env"), Git.pendingPaths(work))
+    }
+
     @Test fun textNamesThePrAndEveryWarning() {
         val text = Finished("/w", "t1", "t1: x", URL, false, true, listOf("w1")).toText()
         assertEquals("/w: $URL\ncommitted: t1: x\nauto-merge: off\nunlocked\nwarning: w1\n", text)
