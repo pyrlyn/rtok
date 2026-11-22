@@ -7,6 +7,7 @@ import kotlinx.serialization.json.*
 import rtok.plugin.sdk.*
 import rtok.store.SerdeJson
 import rtok.store.hexSha256
+import rtok.sys.takeScalars
 
 private const val TITLE_MAX = 80
 internal const val NARRATIVE_MAX = 400
@@ -68,10 +69,7 @@ private fun stringify(v: JsonElement): String =
 internal fun truncateChars(
     s: String,
     n: Int,
-): String {
-    val cs = s.scalars()
-    return if (cs.size <= n) s else cs.take(maxOf(n - 1, 0)).joinToString("") + "…"
-}
+): String = if (s.takeScalars(n).length == s.length) s else s.takeScalars(maxOf(n - 1, 0)) + "…"
 
 private fun extractFiles(
     toolName: String,
@@ -100,7 +98,7 @@ fun synthesize(
 ): Synthesized {
     val o = output as? JsonObject
     val isError = (o?.get("is_error") as? JsonPrimitive)?.booleanOrNull == true || o?.containsKey("error") == true
-    val narrative = listOf(stringify(input), stringify(output)).map { truncateChars(scrubSecrets(it), 200) }.filter { it.isNotEmpty() }.joinToString(" | ")
+    val narrative = listOf(stringify(input), stringify(output)).map(::scrubbedField).filter { it.isNotEmpty() }.joinToString(" | ")
     return Synthesized(
         inferType(toolName, hook, isError),
         truncateChars(toolName.ifEmpty { "observation" }, TITLE_MAX),
@@ -171,4 +169,4 @@ fun capture(
 fun indexLines(
     hits: List<ObsHit>,
     n: Int,
-): List<String> = hits.take(n).map { "obs ${it.id} ${it.title} (${it.sessionId.scalars().take(8).joinToString("")})" }
+): List<String> = hits.take(n).map { "obs ${it.id} ${oneLine(it.title)} (${it.sessionId.scalars().take(8).joinToString("")})" }
