@@ -22,7 +22,9 @@ class GraphPageTest {
             val text = GraphPage.text(c, "$dir/src")!!
             assertTrue(text.startsWith("root "), text)
             assertTrue("\ndead symbols\n none\n" in text, text)
-            assertEquals(0, (Snapshot.build(c)["projects"] as JsonArray).size)
+            // The snapshot's `projects` field, read directly: building the whole snapshot starts background page
+            // reads against this directory, and they raced with its removal below.
+            assertEquals(0, (GraphPage.projectsJson(c) as JsonArray).size)
         } finally {
             removeDirAll(dir)
         }
