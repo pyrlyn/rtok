@@ -54,10 +54,12 @@ int rtok_clone_or_copy(const char *from, const char *to) {
 #include <sys/ioctl.h>
 #include <linux/fs.h>
 int rtok_clone_or_copy(const char *from, const char *to) {
-    int in = open(from, O_RDONLY | O_NOFOLLOW);
+    /* O_NONBLOCK: opening a FIFO for reading would block until a writer shows up. Only a regular file is copied. */
+    int in = open(from, O_RDONLY | O_NOFOLLOW | O_NONBLOCK);
     if (in < 0) return -1;
     struct stat st;
     if (fstat(in, &st) != 0) { int e = errno; close(in); errno = e; return -1; }
+    if (!S_ISREG(st.st_mode)) { close(in); errno = EINVAL; return -1; }
     int out = open(to, O_WRONLY | O_CREAT | O_EXCL, st.st_mode & 07777);
     if (out < 0) { int e = errno; close(in); errno = e; return -1; }
     int rc = 1;
@@ -65,9 +67,12 @@ int rtok_clone_or_copy(const char *from, const char *to) {
         char buf[65536];
         ssize_t n;
         rc = 0;
-        while ((n = read(in, buf, sizeof buf)) > 0) {
+        /* A signal (SIGCHLD, SIGWINCH) in the middle of a large copy must not fail it. */
+        while ((n = read(in, buf, sizeof buf)) > 0 || (n < 0 && errno == EINTR)) {
+            if (n < 0) continue;
             for (ssize_t off = 0; off < n;) {
                 ssize_t w = write(out, buf + off, (size_t)(n - off));
+                if (w < 0 && errno == EINTR) continue;
                 if (w < 0) { rc = -1; break; }
                 off += w;
             }
@@ -88,6 +93,7 @@ int rtok_clone_or_copy(const char *from, const char *to) {
 }
 #endif
 
+#include <signal.h>
 #include <sys/statvfs.h>
 #include <time.h>
 int rtok_spawn(int *pid, const char *prog, char *const argv[], char *const envp[], int n, const int *kind,
