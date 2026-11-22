@@ -49,4 +49,20 @@ class StrictJsonTest {
         for (b in bad) assertNull(StrictJson.parseOrNull(b), b)
         assertFailsWith<SerializationException> { StrictJson.parse("{\"k\":word}") }
     }
+
+    @Test
+    fun nestingStopsAtSerdesRecursionLimit() {
+        fun nested(depth: Int) = "[".repeat(depth) + "]".repeat(depth)
+        assertTrue(StrictJson.parseOrNull(nested(127)) != null)
+        assertNull(StrictJson.parseOrNull(nested(128)))
+        assertNull(StrictJson.parseOrNull("{\"a\":".repeat(128) + "1" + "}".repeat(128)))
+        assertFailsWith<SerializationException> { StrictJson.parse(nested(200_000)) }
+    }
+
+    @Test
+    fun bracketsInsideStringsDoNotCountAsNesting() {
+        val text = "\"" + "[{".repeat(500) + "\\\"" + "[".repeat(500) + "\""
+        assertTrue(StrictJson.parseOrNull(text) != null)
+        assertTrue(StrictJson.parseOrNull("[\"" + "[".repeat(300) + "\"]") != null)
+    }
 }
