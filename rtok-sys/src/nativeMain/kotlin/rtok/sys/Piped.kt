@@ -225,12 +225,12 @@ class PipedChild private constructor(
                 signal(SIGPIPE, SIG_IGN)
                 val inPipe = allocArray<IntVar>(2)
                 val outPipe = allocArray<IntVar>(2)
-                check(pipe(inPipe) == 0) { "pipe: errno $errno" }
                 if (inheritStdout) {
+                    openPipes(inPipe)
                     outPipe[0] = -1
                     outPipe[1] = -1
                 } else {
-                    check(pipe(outPipe) == 0) { "pipe: errno $errno" }
+                    openPipes(inPipe, outPipe)
                 }
                 val ends = listOf(inPipe[0], inPipe[1], outPipe[0], outPipe[1]).filter { it >= 0 }
                 val actions = SpawnActions().dup2(inPipe[0], 0)

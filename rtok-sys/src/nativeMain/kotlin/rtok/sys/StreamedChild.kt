@@ -113,7 +113,7 @@ class StreamedChild private constructor(
             memScoped {
                 val out = allocArray<IntVar>(2)
                 val err = allocArray<IntVar>(2)
-                check(pipe(out) == 0 && pipe(err) == 0) { "pipe: errno $errno" }
+                openPipes(out, err)
                 // The parent's read ends must not leak into a later child of this process.
                 fcntl(out[0], F_SETFD, FD_CLOEXEC)
                 fcntl(err[0], F_SETFD, FD_CLOEXEC)
