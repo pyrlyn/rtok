@@ -13,6 +13,7 @@ import rtok.http.ktor.KtorHttp
 import rtok.json.StrictJson
 import rtok.recordLog
 import rtok.store.*
+import kotlin.coroutines.cancellation.CancellationException
 
 private const val DEFAULT_ANTHROPIC_VERSION = "2023-06-01"
 
@@ -127,6 +128,8 @@ class Compressor private constructor(
             try {
                 ask(auth, text, spans)
             } catch (e: Exception) {
+                // A cancelled call is the queue shutting down, not a model failure: let it cancel.
+                if (e is CancellationException) throw e
                 return Outcome.Failed(e.message ?: e.toString())
             }
         if (summary.isEmpty() || summary.encodeToByteArray().size >= bytes.size) return Outcome.Skipped("summary not shorter than the original")
