@@ -169,4 +169,4 @@ fun capture(
 fun indexLines(
     hits: List<ObsHit>,
     n: Int,
-): List<String> = hits.take(n).map { "obs ${it.id} ${oneLine(it.title)} (${it.sessionId.scalars().take(8).joinToString("")})" }
+): List<String> = hits.take(n).map { "obs ${it.id} ${oneLine(it.title)} (${it.sessionId.takeScalars(8)})" }

@@ -6,6 +6,7 @@ import kotlinx.serialization.json.*
 import rtok.json.StrictJson
 import rtok.plugin.Runtime
 import rtok.sys.*
+import rtok.sys.scalarList
 
 /** A note the extractor proposes; the kind is always `note` (model output never picks one). */
 data class Candidate(
@@ -78,12 +79,12 @@ fun parseCandidates(
             Candidate(
                 t
                     .trim()
-                    .scalars()
+                    .scalarList()
                     .take(MAX_TITLE)
                     .joinToString(""),
                 b
                     .trim()
-                    .scalars()
+                    .scalarList()
                     .take(MAX_BODY)
                     .joinToString(""),
             )

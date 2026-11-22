@@ -4,6 +4,7 @@ package rtok.store
 
 import rtok.plugin.sdk.NoteHit
 import rtok.sys.Sha256
+import rtok.sys.scalarCount
 import kotlin.math.sqrt
 
 /** A vector source the store cannot build itself (T668); the host owns the transport. */
@@ -62,7 +63,7 @@ fun hashEmbed(
     val d = maxOf(dims, 1u).toULong()
     val v = FloatArray(d.toInt())
     for (token in words(text)) {
-        if (token.codePointCount() < 2) continue
+        if (token.scalarCount() < 2) continue
         val digest = Sha256.digest(token.lowercase().encodeToByteArray())
         for (c in 0 until 4) {
             var h = 0uL
@@ -94,16 +95,6 @@ private fun words(text: String): List<String> {
     }
     out += cur.toString()
     return out
-}
-
-private fun String.codePointCount(): Int {
-    var n = 0
-    var i = 0
-    while (i < length) {
-        i += if (this[i].isHighSurrogate() && i + 1 < length) 2 else 1
-        n++
-    }
-    return n
 }
 
 private fun l2Normalize(v: FloatArray) {

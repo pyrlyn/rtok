@@ -1,6 +1,7 @@
 // Port of src/plugins/memory/pack.rs tests.
 package rtok.plugins.memory
 
+import rtok.sys.scalarList
 import kotlin.test.*
 
 private fun hit(
@@ -9,7 +10,7 @@ private fun hit(
     s: String,
 ) = PackHit(id, t, s)
 
-private fun chars4(s: String): UInt = ((s.scalars().size + 3) / 4).toUInt()
+private fun chars4(s: String): UInt = ((s.scalarList().size + 3) / 4).toUInt()
 
 class PackTest {
     @Test fun abstractsFitAndFullBodiesDoNot() {

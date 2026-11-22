@@ -2,6 +2,8 @@
 // and Jaccard overlap, all local text.
 package rtok.plugins.memory
 
+import rtok.sys.scalarList
+
 object Admit {
     /** How many of the newest notes a save is compared with. */
     const val WINDOW: UInt = 200u
@@ -31,7 +33,7 @@ object Admit {
             .lowercase()
 
     private fun trigrams(t: String): Set<String> {
-        val cps = t.scalars()
+        val cps = t.scalarList()
         return (0..cps.size - 3).map { i -> cps.subList(i, i + 3).joinToString("") }.toSet()
     }
 
@@ -56,7 +58,7 @@ object Admit {
         stored: List<Row>,
     ): Verdict {
         val b = normalize(body)
-        if (b.scalars().size.toUInt() < minChars) return Verdict.TooShort
+        if (b.scalarList().size.toUInt() < minChars) return Verdict.TooShort
         return stored.firstOrNull { similarityPct(b, normalize(it.body)) >= similarity }?.let { Verdict.Duplicate(it.id) } ?: Verdict.Admit
     }
 }

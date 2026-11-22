@@ -2,6 +2,8 @@
 // mutates fenced code bodies or backtick spans, and never drops negation tokens.
 package rtok.modes
 
+import rtok.sys.rustLines
+
 enum class CaveIntensity { Lite, Full, Ultra }
 
 private val PLEASANTRIES =
@@ -276,18 +278,10 @@ private fun cleanupWsSegment(
     return cleaned
 }
 
-/** Rust `str::lines`: split on \n, strip a trailing \r, no final empty line. */
-internal fun rustLines(s: String): List<String> {
-    if (s.isEmpty()) return emptyList()
-    val parts = s.split('\n').toMutableList()
-    if (s.endsWith('\n')) parts.removeAt(parts.size - 1)
-    return parts.map { it.removeSuffix("\r") }
-}
-
 private fun cleanupWs(s: String): String {
     val out = StringBuilder(s.length)
     var start = true
-    for (line in rustLines(s)) {
+    for (line in s.rustLines()) {
         if (!start) out.append('\n')
         start = false
         var prevSpace = true

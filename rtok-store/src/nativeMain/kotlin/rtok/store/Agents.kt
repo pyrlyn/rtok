@@ -10,6 +10,7 @@ import humantime.parseHumanDuration
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import rtok.plugin.sdk.debugStr
+import rtok.sys.scalarCount
 import kotlin.time.Duration
 import kotlin.uuid.Uuid
 
@@ -156,7 +157,7 @@ fun Store.endAgent(
 
 /** The one id starting with `prefix`; "unknown" / "ambiguous: <ids>" otherwise. D34: at least 4 chars. */
 fun Store.resolveAgent(prefix: String): String {
-    if (prefix.codePointCount() < 4) throw StoreException("an agent id prefix needs at least 4 characters")
+    if (prefix.scalarCount() < 4) throw StoreException("an agent id prefix needs at least 4 characters")
     val len = prefix.encodeToByteArray().size
     val matches = conn { it.query("SELECT id FROM agents WHERE substr(id, 1, ?) = ?", len, prefix) { r -> r.string(0) } }
     return when (matches.size) {
@@ -164,17 +165,6 @@ fun Store.resolveAgent(prefix: String): String {
         1 -> matches[0]
         else -> throw StoreException("ambiguous: ${matches.joinToString(", ")}")
     }
-}
-
-private fun String.codePointCount(): Int {
-    var n = 0
-    var i = 0
-    while (i < length) {
-        if (this[i].isHighSurrogate() && i + 1 < length && this[i + 1].isLowSurrogate()) i++
-        i++
-        n++
-    }
-    return n
 }
 
 fun Store.agentDetail(id: String): AgentDetail? = conn { it.queryOne("$DETAIL_SQL WHERE agents.id = ? LIMIT 1", id, map = ::detail) }

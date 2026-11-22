@@ -7,6 +7,7 @@ import rtok.hook.expandWith
 import rtok.log.FileLog
 import rtok.store.Store
 import rtok.store.insertLog
+import rtok.sys.rustLines
 
 /**
  * `[log]` as the rotating file the log library writes. `log.path` is `~`-expanded here as well (Rust `finish`
@@ -73,14 +74,11 @@ internal fun logTailWith(
     while (out.size < n) {
         // Rotation is contiguous: nothing sits behind a gap.
         val text = runCatching { rtok.sys.readToString(rtok.log.rotatedPath(path, i)) }.getOrNull() ?: break
-        out += rustLines(text).asReversed().take(n - out.size)
+        out += text.rustLines().asReversed().take(n - out.size)
         i++
     }
     return out
 }
-
-/** Rust `str::lines`: no trailing empty line, `\r\n` endings trimmed. */
-private fun rustLines(text: String): List<String> = if (text.isEmpty()) emptyList() else text.removeSuffix("\n").split('\n').map { it.removeSuffix("\r") }
 
 /** log.rs `numbered`: the tail numbered `1` newest and nothing else, what a viewer such as tailspin gets as-is. */
 fun logNumbered(lines: List<String>): List<String> = lines.mapIndexed { i, line -> "${i + 1} $line" }

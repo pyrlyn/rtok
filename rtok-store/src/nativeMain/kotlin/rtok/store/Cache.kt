@@ -1,6 +1,8 @@
 // Port of crates/rtok-store/src/cache.rs: per-session read cache and hook-input windows.
 package rtok.store
 
+import rtok.sys.scalarCount
+
 fun Store.putReadCache(
     session: String,
     path: String,
@@ -48,7 +50,7 @@ fun Store.clearReadCache(
     path: String,
 ) = conn { db ->
     val keyed = "$path\t"
-    db.execute("DELETE FROM read_cache WHERE session = ? AND (path = ? OR substr(path, 1, ?) = ?)", session, path, keyed.codePointCountCompat(), keyed)
+    db.execute("DELETE FROM read_cache WHERE session = ? AND (path = ? OR substr(path, 1, ?) = ?)", session, path, keyed.scalarCount(), keyed)
     Unit
 }
 
@@ -89,14 +91,3 @@ fun Store.callsSince(
 
 /** A missing body stays `""`; a split one is made whole. */
 internal fun rebuildHookInputs(rows: List<Pair<String?, String?>>): List<String> = rows.map { (body, fields) -> body?.let { HookFields.rebuild(it, fields) } ?: "" }
-
-internal fun String.codePointCountCompat(): Int {
-    var n = 0
-    var i = 0
-    while (i < length) {
-        if (this[i].isHighSurrogate() && i + 1 < length && this[i + 1].isLowSurrogate()) i++
-        i++
-        n++
-    }
-    return n
-}
