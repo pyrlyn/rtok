@@ -156,9 +156,6 @@ class Store private constructor(
             if (longMigrate == null) longMigrate = hook
         }
 
-        /** Test tally of fresh connections (T203). */
-        var openCount = 0
-
         fun open(path: String) = openWith(path, LockWait.STEADY)
 
         fun openWith(
@@ -205,7 +202,6 @@ class Store private constructor(
             db: Db,
             wait: LockWait,
         ): Store {
-            openCount++
             db.exec("PRAGMA foreign_keys = ON")
             val s = Store(db, wait)
             s.migrate()

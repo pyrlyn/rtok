@@ -1,11 +1,8 @@
 // Port of crates/rtok-config/src/layers.rs — config layering (figment replacement):
 // default < user file < <checkout>/.rtok.toml (restricted keys dropped) < legacy fold < .env < RTOK_* env < flags.
 // Each layer keeps its name so `config show --sources` can say where a value came from.
-@file:OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
-
 package rtok.config
 
-import kotlinx.cinterop.*
 import kotlinx.serialization.json.*
 import rtok.sys.*
 
@@ -51,14 +48,9 @@ fun deepMerge(
 
 object Layers {
     private var onLoad: ((Config) -> Unit)? = null
-    private var onEarly: ((String) -> Unit)? = null
 
     fun onLoad(hook: (Config) -> Unit) {
         onLoad = hook
-    }
-
-    fun onEarlyWarning(hook: (String) -> Unit) {
-        onEarly = hook
     }
 
     internal fun notify(cfg: Config) {
@@ -408,13 +400,7 @@ object Layers {
         val dotenv = RtokEnv.fromDotenv(home, cwd)
         val warnings = ArrayList(dotenv.warnings)
         val fig = assemble(home, configFile, flags, RtokEnv.fromProcess(), cwd, dotenv, warnings)
-        val cfg =
-            try {
-                fig.extract()
-            } catch (e: ConfigException) {
-                warnings.forEach { onEarly?.invoke(it) }
-                throw e
-            }
+        val cfg = fig.extract()
         val done = cfg.finish(home)
         done.loadedFrom = Config.userPath(home, configFile)
         for (w in warnings) done.notes += LoadNote(if (w.contains(": ignored project setting ")) "project" else "dotenv", w, w)
@@ -519,9 +505,3 @@ object Dotenv {
         }
     }
 }
-
-fun isFile(path: String): Boolean =
-    memScoped {
-        val st = alloc<platform.posix.stat>()
-        platform.posix.stat(path, st.ptr) == 0 && (st.st_mode.toInt() and platform.posix.S_IFMT) == platform.posix.S_IFREG
-    }

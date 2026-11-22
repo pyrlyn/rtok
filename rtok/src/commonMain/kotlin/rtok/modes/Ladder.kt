@@ -24,7 +24,3 @@ fun evaluateLadder(ctx: LadderContext): LadderDecision =
         ctx.oneLiner -> LadderDecision.OneLiner
         else -> LadderDecision.Minimum
     }
-
-fun naiveAlwaysMinimum(
-    @Suppress("UNUSED_PARAMETER") ctx: LadderContext,
-) = LadderDecision.Minimum
