@@ -9,6 +9,7 @@ import rtok.config.Tasks
 import rtok.config.Validate
 import rtok.store.Store
 import rtok.store.TaskId
+import rtok.store.allocateTaskId
 import rtok.store.hostId
 import rtok.store.latestTaskClaim
 import rtok.store.registerAgent
@@ -310,6 +311,31 @@ class TaskProjectTest {
         assertEquals("R2", latest())
         project(path).claim(store, id("R1"), live)
         assertEquals("R1", latest(), "a same-agent re-claim moves to the front")
+        removeDirAll(path)
+    }
+
+    @Test fun boardsThatLockSeparatelyTakeTheirIdsFromTheSharedCounter() {
+        val one = tmpDir("ids-one")
+        val two = tmpDir("ids-two")
+        val store = store()
+        // Another checkout's create that took its number and has not written its task yet.
+        assertEquals("R1", store.allocateTaskId("proj", "R", null).toString())
+        assertEquals("R2", project(one).create(store, new("First")).id.toString())
+        assertEquals("R3", project(two).create(store, new("Second")).id.toString())
+        assertEquals("R2.1", project(one).create(store, new("Leaf", "R2")).id.toString())
+        removeDirAll(one)
+        removeDirAll(two)
+    }
+
+    @Test fun movingAClaimedTaskBackToTodoDropsTheStoredClaim() {
+        val path = tmpDir("claim-todo")
+        val store = store()
+        val live = agent(store, "live", nowSecs())
+        project(path).adapter.create(new("First"), id("R1"))
+        project(path).claim(store, id("R1"), live)
+        assertEquals("R1", store.latestTaskClaim("proj", live)?.taskId)
+        project(path).status(store, id("R1"), Status.Todo, false, null, live)
+        assertEquals(null, store.latestTaskClaim("proj", live))
         removeDirAll(path)
     }
 }
