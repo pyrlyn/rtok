@@ -104,6 +104,12 @@ object Migrate {
         if (current) keep("the worktree this command runs from")
         heldByAnother(r, dir, me, held)?.let(::keep)
         if (exists(join(r.path, ".gitmodules"))) keep("has submodules, which `git worktree move` refuses")
+        // The task comes from a lock or a branch, not from `add`'s checked id: a `/` in it would leave the root.
+        r
+            .owner()
+            ?.task
+            ?.takeIf { '/' in it }
+            ?.let { keep("its task `$it` is not a plain directory name") }
         // No task to name it by: it keeps its directory name.
         val name = r.owner()?.let { "${fileName(main).orEmpty()}-${it.task}" } ?: fileName(r.path).orEmpty()
         val to = join(base, name)
@@ -149,6 +155,7 @@ object Migrate {
         return steps.map { (record, to, why) ->
             if (to == null) return@map MigrateOutcome(record.path, null, "keep", why.orEmpty(), false)
             val done = if (yes) runCatching { apply(main, record, to, store) } else null
+            val warning = done?.getOrNull()
             MigrateOutcome(
                 path = record.path,
                 to = to,
@@ -156,40 +163,40 @@ object Migrate {
                 note =
                     when {
                         done == null -> "outside the root"
-                        done.isSuccess -> "moved"
-                        else -> "failed, kept: ${done.exceptionOrNull()?.message}"
+                        done.isFailure -> "failed, kept: ${done.exceptionOrNull()?.message}"
+                        else -> warning ?: "moved"
                     },
-                failed = done?.isFailure == true,
+                failed = done?.isFailure == true || warning != null,
             )
         }
     }
 
+    /** Null when the worktree moved with its lock; else what went wrong after it moved. */
     private fun apply(
         main: String,
         record: WorktreeRecord,
         to: String,
         store: Store?,
-    ) {
+    ): String? {
         if (pathStartsWith(resolved(to), canon(main))) Add.ensureIgnored(main)
         parent(to)?.let { p -> runCatching { createDirAll(p) }.getOrElse { fail("cannot create $p: ${it.message}") } }
         val from = record.path
         // Canonical before the move: afterwards `from` no longer exists to resolve.
         val old = canon(from)
         val reason = record.locked
-        if (reason != null) {
-            Git.unlock(main, from)
-            try {
-                Git.moveTo(main, from, to)
-            } catch (e: GitError) {
-                // Put the lock back: an unlocked worktree is one `gc` may take.
-                Git.lock(main, from, reason)
-                throw e
-            }
-            Git.lock(main, to, reason)
-        } else {
+        if (reason != null) Git.unlock(main, from)
+        try {
             Git.moveTo(main, from, to)
+        } catch (e: GitError) {
+            // Put the lock back: an unlocked worktree is one `gc` may take.
+            if (reason != null) Git.lock(main, from, reason)
+            throw e
         }
+        // The claim rows follow the directory before the relock, so a lock that does not come back leaves the claim
+        // still naming the worktree; reported, since the move itself cannot be taken back.
         store?.moveWorktreeRows(old, canon(to))
+        if (reason == null) return null
+        return runCatching { Git.lock(main, to, reason) }.exceptionOrNull()?.let { "moved, not locked again: ${it.message}" }
     }
 
     fun toTable(

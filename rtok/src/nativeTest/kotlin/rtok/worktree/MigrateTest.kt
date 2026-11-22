@@ -117,6 +117,13 @@ class MigrateTest {
         assertEquals("outside the root", notes[1])
     }
 
+    @Test fun aTaskWithASlashKeepsTheWorktreeInPlace() {
+        val (_, work) = repo("wt-migrate-slash")
+        add(work, "slash", "$ME | ../../elsewhere | 2026-10-14")
+        val plan = Migrate.run(work, REL, MigrateMe(null, ME), MigrateHeld(), null, false)
+        assertEquals("keep" to "its task `../../elsewhere` is not a plain directory name", action(plan, "wt-slash"))
+    }
+
     @Test fun theTableCountsOnlyTheMoves() {
         val rows = listOf(MigrateOutcome("/a", "/r/a", "move", "outside the root", false), MigrateOutcome("/b", null, "keep", "main checkout", false))
         assertTrue(Migrate.toTable(rows, false).endsWith("\ndry run: 1 to move, nothing changed; rerun with --yes\n"))
