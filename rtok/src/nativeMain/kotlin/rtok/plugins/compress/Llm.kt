@@ -1,7 +1,5 @@
 // Port of the transport-free parts of src/plugins/compress/llm.rs — the P28 compressor's prompt, version
-// key, code detection and credential rules. The HTTP client and the background queue (llm.rs `Compressor`,
-// queue.rs) wait for an approved HTTP client / async runtime; until then `[plugins.compress.llm]` only
-// changes which stored summaries are read.
+// key, code detection and credential rules. The HTTP side is Compressor.kt, the background queue Queue.kt.
 package rtok.plugins.compress
 
 import kotlinx.serialization.json.jsonPrimitive

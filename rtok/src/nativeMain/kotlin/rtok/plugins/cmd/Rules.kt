@@ -201,8 +201,6 @@ object Rules {
         }
     }
 
-    /** `rtok config check`: one line per rules file that does not parse strictly. */
-
     /** Lets `rtok config validate` (rtok-config cannot see this module) check the rule files on disk. */
     fun installValidateCheck() = rtok.config.Validate.registerRules { file, dir -> issuesIn(DiskRuleFiles, file, dir) }
 

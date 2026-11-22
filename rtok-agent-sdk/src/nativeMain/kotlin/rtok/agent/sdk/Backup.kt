@@ -1,6 +1,5 @@
 // Port of crates/rtok-agent-sdk/src/lib.rs (backup + write subset): undo copies of host files in
 // `.backup_configs/<name>.bak-<ts>[-<n>]` and the atomic write every host-file change goes through.
-// The rest of the crate (host registration, doctor) is Phase 9.
 @file:OptIn(kotlinx.cinterop.ExperimentalForeignApi::class, kotlin.time.ExperimentalTime::class)
 
 package rtok.agent.sdk
