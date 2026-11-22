@@ -3,7 +3,7 @@ status: in progress
 priority: P1
 complexity: 5
 readiness: 10%
-agent: Claude Code / claude-opus-5-5
+agent: Claude Code / claude-fable-5-2
 ---
 
 # T7. Whole-repo code review: bug fixes, K1–K5 and optimizations
