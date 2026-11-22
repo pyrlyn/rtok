@@ -248,8 +248,6 @@ class GithubAdapter(
 
     override fun storesMarkers() = true
 
-    override fun maxId(prefix: String) = maxWithPrefix(issues(LABEL, "all").mapNotNull { it.taskId() }, prefix)
-
     override fun unlabelled() = issues(LABEL, "all").filter { it.taskId() == null }.map { Stray(it.title, it.htmlUrl, titleId(it.title)) }
 }
 

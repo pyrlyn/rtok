@@ -19,7 +19,6 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration
 
@@ -133,9 +132,6 @@ class GithubTest {
         assertEquals(Status.InProgress, plan[1].status)
         assertEquals(1, fake.calls.count { "state=open" in it.query })
         assertEquals(tid("A1.1"), gh.list(Filter(statuses = listOf(Status.Closed)))[0].id)
-        assertEquals(tid("A1.1"), gh.maxId("a"))
-        assertEquals(tid("B9"), gh.maxId("B"))
-        assertNull(gh.maxId("Q"))
         assertEquals(listOf(Stray("A4. Task 4", "https://github.com/me/app/issues/4", tid("A4"))), gh.unlabelled())
     }
 

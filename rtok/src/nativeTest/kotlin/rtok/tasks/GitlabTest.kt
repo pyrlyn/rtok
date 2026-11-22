@@ -19,7 +19,6 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration
 
@@ -122,9 +121,6 @@ class GitlabTest {
         assertEquals(1, fake.calls.count { "state=opened" in it.query })
         assertEquals(listOf(tid("A1.1")), gl.list(Filter(statuses = listOf(Status.Closed))).map { it.id })
         assertEquals(listOf("B9", "B10"), gl.list(Filter(statuses = listOf(Status.Done))).map { it.id.toString() }, "closed without a status label is done")
-        assertEquals(tid("A1.1"), gl.maxId("a"))
-        assertEquals(tid("B10"), gl.maxId("B"))
-        assertNull(gl.maxId("Q"))
     }
 
     @Test fun statusSwapsTheLabelsAndClosesOrReopens() {

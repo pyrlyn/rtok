@@ -194,8 +194,6 @@ class TaskProjectTest {
             status: Status,
             report: String?,
         ) = inner.writeStatus(id, status)
-
-        override fun maxId(prefix: String) = inner.maxId(prefix)
     }
 
     /** The MCP task tools close their project after every call: a remote adapter's HTTP client must go with it. */
@@ -222,8 +220,6 @@ class TaskProjectTest {
                     status: Status,
                     report: String?,
                 ) = inner.writeStatus(id, status)
-
-                override fun maxId(prefix: String) = inner.maxId(prefix)
 
                 override fun close() {
                     closed = true

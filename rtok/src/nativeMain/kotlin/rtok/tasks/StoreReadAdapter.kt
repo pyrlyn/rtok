@@ -21,8 +21,6 @@ internal class StoreReadAdapter(
 
     override fun get(id: TaskId) = all().firstOrNull { it.id == id }
 
-    override fun maxId(prefix: String): TaskId? = all().map { it.id }.filter { it.prefix == prefix.uppercase() }.maxOrNull()
-
     override fun movesWithReport() = true
 
     override fun storesMarkers() = true

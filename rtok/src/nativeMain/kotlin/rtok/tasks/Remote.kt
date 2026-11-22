@@ -79,15 +79,6 @@ fun secs(ts: String): Long =
             .epochSeconds
     }.getOrDefault(0)
 
-/** The highest of [ids] with [prefix], any case. */
-fun maxWithPrefix(
-    ids: Iterable<TaskId>,
-    prefix: String,
-): TaskId? {
-    val p = prefix.uppercase()
-    return ids.filter { it.prefix == p }.maxOrNull()
-}
-
 /** The first non-empty variable of [vars], else the trimmed output of the [cli] command (`gh auth token`). */
 fun token(
     adapter: String,

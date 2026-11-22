@@ -52,8 +52,6 @@ private class Fixed(
         report: String?,
     ): Task = error("sync never writes")
 
-    override fun maxId(prefix: String): TaskId? = error("unused")
-
     override fun unlabelled() = strays
 }
 
