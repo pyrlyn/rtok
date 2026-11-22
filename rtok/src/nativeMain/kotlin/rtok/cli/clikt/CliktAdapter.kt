@@ -108,6 +108,12 @@ object CliktParser : CliParser {
             Trace.annotate(emptyList(), name = parsed.path.joinToString(" ").ifEmpty { spec.name })
             val text = cmd.getFormattedHelp(e) ?: ""
             return when {
+                // A group called without its subcommand prints the help as an error; clap exits 2 on stderr there.
+                (e is PrintHelpMessage || e is PrintMessage) && e.printError -> {
+                    if (text.isNotEmpty()) io.eprintln(text)
+                    ExitCode.USAGE
+                }
+
                 e is PrintHelpMessage || e is PrintMessage || e is PrintCompletionMessage -> {
                     if (text.isNotEmpty()) io.println(text)
                     ExitCode.OK
