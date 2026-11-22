@@ -78,7 +78,9 @@ val DOCTOR =
             // A terminal and no `--yes`: the user picks what goes. Pipes and CI keep the dry run.
             val tty = platform.posix.isatty(0) == 1 && platform.posix.isatty(1) == 1
             val ask = if (!yes && tty) Terminal(inv.io) else null
-            val (text, code) = Fix.run(cfg, yes && !inv.flag("dry-run"), agent, only.ifEmpty { Fix.KINDS }, ask)
+            // `--stat` is documented as a dry run, with or without `--dry-run`.
+            val write = yes && !inv.flag("dry-run") && !inv.flag("stat")
+            val (text, code) = Fix.run(cfg, write, agent, only.ifEmpty { Fix.KINDS }, ask)
             inv.io.out(text)
             if (code != 0) throw CliExit(code)
         } else {
