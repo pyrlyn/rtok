@@ -19,6 +19,7 @@ import rtok.store.recentSessionTotals
 import rtok.store.resolveAgent
 import rtok.store.setAgentStatus
 import rtok.store.unreadCounts
+import rtok.sys.scalarCount
 
 object Agents {
     /** Rows of the Sessions page (model/mod.rs `SESSIONS_ROWS`). */
@@ -153,7 +154,7 @@ object Agents {
     /** Status as stored: control chars stripped, trimmed; null clears it. Longer than [STATUS_MAX] is refused. */
     fun cleanStatus(text: String): String? {
         val clean = text.filter { !it.isISOControl() }.trim()
-        val n = clean.codePointCount()
+        val n = clean.scalarCount()
         require(n <= STATUS_MAX) { "status text is $n chars; at most $STATUS_MAX allowed" }
         return clean.ifEmpty { null }
     }
@@ -170,6 +171,4 @@ object Agents {
         store.setAgentStatus(id, clean)
         return clean
     }
-
-    private fun String.codePointCount(): Int = count { !it.isLowSurrogate() }
 }

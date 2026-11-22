@@ -2,6 +2,8 @@
 // at the cheapest tier that fits, then leftover budget deepens the best hits. No model calls.
 package rtok.plugins.memory
 
+import rtok.sys.takeScalars
+
 /** How much of a note `mem_pack` spent; declaration order is the depth rank. */
 enum class Tier(
     val str: String,
@@ -127,19 +129,8 @@ private fun tierText(
 private fun firstParagraph(body: String): String? {
     val para = body.substringBefore("\n\n").trim()
     if (para.isEmpty()) return null
-    return para.scalars().take(OVERVIEW_CHARS).joinToString("")
+    return para.takeScalars(OVERVIEW_CHARS)
 }
-
-/** Unicode scalar values of a string (Rust `chars()`). */
-internal fun String.scalars(): List<String> =
-    buildList {
-        var i = 0
-        while (i < length) {
-            val n = if (this@scalars[i].isHighSurrogate() && i + 1 < length) 2 else 1
-            add(substring(i, i + n))
-            i += n
-        }
-    }
 
 /** `{id}\t{tier}\n{text}`: budgeting measures this form so the header counts. */
 private fun entryRepr(

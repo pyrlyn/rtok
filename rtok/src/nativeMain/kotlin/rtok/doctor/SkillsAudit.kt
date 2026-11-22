@@ -7,7 +7,6 @@
 package rtok.doctor
 
 import rtok.agents.Skills
-import rtok.codePointCountCompat
 import rtok.json.StrictJson
 import rtok.sys.canon
 import rtok.sys.fileName
@@ -15,6 +14,7 @@ import rtok.sys.isDir
 import rtok.sys.listDirOrEmpty
 import rtok.sys.readToString
 import rtok.sys.samePath
+import rtok.sys.scalarCount
 
 data class SkillsAudit(
     val rows: List<SkillRow> = emptyList(),
@@ -243,7 +243,7 @@ internal object SkillsAuditProbe {
                     .removePrefix("description:")
                     .trim()
                     .trim('"')
-                    .codePointCountCompat()
+                    .scalarCount()
             }
         }
         return 0

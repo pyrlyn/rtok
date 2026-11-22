@@ -1,6 +1,8 @@
 // Text helpers of src/report/pdf.rs: word wrap and the WinAnsi fold for the builtin Helvetica.
 package rtok.report
 
+import rtok.sys.scalarList
+
 internal object PdfText {
     private const val LATIN1_END = 256
     private const val ASCII_END = 128
@@ -29,14 +31,14 @@ internal object PdfText {
         word: String,
         width: Int,
     ): List<String> {
-        val cps = codePoints(word)
+        val cps = word.scalarList()
         if (cps.size <= width) return listOf(word)
         return cps.chunked(width).map { it.joinToString("") }
     }
 
     /** WinAnsi: map the punctuation the report emits, pass Latin-1, degrade the rest to `?`; drop tabs and CRs. */
     fun ansi(s: String): String =
-        codePoints(s).joinToString("") { c ->
+        s.scalarList().joinToString("") { c ->
             when (c) {
                 "→" -> "->"
                 "—", "–", "·" -> "-"
@@ -48,17 +50,6 @@ internal object PdfText {
                 else -> if (latin1(c)) c else "?"
             }
         }
-
-    private fun codePoints(s: String): List<String> {
-        val out = mutableListOf<String>()
-        var i = 0
-        while (i < s.length) {
-            val n = if (s[i].isHighSurrogate() && i + 1 < s.length) 2 else 1
-            out.add(s.substring(i, i + n))
-            i += n
-        }
-        return out
-    }
 
     /** ASCII passes as is; the rest of Latin-1 unless it is a C1 control. */
     private fun latin1(c: String): Boolean {

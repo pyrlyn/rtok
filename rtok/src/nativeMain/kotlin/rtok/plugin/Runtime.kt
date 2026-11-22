@@ -4,6 +4,7 @@ package rtok.plugin
 
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
 import rtok.config.Config
 import rtok.config.MemoryEmbed
 import rtok.config.leaf
@@ -13,6 +14,7 @@ import rtok.sys.createTempDir
 import rtok.sys.removeDirAll
 import rtok.sys.scalarList
 import kotlin.concurrent.AtomicReference
+import kotlin.concurrent.Volatile
 
 /** The longest prefix of [text] that estimates to at most [budget] tokens (one estimate, then a short trim). */
 fun fitBudget(
@@ -226,8 +228,16 @@ class Runtime private constructor(
         message: String,
     ) = rtok.recordLog(config, store, session, null, level, source, name, message)
 
+    /** [config] as JSON, keyed by the instance it was encoded from: a reassigned config is encoded again. */
+    @Volatile private var configTree: Pair<Config, JsonObject>? = null
+
     /** One config section by dotted path; unknown paths are null (the plugin's defaults). */
-    override fun configJson(path: String): JsonElement = leaf(config.toJson(), path) ?: JsonNull
+    override fun configJson(path: String): JsonElement {
+        // Plugins ask for a section on every call, and encoding the whole config each time was the cost of the lookup.
+        val cfg = config
+        val tree = configTree?.takeIf { it.first === cfg }?.second ?: cfg.toJson().also { configTree = cfg to it }
+        return leaf(tree, path) ?: JsonNull
+    }
 
     override fun graphWatchPending(root: String) = watchPending.value[root].orEmpty().sorted()
 

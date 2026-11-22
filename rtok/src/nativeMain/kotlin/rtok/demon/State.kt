@@ -12,10 +12,10 @@ import platform.posix.O_WRONLY
 import platform.posix.close
 import platform.posix.open
 import platform.posix.usleep
-import rtok.agent.sdk.writeAtomic
 import rtok.sys.exists
 import rtok.sys.readToString
 import rtok.sys.removeFile
+import rtok.sys.writeAtomic
 
 /** What `status` reads; the supervisor is the only writer. */
 @Serializable

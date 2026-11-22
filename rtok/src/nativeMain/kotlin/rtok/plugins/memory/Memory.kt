@@ -9,6 +9,8 @@ import rtok.plugin.sdk.*
 import rtok.projectName
 import rtok.store.*
 import rtok.sys.cwd
+import rtok.sys.scalarList
+import rtok.sys.takeScalars
 
 /** One line in the hook index: titles only; names the MCP tools that fetch bodies (T293). */
 internal const val INDEX_GUIDE = "titles only; mem_search this turn; mem_get matching id for body"
@@ -101,7 +103,7 @@ internal fun renderTitleIndex(
             first != null && first.title.isNotEmpty() -> {
                 first.title =
                     first.title
-                        .scalars()
+                        .scalarList()
                         .let { it.take(it.size / 2) }
                         .joinToString("")
             }
@@ -166,7 +168,7 @@ private fun rememberSave(
     if (!first.startsWith("remember:")) return null
     val rest = stripPrivate(first.removePrefix("remember:").trim())
     if (rest.isEmpty()) return null
-    val title = rest.scalars().take(80).joinToString("")
+    val title = rest.takeScalars(80)
     val id = runCatching { cx.upsertNote(cx.cwd()?.let(::projectName), "user", title, rest) }.getOrNull() ?: return null
     linkNote(cx, id, rest)
     return Injection("memory", "saved note $id", 12u)

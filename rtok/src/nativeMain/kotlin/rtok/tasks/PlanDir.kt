@@ -3,7 +3,6 @@
 // task.md's front matter; what the layout has no key for (blockers, conflicts, parallel) is refused, not dropped.
 package rtok.tasks
 
-import rtok.agent.sdk.writeAtomic
 import rtok.store.TaskId
 import rtok.sys.IoException
 import rtok.sys.createDirAll
@@ -13,6 +12,8 @@ import rtok.sys.isDir
 import rtok.sys.isFile
 import rtok.sys.readDir
 import rtok.sys.readToString
+import rtok.sys.rustLines
+import rtok.sys.writeAtomic
 
 private const val TASK = "task.md"
 private const val DONE = "done.md"
@@ -193,8 +194,6 @@ private fun value(
     key: String,
 ): String? = head.lines().firstNotNullOfOrNull { l -> l.takeIf { it.startsWith("$key:") }?.substring(key.length + 1) }?.trim()
 
-private fun rustLines(s: String) = if (s.isEmpty()) emptyList() else s.removeSuffix("\n").split("\n").map { it.removeSuffix("\r") }
-
 private fun some(v: String?) = v?.let { "Some(\"$it\")" } ?: "None"
 
 /** `(status, priority, agent)` of an active task's front matter. */
@@ -230,7 +229,7 @@ internal fun parsePlan(
             if (finished) "" to text else throw e
         }
     val heading = "# $id. "
-    val lines = rustLines(body).dropWhile { !it.startsWith("# ") }
+    val lines = body.rustLines().dropWhile { !it.startsWith("# ") }
     val first = lines.firstOrNull()?.takeIf { it.startsWith(heading) }?.removePrefix(heading)
     val raw = first ?: if (finished) "" else bail("no `${heading}Title` heading")
     val title = if (raw.isBlank() && finished) id.toString() else raw.trim()
@@ -264,7 +263,7 @@ internal fun withHead(
     val (head, body) = splitFront(text)
     var seen = 0
     val lines =
-        rustLines(head).map { l ->
+        head.rustLines().map { l ->
             val new =
                 when (l.substringBefore(':')) {
                     "status" -> "status: $status"

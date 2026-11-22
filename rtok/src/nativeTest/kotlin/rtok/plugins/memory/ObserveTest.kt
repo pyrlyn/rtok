@@ -3,13 +3,14 @@ package rtok.plugins.memory
 
 import kotlinx.serialization.json.*
 import rtok.plugin.sdk.ObsHit
+import rtok.sys.scalarList
 import kotlin.test.*
 
 private fun cmd(c: String) = buildJsonObject { put("command", c) }
 
 private fun s(v: String) = JsonPrimitive(v)
 
-private fun len(t: String) = t.scalars().size
+private fun len(t: String) = t.scalarList().size
 
 class ObserveTest {
     @Test fun fusionKeepsDistinctFileHitsAndBoostsCrossListOnes() {

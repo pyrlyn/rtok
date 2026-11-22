@@ -10,6 +10,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
+import rtok.sys.takeScalars
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
 
@@ -91,22 +92,7 @@ private val samplesSerializer = ListSerializer(MeasurementSample.serializer())
 private val samplesJson = Json { ignoreUnknownKeys = true }
 private const val EVENT_COLS = "id, ts_ms, call, phase, session, tool, target, project, backend, ok, error, ms, done, total, answer_tokens, rows_json, symbols, symbols_returned, files_touched, projects_hit"
 
-private fun clip(s: String?) =
-    s?.let {
-        val cps = it.codePoints()
-        if (cps.size <= GRAPH_TEXT_MAX) it else cps.take(GRAPH_TEXT_MAX).joinToString("")
-    }
-
-private fun String.codePoints(): List<String> {
-    val out = ArrayList<String>()
-    var i = 0
-    while (i < length) {
-        val n = if (this[i].isHighSurrogate() && i + 1 < length) 2 else 1
-        out += substring(i, i + n)
-        i += n
-    }
-    return out
-}
+private fun clip(s: String?) = s?.takeScalars(GRAPH_TEXT_MAX)
 
 private fun UInt?.toColumn(): Int? = this?.takeIf { it <= Int.MAX_VALUE.toUInt() }?.toInt()
 

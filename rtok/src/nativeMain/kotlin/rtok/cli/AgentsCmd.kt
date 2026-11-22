@@ -2,7 +2,6 @@
 // The junk commands are in AgentsJunkCmd.kt.
 package rtok.cli
 
-import kotlinx.cinterop.toKString
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -22,6 +21,7 @@ import rtok.agents.Usage
 import rtok.agents.UsageException
 import rtok.agents.UsageText
 import rtok.config.Config
+import rtok.config.envVar
 import rtok.log.watchLoop
 import rtok.model.Agents
 import rtok.store.AgentDetail
@@ -237,9 +237,6 @@ private fun <T> withMessages(
     cfg: Config,
     body: (Store, AgentMessages) -> T,
 ): T = Store.open(cfg.core.dbPath).use { s -> agentCall { body(s, AgentMessages(s, ::envVar, ::currentDir)) } }
-
-@OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
-private fun envVar(k: String) = platform.posix.getenv(k)?.toKString()
 
 private fun currentDir() = runCatching { rtok.sys.cwd() }.getOrNull()
 

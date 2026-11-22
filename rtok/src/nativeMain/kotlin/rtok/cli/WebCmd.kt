@@ -1,11 +1,10 @@
 // Port of src/cli/web.rs: `rtok web --host --port` and the deprecated `rtok dashboard` alias.
 package rtok.cli
 
-import kotlinx.cinterop.ExperimentalForeignApi
-import kotlinx.cinterop.toKString
 import rtok.appendLog
 import rtok.config.Config
 import rtok.config.Layers
+import rtok.config.envVar
 import rtok.http.server.ktor.KtorHttpServer
 import rtok.web.ALLOW_REMOTE_ENV
 import rtok.web.Answer
@@ -28,9 +27,6 @@ private val WEB_OPTIONS =
         OptSpec.Value("port", "Override `[web] port`", "PORT"),
     )
 
-@OptIn(ExperimentalForeignApi::class)
-private fun env(name: String) = platform.posix.getenv(name)?.toKString()
-
 private fun webConfig(inv: Invocation): Config {
     val port = inv.value("port")?.let { it.toUShortOrNull() ?: throw CliFailure("invalid value '$it' for '--port <PORT>'") }
     return Config.loadWith(inv.configFile, Layers.webFlags(inv.value("host"), port))
@@ -41,11 +37,11 @@ internal fun serveWeb(
     cfg: Config,
     io: CliIo,
 ) {
-    runCatching { checkRemoteBind(cfg.web.host, env(ALLOW_REMOTE_ENV) == "1") }
+    runCatching { checkRemoteBind(cfg.web.host, envVar(ALLOW_REMOTE_ENV) == "1") }
         .onFailure { if (it is RemoteBindRefused) throw CliFailure(it.message ?: "refusing to bind") else throw it }
     // S2: a fresh token per start; written before the startup line so a client waiting on it finds the file.
     val token = WebToken.issue(cfg.home)
-    val (assets, notice) = resolveAssets(env(DIST_ENV), EmbeddedAssets)
+    val (assets, notice) = resolveAssets(envVar(DIST_ENV), EmbeddedAssets)
     val bound = BoundAddr(cfg.web.host, cfg.web.port.toInt())
     val app = WebApp(bound, assets, token)
     val live = LiveConfig(cfg)

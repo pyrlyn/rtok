@@ -3,7 +3,6 @@
 // check ever needs a real agent folder. [Writer] is the only way `doctor --fix` changes a file.
 package rtok.doctor
 
-import rtok.agent.sdk.writeAtomic
 import rtok.agents.HostBins
 import rtok.agents.McpPaths
 import rtok.config.envVar
@@ -15,6 +14,7 @@ import rtok.sys.fileMode
 import rtok.sys.isDir
 import rtok.sys.readLink
 import rtok.sys.readToString
+import rtok.sys.writeAtomic
 import rtok.agent.sdk.backup as sdkBackup
 
 /** What a path is, following a symlink to its target. */

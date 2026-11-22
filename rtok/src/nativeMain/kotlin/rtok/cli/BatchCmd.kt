@@ -2,12 +2,11 @@
 // The key itself is only read from the environment (`ANTHROPIC_API_KEY` / `OPENAI_API_KEY`).
 package rtok.cli
 
-import kotlinx.cinterop.ExperimentalForeignApi
-import kotlinx.cinterop.toKString
 import rtok.BatchApi
 import rtok.BatchException
 import rtok.BatchProvider
 import rtok.agents.ProxyEnv
+import rtok.config.envVar
 import rtok.http.ktor.KtorHttp
 
 private const val ID_HELP = "Batch id (`msgbatch_…` is Anthropic, `batch_…` OpenAI)"
@@ -18,9 +17,6 @@ private val TARGET =
         OptSpec.Value("url", "Proxy base URL (default: `[proxy] bind` and `port`)", "URL"),
     )
 
-@OptIn(ExperimentalForeignApi::class)
-private fun env(name: String) = platform.posix.getenv(name)?.toKString()
-
 /** The provider from `--provider`, else from [id], else Anthropic; the base URL from `--url`, else the config. */
 private fun Invocation.api(id: String?): BatchApi {
     val named =
@@ -30,7 +26,7 @@ private fun Invocation.api(id: String?): BatchApi {
         }
     val provider = named ?: id?.let(BatchProvider::ofId) ?: BatchProvider.Anthropic
     val base = value("url") ?: ProxyEnv.anthropic(loadConfig())
-    return batch { BatchApi(base, provider, env(provider.keyEnv).orEmpty(), KtorHttp.FACTORY) }
+    return batch { BatchApi(base, provider, envVar(provider.keyEnv).orEmpty(), KtorHttp.FACTORY) }
 }
 
 @Suppress("SwallowedException") // the message is the whole error, as anyhow prints it

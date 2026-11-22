@@ -3,6 +3,7 @@
 // the export (no random seed, no clock). PNG (resvg in Rust) is not ported: it needs a rasterizer.
 package rtok.plugins.graph
 
+import rtok.sys.scalarList
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.cos
@@ -71,20 +72,9 @@ object Draw {
         s: String,
         max: Int,
     ): String {
-        val cps = s.codePoints()
+        val cps = s.scalarList()
         if (cps.size <= max) return s
         return cps.take((max - 1).coerceAtLeast(0)).joinToString("") + "\u2026"
-    }
-
-    private fun String.codePoints(): List<String> {
-        val out = ArrayList<String>()
-        var i = 0
-        while (i < length) {
-            val two = this[i].isHighSurrogate() && i + 1 < length && this[i + 1].isLowSurrogate()
-            out += substring(i, if (two) i + 2 else i + 1)
-            i += if (two) 2 else 1
-        }
-        return out
     }
 
     private fun whenOf(secs: Long) = "${rtok.log.stamp(max(secs, 0))} UTC"
@@ -287,7 +277,7 @@ object Draw {
             label: String,
         ) {
             out.append(mark).append(text(x + 18, y + row * 20 + 4, 11, INK, "", label))
-            x += 30 + label.codePoints().size * 6.2
+            x += 30 + label.scalarList().size * 6.2
         }
         val shown = min(e.projects.size, COLORS.size)
         e.projects.take(shown).forEachIndexed { i, pr ->

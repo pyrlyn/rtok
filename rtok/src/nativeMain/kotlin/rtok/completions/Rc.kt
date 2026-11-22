@@ -32,7 +32,7 @@ internal object Rc {
     ): String {
         if (rtok.sys.exists(path) && rtok.sys.readToString(path) == body) return "unchanged $path"
         rtok.sys.parent(path)?.let { rtok.sys.createDirAll(it) }
-        rtok.agent.sdk.writeAtomic(path, body.encodeToByteArray())
+        rtok.sys.writeAtomic(path, body.encodeToByteArray())
         return "wrote $path"
     }
 }
