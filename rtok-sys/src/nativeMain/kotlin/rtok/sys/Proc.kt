@@ -292,7 +292,20 @@ fun spawnDetached(
                 .open(2, "/dev/null", O_WRONLY)
         val rc = if (runCatching { actions.spawn(program, args, mergedEnv(extraEnv), setsid = true, search = false) }.isSuccess) 0 else 1
         close(inPipe[0])
-        if (rc == 0) stdin.usePinned { if (stdin.isNotEmpty()) write(inPipe[1], it.addressOf(0), stdin.size.convert()) }
+        if (rc == 0 && stdin.isNotEmpty()) {
+            // A child that exits before it reads must fail the write (EPIPE), not kill the caller.
+            signal(SIGPIPE, SIG_IGN)
+            stdin.usePinned {
+                var off = 0
+                while (off < stdin.size) {
+                    val n = write(inPipe[1], it.addressOf(off), (stdin.size - off).convert()).toInt()
+                    when {
+                        n > 0 -> off += n
+                        n == 0 || errno != EINTR -> break
+                    }
+                }
+            }
+        }
         close(inPipe[1])
         rc == 0
     }

@@ -107,7 +107,13 @@ int rtok_spawn(int *pid, const char *prog, char *const argv[], char *const envp[
     }
     if (rc == 0) rc = posix_spawnattr_init(&attr);
     else { posix_spawn_file_actions_destroy(&actions); return rc; }
-    if (rc == 0 && setsid) rc = posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSID);
+    /* rtok ignores SIGPIPE in processes that write to pipes and sockets; an ignored signal stays ignored across
+       exec, so the child gets the default back (as Rust's std does), or `cmd | head` under rtok would not stop. */
+    sigset_t defaults;
+    sigemptyset(&defaults);
+    sigaddset(&defaults, SIGPIPE);
+    if (rc == 0) rc = posix_spawnattr_setsigdefault(&attr, &defaults);
+    if (rc == 0) rc = posix_spawnattr_setflags(&attr, (short)(POSIX_SPAWN_SETSIGDEF | (setsid ? POSIX_SPAWN_SETSID : 0)));
     pid_t child = 0;
     if (rc == 0) rc = search ? posix_spawnp(&child, prog, &actions, &attr, argv, envp)
                              : posix_spawn(&child, prog, &actions, &attr, argv, envp);
