@@ -1,6 +1,8 @@
 // Directory walk with the `ignore::WalkBuilder` defaults rtok uses (`hidden(false)`): inside a git
 // repository, `.gitignore`/`.ignore` files from the repository root down and `.git/info/exclude`
-// apply; `.git` is never entered; siblings come sorted by name, depth first.
+// apply; `.git` is never entered; siblings come sorted by name, depth first. Like `follow_links(false)`,
+// only the root is followed through a link: a symlink below it is yielded as neither file nor directory,
+// so a link loop cannot recurse and a link cannot pull a file from outside the tree into a search.
 package rtok.sys
 
 class WalkEntry(
@@ -43,12 +45,14 @@ fun walk(
         ) {
             if (maxDepth != null && depth >= maxDepth) return
             val local = if (repo != null) rules + dirRules(canonOf(dir)) else rules
-            for (name in listDir(dir).sorted()) {
+            // An unreadable directory is skipped, as `ignore` yields an error for it and walks on.
+            for (name in listDirOrEmpty(dir).sorted()) {
                 if (name == ".git") continue
                 val path = if (dir.isEmpty()) name else "${dir.trimEnd('/')}/$name"
-                val d = isDir(path)
+                val kind = entryKind(path) ?: continue
+                val d = kind == EntryKind.Dir
                 if (repo != null && ignored(local, canonOf(path), d)) continue
-                val e = WalkEntry(path, depth + 1, d, !d && isFile(path))
+                val e = WalkEntry(path, depth + 1, d, kind == EntryKind.File)
                 if (!filter(e)) continue
                 yield(e)
                 if (d) visit(path, depth + 1, local)
