@@ -50,8 +50,9 @@ object JunkHosts {
         roots: JunkRoots,
     ): List<String> {
         val variants = Hosts.host(id)?.variants.orEmpty()
-        val agent = Agents.agent(id) ?: return emptyList()
         val home = roots.home
+        // Without an absolute home every path would count as under it.
+        val agent = Agents.agent(id)?.takeIf { home.startsWith('/') } ?: return emptyList()
         return variants
             .flatMap { agent.markers(cfg, it.kind) }
             .mapNotNull(::parent)

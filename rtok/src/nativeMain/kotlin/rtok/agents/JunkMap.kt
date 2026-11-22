@@ -130,22 +130,31 @@ class JunkRoots(
     private val roots: Map<String, String>
 
     init {
+        // An unset or relative HOME leaves every root built on it out, so its templates stay unresolved and match
+        // nothing; joined anyway they would name folders under the cwd, a project's own `.claude/` among them.
+        val base = home.takeIf { it.startsWith('/') }
+
+        fun under(rel: String) = base?.let { join(it, rel) }
+
         fun dir(
             v: String,
-            default: String,
+            default: String?,
         ) = get(v)?.takeIf { it.startsWith('/') } ?: default
-        val xdgCache = dir("XDG_CACHE_HOME", join(home, ".cache"))
+        val xdgCache = dir("XDG_CACHE_HOME", under(".cache"))
+
+        fun cache(name: String) = if (macos) under("Library/Caches/$name") else xdgCache?.let { join(it, name) }
+
         roots =
-            mapOf(
-                "home" to home,
-                "claude" to dir("CLAUDE_CONFIG_DIR", join(home, ".claude")),
-                "codex" to dir("CODEX_HOME", join(home, ".codex")),
+            listOf(
+                "home" to base,
+                "claude" to dir("CLAUDE_CONFIG_DIR", under(".claude")),
+                "codex" to dir("CODEX_HOME", under(".codex")),
                 "xdg_cache" to xdgCache,
-                "xdg_config" to dir("XDG_CONFIG_HOME", join(home, ".config")),
-                "xdg_data" to dir("XDG_DATA_HOME", join(home, ".local/share")),
-                "copilot_cache" to dir("COPILOT_CACHE_HOME", if (macos) join(home, "Library/Caches/copilot") else join(xdgCache, "copilot")),
-                "rtok_cache" to if (macos) join(home, "Library/Caches/rtok") else join(xdgCache, "rtok"),
-            )
+                "xdg_config" to dir("XDG_CONFIG_HOME", under(".config")),
+                "xdg_data" to dir("XDG_DATA_HOME", under(".local/share")),
+                "copilot_cache" to dir("COPILOT_CACHE_HOME", cache("copilot")),
+                "rtok_cache" to cache("rtok"),
+            ).mapNotNull { (k, v) -> v?.let { k to it } }.toMap()
     }
 
     companion object {

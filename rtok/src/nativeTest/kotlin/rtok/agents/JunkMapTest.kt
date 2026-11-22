@@ -32,6 +32,16 @@ class JunkMapTest {
         assertEquals("$h/.codex", r.resolve("{codex}"))
     }
 
+    @Test fun anUnsetOrRelativeHomeResolvesNothingUnderIt() {
+        for (home in listOf("", "rel")) {
+            val r = JunkRoots(home, { k -> if (k == "CODEX_HOME") "/x" else null })
+            assertEquals("{claude}/paste-cache", r.resolve("{claude}/paste-cache"), home)
+            assertEquals("{rtok_cache}", r.resolve("{rtok_cache}"), home)
+            assertEquals("{home}/.gemini", r.resolve("{home}/.gemini"), home)
+            assertEquals("/x/log", r.resolve("{codex}/log"), home)
+        }
+    }
+
     @Test fun onlyDocumentedRowsComeFromTheSection22TableAndCursorHasNone() {
         assertTrue(JunkMap.specs("cursor").none { it.documented })
         assertTrue(JunkMap.specs("claude").all { it.documented })

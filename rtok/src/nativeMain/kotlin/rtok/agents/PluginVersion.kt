@@ -150,7 +150,8 @@ object PluginVersion {
         if (McpPaths.macos) {
             "$home/Library/Application Support/rtok/plugins.json"
         } else {
-            "${xdgStateHome ?: "$home/.local/state"}/rtok/plugins.json"
+            // The XDG spec says an empty or relative value is ignored.
+            "${xdgStateHome?.takeIf { it.startsWith("/") } ?: "$home/.local/state"}/rtok/plugins.json"
         }
 
     fun receiptPath(cfg: Config): String = cfg.pluginReceiptPath ?: defaultReceiptPath(McpPaths.home(), env("XDG_STATE_HOME"))
