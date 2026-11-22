@@ -190,7 +190,7 @@ class Cursor(
             val events = owned().map { it.second }
             return events.any { ev ->
                 val bin = cmd.removeSuffix(" hook $ev --host $HOST").takeIf { it != cmd }
-                (bin != null && isRtokBin(HookLine.unquoteBin(bin))) || "exec rtok hook $ev --host $HOST;" in cmd
+                (bin != null && HookLine.isRtokWord(bin)) || "exec rtok hook $ev --host $HOST;" in cmd
             }
         }
     }

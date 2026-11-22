@@ -110,6 +110,14 @@ class ClaudeHooksTest {
         assertFalse(C.isOurs("echo rtok hook Stop", "Stop"))
     }
 
+    @Test fun aUserChainThatEndsInRtokStaysForeign() {
+        assertFalse(C.isOurs("notify-send hi; /usr/local/bin/rtok hook PreToolUse", "PreToolUse"))
+        assertFalse(C.isOurs("cd x && /opt/rtok hook PreToolUse", "PreToolUse"))
+        assertFalse(C.isOurs("\"/a\"; \"/opt/rtok\" hook PreToolUse", "PreToolUse"))
+        assertTrue(C.isOurs("/usr/local/bin/rtok hook PreToolUse", "PreToolUse"))
+        assertTrue(C.isOurs("'/opt/my rtok/rtok' hook PreToolUse", "PreToolUse"))
+    }
+
     @Test fun commandResolvesRtokAtRunTimeAndFailsOpenSilently() {
         val home = join(tempDir(), "rtok-t174-${kotlin.random.Random.nextLong().toULong()}")
         val empty = join(home, "empty-path").also(::createDirAll)

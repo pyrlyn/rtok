@@ -96,6 +96,16 @@ class CommandCodeTest {
         removeDirAll(s.dir)
     }
 
+    @Test fun removeTakesRtokFromEveryDefinitionOfAnEvent() {
+        val s = scratch("twice")
+        val ours = CommandCode.hookCommand("SessionEnd", "rtok")
+        val def = """{"hooks":[{"type":"command","command":"$ours"}]}"""
+        writeString(CommandCode.settingsPath(s.cfg), """{"hooks":{"Stop":[$def,$def]}}""")
+        assertEquals("- Stop\n- Stop", CommandCode.run(s.cfg, true))
+        assertFalse("Stop" in readToString(CommandCode.settingsPath(s.cfg)))
+        removeDirAll(s.dir)
+    }
+
     @Test fun mcpEntryRegistersAndUnregistersKeepingForeign() {
         val s = scratch("mcp")
         val path = CommandCode.mcpPath(s.cfg)

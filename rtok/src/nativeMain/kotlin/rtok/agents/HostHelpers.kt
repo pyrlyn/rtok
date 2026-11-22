@@ -56,6 +56,25 @@ object HookLine {
         val quoted = b.length >= 2 && b.first() == b.last() && (b.first() == '"' || b.first() == '\'')
         return if (quoted) b.substring(1, b.length - 1) else b
     }
+
+    /**
+     * [token] is one rtok binary word, bare or quoted as [shellQuoteBin] writes it. A user's chain that only ends in
+     * rtok (`notify-send hi; /usr/local/bin/rtok`, `cd x && rtok`) is not, so it stays foreign.
+     */
+    fun isRtokWord(token: String): Boolean {
+        val b = token.trim()
+        val bin = unquoteBin(b)
+        val single =
+            if (bin.length == b.length) {
+                bin.none { it.isWhitespace() || it in SHELL_META }
+            } else {
+                val q = b.first()
+                q !in bin.replace("$q$q", "")
+            }
+        return single && isRtokBin(bin)
+    }
+
+    private const val SHELL_META = ";&|<>()`$"
 }
 
 /** `strip_ours` reports. */
