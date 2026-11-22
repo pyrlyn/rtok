@@ -37,6 +37,16 @@ class ReviewTest {
         assertFalse("gone.rs" in hunks)
     }
 
+    @Test fun parseHunksKeepsSpacedNamesAndIgnoresHeaderLikeAddedLines() {
+        val diff =
+            "diff --git a/a b.rs b/a b.rs\n--- a/a b.rs\t\n+++ b/a b.rs\t\n@@ -1,0 +2,2 @@\n+++ x\n+fn y() {}\n@@ -9 +11 @@\n-old\n+new\n" +
+                "diff --git a/c.rs b/c.rs\n--- a/c.rs\n+++ b/c.rs\n@@ -3 +3 @@\n-a\n+b\n"
+        val hunks = Review.parseHunks(diff)
+        assertEquals(listOf(2 to 3, 11 to 11), hunks["a b.rs"], "$hunks")
+        assertEquals(listOf(3 to 3), hunks["c.rs"], "$hunks")
+        assertEquals(setOf("a b.rs", "c.rs"), hunks.keys)
+    }
+
     @Test fun widenCoversAShortDefinitionAndNotALongOne() {
         assertEquals(listOf(Region(1, 10)), Review.widen(listOf(5 to 5), listOf(SymDef("small", "function", 1, 10))))
         val r = Review.widen(listOf(200 to 200), listOf(SymDef("big", "function", 1, 400)))

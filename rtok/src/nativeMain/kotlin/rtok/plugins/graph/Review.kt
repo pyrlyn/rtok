@@ -130,18 +130,61 @@ object Review {
     fun parseHunks(diff: String): Map<String, List<Pair<Int, Int>>> {
         val out = HashMap<String, MutableList<Pair<Int, Int>>>()
         var path: String? = null
+        // Body lines of the current hunk still to come: an added line `++ x` reads `+++ x` and is no file header.
+        var body = 0 to 0
         for (line in diff.lines()) {
+            if (body != (0 to 0)) {
+                val next = bodyStep(line, body)
+                if (next != null) {
+                    body = next
+                    continue
+                }
+                body = 0 to 0
+            }
             if (line.startsWith("+++ ")) {
-                val rest = line.removePrefix("+++ ")
-                val raw = rest.split(' ', '\t').firstOrNull { it.isNotEmpty() } ?: rest
+                // Git ends a name holding a space with a tab, so only the tab separates it from what follows.
+                val raw = line.removePrefix("+++ ").substringBefore('\t')
                 path = if (raw == "/dev/null") null else raw.removePrefix("b/").replace('\\', '/')
                 continue
             }
             if (!line.startsWith("@@ ")) continue
+            val rest = line.removePrefix("@@ ")
+            body = hunkLens(rest)
             val p = path ?: continue
-            hunkHeader(line.removePrefix("@@ "))?.let { out.getOrPut(p) { ArrayList() } += it }
+            hunkHeader(rest)?.let { out.getOrPut(p) { ArrayList() } += it }
         }
         return out.entries.sortedBy { it.key }.associate { it.key to it.value }
+    }
+
+    /** [body] (old, new lines left) after one hunk body [line]; null when [line] is not a body line (a short hunk). */
+    private fun bodyStep(
+        line: String,
+        body: Pair<Int, Int>,
+    ): Pair<Int, Int>? =
+        when (line.firstOrNull()) {
+            '+' -> body.first to body.second - 1
+
+            '-' -> body.first - 1 to body.second
+
+            // Some tools strip the trailing space of an empty context line.
+            ' ', null -> body.first - 1 to body.second - 1
+
+            '\\' -> body
+
+            else -> null
+        }?.let { (o, n) -> o.coerceAtLeast(0) to n.coerceAtLeast(0) }
+
+    /** `(old, new)` body line counts of a hunk header after `@@ `; a count left out is 1. */
+    private fun hunkLens(rest: String): Pair<Int, Int> {
+        val specs = rest.split(' ', '\t')
+
+        fun len(sign: Char) =
+            specs
+                .firstOrNull { it.startsWith(sign) }
+                ?.substringAfter(',', "1")
+                ?.toIntOrNull()
+                ?.coerceAtLeast(0) ?: 0
+        return len('-') to len('+')
     }
 
     private fun hunkHeader(rest: String): Pair<Int, Int>? {
