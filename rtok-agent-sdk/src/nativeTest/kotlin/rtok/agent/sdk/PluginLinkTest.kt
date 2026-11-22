@@ -144,6 +144,36 @@ class PluginLinkTest {
     }
 
     @Test
+    fun aDryRunOfACurrentPluginReportsNoChange() {
+        val dir = tmp("dry-current")
+        val src = join(dir, "plugins/demo")
+        write(join(src, "plugin.json"), "v1")
+        val link = demo(src, join(dir, "host/plugins/rtok"))
+        link.run(yes, false)
+        assertEquals(NO_CHANGES, link.run(Apply(dryRun = true), false))
+        assertEquals("- plugin ${link.dest}", link.run(Apply(dryRun = true), true))
+        assertTrue(link.linked(), "a dry run must not unlink")
+        removeDirAll(dir)
+    }
+
+    @Test
+    fun aDeclinedReinstallKeepsTheStaleCopy() {
+        val dir = tmp("stale-declined")
+        val src = join(dir, "store/rtok/v2/plugins/demo")
+        write(join(src, "plugin.json"), "v2")
+        val dest = join(dir, "host/plugins/rtok")
+        write(join(dest, "plugin.json"), "v1")
+        write(join(dest, OWNED_MARKER), "")
+        val report = demo(src, dest).run(Apply(), false)
+        assertTrue(report.startsWith("offer "), report)
+        assertEquals("v1", readToString(join(dest, "plugin.json")))
+        assertEquals("+ plugin plugins/demo → $dest", demo(src, dest).run(yes, false))
+        assertEquals("v2", readToString(join(dest, "plugin.json")))
+        assertTrue(isFile(join(dest, OWNED_MARKER)))
+        removeDirAll(dir)
+    }
+
+    @Test
     fun removeLeavesAForeignDirectoryWithoutMarkerAlone() {
         val dir = tmp("foreign")
         val dest = join(dir, "host/plugins/rtok")
