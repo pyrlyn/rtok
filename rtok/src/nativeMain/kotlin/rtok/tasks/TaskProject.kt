@@ -141,6 +141,7 @@ class TaskProject(
     override fun close() {
         (adapter as? AutoCloseable)?.close()
     }
+
     companion object {
         /** The board directory's layout: its own folder for a board, the old adapter under the engine otherwise. */
         private fun openDisk(
