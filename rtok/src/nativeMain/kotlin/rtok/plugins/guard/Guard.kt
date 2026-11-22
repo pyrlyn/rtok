@@ -22,6 +22,12 @@ import rtok.config.Read as ReadCfg
  */
 internal const val ARCHIVE_CAP_BYTES = 256 * 1024
 
+/**
+ * Tools whose result can change a file. `canonicalToolName` leaves the multi-file and patch editors under
+ * their own names, and a missed one would keep a stale body answering the next read.
+ */
+private val MUTATORS = setOf("Bash", "Edit", "Write", "MultiEdit", "NotebookEdit", "apply_patch")
+
 internal fun guardCfg(cx: Ctx) = cx.pluginConfig("guard", GuardCfg.serializer(), GuardCfg())
 
 object GuardPlugin : Plugin {
@@ -81,7 +87,7 @@ object GuardPlugin : Plugin {
             } else {
                 runCatching { cx.clearReadCache(key) }
             }
-        } else if (ev.toolName in setOf("Bash", "Edit", "Write")) {
+        } else if (ev.toolName in MUTATORS) {
             // The guard owns its keys (T55.8).
             runCatching { cx.clearReadCache("bash") }
             val mutated = fileArg(ev.toolInput)?.let { pathIdentity(it, cx.cwd()) }
@@ -215,26 +221,37 @@ internal fun readOnly(cmd: String): Boolean =
     !cmd.contains("$(") && !cmd.contains('`') && !cmd.contains("<(") &&
         segments(afterCdPrefix(cmd)).map { it.trim() }.filter { it.isNotEmpty() }.all(::segmentReadOnly)
 
+/**
+ * Calls [f] for every character bash reads as unquoted and unescaped. A backslash escapes the next
+ * character outside single quotes, as in [flatten]; ignoring it would let `\"` open a quote bash never
+ * opens and hide the `;`, `|` or `>` behind it.
+ */
+private inline fun forEachUnquoted(
+    s: String,
+    f: (Int, Char) -> Unit,
+) {
+    var quote: Char? = null
+    var i = 0
+    while (i < s.length) {
+        val c = s[i]
+        when {
+            c == '\\' && quote != '\'' -> i++
+            quote != null -> if (c == quote) quote = null
+            c == '\'' || c == '"' -> quote = c
+            else -> f(i, c)
+        }
+        i++
+    }
+}
+
 /** Splits at every unquoted `|`, `;` and `&`. */
 private fun segments(s: String): List<String> {
     val out = ArrayList<String>()
     var start = 0
-    var quote: Char? = null
-    for ((i, b) in s.withIndex()) {
-        val q = quote
-        when {
-            q != null -> {
-                if (b == q) quote = null
-            }
-
-            b == '\'' || b == '"' -> {
-                quote = b
-            }
-
-            b == '|' || b == ';' || b == '&' -> {
-                out += s.substring(start, i)
-                start = i + 1
-            }
+    forEachUnquoted(s) { i, b ->
+        if (b == '|' || b == ';' || b == '&') {
+            out += s.substring(start, i)
+            start = i + 1
         }
     }
     out += s.substring(start)
@@ -326,15 +343,7 @@ private fun isRedirect(t0: String): Boolean {
 
 /** A `>`/`>>` glued to a word (`echo x>file`); quote-aware. */
 private fun hasUnquotedRedirect(seg: String): Boolean {
-    var quote: Char? = null
-    for (b in seg) {
-        val q = quote
-        when {
-            q != null -> if (b == q) quote = null
-            b == '\'' || b == '"' -> quote = b
-            b == '>' -> return true
-        }
-    }
+    forEachUnquoted(seg) { _, b -> if (b == '>') return true }
     return false
 }
 
