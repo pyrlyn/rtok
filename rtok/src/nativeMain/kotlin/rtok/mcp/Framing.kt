@@ -35,21 +35,33 @@ class FrameReader {
     private var start = 0
     private var end = 0
 
+    /** `[cleanFrom, cleanEnd)` holds no newline: a frame that arrives in pieces is not rescanned from its start. */
+    private var cleanFrom = 0
+    private var cleanEnd = 0
+
+    internal val capacity get() = data.size
+
     fun feed(
         bytes: ByteArray,
         n: Int = bytes.size,
     ) {
         if (end + n > data.size) {
+            // The buffer is sized by the bytes still live, not by the traffic seen so far: a long session would
+            // otherwise double it on every wrap until the size overflows.
             val live = end - start
-            val next = ByteArray(maxOf(data.size, live + n) * 2)
-            data.copyInto(next, 0, start, end)
-            data = next
+            val target = if (live + n > data.size) ByteArray(grown(live.toLong() + n)) else data
+            data.copyInto(target, 0, start, end)
+            data = target
+            cleanFrom -= start
+            cleanEnd -= start
             start = 0
             end = live
         }
         bytes.copyInto(data, end, 0, n)
         end += n
     }
+
+    private fun grown(need: Long): Int = maxOf(need, data.size.toLong() * 2).coerceAtMost(MAX_CAPACITY).toInt()
 
     fun next(eof: Boolean): Frame? {
         while (start < end && isSpace(data[start])) start++
@@ -117,12 +129,18 @@ class FrameReader {
         b: Byte,
         from: Int,
     ): Int {
-        for (i in from until end) if (data[i] == b) return i
+        val scan = if (from in cleanFrom..cleanEnd) cleanEnd else from
+        for (i in scan until end) if (data[i] == b) return i
+        cleanFrom = from
+        cleanEnd = end
         return -1
     }
 
     companion object {
         private const val INITIAL = 64 * 1024
+
+        /** The largest array Kotlin/Native allocates, kept clear of the `Int` limit. */
+        private const val MAX_CAPACITY = Int.MAX_VALUE.toLong() - 8
         private const val NL = '\n'.code.toByte()
         private const val CR = '\r'.code.toByte()
         private const val UPPER_C = 'C'.code.toByte()
