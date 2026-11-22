@@ -197,6 +197,42 @@ class TaskProjectTest {
         override fun maxId(prefix: String) = inner.maxId(prefix)
     }
 
+    /** The MCP task tools close their project after every call: a remote adapter's HTTP client must go with it. */
+    @Test fun closingTheProjectClosesACloseableAdapter() {
+        val path = tmpDir("project-close")
+        var closed = false
+        val adapter =
+            object : TaskAdapter, AutoCloseable {
+                private val inner = DiskAdapter(path)
+
+                override val name = "fake"
+
+                override fun create(
+                    task: NewTask,
+                    id: TaskId,
+                ) = inner.create(task, id)
+
+                override fun list(filter: Filter) = inner.list(filter)
+
+                override fun get(id: TaskId) = inner.get(id)
+
+                override fun writeStatus(
+                    id: TaskId,
+                    status: Status,
+                    report: String?,
+                ) = inner.writeStatus(id, status)
+
+                override fun maxId(prefix: String) = inner.maxId(prefix)
+
+                override fun close() {
+                    closed = true
+                }
+            }
+        TaskProject("proj", path, "R", adapter).close()
+        assertTrue(closed)
+        removeDirAll(path)
+    }
+
     @Test fun markersAreSymmetricIdempotentAndRefusedWhereTheyCannotBeKept() {
         val path = tmpDir("claim-markers")
         val p = project(path)

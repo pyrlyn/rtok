@@ -119,6 +119,7 @@ internal fun checkoutOf(
     what: String,
 ): String = ProjectRoot.find(cwd)?.checkout ?: bail("$what: not inside a git checkout")
 
+@Suppress("TooManyFunctions")
 class TaskProject(
     /** The counter key, `projectKey`. */
     val key: String,
@@ -135,7 +136,11 @@ class TaskProject(
     internal val tasks: TaskStore = AdapterStore(adapter, stateDirOf(root, adapter.name, boardDir)),
     /** What leases and timestamps are measured by; a test turns it forward to let a lease lapse. */
     internal val clock: Clock = Clock.System,
-) {
+) : AutoCloseable {
+    /** A remote adapter owns an HTTP client (and its engine); the disk ones hold nothing. */
+    override fun close() {
+        (adapter as? AutoCloseable)?.close()
+    }
     companion object {
         /** The board directory's layout: its own folder for a board, the old adapter under the engine otherwise. */
         private fun openDisk(
