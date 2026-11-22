@@ -1104,7 +1104,6 @@
     <ID>ReturnCount:Wrap.kt:Wrap$private fun jsonTreeFold: String?</ID>
     <ID>ReturnCount:Wrap.kt:Wrap$private fun shorten: ByteArray?</ID>
     <ID>ReturnCount:Wrap.kt:Wrap.Pending$fun note</ID>
-    <ID>ReturnCount:Wrap.kt:Wrap.Pending$fun take: String?</ID>
     <ID>SwallowedException:Dispatch.kt:e: Exception</ID>
     <ID>SwallowedException:Dispatch.kt:e: HookError</ID>
     <ID>SwallowedException:ExpandCmd.kt:e: ExpandException</ID>

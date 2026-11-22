@@ -149,7 +149,7 @@ class AppState {
             }
 
             is Frame.Reply -> {
-                Unit
+                replies[f.type]?.toList()?.forEach { it(f) }
             }
         }
     }

@@ -11,7 +11,6 @@ import rtok.store.*
 import rtok.support.diskConfig
 import rtok.sys.*
 import kotlin.test.*
-import kotlin.time.TimeSource
 
 class HookTest {
     private val tail = "before Edit run native Read(limit=1) — it satisfies the edit gate"
@@ -267,12 +266,13 @@ class HookTest {
                     200_000,
                 )
             }
-            val start = TimeSource.Monotonic.markNow()
+            // The budget is the bytes the window query pulls, not wall time: a loaded macOS
+            // runner blew a 500 ms ceiling while the bounded fetch held.
             assertNotNull(preTool(ev(file(p)), r.ctx()))
-            assertTrue(start.elapsedNow().inWholeMilliseconds < 500)
             val rows = r.store.recentHookInputsForEvent(r.session, "PostToolUse", WINDOW_TOOL_CALLS.toLong())
-            assertTrue(rows.size <= WINDOW_TOOL_CALLS)
-            assertTrue(rows.sumOf { it.length } < 500 * 1024)
+            assertTrue(rows.size <= WINDOW_TOOL_CALLS, "fetched ${rows.size} rows, window is $WINDOW_TOOL_CALLS")
+            val bytes = rows.sumOf { it.length }
+            assertTrue(bytes < 500 * 1024, "fetched $bytes bytes of hook bodies")
         }
     }
 }

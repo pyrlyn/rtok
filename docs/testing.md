@@ -25,6 +25,9 @@ unaffected). End-to-end CLI tests are a separate task (below).
 ## Test
 - Unit + spec tests: `./gradlew macosArm64Test` (or `:module:macosArm64Test`).
 - Report per module: `python3 ~/Grok/rtok-kotlin-port/failures.py <module dir>`.
+- Smart task selection regressions: `python3 -B -m unittest discover -s scripts -p test_smart.py`.
+  Smart tasks enable `-Prtok.wasm=true` when files in `rtok-wasm/` change, including in a full run;
+  other changes keep the plugin host opt-in.
 
 Measured on the Mac (one edit, warm daemon, seconds):
 

@@ -1,6 +1,5 @@
 package rtok.model
 
-import kotlinx.serialization.json.jsonPrimitive
 import rtok.config.Config
 import rtok.support.installDb
 import rtok.sys.createDirAll
@@ -25,7 +24,7 @@ class ConfigPageTest {
             assertTrue(text.lines().any { it.startsWith("proxy.port = ") && it.endsWith("(default)") }, text)
             assertFalse(exists("$dir/config.toml"))
             writeString("$dir/config.toml", "[proxy]\nport = 9999\n")
-            val set = Snapshot.build(c)["config"]!!.jsonPrimitive.content
+            val set = ConfigPage.text(c)!!
             assertTrue(set.lines().any { it.startsWith("proxy.port = 9999 (") && !it.endsWith("(default)") }, set)
         } finally {
             removeDirAll(dir)

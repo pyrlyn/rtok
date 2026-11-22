@@ -3,3 +3,4 @@ build/
 .kotlin/
 local.properties
 *.snap.new
+.rtok/

@@ -70,7 +70,15 @@ class WrapTest {
         val head = "Content-Length: $MAX_FRAME\r\n\r\n".encodeToByteArray()
         val r = reader(head + "{}".encodeToByteArray())
         assertNull(r.next(false), "a short body waits for more bytes while the pipe is open")
-        r.expect(Framing.Raw, head + "{}".encodeToByteArray())
+        r.expect(Framing.Torn, head + "{}".encodeToByteArray())
+        assertNull(r.next(true))
+    }
+
+    @Test fun aHeaderTheStreamEndsInsideIsTorn() {
+        val head = "Content-Length: 2\r\nX-Oth".encodeToByteArray()
+        val r = reader(head)
+        assertNull(r.next(false), "an unfinished header waits for more bytes while the pipe is open")
+        r.expect(Framing.Torn, head)
         assertNull(r.next(true))
     }
 
@@ -89,14 +97,15 @@ class WrapTest {
         assertNull(r.next(true))
     }
 
-    @Test fun pendingMatchesToolCallIdsOnly() {
+    @Test fun pendingNamesTheToolOfToolCallsOnly() {
         val p = Wrap.Pending()
         p.note(obj("""{"id":7,"method":"tools/call","params":{"name":"grep"}}"""))
         p.note(obj("""{"id":8,"method":"tools/list"}"""))
-        assertNull(p.take("""{"id":8,"result":{}}""".encodeToByteArray()))
-        assertNull(p.take("""{"id":"7","result":{}}""".encodeToByteArray()))
-        assertEquals("grep", p.take("""{"id":7,"result":{}}""".encodeToByteArray()))
-        assertNull(p.take("""{"id":7,"result":{}}""".encodeToByteArray()))
+        val listed = assertNotNull(p.take(obj("""{"id":8,"result":{}}""")))
+        assertNull(listed.tool)
+        assertNull(p.take(obj("""{"id":"7","result":{}}""")))
+        assertEquals("grep", p.take(obj("""{"id":7,"result":{}}"""))?.tool)
+        assertNull(p.take(obj("""{"id":7,"result":{}}""")))
     }
 
     @Test fun serverRequestsDoNotConsumeClientPendingCalls() {
@@ -107,12 +116,12 @@ class WrapTest {
             """{"id":"7","method":"roots/list"}""",
             """{"method":"notifications/progress","params":{"id":7}}""",
         )) {
-            assertNull(p.take(frame.encodeToByteArray()), frame)
+            assertNull(p.take(obj(frame)), frame)
         }
-        assertEquals("grep", p.take("""{"id":7,"result":{}}""".encodeToByteArray()))
+        assertEquals("grep", p.take(obj("""{"id":7,"result":{}}"""))?.tool)
         p.note(obj("""{"id":9,"method":"tools/call","params":{"name":"find"}}"""))
-        assertEquals("find", p.take("""{"id":9,"error":{"code":-1,"message":"x"}}""".encodeToByteArray()))
-        assertNull(p.take("""{"id":9,"result":{}}""".encodeToByteArray()))
+        assertEquals("find", p.take(obj("""{"id":9,"error":{"code":-1,"message":"x"}}"""))?.tool)
+        assertNull(p.take(obj("""{"id":9,"result":{}}""")))
     }
 
     @Test fun drainReturnsEveryUnansweredRequestOnce() {
@@ -120,10 +129,20 @@ class WrapTest {
         p.note(obj("""{"id":1,"method":"initialize"}"""))
         p.note(obj("""{"id":"2","method":"tools/call","params":{"name":"grep"}}"""))
         p.note(obj("""{"method":"notifications/initialized"}"""))
-        assertNull(p.take("""{"id":1,"result":{}}""".encodeToByteArray()))
+        assertNull(p.take(obj("""{"id":1,"result":{}}"""))?.tool)
         assertEquals(listOf("\"2\""), p.drain().map { it.toString() })
         assertEquals(emptyList(), p.drain())
-        assertNull(p.take("""{"id":"2","result":{}}""".encodeToByteArray()))
+        assertNull(p.take(obj("""{"id":"2","result":{}}""")))
+    }
+
+    @Test fun aCancelledRequestIsOwedNothing() {
+        val p = Wrap.Pending()
+        p.note(obj("""{"id":1,"method":"tools/call","params":{"name":"grep"}}"""))
+        p.note(obj("""{"id":2,"method":"tools/list"}"""))
+        p.note(obj("""{"method":"notifications/cancelled","params":{"requestId":1,"reason":"user"}}"""))
+        p.note(obj("""{"method":"notifications/cancelled","params":{"requestId":"2"}}"""))
+        assertNull(p.take(obj("""{"id":1,"result":{}}""")))
+        assertEquals(listOf("2"), p.drain().map { it.toString() })
     }
 
     @Test fun shortenResultRecordsArchiveMcpAboveThreshold() {
