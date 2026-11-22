@@ -51,6 +51,69 @@ class WasmPluginTest {
         assertTrue(appendWasm(emptyList(), "$tmp/missing", ChasmRuntime, env, { _, d -> d }, {}).isEmpty())
     }
 
+    // (memory (export "memory") 1) (func (export "rtok_manifest")): the manifest export returns no value.
+    @Test fun aManifestWithoutAResultIsSkippedNotFatal() {
+        val m =
+            intArrayOf(
+                0,
+                0x61,
+                0x73,
+                0x6d,
+                1,
+                0,
+                0,
+                0,
+                1,
+                4,
+                1,
+                0x60,
+                0,
+                0,
+                3,
+                2,
+                1,
+                0,
+                5,
+                3,
+                1,
+                0,
+                1,
+                7,
+                0x1a,
+                2,
+                6,
+                *"memory".map { it.code }.toIntArray(),
+                2,
+                0,
+                13,
+                *"rtok_manifest".map { it.code }.toIntArray(),
+                0,
+                0,
+                0x0a,
+                4,
+                1,
+                2,
+                0,
+                0x0b,
+            )
+        val dir = "$tmp/void-manifest"
+        platform.posix.mkdir(tmp, 0x1c0u)
+        platform.posix.mkdir(dir, 0x1c0u)
+        rtok.sys.writeBytes("$dir/void.wasm", ByteArray(m.size) { m[it].toByte() })
+        val errors = mutableListOf<String>()
+        val out = appendWasm(emptyList<Pair<Plugin, Boolean>>(), dir, ChasmRuntime, env, { _, d -> d }, { errors += it })
+        assertTrue(out.isEmpty())
+        assertEquals(1, errors.size)
+        assertTrue("void.wasm" in errors[0], errors[0])
+    }
+
+    @Test fun guestLogTextCarriesNoControlCharacters() {
+        val safe = logSafe("hi\u001b]52;c;aGk=\u0007\n\u009b2Jforged")
+        assertTrue(safe.none { it.isISOControl() }, safe)
+        assertEquals("hi]52;c;aGk=2Jforged", safe)
+        assertEquals(LOG_FIELD_MAX, logSafe("x".repeat(LOG_FIELD_MAX * 2)).length)
+    }
+
     // Port of `guest_slice_rejects_what_used_to_panic`.
     @Test fun guestSliceRejectsWhatUsedToPanic() {
         val data = ByteArray(16) { 7 }
