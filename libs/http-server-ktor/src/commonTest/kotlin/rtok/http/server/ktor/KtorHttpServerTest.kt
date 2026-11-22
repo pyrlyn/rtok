@@ -4,10 +4,19 @@ import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.plugins.websocket.webSocket
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.content.OutgoingContent
+import io.ktor.utils.io.ByteWriteChannel
+import io.ktor.utils.io.writeFully
 import io.ktor.websocket.Frame
 import io.ktor.websocket.readText
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import rtok.http.HttpRequest
 import rtok.http.HttpSettings
 import rtok.http.ktor.KtorHttp
@@ -24,6 +33,10 @@ import kotlin.native.concurrent.Worker
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+
+/** Long enough for the server to have read the stalled request's headers and the first half of its body. */
+private const val STALL_MS = 300L
+private const val QUICK_LIMIT_MS = 5_000L
 
 @OptIn(ObsoleteWorkersApi::class)
 class KtorHttpServerTest {
@@ -49,6 +62,46 @@ class KtorHttpServerTest {
                 assertEquals(201, ok.status)
                 assertEquals("hi/x", ok.text())
                 assertEquals(413, client.post(HttpRequest("http://${bound.value}/x", body = ByteArray(9))).status)
+            }
+        }
+        stop.value = 1
+        done.result
+        worker.requestTermination().result
+    }
+
+    // The handler lock used to be taken before the body was read, so one client that stalled mid-upload held up
+    // every other request, `/health` included.
+    @Test fun aStalledUploadDoesNotHoldUpOtherRequests() {
+        val bound = AtomicReference<String?>(null)
+        val stop = AtomicInt(0)
+        val worker = Worker.start(name = "http-server-stall-test")
+        val done =
+            worker.execute(TransferMode.SAFE, { Triple(bound, stop, Unit) }) { (b, s, _) ->
+                KtorHttpServer.serveBlocking("127.0.0.1", 0, { req -> ServerResponse(200, body = req.body) }, maxBody = 8, stop = { s.value != 0 }, onBound = { b.value = it })
+            }
+        while (bound.value == null) platform.posix.usleep(10_000u)
+        val rest = CompletableDeferred<Unit>()
+        val stalled =
+            object : OutgoingContent.WriteChannelContent() {
+                override val contentLength = 4L
+
+                override suspend fun writeTo(channel: ByteWriteChannel) {
+                    channel.writeFully("ab".encodeToByteArray())
+                    channel.flush()
+                    rest.await()
+                    channel.writeFully("cd".encodeToByteArray())
+                }
+            }
+        HttpClient(CIO).use { slow ->
+            KtorHttp(HttpSettings()).use { quick ->
+                runBlocking {
+                    val upload = async { slow.post("http://${bound.value}/slow") { setBody(stalled) }.bodyAsText() }
+                    delay(STALL_MS)
+                    val got = withTimeout(QUICK_LIMIT_MS) { quick.post(HttpRequest("http://${bound.value}/quick", body = "hi".encodeToByteArray())) }
+                    assertEquals("hi", got.text())
+                    rest.complete(Unit)
+                    assertEquals("abcd", upload.await())
+                }
             }
         }
         stop.value = 1

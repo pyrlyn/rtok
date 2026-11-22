@@ -70,7 +70,8 @@ object KtorHttpServer : HttpServer, StreamingHttpServer {
         websockets: Map<String, WsHandler>,
         onBound: (String) -> Unit,
     ) {
-        // The handler owns one SQLite connection and per-process state: calls never overlap.
+        // The handler owns one SQLite connection and per-process state: calls never overlap. The lock is taken only
+        // around the handler, after the body is in: a client that stalls mid-upload must not hold up the others.
         val lock = Mutex()
         val server =
             embeddedServer(CIO, port = port, host = host) {
@@ -82,7 +83,8 @@ object KtorHttpServer : HttpServer, StreamingHttpServer {
                     val refused = ws?.let { h -> lock.withLock { h.admit(request(context, ByteArray(0))) } }
                     when {
                         ws == null -> {
-                            respond(context, lock.withLock { answer(context, handler, maxBody) })
+                            val req = receive(context, maxBody)
+                            respond(context, if (req == null) ServerResponse(PAYLOAD_TOO_LARGE) else lock.withLock { handler.handle(req) })
                             finish()
                         }
 
@@ -207,21 +209,6 @@ object KtorHttpServer : HttpServer, StreamingHttpServer {
 
     /** A header value from a handler or an upstream may be malformed: it is dropped rather than failing the call. */
     private fun contentType(value: String): ContentType? = runCatching { ContentType.parse(value) }.getOrNull()
-
-    private suspend fun answer(
-        call: ApplicationCall,
-        handler: RequestHandler,
-        maxBody: Long,
-    ): ServerResponse {
-        val declared = call.request.headers[HttpHeaders.ContentLength]?.toLongOrNull()
-        if (declared != null && declared > maxBody) {
-            drainRefused(call, declared)
-            return ServerResponse(PAYLOAD_TOO_LARGE)
-        }
-        val body = call.receiveChannel().readRemaining(maxBody + 1).readByteArray()
-        if (body.size > maxBody) return ServerResponse(PAYLOAD_TOO_LARGE)
-        return handler.handle(request(call, body))
-    }
 
     private fun request(
         call: ApplicationCall,
