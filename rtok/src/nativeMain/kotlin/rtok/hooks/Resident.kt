@@ -22,6 +22,8 @@ object Resident {
     /** Serve until the home goes away or a client of another version calls. Returns at once when
      *  another resident holds the home or the environment gives it no endpoint. */
     fun serve() {
+        // A client that gave up at its deadline must fail the reply's write, not kill the resident with it.
+        signal(SIGPIPE, SIG_IGN)
         val env = environ().toMap()
         val home = home { env[it] } ?: return
         val ep = endpoint(home) ?: return
@@ -74,13 +76,31 @@ object Resident {
     internal fun answer(
         c: Int,
         fp: ULong,
+        readTimeoutMs: Long = DEADLINE_MS,
     ): Boolean {
+        // Calls are served one at a time: a client that connects and then stalls must not hold up every other hook.
+        receiveTimeout(c, readTimeoutMs)
         val req = runCatching { Request.decode(readFrame { readExact(c, it) }) }.getOrNull()
         val stale = req != null && req.version != VERSION
         val out = if (req != null && !stale && req.fingerprint == fp) run(req) else null
         writeAll(c, encodeResponse(out))
         return stale
     }
+
+    private fun receiveTimeout(
+        fd: Int,
+        ms: Long,
+    ) {
+        memScoped {
+            val tv = alloc<timeval>()
+            tv.tv_sec = (ms / MS_PER_SECOND).convert()
+            tv.tv_usec = (ms % MS_PER_SECOND * US_PER_MS).convert()
+            setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, tv.ptr, sizeOf<timeval>().convert())
+        }
+    }
+
+    private const val MS_PER_SECOND = 1000L
+    private const val US_PER_MS = 1000L
 
     private fun run(req: Request): ByteArray? {
         if (chdir(req.cwd) != 0) return null
