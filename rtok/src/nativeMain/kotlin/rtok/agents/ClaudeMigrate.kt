@@ -20,7 +20,8 @@ object ClaudeMigrate {
     fun run(cfg: Config): String {
         require(cfg.setup.dryRun || cfg.setup.yes) { "--replace requires --yes (or --dry-run)" }
         val path = cfg.setup.claude.settingsPath
-        val (root, lines) = rewrite(HostJson.read(path), ProxyEnv.anthropic(cfg))
+        val before = HostJson.read(path)
+        val (root, lines) = rewrite(before, ProxyEnv.anthropic(cfg))
         val claudeJson = cfg.doctor.claudeJson
         val diff =
             if (exists(claudeJson) && claudeJson != path) {
@@ -30,7 +31,8 @@ object ClaudeMigrate {
             } else {
                 lines
             }
-        HostJson.write(applyOf(cfg), path, root, diff)
+        // The report always counts the rtok hooks left, so only a changed root says whether there is anything to write.
+        if (root != before) HostJson.write(applyOf(cfg), path, root, diff)
         return diff
     }
 
