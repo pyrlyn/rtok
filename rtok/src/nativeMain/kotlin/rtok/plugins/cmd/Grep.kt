@@ -4,6 +4,7 @@ package rtok.plugins.cmd
 
 import rtok.cmdStem
 import rtok.sys.Utf8Order
+import rtok.sys.isDir
 import rtok.sys.rustLines
 
 object Grep {
@@ -65,13 +66,38 @@ object Grep {
         val text: String,
     )
 
+    private class Parsed(
+        val git: Boolean,
+        val rg: Boolean,
+        val flags: String,
+        val pattern: String?,
+        val operands: List<String>,
+    )
+
+    /**
+     * Whether the hits carry no path column: grep and rg name the file only when they search more than one,
+     * so with a single file operand the text before the first colon is part of the line, not a path.
+     */
+    private fun bareLines(p: Parsed): Boolean {
+        val op = p.operands.singleOrNull() ?: return false
+        return when {
+            p.git || 'H' in p.flags -> false
+
+            // `grep -r` with one operand is taken as a directory, as the shape has always been read.
+            !p.rg && ('r' in p.flags || 'R' in p.flags) -> false
+
+            else -> !isDir(op)
+        }
+    }
+
     fun group(
         argv: List<String>,
         output: String,
     ): String? {
-        val (flags, pattern) = parseArgv(argv) ?: return null
-        val numbered = 'n' in flags
-        val re = pattern?.let { buildRegex(flags, it) }
+        val parsed = parseArgv(argv) ?: return null
+        if (bareLines(parsed)) return null
+        val numbered = 'n' in parsed.flags
+        val re = parsed.pattern?.let { buildRegex(parsed.flags, it) }
         val files = HashMap<String, MutableList<Hit>>()
         val other = ArrayList<String>()
         for (line in output.rustLines()) {
@@ -138,16 +164,17 @@ object Grep {
         return "$path:$list"
     }
 
-    private fun parseArgv(argv: List<String>): Pair<String, String?>? {
+    private fun parseArgv(argv: List<String>): Parsed? {
         val args = argv.iterator()
         if (!args.hasNext()) return null
-        if (cmdStem(args.next()) == "git") {
+        val stem = cmdStem(args.next())
+        if (stem == "git") {
             if (!args.hasNext()) return null
             args.next()
         } // `grep`
         val flags = StringBuilder()
         val patterns = ArrayList<String>()
-        var positional: String? = null
+        val positionals = ArrayList<String>()
         while (args.hasNext()) {
             val a = args.next()
             if (a in SHAPE_FLAGS) return null
@@ -158,6 +185,8 @@ object Grep {
                     "fixed-strings" -> flags.append('F')
                     "extended-regexp" -> flags.append('E')
                     "perl-regexp" -> flags.append('P')
+                    "recursive", "dereference-recursive" -> flags.append('r')
+                    "with-filename" -> flags.append('H')
                     in VALUE_LONG -> if (args.hasNext()) args.next()
                     "regexp" -> patterns += if (args.hasNext()) args.next() else return null
                     else -> if (long.startsWith("regexp=")) patterns += long.substring("regexp=".length)
@@ -183,10 +212,12 @@ object Grep {
                 }
                 continue
             }
-            if (positional == null) positional = a
+            positionals += a
         }
         // `rg` numbers lines only on request when stdout is not a terminal, like grep.
-        return flags.toString() to (if (patterns.isEmpty()) positional else patterns.joinToString("|"))
+        val pattern = if (patterns.isEmpty()) positionals.firstOrNull() else patterns.joinToString("|")
+        val operands = if (patterns.isEmpty()) positionals.drop(1) else positionals
+        return Parsed(stem == "git", stem == "rg", flags.toString(), pattern, operands)
     }
 
     private fun buildRegex(
