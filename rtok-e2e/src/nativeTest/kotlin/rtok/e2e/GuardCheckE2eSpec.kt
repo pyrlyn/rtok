@@ -5,6 +5,7 @@ package rtok.e2e
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import rtok.sys.writeString
 
 private const val LONG_OUTPUT = 400
 
@@ -56,6 +57,14 @@ class GuardCheckE2eSpec :
                 s.check("bash", ro) shouldContain "\"allow\":false"
                 s.post("""{"command":"sed -i s/a/b/ f"}""", "x")
                 s.check("bash", ro) shouldBe """{"allow":true}"""
+            }
+        }
+        test("a broken config allows instead of failing the caller") {
+            Sandbox("guard-badcfg").use { s ->
+                writeString("${s.root}/bad.toml", "[core\n")
+                val r = s.rtok("guard", "check", "--tool", "bash", "--json", """{"command":"ls"}""", "--config", "${s.root}/bad.toml")
+                r.code shouldBe 0
+                r.out.trim() shouldBe """{"allow":true}"""
             }
         }
         test("discover ranks a recorded family no rule covers") {
