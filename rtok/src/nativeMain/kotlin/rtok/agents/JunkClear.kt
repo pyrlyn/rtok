@@ -330,14 +330,24 @@ object JunkClear {
 
     /** A host runs when a live rtok session names it (T284) or its binary or app is up; no process probe when sandboxed. */
     fun running(cfg: Config): (String) -> Boolean {
-        val store = runCatching { Store.open(cfg.core.dbPath) }.getOrNull()
-        val live = store?.let { s -> runCatching { s.liveAgents(cfg.agents.idle) }.getOrNull() }.orEmpty()
+        // Read up front and closed here: the web and TUI call this per action, so the closure must hold no open store.
+        val bySession =
+            runCatching {
+                Store.open(cfg.core.dbPath).use { s ->
+                    val live =
+                        runCatching { s.liveAgents(cfg.agents.idle) }
+                            .getOrNull()
+                            .orEmpty()
+                            .map { it.hostId }
+                            .toSet()
+                    Hosts.ALL
+                        .map { it.id }
+                        .filter { id -> runCatching { s.hostId(id) }.getOrNull()?.let { it in live } == true }
+                        .toSet()
+                }
+            }.getOrDefault(emptySet())
         val probe = !HostBins.sandboxed()
-        return { id ->
-            val hid = store?.let { s -> runCatching { s.hostId(id) }.getOrNull() }
-            val bySession = hid != null && live.any { it.hostId == hid }
-            bySession || (probe && Hosts.host(id)?.let { hostRunning(cfg, it, RealProcs) } == true)
-        }
+        return { id -> id in bySession || (probe && Hosts.host(id)?.let { hostRunning(cfg, it, RealProcs) } == true) }
     }
 
     /** `clear` beyond T182: scan as `list` does, plan, and with [yes] apply. */

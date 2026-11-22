@@ -18,6 +18,7 @@ import rtok.sys.isDir
 import rtok.sys.isFile
 import rtok.sys.listDir
 import rtok.sys.parent
+import rtok.sys.removeFile
 import rtok.sys.symlink
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -289,7 +290,10 @@ class JunkClearApplyTest {
             val claude = store.hostId("claude")!!
             store.registerAgent(claude, "s", null, null, null)
         }
-        assertTrue(JunkClear.running(cfg)("claude"))
+        val running = JunkClear.running(cfg)
+        // The answer is read up front, so the closure holds no open store.
+        removeFile(cfg.core.dbPath)
+        assertTrue(running("claude"))
     }
 
     @Test
