@@ -116,9 +116,10 @@ private fun rolloutRequests(
         if (v.field("type").str() == "session_meta") v.pointer("/payload/id").str()?.let { session = it }
         val u = v.pointer("/payload/info/last_token_usage")?.takeIf { v.pointer("/payload/type").str() == "token_count" }
         if (u != null) {
-            fun n(k: String) = u.field(k).int() ?: 0
+            // Counts come from a file anyone may write: negative ones, or more cached than read, must not lower a total.
+            fun n(k: String) = u.count(k)
             val cached = n("cached_input_tokens")
-            out += Request(session, model, lineTs(v), n("input_tokens") - cached, cached, n("cache_write_input_tokens"), n("output_tokens"))
+            out += Request(session, model, lineTs(v), (n("input_tokens") - cached).coerceAtLeast(0), cached, n("cache_write_input_tokens"), n("output_tokens"))
         }
     }
     return jsonLines
