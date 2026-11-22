@@ -82,6 +82,21 @@ class OutdatedTest {
         removeDirAll(d)
     }
 
+    @Test fun anUnreadableVersionFileSkipsItsRowInsteadOfFailingTheListing() {
+        val (d, cfg) = home("schema", "1.0.0")
+        writeString(join(d, "plugin/${PluginVersion.FILE}"), "{\"schema\":2,\"plugin\":\"rtok\",\"version\":\"9.0.0\"}\n")
+        val rep = report(cfg)
+        assertEquals(emptyList<OutdatedRow>(), rep.outdated)
+        removeDirAll(d)
+    }
+
+    @Test fun anEmptyOrRelativeXdgStateHomeIsIgnored() {
+        if (McpPaths.macos) return
+        assertEquals("/h/.local/state/rtok/plugins.json", PluginVersion.defaultReceiptPath("/h", ""))
+        assertEquals("/h/.local/state/rtok/plugins.json", PluginVersion.defaultReceiptPath("/h", "state"))
+        assertEquals("/s/rtok/plugins.json", PluginVersion.defaultReceiptPath("/h", "/s"))
+    }
+
     @Test fun noPluginAndAnUnknownHost() {
         val cfg = Config().also { it.pluginReceiptPath = join(dir("none"), "plugins.json") }
         assertEquals("no rtok plugins installed\n", Outdated.human(Outdated.report(cfg, OutdatedSelection(listOf("windsurf")), target)))
