@@ -54,9 +54,30 @@ object Reasonix : Agent {
     fun register(cfg: Config): String {
         val path = configPath(cfg)
         val doc = HostToml.load(path)
-        if (tables(doc).any(::isRtok)) return NO_CHANGES
         val cmd = rtokMcpCommand()
+        tables(doc).firstOrNull(::isRtok)?.let { return refresh(cfg, path, doc, it, cmd) }
         doc.push(AOT, listOf("name" to TomlValue.Str(NAME), "command" to TomlValue.Str(cmd), "args" to HostToml.strings(StdioMcp.args(HOST))))
+        val report = "plugins.rtok: ${StdioMcp.summary(cmd, HOST)}"
+        write(applyOf(cfg), path, doc.toString(), report)
+        return report
+    }
+
+    /**
+     * Point rtok's table at [cmd] when only its command went stale (the binary moved). A table whose other keys differ
+     * from what rtok writes is the user's edit and stays as it is.
+     */
+    private fun refresh(
+        cfg: Config,
+        path: String,
+        doc: TomlDoc,
+        have: TomlTable,
+        cmd: String,
+    ): String {
+        val want = entry(cmd)
+        val now = HostToml.toJson(have)
+        val rest = JsonObject(now - "command") == JsonObject(want - "command")
+        if (now == want || !rest || have.str("command")?.let(::isRtokBin) != true) return NO_CHANGES
+        have["command"] = TomlValue.Str(cmd)
         val report = "plugins.rtok: ${StdioMcp.summary(cmd, HOST)}"
         write(applyOf(cfg), path, doc.toString(), report)
         return report

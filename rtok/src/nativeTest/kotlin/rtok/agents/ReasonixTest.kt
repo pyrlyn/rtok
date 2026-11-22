@@ -66,6 +66,21 @@ class ReasonixTest {
         removeDirAll(dir)
     }
 
+    @Test fun registerRepointsAStaleCommandAndLeavesAUserEdit() {
+        val (c, dir) = cfg("stale")
+        val path = Reasonix.configPath(c)
+        writeString(path, "[[plugins]]\nname = \"rtok\"\ncommand = \"/gone/rtok\"\nargs = [\"mcp\", \"--host\", \"reasonix\"]\n")
+        assertTrue(Reasonix.register(c).startsWith("plugins.rtok: "))
+        val ours = TomlDoc.parse(readToString(path)).arrayOfTables("plugins").single { it.str("name") == "rtok" }
+        assertEquals(rtokMcpCommand(), ours.str("command"))
+        assertEquals(NO_CHANGES, Reasonix.register(c))
+        val edited = "[[plugins]]\nname = \"rtok\"\ncommand = \"/gone/rtok\"\nargs = [\"mcp\", \"--verbose\"]\n"
+        writeString(path, edited)
+        assertEquals(NO_CHANGES, Reasonix.register(c))
+        assertEquals(edited, readToString(path))
+        removeDirAll(dir)
+    }
+
     @Test fun aUserEditedTableStaysOnRemove() {
         val (c, dir) = cfg("edited")
         val path = Reasonix.configPath(c)
