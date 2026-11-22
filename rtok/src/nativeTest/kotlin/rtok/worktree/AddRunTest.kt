@@ -76,6 +76,22 @@ class AddRunTest {
         assertEquals(1, Git.list(repo).size)
     }
 
+    @Test fun aSecondAddOfTheSameTaskLosesWithoutUndoingTheFirst() {
+        val repo = repo("wt-add-race")
+        var second = ""
+        val first =
+            Seams({ 1L shl 40 }) { r, path, branch, reason, base ->
+                second = err { Add.run(repo, Worktree(), roomy, "t9" to null, OWNER to null, temp = emptyList()) }
+                Git.addLocked(r, path, branch, reason, base)
+            }
+        val (plan, undo) = Add.run(repo, Worktree(), first, "t9" to null, OWNER to null, temp = emptyList())
+        undo.keep()
+        assertTrue("already exists" in second, second)
+        assertTrue(exists("${plan.path}/a.txt"))
+        assertTrue(Git.hasBranch(repo, "t9"))
+        assertEquals(plan.reason, Git.list(repo).single { it.path == plan.path }.locked)
+    }
+
     @Test fun aNearlyFullVolumeIsRefusedAndAnUnknownOnePasses() {
         val dir = tmpDir("wt-add-room")
         val full = Seams({ LOW_MIB * MIB }, Git::addLocked)
