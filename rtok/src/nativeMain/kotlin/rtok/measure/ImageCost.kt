@@ -44,7 +44,8 @@ object ImageCost {
     fun dims(data: String): Pair<Int, Int>? {
         val b = decode(data.substring(0, minOf(data.length, HEADER_B64)))
         if (b.size >= 16 && b.copyOfRange(0, 8).contentEquals(PNG) && b.copyOfRange(12, 16).contentEquals(IHDR)) {
-            return be32(b, 16)?.let { w -> be32(b, 20)?.let { h -> w to h } }
+            // A size of 2^31 or more is no PNG and reads as a negative Int here: unknown, like a cut header.
+            return be32(b, 16)?.takeIf { it > 0 }?.let { w -> be32(b, 20)?.takeIf { it > 0 }?.let { h -> w to h } }
         }
         if (b.size < 2 || b[0] != 0xFF.toByte() || b[1] != 0xD8.toByte()) return null
         var i = 2
