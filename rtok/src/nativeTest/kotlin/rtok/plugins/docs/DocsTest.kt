@@ -107,6 +107,8 @@ class DocsTest {
             assertEquals(1, idsOf(query(a, "MARKER_ALPHA")).size)
             assertTrue(cached(a))
             assertFalse(cached(b), "B has no llms file")
+            val aVersion = "local:${canonicalize(a) ?: a}"
+            assertEquals("not cached: rtok docs fetch llms", inDir(b) { docsQuery(rt, "llms", aVersion, "MARKER_ALPHA") }, "B names A's version")
             assertEquals("not cached: rtok docs fetch llms", query(b, "MARKER_ALPHA"))
             assertEquals("[]", query(a, "MARKER_LEGACY"))
             writeString("$b/llms.txt", "# Beta\nMARKER_BETA body\n")
