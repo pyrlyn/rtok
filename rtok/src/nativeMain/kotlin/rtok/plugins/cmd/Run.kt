@@ -138,47 +138,51 @@ fun trailer(
 
 /** Bytes with ANSI escapes dropped, blank runs collapsed to one space, blank lines and edges trimmed. */
 private fun canonical(body: ByteArray): ByteArray {
-    // One char per byte, so the shared escape scanner walks byte offsets.
-    val s = CharArray(body.size) { (body[it].toInt() and 0xff).toChar() }.concatToString()
-    val out = ArrayList<Byte>(body.size)
-    val line = ArrayList<Byte>()
+    // One char per byte, so the shared escape scanner walks byte offsets; built only once an escape shows up.
+    val chars by lazy { CharArray(body.size) { (body[it].toInt() and 0xff).toChar() }.concatToString() }
+    // Plain byte buffers: the output never outgrows the input, and a boxed list costs 8 bytes per byte of a 32 MiB capture.
+    val out = ByteArray(body.size)
+    var size = 0
+    val line = ByteArray(body.size)
+    var len = 0
 
     fun flush() {
         var a = 0
-        var b = line.size
+        var b = len
         while (a < b && line[a].isAsciiSpace()) a++
         while (b > a && line[b - 1].isAsciiSpace()) b--
         if (a == b) return
-        if (out.isNotEmpty()) out += '\n'.code.toByte()
-        for (k in a until b) out += line[k]
-        line.clear()
+        if (size > 0) out[size++] = NL
+        line.copyInto(out, size, a, b)
+        size += b - a
+        len = 0
     }
     var i = 0
     while (i < body.size) {
         when (val c = body[i].toInt() and 0xff) {
             0x1b -> {
-                i = Sanitize.skipEscape(s, i)
+                i = Sanitize.skipEscape(chars, i)
             }
 
             '\n'.code -> {
                 flush()
-                line.clear()
+                len = 0
                 i++
             }
 
             ' '.code, '\t'.code, '\r'.code -> {
                 while (i < body.size && (body[i].toInt() and 0xff).let { it == 0x20 || it == 9 || it == 13 }) i++
-                if (line.isNotEmpty()) line += ' '.code.toByte()
+                if (len > 0) line[len++] = ' '.code.toByte()
             }
 
             else -> {
-                line += c.toByte()
+                line[len++] = c.toByte()
                 i++
             }
         }
     }
     flush()
-    return out.toByteArray()
+    return out.copyOf(size)
 }
 
 private fun Byte.isAsciiSpace() = toInt().let { it == 0x20 || it == 9 || it == 10 || it == 12 || it == 13 }
@@ -237,7 +241,33 @@ private fun writeStdout(b: ByteArray) {
 
 private val NL = '\n'.code.toByte()
 
+/**
+ * Prints [body] filtered, or as it is. The formatters parse untrusted output by hand, so a throw in any
+ * of them falls back to the raw bytes: the command's output is never lost.
+ */
 internal fun emitFilteredTo(
+    cfg: Config,
+    argv: List<String>,
+    body: ByteArray,
+    exit: Int,
+    agent: String?,
+    out: (ByteArray) -> Unit,
+) {
+    var wrote = false
+    runCatching {
+        emitFilteredOnce(cfg, argv, body, exit, agent) {
+            wrote = true
+            out(it)
+        }
+    }.onFailure {
+        if (!wrote) {
+            out(body)
+            if (body.isNotEmpty() && body.last() != NL) out(byteArrayOf(NL))
+        }
+    }
+}
+
+private fun emitFilteredOnce(
     cfg: Config,
     argv: List<String>,
     body: ByteArray,
