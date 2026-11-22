@@ -6,6 +6,7 @@ import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldStartWith
 import kotlinx.serialization.json.*
 import rtok.sys.exists
+import rtok.sys.writeString
 
 /** A pi message array of [n] user/toolResult turns with large results. */
 fun piMessages(n: Int): String =
@@ -65,6 +66,34 @@ class ArchiveCliSpec :
                             .jsonPrimitive.content
                     first shouldStartWith "[archived "
                     exists("$home/rtok.db") shouldBe true
+                }
+            }
+            test("a broken config echoes the pi array verbatim instead of failing") {
+                withHome("arch-badcfg") { home ->
+                    writeString("$home/bad.toml", "[x\n")
+                    val quiet = """[{"role":"user"}]"""
+                    cli("--config", "$home/bad.toml", "archive", "rewrite", "--stdin", stdin = quiet).also {
+                        it.code shouldBe 0
+                        it.out shouldBe quiet
+                        it.err shouldContain "archive rewrite skipped"
+                    }
+                    val input = piMessages(6)
+                    cli("--config", "$home/bad.toml", "archive", "rewrite", "--stdin", stdin = input).also {
+                        it.code shouldBe 0
+                        it.out shouldBe input
+                    }
+                }
+            }
+            test("a store that fails to open leaves the array alone (D1)") {
+                withHome("arch-badstore") { home ->
+                    writeString("$home/nota", "x")
+                    writeString("$home/ok.toml", "[core]\ndb_path = '$home/nota/rtok.db'\n")
+                    val input = piMessages(6)
+                    cli("--config", "$home/ok.toml", "archive", "rewrite", "--stdin", stdin = input).also {
+                        it.code shouldBe 0
+                        it.out shouldBe input
+                        it.err shouldContain "archive rewrite skipped"
+                    }
                 }
             }
             test("an unknown option is a usage error") {
