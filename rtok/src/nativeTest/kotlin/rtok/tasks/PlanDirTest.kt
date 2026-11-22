@@ -85,6 +85,13 @@ class PlanDirTest {
         cleanup(dir)
     }
 
+    @Test fun aCrlfOrBomTaskFileStillParses() {
+        for (text in listOf(HAND_MADE.replace("\n", "\r\n"), "\uFEFF$HAND_MADE")) {
+            val task = parsePlan(id("T7"), text, null, 1)
+            assertEquals(Triple("Hand made", Status.Todo, 1), Triple(task.title, task.status, task.priority))
+        }
+    }
+
     @Test fun aSaveChangesThreeLinesAndNothingElse() {
         val dir = tmp("bytes")
         createDirAll("$dir/T7")
