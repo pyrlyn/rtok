@@ -46,4 +46,16 @@ class MoveAcrossTest {
         assertTrue(exists("$r/f"))
         removeDirAll(r)
     }
+
+    /** The failure path removes the destination, so a destination that was already there must stop the move first. */
+    @Test fun anExistingDestinationIsRefusedAndKept() {
+        val r = root("exists")
+        createDirAll(r)
+        writeString("$r/f", "new")
+        writeString("$r/g", "old")
+        assertFailsWith<IoException> { moveByCopy("$r/f", "$r/g") }
+        assertEquals("old", readToString("$r/g"))
+        assertEquals("new", readToString("$r/f"))
+        removeDirAll(r)
+    }
 }
