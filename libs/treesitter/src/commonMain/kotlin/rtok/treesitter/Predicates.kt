@@ -8,6 +8,12 @@ private fun text(
     node: Node,
 ): String = source.decodeToString(node.startByte, node.endByte)
 
+/** The operator without its `not-`, `any-` and `any-not-` prefixes (`not-any-of?` is `of?` negated). */
+private fun bareOp(op: String): String {
+    val positive = op.removePrefix("not-")
+    return positive.removePrefix("any-").removePrefix("not-")
+}
+
 private fun holds(
     p: Predicate,
     m: QueryMatch,
@@ -20,7 +26,7 @@ private fun holds(
     val any = p.op.startsWith("any-") && p.op != "any-of?"
     val negate = p.op.startsWith("not-") || p.op.startsWith("any-not-")
     val test: (String) -> Boolean =
-        when (p.op.removePrefix("any-").removePrefix("not-")) {
+        when (bareOp(p.op)) {
             "eq?" -> {
                 when (val second = p.args.getOrNull(1)) {
                     is PredicateArg.Literal -> { s -> s == second.value }

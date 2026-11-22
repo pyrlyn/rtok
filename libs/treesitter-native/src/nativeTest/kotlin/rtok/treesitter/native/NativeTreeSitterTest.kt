@@ -44,6 +44,14 @@ class NativeTreeSitterTest {
         }
     }
 
+    @Test fun notAnyOfDropsTheListedNames() {
+        val src = "fn a() {} fn b() {} fn c() {}".encodeToByteArray()
+        val g = ts.grammar("rust")!!
+        g.query("""(function_item name: (identifier) @n (#not-any-of? @n "a" "c"))""").use { q ->
+            g.withTree(src) { t -> assertEquals(listOf("b"), q.matches(t.root, src).map { m -> m.nodes("n").single().let { src.decodeToString(it.startByte, it.endByte) } }.toList()) }
+        }
+    }
+
     @Test fun bundledTagsQueriesCompile() {
         for (g in ts.grammars) g.tagsQuery?.let { tags -> TagsConfiguration(g, tags, g.localsQuery ?: "") }
     }
