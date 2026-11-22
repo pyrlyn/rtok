@@ -13,6 +13,7 @@ import rtok.store.LogRow
 import rtok.store.Session
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 // Port of map.rs's tests.
@@ -87,6 +88,13 @@ class MapTest {
         val off = callSpan(call("mcp", "tool_call", "symbol"), d, Otel(content = false))
         assertTrue(off.attrs.all { (k, _) -> !k.startsWith("gen_ai.tool.call.") && k != "rtok.archive.id" })
         assertEquals("symbol", off.text("gen_ai.tool.name"))
+    }
+
+    @Test fun aCapAboveTheLargestArrayKeepsTheWholeText() {
+        val d = CallDetail(io = io("request", "response"))
+        val sp = callSpan(call("mcp", "tool_call", "symbol"), d, Otel(contentBytes = UInt.MAX_VALUE))
+        assertEquals("response", sp.text("gen_ai.tool.call.result"))
+        assertNull(sp.attr("rtok.content.truncated"))
     }
 
     @Test fun failuresAndLogsCarryStatusAndIds() {
