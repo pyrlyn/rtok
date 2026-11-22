@@ -18,6 +18,8 @@ object Roundtrip {
             "\n" + """{"jsonrpc":"2.0","method":"notifications/initialized"}""" +
             "\n" + """{"jsonrpc":"2.0","id":2,"method":"tools/list"}""" + "\n"
 
+    private const val NL = '\n'.code.toByte()
+
     /** The id the probe's own call carries. */
     const val CALL_ID = 3L
 
@@ -52,10 +54,15 @@ object Roundtrip {
     ): List<JsonElement>? {
         val out = mutableListOf<JsonElement>()
         val pending = StringBuilder()
+        var tail = ByteArray(0)
         var finished = false
         while (!finished) {
             val bytes = child.read(deadline) ?: return null
-            pending.append(bytes.decodeToString())
+            // Only whole lines are decoded: a read may end inside a multi-byte character.
+            val all = tail + bytes
+            val cut = all.lastIndexOf(NL) + 1
+            pending.append(all.decodeToString(0, cut))
+            tail = all.copyOfRange(cut, all.size)
             finished = bytes.isEmpty() || takeLines(pending).any { v -> out.add(v).let { done(v, withCall) } }
         }
         return out
