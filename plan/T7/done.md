@@ -1,8 +1,9 @@
 # T7. Done
 
 Whole-repo review of the Kotlin port for bugs: logic errors, races, resource leaks, bad error handling,
-load and edge-input failures. Twelve review units covered every module; each finding was re-read against
-the code before it was fixed, and each fix is one `T7:` commit on `t7-review-fixes`.
+load and edge-input failures. The sources were read in twelve review units (the gaps are listed at the
+end); each finding was re-read against the code before it was fixed, and each fix is one `T7:` commit on
+`t7-review-fixes`.
 
 K1–K5 were fixed earlier (#278). The task was then taken over with a narrower brief from the creator:
 bugs first. Dead code goes to T9 and architecture changes to T10, so the only optimizations here are
