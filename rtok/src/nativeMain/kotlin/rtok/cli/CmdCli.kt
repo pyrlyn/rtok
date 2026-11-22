@@ -7,9 +7,9 @@ import rtok.plugins.cmd.emitFiltered
 
 private val NO_REF = OptSpec.Flag("no-ref", "Never append the `[rtok <id> · N lines]` pointer")
 
-/** The config with the trailer turned off when `--no-ref` is given. */
+/** The config with the trailer turned off when `--no-ref` is given. A broken config falls back to defaults (fail open): `rtok run` is what the cmd-plugin rewrite wraps every Bash call in. */
 private fun Invocation.cmdConfig(): Config {
-    val cfg = loadConfig()
+    val cfg = Config.loadLenient(configFile, null)
     return if (flag("no-ref")) cfg.copy(plugins = cfg.plugins.copy(cmd = cfg.plugins.cmd.copy(trailer = false))) else cfg
 }
 

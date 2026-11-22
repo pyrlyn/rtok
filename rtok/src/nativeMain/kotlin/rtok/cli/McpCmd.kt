@@ -61,10 +61,12 @@ val MCP =
         runsBare = true,
         args = listOf(ArgSpec("server", "Foreign stdio MCP server to wrap losslessly (`rtok mcp -- npx some-server`)", required = false, variadic = true)),
     ) { inv ->
-        val cfg = Config.loadWith(inv.configFile, Layers.hookHostFlag(inv.value("host")))
         val name = inv.value("call")
         val wrap = inv.args("server")
         val http = inv.value("http")
+        val host = Layers.hookHostFlag(inv.value("host"))
+        // A wrapped foreign server must start even when rtok's own config does not parse (fail open, D4).
+        val cfg = if (wrap.isEmpty()) Config.loadWith(inv.configFile, host) else Config.loadLenient(inv.configFile, host)
         if (http != null) {
             if (wrap.isNotEmpty()) throw CliFailure("rtok mcp --http serves rtok's own tools; it takes no subcommand or `--`")
             if (name != null || inv.value("json") != null) throw CliFailure("rtok mcp --http cannot be used with --call or --json")

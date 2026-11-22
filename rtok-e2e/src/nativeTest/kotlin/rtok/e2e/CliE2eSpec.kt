@@ -152,6 +152,39 @@ class CliE2eSpec :
                 }
             }
         }
+        context("a broken project .rtok.toml never blocks the wrapped paths") {
+            test("rtok run runs the command and rtok filter prints its input (fail open)") {
+                Sandbox("badcfg-run").use { s ->
+                    val repo = s.repo("${s.root}/app")
+                    writeString("$repo/.rtok.toml", "[cmd\n")
+                    s.rtok("run", "--", "echo hi", cwd = repo).also {
+                        it.code shouldBe 0
+                        it.out shouldBe "hi\n"
+                    }
+                    s.rtok("filter", "--cmd", "cat", cwd = repo, stdin = "x").also {
+                        it.code shouldBe 0
+                        it.out shouldBe "x"
+                    }
+                    // A valid TOML file with an unknown key kills wrapped commands the same way.
+                    writeString("$repo/.rtok.toml", "[plugins.read]\nlangauges = [\"rust\"]\n")
+                    s.rtok("run", "--", "echo hi", cwd = repo).also {
+                        it.code shouldBe 0
+                        it.out shouldBe "hi\n"
+                    }
+                }
+            }
+            test("rtok mcp -- <server> still starts the wrapped server") {
+                Sandbox("badcfg-mcp").use { s ->
+                    val repo = s.repo("${s.root}/app")
+                    writeString("$repo/.rtok.toml", "[mcp\n")
+                    val line = """{"jsonrpc":"2.0","id":1,"method":"ping"}"""
+                    s.rtok("mcp", "--", "cat", cwd = repo, stdin = "$line\n").also {
+                        it.code shouldBe 0
+                        it.out shouldBe "$line\n"
+                    }
+                }
+            }
+        }
         context("mcp -- <server> wrapper") {
             // A foreign stdio server: answers `tools/call` with 200 lines, echoes every other request, exits 3.
             val server =
