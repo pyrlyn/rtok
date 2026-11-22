@@ -2,7 +2,7 @@
 status: in progress
 priority: P2
 complexity: 3
-readiness: 10%
+readiness: 100%
 agent: Claude Code / claude-fable-5-2
 ---
 
