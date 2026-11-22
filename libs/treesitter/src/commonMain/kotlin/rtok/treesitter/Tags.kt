@@ -28,7 +28,10 @@ class TagsConfiguration(
     localsQuery: String = "",
 ) {
     private val query: Query = grammar.query(localsQuery + tagsQuery)
-    private val tagsPatternIndex: Int = (0 until query.patternCount).firstOrNull { query.patternStart(it) >= localsQuery.length } ?: query.patternCount
+
+    // Pattern starts are UTF-8 byte offsets, so a non-ASCII locals query must be measured in bytes, not chars.
+    private val localsBytes = localsQuery.encodeToByteArray().size
+    private val tagsPatternIndex: Int = (0 until query.patternCount).firstOrNull { query.patternStart(it) >= localsBytes } ?: query.patternCount
 
     private class PatternInfo(
         val scopeInherits: Boolean,
