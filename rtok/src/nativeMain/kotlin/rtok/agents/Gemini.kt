@@ -6,6 +6,7 @@ package rtok.agents
 
 import rtok.config.Config
 import rtok.plugin.sdk.Surface
+import rtok.sys.parent
 
 class Gemini(
     plugins: PluginSource = ShippedPlugins,
@@ -23,15 +24,25 @@ class Gemini(
         val FORM =
             HookForm(
                 { bin, g -> "$bin hook ${RTOK_EVENT.getValue(g)} --host $HOST" },
-                { cmd, g -> RTOK_EVENT[g]?.let { e -> " hook $e --host $HOST".let { s -> cmd.endsWith(s) && isRtokBin(HookLine.unquoteBin(cmd.removeSuffix(s))) } } == true },
+                { cmd, g -> RTOK_EVENT[g]?.let { e -> " hook $e --host $HOST".let { s -> cmd.endsWith(s) && HookLine.isRtokWord(cmd.removeSuffix(s)) } } == true },
             )
 
         fun hookSpec(timeoutS: Long) = HookSpec(RTOK_EVENT.keys.map { it to "" }, "timeout", timeoutS * MS, matcherless = true)
 
         private const val MS = 1000L
 
+        /** Gemini CLI reads `$GEMINI_CLI_HOME/.gemini`, so a moved `…/.gemini` dir is named by its parent. */
+        private fun cliHome(dir: String): String = if (dir.trimEnd('/').endsWith("/.gemini")) parent(dir.trimEnd('/')) ?: dir else dir
+
         private val SPEC =
-            ExtensionSpec(HOST, { it.setup.gemini.dir }, "gemini-extension.json", "GEMINI_CLI_HOME", " hook PreToolUse --host gemini") { cfg, path ->
+            ExtensionSpec(
+                HOST,
+                { it.setup.gemini.dir },
+                "gemini-extension.json",
+                "GEMINI_CLI_HOME",
+                " hook PreToolUse --host gemini",
+                homeValue = ::cliHome,
+            ) { cfg, path ->
                 HookEdit(FORM, applyOf(cfg), path, hookSpec(cfg.setup.hookTimeoutS.toLong()))
             }
 
