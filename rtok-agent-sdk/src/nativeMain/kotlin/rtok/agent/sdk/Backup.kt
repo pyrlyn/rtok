@@ -11,6 +11,7 @@ import platform.posix.S_IFREG
 import platform.posix.lstat
 import platform.posix.stat
 import rtok.sys.*
+import kotlin.random.Random
 import kotlin.time.Clock
 
 /** How a host-file change is applied. */
@@ -131,11 +132,27 @@ internal fun backupAt(
 
     fun slot(n: ULong) = join(dir, if (n == 0uL) "$name.bak-$ts" else "$name.bak-$ts-$n")
     var bak = slot(n)
-    while (exists(bak)) bak = slot(++n)
-    writeBytes(bak, body)
+    // An exclusive create reserves the slot, so two installs in the same second never share one generation.
+    while (!reserve(bak)) bak = slot(++n)
+    try {
+        writeBytes(bak, body)
+    } catch (e: IoException) {
+        runCatching { removeFile(bak) }
+        throw e
+    }
     fileMode(path)?.let { platform.posix.chmod(bak, it.convertMode()) }
     return bak
 }
+
+/** True when [slot] was created empty by this call; false when it already existed. */
+private fun reserve(slot: String): Boolean =
+    try {
+        createNewBytes(slot, ByteArray(0))
+        true
+    } catch (e: IoException) {
+        if (!exists(slot)) throw e
+        false
+    }
 
 private fun Int.convertMode(): platform.posix.mode_t = convert()
 
@@ -157,11 +174,21 @@ fun writeAtomic(
     path: String,
     bytes: ByteArray,
 ) {
-    val tmp = "${parent(path) ?: "."}/.${fileName(path)}.tmp-${pid()}"
-    writeBytes(tmp, bytes)
-    fileMode(path)?.let { platform.posix.chmod(tmp, it.convertMode()) }
-    if (platform.posix.rename(tmp, path) != 0) {
+    // Renaming over a dotfiles symlink would replace the link itself, so the write lands on its target instead.
+    val dest = if (entryKind(path) == EntryKind.Symlink) canonicalize(path) ?: path else path
+    // The random part keeps two threads of one process off the same temp file.
+    val tmp = "${parent(dest) ?: "."}/.${fileName(dest)}.tmp-${pid()}-${Random.nextLong().toULong().toString(TMP_RADIX)}"
+    try {
+        writeBytes(tmp, bytes)
+    } catch (e: IoException) {
         runCatching { removeFile(tmp) }
-        throw IoException(IoException.Kind.Other, "$path: rename failed")
+        throw e
+    }
+    fileMode(dest)?.let { platform.posix.chmod(tmp, it.convertMode()) }
+    if (platform.posix.rename(tmp, dest) != 0) {
+        runCatching { removeFile(tmp) }
+        throw IoException(IoException.Kind.Other, "$dest: rename failed")
     }
 }
+
+private const val TMP_RADIX = 16
