@@ -19,7 +19,8 @@ private class LinuxWatch(
         if (wd >= 0) dirs[wd] = dir
         for (name in runCatching { listDir(dir) }.getOrDefault(emptyList())) {
             val p = join(dir, name)
-            if (isDir(p) && fileMode(p)?.let { it and S_IFMT == S_IFLNK } != true) add(p)
+            // lstat: a link to a directory is not watched, so a link loop cannot recurse or leave the root.
+            if (entryKind(p) == EntryKind.Dir) add(p)
         }
     }
 
