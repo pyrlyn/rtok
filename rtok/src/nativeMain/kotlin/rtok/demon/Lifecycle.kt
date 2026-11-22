@@ -60,8 +60,11 @@ class Lifecycle(
     ) {
         when (demon.ownership(service, st)) {
             Owner.STALE -> say(Demon.staleLine(service, st))
+
             Owner.ORPHAN -> demon.bringDown(service, st, signalable(st, Owner.ORPHAN), false)
-            Owner.LIVE -> Unit
+
+            // A supervisor that won a concurrent start owns this state: retiring it would hide a running service.
+            Owner.LIVE -> return
         }
         demon.retire(service, st)
     }

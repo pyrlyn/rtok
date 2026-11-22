@@ -11,6 +11,7 @@ import platform.posix.O_CREAT
 import platform.posix.O_WRONLY
 import platform.posix.close
 import platform.posix.open
+import platform.posix.usleep
 import rtok.agent.sdk.writeAtomic
 import rtok.sys.exists
 import rtok.sys.readToString
@@ -78,6 +79,21 @@ class Claim(
         close(fd)
     }
 }
+
+/**
+ * [Store.claim], retried for a short while: [held] probes by taking the lock for an instant, and a supervisor that
+ * met such a probe on its first try would otherwise exit as if another one owned the service.
+ */
+fun Store.claimPatiently(service: Service): Claim? {
+    repeat(CLAIM_TRIES - 1) {
+        claim(service)?.let { return it }
+        usleep(CLAIM_RETRY_US)
+    }
+    return claim(service)
+}
+
+private const val CLAIM_TRIES = 5
+private const val CLAIM_RETRY_US = 20_000u
 
 /** True when the lock is held elsewhere; a probe that wins drops at once. */
 fun Store.held(service: Service): Boolean {

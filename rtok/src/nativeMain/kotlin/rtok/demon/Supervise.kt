@@ -11,11 +11,14 @@ import kotlin.time.TimeSource
 
 /**
  * The detached half (Rust `demon::supervise`): spawn the service, pipe its output into `<svc>.log` through the
- * rotating log sink, wait, spawn it again; runs until the stop marker. A second supervisor leaves at once.
+ * rotating log sink, wait, spawn it again; runs until the stop marker. A second supervisor leaves after a short wait.
  */
+@OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
 fun Lifecycle.supervise(service: Service) {
+    // Long-lived: a write to a pipe or socket whose reader went away must fail, not end the supervision.
+    platform.posix.signal(platform.posix.SIGPIPE, platform.posix.SIG_IGN)
     createDirAll(store.dir)
-    val lock = store.claim(service) ?: return
+    val lock = store.claimPatiently(service) ?: return
     lock.use {
         val exe = currentExe() ?: throw DemonException("cannot find the rtok binary")
         val stop = store.file(service, "stop")

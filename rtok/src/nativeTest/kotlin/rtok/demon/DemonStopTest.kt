@@ -9,6 +9,9 @@ import rtok.sys.exists
 import rtok.sys.pid
 import rtok.sys.removeDirAll
 import rtok.sys.tempDir
+import kotlin.native.concurrent.ObsoleteWorkersApi
+import kotlin.native.concurrent.TransferMode
+import kotlin.native.concurrent.Worker
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -109,6 +112,28 @@ class DemonStopTest {
         val p = Recorder(1000, listOf(4242, 4243), ignoresTerm = true, onPause = { lock.close() })
         Demon(s, p) {}.stop(web, false)
         assertEquals(listOf("term" to 4242, "term" to 4243, "kill" to 4243), p.calls)
+    }
+
+    @OptIn(ObsoleteWorkersApi::class)
+    @Test
+    fun aSupervisorOutwaitsAStatusProbeOnItsLock() {
+        val s = store("probe")
+        val probe = s.claim(Service.WEB)!!
+        val worker = Worker.start(name = "demon-probe-test")
+        val released =
+            worker.execute(TransferMode.SAFE, { probe }) {
+                platform.posix.usleep(30_000u)
+                it.close()
+            }
+        val won = s.claimPatiently(Service.WEB)
+        released.result
+        worker.requestTermination().result
+        assertNotNull(won, "a probe holding the lock for an instant must not turn the supervisor away").close()
+    }
+
+    @Test fun aHeldLockStillTurnsASecondSupervisorAway() {
+        val s = store("owned")
+        s.claim(Service.WEB)!!.use { assertNull(s.claimPatiently(Service.WEB)) }
     }
 
     @Test fun quiesceRetiresALateRespawnOfThisBoot() {
