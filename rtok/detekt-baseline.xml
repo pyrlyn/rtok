@@ -29,7 +29,6 @@
     <ID>ComplexCondition:Sed.kt:at(i)?.let { it != ';'.code &amp;&amp; it != '\n'.code &amp;&amp; it != '}'.code &amp;&amp; it != ' '.code &amp;&amp; it != '\t'.code } == true</ID>
     <ID>ComplexCondition:Sed.kt:i &lt; b.size &amp;&amp; at(i)!!.let { ws(it) || it == ';'.code || it == '{'.code || it == '}'.code }</ID>
     <ID>ComplexCondition:Skill.kt:line[i] == ':' &amp;&amp; (i + 1 == line.length || line[i + 1] == ' ' || line[i + 1] == '\t')</ID>
-    <ID>ComplexCondition:Skill.kt:name.isEmpty() || name.contains('/') || name.contains('\\') || name.contains("..")</ID>
     <ID>ComplexCondition:Tables.kt:Tables$!u.contains("FILESYSTEM") || !(u.contains("MOUNTED") || u.contains("CAPACITY") || u.contains("USE%"))</ID>
     <ID>ComplexCondition:Tables.kt:Tables$cols.firstOrNull() != "NAME" || cols.none { it == "STATUS" || it == "READY" || it == "AGE" }</ID>
     <ID>ComplexCondition:ToonTest.kt:brace &lt; 0 || !s.startsWith('[') || !s.substring(0, brace).endsWith(']') || !s.endsWith('}')</ID>
@@ -67,7 +66,7 @@
     <ID>CyclomaticComplexMethod:Extract.kt:fun transcriptText: String</ID>
     <ID>CyclomaticComplexMethod:Extract.kt:internal fun removedPaths: List&lt;String></ID>
     <ID>CyclomaticComplexMethod:Extract.kt:internal fun worthParsing: Boolean</ID>
-    <ID>CyclomaticComplexMethod:Filter.kt:Filter$fun runWithStore: String</ID>
+    <ID>CyclomaticComplexMethod:Filter.kt:Filter$private fun filterWithStore: String</ID>
     <ID>CyclomaticComplexMethod:Follow.kt:Follow$fun follow: Followed</ID>
     <ID>CyclomaticComplexMethod:Formatters.kt:Formatters$internal fun format: String?</ID>
     <ID>CyclomaticComplexMethod:Formatters.kt:Formatters$internal fun gitLog: String?</ID>
@@ -78,7 +77,7 @@
     <ID>CyclomaticComplexMethod:Gh.kt:Gh$internal fun view: String?</ID>
     <ID>CyclomaticComplexMethod:Git.kt:Git$fun parsePorcelain: List&lt;WorktreeRecord></ID>
     <ID>CyclomaticComplexMethod:Grep.kt:Grep$fun group: String?</ID>
-    <ID>CyclomaticComplexMethod:Grep.kt:Grep$private fun parseArgv: Pair&lt;String, String?>?</ID>
+    <ID>CyclomaticComplexMethod:Grep.kt:Grep$private fun parseArgv: Parsed?</ID>
     <ID>CyclomaticComplexMethod:Guard.kt:internal fun cacheKey: String?</ID>
     <ID>CyclomaticComplexMethod:Guard.kt:private fun flatten: String?</ID>
     <ID>CyclomaticComplexMethod:Guard.kt:private fun relativeHop: Boolean</ID>
@@ -88,7 +87,7 @@
     <ID>CyclomaticComplexMethod:HealthCheck.kt:Health$fun tick</ID>
     <ID>CyclomaticComplexMethod:Index.kt:Index$fun runChanged: IndexReport</ID>
     <ID>CyclomaticComplexMethod:Index.kt:Index$fun runWith: IndexReport</ID>
-    <ID>CyclomaticComplexMethod:Index.kt:Index$internal fun docAbove: String</ID>
+    <ID>CyclomaticComplexMethod:Index.kt:Index$private fun docAbove: String</ID>
     <ID>CyclomaticComplexMethod:Logfmt.kt:private fun pairs: List&lt;Pair></ID>
     <ID>CyclomaticComplexMethod:LspSession.kt:LspSession$fun requestWithin: JsonElement</ID>
     <ID>CyclomaticComplexMethod:Outline.kt:fun render: String</ID>
@@ -107,9 +106,8 @@
     <ID>CyclomaticComplexMethod:Rules.kt:Rules$internal fun placeholderToken: Pair&lt;Int, String>?</ID>
     <ID>CyclomaticComplexMethod:Rules.kt:Rules$internal fun traceBlocks: BooleanArray</ID>
     <ID>CyclomaticComplexMethod:Rules.kt:Rules$private fun cut: String</ID>
-    <ID>CyclomaticComplexMethod:Rules.kt:Rules$private fun durationAt: Int?</ID>
-    <ID>CyclomaticComplexMethod:Run.kt:internal fun emitFilteredTo</ID>
     <ID>CyclomaticComplexMethod:Run.kt:private fun canonical: ByteArray</ID>
+    <ID>CyclomaticComplexMethod:Run.kt:private fun emitFilteredOnce</ID>
     <ID>CyclomaticComplexMethod:Sed.kt:internal fun sedReadOnly: Boolean</ID>
     <ID>CyclomaticComplexMethod:Sed.kt:private fun address: Int?</ID>
     <ID>CyclomaticComplexMethod:Sed.kt:private fun scriptReadOnly: Boolean</ID>
@@ -234,8 +232,11 @@
     <ID>MagicNumber:BlastTest.kt:BlastTest$300u</ID>
     <ID>MagicNumber:BlastTest.kt:BlastTest$4</ID>
     <ID>MagicNumber:BlastTest.kt:BlastTest$5</ID>
+    <ID>MagicNumber:CacheTest.kt:CacheTest$1500</ID>
+    <ID>MagicNumber:CacheTest.kt:CacheTest$200</ID>
     <ID>MagicNumber:CacheTest.kt:CacheTest$23u</ID>
     <ID>MagicNumber:CacheTest.kt:CacheTest$3</ID>
+    <ID>MagicNumber:CacheTest.kt:CacheTest$3000</ID>
     <ID>MagicNumber:CacheTest.kt:CacheTest$40</ID>
     <ID>MagicNumber:CacheTest.kt:CacheTest$64</ID>
     <ID>MagicNumber:CacheTest.kt:CacheTest$80</ID>
@@ -447,6 +448,7 @@
     <ID>MagicNumber:ExtractTest.kt:ExtractTest$40</ID>
     <ID>MagicNumber:ExtractTest.kt:ExtractTest$5u</ID>
     <ID>MagicNumber:FilesTest.kt:FilesTest$3</ID>
+    <ID>MagicNumber:FilterTest.kt:FilterTest$200</ID>
     <ID>MagicNumber:FilterTest.kt:FilterTest$3</ID>
     <ID>MagicNumber:Fixtures.kt:65536</ID>
     <ID>MagicNumber:Formatters.kt:Formatters$15</ID>
@@ -465,8 +467,6 @@
     <ID>MagicNumber:Gh.kt:Gh$3</ID>
     <ID>MagicNumber:GhTest.kt:12</ID>
     <ID>MagicNumber:GhTest.kt:30</ID>
-    <ID>MagicNumber:Git.kt:Git$16L</ID>
-    <ID>MagicNumber:Git.kt:Git$20</ID>
     <ID>MagicNumber:GraphCliSpec.kt:GraphCliSpec$20</ID>
     <ID>MagicNumber:GrepSymbolTest.kt:GrepSymbolTest$3</ID>
     <ID>MagicNumber:GrepSymbolTest.kt:GrepSymbolTest$30</ID>
@@ -734,6 +734,7 @@
     <ID>MagicNumber:ReviewTest.kt:ReviewTest$11</ID>
     <ID>MagicNumber:ReviewTest.kt:ReviewTest$20</ID>
     <ID>MagicNumber:ReviewTest.kt:ReviewTest$200</ID>
+    <ID>MagicNumber:ReviewTest.kt:ReviewTest$3</ID>
     <ID>MagicNumber:ReviewTest.kt:ReviewTest$4</ID>
     <ID>MagicNumber:ReviewTest.kt:ReviewTest$40</ID>
     <ID>MagicNumber:ReviewTest.kt:ReviewTest$5</ID>
@@ -875,7 +876,10 @@
     <ID>MagicNumber:WatchTest.kt:WatchTest$4</ID>
     <ID>MagicNumber:WatchTest.kt:WatchTest$50</ID>
     <ID>MagicNumber:WatchTest.kt:WatchTest$80</ID>
+    <ID>MagicNumber:WrapTest.kt:WrapTest$1000</ID>
+    <ID>MagicNumber:WrapTest.kt:WrapTest$1024</ID>
     <ID>MagicNumber:WrapTest.kt:WrapTest$64</ID>
+    <ID>MagicNumber:WrapTest.kt:WrapTest$7</ID>
     <ID>MatchingDeclarationName:Cache.kt:ReadCache</ID>
     <ID>MatchingDeclarationName:Compress.kt:CaveIntensity</ID>
     <ID>MatchingDeclarationName:Docs.kt:DocsPlugin : Plugin</ID>
@@ -887,7 +891,7 @@
     <ID>MatchingDeclarationName:Walk.kt:Matcher</ID>
     <ID>MayBeConstant:ExtractTest.kt:private val SESSION = """{"type":"user","message":{"content":"we picked sqlite for the cache"}}""" + "\n" + """{"type":"assistant","message":{"content":[{"type":"text","text":"noted &lt;private>hunter2&lt;/private> done"},{"type":"tool_use","name":"Bash"}]}}""" + "\n" + """{"type":"summary"}""" + "\nnot json\n"</ID>
     <ID>NestedBlockDepth:Compact.kt:Compact$fun gitStatus: String?</ID>
-    <ID>NestedBlockDepth:Grep.kt:Grep$private fun parseArgv: Pair&lt;String, String?>?</ID>
+    <ID>NestedBlockDepth:Grep.kt:Grep$private fun parseArgv: Parsed?</ID>
     <ID>NestedBlockDepth:Impact.kt:Impact$fun walkRoots: List&lt;RootRow></ID>
     <ID>NestedBlockDepth:Logfmt.kt:private fun pairs: List&lt;Pair></ID>
     <ID>NestedBlockDepth:Tools.kt:Tools$fun defsText: String</ID>
@@ -922,7 +926,6 @@
     <ID>ReturnCount:Diff.kt:Side$fun body: String?</ID>
     <ID>ReturnCount:Diffs.kt:Diffs$internal fun parse: Parsed?</ID>
     <ID>ReturnCount:Diffs.kt:Diffs$private fun counts: Pair&lt;Int, Int>?</ID>
-    <ID>ReturnCount:Dispatch.kt:private fun runTraced: ByteArray</ID>
     <ID>ReturnCount:Dispatch.kt:internal fun capBudget: String</ID>
     <ID>ReturnCount:Dispatch.kt:internal fun claimInjection: Injection?</ID>
     <ID>ReturnCount:Dispatch.kt:internal fun mcpResult: JsonElement?</ID>
@@ -933,6 +936,7 @@
     <ID>ReturnCount:Dispatch.kt:private fun injectEvent: HookOutput</ID>
     <ID>ReturnCount:Dispatch.kt:private fun postTool: HookOutput</ID>
     <ID>ReturnCount:Dispatch.kt:private fun preTool: HookOutput</ID>
+    <ID>ReturnCount:Dispatch.kt:private fun runTraced: ByteArray</ID>
     <ID>ReturnCount:Docs.kt:fun docsQuery: String</ID>
     <ID>ReturnCount:Docs.kt:fun docsResolve: String</ID>
     <ID>ReturnCount:Docs.kt:fun fetchCrate: String</ID>
@@ -947,7 +951,7 @@
     <ID>ReturnCount:Extract.kt:private fun skillBody: Pair&lt;String, ULong>?</ID>
     <ID>ReturnCount:Extract.kt:private fun userPrompt: UserText?</ID>
     <ID>ReturnCount:Files.kt:internal fun relative: String?</ID>
-    <ID>ReturnCount:Filter.kt:Filter$fun runWithStore: String</ID>
+    <ID>ReturnCount:Filter.kt:Filter$private fun filterWithStore: String</ID>
     <ID>ReturnCount:Formatters.kt:Formatters$fun family: String</ID>
     <ID>ReturnCount:Formatters.kt:Formatters$fun familyOf: String</ID>
     <ID>ReturnCount:Formatters.kt:Formatters$internal fun gitLog: String?</ID>
@@ -967,7 +971,7 @@
     <ID>ReturnCount:Gh.kt:Gh$fun format: String?</ID>
     <ID>ReturnCount:Gh.kt:Gh$internal fun runLog: String?</ID>
     <ID>ReturnCount:Grep.kt:Grep$fun group: String?</ID>
-    <ID>ReturnCount:Grep.kt:Grep$private fun parseArgv: Pair&lt;String, String?>?</ID>
+    <ID>ReturnCount:Grep.kt:Grep$private fun parseArgv: Parsed?</ID>
     <ID>ReturnCount:Grep.kt:Grep$private fun window: String</ID>
     <ID>ReturnCount:GrepSymbol.kt:GrepSymbol$fun answer: PreToolDecision?</ID>
     <ID>ReturnCount:GrepSymbol.kt:GrepSymbol$fun symbolName: String?</ID>
@@ -1050,7 +1054,7 @@
     <ID>ReturnCount:Rules.kt:Rules$private fun durationAt: Int?</ID>
     <ID>ReturnCount:Rules.kt:Rules$private fun pathLine: Pair&lt;String, String>?</ID>
     <ID>ReturnCount:Rules.kt:Rules$private fun uuidAt: Int?</ID>
-    <ID>ReturnCount:Run.kt:internal fun emitFilteredTo</ID>
+    <ID>ReturnCount:Run.kt:private fun emitFilteredOnce</ID>
     <ID>ReturnCount:Runtime.kt:fun identicalResult: String?</ID>
     <ID>ReturnCount:Scope.kt:Scope$fun affected: String</ID>
     <ID>ReturnCount:Scope.kt:Scope$fun callers: String</ID>
@@ -1137,6 +1141,7 @@
     <ID>TooManyFunctions:CompactTest.kt:CompactTest</ID>
     <ID>TooManyFunctions:Compress.kt:rtok.modes.Compress.kt</ID>
     <ID>TooManyFunctions:Dead.kt:Affected</ID>
+    <ID>TooManyFunctions:DemonStopTest.kt:DemonStopTest</ID>
     <ID>TooManyFunctions:Diff.kt:GraphDiffs</ID>
     <ID>TooManyFunctions:DiffTest.kt:DiffTest</ID>
     <ID>TooManyFunctions:Diffs.kt:Diffs</ID>
@@ -1153,6 +1158,7 @@
     <ID>TooManyFunctions:Files.kt:rtok.plugins.memory.Files.kt</ID>
     <ID>TooManyFunctions:Formatters.kt:Formatters</ID>
     <ID>TooManyFunctions:FormattersTest.kt:FormattersTest</ID>
+    <ID>TooManyFunctions:GeminiTest.kt:GeminiTest</ID>
     <ID>TooManyFunctions:GrepSymbolTest.kt:GrepSymbolTest</ID>
     <ID>TooManyFunctions:Guard.kt:rtok.plugins.guard.Guard.kt</ID>
     <ID>TooManyFunctions:GuardTest.kt:GuardTest</ID>
@@ -1171,7 +1177,9 @@
     <ID>TooManyFunctions:Memory.kt:rtok.plugins.memory.Memory.kt</ID>
     <ID>TooManyFunctions:MemoryTest.kt:MemoryTest</ID>
     <ID>TooManyFunctions:Notes.kt:rtok.plugins.checkpoint.Notes.kt</ID>
+    <ID>TooManyFunctions:OutdatedTest.kt:OutdatedTest</ID>
     <ID>TooManyFunctions:Outline.kt:rtok.plugins.read.Outline.kt</ID>
+    <ID>TooManyFunctions:OutlineTest.kt:OutlineTest</ID>
     <ID>TooManyFunctions:Project.kt:rtok.Project.kt</ID>
     <ID>TooManyFunctions:ProjectTest.kt:ProjectTest</ID>
     <ID>TooManyFunctions:Protocol.kt:Protocol</ID>
@@ -1179,6 +1187,7 @@
     <ID>TooManyFunctions:ReadTest.kt:ReadTest</ID>
     <ID>TooManyFunctions:Refs.kt:Refs</ID>
     <ID>TooManyFunctions:Review.kt:Review</ID>
+    <ID>TooManyFunctions:ReviewTest.kt:ReviewTest</ID>
     <ID>TooManyFunctions:Roots.kt:Roots</ID>
     <ID>TooManyFunctions:Rules.kt:Rules</ID>
     <ID>TooManyFunctions:RulesTest.kt:RulesTest</ID>
