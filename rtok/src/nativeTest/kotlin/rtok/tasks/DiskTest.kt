@@ -184,6 +184,14 @@ class DiskTest {
         removeDirAll(dir)
     }
 
+    @Test fun aPriorityOutsideTheRangeIsRefusedNotWrapped() {
+        val head = "---\nid: R4\ntitle: Old\nstatus: open\ncreated_at: 1\nupdated_at: 2\n"
+        for (bad in listOf("4294967296", "-1", "9")) {
+            assertFailsWith<TaskException>(bad) { parseDisk("${head}priority: $bad\n---\n") }
+        }
+        assertEquals(PRIORITY_MAX, parseDisk("${head}priority: $PRIORITY_MAX\n---\n").priority)
+    }
+
     @Test fun slugsAreShortAndSafe() {
         assertEquals("fix-etc-passwd", slug("Fix ../../etc/passwd"))
         assertEquals("task", slug("Привет"))

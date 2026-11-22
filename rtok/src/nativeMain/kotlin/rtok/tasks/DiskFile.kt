@@ -63,7 +63,10 @@ internal fun YamlValue.Map.optText(key: String): String? = this[key]?.takeIf { i
 internal fun YamlValue.Map.priority(): Int =
     when (val p = this["priority"]) {
         null -> DEFAULT_PRIORITY
-        is YamlValue.Int -> p.value.toInt()
+
+        // Checked as a Long: `toInt()` first would wrap 4294967296 to 0, the highest priority.
+        is YamlValue.Int -> p.value.takeIf { it in 0L..PRIORITY_MAX.toLong() }?.toInt() ?: bail("priority: want 0..$PRIORITY_MAX")
+
         else -> bail("priority: want an integer")
     }
 
