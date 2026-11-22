@@ -9,6 +9,9 @@ private fun Invocation.idArg(name: String = "id"): Int = requireArg(name).toIntO
 
 private fun Invocation.intOpt(name: String): Int? = value(name)?.let { it.toIntOrNull() ?: throw CliFailure("invalid value for --$name", ExitCode.USAGE) }
 
+/** A `u32` option: a negative number is refused, as clap does, instead of wrapping to a huge one. */
+private fun Invocation.uintOpt(name: String): UInt? = value(name)?.let { it.toUIntOrNull() ?: throw CliFailure("invalid value for --$name", ExitCode.USAGE) }
+
 private fun <T> Invocation.withRt(body: (Runtime) -> T): T = Runtime.open(loadConfig(), "memory").use(body)
 
 private val ID = ArgSpec("id")
@@ -55,7 +58,7 @@ val MEMORY =
                             OptSpec.Value("days", "Idle days; default `[plugins.memory] forget_after_days`", "DAYS"),
                             OptSpec.Flag("apply", "Retire the notes; without it nothing is written"),
                         ),
-                ) { inv -> inv.io.println(inv.withRt { memForget(it, inv.value("project"), inv.intOpt("days")?.toUInt(), inv.flag("apply")) }) },
+                ) { inv -> inv.io.println(inv.withRt { memForget(it, inv.value("project"), inv.uintOpt("days"), inv.flag("apply")) }) },
                 CommandSpec("pin", "Pin a note so it leads SessionStart recall", args = listOf(ID)) { inv -> inv.io.println(inv.withRt { memUpdate(it, inv.idArg(), false, null, true) }) },
                 CommandSpec("unpin", "Drop a note back to newest-first recall order", args = listOf(ID)) { inv -> inv.io.println(inv.withRt { memUpdate(it, inv.idArg(), false, null, false) }) },
                 CommandSpec("history", "Print the earlier title and body kept when an upsert changed this note", args = listOf(ID)) { inv -> inv.io.println(inv.withRt { memHistory(it, inv.idArg()) }) },
@@ -88,7 +91,7 @@ val MEMORY =
                         ),
                 ) { inv ->
                     rtok.StatPreview.set(inv.flag("stat"))
-                    Sync.run(inv.loadConfig(), inv.value("file") ?: "CLAUDE.md", inv.intOpt("budget")?.toUInt(), inv.flag("dry-run"), inv.flag("remove"), inv.flag("force")) { inv.io.out(it) }
+                    Sync.run(inv.loadConfig(), inv.value("file") ?: "CLAUDE.md", inv.uintOpt("budget"), inv.flag("dry-run"), inv.flag("remove"), inv.flag("force")) { inv.io.out(it) }
                 },
                 CommandSpec(
                     "status",
