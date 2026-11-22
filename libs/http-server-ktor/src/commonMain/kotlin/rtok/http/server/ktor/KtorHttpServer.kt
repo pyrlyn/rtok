@@ -34,7 +34,9 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.io.readByteArray
 import platform.posix.SIGINT
+import platform.posix.SIGPIPE
 import platform.posix.SIGTERM
+import platform.posix.SIG_IGN
 import platform.posix.signal
 import rtok.http.server.BindException
 import rtok.http.server.BodySink
@@ -271,4 +273,6 @@ private fun installStopSignals() {
     val handler = staticCFunction<Int, Unit> { stopSignal.value = 1 }
     signal(SIGINT, handler)
     signal(SIGTERM, handler)
+    // A client that hangs up mid-response must fail that write, not end the server for every other client.
+    signal(SIGPIPE, SIG_IGN)
 }
