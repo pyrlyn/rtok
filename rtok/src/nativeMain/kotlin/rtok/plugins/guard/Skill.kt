@@ -5,6 +5,7 @@ package rtok.plugins.guard
 import kotlinx.serialization.json.*
 import rtok.config.envUserHome
 import rtok.json.StrictJson
+import rtok.plugin.isPlainName
 import rtok.plugin.sdk.*
 import rtok.plugins.read.markdownDigest
 import rtok.shortId
@@ -69,7 +70,7 @@ internal fun resolve(
     cwd: String?,
     home: String,
 ): String? {
-    if (name.isEmpty() || name.contains('/') || name.contains('\\') || name.contains("..")) return null
+    if (!isPlainName(name)) return null
     val colon = name.indexOf(':')
     if (colon >= 0) {
         val root = pluginRoot("$home/.claude/plugins/installed_plugins.json", name.substring(0, colon), cwd) ?: return null

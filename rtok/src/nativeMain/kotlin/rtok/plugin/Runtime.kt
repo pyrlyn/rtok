@@ -67,6 +67,9 @@ fun identicalResult(
     return msg
 }
 
+/** A name that stays one path component when joined under a directory: no separator, no `..`, not empty. */
+fun isPlainName(name: String) = name.isNotEmpty() && !name.contains('/') && !name.contains('\\') && !name.contains("..")
+
 /** The `kv` key behind [Host.pluginStateSet] (T419): plugin id first, so one prefix read gets its state. */
 fun pluginStateKey(
     plugin: String,
