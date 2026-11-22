@@ -1,7 +1,6 @@
 // `tools/call` dispatch of `rtok mcp` (mcp.rs `invoke` and the per-tool argument readers).
 package rtok.mcp
 
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -58,7 +57,7 @@ object Tools {
     ): String =
         when (name) {
             "ping" -> {
-                pingText(str(args, "agent").orEmpty())
+                Ping.pingText(str(args, "agent").orEmpty())
             }
 
             "expand" -> {
@@ -128,8 +127,6 @@ object Tools {
                 throw Protocol.unknownTool(name)
             }
         }
-
-    fun pingText(agent: String) = "MCP $agent жив"
 
     private fun expand(
         cx: Runtime,

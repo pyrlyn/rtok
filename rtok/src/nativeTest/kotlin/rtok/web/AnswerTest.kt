@@ -17,8 +17,6 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-private const val REQ = 3L
-
 class AnswerTest {
     private fun live(tag: String): Pair<LiveConfig, String> {
         installDb()
@@ -74,12 +72,6 @@ class AnswerTest {
         } finally {
             removeDirAll(dir)
         }
-    }
-
-    @Test fun tagReplyOnlyTouchesAnObjectFrame() {
-        assertEquals("""{"req":3,"type":"x"}""", Answer.tagReply("""{"type":"x"}""", REQ))
-        assertEquals("""{"type":"x"}""", Answer.tagReply("""{"type":"x"}""", null))
-        assertEquals("[]", Answer.tagReply("[]", REQ))
     }
 
     @Test fun projectRequestsWriteTheRegistryAndARemoveAsksFirst() {

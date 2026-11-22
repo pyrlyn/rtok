@@ -249,7 +249,6 @@ private val MIME =
         "htm" to "text/html; charset=utf-8",
         "js" to "text/javascript; charset=utf-8",
         "mjs" to "text/javascript; charset=utf-8",
-        "mjs" to "text/javascript; charset=utf-8",
         "css" to "text/css; charset=utf-8",
         "json" to "application/json",
         "map" to "application/json",

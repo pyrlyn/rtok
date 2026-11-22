@@ -211,15 +211,6 @@ object Hooks {
         return on.sortedEntries().filter { (it.value as? JsonPrimitive)?.booleanOrNull == true }.map { it.key }
     }
 
-    /** doctor.rs `plugin_install_paths`: every `installPath` of plugin [id] in `installed_plugins.json`. */
-    internal fun pluginInstallPaths(
-        root: JsonElement,
-        id: String,
-    ): List<String> {
-        val list = ((root as? JsonObject)?.get("plugins") as? JsonObject)?.get(id) as? JsonArray ?: return emptyList()
-        return list.mapNotNull { (it as? JsonObject)?.get("installPath").str() }
-    }
-
     /**
      * The hooks of every enabled Claude plugin, with `${CLAUDE_PLUGIN_ROOT}` resolved against its install directory. A
      * plugin that is enabled but whose directory is gone is reported as stale. These files belong to the plugin, so
@@ -236,7 +227,7 @@ object Hooks {
         val root = runCatching { StrictJson.parse(p.fs.read(index)) }.getOrNull() ?: return
         val plugins = (root as? JsonObject)?.get("plugins") as? JsonObject ?: return
         for (id in plugins.keys.sorted().filter { it in enabled }) {
-            pluginInstallPaths(root, id).forEachIndexed { i, dir ->
+            Advice.pluginInstallPaths(root, id).forEachIndexed { i, dir ->
                 if (p.fs.kind(dir) != PathKind.Dir) {
                     acc.problems +=
                         Problem(
