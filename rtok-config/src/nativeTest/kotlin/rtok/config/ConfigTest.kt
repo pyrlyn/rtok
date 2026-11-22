@@ -369,6 +369,22 @@ class ConfigTest {
 
     @Test fun wasmDisabledByDefault() = assertFalse(Config().plugins.wasm.enabled)
 
+    @Test fun lenientLoadKeepsTheFlagsWhenTheFileIsBroken() {
+        val home = tmpDir("lenient")
+        createDirAll(home)
+        writeString("$home/config.toml", "[plugins.read\n")
+        val saved = envVar("RTOK_HOME")
+        platform.posix.setenv("RTOK_HOME", home, 1)
+        try {
+            val cfg = Config.loadLenient(null, Layers.hookHostFlag("cursor"))
+            assertEquals("cursor", cfg.hook.host)
+            assertTrue(cfg.notes.any { it.event == "load" })
+        } finally {
+            if (saved == null) platform.posix.unsetenv("RTOK_HOME") else platform.posix.setenv("RTOK_HOME", saved, 1)
+            removeDirAll(home)
+        }
+    }
+
     @Test fun wasmOverlayEnables() = assertTrue(parse("[plugins.wasm]\nenabled = true\n").plugins.wasm.enabled)
 
     @Test fun wasmUnknownKeyIsDenied() = assertTrue(assertFailsWith<ConfigException> { parse("[plugins.wasm]\nfuel_per_call = 1\n") }.message!!.contains("fuel_per_call"))
