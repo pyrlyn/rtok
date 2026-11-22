@@ -312,7 +312,8 @@ internal fun writePrivate(
     }
 }
 
-private var archiveSeq = 0L
+// Atomic: two threads of one process (the MCP server and its watcher) must not share a temp name.
+private val archiveSeq = kotlin.concurrent.AtomicLong(0)
 
 /** Write `body` to `dir/<sha>` atomically (temp + rename). Returns the path and whether this call created it. */
 internal fun writeArchiveFile(
@@ -323,7 +324,7 @@ internal fun writeArchiveFile(
     createPrivateDir(dir)
     val path = "$dir/$sha"
     val created = !exists(path)
-    val tmp = "$dir/.$sha.tmp-${pid()}-${archiveSeq++}"
+    val tmp = "$dir/.$sha.tmp-${pid()}-${archiveSeq.getAndIncrement()}"
     try {
         writePrivate(tmp, body)
         if (rename(tmp, path) != 0) throw IoException(IoException.Kind.Other, "rename $tmp")
