@@ -40,10 +40,10 @@ val FILTER =
         val cfg = inv.cmdConfig()
         val hint = inv.value("cmd") ?: cfg.filter.cmd
         val bytes = inv.io.readStdin()
+        val exit = inv.value("exit")?.toIntOrNull() ?: 0
         if (inv.flag("archive")) {
-            val exit = inv.value("exit")?.toIntOrNull() ?: 0
             emitFiltered(cfg, hint.split(' ', '\t').filter { it.isNotEmpty() }, bytes, exit, null)
         } else {
-            inv.io.out(Filter.runWithStore(cfg, hint, bytes.decodeToString()))
+            inv.io.out(Filter.runWithStore(cfg, hint, bytes.decodeToString(), exit))
         }
     }
