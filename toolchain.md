@@ -48,14 +48,15 @@ Without mise, install the same tools by hand; Gradle picks up `JAVA_HOME`.
 - Output: a per-module table plus totals in the terminal; HTML in `build/reports/coverage/jvm-html/`
   and `build/reports/coverage/c-html/`. Without `--c` (`python3 scripts/coverage.py`) only Kover runs.
 
-Sample (2026-10-26):
+Sample (Kotlin rows 2026-11-22, C row 2026-10-26):
 ```
 module               lines  covered  line %
-humantime               33       30   90.9%
-toml-ktoml              72       63   87.5%
-wasm-chasm              36       22   61.1%
-rtok-plugin-sdk        243       54   22.2%
-TOTAL (Kotlin/JVM)     530      176   33.2%
+humantime               46       45   97.8%
+http                    29        0    0.0%
+json-strict             27       27  100.0%
+rtok-plugin-sdk        387      104   26.9%
+treesitter             155        0    0.0%
+TOTAL (Kotlin/JVM)     644      176   27.3%
 tree-sitter C         9288     5311   57.2%
 ```
 

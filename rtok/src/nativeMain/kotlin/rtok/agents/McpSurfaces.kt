@@ -1,7 +1,7 @@
 // Port of src/agents/mcp.rs (surfaces + status side): `has_entry`/`has_toml_entry`, `McpSurface`, `EntryState`,
 // `McpRow` (serves/found/text), `surfaces` over the hosts' MCP files, `status`, `stale_diff`, `unresolved_command`,
-// `doctor_line`, `json_spec`, `tilde`. The install side (`rows`/`own_row` over `installed`, `doctor_lines`, `run`/`sync`)
-// lands with the per-host `installed`/`apply` port.
+// `doctor_line`, `json_spec`, `tilde`. The install side is McpDoctor.kt (`rows`/`own_row`, `doctor_lines`) and
+// McpRun.kt (`run`/`sync`).
 package rtok.agents
 
 import kotlinx.serialization.json.JsonArray

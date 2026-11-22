@@ -138,16 +138,6 @@ data class Config(
             it.hookClientPid = hookClientPid
         }
 
-    /** Every path-valued key, dotted (`setup.paths.<k>`, `plugins.read.allow_paths[i]`, …), with its value. */
-    fun pathFields(): List<Pair<String, String>> {
-        val root = toJson()
-        val out = ArrayList<Pair<String, String>>()
-        for (k in PATH_KEYS) (leaf(root, k) as? JsonPrimitive)?.let { out += k to it.content }
-        for (m in PATH_MAPS) (leaf(root, m) as? JsonObject)?.forEach { (k, v) -> out += "$m.$k" to v.jsonPrimitive.content }
-        for (a in PATH_ARRAYS) (leaf(root, a) as? JsonArray)?.forEachIndexed { i, v -> out += "$a[$i]" to v.jsonPrimitive.content }
-        return out
-    }
-
     /** Rewrites every path field through [f] (Rust `path_fields_mut`). */
     fun mapPaths(f: (String) -> String): Config {
         var root = toJson()

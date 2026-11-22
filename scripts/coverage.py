@@ -3,7 +3,7 @@
 
 Kotlin/Native 2.4 has no coverage instrumentation (the old -Xcoverage flags were removed), so:
   * Kotlin: Kover over a JVM target that only `-Prtok.coverage=true` adds, for the modules whose
-    sources are all common (root build.gradle.kts `jvmCoverable`). Native-only modules are listed as n/a.
+    sources are all common (gradle.properties `rtok.coverage.modules`). Native-only modules are listed as n/a.
   * C (vendored tree-sitter runtime + grammars): llvm-cov over an instrumented librtok_ts build
     exercised by the :treesitter-native test binary (--c, needs Xcode's llvm-cov / llvm-profdata).
 Prints a per-module and total line-coverage table; HTML under build/reports/coverage/.
@@ -23,9 +23,12 @@ def jacoco_lines(path):
     return (int(c.get("covered")), int(c.get("covered")) + int(c.get("missed"))) if c is not None else (0, 0)
 
 def modules():
-    import re
-    s = open(os.path.join(ROOT, "build.gradle.kts")).read()
-    return re.findall(r'"([\w-]+)"', re.search(r"val jvmCoverable = setOf\(([^)]*)\)", s).group(1))
+    # The one list shared.settings.kmp reads too, so the script cannot name a module the build does not cover.
+    key = "rtok.coverage.modules="
+    for line in open(os.path.join(ROOT, "gradle.properties")):
+        if line.startswith(key):
+            return [m.strip() for m in line[len(key):].split(",") if m.strip()]
+    sys.exit(f"coverage: {key[:-1]} is missing from gradle.properties")
 
 def kotlin():
     mods = modules()

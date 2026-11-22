@@ -69,8 +69,6 @@ class DiskTest {
         assertEquals(id("R1.1"), disk.list(Filter(statuses = listOf(Status.Closed)))[0].id)
         disk.writeStatus(id("R1"), Status.InProgress)
         assertTrue(isFile("$dir/R1 - parent.md"))
-        assertEquals(id("R1.1"), disk.maxId("r"))
-        assertNull(disk.maxId("Q"))
         removeDirAll(dir)
     }
 
@@ -95,9 +93,7 @@ class DiskTest {
         disk.create(new("Next"), id("R4"))
         assertEquals(2, disk.list(Filter()).size, "the broken file is left out")
         assertEquals("Next", disk.get(id("R4"))!!.title)
-        assertEquals(id("R4"), disk.maxId("r"))
         removeFile("$dir/R4 - next.md")
-        assertEquals(id("R3"), disk.maxId("r"), "ids are not reused")
         val err = assertFailsWith<TaskException> { disk.get(id("R3")) }
         assertTrue("R3 - broken.md" in err.message!!, err.message)
         assertFailsWith<TaskException> { disk.create(new("Again"), id("R3")) }
@@ -119,7 +115,6 @@ class DiskTest {
         val before = readBytes(copy) to readBytes(target)
         assertEquals(1, disk.list(Filter()).size)
         assertEquals("", disk.get(id("R2"))!!.description)
-        assertEquals(id("R2"), disk.maxId("r"))
         disk.writeStatus(id("R2"), Status.InProgress)
         disk.writeStatus(id("R2"), Status.Todo)
         val errs =

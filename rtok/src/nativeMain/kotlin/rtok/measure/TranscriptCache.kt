@@ -13,7 +13,6 @@ import rtok.sys.exists
 import rtok.sys.fileStat
 import rtok.sys.readToString
 import kotlin.concurrent.AtomicReference
-import kotlin.math.ceil
 
 /** One transcript's totals, valid while [size] and [mtimeNs] match the file. */
 @Serializable
@@ -32,14 +31,10 @@ data class FileAgg(
 
 object TranscriptCache {
     const val AGG_VERSION = 2
-    private const val CHARS_PER_TOKEN = 4.0
 
     private val JSON = Json { ignoreUnknownKeys = true }
     private val SERIALIZER = MapSerializer(String.serializer(), FileAgg.serializer())
     private val MEMORY = AtomicReference<MutableMap<String, FileAgg>?>(null)
-
-    /** stats.rs `est_tokens`: bytes / 4, rounded up. */
-    fun estTokens(bytes: Long): Long = if (bytes == 0L) 0 else ceil(bytes / CHARS_PER_TOKEN).toLong()
 
     /**
      * Aggregates for every transcript under [dir] modified after [cutoff] (unix seconds), in path order, through the

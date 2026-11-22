@@ -121,17 +121,6 @@ class DiskAdapter(
             )
         return place(old, clean)
     }
-
-    override fun maxId(prefix: String): TaskId? {
-        val p = prefix.uppercase()
-        // A skipped file still owns its name, or the next task would be given its id.
-        val ids =
-            listOf(dir, doneDir).flatMap { d ->
-                val s = scan(d)
-                s.found.map { it.second.id } + s.skipped.map { it.nameId }
-            }
-        return ids.filter { it.prefix == p }.maxOrNull()
-    }
 }
 
 /** Parse one task file, refusing one whose front-matter id is not its name's. */

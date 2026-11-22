@@ -72,7 +72,6 @@ class PlanDirTest {
         assertEquals(emptyList(), planErrors(dir), "closed")
         assertTrue(disk.list(Filter()).isEmpty())
         assertEquals(listOf("T1" to Status.Done, "T1.1" to Status.Closed), disk.list(Filter(all = true)).map { it.id.toString() to it.status })
-        assertEquals(id("T1.1"), disk.maxId("t"))
         cleanup(dir)
     }
 
@@ -166,7 +165,6 @@ class PlanDirTest {
         assertEquals("Real", disk.get(id("T1"))!!.title)
         val msg = assertFailsWith<TaskException> { disk.get(id("T4")) }.message!!
         assertTrue("T4/task.md" in msg && "heading" in msg, msg)
-        assertEquals(id("T9"), disk.maxId("T"))
         assertFailsWith<Taken> { disk.create(new("Again", ""), id("T9")) }
         val before = readBytes("$dir/T9/task.md")
         assertFailsWith<TaskException> { disk.writeStatus(id("T9"), Status.InProgress) }

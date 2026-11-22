@@ -29,8 +29,6 @@ sealed class OptSpec(
     ) : OptSpec(name, help, global)
 }
 
-/** A positional argument. */
-
 /** A positional; [variadic] takes every remaining word (after `--` too), read with [Invocation.args]. */
 class ArgSpec(
     val name: String,

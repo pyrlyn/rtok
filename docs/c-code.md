@@ -25,7 +25,6 @@ removed.**
 Functions (identical on `main` and `linux-spawn`):
 
 - `rtok_spawn` — `posix_spawn(p)` with an ordered list of file actions (dup2/open/close/chdir), optional `setsid` and PATH search.
-- `rtok_spawn_addchdir` — `posix_spawn_file_actions_addchdir_np`.
 - `rtok_environ` — returns `environ`.
 - `rtok_parent_of` — parent pid via `proc_pidinfo` (macOS; returns -1 elsewhere).
 - `rtok_current_exe` — `_NSGetExecutablePath` (macOS; returns -1 elsewhere).

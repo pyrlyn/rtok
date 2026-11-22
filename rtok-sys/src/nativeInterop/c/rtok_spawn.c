@@ -21,7 +21,6 @@ static int rtok_addchdir(posix_spawn_file_actions_t *actions, const char *dir) {
 #endif
     return posix_spawn_file_actions_addchdir_np(actions, dir);
 }
-int rtok_spawn_addchdir(posix_spawn_file_actions_t *actions, const char *dir) { return rtok_addchdir(actions, dir); }
 char **rtok_environ(void) { return environ; }
 #ifdef __APPLE__
 #include <libproc.h>

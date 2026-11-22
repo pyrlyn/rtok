@@ -7,30 +7,18 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import rtok.Col
 import rtok.config.Config
-import rtok.config.HOSTS
-import rtok.plugins.graph.Lsp
 import rtok.store.Store
 import rtok.store.archivesPendingRetention
 import rtok.store.convertToIncrementalVacuum
-import rtok.store.projects
 import rtok.store.runRetention
 import rtok.sys.ChangePreview
-import rtok.sys.EntryKind
-import rtok.sys.canonicalize
-import rtok.sys.cwd
-import rtok.sys.diskUsageUntil
 import rtok.sys.fileName
-import rtok.sys.isDir
 import rtok.sys.join
 import rtok.sys.listDirOrEmpty
 import rtok.sys.parent
-import rtok.sys.pathStartsWith
 import rtok.sys.removeFile
 import rtok.sys.symlinkMeta
-import rtok.table
 import rtok.worktree.notedTable
-import kotlin.time.Duration
-import kotlin.time.TimeSource
 
 /** What `rtok agents junk clear` does under rtok's own home. */
 object JunkOwn {

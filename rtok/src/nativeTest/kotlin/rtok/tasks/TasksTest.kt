@@ -122,8 +122,6 @@ class ReadyTest {
                     status: Status,
                     report: String?,
                 ) = tasks.getValue(id).copy(status = status).also { tasks[id] = it }
-
-                override fun maxId(prefix: String) = tasks.keys.maxOrNull()
             }
         installDb()
         val store = Store.openInMemory()

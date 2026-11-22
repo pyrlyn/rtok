@@ -167,12 +167,6 @@ class PlanDirAdapter(
         storeHead("${folder(task.id)}/$TASK", task.copy(assignee = task.assignee?.takeIf { it.isNotEmpty() }))
         return read(task.id) ?: bail("disk tasks: ${task.id} vanished")
     }
-
-    override fun maxId(prefix: String): TaskId? {
-        val p = prefix.uppercase()
-        val (found, skipped) = scan()
-        return (found.map { it.id } + skipped).filter { it.prefix == p }.maxOrNull()
-    }
 }
 
 /** The id a folder is named after, when the name is exactly that id's spelling. */

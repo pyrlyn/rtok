@@ -201,11 +201,5 @@ class Answer(
             type: String,
             vararg fields: Pair<String, JsonElement>,
         ) = JsonObject(mapOf("type" to JsonPrimitive(type)) + fields).toString()
-
-        /** `frame` with `req` spliced in first, as `Reply` serializes it; anything else goes out unchanged. */
-        fun tagReply(
-            frame: String,
-            req: Long?,
-        ): String = if (req != null && frame.startsWith("{\"")) "{\"req\":$req,${frame.substring(1)}" else frame
     }
 }

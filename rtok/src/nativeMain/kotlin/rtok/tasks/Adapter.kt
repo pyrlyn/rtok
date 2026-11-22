@@ -62,9 +62,6 @@ interface TaskAdapter {
     /** Whether [writeStatus] stores its `report` itself. */
     fun movesWithReport() = false
 
-    /** The highest id with [prefix], done ones included. */
-    fun maxId(prefix: String): TaskId?
-
     fun writeReport(
         id: TaskId,
         report: String,
