@@ -1,4 +1,4 @@
-# rtok
+<h1><picture><source media="(prefers-color-scheme: dark)" srcset="brand/logo-dark.svg"><img src="brand/logo.svg" width="32" height="32" alt="" align="absmiddle"></picture> rtok</h1>
 
 Token-reduction CLI for AI coding agents, written in Kotlin Multiplatform / Kotlin/Native.
 
