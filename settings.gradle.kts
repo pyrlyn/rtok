@@ -16,28 +16,28 @@ pluginManagement {
     val sharedSettings = sharedBuild("shared-settings", "SHARED_SETTINGS_DIR")
     includeBuild(sharedSettings)
     includeBuild("$sharedSettings/settings-plugin")
-    extra["kotlinWasmDir"] = sharedBuild("kotlin-wasm", "KOTLIN_WASM_DIR")
-    extra["kotlinSnapshotDir"] = sharedBuild("kotlin-snapshot", "KOTLIN_SNAPSHOT_DIR")
-    extra["kotlinWebglDir"] = sharedBuild("kotlin-webgl", "KOTLIN_WEBGL_DIR")
-    extra["kotlinKitDir"] = sharedBuild("kotlin-kit", "KOTLIN_KIT_DIR")
-    extra["kotlinTaskboardDir"] = sharedBuild("kotlin-taskboard", "KOTLIN_TASKBOARD_DIR")
+    extra["pyrlynWasmDir"] = sharedBuild("pyrlyn-wasm", "KOTLIN_WASM_DIR")
+    extra["pyrlynSnapshotDir"] = sharedBuild("pyrlyn-snapshot", "KOTLIN_SNAPSHOT_DIR")
+    extra["pyrlynWebglDir"] = sharedBuild("pyrlyn-webgl", "KOTLIN_WEBGL_DIR")
+    extra["pyrlynKitDir"] = sharedBuild("pyrlyn-kit", "KOTLIN_KIT_DIR")
+    extra["pyrlynTaskboardDir"] = sharedBuild("pyrlyn-taskboard", "KOTLIN_TASKBOARD_DIR")
 }
 // WASM plugins are opt-in (docs/wasm-plugins.md): without -Prtok.wasm=true neither the host nor the engine is built.
 val wasmPlugins = providers.gradleProperty("rtok.wasm").orNull == "true"
-// The WebAssembly interface and its Chasm adapter, shared with Octo: a checkout of kotlin-wasm
-// (github.com/pyrlyn/packages, kotlin-wasm/).
-if (wasmPlugins) includeBuild(extra["kotlinWasmDir"] as String)
+// The WebAssembly interface and its Chasm adapter, shared with Octo: a checkout of pyrlyn-wasm
+// (github.com/pyrlyn/packages, pyrlyn-wasm/).
+if (wasmPlugins) includeBuild(extra["pyrlynWasmDir"] as String)
 // insta-style snapshot assertions for tests (docs/testing.md "Snapshot tests"): a checkout of
-// kotlin-snapshot.
-includeBuild(extra["kotlinSnapshotDir"] as String)
+// pyrlyn-snapshot.
+includeBuild(extra["pyrlynSnapshotDir"] as String)
 // WebGL2 wrapper, Compose host and the generic graph cloud for :rtok-web-compose.
-includeBuild(extra["kotlinWebglDir"] as String)
-// TOML, YAML, semver and SQLite modules shared with ketch and backend: a checkout of kotlin-kit
-// (github.com/pyrlyn/packages, kotlin-kit/).
-includeBuild(extra["kotlinKitDir"] as String)
-// The task board engine behind `rtok task` (docs/design/task-board.md): a checkout of kotlin-taskboard
-// (github.com/pyrlyn/packages, kotlin-taskboard/).
-includeBuild(extra["kotlinTaskboardDir"] as String)
+includeBuild(extra["pyrlynWebglDir"] as String)
+// TOML, YAML, semver and SQLite modules shared with ketch and backend: a checkout of pyrlyn-kit
+// (github.com/pyrlyn/packages, pyrlyn-kit/).
+includeBuild(extra["pyrlynKitDir"] as String)
+// The task board engine behind `rtok task` (docs/design/task-board.md): a checkout of pyrlyn-taskboard
+// (github.com/pyrlyn/packages, pyrlyn-taskboard/).
+includeBuild(extra["pyrlynTaskboardDir"] as String)
 // Remote build cache on Cloudflare R2 (docs/build-speed.md). Approved by Ivan 2026-10-26.
 // Repositories + R2 remote build cache (docs/build-speed.md), approved by Ivan 2026-10-26; logic in shared.settings.
 plugins { id("com.github.burrunan.s3-build-cache") version "1.9.10"; id("shared.settings") }

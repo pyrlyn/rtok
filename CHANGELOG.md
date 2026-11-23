@@ -16,7 +16,7 @@ Changes since v0.18.0-alpha.2.
 
 - Fix process deadlines, Compose replies, and optional WASM smart checks (#282) (c58b384)
 - test: drop the flaky HookTest wall-clock check and ignore .rtok/ (#281) (d76ef35)
-- T8.8: run rtok tasks on the kotlin-taskboard library (#280) (cc07300)
+- T8.8: run rtok tasks on the pyrlyn-taskboard library (#280) (cc07300)
 - T8.1: board layout with column folders, shared root and migrate (#279) (27505fe)
 - T8: plan the task board with two-way remote sync (#277) (0917f54)
 - T7: fix the K1–K5 audit findings (#278) (263bdd0)
@@ -41,7 +41,7 @@ Changes since v0.18.0-alpha.1.
 Changes since the first commit.
 
 - fix(mcp): stop a shared server answering for another session (#262) (8bded0f)
-- T2: use kotlin-kit instead of libs/ copies (#255) (10a47a8)
+- T2: use pyrlyn-kit instead of libs/ copies (#255) (10a47a8)
 - T1: GitHub Actions CI for macOS arm64 and Linux x64 (#253) (848a1e4)
 - fix: turn off Gradle file watching so a late FSEvents event cannot hide an edit (#259) (b7acd97)
 - ci: manual prerelease workflow (version bump, changelog, tests, draft prerelease behind the release environment) (#261) (8464d76)
@@ -104,7 +104,7 @@ Changes since the first commit.
 - proxy: tools[] rewrite and schema prose compaction (port of tools_rewrite.rs) (#200) (f05ad9a)
 - worktree: port finish, clean run, migrate and the MCP worktree tools (#195) (e811e67)
 - proxy: lanes, live ring and Flex policy; shared lane kinds (port of lane.rs, src/lane.rs, live.rs, flex.rs policy) (#198) (4046574)
-- test: insta-style snapshot tests through kotlin-snapshot; reuse the Rust compress snapshot (#197) (d141189)
+- test: insta-style snapshot tests through pyrlyn-snapshot; reuse the Rust compress snapshot (#197) (d141189)
 - proxy: Wire trait, usage, SSE, upstream join and the four dialects (port of wire.rs, anthropic.rs, openai_chat.rs, openai_responses.rs, gemini.rs) (#196) (bb9ffe7)
 - proxy: route, gate, noise and chat ToolResults (port of route.rs, gate.rs, noise.rs, openai_chat.rs ToolResults) (#193) (7fb0f53)
 - web: open a drill node from the Graph scene (click or Enter), shared with the node list (#194) (2425964)
@@ -217,7 +217,7 @@ Changes since the first commit.
 - libs: yaml-aot, own lossless YAML reader and line editor (no dependencies) (#86) (bf57987)
 - agents: codex plugin (GitHub marketplace add/repoint, marketplace upgrade update) (#85) (7a18aeb)
 - agents: codex proxy provider (model_providers.rtok, restore replaced model_provider) (#84) (1f642ea)
-- chore: take the wasm libs from the shared kotlin-wasm package (#78) (eced2c9)
+- chore: take the wasm libs from the shared pyrlyn-wasm package (#78) (eced2c9)
 - agents: codex host, MCP table and hooks.json (toml-aot removeTable) (#83) (be050fe)
 - agents: cursor host (hooks.json flat entries, mcp.json, linked plugin) (#82) (1d7c127)
 - agents: grok host (TOML mcp_servers.rtok, [compat.claude] import, plugin offer) (#81) (acb0567)

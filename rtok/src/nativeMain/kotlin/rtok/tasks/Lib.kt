@@ -1,4 +1,4 @@
-// Conversions between rtok's task types, which keep the CLI, MCP and web JSON shapes, and kotlin-taskboard's.
+// Conversions between rtok's task types, which keep the CLI, MCP and web JSON shapes, and pyrlyn-taskboard's.
 package rtok.tasks
 
 import kotlinx.serialization.json.decodeFromJsonElement

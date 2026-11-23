@@ -38,7 +38,7 @@ Ids keep rtok's shape, `<PREFIX><n>[.<n>[.<n>]]`. From T8.8 they come from the b
 counter (`.state/ids.json`, under the board lock), seeded once from rtok's `task_counters`,
 the board and the remote, and never reused. A remote issue never renames a file.
 
-**Library = the engine**, rtok = the front ends. The package `kotlin-taskboard` (see Library)
+**Library = the engine**, rtok = the front ends. The package `pyrlyn-taskboard` (see Library)
 owns the model, the file board, the concurrency rules, the sync engine and the trackers.
 rtok owns config, finding the board root, the legacy layouts, `migrate`, and the CLI, MCP,
 web and daemon front ends. Every front end calls the same `Board` API, so the rules below hold
@@ -106,11 +106,11 @@ old key accepted).
   the library's `Store` interface and keeps their engine state under the main checkout's
   `.rtok/taskboard/`, so a committed `plan/` folder gains no state files.
 
-## Library: `kotlin-taskboard`
+## Library: `pyrlyn-taskboard`
 
 A Kotlin Multiplatform package in the workspace's `packages/` (the `pyrlyn/packages` repo),
 with the same native targets as rtok, a neutral name and no rtok imports. rtok includes it
-with the `sharedBuild("kotlin-taskboard", "KOTLIN_TASKBOARD_DIR")` helper, like `kotlin-kit`.
+with the `sharedBuild("pyrlyn-taskboard", "KOTLIN_TASKBOARD_DIR")` helper, like `pyrlyn-kit`.
 Gradle group `pyrlyn.taskboard`:
 
 | Module | Holds |
@@ -118,7 +118,7 @@ Gradle group `pyrlyn.taskboard`:
 | `core` | `Task`, `Status`, `TaskId`, `Rev`, `Patch`, `Op`, errors, ready/next rules, field merge, the JSON codec (the one wire schema for CLI `--json`, MCP and JSON-RPC), the `Store` SPI and the engine that implements `Board` over any `Store` |
 | `files` | `FileStore`: the column-folder layout above, front matter, atomic writes, `.lock` |
 | `sync` | the sync engine and the `Remote` interface |
-| `github`, `gitlab`, `linear`, `jira` | the trackers, over `kotlin-kit`'s `http` |
+| `github`, `gitlab`, `linear`, `jira` | the trackers, over `pyrlyn-kit`'s `http` |
 | `rpc` | JSON-RPC 2.0 method table, a transport-free dispatcher, a Kotlin client, the OpenRPC document |
 | `testing` | an in-memory store, fake trackers, a concurrency test kit (N clients racing on one board) |
 
@@ -428,7 +428,7 @@ Remote setup, sync, push, pull and migrate are not MCP tools: they are the user'
 | Task | Scope | Needs |
 |---|---|---|
 | T8.1 | Board layout, shared root, `migrate`, `board`, disk-layer fixes (board store kept free of rtok imports) | - |
-| T8.8 | `packages/kotlin-taskboard`: `core`, `files`, `testing`; the engine with revisions, field merge, batches, idempotency keys, leases, journal and watch; rtok moves onto it | T8.1 |
+| T8.8 | `packages/pyrlyn-taskboard`: `core`, `files`, `testing`; the engine with revisions, field merge, batches, idempotency keys, leases, journal and watch; rtok moves onto it | T8.1 |
 | T8.2 | New CLI verbs and aliases, MCP eight tools and aliases, concurrency flags, `batch`, `watch`, `[tasks]` config and old keys, `doctor`, `prime`, web board on by default | T8.8 |
 | T8.9 | JSON-RPC: the `rpc` module, OpenRPC document, `rtok task rpc --stdio`, the daemon's Unix socket | T8.2 |
 | T8.3 | Sync engine and GitHub Issues + Projects v2 in the package, `.sync/` state, `remote`/`sync`/`push`/`pull`, auto mode | T8.2 |

@@ -5,7 +5,7 @@
 
 ## What was done
 
-- **`kotlin-taskboard`** is a new project in `pyrlyn/packages`, with the `core`, `files` and `testing` modules.
+- **`pyrlyn-taskboard`** is a new project in `pyrlyn/packages`, with the `core`, `files` and `testing` modules.
   - `core` holds the model, the `Store` SPI and the `Board` engine: revisions with `if_rev`, field merge, atomic claim-next, all-or-nothing batches, idempotency keys, leases with a liveness hook, and the journal with `changes` and `watch`.
   - `files` holds T8.1's board format, moved out of rtok as `FileStore`: flock on `.lock`, `.state/`, the redo log and hand-edit detection.
   - `testing` holds an in-memory store, a fake clock and a race kit.

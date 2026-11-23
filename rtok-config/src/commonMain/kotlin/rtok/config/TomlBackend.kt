@@ -1,5 +1,5 @@
 // The single place that picks the TOML backend. Everything else in rtok-config uses `Toml`,
-// which exposes only the backend-neutral `toml` API (kotlin-kit).
+// which exposes only the backend-neutral `toml` API (pyrlyn-kit).
 package rtok.config
 
 import rtok.toml.ktoml.KtomlReader

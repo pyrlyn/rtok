@@ -13,7 +13,7 @@ board: `skills/rtok-tasks/SKILL.md` (model, the eight MCP tools with their CLI t
 how to work in parallel), `creating.md` (how to write a task) and `remote.md` (connecting a
 tracker, sync, migrate: only on the user's request). The release packages `skills/`.
 `docs/tasks.md` documents the board, the remotes, the concurrency rules and the JSON-RPC API;
-the `kotlin-taskboard` README documents the library; README, PORTING and `plan/README.md` note
+the `pyrlyn-taskboard` README documents the library; README, PORTING and `plan/README.md` note
 that `rtok task` no longer matches the Rust binary's format. Spec: "Skills and agent
 instructions" in [docs/design/task-board.md](../../docs/design/task-board.md).
 

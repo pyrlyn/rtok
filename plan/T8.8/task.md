@@ -9,7 +9,7 @@ agent: Claude Code / claude-opus-5-5
 # T8.8. Task board library with a concurrency API
 
 The creator wants the board as a library with an API for parallel work without conflicts.
-This task creates `packages/kotlin-taskboard` (a new project in `pyrlyn/packages`: Kotlin
+This task creates `packages/pyrlyn-taskboard` (a new project in `pyrlyn/packages`: Kotlin
 Multiplatform, rtok's native targets, its own `AGENTS.md`, `README.md`, `plan/`,
 `roadmap.md`, `ideas.md`, `toolchain.md`) with the `core`, `files` and `testing` modules:
 the model, the `Store` SPI, the `FileStore` that T8.1 built inside rtok (moved, not copied),
@@ -34,7 +34,7 @@ Check: the package's own gate (`./gradlew check` there) green; in rtok
 
 ## Execution plan
 
-1. In a worktree of `pyrlyn/packages`, scaffold `kotlin-taskboard` like `kotlin-snapshot`:
+1. In a worktree of `pyrlyn/packages`, scaffold `pyrlyn-taskboard` like `pyrlyn-snapshot`:
    `shared-settings` native convention (rtok's targets), modules `core` and `testing`, the
    project files, its own `plan/T1`, and a row in the repository README.
 2. `core`: the model (`Task`, `Status`, `TaskId`, `Rev`, `NewTask`, `Patch`, `Op`, `Write`,

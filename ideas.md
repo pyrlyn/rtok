@@ -28,8 +28,8 @@ An idea the creator approved keeps its row, marked **Promoted to T<n>**; the tas
 
 | Id | Area | Idea | Evidence |
 |---|---|---|---|
-| I-5 | libs / kotlin-kit | **Promoted to T2.** Depend on `packages/kotlin-kit` through `includeBuild` (as with `kotlin-snapshot` and `kotlin-wasm`) and delete the copies in `libs/`. Port local fixes into kotlin-kit first where the copies diverged. | kotlin-kit's README says its modules started as rtok-kotlin's `libs/`. `diff -rq` of `src/`: `semver`, `yaml-aot`, `toml-aot` identical; `toml`, `http`, `db-room` differ. Fix #246 (ktoml escaped quotes) landed here only. |
-| I-6 | CLI / fs | **Promoted to T2.** Compare `pyrlyn.kit:cli` (clap 4.6 semantics, completions, man pages) with the Clikt adapter and `cli/Spec.kt`, and `pyrlyn.kit:fs` with `rtok-sys` `Fs.kt`; adopt the kit modules where they cover the port's needs. | `packages/kotlin-kit/README.md` module table; `PORTING.md` rows for `cli/Mod.kt` + `CliktAdapter.kt` and `rtok-sys/nativeMain/Fs.kt`. |
+| I-5 | libs / pyrlyn-kit | **Promoted to T2.** Depend on `packages/pyrlyn-kit` through `includeBuild` (as with `pyrlyn-snapshot` and `pyrlyn-wasm`) and delete the copies in `libs/`. Port local fixes into pyrlyn-kit first where the copies diverged. | pyrlyn-kit's README says its modules started as rtok-kotlin's `libs/`. `diff -rq` of `src/`: `semver`, `yaml-aot`, `toml-aot` identical; `toml`, `http`, `db-room` differ. Fix #246 (ktoml escaped quotes) landed here only. |
+| I-6 | CLI / fs | **Promoted to T2.** Compare `pyrlyn.kit:cli` (clap 4.6 semantics, completions, man pages) with the Clikt adapter and `cli/Spec.kt`, and `pyrlyn.kit:fs` with `rtok-sys` `Fs.kt`; adopt the kit modules where they cover the port's needs. | `packages/pyrlyn-kit/README.md` module table; `PORTING.md` rows for `cli/Mod.kt` + `CliktAdapter.kt` and `rtok-sys/nativeMain/Fs.kt`. |
 
 ### Port parity and docs
 

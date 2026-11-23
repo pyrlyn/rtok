@@ -1,6 +1,6 @@
 @file:Suppress("MagicNumber")
 
-// The board layout as rtok opens it. The file format is kotlin-taskboard's own and is tested there; these check the
+// The board layout as rtok opens it. The file format is pyrlyn-taskboard's own and is tested there; these check the
 // wiring: which store a checkout gets, and that every write goes through the engine.
 
 package rtok.tasks

@@ -1,7 +1,6 @@
-# rtok-kotlin
+# rtok
 
-Kotlin Multiplatform / Kotlin/Native port of [rtok](../rtok), the
-token-reduction CLI for AI coding agents.
+Token-reduction CLI for AI coding agents, written in Kotlin Multiplatform / Kotlin/Native.
 
 **Work in progress**: see [PORTING.md](PORTING.md) for what is ported and [port-plan.md](port-plan.md)
 for the plan. The TUI (`rtok tui`) is ported; the web UI (`rtok web`, `rtok dashboard`) is in

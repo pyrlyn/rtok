@@ -1,14 +1,14 @@
 # Toolchain (mise)
 
-Every tool rtok-kotlin needs that [mise](https://mise.jdx.dev) can provide is pinned in the repo-local
+Every tool rtok needs that [mise](https://mise.jdx.dev) can provide is pinned in the repo-local
 `mise.toml`. Kotlin libraries and klibs (Ktor, ktoml, Room KMP, Chasm, Kotest, ...) stay in Gradle and
 come from Maven Central. The build system is Gradle.
 
 | Package | Where | Source | Why here |
 |---|---|---|---|
 | IBM Plex Mono 2.5.0 (Regular, SemiBold; SIL OFL 1.1) | local (`rtok-web-compose/src/wasmJsMain/resources/fonts`) | https://github.com/IBM/plex | The Web Pyrlyn UI kit's typeface |
-| `pyrlyn.kit:semver`, `toml`, `toml-aot`, `yaml-aot`, `db`, `db-room`, `db-sqldelight` | local (included build, `KOTLIN_KIT_DIR` or `packages/kotlin-kit` above the checkout) | https://github.com/pyrlyn/packages (`kotlin-kit/`) | Version ordering, TOML and YAML reading and editing, the SQLite store driver and SQLDelight adapter, shared with ketch and backend |
-| `pyrlyn.taskboard:core`, `files` | local (included build, `KOTLIN_TASKBOARD_DIR` or `packages/kotlin-taskboard` above the checkout) | https://github.com/pyrlyn/packages (`kotlin-taskboard/`) | The task board engine and file store behind `rtok task`: revisions, leases, batches and the column-folder layout |
+| `pyrlyn.kit:semver`, `toml`, `toml-aot`, `yaml-aot`, `db`, `db-room`, `db-sqldelight` | local (included build, `KOTLIN_KIT_DIR` or `packages/pyrlyn-kit` above the checkout) | https://github.com/pyrlyn/packages (`pyrlyn-kit/`) | Version ordering, TOML and YAML reading and editing, the SQLite store driver and SQLDelight adapter, shared with ketch and backend |
+| `pyrlyn.taskboard:core`, `files` | local (included build, `KOTLIN_TASKBOARD_DIR` or `packages/pyrlyn-taskboard` above the checkout) | https://github.com/pyrlyn/packages (`pyrlyn-taskboard/`) | The task board engine and file store behind `rtok task`: revisions, leases, batches and the column-folder layout |
 | SQLDelight 2.4.1 | Gradle plugin, SQLite 3.38 dialect and runtime via `db-sqldelight` | https://github.com/sqldelight/sqldelight | Generates and checks typed note/file queries; uses the existing SQLite connection |
 
 ## Enable

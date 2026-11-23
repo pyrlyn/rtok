@@ -1,4 +1,4 @@
-# rtok-kotlin documentation
+# rtok documentation
 
 ## Build and develop
 

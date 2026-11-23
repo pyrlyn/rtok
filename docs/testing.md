@@ -65,8 +65,8 @@ Kotest on Native ignores Gradle's test filter, so a new CLI spec must call `tags
 
 ## Snapshot tests
 
-Snapshot assertions come from the kotlin-snapshot package (`pyrlyn.snapshot:snapshot`, an included
-build at `../../packages/kotlin-snapshot`, overridden by `KOTLIN_SNAPSHOT_DIR`), written after Rust's
+Snapshot assertions come from the pyrlyn-snapshot package (`pyrlyn.snapshot:snapshot`, an included
+build at `../../packages/pyrlyn-snapshot`, overridden by `KOTLIN_SNAPSHOT_DIR`), written after Rust's
 insta. It reads and writes insta's `.snap` format, so the Rust `.snap` files are reused as they are.
 
 - File snapshots: `assertSnapshot(name, actual)`, files in `rtok/src/commonTest/snapshots`
