@@ -57,4 +57,59 @@ class HookTest {
         assertNull(decodeResponse(p.copyOfRange(4, p.size))!!.getOrNull())
         assertNull(decodeResponse(byteArrayOf(1, 9)))
     }
+
+    @Test fun anOversizedFrameIsRefusedBeforeItIsRead() {
+        assertEquals(MAX_FRAME, frameLen(le32(MAX_FRAME.toUInt())))
+        assertFailsWith<FrameException> { frameLen(le32(MAX_FRAME.toUInt() + 1u)) }
+        assertFailsWith<FrameException> { frameLen(le32(UInt.MAX_VALUE)) }
+        var asked = -1
+        assertFailsWith<FrameException> { readFrame { n -> if (n == 4) le32(UInt.MAX_VALUE) else ByteArray(n).also { asked = n } } }
+        assertEquals(-1, asked)
+    }
+
+    @Test fun invalidUtf8InATextFieldIsRefused() {
+        val ok = body(Request("0.7.0", 1u, "Stop", "", "/w", byteArrayOf()))
+        // version is the first field: replace its first byte with a lone continuation byte.
+        val bad = ok.copyOf().also { it[4] = 0x80.toByte() }
+        assertNull(Request.decode(bad))
+        // stdin is raw bytes and may hold anything.
+        val raw = Request("0.7.0", 1u, "Stop", "", "/w", byteArrayOf(0x80.toByte(), 0, -1))
+        assertEquals(raw, Request.decode(body(raw)))
+    }
+
+    @Test fun theFingerprintCoversHostAndTelemetryVariables() {
+        val base = fingerprint(emptyList())
+        for (k in HOST_VARS + listOf("USERPROFILE", "OTEL_EXPORTER_OTLP_ENDPOINT", "OTEL_EXPORTER_OTLP_HEADERS", "RTOK_X")) {
+            assertNotEquals(base, fingerprint(listOf(k to "v")), k)
+        }
+        assertEquals(base, fingerprint(listOf("OTEL_SERVICE_NAME" to "x", "PATH" to "/bin")))
+        // Key and value are separated, so moving a byte between them changes the hash.
+        assertNotEquals(fingerprint(listOf("RTOK_A" to "B")), fingerprint(listOf("RTOK_AB" to "")))
+    }
+
+    @Test fun fnvMatchesTheReferenceVectors() {
+        assertEquals(0xcbf29ce484222325uL, fnv(byteArrayOf()))
+        assertEquals(0xaf63dc4c8601ec8cuL, fnv("a".encodeToByteArray()))
+        assertEquals(0x85944171f73967e8uL, fnv("foobar".encodeToByteArray()))
+    }
+
+    @Test fun tildeExpansion() {
+        assertEquals("/u", expandWith("~", "/r", "/u"))
+        assertEquals("~", expandWith("~", "/r", null))
+        assertEquals("/u/a/b", expandWith("~/a//b/", "/r", "/u"))
+        assertEquals("~/a", expandWith("~/a", "/r", null))
+        assertEquals("/r/logs", expandWith("~/.rtok/logs", "/r", "/u"))
+        assertEquals("/r/logs/x", expandWith("~\\.rtok\\logs\\x", "/r", "/u"))
+        assertEquals("/r", expandWith("~/.rtok", "/r", "/u"))
+        assertEquals("/u/.rtokx", expandWith("~/.rtokx", "/r", "/u"))
+        assertEquals("~other/x", expandWith("~other/x", "/r", "/u"))
+        assertEquals("rel/~/x", expandWith("rel/~/x", "/r", "/u"))
+    }
+
+    @Test fun theSocketPathMustFitSunPath() {
+        assertEquals("/h/hook.sock", endpoint("/h"))
+        assertEquals("/h/hook.sock", endpoint("/h/"))
+        assertNull(endpoint("/" + "x".repeat(90)))
+        assertNotNull(endpoint("/" + "x".repeat(87)))
+    }
 }
