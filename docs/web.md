@@ -121,7 +121,7 @@ The frontend is being rewritten in Compose Multiplatform, replacing the kotlinx.
   body (#207); Graph drill with breadcrumb, focus depth, node list, compare with change marks, JSON export/import,
   removal dry run (#209); live calls, the command palette (⌘K/Ctrl+K, `g <key>`, `?`) and the WebGL cloud (#211).
 - Graph cloud: the Graph page draws every registered project as a cluster in one WebGL2 scene (`GraphCloud.kt`,
-  generic renderer from `kotlin-webgl`, included via `KOTLIN_WEBGL_DIR`, default `../../packages/kotlin-webgl`).
+  generic renderer from `pyrlyn-webgl`, included via `KOTLIN_WEBGL_DIR`, default `../../packages/pyrlyn-webgl`).
   `cloudClusters` (`:rtok-web-model`) is the rtok mapping: one cluster per `projects` row, radius from indexed files,
   tone from health; the drilled project also carries its drill graph with change marks. Zoomed out a cluster is a
   summary disc, zoomed in (or focused) its nodes and edges. Drag pans, the wheel zooms about the cursor, a click on a

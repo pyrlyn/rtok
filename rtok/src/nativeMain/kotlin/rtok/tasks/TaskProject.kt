@@ -1,5 +1,5 @@
 // One project's tasks: where they live, the prefix new ids get, and every operation over them. Writes go through the
-// kotlin-taskboard engine, over a file store for the board layout and over the adapter for the others.
+// pyrlyn-taskboard engine, over a file store for the board layout and over the adapter for the others.
 package rtok.tasks
 
 import kotlinx.serialization.json.Json

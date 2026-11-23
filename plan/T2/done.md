@@ -2,9 +2,9 @@
 
 ## What changed
 
-- `settings.gradle.kts` includes kotlin-kit (`KOTLIN_KIT_DIR`, else `packages/kotlin-kit` in any directory above the
-  checkout, the same lookup as kotlin-snapshot).
-- Taken from kotlin-kit and deleted from `libs/`: `semver`, `toml-aot`, `yaml-aot` (identical sources), `toml`
+- `settings.gradle.kts` includes pyrlyn-kit (`KOTLIN_KIT_DIR`, else `packages/pyrlyn-kit` in any directory above the
+  checkout, the same lookup as pyrlyn-snapshot).
+- Taken from pyrlyn-kit and deleted from `libs/`: `semver`, `toml-aot`, `yaml-aot` (identical sources), `toml`
   (`TomlReader.kt` identical; kit also has `TomlParser`/`TomlWriter`, unused here), `db` and `db-room` (kit adds
   `Cursor`/`Db.cursor`; nothing here implements `Db`, and `RoomDbDriver.query` runs the same statements).
 - Imports moved from `rtok.toml` / `rtok.db` / `rtok.db.room` to `toml` / `db` / `db.room`.
@@ -12,17 +12,17 @@
 
 PR: https://github.com/pyrlyn/rtok/pull/255
 
-## Kept in `libs/` until kotlin-kit has their fixes
+## Kept in `libs/` until pyrlyn-kit has their fixes
 
-kotlin-kit is another project (`pyrlyn/packages`); its changes need the creator's OK and their own PR there.
+pyrlyn-kit is another project (`pyrlyn/packages`); its changes need the creator's OK and their own PR there.
 
-| Module | Here, not in kotlin-kit | In kotlin-kit, not here |
+| Module | Here, not in pyrlyn-kit | In pyrlyn-kit, not here |
 | --- | --- | --- |
 | `toml-ktoml` | #246: escaped quotes in arrays of inline tables (`QuoteEscapes.kt`); dotted `[[a.b.c]]` nesting under plain tables | `key =` and `key = null` are errors |
 | `http` | `HttpResponse.headers`, `HttpClient.request(method, …)`, `StreamingHttpClient` / `StreamedResponse` (`Streaming.kt`) | `put`, `patch`, `stream` with `HttpHead` / `HttpBody` |
 | `http-ktor` | #247: streamed reads bounded by the socket timeout on Linux; a no-redirect client for the proxy; any method | WinHttp engine on Windows; `put` / `patch` / `stream` |
 
-`http` needs an API merge in kotlin-kit (ketch and backend use kit's `stream`; rtok's proxy uses `StreamingHttpClient`),
+`http` needs an API merge in pyrlyn-kit (ketch and backend use kit's `stream`; rtok's proxy uses `StreamingHttpClient`),
 so it is more than a copy. `toml-ktoml`'s kit side adds a stricter check that rtok would then pick up: a behaviour
 change to review with the creator.
 
@@ -42,14 +42,14 @@ change to review with the creator.
 
 ## `PORTING.md` rows to change (owned by T3)
 
-- Line 31, semver: `libs/semver` (`:semver`) → `pyrlyn.kit:semver` (kotlin-kit).
-- Line 72, toml: `libs/toml` interface → `pyrlyn.kit:toml` interface (kotlin-kit); `libs/toml-ktoml` stays.
-- Line 73, SQLite: `libs/db` + `libs/db-room` → `pyrlyn.kit:db` + `pyrlyn.kit:db-room` (kotlin-kit).
+- Line 31, semver: `libs/semver` (`:semver`) → `pyrlyn.kit:semver` (pyrlyn-kit).
+- Line 72, toml: `libs/toml` interface → `pyrlyn.kit:toml` interface (pyrlyn-kit); `libs/toml-ktoml` stays.
+- Line 73, SQLite: `libs/db` + `libs/db-room` → `pyrlyn.kit:db` + `pyrlyn.kit:db-room` (pyrlyn-kit).
 - Lines 50, 51, 55: `:toml-aot` → `pyrlyn.kit:toml-aot`.
 
 ## Follow-ups
 
-- One commit is named `fixup! T2: take toml from kotlin-kit` (a missed qualified `rtok.toml.TomlException`); history
+- One commit is named `fixup! T2: take toml from pyrlyn-kit` (a missed qualified `rtok.toml.TomlException`); history
   rewriting was not allowed in the session, so it stays for the squash merge.
 
 ## Checked

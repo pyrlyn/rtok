@@ -1,6 +1,6 @@
 @file:OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
 
-// The legacy `files` and `plan` layouts and the remote adapters as a kotlin-taskboard `Store`, so they get the board
+// The legacy `files` and `plan` layouts and the remote adapters as a pyrlyn-taskboard `Store`, so they get the board
 // layout's API and concurrency rules: the engine adds revisions, leases, idempotency keys and the journal on top.
 
 package rtok.tasks

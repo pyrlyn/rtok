@@ -1,4 +1,4 @@
-// The Graph page's cloud of graphs on WebGL (kotlin-webgl): one cluster per project (rtok mapping in
+// The Graph page's cloud of graphs on WebGL (pyrlyn-webgl): one cluster per project (rtok mapping in
 // `cloudClusters`), summaries when zoomed out, nodes and edges when zoomed in; clicking a cluster flies into it and
 // opens its drill-down, clicking a node opens the node, "back" returns to the whole cloud.
 // Compose UI: @Composable functions are PascalCase and layout sizes are literal dp/sp values.

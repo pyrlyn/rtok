@@ -1,5 +1,5 @@
 // Port of src/plugins/wasm.rs — the out-of-tree `.wasm` plugin host (P32). Loaded only when
-// `[plugins.wasm] enabled = true`. The engine is anything behind wasm.WasmRuntime (kotlin-wasm).
+// `[plugins.wasm] enabled = true`. The engine is anything behind wasm.WasmRuntime (pyrlyn-wasm).
 package rtok.plugins.wasm
 
 import kotlinx.serialization.SerialName

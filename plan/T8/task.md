@@ -12,7 +12,7 @@ The creator asked to rework `rtok task`: by default it works on files that form 
 (one folder per column: `todo/`, `in-progress/`, `done/`, `closed/`); a clear API connects the
 board to GitHub Issues and Projects, GitLab, Linear or Jira with two-way sync; agents get a
 clear MCP and CLI API and skills that teach it. The board, the sync engine and the trackers
-are a library (`packages/kotlin-taskboard`) that other programs use directly or over JSON-RPC,
+are a library (`packages/pyrlyn-taskboard`) that other programs use directly or over JSON-RPC,
 and its API lets many clients work in parallel without conflicts (revisions, field merge,
 batches, idempotency keys, leases, a change feed). The old subcommands, MCP tools and config
 keys stay as hidden aliases for one release, and `rtok task migrate` converts old `tasks/`
@@ -36,7 +36,7 @@ and an e2e run moves a card on the board and on a fake tracker and sees both sid
 | Id | Scope | Needs |
 |---|---|---|
 | T8.1 | Board layout, shared root, `migrate`, `board`, disk-layer fixes | |
-| T8.8 | `packages/kotlin-taskboard` library and its concurrency API; rtok moves onto it | T8.1 |
+| T8.8 | `packages/pyrlyn-taskboard` library and its concurrency API; rtok moves onto it | T8.1 |
 | T8.2 | CLI verbs and aliases, eight MCP tools and aliases, concurrency flags, `batch`, `watch`, `[tasks]` config, `doctor`, `prime`, web board on by default | T8.8 |
 | T8.9 | JSON-RPC: `rpc` module, OpenRPC, `rtok task rpc --stdio`, daemon socket | T8.2 |
 | T8.3 | Sync engine, GitHub Issues + Projects v2 two-way, `remote`/`sync`/`push`/`pull`, auto mode | T8.2 |

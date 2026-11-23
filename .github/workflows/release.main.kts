@@ -109,11 +109,11 @@ workflow(
     env =
         mapOf(
             "SHARED_SETTINGS_DIR" to "\${{ github.workspace }}/packages/shared-settings",
-            "KOTLIN_WASM_DIR" to "\${{ github.workspace }}/packages/kotlin-wasm",
-            "KOTLIN_SNAPSHOT_DIR" to "\${{ github.workspace }}/packages/kotlin-snapshot",
-            "KOTLIN_WEBGL_DIR" to "\${{ github.workspace }}/packages/kotlin-webgl",
-            "KOTLIN_KIT_DIR" to "\${{ github.workspace }}/packages/kotlin-kit",
-            "KOTLIN_TASKBOARD_DIR" to "\${{ github.workspace }}/packages/kotlin-taskboard",
+            "KOTLIN_WASM_DIR" to "\${{ github.workspace }}/packages/pyrlyn-wasm",
+            "KOTLIN_SNAPSHOT_DIR" to "\${{ github.workspace }}/packages/pyrlyn-snapshot",
+            "KOTLIN_WEBGL_DIR" to "\${{ github.workspace }}/packages/pyrlyn-webgl",
+            "KOTLIN_KIT_DIR" to "\${{ github.workspace }}/packages/pyrlyn-kit",
+            "KOTLIN_TASKBOARD_DIR" to "\${{ github.workspace }}/packages/pyrlyn-taskboard",
             "VERSION_FILE" to "rtok/src/commonMain/kotlin/rtok/Version.kt",
         ),
     sourceFile = __FILE__,

@@ -93,7 +93,7 @@ class TasksTest {
     }
 }
 
-// The queue, cycle and subtask rules are kotlin-taskboard's and tested there; these check rtok's side of them.
+// The queue, cycle and subtask rules are pyrlyn-taskboard's and tested there; these check rtok's side of them.
 class ReadyTest {
     @Test fun aMissingAgentIsStaleAndAStoreErrorIsNot() {
         assertTrue(Ready.holderIsStale(Result.success(null), 0))

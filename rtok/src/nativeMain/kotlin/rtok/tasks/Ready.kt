@@ -1,5 +1,5 @@
 // Port of src/tasks/ready.rs: when a claim's holder is gone. Which tasks are ready, and the cycle check, are the
-// kotlin-taskboard engine's.
+// pyrlyn-taskboard engine's.
 package rtok.tasks
 
 object Ready {

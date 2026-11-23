@@ -8,7 +8,7 @@ agent:
 
 # T8.2. Clear CLI and MCP task API with deprecated aliases
 
-Agents and people get one small, consistent API over the `kotlin-taskboard` library: the CLI
+Agents and people get one small, consistent API over the `pyrlyn-taskboard` library: the CLI
 verbs `board`, `list`, `show`, `create`, `edit`, `move`, `claim`, `release`, `next`, `ready`,
 `dep`, `conflict`, `batch`, `watch`, `doctor`, `prime`, and the eight MCP tools `task_board`,
 `task_get`, `task_create`, `task_update`, `task_claim`, `task_release`, `task_batch`,

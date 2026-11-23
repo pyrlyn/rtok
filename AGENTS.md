@@ -19,7 +19,7 @@
 - Packages/libraries contain only tests of the package itself. Tests that verify the app
   (rtok-kotlin) through a package live in the app next to its other tests. Applies to the whole
   Kotlin port, including snapshot tests.
-- Snapshot tests use `pyrlyn.snapshot:snapshot` (`../../packages/kotlin-snapshot`); see
+- Snapshot tests use `pyrlyn.snapshot:snapshot` (`../../packages/pyrlyn-snapshot`); see
   docs/testing.md "Snapshot tests".
 
 ## Native C

@@ -20,7 +20,7 @@ PR: https://github.com/pyrlyn/rtok/pull/279
 
 ## Deviations
 
-- `BoardAdapter` still imports `rtok.store.TaskId` and `writeAtomic`. T8.8 moves it into the `kotlin-taskboard` files module.
+- `BoardAdapter` still imports `rtok.store.TaskId` and `writeAtomic`. T8.8 moves it into the `pyrlyn-taskboard` files module.
 - `board` shows the 10 newest done and closed tasks unless `--all` is passed.
 
 ## How it was checked
