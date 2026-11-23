@@ -59,7 +59,7 @@ jobs:
       uses: 'actions/checkout@v7.0.1'
       with:
         repository: 'pyrlyn/packages'
-        ref: '0.0.2'
+        ref: 'cc286918bf40a71aa09dd5cfcf6497fc173d36de'
         path: 'packages'
     - id: 'step-2'
       uses: 'jdx/mise-action@v5.2.4'
@@ -92,7 +92,7 @@ jobs:
       uses: 'actions/checkout@v7.0.1'
       with:
         repository: 'pyrlyn/packages'
-        ref: '0.0.2'
+        ref: 'cc286918bf40a71aa09dd5cfcf6497fc173d36de'
         path: 'packages'
     - id: 'step-2'
       uses: 'jdx/mise-action@v5.2.4'

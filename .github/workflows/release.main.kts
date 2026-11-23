@@ -55,7 +55,7 @@ fun JobBuilder<*>.setUp() {
     uses(
         action =
             checkout(
-                mapOf("repository" to "pyrlyn/packages", "ref" to "0.0.2", "path" to "packages", "persist-credentials" to "false"),
+                mapOf("repository" to "pyrlyn/packages", "ref" to "cc286918bf40a71aa09dd5cfcf6497fc173d36de", "path" to "packages", "persist-credentials" to "false"),
             ),
     )
     uses(action = downloadArtifact(bumpArtifact))

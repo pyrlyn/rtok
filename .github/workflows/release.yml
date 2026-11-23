@@ -148,7 +148,7 @@ jobs:
       uses: 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
       with:
         repository: 'pyrlyn/packages'
-        ref: '0.0.2'
+        ref: 'cc286918bf40a71aa09dd5cfcf6497fc173d36de'
         path: 'packages'
         persist-credentials: 'false'
     - id: 'step-2'
@@ -210,7 +210,7 @@ jobs:
       uses: 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
       with:
         repository: 'pyrlyn/packages'
-        ref: '0.0.2'
+        ref: 'cc286918bf40a71aa09dd5cfcf6497fc173d36de'
         path: 'packages'
         persist-credentials: 'false'
     - id: 'step-2'
