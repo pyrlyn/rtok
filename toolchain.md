@@ -1,6 +1,6 @@
 # Toolchain (mise)
 
-Every tool rtok-kotlin needs that [mise](https://mise.jdx.dev) can provide is pinned in the repo-local
+Every tool rtok needs that [mise](https://mise.jdx.dev) can provide is pinned in the repo-local
 `mise.toml`. Kotlin libraries and klibs (Ktor, ktoml, Room KMP, Chasm, Kotest, ...) stay in Gradle and
 come from Maven Central. The build system is Gradle.
 

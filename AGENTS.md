@@ -1,4 +1,4 @@
-# Agent rules for rtok-kotlin
+# Agent rules for rtok
 
 ## Builds and tests: use the smart tasks
 - Default: `mise run test-smart` (tests) and `mise run build-smart` (build). The script

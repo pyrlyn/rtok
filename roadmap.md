@@ -1,4 +1,4 @@
-# rtok-kotlin roadmap
+# rtok roadmap
 
 Work the creator approved that is not in `plan/` yet. Unapproved ideas live in [ideas.md](ideas.md);
 decisions and history live in [port-plan.md](port-plan.md).
