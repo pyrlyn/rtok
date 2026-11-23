@@ -58,6 +58,19 @@ class HookTest {
         assertNull(decodeResponse(byteArrayOf(1, 9)))
     }
 
+    @Test fun aDeadlineBeyondTheLongRangeStaysPositive() {
+        // A "never" value must not wrap to a negative limit (or overflow now() + limit in arm()),
+        // which would fail every hook open at once.
+        for (raw in listOf("18446744073709551615", "9223372036854775808", "9223372036854775807")) {
+            val d = deadline { raw }
+            assertEquals(MAX_DEADLINE_MS, d, raw)
+        }
+        assertEquals(MAX_DEADLINE_MS, deadline { MAX_DEADLINE_MS.toString() })
+        assertEquals(MAX_DEADLINE_MS - 1, deadline { (MAX_DEADLINE_MS - 1).toString() })
+        assertEquals(0, deadline { " 0 " })
+        assertEquals(DEADLINE_MS, deadline { "-5" })
+    }
+
     @Test fun anOversizedFrameIsRefusedBeforeItIsRead() {
         assertEquals(MAX_FRAME, frameLen(le32(MAX_FRAME.toUInt())))
         assertFailsWith<FrameException> { frameLen(le32(MAX_FRAME.toUInt() + 1u)) }

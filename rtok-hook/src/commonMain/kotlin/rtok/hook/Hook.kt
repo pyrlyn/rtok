@@ -14,8 +14,11 @@ const val HOOK_MAX_INPUT_BYTES: Int = 8 shl 20
 val HOST_VARS = listOf("GROK_HOOK_EVENT", "DEVIN_PROJECT_DIR")
 private val CONFIG_VARS = listOf("HOME", "USERPROFILE", "OTEL_EXPORTER_OTLP_ENDPOINT", "OTEL_EXPORTER_OTLP_HEADERS")
 
-/** `RTOK_HOOK_DEADLINE_MS` or 3000 ms. */
-fun deadline(v: (String) -> String?): Long = v("RTOK_HOOK_DEADLINE_MS")?.trim()?.toULongOrNull()?.toLong() ?: DEADLINE_MS
+/** Largest deadline: the watchdog adds it to a monotonic clock, so `now + limit` must not overflow. */
+const val MAX_DEADLINE_MS: Long = Long.MAX_VALUE / 2
+
+/** `RTOK_HOOK_DEADLINE_MS` or 3000 ms; larger values are capped at [MAX_DEADLINE_MS]. */
+fun deadline(v: (String) -> String?): Long = v("RTOK_HOOK_DEADLINE_MS")?.trim()?.toULongOrNull()?.let { minOf(it, MAX_DEADLINE_MS.toULong()).toLong() } ?: DEADLINE_MS
 
 /** One hook call: event, host, working directory and the hook's stdin. */
 class Request(

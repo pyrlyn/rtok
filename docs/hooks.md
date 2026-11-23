@@ -8,7 +8,8 @@ run `rtok hook <Event> [--host H]` with JSON on stdin. `hooks/Types.kt` parses i
 The answer is `HookOutput` JSON; `{}` means "no opinion" (fail open).
 
 - **Deadline** (`Deadline.kt`): a watchdog prints `{}` and exits 0 when the call outlives
-  `RTOK_HOOK_DEADLINE_MS` (default 3000); a `Gate` makes sure only one answer is written.
+  `RTOK_HOOK_DEADLINE_MS` (default 3000, capped at `Long.MAX_VALUE / 2`); a `Gate` makes sure
+  only one answer is written.
 - **Resident** (`Resident.kt`, `rtok hook --serve`): optional server on `<home>/hook.sock` (mode 0600,
   bound through a private 0700 directory), one per home (`hook.lock` flock). It answers only clients
   with the same environment fingerprint and version; a different version makes it exit. Wire format:
